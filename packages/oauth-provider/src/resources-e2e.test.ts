@@ -29,11 +29,6 @@ import type {
 } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
-const silenceWarnings = {
-	oauthAuthServerConfig: true,
-	openidConfig: true,
-} as const;
-
 /**
  * Boots an in-memory better-auth instance with the oauth-provider plugin and
  * (when not disabled by callers) the jwt plugin. Pre-seeds resource rows so
@@ -43,7 +38,6 @@ const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		// Resource-linkage enforcement has its own coverage; disable here so
 		// unit-level resolveResourcePolicy tests don't have to seed
 		// `oauthClientResource` rows just to validate policy fields.
@@ -83,7 +77,7 @@ const bootCodeFlowHarness = async (
 	invalidateResourceCache();
 
 	const authServerBaseUrl = "http://localhost:3000";
-	const rpBaseUrl = "http://localhost:5000";
+	const rpBaseUrl = "https://rp.example.com";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 	const state = "state-123";
@@ -91,7 +85,6 @@ const bootCodeFlowHarness = async (
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		// Disable the per-client resource-linkage check for the harness.
 		// Bug-fix coverage targets the policy / introspection / refresh paths;
 		// per-client linkage has its own coverage in resources.test.ts.
@@ -119,6 +112,7 @@ const bootCodeFlowHarness = async (
 		headers,
 		body: {
 			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "client_secret_post",
 			scope: "openid profile email offline_access",
 			skip_consent: true,
 		},
@@ -133,7 +127,7 @@ const bootCodeFlowHarness = async (
 		scopes?: string[];
 	}) => {
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id!,
@@ -894,7 +888,7 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 			scopes: ["read"],
 			resources: [resource],
 			enforcePerClientResources: false,
-			silenceWarnings,
+			clientPrivileges: () => true,
 		} as OAuthOptions<Scope[]>;
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{
@@ -918,6 +912,8 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 			body: {
 				scope: "read",
 				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_basic",
+				client_credentials_scopes: ["read"],
 				redirect_uris: ["https://client.example.com/callback"],
 			},
 		});

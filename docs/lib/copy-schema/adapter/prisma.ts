@@ -1,5 +1,10 @@
 import type { Resolver } from "../types";
-import { capitalize, getTypeFactory } from "../utils";
+import {
+	capitalize,
+	filterNonUniqueIndexes,
+	getIndexName,
+	getTypeFactory,
+} from "../utils";
 
 export type PrismaResolverOptions = {
 	/**
@@ -97,6 +102,11 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 					lines.push(`\t${additionalLine}`);
 				}
 				lines.push(`\t${newLine}`);
+			}
+			for (const field of filterNonUniqueIndexes(ctx.schema)) {
+				lines.push(
+					`\t@@index([${field.fieldName}], map: "${getIndexName(ctx.schema.modelName, field)}")`,
+				);
 			}
 			lines.push(
 				`\t@@map("${ctx.schema.modelName}${options.usePlural ? "s" : ""}")`,

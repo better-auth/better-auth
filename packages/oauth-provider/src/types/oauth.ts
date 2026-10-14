@@ -202,7 +202,7 @@ export interface AuthServerMetadata {
 	authorization_response_iss_parameter_supported?: boolean;
 	/**
 	 * Whether the authorization server supports discovering clients via
-	 * [Client ID Metadata Documents](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+	 * [Client ID Metadata Document](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-client-id-metadata-document)
 	 * (an HTTPS URL as `client_id`).
 	 *
 	 * Set at runtime by the `@better-auth/cimd` plugin (or any other
@@ -239,6 +239,27 @@ export interface AuthServerMetadata {
 	 * @see https://datatracker.ietf.org/doc/html/rfc9449
 	 */
 	dpop_signing_alg_values_supported?: JWSAlgorithms[];
+	/**
+	 * Boolean value specifying whether the OP supports HTTP-based (front-channel)
+	 * logout, with true indicating support.
+	 *
+	 * Registered in the "OAuth Authorization Server Metadata" IANA registry
+	 * under OpenID Connect Front-Channel Logout 1.0, so this may appear at both
+	 * `.well-known/oauth-authorization-server` and `.well-known/openid-configuration`.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout
+	 */
+	frontchannel_logout_supported?: boolean;
+	/**
+	 * Boolean value specifying whether the OP can pass `iss` (issuer) and `sid`
+	 * (session ID) query parameters to identify the RP session with the OP when
+	 * the `frontchannel_logout_uri` is used.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout
+	 */
+	frontchannel_logout_session_supported?: boolean;
 }
 
 /**
@@ -258,19 +279,16 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	userinfo_endpoint: string;
 	/**
-	 * acr_values supported.
+	 * Authentication Context Class Reference values supported.
 	 *
-	 * - `urn:mace:incommon:iap:silver`: Silver level of assurance
-	 * - `urn:mace:incommon:iap:bronze`: Bronze level of assurance
-	 *
-	 * Determination of acr_value is considered bronze by default.
-	 * Silver level determination coming soon.
+	 * Better Auth does not advertise this field by default because it does not
+	 * currently evaluate requested Authentication Context Class References.
 	 *
 	 * @default
-	 * ["urn:mace:incommon:iap:bronze"]
-	 * @see https://incommon.org/federation/attributes.html
+	 * undefined
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
 	 */
-	acr_values_supported: string[];
+	acr_values_supported?: string[];
 	/**
 	 * Supported subject types.
 	 *
@@ -299,11 +317,35 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	claims_supported: string[];
 	/**
+	 * Whether the OP supports the OIDC `claims` request parameter.
+	 *
+	 * @default true
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	claims_parameter_supported?: boolean;
+	/**
 	 * RP-Initiated Logout Endpoint
 	 *
 	 * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
 	 */
 	end_session_endpoint: string;
+	/**
+	 * Whether the OP supports OpenID Connect Request Objects by value.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	request_parameter_supported?: boolean;
+	/**
+	 * Whether the OP supports OpenID Connect Request Objects by reference.
+	 *
+	 * Discovery defaults this field to true when omitted, so providers that do
+	 * not support it should advertise false explicitly.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata
+	 */
+	request_uri_parameter_supported?: boolean;
 	/**
 	 * Prompt values supported by this OIDC server
 	 *
@@ -335,9 +377,9 @@ export interface OAuthClient {
 	contacts?: string[];
 	tos_uri?: string;
 	policy_uri?: string;
-	//---- Jwks (only one can be used) ----//
-	/** JWK Set — accepts either a bare key array or an RFC 7517 JWKS object `{"keys":[...]}` */
-	jwks?: Record<string, unknown>[] | { keys: Record<string, unknown>[] };
+	//---- Client key metadata (only one can be used) ----//
+	/** RFC 7517 JWK Set. The `keys` array must be non-empty. */
+	jwks?: { keys: Record<string, unknown>[] };
 	jwks_uri?: string;
 	//---- User Software Identifiers ----//
 	software_id?: string;
@@ -362,13 +404,38 @@ export interface OAuthClient {
 	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
 	 */
 	backchannel_logout_session_required?: boolean;
+	/**
+	 * RP URL that the OP renders in a hidden iframe on its logout page so the
+	 * RP can log itself out when the end-user's OP session ends at
+	 * `/oauth2/end-session`. Must share the scheme, host, and port of one of
+	 * the client's `redirect_uris`.
+	 *
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	frontchannel_logout_uri?: string;
+	/**
+	 * When true, the RP requires `iss` and `sid` query parameters on its
+	 * `frontchannel_logout_uri`. The OP includes both whenever it notifies a
+	 * front-channel client, so this flag is stored but does not change
+	 * delivery.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	frontchannel_logout_session_required?: boolean;
 	token_endpoint_auth_method?: TokenEndpointAuthMethod;
 	grant_types?: GrantType[];
 	response_types?: "code"[];
-	// | "token" // NEVER SUPPORT - depreciated in oAuth2.1
-	//---- RFC6749 Spec ----//
-	public?: boolean;
-	type?: "web" | "native" | "user-agent-based";
+	// | "token" // NEVER SUPPORT - deprecated in OAuth 2.1
+	/**
+	 * OIDC Registration application type. This classifies redirect URI policy
+	 * only; client authentication is determined by
+	 * `token_endpoint_auth_method`.
+	 *
+	 * @default "web"
+	 * @see https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata
+	 */
+	application_type?: "web" | "native" | null;
 	//---- Not Part of RFC7591 Spec ----//
 	disabled?: boolean;
 	skip_consent?: boolean;
@@ -378,8 +445,9 @@ export interface OAuthClient {
 	 *
 	 * @default true
 	 *
-	 * Note: PKCE is always required for public clients and when
-	 * requesting offline_access scope, regardless of this setting.
+	 * Note: PKCE is always required for public clients. When requesting
+	 * offline_access without PKCE, confidential OIDC clients must send both
+	 * `openid` and `nonce`.
 	 */
 	require_pkce?: boolean;
 	/**
@@ -394,9 +462,8 @@ export interface OAuthClient {
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes
 	 */
 	subject_type?: "public" | "pairwise";
-	//---- All other metadata ----//
+	//---- Server Metadata ----//
 	reference_id?: string;
-	[key: string]: unknown;
 }
 
 /**

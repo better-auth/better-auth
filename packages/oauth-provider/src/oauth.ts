@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
-import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { DispatchContext } from "better-auth/api";
 import {
@@ -18,13 +17,17 @@ import type { BetterAuthPlugin } from "better-auth/types";
 import * as z from "zod";
 import type { AuthorizeEndpointSettings } from "./authorize";
 import { authorizeEndpoint, authorizeRedirectOnError } from "./authorize";
+import { claimsRequestParameterSchema } from "./claims-request";
 import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
+import type { SessionLogoutPlan } from "./logout";
 import {
-	deliverBackchannelLogoutTokens,
-	revokeAndPlanBackchannelLogout,
+	applySessionLogoutPlan,
+	prepareSessionLogoutPlan,
+	recordFrontchannelLogoutUris,
+	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
 import {
@@ -40,14 +43,15 @@ import { registerEndpoint } from "./register";
 import {
 	extractRepeatedResourceFromForm,
 	logEnforcePerClientResourcesResolution,
-	seedResources,
+	logStartupSeedFailure,
+	seedResourcesOnce,
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
+import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
-	authorizationQuerySchema,
 	clientRegistrationRequestSchema,
 	ResourceUriSchema,
 	SafeUrlSchema,
@@ -78,6 +82,24 @@ export const DEFAULT_OAUTH_SCOPES = [
 	"offline_access",
 ] as const;
 
+const rpInitiatedLogoutRequestSchema = z.object({
+	id_token_hint: z.string().optional(),
+	client_id: z.string().optional(),
+	post_logout_redirect_uri: SafeUrlSchema.optional(),
+	state: z.string().optional(),
+});
+
+type RPInitiatedLogoutFields = {
+	id_token_hint?: string;
+	client_id?: string;
+	post_logout_redirect_uri?: string;
+	state?: string;
+};
+
+type RPInitiatedLogoutClientInput =
+	| RPInitiatedLogoutFields
+	| { query: RPInitiatedLogoutFields };
+
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"oauth-provider": {
@@ -92,6 +114,10 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
+const sessionLogoutPlansByContext = new WeakMap<
+	GenericEndpointContext,
+	Map<string, SessionLogoutPlan>
+>();
 const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
 
 function getServerContextSignedQueryIssuedAt(value: unknown) {
@@ -147,7 +173,34 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		}
 	}
 
-	// Validate claims
+	const configuredResourceIdentifiers = new Set(
+		(options.resources ?? []).map((resource) =>
+			typeof resource === "string" ? resource : resource.identifier,
+		),
+	);
+	for (const [optionName, identifiers] of [
+		[
+			"clientRegistrationDefaultResources",
+			options.clientRegistrationDefaultResources,
+		],
+		[
+			"clientRegistrationAllowedResources",
+			options.clientRegistrationAllowedResources,
+		],
+	] as const) {
+		for (const identifier of identifiers ?? []) {
+			if (!configuredResourceIdentifiers.has(identifier)) {
+				throw new BetterAuthError(
+					`${optionName} resource ${identifier} not found in resources`,
+				);
+			}
+		}
+	}
+
+	// Discovery `claims_supported`: protocol claims that are always present, plus
+	// the standard identity claims whose backing scope is configured. The
+	// identity set is derived from the one claim registry so the advertisement
+	// cannot drift from what UserInfo actually resolves.
 	const claims = new Set([
 		"sub",
 		"iss",
@@ -157,10 +210,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		"sid",
 		"scope",
 		"azp",
-		...(scopes.has("email") ? ["email", "email_verified"] : []),
-		...(scopes.has("profile")
-			? ["name", "picture", "family_name", "given_name"]
-			: []),
+		...STANDARD_CLAIM_NAMES.filter((name) =>
+			scopes.has(STANDARD_CLAIMS[name].scope),
+		),
 	]);
 
 	const opts: O & { claims?: string[] } = {
@@ -168,6 +220,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		accessTokenExpiresIn: 3600, // 1 hour
 		m2mAccessTokenExpiresIn: 3600, // 1 hour
 		refreshTokenExpiresIn: 2592000, // 30 days
+		refreshTokenReuseInterval: 0,
 		allowUnauthenticatedClientRegistration: false,
 		allowDynamicClientRegistration: false,
 		disableJwtPlugin: false,
@@ -303,51 +356,49 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	const oauth2AuthorizeEndpoint = createOAuthEndpoint(
 		"/oauth2/authorize",
 		{
-			method: "GET",
-			query: authorizationQuerySchema,
+			method: ["GET", "POST"],
+			body: z.object({}).passthrough(),
 			redirectOnError: authorizeRedirectOnError(opts),
-			errorCodesByField: {
-				response_type: { invalid: "unsupported_response_type" },
-				resource: { invalid: "invalid_target" },
-			},
 			metadata: {
+				allowedMediaTypes: ["application/x-www-form-urlencoded"],
 				openapi: {
-					description: "Authorize an OAuth2 request",
+					description:
+						"Authorize an OAuth 2.1 request from query parameters or an application/x-www-form-urlencoded POST body",
 					parameters: [
 						{
 							name: "response_type",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 response type (e.g., 'code')",
+							description: "OAuth 2.1 response type (e.g., 'code')",
 						},
 						{
 							name: "client_id",
 							in: "query",
 							required: true,
 							schema: { type: "string" },
-							description: "OAuth2 client ID",
+							description: "OAuth 2.1 client ID",
 						},
 						{
 							name: "redirect_uri",
 							in: "query",
 							required: false,
 							schema: { type: "string", format: "uri" },
-							description: "OAuth2 redirect URI",
+							description: "OAuth 2.1 redirect URI",
 						},
 						{
 							name: "scope",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 scopes (space-separated)",
+							description: "OAuth 2.1 scopes (space-separated)",
 						},
 						{
 							name: "state",
 							in: "query",
 							required: false,
 							schema: { type: "string" },
-							description: "OAuth2 state parameter",
+							description: "OAuth 2.1 state parameter",
 						},
 						{
 							name: "request_uri",
@@ -470,20 +521,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// Seed `oauthResource` rows from plugin config. Idempotent and
-			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
-			// is empty. Tolerates
-			// "table not yet created" errors and defers to lazy-seed.
-			await seedResources(ctx, opts);
+			// Seed `oauthResource` rows from plugin config. A failure must not
+			// reject init (a failed init is cached and breaks every route);
+			// `getResource` retries the seed on first resource access.
+			// TODO(#11725): remove database I/O from init. Resolve configured
+			// resources at lookup time and create a row only when a link needs one.
+			await seedResourcesOnce(ctx, opts).catch((error: unknown) =>
+				logStartupSeedFailure(ctx, error),
+			);
 
 			// Record which default applied to `enforcePerClientResources` so
 			// admins can see it in startup logs. Pure resolution lives in
 			// `resolveEnforcePerClientResources` so validation flow stays cheap.
 			logEnforcePerClientResourcesResolution(opts);
 
-			// Well-known warnings are best-effort and only make sense with the
-			// JWT plugin. A dynamic baseURL resolves per-request, so there is
-			// nothing to emit at init time for that deployment shape either.
+			// Fail fast on an invalid configured issuer. A dynamic baseURL
+			// resolves per-request, so there is nothing to validate at init
+			// time for that deployment shape.
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
 				const jwtPluginOptions = jwtPlugin?.options;
@@ -493,40 +547,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					typeof ctx.options.baseURL === "object" &&
 					ctx.options.baseURL !== null &&
 					"allowedHosts" in ctx.options.baseURL;
-				let issuerPath: string | undefined;
 				try {
-					issuerPath = new URL(issuer).pathname;
+					new URL(issuer);
 				} catch (error) {
 					if (!isDynamicBaseURLInit || issuer !== "") throw error;
-				}
-				if (
-					issuerPath !== undefined &&
-					!opts.silenceWarnings?.oauthAuthServerConfig &&
-					!(ctx.options.basePath === "/" && issuerPath === "/")
-				) {
-					logger.warn(
-						`Please ensure '/.well-known/oauth-authorization-server${issuerPath === "/" ? "" : issuerPath}' exists. Upon completion, clear with silenceWarnings.oauthAuthServerConfig.`,
-					);
-				}
-				if (
-					issuerPath !== undefined &&
-					!opts.silenceWarnings?.openidConfig &&
-					ctx.options.basePath !== issuerPath &&
-					opts.scopes?.includes("openid")
-				) {
-					logger.warn(
-						`Please ensure '${issuerPath}${issuerPath.endsWith("/") ? "" : "/"}.well-known/openid-configuration' exists. Upon completion, clear with silenceWarnings.openidConfig.`,
-					);
 				}
 			}
 
 			// The hook must register for every configuration path (including
-			// dynamic baseURL). Revocation runs inline because it mutates DB
-			// state we rely on. The HTTP fan-out goes through
-			// `runInBackgroundOrAwait`: with a background handler configured
-			// (Vercel `waitUntil`, CF `ctx.waitUntil`) it runs after the
-			// response; without one it is awaited inline so delivery is not lost
-			// on request teardown. Awaiting here keeps both paths reliable.
+			// dynamic baseURL). Core runs delete.after only after the session row is
+			// consumed and queues it until the surrounding transaction commits.
 			return {
 				options: {
 					databaseHooks: {
@@ -534,23 +564,47 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							delete: {
 								async before(session, hookCtx) {
 									if (!hookCtx) return;
-									const plan = await revokeAndPlanBackchannelLogout(
-										hookCtx,
-										opts,
-										{
-											sessionId: session.id,
-											userId: session.userId,
-										},
-									);
+									const plan = await prepareSessionLogoutPlan(hookCtx, opts, {
+										sessionId: session.id,
+										userId: session.userId,
+									});
 									if (!plan) return;
-									// TODO: re-evaluate this await. It makes delivery reliable on
-									// every runtime, but without an `advanced.backgroundTasks.handler`
-									// a hung RP can add up to the per-RP timeout to sign-out latency.
-									// Alternative to weigh: keep delivery non-blocking and instead
-									// hard-require a background handler when back-channel logout is on.
-									await hookCtx.context.runInBackgroundOrAwait(
-										deliverBackchannelLogoutTokens(hookCtx, plan),
+									const logoutPlanBySessionId =
+										sessionLogoutPlansByContext.get(hookCtx) ??
+										new Map<string, SessionLogoutPlan>();
+									logoutPlanBySessionId.set(session.id, plan);
+									sessionLogoutPlansByContext.set(
+										hookCtx,
+										logoutPlanBySessionId,
 									);
+								},
+								async after(session, hookCtx) {
+									if (!hookCtx) return;
+									const logoutPlanBySessionId =
+										sessionLogoutPlansByContext.get(hookCtx);
+									if (!logoutPlanBySessionId) return;
+									const plan = logoutPlanBySessionId.get(session.id);
+									logoutPlanBySessionId.delete(session.id);
+									if (logoutPlanBySessionId.size === 0) {
+										sessionLogoutPlansByContext.delete(hookCtx);
+									}
+									if (!plan) return;
+									// Recorded synchronously so the logout page of this request
+									// can render the iframes; delivery below may run after the
+									// response.
+									await recordFrontchannelLogoutUris(
+										plan.frontchannelLogoutUris,
+									);
+									const logoutTask = applySessionLogoutPlan(
+										hookCtx,
+										plan,
+									).catch((error) => {
+										hookCtx.context.logger.error(
+											"Logout notification failed after session deletion",
+											error,
+										);
+									});
+									await hookCtx.context.runInBackgroundOrAwait(logoutTask);
 								},
 							},
 						},
@@ -733,6 +787,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						scope: z.string().optional().meta({
 							description:
 								"List of accept of accepted space-separated scopes. If none is provided, then all originally requested scopes are accepted.",
+						}),
+						claims: claimsRequestParameterSchema.optional().meta({
+							description:
+								"Accepted OIDC claims request object. If none is provided, then all originally requested claims are accepted.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
@@ -1021,6 +1079,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/introspect",
 				{
 					method: "POST",
+					// Credential cardinality is enforced from the raw form body.
+					cloneRequest: true,
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
@@ -1160,6 +1220,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/revoke",
 				{
 					method: "POST",
+					// Credential cardinality is enforced from the raw form body.
+					cloneRequest: true,
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
@@ -1247,8 +1309,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/userinfo",
 				{
 					method: ["GET", "POST"],
+					body: z
+						.object({
+							access_token: z.string().optional(),
+						})
+						.passthrough()
+						.optional(),
 					metadata: {
 						noStore: true,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
 						openapi: {
 							description:
 								"Get OpenID Connect user information (UserInfo endpoint)",
@@ -1370,21 +1439,27 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			oauth2EndSession: createOAuthEndpoint(
 				"/oauth2/end-session",
 				{
-					method: "GET",
-					query: z.object({
-						id_token_hint: z.string(),
-						client_id: z.string().optional(),
-						post_logout_redirect_uri: SafeUrlSchema.optional(),
-						state: z.string().optional(),
-					}),
+					method: ["GET", "POST"],
+					body: rpInitiatedLogoutRequestSchema.optional(),
+					query: rpInitiatedLogoutRequestSchema.optional(),
 					metadata: {
+						noStore: true,
+						allowedMediaTypes: [
+							"application/x-www-form-urlencoded",
+							// Better Auth's generated client sends endpoint bodies as JSON.
+							"application/json",
+						],
+						$Infer: {
+							body: {} as RPInitiatedLogoutClientInput,
+							query: {} as RPInitiatedLogoutFields,
+						},
 						openapi: {
 							description:
-								"RP-Initiated Logout endpoint. Allows clients to notify the OP that the End-User has logged out.",
+								"RP-Initiated Logout endpoint. Accepts standard logout parameters through GET or an application/x-www-form-urlencoded POST body, plus JSON for Better Auth generated-client calls. Requests without a usable id_token_hint may require explicit OP confirmation.",
 							responses: {
 								"200": {
 									description:
-										"Logout successful. May include redirect_uri if post_logout_redirect_uri was provided.",
+										"Logout completed, or an HTML page was returned for browser navigation — a confirmation page, or the OIDC front-channel logout page when clients with a registered frontchannel_logout_uri hold tokens on the session. A redirect is used only for an exact registered post_logout_redirect_uri.",
 									content: {
 										"application/json": {
 											schema: {
@@ -1403,6 +1478,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 												},
 											},
 										},
+										"text/html": {
+											schema: {
+												type: "string",
+												description:
+													"Logout confirmation page, or the OIDC Front-Channel Logout page with one hidden iframe per registered RP",
+											},
+										},
 									},
 								},
 							},
@@ -1411,6 +1493,23 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				},
 				async (ctx) => {
 					return rpInitiatedLogoutEndpoint(ctx, opts);
+				},
+			),
+			oauth2EndSessionConfirmation: createOAuthEndpoint(
+				"/oauth2/end-session/confirm",
+				{
+					method: "POST",
+					body: z.object({
+						action: z.literal("confirm"),
+					}),
+					metadata: {
+						noStore: true,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
+						scope: "http",
+					},
+				},
+				async (ctx) => {
+					return rpInitiatedLogoutConfirmationEndpoint(ctx, opts);
 				},
 			),
 			registerOAuthClient: createOAuthEndpoint(
@@ -1537,6 +1636,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														description:
 															"Whether the RP requires a `sid` claim in every Logout Token",
 													},
+													frontchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL rendered in a hidden iframe on the OP's logout page when the end-user's OP session terminates",
+													},
+													frontchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the RP requires `iss` and `sid` query parameters on its front-channel logout URI. The OP always sends both.",
+													},
 													token_endpoint_auth_method: {
 														type: "string",
 														description:
@@ -1559,15 +1669,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														description:
 															"Response types the client may use at the authorization endpoint",
 													},
-													public: {
-														type: "boolean",
-														description:
-															"Whether the client is public as determined by the type",
-													},
-													type: {
+													application_type: {
 														type: "string",
-														description: "Type of the client",
-														enum: ["web", "native", "user-agent-based"],
+														description:
+															"OIDC application type used to classify redirect URI policy",
+														enum: ["web", "native"],
+													},
+													resources: {
+														type: "array",
+														items: {
+															type: "string",
+															format: "uri",
+														},
+														description:
+															"Final resource identifiers linked to the registered client",
 													},
 													disabled: {
 														type: "boolean",
@@ -1616,7 +1731,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			adminUnlinkClientResource:
 				oauthResourceEndpoints.adminUnlinkClientResource(opts),
 		},
-		schema: mergeSchema(schema, opts?.schema),
+		// `mergeSchema` applies overrides in place. Clone the package schema so
+		// one auth instance's custom model/field names cannot leak into another
+		// instance created in the same process.
+		schema: mergeSchema(structuredClone(schema), opts?.schema),
 		rateLimit: [
 			// Token endpoint - critical for preventing credential stuffing
 			...(opts.rateLimit?.token !== false

@@ -8,6 +8,7 @@ import type {
 	AuthServerMetadata,
 	Confirmation,
 	GrantType,
+	OAuthClient,
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
 	TokenType,
@@ -40,11 +41,44 @@ type InternallySupportedScopes =
 	| "email"
 	| "offline_access";
 export type Scope = LiteralString | InternallySupportedScopes;
+
+/**
+ * OAuth client metadata returned by Dynamic Client Registration and
+ * user-managed client endpoints.
+ */
+export interface OAuthClientRegistrationResponse extends OAuthClient {
+	/** Server-owned resources linked to the registered client, when present. */
+	resources?: string[];
+}
+
+/**
+ * OAuth client metadata returned by administrative create and update
+ * endpoints.
+ */
+export interface OAuthClientAdministrativeResponse
+	extends OAuthClientRegistrationResponse {
+	/** Server-authorized scope ceiling for `client_credentials` tokens. */
+	client_credentials_scopes: Scope[];
+}
+
 export type Prompt = "none" | "consent" | "login" | "create" | "select_account";
 export type AuthorizePrompt =
 	| Prompt
 	| "login consent"
 	| "select_account consent";
+
+/**
+ * Runtime-owned HTTP transport for resources referenced by externally
+ * discovered client metadata.
+ *
+ * A discovery that accepts URL-owned metadata must document and enforce its
+ * network trust boundary. CIMD requires resolve-once DNS handling, rejection of
+ * RFC 6890 special-use addresses, connection pinning, and redirect refusal.
+ */
+export type ClientMetadataResourceFetch = (
+	input: RequestInfo | URL,
+	init?: RequestInit,
+) => Awaitable<Response>;
 
 /**
  * Describes how to resolve a `client_id` from an external source (a URL-based
@@ -57,8 +91,9 @@ export type AuthorizePrompt =
  */
 export interface ClientDiscovery {
 	/**
-	 * Stable identifier used in error messages and diagnostics. Convention
-	 * is to match the plugin id (for example `"cimd"`).
+	 * Stable, globally unique identifier persisted as client provenance.
+	 * Convention is to match the plugin id (for example `"cimd"`). Changing it
+	 * requires migrating every client owned by this discovery.
 	 */
 	readonly id: string;
 	/**
@@ -73,15 +108,22 @@ export interface ClientDiscovery {
 	 * refreshing, or passing through to the database result.
 	 *
 	 * Return:
-	 * - a client record: `getClient()` returns it (creation / refresh / takeover).
-	 * - `null`: `getClient()` falls through to the next matching discovery
-	 *   or to the database record (if any).
+	 * - a client record: `getClient()` returns it after creation or refresh.
+	 * - `null` for a new client: `getClient()` tries the next matching discovery.
+	 * - `null` for a client owned by this discovery: resolution fails closed;
+	 *   the stored record is not treated as a managed client.
 	 */
 	resolve: (
 		ctx: GenericEndpointContext,
 		clientId: string,
 		existing: SchemaClient<Scope[]> | null,
 	) => Awaitable<SchemaClient<Scope[]> | null>;
+	/**
+	 * Fetch transport for resources owned by this discovery, such as a CIMD
+	 * client's `jwks_uri`. The discovery defines the transport's network-safety
+	 * contract.
+	 */
+	fetchClientMetadataResource?: ClientMetadataResourceFetch;
 	/**
 	 * Fields merged into `/.well-known/oauth-authorization-server` and
 	 * `/.well-known/openid-configuration` responses. Useful for advertising
@@ -131,6 +173,13 @@ export interface OAuthTokenIssueParams {
 	resources?: string[];
 	/** Full original authorized resources for the grant, used to seed refresh tokens. */
 	originalResources?: string[];
+	/**
+	 * OIDC UserInfo claim names requested by the authorization request's
+	 * `claims.userinfo` object. The authorization server persists these names so
+	 * refresh-token rotation and opaque access tokens continue honoring the same
+	 * UserInfo request contract.
+	 */
+	requestedUserInfoClaims?: string[];
 	/**
 	 * Additional JWT access-token claims for this single issuance.
 	 *
@@ -194,7 +243,10 @@ export interface OAuthProviderApi {
 	 * or none). For assertion-based methods, the RFC 7523 audience is bound to the
 	 * endpoint serving the request, so an assertion cannot be replayed across
 	 * endpoints. Returns the authenticated client, plus any `confirmation` an
-	 * assertion strategy proved.
+	 * assertion strategy proved. A companion endpoint that accepts
+	 * `application/x-www-form-urlencoded` must set `cloneRequest: true` in its
+	 * endpoint options because client authentication re-reads the raw form body
+	 * to enforce credential cardinality and reject mixed authentication methods.
 	 */
 	authenticateClient: (
 		request?: OAuthClientAuthenticationRequest,
@@ -349,6 +401,11 @@ export interface OAuthUserInfoExtensionInput {
 	scopes: string[];
 	jwt: JWTPayload;
 	client?: SchemaClient<Scope[]>;
+	/**
+	 * Claim names explicitly requested through the OIDC `claims.userinfo`
+	 * authorization request parameter.
+	 */
+	requestedClaims: string[];
 }
 
 /**
@@ -460,6 +517,62 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
+	 * Validates an OAuth authorization request's redirect URI. Without this
+	 * option, the URI must match one registered for the client, except that
+	 * a registered native HTTP loopback URI may use a different port.
+	 *
+	 * The callback runs for every client and also controls whether early
+	 * authorization errors may be sent to the requested URI. Returning `true`
+	 * accepts the URI even when `defaultResult` is `false`; returning `false`
+	 * or throwing rejects it. Client registration is unchanged.
+	 *
+	 * The preview example assumes only trusted clients can register its
+	 * production callback URI.
+	 *
+	 * @example
+	 * ```ts
+	 * oauthProvider({
+	 *   validateRedirectUri: (uri, registeredUris, defaultResult) => {
+	 *     if (defaultResult) return true;
+	 *     if (!registeredUris.includes("https://app.example.com/api/auth/callback")) {
+	 *       return false;
+	 *     }
+	 *     if (uri.includes("#")) return false;
+	 *     try {
+	 *       const url = new URL(uri);
+	 *       return (
+	 *         url.protocol === "https:" &&
+	 *         url.username === "" &&
+	 *         url.password === "" &&
+	 *         url.hostname.endsWith(".preview.example.com") &&
+	 *         url.port === "" &&
+	 *         url.pathname === "/api/auth/callback" &&
+	 *         url.search === ""
+	 *       );
+	 *     } catch {
+	 *       return false;
+	 *     }
+	 *   },
+	 * })
+	 * ```
+	 *
+	 * Custom acceptance relaxes the exact matching required by RFC 9700 §2.1.
+	 * Accept only callback hosts you control. For pairwise subject identifiers,
+	 * custom-validated URIs use the sector of the client's first registered URI.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider#custom-redirect-uri-validation
+	 *
+	 * @param redirectUri - The redirect_uri from the authorization request
+	 * @param registeredUris - Registered redirect URIs for the client
+	 * @param defaultResult - Result of built-in redirect URI matching
+	 * @returns `true` to accept the URI, or `false` to reject it
+	 */
+	validateRedirectUri?: (
+		redirectUri: string,
+		registeredUris: readonly string[],
+		defaultResult: boolean,
+	) => Awaitable<boolean>;
+	/**
 	 * Protected resources the AS issues access tokens for. Promotes the
 	 * resource model into a first-class persisted entity with per-resource
 	 * token policy.
@@ -521,6 +634,21 @@ export interface OAuthOptions<
 	 * applied.
 	 */
 	enforcePerClientResources?: boolean;
+	/**
+	 * Resource identifiers linked to every newly registered OAuth client.
+	 *
+	 * Each value must also be present in {@link OAuthOptions.resources}.
+	 */
+	clientRegistrationDefaultResources?: readonly string[];
+	/**
+	 * Resource identifiers an explicit DCR `resources` extension may request.
+	 *
+	 * The effective allowlist is the union of this list and
+	 * {@link OAuthOptions.clientRegistrationDefaultResources}. Each value must
+	 * also be present in {@link OAuthOptions.resources}. When both registration
+	 * resource options are omitted, explicit resource requests are rejected.
+	 */
+	clientRegistrationAllowedResources?: readonly string[];
 	/**
 	 * Customize how a resource `identifier` is validated when resources are
 	 * created via CRUD or DCR. The default rejects non-URI identifiers per
@@ -585,6 +713,18 @@ export interface OAuthOptions<
 	 */
 	refreshTokenExpiresIn?: number;
 	/**
+	 * Seconds that a rotated refresh token can be reused to receive the same
+	 * token response for the same effective scopes, requested resources, and
+	 * sender constraint.
+	 *
+	 * Matching reuse inside this interval is treated as refresh-response replay,
+	 * not refresh-token replay. Set to `0` to treat any rotated refresh token
+	 * reuse as replay.
+	 *
+	 * @default 0
+	 */
+	refreshTokenReuseInterval?: number;
+	/**
 	 * The amount of time in seconds that the authorization code is valid for.
 	 *
 	 * @default 600 (10 minutes) - Recommended by the OIDC spec
@@ -623,8 +763,9 @@ export interface OAuthOptions<
 	 * Allow unauthenticated dynamic client registration.
 	 *
 	 * When enabled, the `/oauth2/register` endpoint accepts requests
-	 * without a session, but only for public clients
-	 * (`token_endpoint_auth_method: "none"`).
+	 * without a session. Public clients use
+	 * `token_endpoint_auth_method: "none"`; confidential clients receive a
+	 * one-time `client_secret` in the registration response.
 	 *
 	 * For verified client discovery (MCP), consider installing the
 	 * `@better-auth/cimd` plugin, which verifies client identity through
@@ -641,8 +782,8 @@ export interface OAuthOptions<
 	 * - session-backed: a logged-in user with client-create privileges.
 	 * - token-backed: a valid initial access token, when
 	 *   {@link OAuthOptions.validateInitialAccessToken} is defined.
-	 * - open public-only: unauthenticated registration constrained to public
-	 *   clients, when {@link OAuthOptions.allowUnauthenticatedClientRegistration}
+	 * - open: unauthenticated registration, when
+	 *   {@link OAuthOptions.allowUnauthenticatedClientRegistration}
 	 *   is enabled.
 	 *
 	 * @default false
@@ -689,28 +830,64 @@ export interface OAuthOptions<
 	 */
 	extensions?: OAuthProviderExtension[];
 	/**
-	 * List of scopes for newly registered clients
-	 * if not requested.
+	 * Baseline scope capabilities persisted for dynamically discovered and
+	 * dynamically registered clients.
 	 *
-	 * For scopes that shall automatically adapt to your scopes
-	 * list in the future (ie scopes: undefined), create that client
-	 * using the server's `createOAuthClient` function.
+	 * A client's registration request may ask for a subset, but that request is
+	 * not an authorization grant. Better Auth validates the requested subset,
+	 * then persists the deduplicated union of this list and
+	 * {@link OAuthOptions.clientRegistrationAllowedScopes} so a later user
+	 * authorization can step up within the operator-approved capability set.
 	 *
 	 * @default scopes
 	 */
 	clientRegistrationDefaultScopes?: Scopes;
 	/**
-	 * List of scopes for allowed clients in addition to
-	 * those listed in the default scope. Finalized allowed list is
-	 * the union of the default scopes and this list.
+	 * Additional scope capabilities for dynamically discovered and dynamically
+	 * registered clients. The effective client capability set is the
+	 * deterministic, deduplicated union with
+	 * {@link OAuthOptions.clientRegistrationDefaultScopes}.
 	 *
-	 * If both clientRegistrationDefaultScopes and this
-	 * are undefined, only scopes listed in the scopes option
-	 * are allowed.
+	 * Any registration metadata `scope` must be a subset of that effective set.
+	 * It does not narrow the persisted capability set or grant those scopes to a
+	 * user. If both registration scope options are omitted, {@link OAuthOptions.scopes}
+	 * is the effective set.
 	 *
-	 * @default - clientRegistrationDefaultScopes
+	 * @default []
 	 */
 	clientRegistrationAllowedScopes?: Scopes;
+	/**
+	 * Whether dynamically registered confidential clients require PKCE by default.
+	 *
+	 * This is server-owned registration policy. Dynamic client registration does
+	 * not accept `require_pkce` from the client request, and public clients or
+	 * authorization requests with `offline_access` still require PKCE unless the
+	 * confidential OIDC request includes both `openid` and `nonce`.
+	 *
+	 * @default true
+	 */
+	clientRegistrationRequirePKCE?: boolean;
+	/**
+	 * Default `application_type` for dynamic client registrations that omit the
+	 * field.
+	 *
+	 * - `"web"`: the OIDC Registration §2 default. Omitted `application_type` is
+	 *   treated as `web`, so custom-scheme redirect URIs are rejected.
+	 * - `"native"`: omitted `application_type` is treated as `native`.
+	 * - `"infer"`: omitted `application_type` is treated as `native` when any
+	 *   `redirect_uris` entry uses a non-http(s) scheme; otherwise `web`. Every
+	 *   redirect URI is then validated against the native rules. Lets native MCP
+	 *   clients that omit `application_type` (for example Cursor, which also
+	 *   registers https and loopback callbacks) register without loosening
+	 *   web-client redirect policy.
+	 *
+	 * An `application_type` the client actually sends is never overridden.
+	 * Applies only to dynamic client registration; managed clients and Client ID
+	 * Metadata Documents are unaffected.
+	 *
+	 * @default "web"
+	 */
+	clientRegistrationDefaultApplicationType?: "web" | "native" | "infer";
 	/**
 	 * How long a dynamically created confidential client
 	 * should last for.
@@ -759,19 +936,27 @@ export interface OAuthOptions<
 	 */
 	clientPrivileges?: (context: {
 		headers: Headers;
-		action: "create" | "read" | "update" | "delete" | "list" | "rotate";
+		action:
+			| "create"
+			| "read"
+			| "update"
+			| "delete"
+			| "list"
+			| "rotate"
+			| "configure-client-credentials-scopes";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
+		/**
+		 * The `client_id` from the request, for actions on an existing client.
+		 * Absent for `create`, `list`, and scope configuration during creation.
+		 * The client may not exist, and this value does not establish ownership.
+		 * Client CRUD enforces ownership except when `adminUpdateOAuthClient`
+		 * changes only `client_credentials_scopes`: the `update` and
+		 * `configure-client-credentials-scopes` decisions can authorize access
+		 * to another owner's client.
+		 */
+		clientId?: string;
 	}) => Awaitable<boolean | undefined>;
-	/**
-	 * List default scopes when using the token endpoint's
-	 * grant type "client_credentials". This is used
-	 * only when oauthClients are stored in the database
-	 * without a scope and you do not want all `scopes` to be given.
-	 *
-	 * @default undefined
-	 */
-	clientCredentialGrantDefaultScopes?: Scopes;
 	/**
 	 * Grant types supported by the token endpoint
 	 *
@@ -796,11 +981,16 @@ export interface OAuthOptions<
 	 *
 	 * - `client_id` - The ID of the client.
 	 * - `scope` - The requested scopes.
+	 * - `claims` - The OIDC claims request, when the client requested specific
+	 *   claims. Consent pages should surface `claims.userinfo` names alongside
+	 *   scopes because accepted UserInfo claims can affect the UserInfo response.
 	 * - `code` - The authorization code.
 	 *
 	 * once the user consents, you need to call the `/oauth2/consent` endpoint
-	 * with the code and `accept: true` to complete the authorization. Which will
-	 * then return the client to the `redirect_uri` with the authorization code.
+	 * with the code and `accept: true` to complete the authorization. Include a
+	 * `claims` object if the user accepted only some requested UserInfo claims.
+	 * The endpoint will then return the client to the `redirect_uri` with the
+	 * authorization code.
 	 *
 	 * @example
 	 * ```ts
@@ -1002,6 +1192,11 @@ export interface OAuthOptions<
 		scopes: Scopes;
 		/** The access token payload used in the /userinfo request */
 		jwt: JWTPayload;
+		/**
+		 * Claim names explicitly requested through the OIDC `claims.userinfo`
+		 * authorization request parameter.
+		 */
+		requestedClaims: string[];
 	}) => Awaitable<Record<string, any>>;
 	/**
 	 * Custom claims attached to OIDC id tokens.
@@ -1010,6 +1205,11 @@ export interface OAuthOptions<
 	 * namespaced with a URI. For example, a site
 	 * example.com should namespace an organization at
 	 * https://example.com/organization.
+	 *
+	 * Reserved ID token claim names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`,
+	 * `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`,
+	 * `amr`, `azp`) are stripped at issuance with a warning log. The
+	 * authorization server owns these values.
 	 *
 	 * @param info - context that may be useful when creating custom claims
 	 */
@@ -1079,7 +1279,7 @@ export interface OAuthOptions<
 	}) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Overwrite specific /.well-known/openid-configuration
-	 * values so they are not available publically.
+	 * values so they are not available publicly.
 	 * This may be important if not all clients need specific scopes.
 	 */
 	advertisedMetadata?: {
@@ -1169,27 +1369,6 @@ export interface OAuthOptions<
 	 * generateRandomString(32, "A-Z", "a-z")
 	 */
 	generateRefreshToken?: () => Awaitable<string>;
-	/**
-	 * Confirmations that individually silences specific well-known endpoint
-	 * configuration warnings.
-	 *
-	 * Only set these specific values if you see the error as they
-	 * are configuration specific.
-	 */
-	silenceWarnings?: {
-		/**
-		 * Config warning for `/.well-known/oauth-authorization-server/[issuer-path]`
-		 *
-		 * @default false
-		 */
-		oauthAuthServerConfig?: boolean;
-		/**
-		 * Config warning for `[issuer-path]/.well-known/openid-configuration`
-		 *
-		 * @default false
-		 */
-		openidConfig?: boolean;
-	};
 	/**
 	 * By default, access and id tokens can be issued and verified
 	 * through the JWT plugin.
@@ -1300,8 +1479,15 @@ export interface OAuthAuthorizationQuery {
 	 * - "code": authorization code flow.
 	 * Optional in the query when using request_uri (PAR) — resolved from stored params.
 	 */
-	// NEVER SUPPORT "token" or "id_token" - depreciated in oAuth2.1
+	// NEVER SUPPORT "token" or "id_token" - deprecated in OAuth 2.1
 	response_type?: "code";
+	/**
+	 * OpenID Connect Request Object by value.
+	 *
+	 * The parameter is parsed so unsupported use can be rejected with
+	 * `request_not_supported`; Better Auth does not process Request Objects yet.
+	 */
+	request?: string;
 	/**
 	 * PAR request_uri. When present, other params are resolved from the stored request.
 	 */
@@ -1410,6 +1596,14 @@ export interface OAuthAuthorizationQuery {
 	 */
 	nonce?: string;
 	/**
+	 * OIDC Claims request parameter. In an authorization request it is a
+	 * form-encoded JSON string; Request Object resolvers may provide the parsed
+	 * object form.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter
+	 */
+	claims?: string | Record<string, unknown>;
+	/**
 	 * RFC 9449 authorization request parameter. When present, the authorization
 	 * code is bound to this JWK thumbprint and the token request must present a
 	 * matching DPoP proof.
@@ -1508,6 +1702,19 @@ export interface OAuthClientResource {
 }
 
 /**
+ * The authorization request as persisted alongside a minted code. Identical to
+ * {@link OAuthAuthorizationQuery} except `redirect_uri` is optional: a headless
+ * authorization request (first-party-apps / device-style) carries none, and
+ * RFC 6749 §4.1.3 only binds `redirect_uri` at the token endpoint when the
+ * authorization request included one. Mirrors the runtime
+ * `storedAuthorizationQuerySchema`.
+ */
+export interface StoredAuthorizationQuery
+	extends Omit<OAuthAuthorizationQuery, "redirect_uri"> {
+	redirect_uri?: string;
+}
+
+/**
  * Stored within the verification.value field
  * in JSON format.
  *
@@ -1516,7 +1723,7 @@ export interface OAuthClientResource {
  */
 export interface VerificationValue {
 	type: "authorization_code";
-	query: OAuthAuthorizationQuery;
+	query: StoredAuthorizationQuery;
 	sessionId: string;
 	userId: string;
 	resource?: string[];
@@ -1547,6 +1754,13 @@ export interface SchemaClient<
 	 * size 32
 	 */
 	clientSecret?: string;
+	/**
+	 * Stable identifier of the discovery that owns this client record.
+	 *
+	 * Null or absent records are managed or dynamically registered clients and
+	 * must never be refreshed by a discovery solely because of their ID shape.
+	 */
+	clientDiscoveryId?: string | null;
 	/** Whether the client is disabled or not. */
 	disabled?: boolean;
 	/**
@@ -1555,6 +1769,13 @@ export interface SchemaClient<
 	 * If not defined, any scope can be requested.
 	 */
 	scopes?: Scopes;
+	/**
+	 * Server-owned scope ceiling for the `client_credentials` grant.
+	 *
+	 * Missing, null, and empty values deny machine-to-machine token issuance.
+	 * This authority is independent from user-delegated {@link scopes}.
+	 */
+	clientCredentialsScopes?: Scopes | null;
 	//---- Recommended client data ----//
 	/** User who owns this client */
 	userId?: string | null;
@@ -1612,36 +1833,37 @@ export interface SchemaClient<
 	 * @default false
 	 */
 	backchannelLogoutSessionRequired?: boolean;
+	/**
+	 * RP URL rendered in a hidden iframe on the OP's logout page when the
+	 * end-user's session ends at `/oauth2/end-session`. Registering it is the
+	 * per-client opt-in for front-channel logout. Must be absolute, without a
+	 * fragment, and share the scheme, host, and port of a registered redirect
+	 * URI.
+	 *
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	frontchannelLogoutUri?: string;
+	/**
+	 * When true, the RP requires `iss` and `sid` query parameters on its
+	 * front-channel logout URI. The OP includes both whenever it notifies a
+	 * front-channel client, so this flag is stored but does not change
+	 * delivery.
+	 *
+	 * @default false
+	 */
+	frontchannelLogoutSessionRequired?: boolean;
 	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];
-	/** Client's JSON Web Key Set for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`. */
+	/**
+	 * OIDC application type used only to classify redirect URI policy.
+	 * Authentication capability is determined by `tokenEndpointAuthMethod`.
+	 */
+	applicationType?: "web" | "native" | null;
+	/** Client's JSON Web Key Set metadata. Mutually exclusive with `jwksUri`. */
 	jwks?: string;
 	/** URI for the client's JSON Web Key Set. Mutually exclusive with `jwks`. Must be HTTPS. */
 	jwksUri?: string;
-	//---- RFC6749 Spec ----//
-	/**
-	 * Indicates whether the client is public or confidential.
-	 * If public, refreshing tokens doesn't require
-	 * a client_secret. Clients are considered confidential by default.
-	 *
-	 * Uses `token_endpoint_auth_method` field or `type` field to determine
-	 *
-	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * @default undefined
-	 */
-	public?: boolean;
-	/**
-	 * The client type
-	 *
-	 * Described https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * - web - A web application (confidential client)
-	 * - native - A mobile application (public client)
-	 * - user-agent-based - A user-agent-based application (public client)
-	 */
-	type?: "web" | "native" | "user-agent-based";
 	/**
 	 * Whether this client requires PKCE for authorization code flow.
 	 *
@@ -1704,6 +1926,11 @@ export interface OAuthOpaqueAccessToken<
 	 */
 	referenceId?: string;
 	/**
+	 * Stored authorization-code identifier that produced this token family.
+	 * Used to revoke tokens after authorization-code replay is detected.
+	 */
+	authorizationCodeId?: string;
+	/**
 	 * The refresh token the access token is associated with.
 	 *
 	 * Not available without the "offline_access" scope
@@ -1730,6 +1957,11 @@ export interface OAuthOpaqueAccessToken<
 	 */
 	resources?: string[];
 	/**
+	 * OIDC UserInfo claim names requested by the authorization request's
+	 * `claims.userinfo` object.
+	 */
+	requestedUserInfoClaims?: string[];
+	/**
 	 * RFC 7800 `cnf` confirmation that sender-constrains this access token (for
 	 * example DPoP `{ jkt }`). Surfaced as the `cnf` claim at introspection.
 	 */
@@ -1746,13 +1978,30 @@ export interface OAuthRefreshToken<
 	sessionId?: string;
 	userId: string;
 	referenceId?: string;
+	authorizationCodeId?: string;
 	clientId?: string;
 	expiresAt: Date;
 	createdAt: Date;
 	/**
-	 * When token was revoked. If set, token is considered a replay attack.
+	 * When this token stopped being active.
+	 *
+	 * A token can be revoked by /oauth2/revoke or consumed by rotation. Use
+	 * `rotatedAt` to distinguish rotation from explicit revocation.
 	 */
 	revoked?: Date;
+	/**
+	 * When this refresh token was consumed by rotation.
+	 */
+	rotatedAt?: Date;
+	/**
+	 * Encrypted token endpoint response and request fingerprint to replay during
+	 * the configured refresh-token reuse interval.
+	 */
+	rotationReplayResponse?: string;
+	/**
+	 * When the cached rotation response stops being replayable.
+	 */
+	rotationReplayExpiresAt?: Date;
 	/**
 	 * The time the user originally authenticated.
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
@@ -1768,6 +2017,11 @@ export interface OAuthRefreshToken<
 	 * Resources allowed for this refresh token
 	 */
 	resources?: string[];
+	/**
+	 * OIDC UserInfo claim names requested by the authorization request's
+	 * `claims.userinfo` object. Carried forward on rotation.
+	 */
+	requestedUserInfoClaims?: string[];
 	/**
 	 * RFC 7800 `cnf` confirmation that sender-constrains this refresh-token
 	 * family (for example DPoP `{ jkt }`). Carried forward on rotation.
@@ -1786,6 +2040,11 @@ export type OAuthConsent<
 	userId: string;
 	resources?: string[];
 	referenceId?: string;
+	/**
+	 * OIDC UserInfo claim names consented from the authorization request's
+	 * `claims.userinfo` object.
+	 */
+	requestedUserInfoClaims?: string[];
 	scopes: Scopes;
 	createdAt: Date;
 	updatedAt: Date;

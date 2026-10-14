@@ -138,6 +138,14 @@ describe("anonymous", async () => {
 		expect(session.data?.user.isAnonymous).toBe(true);
 	});
 
+	it("uses a namespaced placeholder email by default", async () => {
+		const result = await client.signIn.anonymous();
+
+		expect(result.data?.user.email).toMatch(
+			/^[^@]+@anonymous\.placeholder\.invalid$/,
+		);
+	});
+
 	it("should reject anonymous sign-in when validateUserInfo returns error", async () => {
 		const { client } = await getTestInstance(
 			{
@@ -567,11 +575,9 @@ describe("anonymous", async () => {
 		function createMiddlewareContext({
 			newSessionUser,
 			deleteUser,
-			deleteUserSessions,
 		}: {
 			newSessionUser: Record<string, any>;
 			deleteUser: ReturnType<typeof vi.fn>;
-			deleteUserSessions?: ReturnType<typeof vi.fn>;
 		}) {
 			return {
 				path: "/sign-in/anonymous",
@@ -602,7 +608,6 @@ describe("anonymous", async () => {
 					},
 					internalAdapter: {
 						deleteUser,
-						deleteUserSessions: deleteUserSessions ?? vi.fn(),
 					},
 					options: {},
 					secret: "secret",
@@ -649,14 +654,12 @@ describe("anonymous", async () => {
 			const plugin = anonymous();
 			const handler = plugin.hooks?.after?.[0]?.handler;
 			const deleteUser = vi.fn();
-			const deleteUserSessions = vi.fn();
 			const ctx = createMiddlewareContext({
 				newSessionUser: {
 					id: "linked-user",
 					isAnonymous: false,
 				},
 				deleteUser,
-				deleteUserSessions,
 			});
 
 			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
@@ -671,7 +674,6 @@ describe("anonymous", async () => {
 
 			await handler?.(ctx);
 
-			expect(deleteUserSessions).toHaveBeenCalledWith("anon-user");
 			expect(deleteUser).toHaveBeenCalledWith("anon-user");
 		});
 	});

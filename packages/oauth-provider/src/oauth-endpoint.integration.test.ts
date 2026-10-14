@@ -23,10 +23,6 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -49,6 +45,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -76,11 +73,14 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 		return { status, body };
 	}
 
-	async function captureRedirect(path: string) {
+	async function captureRedirect(
+		path: string,
+		init: Parameters<typeof client.$fetch>[1] = { method: "GET" },
+	) {
 		let status = 0;
 		let location: string | null = null;
 		await client.$fetch(path, {
-			method: "GET",
+			...init,
 			redirect: "manual",
 			onResponse: async (context) => {
 				status = context.response.status;
@@ -109,6 +109,33 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	function postJson(path: string, body: Record<string, unknown>) {
 		return captureJsonResponse(path, { method: "POST", body });
 	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
+	 */
+	it.each([
+		"/oauth2/introspect",
+		"/oauth2/revoke",
+	])("%s rejects repeated form client authentication fields", async (path) => {
+		if (!oauthClient?.client_id || !oauthClient.client_secret) {
+			throw new Error("OAuth client was not created");
+		}
+		const { status, body } = await captureJsonResponse(path, {
+			method: "POST",
+			body: new URLSearchParams([
+				["client_id", oauthClient.client_id],
+				["client_secret", oauthClient.client_secret],
+				["client_secret", "duplicate-secret"],
+				["token", "opaque-token"],
+			]),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+
+		expect(status).toBe(400);
+		expect(body?.error).toBe("invalid_request");
+	});
 
 	describe("oauth2Token (JSON delivery)", () => {
 		it("missing grant_type → invalid_request", async () => {
@@ -161,6 +188,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 		it("disabled registration does not leak supported auth methods", async () => {
 			const { status, body } = await postJson("/oauth2/register", {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				token_endpoint_auth_method: "not_a_real_method",
 			});
 			expect(status).toBe(403);
@@ -236,6 +264,167 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			);
 		});
 
+		it("missing response_type with trusted redirect_uri → invalid_request", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const state = "missing-response-type";
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				state,
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			const errorUrl = new URL(redirectLocation);
+			expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+			expect(errorUrl.searchParams.get("error_description")).toMatch(
+				/response_type/,
+			);
+			expect(errorUrl.searchParams.get("state")).toBe(state);
+			expect(errorUrl.searchParams.get("iss")).toBeTruthy();
+		});
+
+		it("missing response_type with unregistered redirect_uri → server error page", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: "https://evil.example.com/callback",
+				state: "s",
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(false);
+			expect(redirectLocation).not.toContain("evil.example.com");
+			const errorUrl = new URL(redirectLocation);
+			expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+			expect(errorUrl.searchParams.get("error_description")).toMatch(
+				/response_type/,
+			);
+		});
+
+		it("form POST authorization request → code redirect", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const state = "post-authorization-state";
+			const body = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				scope: "openid",
+				state,
+				code_challenge: "a".repeat(43),
+				code_challenge_method: "S256",
+			});
+			const { status, location } = await captureRedirect("/oauth2/authorize", {
+				method: "POST",
+				body,
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			});
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			const callback = new URL(redirectLocation);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			expect(callback.searchParams.get("code")).toBeTruthy();
+			expect(callback.searchParams.get("state")).toBe(state);
+			expect(callback.searchParams.get("iss")).toBeTruthy();
+		});
+
+		it("unsupported request object → request_not_supported", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				scope: "openid",
+				request: "eyJhbGciOiJub25lIn0.eyJzdGF0ZSI6Imp3dC1zdGF0ZSJ9.",
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.searchParams.get("error")).toBe("request_not_supported");
+			expect(errorUrl.searchParams.get("code")).toBeNull();
+		});
+
+		it("empty request object parameter → request_not_supported", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				scope: "openid",
+				request: "",
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.searchParams.get("error")).toBe("request_not_supported");
+			expect(errorUrl.searchParams.get("code")).toBeNull();
+		});
+
+		it("unsupported request_uri without resolver → request_uri_not_supported", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				scope: "openid",
+				request_uri: "https://rp.example.com/request.jwt",
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.searchParams.get("error")).toBe(
+				"request_uri_not_supported",
+			);
+			expect(errorUrl.searchParams.get("code")).toBeNull();
+		});
+
+		it("empty request_uri parameter without resolver → request_uri_not_supported", async () => {
+			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+			const qs = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectUri,
+				response_type: "code",
+				scope: "openid",
+				request_uri: "",
+			}).toString();
+			const { status, location } = await captureRedirect(
+				`/oauth2/authorize?${qs}`,
+			);
+			expect(status).toBeGreaterThanOrEqual(300);
+			expect(status).toBeLessThan(400);
+			const redirectLocation = expectRedirectLocation(location);
+			const errorUrl = new URL(redirectLocation);
+			expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+			expect(errorUrl.searchParams.get("error")).toBe(
+				"request_uri_not_supported",
+			);
+			expect(errorUrl.searchParams.get("code")).toBeNull();
+		});
+
 		it("missing client_id → server error page with invalid_request (no RP to trust)", async () => {
 			const qs = new URLSearchParams({
 				redirect_uri: redirectUri,
@@ -290,7 +479,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	});
 
 	describe("oauth2EndSession (JSON delivery)", () => {
-		it("missing id_token_hint → invalid_request with envelope", async () => {
+		it("missing id_token_hint → controlled invalid_request with envelope", async () => {
 			const { status, body } = await captureJsonResponse(
 				"/oauth2/end-session",
 				{ method: "GET" },
@@ -298,7 +487,7 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			expect(status).toBe(400);
 			expect(body).toEqual({
 				error: "invalid_request",
-				error_description: "id_token_hint is required",
+				error_description: "User confirmation is required to complete logout",
 			});
 		});
 	});

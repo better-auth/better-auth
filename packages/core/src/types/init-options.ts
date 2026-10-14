@@ -1,6 +1,5 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -28,10 +27,12 @@ import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
+import type { D1Database } from "./database";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
+
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
@@ -146,7 +147,8 @@ export type DynamicBaseURLConfig = {
 	/**
 	 * List of allowed hostnames. Supports wildcard patterns.
 	 *
-	 * The derived host from the request will be validated against this list.
+	 * `x-forwarded-host` is used only when `advanced.trustedProxyHeaders` is
+	 * enabled.
 	 * Uses the same wildcard matching as `trustedOrigins`.
 	 *
 	 * @example
@@ -161,8 +163,9 @@ export type DynamicBaseURLConfig = {
 	allowedHosts: string[];
 
 	/**
-	 * Fallback URL to use if the derived host doesn't match any allowed host.
-	 * If not set, Better Auth will throw an error when the host doesn't match.
+	 * Fallback URL used when no allowed request host can be resolved.
+	 * If omitted, Better Auth throws when the request host is unavailable or not
+	 * allowed.
 	 *
 	 * @example "https://myapp.com"
 	 */
@@ -172,7 +175,7 @@ export type DynamicBaseURLConfig = {
 	 * Protocol to use when constructing the URL.
 	 * - `"https"`: Always use HTTPS (recommended for production)
 	 * - `"http"`: Always use HTTP (for local development)
-	 * - `"auto"`: Derive from `x-forwarded-proto` header or default to HTTPS
+	 * - `"auto"`: Trust `x-forwarded-proto` only when proxy headers are enabled
 	 *
 	 * @default "auto"
 	 */
@@ -303,7 +306,7 @@ export type BetterAuthAdvancedOptions = {
 				 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
 				 *
 				 * @default
-				 * @link https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/utils/get-request-ip.ts#L8
+				 * @link https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/ip.ts
 				 */
 				ipAddressHeaders?: string[];
 				/**
@@ -320,6 +323,21 @@ export type BetterAuthAdvancedOptions = {
 				 * @default 64
 				 */
 				ipv6Subnet?: number;
+				/**
+				 * Trusted reverse-proxy IPs or CIDR ranges. When set, a forwarded IP
+				 * chain is walked right to left, trusted hops are skipped, and the
+				 * first untrusted address is the client IP. Unset trusts only
+				 * single-value IP headers. Use the actual address or subnet of your
+				 * proxies, not a broad private range that also covers clients.
+				 *
+				 * This only interprets the forwarded header chain and cannot verify
+				 * the direct sender. It is safe only when your origin is reachable
+				 * through these proxies and clients cannot set forwarded headers
+				 * directly.
+				 *
+				 * @example ["192.0.2.10", "10.0.0.0/24"]
+				 */
+				trustedProxies?: string[];
 		  }
 		| undefined;
 	/**
@@ -439,6 +457,32 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Enable database joins for adapters that support them.
+				 *
+				 * When disabled (default), related data is fetched via
+				 * separate queries. When enabled, adapters that support
+				 * native joins use them; otherwise Better Auth falls back
+				 * to separate queries.
+				 *
+				 * Please read the adapter documentation for more
+				 * information regarding joins before enabling this.
+				 * Not all adapters support joins.
+				 *
+				 * @default false
+				 */
+				joins?: boolean;
+				/**
+				 * Validate the schema during initialization and report problems
+				 * through the configured logger. Authentication requests await
+				 * the same check and fail when the schema does not match.
+				 * Kysely introspects the database; Drizzle and Prisma inspect
+				 * local schema metadata without opening a connection.
+				 * Set `false` to disable runtime schema validation.
+				 *
+				 * @default true
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**
@@ -607,6 +651,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 				| {
 						/**
@@ -637,6 +691,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 		  )
 		| undefined;
@@ -782,8 +846,11 @@ export type BetterAuthOptions = {
 				 */
 				resetPasswordTokenExpiresIn?: number;
 				/**
-				 * A callback function that is triggered
-				 * when a user's password is changed successfully.
+				 * A callback function that is triggered after a user's password
+				 * is reset. It runs after the new password is saved and, when
+				 * `revokeSessionsOnPasswordReset` is enabled, after the user's
+				 * database sessions are revoked and removal from secondary
+				 * storage has been attempted.
 				 */
 				onPasswordReset?: (
 					data: { user: User },
@@ -811,7 +878,11 @@ export type BetterAuthOptions = {
 				 */
 				autoSignIn?: boolean;
 				/**
-				 * Whether to revoke all other sessions when resetting password
+				 * Whether to revoke all of the user's sessions when resetting the
+				 * password. For sessions stored in the database, revocation and
+				 * the password change run in one transaction when transactions are
+				 * enabled for the adapter. Sessions in secondary storage are
+				 * removed after commit, on a best-effort basis.
 				 * @default false
 				 */
 				revokeSessionsOnPasswordReset?: boolean;
@@ -1020,7 +1091,9 @@ export type BetterAuthOptions = {
 				 * Set this to true to store the session in the database
 				 * as well.
 				 *
-				 * Reads are always done from the secondary storage.
+				 * When enabled, session token lookups fall back to the database
+				 * for missing secondary-storage entries, unless
+				 * `preserveSessionInDatabase` is enabled.
 				 *
 				 * @default false
 				 */
@@ -1059,20 +1132,6 @@ export type BetterAuthOptions = {
 					 * @default "compact"
 					 */
 					strategy?: "compact" | "jwt" | "jwe";
-					/**
-					 * JWT-specific configuration for `strategy: "jwt"`.
-					 */
-					jwt?: {
-						/**
-						 * Which signing key is used for cookie-cache JWTs.
-						 *
-						 * - `"secret"`: uses the Better Auth secret with HS256.
-						 * - `"jwt-plugin"`: uses the installed `jwt()` plugin's asymmetric signing keys.
-						 *
-						 * @default "secret"
-						 */
-						signingKey?: "secret" | "jwt-plugin";
-					};
 					/**
 					 * Controls stateless cookie cache refresh behavior.
 					 *
@@ -1257,7 +1316,7 @@ export type BetterAuthOptions = {
 				 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
 				 * on external services.
 				 *
-				 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+				 * When enabled, tokens are encrypted using XChaCha20-Poly1305 before storage, providing protection against:
 				 * - Database breaches and unauthorized access to raw token data
 				 * - Internal threats from database administrators or compromised credentials
 				 * - Token exposure in database backups and logs
@@ -1769,17 +1828,23 @@ export type BetterAuthOptions = {
 		  }
 		| undefined;
 	/**
-	 * Experimental features
+	 * Experimental features.
 	 */
-	experimental?: {
-		/**
-		 * Enable experimental joins for your database adapter.
-		 *
-		 * 	Please read the adapter documentation for more information regarding joins before enabling this.
-		 * 	Not all adapters support joins.
-		 *
-		 * @default false
-		 */
-		joins?: boolean;
-	};
+	experimental?:
+		| {
+				/**
+				 * OpenTelemetry instrumentation configuration.
+				 */
+				instrumentation?:
+					| {
+							/**
+							 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+							 *
+							 * @default true
+							 */
+							enabled?: boolean | undefined;
+					  }
+					| undefined;
+		  }
+		| undefined;
 };

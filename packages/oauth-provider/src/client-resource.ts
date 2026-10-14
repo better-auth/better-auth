@@ -1,4 +1,3 @@
-import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type {
 	ResourceRequestInput,
@@ -16,16 +15,13 @@ import type {
 } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyOptions } from "jose";
-import { raiseResourceServerChallenge } from "./resource-challenge";
+import { createResourceServerChallenge } from "./resource-challenge";
 import type { ResourceServerMetadata } from "./types/oauth";
 import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 type ResourceClientAuth = {
-	options: {
-		baseURL?: BetterAuthOptions["baseURL"];
-		basePath?: BetterAuthOptions["basePath"];
-	};
+	options: BetterAuthOptions;
 	$context: Promise<unknown>;
 };
 
@@ -147,7 +143,8 @@ export const oauthProviderResourceClient = <
 					opts?: {
 						verifyOptions?: JWTVerifyOptions &
 							Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-						scopes?: string[];
+						requiredScopes?: readonly string[];
+						isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 						jwksUrl?: string;
 						remoteVerify?: VerifyAccessTokenRemote;
 						/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -163,7 +160,7 @@ export const oauthProviderResourceClient = <
 						}
 						return await verifyBearerToken(token, verifyOptions);
 					} catch (error) {
-						raiseResourceServerChallenge(
+						const challenge = createResourceServerChallenge(
 							error,
 							verifyOptions.verifyOptions.audience,
 							{
@@ -171,6 +168,8 @@ export const oauthProviderResourceClient = <
 								dpopSigningAlgorithms: DPOP_SIGNING_ALGORITHMS,
 							},
 						);
+						if (challenge) throw challenge;
+						throw error;
 					}
 				}) as VerifyAccessTokenOutput<T>,
 				/**
@@ -184,7 +183,8 @@ export const oauthProviderResourceClient = <
 					opts?: {
 						verifyOptions?: JWTVerifyOptions &
 							Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-						scopes?: string[];
+						requiredScopes?: readonly string[];
+						isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 						jwksUrl?: string;
 						remoteVerify?: VerifyAccessTokenRemote;
 						dpop?: VerifyAccessTokenRequestOptions["dpop"];
@@ -199,7 +199,7 @@ export const oauthProviderResourceClient = <
 							verifyOptions,
 						);
 					} catch (error) {
-						raiseResourceServerChallenge(
+						const challenge = createResourceServerChallenge(
 							error,
 							verifyOptions.verifyOptions.audience,
 							{
@@ -208,6 +208,8 @@ export const oauthProviderResourceClient = <
 									opts?.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS,
 							},
 						);
+						if (challenge) throw challenge;
+						throw error;
 					}
 				}) as VerifyAccessTokenRequestOutput<T>,
 				/**
@@ -224,9 +226,6 @@ export const oauthProviderResourceClient = <
 					overrides: Partial<ResourceServerMetadata> | undefined,
 					opts:
 						| {
-								silenceWarnings?: {
-									oidcScopes?: boolean;
-								};
 								externalScopes?: string[];
 						  }
 						| undefined,
@@ -257,13 +256,6 @@ export const oauthProviderResourceClient = <
 								throw new BetterAuthError(
 									"Only the Auth Server should utilize the openid scope",
 								);
-							}
-							if (["profile", "email", "phone", "address"].includes(sc)) {
-								if (!opts?.silenceWarnings?.oidcScopes) {
-									logger.warn(
-										`"${sc}" is typically restricted for the authorization server, a resource server typically shouldn't handle this scope`,
-									);
-								}
 							}
 							if (!allValidScopes.has(sc)) {
 								throw new BetterAuthError(
@@ -342,7 +334,8 @@ type VerifyAccessTokenRequestOutput<T> = T extends undefined
 type VerifyAccessTokenAuthOpts = {
 	verifyOptions?: JWTVerifyOptions &
 		Required<Pick<JWTVerifyOptions, "audience">>;
-	scopes?: string[];
+	requiredScopes?: readonly string[];
+	isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 	jwksUrl?: string;
 	remoteVerify?: VerifyAccessTokenRemote;
 	/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -355,7 +348,8 @@ type VerifyAccessTokenNoAuthOpts =
 	| {
 			verifyOptions: JWTVerifyOptions &
 				Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-			scopes?: string[];
+			requiredScopes?: readonly string[];
+			isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 			jwksUrl: string;
 			remoteVerify?: VerifyAccessTokenRemote;
 			/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -364,7 +358,8 @@ type VerifyAccessTokenNoAuthOpts =
 	| {
 			verifyOptions: JWTVerifyOptions &
 				Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
-			scopes?: string[];
+			requiredScopes?: readonly string[];
+			isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 			jwksUrl?: string;
 			remoteVerify: VerifyAccessTokenRemote;
 			/** Maps non-url (ie urn, client) resources to resource_metadata */
@@ -378,18 +373,12 @@ type ProtectedResourceMetadataOutput<T> = T extends undefined
 	? (
 			overrides: ResourceServerMetadata,
 			opts?: {
-				silenceWarnings?: {
-					oidcScopes?: boolean;
-				};
 				externalScopes?: string[];
 			},
 		) => Promise<ResourceServerMetadata>
 	: (
 			overrides?: Partial<ResourceServerMetadata>,
 			opts?: {
-				silenceWarnings?: {
-					oidcScopes?: boolean;
-				};
 				externalScopes?: string[];
 			},
 		) => Promise<ResourceServerMetadata>;

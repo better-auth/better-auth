@@ -1,4 +1,5 @@
 ---
+icon: pluginsPhoneNumber
 title: Phone Number
 description: Phone number plugin
 ---
@@ -294,6 +295,10 @@ Then, you can reset the password by calling `resetPassword` on the client with t
   ```
 </APIMethod>
 
+If the new password is rejected, for example by the [Have I Been Pwned](/docs/plugins/have-i-been-pwned) plugin, the OTP isn't consumed and can be used again. If a later step of the reset fails, such as revoking sessions or saving the password, the OTP stays usable only when transactions are enabled for your database adapter and verification values are stored in the database. That is the default without secondary storage; with [secondary storage](/docs/concepts/database#secondary-storage), set [`verification.storeInDatabase: true`](/docs/reference/options#verification). A wrong OTP still counts toward `allowedAttempts`.
+
+With a custom [`verifyOTP`](#verifyotp), your provider checks the code and usually spends it, so these guarantees don't apply. A password that is too short or too long is rejected before the provider is called, but a password rejected later, for example by Have I Been Pwned, has already spent the code, and the user needs to request a new one.
+
 ## Options
 
 ### `otpLength`
@@ -341,6 +346,8 @@ A custom function to validate the phone number. It takes the phone number as an 
 ### `verifyOTP`
 
 A custom function to verify the OTP code. When provided, this function will be used instead of the default internal verification logic. This is useful when you want to integrate with external SMS providers that handle OTP verification (e.g., Twilio Verify, AWS SNS). The function takes an object with `phoneNumber` and `code` properties and a request object, and returns a boolean or a promise that resolves to a boolean indicating whether the OTP is valid.
+
+The function checks the codes for phone number verification, [`consumePhoneNumberOTP`](#consume-an-otp-on-the-server), and [password reset](#request-password-reset). If `sendPasswordResetOTP` sends the code Better Auth generates rather than a code from your provider, `verifyOTP` must accept that code too.
 
 ```ts
 import { betterAuth } from "better-auth";

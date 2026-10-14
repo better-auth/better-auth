@@ -1,10 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import {
 	CLIENT_ASSERTION_TYPE,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import { isPublicRoutableHost } from "@better-auth/core/utils/host";
-import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "better-call";
 import type { JSONWebKeySet } from "jose";
@@ -14,22 +14,54 @@ import {
 	decodeProtectedHeader,
 	jwtVerify,
 } from "jose";
-import type { OAuthOptions, SchemaClient, Scope } from "../types";
+import { getIssuer } from "../authorize";
+import { validatePublicClientJwks } from "../client-jwks";
+import { getClientDiscoveries } from "../extensions";
+import type {
+	ClientMetadataResourceFetch,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "../types";
 import { getClient } from "./index";
 
-// JWKS URI cache with 5-minute TTL and bounded size
-const jwksCache = new Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>();
+type JwksCache = Map<string, { jwks: JSONWebKeySet; fetchedAt: number }>;
+type FetchedJwksResult =
+	| { valid: true; jwks: JSONWebKeySet }
+	| { valid: false };
+
+// Provider-scoped JWKS URI caches with 5-minute TTL and bounded size.
+const jwksCaches = new WeakMap<OAuthOptions<Scope[]>, JwksCache>();
 const JWKS_CACHE_TTL_MS = 5 * 60 * 1000;
 const JWKS_CACHE_MAX_ENTRIES = 500;
 const JWKS_FETCH_TIMEOUT_MS = 5_000;
+const MAX_JWKS_RESPONSE_BYTES = 64 * 1024;
+const JSON_CONTENT_TYPE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 
-function setJwksCache(uri: string, jwks: JSONWebKeySet, fetchedAt: number) {
-	jwksCache.set(uri, { jwks, fetchedAt });
+function setJwksCache(
+	jwksCache: JwksCache,
+	cacheKey: string,
+	jwks: JSONWebKeySet,
+	fetchedAt: number,
+) {
+	jwksCache.set(cacheKey, { jwks, fetchedAt });
 	if (jwksCache.size > JWKS_CACHE_MAX_ENTRIES) {
 		// Evict oldest entry (Map iterates in insertion order)
 		const oldest = jwksCache.keys().next().value;
 		if (oldest !== undefined) jwksCache.delete(oldest);
 	}
+}
+
+function getJwksCache(opts: OAuthOptions<Scope[]>): JwksCache {
+	const existingCache = jwksCaches.get(opts);
+	if (existingCache) return existingCache;
+	const cache: JwksCache = new Map();
+	jwksCaches.set(opts, cache);
+	return cache;
+}
+
+function getJwksCacheKey(client: SchemaClient<Scope[]>): string {
+	return `${client.clientDiscoveryId ?? "managed"}:${client.jwksUri ?? ""}`;
 }
 const ALGORITHMS_LIST: string[] = [...PRIVATE_KEY_JWT_SIGNING_ALGORITHMS];
 
@@ -62,6 +94,19 @@ function validateJwksUri(
 			error: "invalid_client",
 		});
 	}
+	if (parsed.username || parsed.password) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "jwks_uri must not contain credentials",
+			error: "invalid_client",
+		});
+	}
+	// URL.hash is empty for a bare trailing `#`, so inspect the source value.
+	if (jwksUri.includes("#")) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "jwks_uri must not include a fragment component",
+			error: "invalid_client",
+		});
+	}
 	if (isPrivateHostname(parsed.hostname)) {
 		throw new APIError("BAD_REQUEST", {
 			error_description:
@@ -84,40 +129,104 @@ function validateJwksUri(
 }
 
 function urlClientIdOrigin(clientId: string): string | undefined {
-	if (!clientId.startsWith("https://") && !clientId.startsWith("http://")) {
-		return undefined;
-	}
 	try {
-		return new URL(clientId).origin;
+		const parsed = new URL(clientId);
+		if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+			return undefined;
+		}
+		return parsed.origin;
 	} catch {
 		return undefined;
 	}
 }
 
-async function fetchJwksFromUri(jwksUri: string): Promise<JSONWebKeySet> {
+async function readBoundedResponseBody(response: Response): Promise<string> {
+	const contentLength = response.headers.get("content-length");
+	if (
+		contentLength !== null &&
+		Number.isFinite(Number(contentLength)) &&
+		Number(contentLength) > MAX_JWKS_RESPONSE_BYTES
+	) {
+		await response.body?.cancel();
+		throw new Error("JWKS response exceeds 64 KiB");
+	}
+
+	if (!response.body) {
+		return "";
+	}
+
+	const reader = response.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let totalBytes = 0;
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		totalBytes += value.byteLength;
+		if (totalBytes > MAX_JWKS_RESPONSE_BYTES) {
+			await reader.cancel();
+			throw new Error("JWKS response exceeds 64 KiB");
+		}
+		chunks.push(value);
+	}
+
+	const bytes = new Uint8Array(totalBytes);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return new TextDecoder().decode(bytes);
+}
+
+async function fetchJwksFromUri(
+	jwksUri: string,
+	fetchClientMetadataResource: ClientMetadataResourceFetch = globalThis.fetch,
+): Promise<FetchedJwksResult> {
 	const controller = new AbortController();
 	const timeout = setTimeout(() => controller.abort(), JWKS_FETCH_TIMEOUT_MS);
 	try {
-		const response = await fetch(jwksUri, {
+		const response = await fetchClientMetadataResource(jwksUri, {
 			signal: controller.signal,
 			headers: { accept: "application/json" },
 			redirect: "error",
 		});
-		if (!response.ok) {
+		if (response.redirected) {
+			throw new Error("JWKS fetch redirected");
+		}
+		if (response.status !== 200) {
 			throw new Error(`JWKS fetch returned ${response.status}`);
 		}
-		const jwks = (await response.json()) as JSONWebKeySet;
-		if (!jwks.keys || !Array.isArray(jwks.keys)) {
-			throw new Error("JWKS response missing keys array");
+		const contentType = response.headers.get("content-type");
+		if (!contentType || !JSON_CONTENT_TYPE.test(contentType)) {
+			throw new Error("JWKS response must use a JSON media type");
 		}
-		return jwks;
+		const responseBody = await readBoundedResponseBody(response);
+		let parsedBody: unknown;
+		try {
+			parsedBody = JSON.parse(responseBody);
+		} catch {
+			return { valid: false };
+		}
+		const result = validatePublicClientJwks(parsedBody);
+		if (!result.valid) {
+			return { valid: false };
+		}
+		return { valid: true, jwks: result.jwks };
 	} finally {
 		clearTimeout(timeout);
 	}
 }
 
+function createClientJwksFetchError(): APIError {
+	return new APIError("BAD_REQUEST", {
+		error_description: "failed to fetch client JWKS",
+		error: "invalid_client",
+	});
+}
+
 async function fetchClientJwks(
 	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
 ): Promise<JSONWebKeySet> {
 	if (client.jwks) {
@@ -131,18 +240,38 @@ async function fetchClientJwks(
 		});
 	}
 
-	validateJwksUri(ctx, client.jwksUri, urlClientIdOrigin(client.clientId));
+	const discovery = client.clientDiscoveryId
+		? getClientDiscoveries(opts).find(
+				(candidate) => candidate.id === client.clientDiscoveryId,
+			)
+		: undefined;
+	if (client.clientDiscoveryId && !discovery?.fetchClientMetadataResource) {
+		throw new APIError("BAD_REQUEST", {
+			error_description:
+				"client discovery does not provide a metadata resource transport",
+			error: "invalid_client",
+		});
+	}
+	validateJwksUri(
+		ctx,
+		client.jwksUri,
+		client.clientDiscoveryId ? urlClientIdOrigin(client.clientId) : undefined,
+	);
 
 	const now = Date.now();
-	const cached = jwksCache.get(client.jwksUri);
+	const cacheKey = getJwksCacheKey(client);
+	const jwksCache = getJwksCache(opts);
+	const cached = jwksCache.get(cacheKey);
 	if (cached && now - cached.fetchedAt < JWKS_CACHE_TTL_MS) {
 		return cached.jwks;
 	}
 
+	let result: FetchedJwksResult;
 	try {
-		const jwks = await fetchJwksFromUri(client.jwksUri);
-		setJwksCache(client.jwksUri, jwks, now);
-		return jwks;
+		result = await fetchJwksFromUri(
+			client.jwksUri,
+			discovery?.fetchClientMetadataResource,
+		);
 	} catch {
 		// Return stale cache on transient failures, but only within a grace period.
 		// After 2x the TTL, stale keys are no longer trusted (prevents accepting
@@ -151,11 +280,11 @@ async function fetchClientJwks(
 		if (cached && now - cached.fetchedAt < staleLimitMs) {
 			return cached.jwks;
 		}
-		throw new APIError("BAD_REQUEST", {
-			error_description: "failed to fetch client JWKS",
-			error: "invalid_client",
-		});
+		throw createClientJwksFetchError();
 	}
+	if (!result.valid) throw createClientJwksFetchError();
+	setJwksCache(jwksCache, cacheKey, result.jwks, now);
+	return result.jwks;
 }
 
 /**
@@ -163,13 +292,31 @@ async function fetchClientJwks(
  * Handles key rotation: the client may have published a new key that isn't in our cache yet.
  */
 async function refetchClientJwks(
+	opts: OAuthOptions<Scope[]>,
 	client: SchemaClient<Scope[]>,
 ): Promise<JSONWebKeySet | null> {
 	if (!client.jwksUri) return null;
+	const discovery = client.clientDiscoveryId
+		? getClientDiscoveries(opts).find(
+				(candidate) => candidate.id === client.clientDiscoveryId,
+			)
+		: undefined;
+	if (client.clientDiscoveryId && !discovery?.fetchClientMetadataResource) {
+		return null;
+	}
 	try {
-		const jwks = await fetchJwksFromUri(client.jwksUri);
-		setJwksCache(client.jwksUri, jwks, Date.now());
-		return jwks;
+		const result = await fetchJwksFromUri(
+			client.jwksUri,
+			discovery?.fetchClientMetadataResource,
+		);
+		if (!result.valid) return null;
+		setJwksCache(
+			getJwksCache(opts),
+			getJwksCacheKey(client),
+			result.jwks,
+			Date.now(),
+		);
+		return result.jwks;
 	} catch {
 		return null;
 	}
@@ -257,16 +404,17 @@ export async function consumeClientAssertion(
 	}
 
 	// Consume the jti with a single insert keyed by a digest of the namespaced
-	// identifier. The primary key is the atomic gate on every adapter (SQL
+	// identifier, encoded so the configured id strategy keeps it. The primary key is the atomic gate on every adapter (SQL
 	// primary key, MongoDB `_id`), so concurrent requests across workers cannot
 	// both pass. A duplicate-key failure means the jti was already used (replay);
 	// any other failure is surfaced unchanged.
 	const jtiDigest = await createHash("SHA-256").digest(
 		new TextEncoder().encode(`${namespace}:${payload.jti}`),
 	);
-	const jtiId = base64Url.encode(new Uint8Array(jtiDigest).slice(0, 24), {
-		padding: false,
-	});
+	const jtiId = encodeDeterministicId(
+		new Uint8Array(jtiDigest).slice(0, 24),
+		ctx.context.options,
+	);
 	try {
 		await ctx.context.adapter.create({
 			model: "oauthClientAssertion",
@@ -301,8 +449,9 @@ export async function consumeClientAssertion(
 /**
  * Verifies a client assertion JWT for `private_key_jwt` authentication.
  *
- * Validates: signature, iss=client_id, sub=client_id, aud=token_endpoint,
- * exp, assertion max lifetime, jti uniqueness (replay prevention).
+ * Validates: signature, iss=client_id, sub=client_id, aud=the endpoint serving
+ * the assertion or the normalized OP issuer, exp, assertion max lifetime,
+ * jti uniqueness (replay prevention).
  */
 export async function verifyClientAssertion(
 	ctx: GenericEndpointContext,
@@ -386,12 +535,15 @@ export async function verifyClientAssertion(
 	}
 
 	// Fetch JWKS and verify signature + claims
-	const jwks = await fetchClientJwks(ctx, client);
-	const audience = expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
+	const jwks = await fetchClientJwks(ctx, opts, client);
+	const endpointAudience =
+		expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
+	const issuerAudience = getIssuer(ctx, opts);
+	const acceptedAudiences = [...new Set([endpointAudience, issuerAudience])];
 	const verifyOpts = {
 		issuer: clientId,
 		subject: clientId,
-		audience,
+		audience: acceptedAudiences,
 		algorithms: ALGORITHMS_LIST,
 	};
 
@@ -414,7 +566,7 @@ export async function verifyClientAssertion(
 			verifyErr instanceof Error &&
 			/no matching key|no applicable key/i.test(verifyErr.message);
 		if (isKeyError) {
-			const refreshed = await refetchClientJwks(client);
+			const refreshed = await refetchClientJwks(opts, client);
 			if (refreshed) {
 				try {
 					({ payload } = await jwtVerify(
@@ -442,6 +594,15 @@ export async function verifyClientAssertion(
 		}
 	}
 
+	const assertionAudiences = Array.isArray(payload.aud)
+		? payload.aud
+		: [payload.aud];
+	// jwtVerify already matched the payload against this same audience set.
+	const acceptedAudience = assertionAudiences.find(
+		(value): value is string =>
+			typeof value === "string" && acceptedAudiences.includes(value),
+	)!;
+
 	// Audience, lifetime, and jti single-use replay protection, shared with
 	// extension client-auth methods through `consumeClientAssertion` so both
 	// paths enforce RFC 7523 §3 identically. jose already matched `aud` via
@@ -450,7 +611,7 @@ export async function verifyClientAssertion(
 	await consumeClientAssertion(ctx, opts, {
 		namespace: `private_key_jwt:${clientId}`,
 		payload,
-		expectedAudience: audience,
+		expectedAudience: acceptedAudience,
 	});
 
 	return { clientId };

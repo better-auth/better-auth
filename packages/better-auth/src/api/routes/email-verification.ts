@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
@@ -9,6 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
+import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
@@ -290,10 +292,10 @@ export const verifyEmail = createAuthEndpoint(
 	async (ctx) => {
 		function redirectOnError(error: { code: string; message: string }) {
 			if (ctx.query.callbackURL) {
-				if (ctx.query.callbackURL.includes("?")) {
-					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error.code}`);
-				}
-				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error.code}`);
+				const params = new URLSearchParams({ error: error.code });
+				const redirectURL = appendQueryParams(ctx.query.callbackURL, params);
+
+				throw ctx.redirect(redirectURL);
 			}
 			throw APIError.from("UNAUTHORIZED", error);
 		}
@@ -354,7 +356,7 @@ export const verifyEmail = createAuthEndpoint(
 									url,
 									token: newToken,
 								},
-								ctx.request?.clone(),
+								safeCloneRequest(ctx.request),
 							),
 						);
 					}
@@ -453,7 +455,7 @@ export const verifyEmail = createAuthEndpoint(
 									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
 									token: newToken,
 								},
-								ctx.request?.clone(),
+								safeCloneRequest(ctx.request),
 							),
 						);
 					}

@@ -31,6 +31,21 @@ describe("oauth provider schema", () => {
 		}
 	});
 
+	it("enforces one client-resource link per pair with a compound unique index", () => {
+		expect(schema.oauthClientResource.indexes).toContainEqual({
+			fields: ["clientId", "resourceId"],
+			unique: true,
+		});
+	});
+
+	it("defaults new client_credentials scope authority to an empty array", () => {
+		expect(schema.oauthClient.fields.clientCredentialsScopes).toMatchObject({
+			type: "string[]",
+			required: false,
+			defaultValue: [],
+		});
+	});
+
 	it("declares the oauthResource entity with the expected policy seams", () => {
 		type FieldShape = {
 			type?: string;
@@ -104,6 +119,8 @@ describe("oauth provider schema", () => {
 		);
 		expect(refreshFields.confirmation).toBeDefined();
 		expect(accessFields.confirmation).toBeDefined();
+		expect(refreshFields.authorizationCodeId).toBeDefined();
+		expect(accessFields.authorizationCodeId).toBeDefined();
 
 		// Other sender-constraint/token-format columns are intentionally absent
 		// from the schema.

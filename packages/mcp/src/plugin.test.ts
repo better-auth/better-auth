@@ -1,3 +1,7 @@
+import {
+	DEVICE_CODE_GRANT_TYPE,
+	oauthDeviceAuthorization,
+} from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
@@ -9,31 +13,26 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
-import { mcp, requireMcpAuth } from "./index";
+import { createMcpProtectedRequestHandler, mcp, requireMcpAuth } from "./index";
 
 describe("mcp plugin", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const baseURL = `${authServerBaseUrl}/api/auth`;
+	const mcpPlugin = mcp({
+		loginPage: "/login",
+		consentPage: "/consent",
+		resource: baseURL,
+	});
 
 	// No custom jwt.issuer here, so discovery documents are served under the
 	// `/api/auth` base path (issuer == baseURL), matching the public well-known
 	// URLs an MCP client derives from the issuer.
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
-		plugins: [
-			jwt(),
-			mcp({
-				loginPage: "/login",
-				consentPage: "/consent",
-				resource: baseURL,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
-			}),
-		],
+		plugins: [jwt(), mcpPlugin],
 	});
 
 	const { headers } = await signInWithTestUser();
@@ -57,34 +56,61 @@ describe("mcp plugin", async () => {
 	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 
 	describe("dynamic client registration", () => {
-		it("registers a public client without a client_secret", async () => {
+		it("configures the MCP resource as a registration default", () => {
+			expect(mcpPlugin.options.clientRegistrationDefaultResources).toEqual([
+				baseURL,
+			]);
+		});
+
+		it("does not enable unauthenticated DCR by default", async () => {
 			const response = await unauthenticatedClient.oauth2.register({
 				client_name: "test-public-client",
 				redirect_uris: [redirectUri],
 				token_endpoint_auth_method: "none",
+				application_type: "native",
 			});
 
-			expect(response.data?.client_id).toBeDefined();
-			expect(response.data?.token_endpoint_auth_method).toBe("none");
-			expect(response.data).not.toHaveProperty("client_secret");
-			expect(response.data).toMatchObject({
-				grant_types: ["authorization_code"],
-				response_types: ["code"],
-			});
+			expect(response.error?.status).toBe(403);
 		});
 
-		it("registers a confidential client with a client_secret", async () => {
-			const response = await serverClient.oauth2.register({
-				client_name: "test-confidential-client",
-				redirect_uris: [redirectUri],
-				token_endpoint_auth_method: "client_secret_basic",
+		it("advertises and accepts DCR only when explicitly enabled", async () => {
+			const explicitBaseUrl = "http://localhost:3020";
+			const explicitResource = `${explicitBaseUrl}/api/auth`;
+			const { auth: explicitAuth, customFetchImpl: explicitFetch } =
+				await getTestInstance({
+					baseURL: explicitBaseUrl,
+					plugins: [
+						jwt(),
+						mcp({
+							loginPage: "/login",
+							consentPage: "/consent",
+							resource: explicitResource,
+							allowDynamicClientRegistration: true,
+							allowUnauthenticatedClientRegistration: true,
+						}),
+					],
+				});
+			const explicitClient = createAuthClient({
+				plugins: [oauthProviderClient()],
+				baseURL: explicitBaseUrl,
+				fetchOptions: { customFetchImpl: explicitFetch },
 			});
 
-			expect(response.data?.client_id).toBeDefined();
-			expect(response.data?.client_secret).toEqual(expect.any(String));
-			expect(response.data?.token_endpoint_auth_method).toBe(
-				"client_secret_basic",
+			const metadata = await explicitAuth.api.getOAuthServerConfig();
+			expect(metadata.registration_endpoint).toBe(
+				`${explicitResource}/oauth2/register`,
 			);
+			expect(metadata.client_id_metadata_document_supported).toBeUndefined();
+			const registration = await explicitClient.oauth2.register({
+				client_name: "explicit DCR client",
+				redirect_uris: ["https://client.example.com/callback"],
+				token_endpoint_auth_method: "none",
+			});
+			expect(registration.error).toBeNull();
+			expect(registration.data).toMatchObject({
+				resources: [explicitResource],
+				token_endpoint_auth_method: "none",
+			});
 		});
 	});
 
@@ -107,7 +133,7 @@ describe("mcp plugin", async () => {
 				authorization_endpoint: string;
 				token_endpoint: string;
 				userinfo_endpoint: string;
-				registration_endpoint: string;
+				registration_endpoint?: string;
 				scopes_supported: string[];
 				id_token_signing_alg_values_supported: string[];
 			};
@@ -117,12 +143,43 @@ describe("mcp plugin", async () => {
 				authorization_endpoint: `${baseURL}/oauth2/authorize`,
 				token_endpoint: `${baseURL}/oauth2/token`,
 				userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
-				registration_endpoint: `${baseURL}/oauth2/register`,
 			});
+			expect(metadata.registration_endpoint).toBeUndefined();
+			expect(
+				(metadata as { client_id_metadata_document_supported?: boolean })
+					.client_id_metadata_document_supported,
+			).toBeUndefined();
 			expect(metadata.scopes_supported).toContain("offline_access");
 			expect(metadata.id_token_signing_alg_values_supported).not.toContain(
 				"none",
 			);
+		});
+
+		it("composes with device authorization and advertises the device-code grant", async () => {
+			const deviceBaseURL = "http://localhost:3011";
+			const { auth: deviceAuth } = await getTestInstance({
+				baseURL: deviceBaseURL,
+				plugins: [
+					jwt(),
+					mcp({
+						loginPage: "/login",
+						consentPage: "/consent",
+						resource: `${deviceBaseURL}/api/auth`,
+					}),
+					oauthDeviceAuthorization(),
+				],
+			});
+
+			const metadata =
+				(await deviceAuth.api.getOAuthServerConfig()) as unknown as {
+					device_authorization_endpoint?: string;
+					grant_types_supported?: string[];
+				};
+
+			expect(metadata.device_authorization_endpoint).toBe(
+				`${deviceBaseURL}/api/auth/device/code`,
+			);
+			expect(metadata.grant_types_supported).toContain(DEVICE_CODE_GRANT_TYPE);
 		});
 	});
 
@@ -168,10 +225,6 @@ describe("mcp plugin", async () => {
 						consentPage: "/consent",
 						resource: resourceBaseURL,
 						scopes: ["openid", "offline_access", "mcp:read"],
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			});
@@ -219,14 +272,39 @@ describe("mcp plugin", async () => {
 			expect(response.headers.get("allow")).toBe("GET, HEAD");
 		});
 
-		it("rejects a resource identifier that contains a URI fragment", () => {
+		it.each([
+			["opaque URI", "urn:example:mcp"],
+			["array", ["https://api.example.com/mcp"]],
+			["non-loopback HTTP", "http://api.example.com/mcp"],
+			["private HTTP hostname", "http://mcp.internal/mcp"],
+			["loopback-lookalike hostname", "http://127.example.com/mcp"],
+			["credentials", "https://user:pass@api.example.com/mcp"],
+			["fragment", "https://api.example.com/mcp#fragment"],
+			["query", "https://api.example.com/mcp?tenant=a"],
+		])("rejects an invalid canonical MCP resource: %s", (_name, resource) => {
 			expect(() =>
 				mcp({
 					loginPage: "/login",
 					consentPage: "/consent",
-					resource: "https://api.example.com/mcp#fragment",
+					resource: resource as string,
 				}),
-			).toThrow();
+			).toThrow("MCP resource");
+		});
+
+		it.each([
+			"https://api.example.com/mcp",
+			"http://localhost:3000/mcp",
+			"http://127.0.0.1:3000/mcp",
+			"http://127.42.0.1/mcp",
+			"http://[::1]:3000/mcp",
+		])("accepts a canonical MCP resource: %s", (resource) => {
+			expect(() =>
+				mcp({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resource,
+				}),
+			).not.toThrow();
 		});
 	});
 
@@ -257,6 +335,72 @@ describe("mcp plugin", async () => {
 				`Bearer resource_metadata="${authServerBaseUrl}/.well-known/oauth-protected-resource/api/auth"`,
 			);
 		});
+
+		it("challenges for a missing scope and accepts a union-scope retry", async () => {
+			const { publicKey, privateKey } = await generateKeyPair("RS256", {
+				extractable: true,
+			});
+			const publicJwk = await exportJWK(publicKey);
+			publicJwk.kid = "mcp-real-verifier";
+			publicJwk.alg = "RS256";
+			const signToken = (scope: string) =>
+				new SignJWT({
+					sub: "user-real",
+					scope,
+				})
+					.setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
+					.setIssuer(baseURL)
+					.setAudience(baseURL)
+					.setIssuedAt()
+					.setExpirationTime("1h")
+					.sign(privateKey);
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async () => Response.json({ keys: [publicJwk] })),
+			);
+			onTestFinished(() => {
+				vi.unstubAllGlobals();
+			});
+
+			const handler = vi.fn(
+				async (_request: Request, accessTokenClaims: { sub?: string }) =>
+					Response.json({ sub: accessTokenClaims.sub }),
+			);
+			const protect = createMcpProtectedRequestHandler(
+				{
+					issuer: baseURL,
+					audience: baseURL,
+					jwksUrl: `${baseURL}/jwks`,
+					requiredScopes: ["mcp:write"],
+				},
+				handler,
+			);
+			const firstToken = await signToken("mcp:read");
+			const challenge = await protect(
+				new Request(`${authServerBaseUrl}/mcp`, {
+					headers: { Authorization: `Bearer ${firstToken}` },
+				}),
+			);
+
+			expect(challenge.status).toBe(403);
+			expect(challenge.headers.get("WWW-Authenticate")).toContain(
+				'scope="mcp:write"',
+			);
+			expect(challenge.headers.get("WWW-Authenticate")).not.toContain(
+				'scope="mcp:read',
+			);
+			expect(handler).not.toHaveBeenCalled();
+
+			const retryToken = await signToken("mcp:read mcp:write");
+			const response = await protect(
+				new Request(`${authServerBaseUrl}/mcp`, {
+					headers: { Authorization: `Bearer ${retryToken}` },
+				}),
+			);
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({ sub: "user-real" });
+			expect(handler).toHaveBeenCalledOnce();
+		});
 	});
 
 	describe("authorization code + PKCE flow", () => {
@@ -264,18 +408,22 @@ describe("mcp plugin", async () => {
 		const state = "mcp-pkce-state";
 
 		beforeAll(async () => {
-			const reg = await unauthenticatedClient.oauth2.register({
-				client_name: "test-pkce-client",
-				redirect_uris: [redirectUri],
-				token_endpoint_auth_method: "none",
+			const reg = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					client_name: "test-pkce-client",
+					redirect_uris: [redirectUri],
+					token_endpoint_auth_method: "none",
+					application_type: "native",
+				},
 			});
-			if (!reg.data?.client_id) throw new Error("registration failed");
-			publicClientId = reg.data.client_id;
+			if (!reg.client_id) throw new Error("client creation failed");
+			publicClientId = reg.client_id;
 		});
 
 		it("mints an access token through authorize + consent + token exchange", async () => {
 			const codeVerifier = generateRandomString(64);
-			const { url: authUrl } = await createAuthorizationURL({
+			const authUrl = await createAuthorizationURL({
 				id: providerId,
 				options: {
 					clientId: publicClientId,
@@ -337,6 +485,8 @@ describe("mcp plugin", async () => {
 			});
 			const tokens = (await tokenResponse.json()) as {
 				access_token?: string;
+				expires_at?: number;
+				expires_in?: number;
 				id_token?: string;
 				refresh_token?: string;
 				token_type?: string;
@@ -348,6 +498,50 @@ describe("mcp plugin", async () => {
 			expect(tokens.refresh_token).toBeDefined();
 			expect(tokens.token_type?.toLowerCase()).toBe("bearer");
 			expect(tokens.scope).toBe("openid offline_access");
+
+			const { body: firstRefreshBody, headers: firstRefreshHeaders } =
+				await refreshAccessTokenRequest({
+					refreshToken: tokens.refresh_token!,
+					options: {
+						clientId: publicClientId,
+						redirectURI: redirectUri,
+					},
+				});
+			const firstRefreshResponse = await customFetchImpl(
+				`${baseURL}/oauth2/token`,
+				{
+					method: "POST",
+					body: firstRefreshBody.toString(),
+					headers: firstRefreshHeaders,
+				},
+			);
+			const firstRefresh = (await firstRefreshResponse.json()) as typeof tokens;
+			expect(firstRefresh.access_token).toBeDefined();
+			expect(firstRefresh.refresh_token).toBeDefined();
+
+			const { body: replayBody, headers: replayHeaders } =
+				await refreshAccessTokenRequest({
+					refreshToken: tokens.refresh_token!,
+					options: {
+						clientId: publicClientId,
+						redirectURI: redirectUri,
+					},
+				});
+			const replayResponse = await customFetchImpl(`${baseURL}/oauth2/token`, {
+				method: "POST",
+				body: replayBody.toString(),
+				headers: replayHeaders,
+			});
+			const replay = (await replayResponse.json()) as typeof tokens;
+			expect(replay).toMatchObject({
+				access_token: firstRefresh.access_token,
+				expires_at: firstRefresh.expires_at,
+				refresh_token: firstRefresh.refresh_token,
+				token_type: firstRefresh.token_type,
+				scope: firstRefresh.scope,
+				id_token: firstRefresh.id_token,
+			});
+			expect(replay.expires_in).toBeLessThanOrEqual(firstRefresh.expires_in!);
 		});
 	});
 });
@@ -375,10 +569,8 @@ describe("mcp refresh_token grant client authentication", async () => {
 				loginPage: "/login",
 				consentPage: "/consent",
 				resource: `${authServerBaseUrl}/api/auth`,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
 			}),
 		],
 	});
@@ -402,6 +594,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 			client_name: "test-refresh-confidential-client",
 			redirect_uris: [redirectUri],
 			token_endpoint_auth_method: "client_secret_basic",
+			application_type: "native",
 		});
 		if (!created.data?.client_id || !created.data.client_secret) {
 			throw new Error("client registration failed");
@@ -412,10 +605,18 @@ describe("mcp refresh_token grant client authentication", async () => {
 		};
 	});
 
+	function createBasicAuthorizationHeader(
+		clientSecret = oauthClient.client_secret,
+	) {
+		return `Basic ${Buffer.from(
+			`${oauthClient.client_id}:${clientSecret}`,
+		).toString("base64")}`;
+	}
+
 	/** Runs the real authorize + consent + token exchange to mint a refresh token. */
 	async function mintRefreshToken(): Promise<string> {
 		const codeVerifier = generateRandomString(64);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,
@@ -462,6 +663,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 			code,
 			codeVerifier,
 			redirectURI: redirectUri,
+			authentication: "basic",
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,
@@ -512,12 +714,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
-				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: createBasicAuthorizationHeader("wrong-secret"),
+				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
 					refresh_token: refreshToken,
-					client_id: oauthClient.client_id,
-					client_secret: "wrong-secret",
 				}).toString(),
 			},
 		);
@@ -530,16 +733,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 
 	it("accepts refresh_token grant when client_secret comes via Authorization: Basic", async () => {
 		const refreshToken = await mintRefreshToken();
-		const basic = `Basic ${Buffer.from(
-			`${oauthClient.client_id}:${oauthClient.client_secret}`,
-		).toString("base64")}`;
 		const response = await customFetchImpl(
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
 				headers: {
 					"Content-Type": "application/x-www-form-urlencoded",
-					authorization: basic,
+					authorization: createBasicAuthorizationHeader(),
 				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
@@ -567,12 +767,13 @@ describe("mcp refresh_token grant client authentication", async () => {
 			`${authServerBaseUrl}/api/auth/oauth2/token`,
 			{
 				method: "POST",
-				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
+					authorization: createBasicAuthorizationHeader(),
+				},
 				body: new URLSearchParams({
 					grant_type: "refresh_token",
 					refresh_token: refreshToken,
-					client_id: oauthClient.client_id,
-					client_secret: oauthClient.client_secret,
 				}).toString(),
 			},
 		);
@@ -585,8 +786,9 @@ describe("mcp refresh_token grant client authentication", async () => {
 			update: { disabled: false },
 		});
 
-		// A disabled client is rejected outright (400) before token issuance.
-		expect(response.status).toBe(400);
+		// Failed HTTP Basic authentication returns its registered challenge.
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toBe("Basic");
 		expect(body?.error).toBe("invalid_client");
 		expect(body?.access_token).toBeUndefined();
 	});
@@ -595,6 +797,7 @@ describe("mcp refresh_token grant client authentication", async () => {
 		const refreshToken = await mintRefreshToken();
 		const { body, headers: refreshHeaders } = await refreshAccessTokenRequest({
 			refreshToken,
+			authentication: "basic",
 			options: {
 				clientId: oauthClient.client_id,
 				clientSecret: oauthClient.client_secret,

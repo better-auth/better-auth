@@ -34,10 +34,6 @@ describe("pairwise subject identifiers", async () => {
 				resources: [validResource],
 				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -67,6 +63,8 @@ describe("pairwise subject identifiers", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUriA],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",
@@ -78,6 +76,8 @@ describe("pairwise subject identifiers", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUriB],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",
@@ -89,6 +89,8 @@ describe("pairwise subject identifiers", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUriPublic],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
@@ -99,6 +101,8 @@ describe("pairwise subject identifiers", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUriSameHost],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 				subject_type: "pairwise",
@@ -115,7 +119,7 @@ describe("pairwise subject identifiers", async () => {
 		},
 	) {
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: "test",
 			options: {
 				clientId: oauthClient.client_id,
@@ -314,10 +318,6 @@ describe("pairwise DCR validation", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -328,6 +328,7 @@ describe("pairwise DCR validation", async () => {
 				headers,
 				body: {
 					redirect_uris: [redirectUri],
+					application_type: "native",
 					subject_type: "pairwise",
 				},
 			}),
@@ -343,10 +344,6 @@ describe("pairwise DCR validation", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -356,6 +353,7 @@ describe("pairwise DCR validation", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				subject_type: "pairwise",
 				skip_consent: true,
 			},
@@ -374,10 +372,6 @@ describe("pairwise DCR validation", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -387,6 +381,7 @@ describe("pairwise DCR validation", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -404,10 +399,6 @@ describe("pairwise DCR validation", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -436,10 +427,6 @@ describe("pairwise DCR validation", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -471,10 +458,6 @@ describe("pairwise DCR validation", async () => {
 					consentPage: "/consent",
 					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
 					allowDynamicClientRegistration: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -493,12 +476,90 @@ describe("pairwise DCR validation", async () => {
 			method: "POST",
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				subject_type: "pairwise",
 				token_endpoint_auth_method: "none",
 			},
 		});
 
 		expect(response.data?.subject_type).toBe("pairwise");
+	});
+});
+
+/**
+ * A custom URI scheme is not bound to the host in its authority, so that host
+ * cannot identify a pairwise sector.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ */
+describe("pairwise with custom-scheme redirect URIs", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				pairwiseSecret: "test-pairwise-secret-key-32chars!!",
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const customSchemeRedirect = "app://rp.example.com/callback";
+
+	const errorCode = (error: unknown) =>
+		error instanceof APIError
+			? (error.body as { error?: string } | undefined)?.error
+			: undefined;
+
+	it("rejects a pairwise client with a custom-scheme redirect URI that includes a host", async () => {
+		const error = await auth.api
+			.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [customSchemeRedirect],
+					application_type: "native",
+					token_endpoint_auth_method: "none",
+					subject_type: "pairwise",
+				},
+			})
+			.catch((e: unknown) => e);
+		expect(errorCode(error)).toBe("invalid_client_metadata");
+	});
+
+	it("accepts the same client without pairwise", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [customSchemeRedirect],
+				application_type: "native",
+				token_endpoint_auth_method: "none",
+			},
+		});
+		expect(client.client_id).toEqual(expect.any(String));
+	});
+
+	it("rejects moving a pairwise client to a custom-scheme redirect URI with a host", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["https://rp.example.com/callback"],
+				subject_type: "pairwise",
+			},
+		});
+		const error = await auth.api
+			.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: client.client_id,
+					update: {
+						application_type: "native",
+						redirect_uris: [customSchemeRedirect],
+					},
+				},
+			})
+			.catch((e: unknown) => e);
+		expect(errorCode(error)).toBe("invalid_client_metadata");
 	});
 });
 
@@ -536,10 +597,6 @@ describe("pairwise metadata", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					pairwiseSecret: "test-pairwise-metadata-secret!!!",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -556,10 +613,6 @@ describe("pairwise metadata", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});

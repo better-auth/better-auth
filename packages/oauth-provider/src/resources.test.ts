@@ -14,11 +14,6 @@ import {
 } from "./resources";
 import type { OAuthOptions, OAuthResource, Scope } from "./types";
 
-const silenceWarnings = {
-	oauthAuthServerConfig: true,
-	openidConfig: true,
-} as const;
-
 describe("collectResourceInputs", () => {
 	let warnSpy: ReturnType<typeof vi.spyOn>;
 
@@ -66,8 +61,8 @@ describe("collectResourceInputs", () => {
 /**
  * Helper that boots a fresh in-memory auth instance with the given
  * `oauthProvider` options. Each test gets a clean DB. `loginPage` /
- * `consentPage` / `silenceWarnings` are filled with sensible defaults so
- * resource tests only state what's relevant.
+ * `consentPage` are filled with sensible defaults so resource tests only
+ * state what's relevant.
  *
  * Better Auth's test harness runs `runMigrations()` AFTER plugin init,
  * so seeding at init silently defers (table doesn't exist yet). The helper
@@ -80,7 +75,6 @@ const bootWithResourcesOption = async (options: ResourceTestOptions = {}) => {
 	const resolvedOpts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		...options,
 	} as OAuthOptions<Scope[]>;
 	const instance = await getTestInstance({

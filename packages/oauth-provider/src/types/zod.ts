@@ -1,5 +1,9 @@
 import { SafeUrlSchema } from "@better-auth/core/utils/redirect-uri";
 import * as z from "zod";
+import {
+	claimsRequestInputSchema,
+	claimsRequestParameterSchema,
+} from "../claims-request";
 
 /**
  * Re-exported from `@better-auth/core` so every OAuth provider plugin shares one
@@ -80,6 +84,11 @@ const authorizationPromptSchema = z.string().superRefine((value, ctx) => {
 	}
 });
 
+/** Canonical RFC 7517 JWK Set metadata for an OAuth client. */
+export const clientJwksSchema = z.object({
+	keys: z.array(z.record(z.string(), z.unknown())).min(1),
+});
+
 const maxAgeSchema = z
 	.union([z.number(), z.string().trim().min(1)])
 	.transform((value, ctx) => {
@@ -111,11 +120,12 @@ export const authorizationQuerySchema = z
 			.string()
 			.pipe(z.enum(["code"]))
 			.optional(),
+		request: z.string().optional(),
 		request_uri: z.string().optional(),
 		redirect_uri: SafeUrlSchema.optional(),
 		scope: z.string().optional(),
 		state: z.string().optional(),
-		client_id: z.string(),
+		client_id: z.string().min(1, "client_id is required"),
 		prompt: authorizationPromptSchema.optional(),
 		display: z.string().optional(),
 		ui_locales: z.string().optional(),
@@ -129,6 +139,7 @@ export const authorizationQuerySchema = z
 			.pipe(z.enum(["S256"]))
 			.optional(),
 		nonce: z.string().optional(),
+		claims: claimsRequestInputSchema.optional(),
 		dpop_jkt: dpopJktSchema.optional(),
 		resource: z
 			.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
@@ -136,8 +147,15 @@ export const authorizationQuerySchema = z
 	})
 	.passthrough();
 
+// redirect_uri stays optional in the stored code: a headless authorization
+// request (e.g. first-party-apps / device-style flows) legitimately omits it,
+// and RFC 6749 §4.1.3 only requires it at the token endpoint when the
+// authorization request carried one. The token endpoint enforces that
+// conditional match; forcing it here would reject valid headless codes as
+// "malformed verification value".
 const storedAuthorizationQuerySchema = authorizationQuerySchema.extend({
-	redirect_uri: SafeUrlSchema,
+	redirect_uri: SafeUrlSchema.optional(),
+	claims: claimsRequestParameterSchema.optional(),
 });
 
 /**
@@ -173,7 +191,10 @@ export const verificationValueSchema = z
 export const clientRegistrationRequestSchema = z.object({
 	redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 	scope: z.string().optional(),
-	client_name: z.string().optional(),
+	client_name: z
+		.string()
+		.refine((value) => value.trim().length > 0, "client_name cannot be empty")
+		.optional(),
 	client_uri: z.string().optional(),
 	logo_uri: z.string().optional(),
 	contacts: z.array(z.string().min(1)).min(1).optional(),
@@ -185,19 +206,16 @@ export const clientRegistrationRequestSchema = z.object({
 	post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 	backchannel_logout_uri: SafeUrlSchema.optional(),
 	backchannel_logout_session_required: z.boolean().optional(),
+	frontchannel_logout_uri: SafeUrlSchema.optional(),
+	frontchannel_logout_session_required: z.boolean().optional(),
 	token_endpoint_auth_method: z.string().trim().min(1).optional(),
-	jwks: z
-		.union([
-			z.array(z.record(z.string(), z.unknown())).min(1),
-			z.object({
-				keys: z.array(z.record(z.string(), z.unknown())).min(1),
-			}),
-		])
-		.optional(),
+	jwks: clientJwksSchema.optional(),
 	jwks_uri: z.string().optional(),
 	grant_types: z.array(z.string().trim().min(1)).min(1).optional(),
 	response_types: z.array(z.enum(["code"])).optional(),
-	type: z.enum(["web", "native", "user-agent-based"]).optional(),
+	// OIDC Registration §2: classifies redirect URI policy independently of
+	// client authentication.
+	application_type: z.enum(["web", "native"]).optional(),
 	subject_type: z.enum(["public", "pairwise"]).optional(),
 	// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 	dpop_bound_access_tokens: z.boolean().optional(),
@@ -211,6 +229,30 @@ export const clientRegistrationRequestSchema = z.object({
 		})
 		.optional(),
 });
+
+/**
+ * Complete OAuth client metadata document schema shared by registration and
+ * verified client-discovery integrations.
+ *
+ * Unlike {@link clientRegistrationRequestSchema}, a metadata document carries
+ * its own identifier and may contain the server-assigned secret fields that a
+ * discovery profile must explicitly prohibit. Keeping those fields in the
+ * parsed shape lets profile validation distinguish a forbidden value from an
+ * unknown extension without unsafe casts or ad-hoc allowlists.
+ */
+export const oauthClientMetadataSchema = clientRegistrationRequestSchema
+	.omit({ skip_consent: true })
+	.extend({
+		client_id: z
+			.string()
+			.refine((value) => value.trim().length > 0, "client_id cannot be empty"),
+		client_secret: z.string().optional(),
+		client_secret_expires_at: z.number().int().nonnegative().optional(),
+		client_id_issued_at: z.number().int().nonnegative().optional(),
+	})
+	.loose();
+
+export type OAuthClientMetadata = z.infer<typeof oauthClientMetadataSchema>;
 
 /**
  * Client metadata as submitted in an RFC 7591 §2 registration request, inferred

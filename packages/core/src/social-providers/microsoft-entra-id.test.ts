@@ -14,6 +14,7 @@ import { microsoft } from "./microsoft-entra-id";
 const mockedBetterFetch = vi.mocked(betterFetch);
 
 const CLIENT_ID = "ms-app";
+const CLIENT_SECRET = "ms-secret";
 const AUTHORITY = "https://login.microsoftonline.com";
 const CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 const WORK_TENANT_ID = "11111111-2222-3333-4444-555555555555";
@@ -27,7 +28,6 @@ beforeEach(async () => {
 	privateKey = keyPair.privateKey;
 	publicJWK = await exportJWK(keyPair.publicKey);
 	publicJWK.kid = KID;
-	publicJWK.alg = "RS256";
 	publicJWK.use = "sig";
 
 	mockedBetterFetch.mockReset();
@@ -49,6 +49,14 @@ async function signMicrosoftToken(opts: {
 		.setProtectedHeader({ alg: "RS256", kid: KID })
 		.setIssuer(iss)
 		.setAudience(opts.audience ?? CLIENT_ID)
+		.setIssuedAt()
+		.setExpirationTime("1h")
+		.sign(privateKey);
+}
+
+async function encodeMicrosoftProfile(profile: Record<string, unknown>) {
+	return new SignJWT(profile)
+		.setProtectedHeader({ alg: "RS256", kid: KID })
 		.setIssuedAt()
 		.setExpirationTime("1h")
 		.sign(privateKey);
@@ -154,5 +162,180 @@ describe("microsoft id_token tenant enforcement", () => {
 		await expect(
 			verifyProviderIdToken(provider, token, undefined),
 		).resolves.toBe(false);
+	});
+});
+
+describe("microsoft account subject", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10194
+	 */
+	it("uses the stable oid claim instead of the pairwise sub claim", async () => {
+		const provider = microsoft({ clientId: CLIENT_ID, tenantId: "common" });
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: "ms-stable-oid",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		const result = await provider.getUserInfo({
+			idToken,
+			accessToken: "ms-access-token",
+		});
+
+		expect(
+			await provider.accountSubject({
+				tokens: { idToken, accessToken: "ms-access-token" },
+				profile: result!.data,
+			}),
+		).toBe("ms-stable-oid");
+		expect(result?.data.oid).toBe("ms-stable-oid");
+		expect(result?.data.sub).toBe("ms-pairwise-sub");
+	});
+
+	it("does not fetch a photo when profile photos are disabled and still maps the profile", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+			disableProfilePhoto: true,
+			mapProfileToUser: () => ({ name: "Mapped User" }),
+		});
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: "ms-stable-oid",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		const result = await provider.getUserInfo({
+			idToken,
+			accessToken: "ms-access-token",
+		});
+
+		expect(result?.user.name).toBe("Mapped User");
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+
+	it("does not fetch a photo when accessToken is missing and still maps the profile", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+			mapProfileToUser: () => ({ name: "Mapped User" }),
+		});
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: "ms-stable-oid",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		const result = await provider.getUserInfo({ idToken });
+
+		expect(result?.user.name).toBe("Mapped User");
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+
+	it("returns null without fetching a photo when oid is missing", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			tenantId: "common",
+		});
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		await expect(
+			provider.getUserInfo({
+				idToken,
+				accessToken: "ms-access-token",
+			}),
+		).resolves.toBeNull();
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+
+	it("returns null when the oid claim is not a string", async () => {
+		const provider = microsoft({ clientId: CLIENT_ID, tenantId: "common" });
+		const idToken = await encodeMicrosoftProfile({
+			sub: "ms-pairwise-sub",
+			oid: 123,
+			tid: WORK_TENANT_ID,
+			email: "user@example.com",
+			name: "Microsoft User",
+		});
+
+		await expect(
+			provider.getUserInfo({
+				idToken,
+				accessToken: "ms-access-token",
+			}),
+		).resolves.toBeNull();
+		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11652
+ */
+describe("microsoft id_token alg omission", () => {
+	it("verifies a token when Microsoft's JWKS keys omit alg", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+		});
+
+		const token = await new SignJWT({
+			sub: "user-123",
+			email: "user@example.com",
+			tid: WORK_TENANT_ID,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: KID })
+			.setIssuer(`${AUTHORITY}/${WORK_TENANT_ID}/v2.0`)
+			.setAudience(CLIENT_ID)
+			.setExpirationTime("1h")
+			.setIssuedAt()
+			.sign(privateKey);
+
+		const isValid = await verifyProviderIdToken(provider, token);
+		expect(isValid).toBe(true);
+	});
+
+	it("rejects a token signed with an algorithm other than RS256", async () => {
+		const ecKeyPair = await generateKeyPair("ES256", { extractable: true });
+		const ecJWK = await exportJWK(ecKeyPair.publicKey);
+		const ecKid = "ms-test-es256-key";
+		ecJWK.kid = ecKid;
+		ecJWK.alg = "ES256";
+		ecJWK.use = "sig";
+
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { keys: [ecJWK] },
+			error: null,
+		} as Awaited<ReturnType<typeof betterFetch>>);
+
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+		});
+
+		const token = await new SignJWT({
+			sub: "user-123",
+			email: "user@example.com",
+			tid: WORK_TENANT_ID,
+		})
+			.setProtectedHeader({ alg: "ES256", kid: ecKid })
+			.setIssuer(`${AUTHORITY}/${WORK_TENANT_ID}/v2.0`)
+			.setAudience(CLIENT_ID)
+			.setExpirationTime("1h")
+			.setIssuedAt()
+			.sign(ecKeyPair.privateKey);
+
+		const isValid = await verifyProviderIdToken(provider, token);
+		expect(isValid).toBe(false);
 	});
 });

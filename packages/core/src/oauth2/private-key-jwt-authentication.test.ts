@@ -364,6 +364,52 @@ describe("private_key_jwt OAuth2 helpers", () => {
 		);
 	});
 
+	it("customizes token endpoint request authentication", async () => {
+		const { body } = await authorizationCodeRequest({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: {},
+			tokenEndpoint,
+			tokenEndpointAuth: {
+				method: "custom",
+				customizeRequest({ body }) {
+					body.set("client_key", "provider-client-key");
+					body.set("client_secret", "provider-client-secret");
+				},
+			},
+		});
+
+		expect(Object.fromEntries(body)).toEqual({
+			client_key: "provider-client-key",
+			client_secret: "provider-client-secret",
+			code: "auth-code",
+			grant_type: "authorization_code",
+			redirect_uri: "https://rp.example.com/callback",
+		});
+	});
+
+	it.each([
+		"client_assertion",
+		"client_assertion_type",
+	] as const)("rejects custom authentication with only %s", async (parameter) => {
+		await expect(
+			authorizationCodeRequest({
+				code: "auth-code",
+				redirectURI: "https://rp.example.com/callback",
+				options: {},
+				tokenEndpoint,
+				tokenEndpointAuth: {
+					method: "custom",
+					customizeRequest({ body }) {
+						body.set(parameter, "value");
+					},
+				},
+			}),
+		).rejects.toThrow(
+			"client_assertion and client_assertion_type must both be provided",
+		);
+	});
+
 	it("uses configured clientId over additional token client_id parameters", async () => {
 		const { body } = await authorizationCodeRequest({
 			code: "auth-code",

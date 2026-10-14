@@ -1,10 +1,9 @@
 import { decodeJwt } from "jose";
 import { logger } from "../env";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -38,26 +37,24 @@ export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
 	clientId: string;
 	claims?: string[] | undefined;
 }
-const TWITCH_DEFAULT_SCOPES = ["user:read:email", "openid"];
-
 export const twitch = (options: TwitchOptions) => {
 	const tokenEndpoint = "https://id.twitch.tv/oauth2/token";
 	return {
 		id: "twitch",
 		name: "Twitch",
-		callbackPath: "/callback/twitch",
+		accountSubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				TWITCH_DEFAULT_SCOPES,
-				scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["user:read:email", "openid"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "twitch",
 				redirectURI,
 				options,
 				authorizationEndpoint: "https://id.twitch.tv/oauth2/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				claims: options.claims || [
 					"email",
@@ -102,7 +99,6 @@ export const twitch = (options: TwitchOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.preferred_username,
 					email: profile.email,
 					image: profile.picture,
@@ -113,5 +109,5 @@ export const twitch = (options: TwitchOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<TwitchProfile>;
+	} satisfies OAuthProvider<TwitchProfile>;
 };

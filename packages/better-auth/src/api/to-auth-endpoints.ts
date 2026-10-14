@@ -1,4 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
+import type { RequestStateWeakMap } from "@better-auth/core/context";
 import {
 	hasRequestState,
 	runWithRequestState,
@@ -90,6 +91,8 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 
 			const run = async () => {
 				const rawContext = await ctx;
+				const pendingSchemaCheck = rawContext.checkSchema?.();
+				if (pendingSchemaCheck) await pendingSchemaCheck;
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;
@@ -105,7 +108,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 			if (await hasRequestState()) {
 				return run();
 			}
-			const store = new WeakMap();
+			const store: RequestStateWeakMap = new WeakMap();
 			return runWithRequestState(store, run);
 		};
 		api[key].path = endpoint.path;

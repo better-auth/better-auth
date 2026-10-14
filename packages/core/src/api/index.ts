@@ -1,6 +1,7 @@
 import type {
-	EndpointContext,
+	EndpointHandler,
 	EndpointOptions,
+	MiddlewareHandler,
 	StrictEndpoint,
 } from "better-call";
 import {
@@ -75,13 +76,47 @@ export const createAuthMiddleware = createMiddleware.create({
 	],
 });
 
-const use = [optionsMiddleware];
+const createEndpointWithAuthContext = createEndpoint.create({
+	use: [optionsMiddleware],
+});
 
-type EndpointHandler<
+type AuthEndpointHandler<
 	Path extends string,
 	Options extends EndpointOptions,
 	R,
-> = (context: EndpointContext<Path, Options, AuthContext>) => Promise<R>;
+> = EndpointHandler<Path, Options, R, AuthContext>;
+
+type PathlessAuthEndpointHandler<
+	Options extends EndpointOptions,
+	R,
+> = AuthEndpointHandler<string, Options, R>;
+
+function wrapEndpointHandler<
+	Path extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	handler: AuthEndpointHandler<Path, Options, R>,
+	options: Options,
+): AuthEndpointHandler<Path, Options, R> {
+	const noStore =
+		(options as { metadata?: { noStore?: boolean } }).metadata?.noStore ===
+		true;
+
+	return async (context) => {
+		if (noStore) {
+			for (const [name, value] of Object.entries(NO_STORE_HEADERS)) {
+				context.setHeader(name, value);
+			}
+		}
+		try {
+			return await runWithEndpointContext(context, () => handler(context));
+		} catch (error) {
+			attachResponseHeadersToAPIError(context.responseHeaders, error);
+			throw error;
+		}
+	};
+}
 
 export function createAuthEndpoint<
 	Path extends string,
@@ -90,79 +125,44 @@ export function createAuthEndpoint<
 >(
 	path: Path,
 	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
+	handler: AuthEndpointHandler<Path, Options, R>,
 ): StrictEndpoint<Path, Options, R>;
+
+export function createAuthEndpoint<
+	InferredPath extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	options: Options,
+	handler: PathlessAuthEndpointHandler<Options, R>,
+): StrictEndpoint<InferredPath, Options, R>;
 
 export function createAuthEndpoint<
 	Path extends string,
 	Options extends EndpointOptions,
 	R,
 >(
-	options: Options,
-	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R>;
-
-export function createAuthEndpoint<
-	Path extends string,
-	Opts extends EndpointOptions,
-	R,
->(
-	pathOrOptions: Path | Opts,
-	handlerOrOptions: EndpointHandler<Path, Opts, R> | Opts,
-	handlerOrNever?: any,
+	...args:
+		| [
+				path: Path,
+				options: Options,
+				handler: AuthEndpointHandler<Path, Options, R>,
+		  ]
+		| [options: Options, handler: PathlessAuthEndpointHandler<Options, R>]
 ) {
-	const path: Path | undefined =
-		typeof pathOrOptions === "string" ? pathOrOptions : undefined;
-	const options: Opts =
-		typeof handlerOrOptions === "object"
-			? handlerOrOptions
-			: (pathOrOptions as Opts);
-	const handler: EndpointHandler<Path, Opts, R> =
-		typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
-
-	// Endpoints that return credentials declare `metadata: { noStore: true }`.
-	// Emit the no-store headers at the boundary, before the handler runs, so they
-	// land on every response the handler produces: a success harvests
-	// `responseHeaders`, and a thrown error carries the same headers through
-	// `attachResponseHeadersToAPIError`. Validation that rejects the request
-	// before the handler runs is not covered (and returns no credentials).
-	const noStore =
-		(options as { metadata?: { noStore?: boolean } }).metadata?.noStore ===
-		true;
-
-	// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-	const wrapped: EndpointHandler<Path, Opts, R> = async (ctx) => {
-		if (noStore) {
-			for (const [name, value] of Object.entries(NO_STORE_HEADERS)) {
-				ctx.setHeader(name, value);
-			}
-		}
-		const runtimeCtx = ctx as unknown as { responseHeaders?: Headers };
-		try {
-			return await runWithEndpointContext(ctx as any, () => handler(ctx));
-		} catch (e) {
-			attachResponseHeadersToAPIError(runtimeCtx.responseHeaders, e);
-			throw e;
-		}
-	};
-
-	if (path) {
-		return createEndpoint(
+	if (args.length === 3) {
+		const [path, options, handler] = args;
+		return createEndpointWithAuthContext(
 			path,
-			{
-				...options,
-				use: [...(options?.use || []), ...use],
-			},
-			wrapped,
+			options,
+			wrapEndpointHandler(handler, options),
 		);
 	}
 
-	return createEndpoint(
-		{
-			...options,
-			use: [...(options?.use || []), ...use],
-		},
-		wrapped,
+	const [options, handler] = args;
+	return createEndpointWithAuthContext(
+		options,
+		wrapEndpointHandler(handler, options),
 	);
 }
 
@@ -179,44 +179,45 @@ function withServerOnly<Options extends EndpointOptions>(
 	} as Options;
 }
 
-export namespace createAuthEndpoint {
-	/**
-	 * Declare a **server-only** endpoint.
-	 *
-	 * The endpoint is callable through `auth.api.*` from trusted server code but is
-	 * never registered on the HTTP router and never emitted into the OpenAPI
-	 * schema. It takes no path because it has no URL to be reached at.
-	 *
-	 * Prefer this over the path-less `createAuthEndpoint({ ... }, handler)` form.
-	 * Setting `metadata.SERVER_ONLY` makes the intent explicit at the call site and
-	 * keeps the endpoint off the HTTP surface even if a path is later added by
-	 * mistake: better-call's router skips an endpoint when its path is missing *or*
-	 * when `SERVER_ONLY` is set, so the two together are defense in depth. Relying
-	 * on path omission alone is invisible and one keystroke away from exposure.
-	 *
-	 * @example
-	 * ```ts
-	 * viewBackupCodes: createAuthEndpoint.serverOnly(
-	 * 	{ method: "POST", body: schema },
-	 * 	async (ctx) => { ... },
-	 * )
-	 * ```
-	 */
-	export function serverOnly<
-		Path extends string,
-		Options extends EndpointOptions,
-		R,
-	>(
-		options: Options,
-		handler: EndpointHandler<Path, Options, R>,
-	): StrictEndpoint<Path, Options, R> {
-		return createAuthEndpoint(withServerOnly(options), handler);
-	}
-}
+/**
+ * Declare a **server-only** endpoint.
+ *
+ * The endpoint is callable through `auth.api.*` from trusted server code but is
+ * never registered on the HTTP router and never emitted into the OpenAPI
+ * schema. It takes no path because it has no URL to be reached at.
+ *
+ * Prefer this over the path-less `createAuthEndpoint({ ... }, handler)` form.
+ * Setting `metadata.SERVER_ONLY` makes the intent explicit at the call site and
+ * keeps the endpoint off the HTTP surface even if a path is later added by
+ * mistake: better-call's router skips an endpoint when its path is missing *or*
+ * when `SERVER_ONLY` is set, so the two together are defense in depth. Relying
+ * on path omission alone is invisible and one keystroke away from exposure.
+ *
+ * @example
+ * ```ts
+ * viewBackupCodes: createAuthEndpoint.serverOnly(
+ * 	{ method: "POST", body: schema },
+ * 	async (ctx) => { ... },
+ * )
+ * ```
+ */
+createAuthEndpoint.serverOnly = <
+	InferredPath extends string,
+	Options extends EndpointOptions,
+	R,
+>(
+	options: Options,
+	handler: PathlessAuthEndpointHandler<Options, R>,
+): StrictEndpoint<InferredPath, Options, R> =>
+	createAuthEndpoint<InferredPath, Options, R>(
+		withServerOnly(options),
+		handler,
+	);
 
 export type AuthEndpoint<
 	Path extends string,
 	Opts extends EndpointOptions,
 	R,
 > = ReturnType<typeof createAuthEndpoint<Path, Opts, R>>;
-export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;
+
+export type AuthMiddleware = MiddlewareHandler;

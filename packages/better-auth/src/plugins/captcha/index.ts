@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { getIp } from "../../utils/get-request-ip";
+import { getIP } from "@better-auth/core/utils/ip";
 import { middlewareResponse } from "../../utils/middleware-response";
 import { wildcardMatch } from "../../utils/wildcard";
 import { PACKAGE_VERSION } from "../../version";
@@ -58,12 +58,20 @@ export const captcha = (options: CaptchaOptions) =>
 					return undefined;
 				}
 
+				if (options.provider === Providers.VERCEL_BOTID) {
+					return await verifyHandlers.vercelBotId({
+						request,
+						checkBotId: options.checkBotId,
+						validateRequest: options.validateRequest,
+					});
+				}
+
 				if (!options.secretKey) {
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
 				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
-				const remoteUserIP = getIp(request, ctx.options) ?? undefined;
+				const remoteUserIP = getIP(request, ctx.options) ?? undefined;
 
 				if (!captchaResponse) {
 					return middlewareResponse({
@@ -86,6 +94,7 @@ export const captcha = (options: CaptchaOptions) =>
 				if (options.provider === Providers.CLOUDFLARE_TURNSTILE) {
 					return await verifyHandlers.cloudflareTurnstile({
 						...handlerParams,
+						logger: ctx.logger,
 						expectedAction: options.expectedAction,
 						allowedHostnames: options.allowedHostnames,
 					});

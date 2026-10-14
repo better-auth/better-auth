@@ -54,10 +54,6 @@ describe("oauth-provider resource indicator binding", async () => {
 				consentPage: "/consent",
 				resources: [resourceA, resourceB],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -76,7 +72,12 @@ describe("oauth-provider resource indicator binding", async () => {
 	beforeAll(async () => {
 		oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
-			body: { redirect_uris: [redirectUri], skip_consent: true },
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+				skip_consent: true,
+			},
 		});
 		expect(oauthClient?.client_id).toBeDefined();
 		expect(oauthClient?.client_secret).toBeDefined();
@@ -88,7 +89,7 @@ describe("oauth-provider resource indicator binding", async () => {
 			throw new Error("beforeAll did not run");
 		}
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id,

@@ -1,11 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { createPlaceholderEmail } from "../utils/email";
 
 export interface TwitterProfile {
 	data: {
@@ -104,30 +104,23 @@ export interface TwitterOption extends ProviderOptions<TwitterProfile> {
 	clientId: string;
 }
 
-const TWITTER_DEFAULT_SCOPES = [
-	"users.read",
-	"tweet.read",
-	"offline.access",
-	"users.email",
-];
-
 export const twitter = (options: TwitterOption) => {
 	const tokenEndpoint = "https://api.x.com/2/oauth2/token";
 	return {
 		id: "twitter",
 		name: "Twitter",
-		callbackPath: "/callback/twitter",
+		accountSubject: ({ profile }) => profile.data.id,
 		createAuthorizationURL(data) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				TWITTER_DEFAULT_SCOPES,
-				data.scopes,
-			);
+			const _scopes = options.disableDefaultScope
+				? []
+				: ["users.read", "tweet.read", "offline.access", "users.email"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (data.scopes) _scopes.push(...data.scopes);
 			return createAuthorizationURL({
 				id: "twitter",
 				options,
 				authorizationEndpoint: "https://x.com/i/oauth2/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state: data.state,
 				codeVerifier: data.codeVerifier,
 				redirectURI: data.redirectURI,
@@ -194,16 +187,20 @@ export const twitter = (options: TwitterOption) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.data.id,
 					name: profile.data.name,
-					email: profile.data.email || profile.data.username || null,
+					email:
+						profile.data.email ||
+						createPlaceholderEmail({
+							identifier: profile.data.id,
+							namespace: "twitter",
+						}),
 					image: profile.data.profile_image_url,
-					emailVerified: emailVerified,
+					emailVerified,
 					...userMap,
 				},
 				data: profile,
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<TwitterProfile>;
+	} satisfies OAuthProvider<TwitterProfile>;
 };

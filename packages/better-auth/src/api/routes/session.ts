@@ -7,14 +7,12 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils/json";
-import { base64Url } from "@better-auth/utils/base64";
-import { binary } from "@better-auth/utils/binary";
-import { createHMAC } from "@better-auth/utils/hmac";
 
 import * as z from "zod";
 import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
+	createSessionStore,
+	decodeCookieCache,
 	deleteSessionCookie,
 	expireCookie,
 	getChunkedCookie,
@@ -22,12 +20,7 @@ import {
 	setSessionCookie,
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
-import { symmetricDecodeJWT, verifyJWT as verifySecretJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
-import {
-	getCookieCacheJwtSigningKey,
-	verifyCookieCacheJWT,
-} from "../../plugins/jwt/cookie-cache";
 import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import { isAPIError } from "../../utils/is-api-error";
@@ -76,6 +69,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			session: Session<Option["session"], Option["plugins"]>;
 			user: User<Option["user"], Option["plugins"]>;
 		} | null> => {
+			ctx.setHeader("cache-control", "no-store");
+			ctx.setHeader("pragma", "no-cache");
+
 			const deferSessionRefresh =
 				ctx.context.options.session?.deferSessionRefresh;
 			const isPostRequest = ctx.method === "POST";
@@ -88,12 +84,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			}
 
 			try {
+				const cookieCacheEnabled =
+					ctx.context.options.session?.cookieCache?.enabled === true;
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
 					ctx.context.secret,
 				);
 
-				if (!sessionCookieToken) {
+				if (!sessionCookieToken && cookieCacheEnabled) {
 					return null;
 				}
 
@@ -101,127 +99,26 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					ctx,
 					ctx.context.authCookies.sessionData.name,
 				);
-
-				let sessionDataPayload: {
-					session: {
-						session: Session;
-						user: User;
-						updatedAt: number;
-						version?: string;
-					};
-					expiresAt: number;
-				} | null = null;
-
-				if (sessionDataCookie) {
-					const strategy =
-						ctx.context.options.session?.cookieCache?.strategy || "compact";
-					const jwtSigningKey = getCookieCacheJwtSigningKey(
-						ctx.context.options,
+				if (sessionDataCookie && !cookieCacheEnabled) {
+					const sessionStore = createSessionStore(
+						ctx.context.authCookies.sessionData.name,
+						ctx.context.authCookies.sessionData.attributes,
+						ctx,
 					);
+					sessionStore.setCookies(sessionStore.clean());
+				}
+				if (!sessionCookieToken) {
+					return null;
+				}
 
-					if (strategy === "jwe") {
-						// Decode JWE (encrypted)
-						const payload = await symmetricDecodeJWT<{
-							session: Session;
-							user: User;
-							updatedAt: number;
-							version?: string;
-							exp?: number;
-						}>(
-							sessionDataCookie,
-							ctx.context.secretConfig,
-							"better-auth-session",
-						);
-
-						if (payload && payload.session && payload.user) {
-							sessionDataPayload = {
-								session: {
-									session: payload.session,
-									user: payload.user,
-									updatedAt: payload.updatedAt,
-									version: payload.version,
-								},
-								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
-							};
-						} else {
-							// Decryption failed, expire the invalid cookie and fall through
-							// to session_token DB validation. This handles scenarios like
-							// cross-subdomain cookie migrations where stale cookies may be present.
-							expireCookie(ctx, ctx.context.authCookies.sessionData);
-						}
-					} else if (strategy === "jwt") {
-						const payload =
-							jwtSigningKey === "jwt-plugin"
-								? await verifyCookieCacheJWT<{
-										session: Session;
-										user: User;
-										updatedAt: number;
-										version?: string;
-										exp?: number;
-									}>(ctx, sessionDataCookie)
-								: await verifySecretJWT<{
-										session: Session;
-										user: User;
-										updatedAt: number;
-										version?: string;
-										exp?: number;
-									}>(sessionDataCookie, ctx.context.secret);
-
-						if (payload && payload.session && payload.user) {
-							sessionDataPayload = {
-								session: {
-									session: payload.session,
-									user: payload.user,
-									updatedAt: payload.updatedAt,
-									version: payload.version,
-								},
-								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
-							};
-						} else {
-							// Verification failed, expire the invalid cookie and fall through
-							// to session_token DB validation. This handles scenarios like
-							// cross-subdomain cookie migrations where stale cookies may be present.
-							expireCookie(ctx, ctx.context.authCookies.sessionData);
-						}
-					} else {
-						// Decode compact format (or legacy base64-hmac)
-						const parsed = safeJSONParse<{
-							session: {
-								session: Session;
-								user: User;
-								updatedAt: number;
-								version?: string;
-							};
-							signature: string;
-							expiresAt: number;
-						}>(binary.decode(base64Url.decode(sessionDataCookie)));
-
-						if (parsed) {
-							const isValid = await createHMAC(
-								"SHA-256",
-								"base64urlnopad",
-							).verify(
-								ctx.context.secret,
-								JSON.stringify({
-									...parsed.session,
-									expiresAt: parsed.expiresAt,
-								}),
-								parsed.signature,
-							);
-							if (isValid) {
-								sessionDataPayload = parsed;
-							} else {
-								// HMAC verification failed, expire the invalid cookie and fall through
-								// to session_token DB validation. This handles scenarios like
-								// cross-subdomain cookie migrations where stale cookies may be present.
-								expireCookie(ctx, ctx.context.authCookies.sessionData);
-							}
-						} else {
-							// Parsing failed, expire the invalid cookie and fall through to
-							// session_token DB validation like the signed-token strategies.
-							expireCookie(ctx, ctx.context.authCookies.sessionData);
-						}
-					}
+				const shouldUseCookieCache =
+					cookieCacheEnabled && !ctx.query?.disableCookieCache;
+				const sessionDataPayload =
+					shouldUseCookieCache && sessionDataCookie
+						? await decodeCookieCache(ctx, sessionDataCookie)
+						: null;
+				if (shouldUseCookieCache && sessionDataCookie && !sessionDataPayload) {
+					expireCookie(ctx, ctx.context.authCookies.sessionData);
 				}
 
 				const dontRememberMe = await ctx.getSignedCookie(
@@ -232,11 +129,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				/**
 				 * If session data is present in the cookie, check if it should be used or refreshed
 				 */
-				if (
-					sessionDataPayload?.session &&
-					ctx.context.options.session?.cookieCache?.enabled &&
-					!ctx.query?.disableCookieCache
-				) {
+				if (sessionDataPayload?.session) {
 					const session = sessionDataPayload.session;
 
 					let shouldExpireCookieCache =
@@ -490,8 +383,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 						);
 					}
-					const maxAge =
-						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
+					const maxAge = ctx.context.sessionConfig.expiresIn;
 					await setSessionCookie(
 						ctx,
 						{
@@ -605,12 +497,16 @@ export const getSessionFromCtx = async <
 	}
 	if (session.headers) {
 		session.headers.forEach((value, key) => {
-			if (!ctx.context.responseHeaders) {
-				ctx.context.responseHeaders = new Headers({ [key]: value });
-			} else if (key.toLowerCase() === "set-cookie") {
-				ctx.context.responseHeaders.append(key, value);
+			const lowerKey = key.toLowerCase();
+			// /get-session response cache headers must not leak onto endpoints
+			// that resolve the session via getSessionFromCtx.
+			if (lowerKey === "cache-control" || lowerKey === "pragma") {
+				return;
+			}
+			if (lowerKey === "set-cookie") {
+				ctx.responseHeaders.append(key, value);
 			} else {
-				ctx.context.responseHeaders.set(key, value);
+				ctx.responseHeaders.set(key, value);
 			}
 		});
 	}
@@ -619,6 +515,27 @@ export const getSessionFromCtx = async <
 		session: S & Session;
 		user: U & User;
 	} | null;
+};
+
+/**
+ * Reads the session from the source that can authorize sensitive work.
+ *
+ * Stateful deployments must re-read the server-side session store because an
+ * earlier hook may have populated `ctx.context.session` from cookie cache.
+ * Stateless deployments keep the signed cookie as the session record.
+ */
+export const getAuthoritativeSessionFromCtx = async <
+	U extends Record<string, any> = Record<string, any>,
+	S extends Record<string, any> = Record<string, any>,
+>(
+	ctx: GenericEndpointContext,
+) => {
+	if (!isStateful(ctx)) {
+		return getSessionFromCtx<U, S>(ctx);
+	}
+
+	ctx.context.session = null;
+	return getSessionFromCtx<U, S>(ctx, { disableCookieCache: true });
 };
 
 /**
@@ -638,12 +555,11 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 /**
- * This middleware forces the endpoint to require a valid session and ignores cookie cache.
+ * This middleware forces the endpoint to require a valid authoritative session.
  * This should be used for sensitive operations like password changes, account deletion, etc.
- * to ensure that revoked sessions cannot be used even if they're still cached in cookies.
  */
 export const sensitiveSessionMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx, { disableCookieCache: true });
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session?.session) {
 		throw APIError.from("UNAUTHORIZED", {
 			message: "Unauthorized",

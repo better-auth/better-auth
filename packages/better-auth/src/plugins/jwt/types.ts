@@ -4,6 +4,15 @@ import type { InferOptionSchema, Session, User } from "../../types";
 import type { schema } from "./schema";
 
 export interface JwtOptions {
+	/**
+	 * Use the JWT plugin's locally managed signing keys for JWT session cookie
+	 * cache values.
+	 *
+	 * Requires `session.cookieCache.strategy` to be set to `"jwt"`.
+	 *
+	 * @default false
+	 */
+	sessionCookieCache?: boolean | undefined;
 	jwks?:
 		| {
 				/**

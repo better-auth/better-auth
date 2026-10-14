@@ -1,11 +1,12 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
+import { fetchRefusingRedirects } from "./reject-redirects";
 import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+import { parseScopeField } from "./utils";
 
 interface RefreshAccessTokenRequestInput {
 	refreshToken: string;
@@ -137,13 +138,13 @@ export async function refreshAccessToken({
 		resource,
 	});
 
-	const { data, error } = await betterFetch<{
+	const { data, error } = await fetchRefusingRedirects<{
 		access_token: string;
 		refresh_token?: string | undefined;
 		expires_in?: number | undefined;
 		refresh_token_expires_in?: number | undefined;
 		token_type?: string | undefined;
-		scope?: (string | string[]) | undefined;
+		scope?: unknown;
 		id_token?: string | undefined;
 	}>(tokenEndpoint, {
 		method: "POST",
@@ -157,7 +158,7 @@ export async function refreshAccessToken({
 		accessToken: data.access_token,
 		refreshToken: data.refresh_token,
 		tokenType: data.token_type,
-		scopes: Array.isArray(data.scope) ? data.scope : data.scope?.split(" "),
+		scopes: parseScopeField(data.scope),
 		idToken: data.id_token,
 	};
 

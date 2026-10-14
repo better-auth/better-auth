@@ -63,31 +63,25 @@ export {
 	verifyDpopProof,
 } from "./dpop";
 export type {
-	AuthorizationURLResult,
-	GrantAuthority,
 	OAuth2Tokens,
 	OAuth2UserInfo,
+	OAuthAccountKeyContext,
+	OAuthAccountSubject,
 	OAuthIdTokenConfig,
+	OAuthMappedUser,
+	OAuthProvider,
 	OAuthRefreshContext,
-	ProviderGrantAuthority,
 	ProviderOptions,
-	UpstreamProvider,
 } from "./oauth-provider";
 export {
 	refreshAccessToken,
 	refreshAccessTokenRequest,
 } from "./refresh-access-token";
-export {
-	includesGrantedScope,
-	normalizeScopes,
-	parseScopeField,
-	readGrantedScopes,
-	resolveRequestedScopes,
-	unionGrantedScopes,
-} from "./scopes";
 export type {
 	TokenEndpointAuth,
 	TokenEndpointAuthMethod,
+	TokenEndpointRequestContext,
+	TokenEndpointRequestHook,
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 export {
@@ -95,6 +89,7 @@ export {
 	generateCodeChallenge,
 	getOAuth2Tokens,
 	getPrimaryClientId,
+	mergeScopes,
 } from "./utils";
 export {
 	authorizationCodeRequest,
@@ -107,7 +102,9 @@ export type {
 	VerifyAccessTokenRequestOptions,
 } from "./verify";
 export {
+	createInsufficientScopeError,
 	getJwks,
+	isInsufficientScopeError,
 	requestToResourceInput,
 	verifyAccessTokenRequest,
 	verifyBearerToken,

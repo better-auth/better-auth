@@ -1,5 +1,237 @@
 # auth
 
+## 1.7.8
+
+### Patch Changes
+
+- Updated dependencies [[`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a), [`b1cfc1e`](https://github.com/better-auth/better-auth/commit/b1cfc1ec1e006a52654c5441422fa26c240ee123), [`435645e`](https://github.com/better-auth/better-auth/commit/435645e5eb6fcd0a3a9a2bbd1fd486f47ff4c4cc), [`678c555`](https://github.com/better-auth/better-auth/commit/678c555beb533c1416c1411a0d77129de2e97d31), [`193efff`](https://github.com/better-auth/better-auth/commit/193efff3d290740b1fd7c564b4b9b6f18343d05e), [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41), [`352d04c`](https://github.com/better-auth/better-auth/commit/352d04c8eb40c597a54da8667d68e05a1cb69426), [`e9d9921`](https://github.com/better-auth/better-auth/commit/e9d99212174c231559b8f75679fc0464dfd4345f), [`e78f15a`](https://github.com/better-auth/better-auth/commit/e78f15aa316bedeaf53a654bb07d4a222ca5e578), [`1bd5c37`](https://github.com/better-auth/better-auth/commit/1bd5c37884f95766c737e35f4be86dfb46d31d36), [`766cfb3`](https://github.com/better-auth/better-auth/commit/766cfb3f42f08665bd52b25b035d0041f000373d), [`60525e0`](https://github.com/better-auth/better-auth/commit/60525e08fd8f4c10385bcd9f215224a2144ef94a), [`c46992f`](https://github.com/better-auth/better-auth/commit/c46992f6ce548fad0f26f5f07dc8525893e8196c), [`916ef5c`](https://github.com/better-auth/better-auth/commit/916ef5c5307103d9bea44446a40da5d31de2b3fe), [`1d95ebf`](https://github.com/better-auth/better-auth/commit/1d95ebf3fe9a788d9b6566495e0016e60d1fd7fd), [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78), [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9), [`2627237`](https://github.com/better-auth/better-auth/commit/2627237fae3d02c53b3ba68b3812cbc31905a24b), [`3d1f008`](https://github.com/better-auth/better-auth/commit/3d1f008ae381dec01751725b7422985c84c74aae), [`67743ed`](https://github.com/better-auth/better-auth/commit/67743ed6e8d873114b723fc5c196aea17a870509), [`f0ce580`](https://github.com/better-auth/better-auth/commit/f0ce580fbdfd62bba262fb5c3625736197fd0eac), [`c46d2a6`](https://github.com/better-auth/better-auth/commit/c46d2a6ac4442b2b9d2f301619a9f1b9ef400f55), [`07a0938`](https://github.com/better-auth/better-auth/commit/07a09389ef00c0fc322983f2eca463194c642865), [`92dfcea`](https://github.com/better-auth/better-auth/commit/92dfceaa14c287543f7cf62239641f4f7406cfb2), [`e15625f`](https://github.com/better-auth/better-auth/commit/e15625ff382a2dd9ea41e7d142d4098f6a8715a2), [`a9f455d`](https://github.com/better-auth/better-auth/commit/a9f455d586f4124bf8c544345f47130a93580103), [`9725f1b`](https://github.com/better-auth/better-auth/commit/9725f1b361a0b5db8a1b519e3c5aacae3ed2fb98)]:
+  - better-auth@1.7.8
+  - @better-auth/core@1.7.8
+  - @better-auth/telemetry@1.7.8
+
+## 1.7.7
+
+### Patch Changes
+
+- Updated dependencies [[`4186e36`](https://github.com/better-auth/better-auth/commit/4186e36d1505f881585dea03353a4fc4ff864474), [`8620aa9`](https://github.com/better-auth/better-auth/commit/8620aa94fdb9e158824cbba0d0fcf364143c56fe), [`55cb92e`](https://github.com/better-auth/better-auth/commit/55cb92e940e6ac26e746bbb06b92c445050cdb09), [`69defbc`](https://github.com/better-auth/better-auth/commit/69defbcabae430ca48e4ff1088c52a051566905e), [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a), [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a)]:
+  - better-auth@1.7.7
+  - @better-auth/core@1.7.7
+  - @better-auth/telemetry@1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11314](https://github.com/better-auth/better-auth/pull/11314) [`dcaa5a7`](https://github.com/better-auth/better-auth/commit/dcaa5a7869d83204a5cdac5ca2092a8fd218f062) Thanks [@bytaesu](https://github.com/bytaesu)! - Add read-only `check` and `check schema` commands to validate the configured adapter schema on demand.
+
+- Updated dependencies [[`af88385`](https://github.com/better-auth/better-auth/commit/af883851ae9c3b55c0d8240fabea3dc797cd5cd0), [`2fa501c`](https://github.com/better-auth/better-auth/commit/2fa501cdf9e022d5f7241fabce1a67f1828d777b), [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5), [`3d0efa3`](https://github.com/better-auth/better-auth/commit/3d0efa308d575c4aa184d65deaf29f2626add8fd), [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da), [`8853419`](https://github.com/better-auth/better-auth/commit/88534192c1d0fd62b108b568243a134e6df61ab1), [`2ee1545`](https://github.com/better-auth/better-auth/commit/2ee1545f244d87e5edd6a003b48b90a5539f8afa), [`fc45d08`](https://github.com/better-auth/better-auth/commit/fc45d08b26ac8e433fc7899a12be392cc52735ba)]:
+  - better-auth@1.7.6
+  - @better-auth/core@1.7.6
+  - @better-auth/telemetry@1.7.6
+
+## 1.7.5
+
+### Patch Changes
+
+- Updated dependencies [[`e56c45b`](https://github.com/better-auth/better-auth/commit/e56c45bddb8ca859175a47ab345b6c6dcc6da5d7), [`8d37cc3`](https://github.com/better-auth/better-auth/commit/8d37cc3b7732a04908b28d8abb7f010a286d6c43), [`348fc26`](https://github.com/better-auth/better-auth/commit/348fc26c9904d800cd471947ba98abb5e8431b60), [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8), [`dae97ed`](https://github.com/better-auth/better-auth/commit/dae97ed932a084a11faa96a2e1abf052fc85d2ea), [`133f6a2`](https://github.com/better-auth/better-auth/commit/133f6a27175ba21193742564d94aebfc9ec89920)]:
+  - better-auth@1.7.5
+  - @better-auth/core@1.7.5
+  - @better-auth/telemetry@1.7.5
+
+## 1.7.4
+
+### Patch Changes
+
+- Updated dependencies [[`3ff842a`](https://github.com/better-auth/better-auth/commit/3ff842ab7fdf60746b5d7bd8c27becd2d0a79c2e), [`3f890eb`](https://github.com/better-auth/better-auth/commit/3f890eb631e0278045b3b5b40d29b11bd9d4c332), [`c1756a2`](https://github.com/better-auth/better-auth/commit/c1756a22745d4580425559b8800acc6e9a70e30f), [`9b9638e`](https://github.com/better-auth/better-auth/commit/9b9638ec99057ade649280fa1447408238158f1c)]:
+  - @better-auth/core@1.7.4
+  - better-auth@1.7.4
+  - @better-auth/telemetry@1.7.4
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11100](https://github.com/better-auth/better-auth/pull/11100) [`b489373`](https://github.com/better-auth/better-auth/commit/b4893737325a8b1073a40aa25b3111b38d579a16) Thanks [@bytaesu](https://github.com/bytaesu)! - Add Codex as a supported target for configuring the Better Auth documentation MCP server.
+
+- [#11179](https://github.com/better-auth/better-auth/pull/11179) [`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate Drizzle schema objects and generated Prisma client models during initialization, including in production, and report mismatches with guidance for fixing them. These checks do not query the database and cannot detect unapplied migrations.
+
+  For Prisma clients whose model metadata omits nullability, `auth generate` reports required fields that Better Auth never writes by reading the existing Prisma schema. Set `advanced.database.validateSchema: false` to disable runtime validation.
+
+- [#11140](https://github.com/better-auth/better-auth/pull/11140) [`b95b7b3`](https://github.com/better-auth/better-auth/commit/b95b7b31e70a20f644bc5f8ff404b43832a8d019) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow `auth init` to finish when a generated setup has no dependencies in one of its install groups, and preserve useful package-manager output when an installation fails.
+
+- [#9908](https://github.com/better-auth/better-auth/pull/9908) [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6) Thanks [@harshil1712](https://github.com/harshil1712)! - Add Cloudflare as a built-in social provider, with support for client-secret authentication and PKCE clients without a secret.
+
+- [#11178](https://github.com/better-auth/better-auth/pull/11178) [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9) Thanks [@bytaesu](https://github.com/bytaesu)! - Report missing tables, missing columns, and required columns Better Auth never writes during initialization, with guidance for fixing them. Kysely checks the live database schema. Authentication requests await the same check and are rejected if the schema does not match.
+
+  Validation is enabled by default, including in production. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` refuses to apply changes when required unwritten columns need manual repair.
+
+- [#11126](https://github.com/better-auth/better-auth/pull/11126) [`5024647`](https://github.com/better-auth/better-auth/commit/5024647392141b41cc9a05e1e3112a2bae5fcb15) Thanks [@bytaesu](https://github.com/bytaesu)! - `auth info` now reports installed package versions instead of declared dependency specifiers, including catalog and workspace references.
+
+- [#11127](https://github.com/better-auth/better-auth/pull/11127) [`8bb6847`](https://github.com/better-auth/better-auth/commit/8bb68479f53b14853a086f15402211606968ea72) Thanks [@bytaesu](https://github.com/bytaesu)! - `auth upgrade` now skips non-semver dependency specifiers, including pnpm catalogs, with a clear warning instead of crashing.
+
+- Updated dependencies [[`3660f06`](https://github.com/better-auth/better-auth/commit/3660f062d6e7a9b02e3fc8eee5b99482117ebba0), [`5bd7096`](https://github.com/better-auth/better-auth/commit/5bd709640a14e03972420bbfe778e3c732df80d5), [`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c), [`7ec7146`](https://github.com/better-auth/better-auth/commit/7ec71461f1b3dcc0f9852ced5cc1ed7252ded4f2), [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6), [`3e9e197`](https://github.com/better-auth/better-auth/commit/3e9e19746e609004da31bea3356c0059611d9ed4), [`157ec8d`](https://github.com/better-auth/better-auth/commit/157ec8d8799ddda642f2fe40120fc364660a8864), [`c47b765`](https://github.com/better-auth/better-auth/commit/c47b76517d235d7cde07a1b4717f76b8f71a675f), [`2d5c63d`](https://github.com/better-auth/better-auth/commit/2d5c63d512164d4e18c5e67b79a9c7d19b27b669), [`baa08f4`](https://github.com/better-auth/better-auth/commit/baa08f4ee674f5cc39624063847c89f1bea73186), [`a9d8c12`](https://github.com/better-auth/better-auth/commit/a9d8c12d14b99a2df35ae2fba98ad4e4bc512ad5), [`9fc7498`](https://github.com/better-auth/better-auth/commit/9fc749867592536b6e472381581cee8f00f6b59b), [`9e36635`](https://github.com/better-auth/better-auth/commit/9e36635eb2fbf27d58c70d3361724335ba9a9951), [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9), [`a2bae0c`](https://github.com/better-auth/better-auth/commit/a2bae0cad04ccc23c40555c77f86b0da1ba40ebc), [`1a1b7d5`](https://github.com/better-auth/better-auth/commit/1a1b7d56f51cb9ce6b06334b22fcbfa0d52be05a), [`0bb0dbf`](https://github.com/better-auth/better-auth/commit/0bb0dbf6f38ab53a0c1f2fb639acd7bd602e2a24), [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc), [`5fe5bc2`](https://github.com/better-auth/better-auth/commit/5fe5bc21d1bf699655054192f4f833bcc33d0ba4), [`74a7369`](https://github.com/better-auth/better-auth/commit/74a7369179cc6ab9fc2a9f13a67b33e8c00aa9ac), [`e16b40a`](https://github.com/better-auth/better-auth/commit/e16b40aeadde4203c883f121e7e5f7a2ec04d6b2), [`c0444dc`](https://github.com/better-auth/better-auth/commit/c0444dc97928f46978c42083083d3b8642b89493)]:
+  - better-auth@1.7.3
+  - @better-auth/core@1.7.3
+  - @better-auth/telemetry@1.7.3
+
+## 1.7.2
+
+### Patch Changes
+
+- Updated dependencies [[`557e19b`](https://github.com/better-auth/better-auth/commit/557e19bfad0f2d2842903ddb1e768a0506aceaea), [`64da15b`](https://github.com/better-auth/better-auth/commit/64da15b0b1ca078d80f115ee0a5bd9ad4ca4d64e), [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e), [`b4ad5a1`](https://github.com/better-auth/better-auth/commit/b4ad5a110ca4f2e043c0f23a8e5f87e0b31c3fc6), [`c7a5c1a`](https://github.com/better-auth/better-auth/commit/c7a5c1a7ed65a5169e98bd347df91b16bb394692), [`78f0c39`](https://github.com/better-auth/better-auth/commit/78f0c3922c273de29bd0b77213fbc37cc3b5917e), [`ce8a3ab`](https://github.com/better-auth/better-auth/commit/ce8a3ab5442fdd388f3b1346b71292cf617c3146), [`a021eaf`](https://github.com/better-auth/better-auth/commit/a021eafaf235dd08c0835d91ee714aca24c4605e), [`c8dcfa5`](https://github.com/better-auth/better-auth/commit/c8dcfa57e11e22325dbb2a0cc1af6775f41b1315), [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1), [`f6891a2`](https://github.com/better-auth/better-auth/commit/f6891a2d2d4f7ead7e9b13e65316a0cbd88f3fe4), [`e1d4011`](https://github.com/better-auth/better-auth/commit/e1d40116e2b6a797372ac82b9feea39f57285632), [`649818a`](https://github.com/better-auth/better-auth/commit/649818a2969594e58147a2cc08157812ea0b75ef)]:
+  - @better-auth/core@1.7.2
+  - better-auth@1.7.2
+  - @better-auth/telemetry@1.7.2
+
+## 1.7.1
+
+### Patch Changes
+
+- [#10863](https://github.com/better-auth/better-auth/pull/10863) [`845bbd1`](https://github.com/better-auth/better-auth/commit/845bbd1de682ab87e03ce925f85087da81249a4e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `auth migrate` no longer attempts to add a required column with no default value to a table that already has rows. It stops with an error naming the column and the backfill to run first. Previously the generated statement failed on SQLite, Postgres, and SQL Server; on MySQL it filled the new column with an empty string for every existing row and reported success. If `auth migrate` already ran against a MySQL database on 1.7, run the check in the upgrade guide's account identity section.
+
+  `getMigrations` throws the new `UnsafeMigrationError` (exported from `better-auth/db/migration`) for this refusal, so callers can distinguish it from other migration errors such as an index-definition conflict.
+
+  `auth generate` still emits the statements for external migration tooling, with a comment banner naming any column that needs a manual backfill first.
+
+  A required field whose database column is still nullable logs a warning instead of blocking the migration.
+
+  A CLI command that fails now prints its error and exits with a non-zero code instead of an unhandled promise rejection.
+
+- Updated dependencies [[`845bbd1`](https://github.com/better-auth/better-auth/commit/845bbd1de682ab87e03ce925f85087da81249a4e)]:
+  - better-auth@1.7.1
+  - @better-auth/core@1.7.1
+  - @better-auth/telemetry@1.7.1
+
+## 1.7.0
+
+### Minor Changes
+
+- [#9501](https://github.com/better-auth/better-auth/pull/9501) [`526aa32`](https://github.com/better-auth/better-auth/commit/526aa322efd648cc2d2583897ab3d24ba565fa6f) Thanks [@bytaesu](https://github.com/bytaesu)! - The CLI now auto-detects auth configs that export the same instance as both a named export and the default export (e.g. `export const auth = betterAuth(...); export default auth;`). Previously such configs failed when no explicit `--config` path was passed.
+
+- [#10170](https://github.com/better-auth/better-auth/pull/10170) [`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `auth` CLI now requires Node.js 22.12 or newer, following its upgrade to Commander 15. Update your Node.js runtime before upgrading the CLI.
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+- [#9547](https://github.com/better-auth/better-auth/pull/9547) [`15bb169`](https://github.com/better-auth/better-auth/commit/15bb1690b274b9f1e2a58c5db039bd240dc5e99b) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `create-admin` CLI command for creating an initial admin user through the configured Better Auth instance.
+
+### Patch Changes
+
+- [#10770](https://github.com/better-auth/better-auth/pull/10770) [`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Export the generated `pgSchema` binding so drizzle-kit can emit `CREATE SCHEMA` for custom PostgreSQL namespaces.
+
+- Updated dependencies [[`4e8e4c7`](https://github.com/better-auth/better-auth/commit/4e8e4c7fc5fb2723144cbf41c4a1bfa28de8d671), [`0cbaf81`](https://github.com/better-auth/better-auth/commit/0cbaf81bed9dec4c56880ee78a532262386e1ec5), [`b36c38f`](https://github.com/better-auth/better-auth/commit/b36c38f9842d3416689340552989449a32007819), [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71), [`6782647`](https://github.com/better-auth/better-auth/commit/6782647d7c2d248246f9ef3980e656725c29ce64), [`73541c1`](https://github.com/better-auth/better-auth/commit/73541c119041113b1909fe244ff4b8210618b5b5), [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1), [`bf39cbf`](https://github.com/better-auth/better-auth/commit/bf39cbf13f3b934f728cde72b1e7ebdc4c85f641), [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78), [`49b5cf6`](https://github.com/better-auth/better-auth/commit/49b5cf650e1264ecc4c917ca193ea05c3b58a3b9), [`e014029`](https://github.com/better-auth/better-auth/commit/e0140297a59ddb59cccbcb4ba46c513de8cb86a7), [`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3), [`c7d2253`](https://github.com/better-auth/better-auth/commit/c7d22539ec4f7322d9625ae2953d397c3863d097), [`ec8a38c`](https://github.com/better-auth/better-auth/commit/ec8a38c08f5cfe2d922be0f8a49f2d0fa84de799), [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560), [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0), [`cf8eaac`](https://github.com/better-auth/better-auth/commit/cf8eaac26e11bcdb7309d537f1730b2559963861), [`523f95c`](https://github.com/better-auth/better-auth/commit/523f95c10db24b790bbd75fe85c86c34d3465267), [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9), [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545), [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b), [`fe4c820`](https://github.com/better-auth/better-auth/commit/fe4c8209479cc90a4c2e8692b2d84fde26926af2), [`e53582c`](https://github.com/better-auth/better-auth/commit/e53582ce55a0ddbca62f52efeb3459523816f222), [`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2), [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59), [`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8), [`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d), [`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725), [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2), [`4f53b61`](https://github.com/better-auth/better-auth/commit/4f53b61f49b470a40ccab18fe1fe4d80f225905f), [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9), [`06daf70`](https://github.com/better-auth/better-auth/commit/06daf7011e548ef5a7d513c96e3a440331977a7d), [`6f2948e`](https://github.com/better-auth/better-auth/commit/6f2948e87bb5fa14bd2174a91f7143e1eced1b87), [`e0d2b9e`](https://github.com/better-auth/better-auth/commit/e0d2b9eb9b4a515e1b73be71e1e3681faaa9b55f), [`f68044d`](https://github.com/better-auth/better-auth/commit/f68044dcfbd9fb83763249ed9509cfacbcce47be), [`91f235f`](https://github.com/better-auth/better-auth/commit/91f235f8604cd432749adf18c7bd7d658aa1519b), [`d2a79ba`](https://github.com/better-auth/better-auth/commit/d2a79bae79b88e2b28cb678f5eefd9759239b627), [`a83152e`](https://github.com/better-auth/better-auth/commit/a83152e2e884b1ac1724f95cea2056795d60e5cc), [`bb6c102`](https://github.com/better-auth/better-auth/commit/bb6c1021e8f6200e60ff852cbd95fb6841a0ec4b), [`34558bc`](https://github.com/better-auth/better-auth/commit/34558bc52b0e043021a1072f78de5f5439ae1734), [`954b664`](https://github.com/better-auth/better-auth/commit/954b664f4f251f8dd028451dab3ab43067dbf890), [`76a3342`](https://github.com/better-auth/better-auth/commit/76a33429fc2a3edcc85307bf81b9d92a95f9de6c), [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a), [`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656), [`652fa53`](https://github.com/better-auth/better-auth/commit/652fa53e4912837fe234651e7c7705fb35abe188), [`729c00d`](https://github.com/better-auth/better-auth/commit/729c00d74c94f558893da1e3a9ee86451d1b23da), [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0), [`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52), [`6fe9faa`](https://github.com/better-auth/better-auth/commit/6fe9faab65eb640dbe9bb762954a068586e8661c), [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a), [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15), [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c), [`973fdde`](https://github.com/better-auth/better-auth/commit/973fdde79d9746b15d5ac0427049e8a008a7705c), [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f), [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a), [`ad35ead`](https://github.com/better-auth/better-auth/commit/ad35eadd130162565a1b93c27f3a66910dca0b0e), [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7), [`544f1c6`](https://github.com/better-auth/better-auth/commit/544f1c63c9826831d96a126fbe568d8a8a8fde68)]:
+  - better-auth@1.7.0
+  - @better-auth/core@1.7.0
+  - @better-auth/telemetry@1.7.0
+
+## 1.7.0-rc.6
+
+### Patch Changes
+
+- [#10770](https://github.com/better-auth/better-auth/pull/10770) [`692b22c`](https://github.com/better-auth/better-auth/commit/692b22c517011444f812fe21c206e399e35e8417) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Export the generated `pgSchema` binding so drizzle-kit can emit `CREATE SCHEMA` for custom PostgreSQL namespaces.
+
+- Updated dependencies [[`773de54`](https://github.com/better-auth/better-auth/commit/773de54b18c0e920a3542bdecaf8b42fffc0dc4b), [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982)]:
+  - better-auth@1.7.0-rc.6
+  - @better-auth/core@1.7.0-rc.6
+  - @better-auth/telemetry@1.7.0-rc.6
+
+## 1.7.0-rc.5
+
+### Patch Changes
+
+- Updated dependencies [[`6782647`](https://github.com/better-auth/better-auth/commit/6782647d7c2d248246f9ef3980e656725c29ce64), [`081d3c3`](https://github.com/better-auth/better-auth/commit/081d3c379c720926295067d878c421b5e8684c78)]:
+  - better-auth@1.7.0-rc.5
+  - @better-auth/core@1.7.0-rc.5
+  - @better-auth/telemetry@1.7.0-rc.5
+
+## 1.7.0-rc.4
+
+### Patch Changes
+
+- Updated dependencies [[`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839)]:
+  - better-auth@1.7.0-rc.4
+  - @better-auth/core@1.7.0-rc.4
+  - @better-auth/telemetry@1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+### Patch Changes
+
+- Updated dependencies [[`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71), [`49b5cf6`](https://github.com/better-auth/better-auth/commit/49b5cf650e1264ecc4c917ca193ea05c3b58a3b9), [`430c895`](https://github.com/better-auth/better-auth/commit/430c89549060ef6bd477ed2510650b9e49bba560), [`5c45abc`](https://github.com/better-auth/better-auth/commit/5c45abcd2094d4a430cc84af6f9719fa0515ad71), [`ecd83da`](https://github.com/better-auth/better-auth/commit/ecd83daa01ec482d31667019737cb6697f03da0b), [`0683a5f`](https://github.com/better-auth/better-auth/commit/0683a5f36befb45ade3866c7f8057791eadeee59), [`f68044d`](https://github.com/better-auth/better-auth/commit/f68044dcfbd9fb83763249ed9509cfacbcce47be), [`d701f90`](https://github.com/better-auth/better-auth/commit/d701f90e6f81ede26209a50a5100bd9914a7ad5a), [`59c4c83`](https://github.com/better-auth/better-auth/commit/59c4c832fc4eed813e98b5b2c45a91cf2d4ad9e7)]:
+  - @better-auth/core@1.7.0-rc.3
+  - better-auth@1.7.0-rc.3
+  - @better-auth/telemetry@1.7.0-rc.3
+
+## 1.7.0-rc.2
+
+### Minor Changes
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+### Patch Changes
+
+- Updated dependencies [[`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1), [`cf8eaac`](https://github.com/better-auth/better-auth/commit/cf8eaac26e11bcdb7309d537f1730b2559963861), [`dbd302e`](https://github.com/better-auth/better-auth/commit/dbd302e422c66620cde391f6a80ab90ee34182f9), [`8784c1c`](https://github.com/better-auth/better-auth/commit/8784c1c1f4301acf96d980e5bf81ff56435e2545), [`bb6c102`](https://github.com/better-auth/better-auth/commit/bb6c1021e8f6200e60ff852cbd95fb6841a0ec4b), [`ed61b47`](https://github.com/better-auth/better-auth/commit/ed61b4798e0ccedadc3b0c0e0a2d08b5d4b7ed5a), [`0de88f5`](https://github.com/better-auth/better-auth/commit/0de88f5e61d96f460e02b8a526e58acb16455d15), [`973fdde`](https://github.com/better-auth/better-auth/commit/973fdde79d9746b15d5ac0427049e8a008a7705c)]:
+  - @better-auth/core@1.7.0-rc.2
+  - better-auth@1.7.0-rc.2
+  - @better-auth/telemetry@1.7.0-rc.2
+
+## 1.7.0-rc.1
+
+### Patch Changes
+
+- Updated dependencies [[`fe4c820`](https://github.com/better-auth/better-auth/commit/fe4c8209479cc90a4c2e8692b2d84fde26926af2)]:
+  - better-auth@1.7.0-rc.1
+  - @better-auth/core@1.7.0-rc.1
+  - @better-auth/telemetry@1.7.0-rc.1
+
+## 1.7.0-rc.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - better-auth@1.7.0-rc.0
+  - @better-auth/core@1.7.0-rc.0
+  - @better-auth/telemetry@1.7.0-rc.0
+
+## 1.7.0-beta.10
+
+### Minor Changes
+
+- [#10170](https://github.com/better-auth/better-auth/pull/10170) [`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `auth` CLI now requires Node.js 22.12 or newer, following its upgrade to Commander 15. Update your Node.js runtime before upgrading the CLI.
+
+### Patch Changes
+
+- Updated dependencies [[`6ddb555`](https://github.com/better-auth/better-auth/commit/6ddb5554c01da4df6c637013dac7ea4ec8a43b52)]:
+  - better-auth@1.7.0-beta.10
+  - @better-auth/core@1.7.0-beta.10
+  - @better-auth/telemetry@1.7.0-beta.10
+
+## 1.7.0-beta.9
+
+### Patch Changes
+
+- Updated dependencies []:
+  - better-auth@1.7.0-beta.9
+  - @better-auth/core@1.7.0-beta.9
+  - @better-auth/telemetry@1.7.0-beta.9
+
+## 1.7.0-beta.8
+
+### Patch Changes
+
+- Updated dependencies [[`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d), [`06daf70`](https://github.com/better-auth/better-auth/commit/06daf7011e548ef5a7d513c96e3a440331977a7d), [`a83152e`](https://github.com/better-auth/better-auth/commit/a83152e2e884b1ac1724f95cea2056795d60e5cc), [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0), [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c)]:
+  - better-auth@1.7.0-beta.8
+  - @better-auth/core@1.7.0-beta.8
+  - @better-auth/telemetry@1.7.0-beta.8
+
+## 1.7.0-beta.7
+
+### Patch Changes
+
+- Updated dependencies [[`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3), [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0)]:
+  - better-auth@1.7.0-beta.7
+  - @better-auth/core@1.7.0-beta.7
+  - @better-auth/telemetry@1.7.0-beta.7
+
 ## 1.7.0-beta.6
 
 ### Patch Changes
@@ -23,6 +255,119 @@
 ### Minor Changes
 
 - [#9547](https://github.com/better-auth/better-auth/pull/9547) [`15bb169`](https://github.com/better-auth/better-auth/commit/15bb1690b274b9f1e2a58c5db039bd240dc5e99b) Thanks [@GautamBytes](https://github.com/GautamBytes)! - Add a `create-admin` CLI command for creating an initial admin user through the configured Better Auth instance.
+
+## 1.6.30
+
+### Patch Changes
+
+- Updated dependencies [[`07c1718`](https://github.com/better-auth/better-auth/commit/07c17189f58502bf038e5f22766f8a99df60ac99)]:
+  - @better-auth/core@1.6.30
+  - better-auth@1.6.30
+  - @better-auth/telemetry@1.6.30
+
+## 1.6.29
+
+### Patch Changes
+
+- Updated dependencies [[`e6e1b4e`](https://github.com/better-auth/better-auth/commit/e6e1b4e8146a84d2a2c5fe2c497c81d03dfc2ad3)]:
+  - better-auth@1.6.29
+  - @better-auth/core@1.6.29
+  - @better-auth/telemetry@1.6.29
+
+## 1.6.28
+
+### Patch Changes
+
+- Updated dependencies [[`773de54`](https://github.com/better-auth/better-auth/commit/773de54b18c0e920a3542bdecaf8b42fffc0dc4b), [`2ad2928`](https://github.com/better-auth/better-auth/commit/2ad2928f967afa9f9858caecd01466ecb8686982)]:
+  - better-auth@1.6.28
+  - @better-auth/core@1.6.28
+  - @better-auth/telemetry@1.6.28
+
+## 1.6.27
+
+### Patch Changes
+
+- [#10743](https://github.com/better-auth/better-auth/pull/10743) [`b8077b7`](https://github.com/better-auth/better-auth/commit/b8077b74ef9a80a7757220b72834349bd8de05c0) Thanks [@bytaesu](https://github.com/bytaesu)! - The upgrade command now targets the running CLI version, including prereleases, instead of the npm `latest` tag.
+
+- Updated dependencies [[`2ae491e`](https://github.com/better-auth/better-auth/commit/2ae491eac3ece50839a0eb2d4f868c4deedac67b), [`90b5093`](https://github.com/better-auth/better-auth/commit/90b509344794b8064700371cbc04b985d0519839)]:
+  - @better-auth/core@1.6.27
+  - better-auth@1.6.27
+  - @better-auth/telemetry@1.6.27
+
+## 1.6.26
+
+### Patch Changes
+
+- Updated dependencies [[`9ede805`](https://github.com/better-auth/better-auth/commit/9ede8059b56e1415c1e8cfdd93ff72691b848bbf), [`5a811f1`](https://github.com/better-auth/better-auth/commit/5a811f1b4314b8bcf6f21c0b72de5cb67d552d97), [`d8327f1`](https://github.com/better-auth/better-auth/commit/d8327f1fea92243b6fea1b0ab183e2a989792c0c), [`e2c73fb`](https://github.com/better-auth/better-auth/commit/e2c73fbec87f5e19f6a2b5ac371bc5bba9bd49ff), [`af50c45`](https://github.com/better-auth/better-auth/commit/af50c45553a62cfb6cdcdede86828731ca00c22c), [`701cd43`](https://github.com/better-auth/better-auth/commit/701cd43babac52784d855291a6adc0cf3fba7970), [`a30e274`](https://github.com/better-auth/better-auth/commit/a30e274b5daed6057086d76b91d17abfa02196d7), [`e7b0eba`](https://github.com/better-auth/better-auth/commit/e7b0eba327e050f50764802e21484c6cabb56600), [`2b4a14f`](https://github.com/better-auth/better-auth/commit/2b4a14f180ed2eeb9692d6933064b001f66ec52c), [`7552a3b`](https://github.com/better-auth/better-auth/commit/7552a3b563fe1ae922fb65db12d005c38a12614d), [`ea38fca`](https://github.com/better-auth/better-auth/commit/ea38fcac7435137604e9b3ba2fe149a1848d0eeb), [`a03e4c1`](https://github.com/better-auth/better-auth/commit/a03e4c18677e2dc01a9b47b2a8017b92dbf9ece7)]:
+  - better-auth@1.6.26
+  - @better-auth/core@1.6.26
+  - @better-auth/telemetry@1.6.26
+
+## 1.6.25
+
+### Patch Changes
+
+- Updated dependencies [[`5124c34`](https://github.com/better-auth/better-auth/commit/5124c3487903e96223bb3f54347724bb0204bb95), [`0ffd1fb`](https://github.com/better-auth/better-auth/commit/0ffd1fb28d44a8266d62791cd4c97e263444d03b), [`7439359`](https://github.com/better-auth/better-auth/commit/743935991f9991e8243d6c3d14773b9cfca462e8)]:
+  - better-auth@1.6.25
+  - @better-auth/core@1.6.25
+  - @better-auth/telemetry@1.6.25
+
+## 1.6.24
+
+### Patch Changes
+
+- [#10302](https://github.com/better-auth/better-auth/pull/10302) [`0f2cc1b`](https://github.com/better-auth/better-auth/commit/0f2cc1b33b77850948dac4d889e5f46bba41e8d5) Thanks [@momomuchu](https://github.com/momomuchu)! - Recover when `auth generate`'s config imports the not-yet-generated `--output` file (e.g. Convex first-run `import schema from "./schema"`), by stubbing a temporary placeholder and retrying config load.
+
+- [#10221](https://github.com/better-auth/better-auth/pull/10221) [`6f3ba45`](https://github.com/better-auth/better-auth/commit/6f3ba45639579da152b69e8e5342e02f28288670) Thanks [@paoloricciuti](https://github.com/paoloricciuti)! - fix: stub SvelteKit's explicit-environment-variables modules
+
+- [#10352](https://github.com/better-auth/better-auth/pull/10352) [`097eecd`](https://github.com/better-auth/better-auth/commit/097eecdd16b82c9730ad145e7823be499a76e2fe) Thanks [@ping-maxwell](https://github.com/ping-maxwell)! - Disambiguate Drizzle relations with matching `relationName` values when a table has multiple foreign keys to the same model.
+
+- [#10333](https://github.com/better-auth/better-auth/pull/10333) [`99dbdd7`](https://github.com/better-auth/better-auth/commit/99dbdd7ea98740d11689394220a718dfb9579276) Thanks [@c-nicol](https://github.com/c-nicol)! - Fixes Drizzle schema generation for fields that are both unique: true and index: true.
+
+- Updated dependencies [[`03dc5a0`](https://github.com/better-auth/better-auth/commit/03dc5a046f536994950800ea557b8e2e2e0cdfdd), [`7508940`](https://github.com/better-auth/better-auth/commit/750894037639c4158472cc1d4994b0e07bf1f59a), [`bae7198`](https://github.com/better-auth/better-auth/commit/bae71988ab79aeb4f19f245ceabac9eca8706a50), [`ef4d273`](https://github.com/better-auth/better-auth/commit/ef4d27360cec8a0bc11a94e135ea4a3dd32b1969), [`6758231`](https://github.com/better-auth/better-auth/commit/6758231905d2e86a7b3f058dd05c17ba739aa80f), [`99dbdd7`](https://github.com/better-auth/better-auth/commit/99dbdd7ea98740d11689394220a718dfb9579276), [`086ca91`](https://github.com/better-auth/better-auth/commit/086ca91f51dd8158aff6cbf54c4f9c7ce220914d), [`8f2dedd`](https://github.com/better-auth/better-auth/commit/8f2dedd89301da9fb52c1a64df6a9683f9be55fd), [`4e685ee`](https://github.com/better-auth/better-auth/commit/4e685eef420b5576913b9803b58c7e7ee7342203), [`3bf0e49`](https://github.com/better-auth/better-auth/commit/3bf0e4981e025ba9af684013a27b0102a04f7c56), [`f59a0ee`](https://github.com/better-auth/better-auth/commit/f59a0ee7895a024ddd4c5c387344173888e17be4), [`54fab08`](https://github.com/better-auth/better-auth/commit/54fab084469a27257e66a0814523ebac7145ef5d), [`0f2cc1b`](https://github.com/better-auth/better-auth/commit/0f2cc1b33b77850948dac4d889e5f46bba41e8d5), [`ae78109`](https://github.com/better-auth/better-auth/commit/ae781091186f321b4e4ec9e84f64b6e4d5ea1043), [`46d2bf0`](https://github.com/better-auth/better-auth/commit/46d2bf02c98902da7b344753372d48cfe0e5ebb3), [`29a373e`](https://github.com/better-auth/better-auth/commit/29a373eaf1778820061a9380c29831c2de2ce704), [`f6d18fa`](https://github.com/better-auth/better-auth/commit/f6d18fa8f79b9323e10b50f72e2b1a088844e4bb), [`f23ce50`](https://github.com/better-auth/better-auth/commit/f23ce5012ea47fac1a69b1dad203dfdef3830fd0), [`c4d1dda`](https://github.com/better-auth/better-auth/commit/c4d1ddaa952eab7edfec942fab223f35798518ab)]:
+  - better-auth@1.6.24
+  - @better-auth/core@1.6.24
+  - @better-auth/telemetry@1.6.24
+
+## 1.6.23
+
+### Patch Changes
+
+- [#10259](https://github.com/better-auth/better-auth/pull/10259) [`3fedfcb`](https://github.com/better-auth/better-auth/commit/3fedfcb01d0f2a3e653a98a0f7f7891949361b7a) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `better-auth generate` emitting an invalid Drizzle schema when a field's string default value contains a quote or backslash.
+
+- Updated dependencies [[`8581f97`](https://github.com/better-auth/better-auth/commit/8581f97ea0000e03edd6aa7911efabf694a9ff95)]:
+  - better-auth@1.6.23
+  - @better-auth/core@1.6.23
+  - @better-auth/telemetry@1.6.23
+
+## 1.6.22
+
+### Patch Changes
+
+- Updated dependencies [[`c06a56d`](https://github.com/better-auth/better-auth/commit/c06a56d83a40bbaeac12d3a8b8b67e59f92a9110), [`8bd43d9`](https://github.com/better-auth/better-auth/commit/8bd43d9d8312fd9ddbfb8fb5c827cf0a0e55132d), [`3a035e9`](https://github.com/better-auth/better-auth/commit/3a035e968e27bfdee1e53ad857e5569090d9f2d1)]:
+  - better-auth@1.6.22
+  - @better-auth/core@1.6.22
+  - @better-auth/telemetry@1.6.22
+
+## 1.6.21
+
+### Patch Changes
+
+- [#10198](https://github.com/better-auth/better-auth/pull/10198) [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de) Thanks [@rachit367](https://github.com/rachit367)! - Honor `disableMigration` on plugin schema tables. Tables flagged with `disableMigration: true` are now skipped by `better-auth generate` (Drizzle and Prisma output) and by the runtime migrator, instead of being emitted and created anyway. The flag was previously dropped while assembling the table list, so it had no effect.
+
+- Updated dependencies [[`e0762a1`](https://github.com/better-auth/better-auth/commit/e0762a127ce351a96614e60866b3455e6eddffa1), [`882cf9e`](https://github.com/better-auth/better-auth/commit/882cf9e592d1d305b5b78cadbb10aaeee7acd6dc), [`f52e1ab`](https://github.com/better-auth/better-auth/commit/f52e1ab50b60d289b64d6b06f1bff5a4358cdfd0), [`90d509e`](https://github.com/better-auth/better-auth/commit/90d509e0b9f72614170ad7124ae9d3a7a97d7d3a), [`b5bec19`](https://github.com/better-auth/better-auth/commit/b5bec193a56cec2f7b71c84d71dacb632f0b96a0), [`816d7f9`](https://github.com/better-auth/better-auth/commit/816d7f92522518e90d437c2a366d75db56690f86), [`239bcc8`](https://github.com/better-auth/better-auth/commit/239bcc836cf39c4fb409a15333be45134f9e9e65), [`1bc370a`](https://github.com/better-auth/better-auth/commit/1bc370aef5c249e82127cb9d35972101087ecde6), [`570267c`](https://github.com/better-auth/better-auth/commit/570267cd5e782f018933ce3af4f51dbd250bf7de), [`461ca6f`](https://github.com/better-auth/better-auth/commit/461ca6fd2453a2e145fa18a1df543e435e884701), [`88409b0`](https://github.com/better-auth/better-auth/commit/88409b0078c2bfddcc6503031fff333bfa045cd2), [`5953157`](https://github.com/better-auth/better-auth/commit/5953157acf619bcb8233c91952b1e4072202f055), [`b046f9e`](https://github.com/better-auth/better-auth/commit/b046f9ec112b2cf547efea8dc870a4895602c53b), [`ae647b4`](https://github.com/better-auth/better-auth/commit/ae647b4abe5a4d606c326f1ce0ffa2500b5424d1)]:
+  - better-auth@1.6.21
+  - @better-auth/core@1.6.21
+  - @better-auth/telemetry@1.6.21
+
+## 1.6.20
+
+### Patch Changes
+
+- Updated dependencies [[`21448b1`](https://github.com/better-auth/better-auth/commit/21448b1b77681e71e80ae0728d8658c936c18eb8), [`8ecf238`](https://github.com/better-auth/better-auth/commit/8ecf23817f5e501bdd8ab63ad5fdf2554ff1dff5), [`930f534`](https://github.com/better-auth/better-auth/commit/930f5341d956bf3075f43758392a5c7f50947104)]:
+  - better-auth@1.6.20
+  - @better-auth/core@1.6.20
+  - @better-auth/telemetry@1.6.20
 
 ## 1.6.19
 

@@ -65,23 +65,27 @@ export function parseBearerToken(
 	return credentials;
 }
 
-class TTLCache<K, V extends { expiresAt?: Date }> {
-	private cache = new Map<K, V>();
-	constructor() {}
+interface TTLCache<K, V> {
+	get(key: K): V | undefined;
+	set(key: K, value: V): void;
+}
 
-	set(key: K, value: V) {
-		this.cache.set(key, value);
-	}
-
-	get(key: K): V | undefined {
-		const entry = this.cache.get(key);
-		if (!entry) return undefined;
-		if (entry.expiresAt && entry.expiresAt < new Date()) {
-			this.cache.delete(key);
-			return undefined;
-		}
-		return entry;
-	}
+function createTTLCache<K, V extends { expiresAt?: Date }>(): TTLCache<K, V> {
+	const cache = new Map<K, V>();
+	return {
+		get(key) {
+			const entry = cache.get(key);
+			if (!entry) return undefined;
+			if (entry.expiresAt && entry.expiresAt < new Date()) {
+				cache.delete(key);
+				return undefined;
+			}
+			return entry;
+		},
+		set(key, value) {
+			cache.set(key, value);
+		},
+	};
 }
 
 /**
@@ -202,8 +206,26 @@ export function toAudienceClaim(
 	return audience.length === 1 ? audience.at(0) : audience;
 }
 
-const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
+const trustedClientCaches = new WeakMap<
+	OAuthOptions<Scope[]>,
+	TTLCache<string, SchemaClient<Scope[]>>
+>();
 
+function getTrustedClientCache(
+	options: OAuthOptions<Scope[]>,
+): TTLCache<string, SchemaClient<Scope[]>> {
+	const existingCache = trustedClientCaches.get(options);
+	if (existingCache) return existingCache;
+	const cache = createTTLCache<string, SchemaClient<Scope[]>>();
+	trustedClientCaches.set(options, cache);
+	return cache;
+}
+
+/**
+ * Verify the signature and expiration of an OAuth query issued by this provider.
+ * Use the provider's current auth secret on the server before displaying a
+ * consent page. A valid signature does not replace client or session checks.
+ */
 export async function verifyOAuthQueryParams(
 	oauth_query: string,
 	secret: string,
@@ -233,8 +255,9 @@ export async function getClient(
 	options: OAuthOptions<Scope[]>,
 	clientId: string,
 ) {
-	const trustedClient = cachedTrustedClients.get(clientId);
-	if (trustedClient) {
+	const trustedClientCache = getTrustedClientCache(options);
+	const trustedClient = trustedClientCache.get(clientId);
+	if (trustedClient && !trustedClient.clientDiscoveryId) {
 		return Object.assign({}, trustedClient);
 	}
 
@@ -244,17 +267,28 @@ export async function getClient(
 	});
 
 	const discoveries = getClientDiscoveries(options);
-	for (const discovery of discoveries) {
-		if (!discovery.matches(clientId)) continue;
-		const resolved = await discovery.resolve(ctx, clientId, dbClient);
-		if (resolved) {
-			dbClient = resolved;
-			break;
+	if (dbClient?.clientDiscoveryId) {
+		const clientDiscoveryId = dbClient.clientDiscoveryId;
+		const discovery = discoveries.find(
+			(candidate) => candidate.id === clientDiscoveryId,
+		);
+		if (!discovery?.matches(clientId)) return null;
+		dbClient = await discovery.resolve(ctx, clientId, dbClient);
+		if (!dbClient) return null;
+	} else if (dbClient) {
+		if (options.cachedTrustedClients?.has(clientId)) {
+			trustedClientCache.set(clientId, Object.assign({}, dbClient));
 		}
-	}
-
-	if (dbClient && options.cachedTrustedClients?.has(clientId)) {
-		cachedTrustedClients.set(clientId, Object.assign({}, dbClient));
+		return dbClient;
+	} else {
+		for (const discovery of discoveries) {
+			if (!discovery.matches(clientId)) continue;
+			const resolved = await discovery.resolve(ctx, clientId, null);
+			if (resolved) {
+				dbClient = resolved;
+				break;
+			}
+		}
 	}
 
 	return dbClient;
@@ -478,6 +512,116 @@ export async function getStoredToken(
 // one or more SP. Match liberally so requests using `basic` or extra
 // spaces aren't rejected before reaching the spec-correct decoder.
 const BASIC_SCHEME_PREFIX = /^Basic +/i;
+const AUTH_SCHEME_TOKEN = /^([!#$%&'*+\-.^_`|~0-9A-Za-z]+)(?=\s|$)/;
+
+function parseAuthorizationScheme(authorization: string) {
+	return authorization.match(AUTH_SCHEME_TOKEN)?.[1];
+}
+
+const CLIENT_AUTHENTICATION_FIELDS = [
+	"client_secret",
+	"client_assertion",
+	"client_assertion_type",
+] as const;
+
+export type ClientAuthenticationField =
+	(typeof CLIENT_AUTHENTICATION_FIELDS)[number];
+
+function throwInvalidAuthenticationRequest(errorDescription: string): never {
+	throw new APIError("BAD_REQUEST", {
+		error: "invalid_request",
+		error_description: errorDescription,
+	});
+}
+
+/**
+ * Normalizes client identification and authentication parameters while
+ * enforcing RFC 6749 §2.3 and RFC 8628 §3.1 cardinality. Empty values are
+ * omitted. Client identification remains separate from authentication-method
+ * detection so a public `client_id` does not count as an authentication attempt.
+ * Repeated `resource` parameters are intentionally outside this parser because
+ * RFC 8707 §2 explicitly permits them.
+ *
+ * Credential and assertion verification remain the responsibility of
+ * `extractClientCredentials`.
+ *
+ * @internal
+ */
+export async function normalizeClientAuthenticationParameters(
+	request: Request | undefined,
+	body: Record<string, unknown> = {},
+) {
+	let clientId: string | undefined;
+	if (body.client_id !== undefined && body.client_id !== "") {
+		if (typeof body.client_id !== "string") {
+			throwInvalidAuthenticationRequest("client_id must be a string");
+		}
+		clientId = body.client_id;
+	}
+	const fields: Partial<Record<ClientAuthenticationField, string>> = {};
+	const setEffectiveField = (
+		field: ClientAuthenticationField,
+		value: unknown,
+	) => {
+		if (value === undefined || value === "") return;
+		if (typeof value !== "string") {
+			throwInvalidAuthenticationRequest(`${field} must be a string`);
+		}
+		fields[field] = value;
+	};
+	for (const field of CLIENT_AUTHENTICATION_FIELDS) {
+		if (Object.hasOwn(body, field)) {
+			setEffectiveField(field, body[field]);
+		}
+	}
+
+	const authorization = request?.headers.get("authorization");
+	const hasAuthorizationHeader = Boolean(authorization);
+
+	if (request) {
+		const contentType =
+			request.headers.get("content-type")?.toLowerCase() ?? "";
+		if (contentType.includes("application/x-www-form-urlencoded")) {
+			const params = new URLSearchParams(await request.clone().text());
+			const clientIds = params
+				.getAll("client_id")
+				.filter((value) => value.length > 0);
+			if (clientIds.length > 1) {
+				throwInvalidAuthenticationRequest("client_id must not be repeated");
+			}
+			clientId = clientIds[0];
+
+			for (const field of CLIENT_AUTHENTICATION_FIELDS) {
+				const values = params.getAll(field).filter((value) => value.length > 0);
+				if (values.length > 1) {
+					throwInvalidAuthenticationRequest(`${field} must not be repeated`);
+				}
+				if (values.length === 1) setEffectiveField(field, values[0]);
+			}
+		}
+	}
+
+	const hasClientSecret = fields.client_secret !== undefined;
+	const hasClientAssertion =
+		fields.client_assertion !== undefined ||
+		fields.client_assertion_type !== undefined;
+	if (
+		(hasAuthorizationHeader && (hasClientSecret || hasClientAssertion)) ||
+		(hasClientSecret && hasClientAssertion)
+	) {
+		throwInvalidAuthenticationRequest(
+			"A request must use only one client authentication method",
+		);
+	}
+	body.client_id = clientId;
+	for (const field of CLIENT_AUTHENTICATION_FIELDS) {
+		body[field] = fields[field];
+	}
+
+	return {
+		detected: hasAuthorizationHeader || Object.keys(fields).length > 0,
+	};
+}
 
 function basicToClientCredentials(authorization: string) {
 	if (!BASIC_SCHEME_PREFIX.test(authorization)) {
@@ -487,10 +631,14 @@ function basicToClientCredentials(authorization: string) {
 		const { clientId, clientSecret } = decodeBasicCredentials(authorization);
 		return { client_id: clientId, client_secret: clientSecret };
 	} catch {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid authorization header format",
-			error: "invalid_client",
-		});
+		throw new APIError(
+			"UNAUTHORIZED",
+			{
+				error_description: "invalid authorization header format",
+				error: "invalid_client",
+			},
+			{ "WWW-Authenticate": "Basic" },
+		);
 	}
 }
 
@@ -522,6 +670,49 @@ export function clientAllowsGrant(
 }
 
 /**
+ * Validates requested scopes against a registered client's allowed scopes.
+ *
+ * @internal
+ */
+export function validateClientScopes(
+	client: Pick<SchemaClient<Scope[]>, "scopes">,
+	scopes?: string[],
+) {
+	if (!scopes || !client.scopes) return;
+	const validScopes = new Set(client.scopes);
+	for (const scope of scopes) {
+		if (!validScopes.has(scope)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: `client does not allow scope ${scope}`,
+				error: "invalid_scope",
+			});
+		}
+	}
+}
+
+function throwInvalidClient(
+	errorDescription: string,
+	authentication?: {
+		method?: TokenEndpointAuthMethod;
+		scheme?: string;
+	},
+): never {
+	const attemptedBasicAuthentication =
+		authentication?.method === "client_secret_basic";
+	const challengeScheme =
+		authentication?.scheme ??
+		(attemptedBasicAuthentication ? "Basic" : undefined);
+	throw new APIError(
+		challengeScheme ? "UNAUTHORIZED" : "BAD_REQUEST",
+		{
+			error_description: errorDescription,
+			error: "invalid_client",
+		},
+		challengeScheme ? { "WWW-Authenticate": challengeScheme } : undefined,
+	);
+}
+
+/**
  * Resolves the registered client by id and authorizes it: existence, disabled
  * state, registered auth method, requested scopes, and grant type. The record is
  * always resolved here via `getClient`, so a client-auth strategy proves the
@@ -542,28 +733,19 @@ export async function validateClientCredentials(
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "missing client",
-			error: "invalid_client",
-		});
+		throwInvalidClient("missing client", { method: authMethod });
 	}
 	if (client.disabled) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client is disabled",
-			error: "invalid_client",
-		});
+		throwInvalidClient("client is disabled", { method: authMethod });
 	}
 
-	// Enforce registered auth method for assertion/pre-verified methods.
-	if (preVerified && authMethod) {
-		const registeredAuthMethod =
-			client.tokenEndpointAuthMethod ?? "client_secret_basic";
-		if (registeredAuthMethod !== authMethod) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: `client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
-				error: "invalid_client",
-			});
-		}
+	const registeredAuthMethod =
+		client.tokenEndpointAuthMethod ?? "client_secret_basic";
+	if (authMethod && registeredAuthMethod !== authMethod) {
+		throwInvalidClient(
+			`client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
+			{ method: authMethod },
+		);
 	}
 	if (
 		(client.tokenEndpointAuthMethod === "private_key_jwt" ||
@@ -581,21 +763,19 @@ export async function validateClientCredentials(
 
 	// Skip secret checks for pre-verified clients (already authenticated via assertion)
 	if (!preVerified) {
-		// Require secret for confidential clients
-		if (!client.public && !clientSecret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "client secret must be provided",
-				error: "invalid_client",
+		// Only token_endpoint_auth_method=none identifies a public client.
+		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
+			throwInvalidClient("client secret must be provided", {
+				method: authMethod,
 			});
 		}
 
 		// Secret should not be received
 		if (clientSecret && !client.clientSecret) {
-			throw new APIError("BAD_REQUEST", {
-				error_description:
-					"public client, client secret should not be received",
-				error: "invalid_client",
-			});
+			throwInvalidClient(
+				"public client, client secret should not be received",
+				{ method: authMethod },
+			);
 		}
 
 		// Compare Secrets when secret is provided
@@ -608,25 +788,11 @@ export async function validateClientCredentials(
 				clientSecret,
 			))
 		) {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "invalid client_secret",
-				error: "invalid_client",
-			});
+			throwInvalidClient("invalid client_secret", { method: authMethod });
 		}
 	}
 
-	// If scopes set, check against client allowed scopes
-	if (scopes && client.scopes) {
-		const validScopes = new Set(client.scopes);
-		for (const sc of scopes) {
-			if (!validScopes.has(sc)) {
-				throw new APIError("BAD_REQUEST", {
-					error_description: `client does not allow scope ${sc}`,
-					error: "invalid_scope",
-				});
-			}
-		}
-	}
+	validateClientScopes(client, scopes);
 
 	// Enforce the client is registered for the requested grant type
 	if (grantType && !clientAllowsGrant(client, grantType)) {
@@ -702,7 +868,8 @@ export async function extractClientCredentials(
 	opts: OAuthOptions<Scope[]>,
 	expectedAudience?: string,
 ): Promise<ExtractedCredentials | null> {
-	const body = (ctx.body ?? {}) as Record<string, unknown>;
+	const body = { ...((ctx.body ?? {}) as Record<string, unknown>) };
+	await normalizeClientAuthenticationParameters(ctx.request, body);
 	const authorization = ctx.request?.headers.get("authorization") ?? undefined;
 
 	// 1. Check for assertion-based client authentication.
@@ -711,16 +878,6 @@ export async function extractClientCredentials(
 			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"client_assertion and client_assertion_type must both be provided",
-				error: "invalid_client",
-			});
-		}
-		if (
-			body.client_secret ||
-			(authorization && BASIC_SCHEME_PREFIX.test(authorization))
-		) {
-			throw new APIError("BAD_REQUEST", {
-				error_description:
-					"client_assertion cannot be combined with client_secret or Basic auth",
 				error: "invalid_client",
 			});
 		}
@@ -762,6 +919,19 @@ export async function extractClientCredentials(
 			method: "private_key_jwt",
 			clientId: result.clientId,
 		};
+	}
+
+	if (authorization && !BASIC_SCHEME_PREFIX.test(authorization)) {
+		const authorizationScheme = parseAuthorizationScheme(authorization);
+		if (!authorizationScheme) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: "Invalid authorization header format",
+			});
+		}
+		throwInvalidClient("unsupported authorization scheme", {
+			scheme: authorizationScheme,
+		});
 	}
 
 	// 2. Check for Basic auth header
@@ -915,17 +1085,24 @@ export function removeMaxAgeFromQuery(query: URLSearchParams) {
 
 enum PKCERequirementErrors {
 	PUBLIC_CLIENT = "pkce is required for public clients",
-	OFFLINE_ACCESS_SCOPE = "pkce is required when requesting offline_access scope",
+	OFFLINE_ACCESS_SCOPE = "pkce or OIDC nonce is required when requesting offline_access scope",
 	CLIENT_REQUIRE_PKCE = "pkce is required for this client",
 }
+
+interface AuthorizationPKCEContext {
+	scopes?: string[];
+	nonce?: string;
+}
+
 /**
- * Determines if PKCE is required for a given client and scope.
+ * Determines if PKCE is required for a given client and authorization request.
  *
  * PKCE is always required for:
  * 1. Public clients (cannot securely store client_secret)
- * 2. Requests with offline_access scope (refresh token security)
+ * 2. Requests with offline_access scope unless a confidential OIDC request
+ *    already uses nonce as its authorization-code injection countermeasure.
  *
- * For confidential clients without offline_access:
+ * For confidential clients:
  * - Uses client.requirePKCE if set (defaults to true)
  *
  * Returns false if PKCE is not required, or the reason it is required.
@@ -934,22 +1111,23 @@ enum PKCERequirementErrors {
  */
 export function isPKCERequired(
 	client: SchemaClient<Scope[]>,
-	requestedScopes?: string[],
+	request?: AuthorizationPKCEContext,
 ): false | PKCERequirementErrors {
 	// Determine if client is public
-	const isPublicClient =
-		client.tokenEndpointAuthMethod === "none" ||
-		client.type === "native" ||
-		client.type === "user-agent-based" ||
-		client.public === true;
+	const isPublicClient = client.tokenEndpointAuthMethod === "none";
 
 	// PKCE always required for public clients
 	if (isPublicClient) {
 		return PKCERequirementErrors.PUBLIC_CLIENT;
 	}
 
-	// PKCE always required for offline_access scope (refresh tokens)
-	if (requestedScopes?.includes("offline_access")) {
+	const requestScopes = request?.scopes ?? [];
+	const isOpenIdRequest = requestScopes.includes("openid");
+	const hasNonce =
+		typeof request?.nonce === "string" && request.nonce.length > 0;
+	const hasOidcNonce = isOpenIdRequest && hasNonce;
+
+	if (requestScopes.includes("offline_access") && !hasOidcNonce) {
 		return PKCERequirementErrors.OFFLINE_ACCESS_SCOPE;
 	}
 

@@ -51,9 +51,7 @@ type ClientSession<Option extends BetterAuthClientOptions> =
 	}
 		? Res extends BetterFetchResponse<infer S>
 			? S
-			: Res extends Record<string, any>
-				? Res
-				: never
+			: Res
 		: never;
 
 /**
@@ -63,9 +61,7 @@ export type SolidAuthClient<Option extends BetterAuthClientOptions> =
 	UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			hydrateSession: (
-				session: NonNullable<ClientSession<Option>> | null,
-			) => void;
+			hydrateSession(session: NonNullable<ClientSession<Option>> | null): void;
 			useSession: () => Accessor<{
 				data: ClientSession<Option>;
 				isPending: boolean;
@@ -79,6 +75,7 @@ export type SolidAuthClient<Option extends BetterAuthClientOptions> =
 				Session: NonNullable<ClientSession<Option>>;
 			};
 			$fetch: ClientConfig["$fetch"];
+			$store: ClientConfig["$store"];
 			$ERROR_CODES: PrettifyDeep<
 				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
 			>;
@@ -93,6 +90,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		pluginsAtoms,
 		hydrateSession,
 		$fetch,
+		$store,
 		atomListeners,
 	} = getClientConfig(options);
 	const resolvedHooks: Record<string, any> = {};
@@ -103,6 +101,8 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		...pluginsActions,
 		...resolvedHooks,
 		hydrateSession,
+		$fetch,
+		$store,
 	};
 	const proxy = createDynamicPathProxy(
 		routes,

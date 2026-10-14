@@ -1,4 +1,5 @@
 ---
+icon: authenticationMicrosoft
 title: Microsoft
 description: Microsoft provider setup and usage.
 ---
@@ -83,6 +84,14 @@ Enabling OAuth with Microsoft Azure Entra ID (formerly Active Directory) allows 
     </Callout>
   </Step>
 </Steps>
+
+## Account identifiers
+
+Better Auth uses the verified Microsoft Entra `oid` claim as the provider-owned account identifier. `mapProfileToUser` can map local user fields but cannot replace this identifier.
+
+<Callout type="warn">
+  Upgrading from Better Auth 1.6 requires a one-time migration of existing Microsoft account rows from `sub` to `oid`. Follow [Migrate Microsoft account identifiers](/docs/guides/1-7-upgrade-guide#migrate-microsoft-account-identifiers) before accepting production traffic on 1.7.
+</Callout>
 
 ## Large Profile Images ⚠️
 

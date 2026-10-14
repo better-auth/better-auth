@@ -8,19 +8,21 @@ import type {
 } from "@better-auth/core";
 import {
 	getCurrentAdapter,
-	getCurrentAuthContext,
+	getCurrentAuthEndpointContext,
+	queueAfterTransactionHook,
 	runWithTransaction,
+	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
+import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
-import { getIp } from "../utils/get-request-ip";
 import {
 	assertValidUserInfo,
 	assertValidUserInfoSource,
@@ -43,6 +45,11 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
 }
 
+type ActiveSessionReference = {
+	readonly token: string;
+	readonly expiresAt: number;
+};
+
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -57,6 +64,12 @@ export const createInternalAdapter = (
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
+	// With secondary storage, the database is the authoritative session store
+	// only when sessions are written to it and revoked rows are deleted.
+	const databaseSessionFallbackEnabled =
+		!!secondaryStorage &&
+		options.session?.storeSessionInDatabase === true &&
+		options.session?.preserveSessionInDatabase !== true;
 	const {
 		createWithHooks,
 		updateWithHooks,
@@ -130,6 +143,72 @@ export const createInternalAdapter = (
 		);
 	}
 
+	async function getActiveSessionReferences(userId: string) {
+		if (!secondaryStorage) return [];
+		const activeSessions = await secondaryStorage.get(
+			`active-sessions-${userId}`,
+		);
+		return activeSessions
+			? safeJSONParse<ActiveSessionReference[]>(activeSessions) || []
+			: [];
+	}
+
+	async function deleteCachedUserSessions(
+		userId: string,
+		sessionReferences: readonly ActiveSessionReference[],
+	) {
+		if (!secondaryStorage) return;
+
+		const deletedTokens = new Set(
+			sessionReferences.map((session) => session.token),
+		);
+		for (const { token } of sessionReferences) {
+			await secondaryStorage.delete(token);
+		}
+
+		const activeSessionsKey = `active-sessions-${userId}`;
+		const currentSessionReferences = await getActiveSessionReferences(userId);
+		const now = Date.now();
+		const remainingSessionReferences = currentSessionReferences.filter(
+			(session) => session.expiresAt > now && !deletedTokens.has(session.token),
+		);
+		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
+		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
+
+		if (furthestExpiration) {
+			await secondaryStorage.set(
+				activeSessionsKey,
+				JSON.stringify(remainingSessionReferences),
+				getTTLSeconds(furthestExpiration, now),
+			);
+			return;
+		}
+		await secondaryStorage.delete(activeSessionsKey);
+	}
+
+	async function queueCachedUserSessionDeletion(
+		userId: string,
+		sessionReferences?: readonly ActiveSessionReference[],
+	) {
+		if (!secondaryStorage) return;
+
+		// Callers may capture the revocation set before destructive work because a
+		// replacement session created by a later hook must remain active.
+		const references =
+			sessionReferences ?? (await getActiveSessionReferences(userId));
+		await queueAfterTransactionHook(
+			() => deleteCachedUserSessions(userId, references),
+			{
+				onError(error) {
+					logger.error(
+						"Failed to delete committed user sessions from secondary storage",
+						error,
+					);
+				},
+			},
+		);
+	}
+
 	async function withVerificationConsumeLock<T>(
 		key: string,
 		fn: () => Promise<T>,
@@ -153,6 +232,45 @@ export const createInternalAdapter = (
 	}
 
 	return {
+		createOAuthUser: async (
+			user: Omit<User, "id" | "createdAt" | "updatedAt">,
+			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
+				Partial<Account>,
+		) => {
+			return runWithTransaction(adapter, async () => {
+				const createdUser = await createWithHooks(
+					{
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						...user,
+						email: user.email?.toLowerCase(),
+					},
+					"user",
+					undefined,
+				);
+				if (!createdUser) {
+					throw new APIError("BAD_REQUEST", {
+						message: "Failed to create user",
+					});
+				}
+				const createdAccount = await createWithHooks(
+					{
+						...account,
+						userId: createdUser.id,
+						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+					"account",
+					undefined,
+				);
+				return {
+					user: createdUser,
+					account: createdAccount,
+				};
+			});
+		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 				Partial<User> &
@@ -176,7 +294,7 @@ export const createInternalAdapter = (
 				let endpointContext: GenericEndpointContext;
 				try {
 					endpointContext =
-						(await getCurrentAuthContext()) as GenericEndpointContext;
+						getCurrentAuthEndpointContext() as GenericEndpointContext;
 				} catch (error) {
 					logger.error(
 						"Unable to run validateUserInfo: missing endpoint context",
@@ -218,6 +336,23 @@ export const createInternalAdapter = (
 			userId: string,
 			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
 		) => {
+			if (databaseSessionFallbackEnabled) {
+				// The database holds every session, including ones whose cached copy
+				// failed to write, so list from it. Expired rows are skipped, as the
+				// cached list does.
+				const sessions = await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session>({
+					model: "session",
+					where: [
+						{ field: "userId", value: userId },
+						{ field: "expiresAt", value: new Date(), operator: "gt" },
+					],
+				});
+				return sessions.map((session) =>
+					parseSessionOutput(ctx.options, session),
+				);
+			}
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -313,6 +448,7 @@ export const createInternalAdapter = (
 			return total;
 		},
 		deleteUser: async (userId: string) => {
+			const sessionReferences = await getActiveSessionReferences(userId);
 			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
 				await deleteManyWithHooks(
 					[
@@ -336,7 +472,7 @@ export const createInternalAdapter = (
 				undefined,
 			);
 
-			await deleteWithHooks(
+			const deletedUser = await deleteWithHooks(
 				[
 					{
 						field: "id",
@@ -346,18 +482,30 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
+			if (deletedUser !== null) {
+				await queueCachedUserSessionDeletion(userId, sessionReferences);
+			}
 		},
 		createSession: async (
 			userId: string,
 			dontRememberMe?: boolean | undefined,
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
+			storageOptions?:
+				| { deferSecondaryStorageWrites?: boolean | undefined }
+				| undefined,
 		) => {
 			const headers: Headers | undefined = await (async () => {
-				const ctx = await getCurrentAuthContext().catch(() => null);
+				const ctx = tryGetCurrentAuthEndpointContext();
 				return ctx?.headers || ctx?.request?.headers;
 			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
+			// Deferring is only safe when the database can serve the session. When
+			// secondary storage is the session store, its write is the session
+			// itself and must fail inside the caller's transaction.
+			const deferMirror =
+				storageOptions?.deferSecondaryStorageWrites === true &&
+				databaseSessionFallbackEnabled;
 			const {
 				// always ignore override id - new sessions must have new ids
 				id: _,
@@ -376,7 +524,7 @@ export const createInternalAdapter = (
 			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
 				...(sessionId ? { id: sessionId } : {}),
-				ipAddress: headers ? getIp(headers, options) || "" : "",
+				ipAddress: headers ? getIP(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -395,72 +543,80 @@ export const createInternalAdapter = (
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			} satisfies Partial<Session>;
+			const mirrorSessionToSecondaryStorage = async (sessionData: Session) => {
+				if (!secondaryStorage) return sessionData;
+				const currentList = await secondaryStorage.get(
+					`active-sessions-${userId}`,
+				);
+
+				let list: { token: string; expiresAt: number }[] = [];
+				const now = Date.now();
+				if (currentList) {
+					list = safeJSONParse(currentList) || [];
+					list = list.filter(
+						(session) =>
+							session.expiresAt > now && session.token !== data.token,
+					);
+				}
+
+				const sorted = [
+					...list,
+					{ token: data.token, expiresAt: data.expiresAt.getTime() },
+				].sort((a, b) => a.expiresAt - b.expiresAt);
+				const furthestSessionExp =
+					sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
+				const furthestSessionTTL = getTTLSeconds(furthestSessionExp, now);
+				if (furthestSessionTTL > 0) {
+					await secondaryStorage.set(
+						`active-sessions-${userId}`,
+						JSON.stringify(sorted),
+						furthestSessionTTL,
+					);
+				}
+
+				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+				const sessionTTL = getTTLSeconds(data.expiresAt, now);
+				if (sessionTTL > 0) {
+					await secondaryStorage.set(
+						data.token,
+						JSON.stringify({ session: sessionData, user }),
+						sessionTTL,
+					);
+				}
+				return sessionData;
+			};
 			const res = await createWithHooks(
 				data,
 				"session",
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								/**
-								 * store the session token for the user
-								 * so we can retrieve it later for listing sessions
-								 */
-								const currentList = await secondaryStorage.get(
-									`active-sessions-${userId}`,
-								);
-
-								let list: { token: string; expiresAt: number }[] = [];
-								const now = Date.now();
-
-								if (currentList) {
-									list = safeJSONParse(currentList) || [];
-									list = list.filter(
-										(session) =>
-											session.expiresAt > now && session.token !== data.token,
+								if (!deferMirror) {
+									return mirrorSessionToSecondaryStorage(
+										sessionData as Session,
 									);
 								}
-
-								const sorted = [
-									...list,
-									{ token: data.token, expiresAt: data.expiresAt.getTime() },
-								].sort((a, b) => a.expiresAt - b.expiresAt);
-								const furthestSessionExp =
-									sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
-								const furthestSessionTTL = getTTLSeconds(
-									furthestSessionExp,
-									now,
-								);
-								if (furthestSessionTTL > 0) {
-									await secondaryStorage.set(
-										`active-sessions-${userId}`,
-										JSON.stringify(sorted),
-										furthestSessionTTL,
-									);
-								}
-
-								const user = await (
-									await getCurrentAdapter(adapter)
-								).findOne<User>({
-									model: "user",
-									where: [
-										{
-											field: "id",
-											value: userId,
+								// Queued here, before createWithHooks queues the session's
+								// after hooks, so a hook that revokes the session runs after
+								// the cached copy exists and removes it.
+								await queueAfterTransactionHook(
+									async () => {
+										await mirrorSessionToSecondaryStorage(
+											sessionData as Session,
+										);
+									},
+									{
+										onError(error: unknown) {
+											logger.error(
+												"Failed to mirror committed session to secondary storage",
+												error,
+											);
 										},
-									],
-								});
-								const sessionTTL = getTTLSeconds(data.expiresAt, now);
-								if (sessionTTL > 0) {
-									await secondaryStorage.set(
-										data.token,
-										JSON.stringify({
-											session: sessionData,
-											user,
-										}),
-										sessionTTL,
-									);
-								}
-
+									},
+								);
 								return sessionData;
 							},
 							executeMainFn: storeInDb,
@@ -545,12 +701,14 @@ export const createInternalAdapter = (
 				  }
 				| undefined,
 		) => {
+			const uniqueTokens = [...new Set(sessionTokens)];
+			const sessionsByToken = new Map<
+				string,
+				{ session: Session; user: User }
+			>();
+			const missingTokens: string[] = [];
 			if (secondaryStorage) {
-				const sessions: {
-					session: Session;
-					user: User;
-				}[] = [];
-				for (const sessionToken of sessionTokens) {
+				for (const sessionToken of uniqueTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
 						try {
@@ -562,7 +720,7 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							if (!s) return [];
+							if (!s) continue;
 							const expiresAt = new Date(s.session.expiresAt);
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
@@ -581,50 +739,57 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							sessions.push(session);
+							sessionsByToken.set(sessionToken, session);
 						} catch {
 							// Skip invalid/corrupt session data
 							continue;
 						}
+					} else {
+						missingTokens.push(sessionToken);
 					}
 				}
-				return sessions;
 			}
 
-			const sessions = await (await getCurrentAdapter(adapter)).findMany<
-				Session & { user: User | null }
-			>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: sessionTokens,
-						operator: "in",
+			const databaseTokens = secondaryStorage ? missingTokens : uniqueTokens;
+			if (
+				databaseTokens.length > 0 &&
+				(!secondaryStorage || databaseSessionFallbackEnabled)
+			) {
+				const databaseSessions = await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session & { user: User | null }>({
+					model: "session",
+					limit: databaseTokens.length,
+					where: [
+						{
+							field: "token",
+							value: databaseTokens,
+							operator: "in",
+						},
+						...(options?.onlyActiveSessions
+							? [
+									{
+										field: "expiresAt",
+										value: new Date(),
+										operator: "gt",
+									} satisfies Where,
+								]
+							: []),
+					],
+					join: {
+						user: true,
 					},
-					...(options?.onlyActiveSessions
-						? [
-								{
-									field: "expiresAt",
-									value: new Date(),
-									operator: "gt",
-								} satisfies Where,
-							]
-						: []),
-				],
-				join: {
-					user: true,
-				},
-			});
+				});
 
-			if (!sessions.length) return [];
-			if (sessions.some((session) => !session.user)) return [];
-
-			return sessions.map((_session) => {
-				const { user, ...session } = _session;
-				return {
-					session,
-					user: user!,
-				};
+				for (const { user, ...session } of databaseSessions) {
+					if (user) {
+						sessionsByToken.set(session.token, { session, user });
+					}
+				}
+			}
+			return uniqueTokens.flatMap((token) => {
+				const session = sessionsByToken.get(token);
+				return session ? [session] : [];
 			});
 		},
 		updateSession: async (
@@ -796,7 +961,7 @@ export const createInternalAdapter = (
 		/**
 		 * Delete an account by its primary key.
 		 *
-		 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+		 * @param id - The account row's primary key, not its accountId.
 		 */
 		deleteAccount: async (id: string) => {
 			await deleteWithHooks(
@@ -811,28 +976,23 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
+			const sessionReferences = await getActiveSessionReferences(userId);
 			if (secondaryStorage) {
-				const activeSession = await secondaryStorage.get(
-					`active-sessions-${userId}`,
-				);
-				const sessions = activeSession
-					? safeJSONParse<{ token: string }[]>(activeSession)
-					: [];
-				if (!sessions) return;
-				for (const session of sessions) {
-					await secondaryStorage.delete(session.token);
-				}
-				await secondaryStorage.delete(`active-sessions-${userId}`);
-
 				if (!options.session?.storeSessionInDatabase) {
+					await queueCachedUserSessionDeletion(userId, sessionReferences);
 					return;
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
-					await endPreservedSessions([{ field: "userId", value: userId }]);
+					const endedSessions = await endPreservedSessions([
+						{ field: "userId", value: userId },
+					]);
+					if (endedSessions !== null) {
+						await queueCachedUserSessionDeletion(userId, sessionReferences);
+					}
 					return;
 				}
 			}
-			await deleteManyWithHooks(
+			const deletedSessions = await deleteManyWithHooks(
 				[
 					{
 						field: "userId",
@@ -842,15 +1002,15 @@ export const createInternalAdapter = (
 				"session",
 				undefined,
 			);
+			if (deletedSessions !== null) {
+				await queueCachedUserSessionDeletion(userId, sessionReferences);
+			}
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
-				for (const sessionToken of sessionTokens) {
-					const session = await secondaryStorage.get(sessionToken);
-					if (session) {
-						await secondaryStorage.delete(sessionToken);
-					}
-				}
+				await Promise.all(
+					sessionTokens.map((token) => secondaryStorage.delete(token)),
+				);
 
 				if (!options.session?.storeSessionInDatabase) {
 					return;
@@ -874,87 +1034,37 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findOAuthUser: async (
-			email: string,
-			accountId: string,
-			providerId: string,
-		) => {
-			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (await getCurrentAdapter(adapter)).findOne<
-				Account & { user: User | null }
-			>({
+		findAccountOwnerByKey: async ({ providerId, accountId }) => {
+			const accountsWithUsers = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account & { user: User | null }>({
 				model: "account",
 				where: [
 					{
-						value: accountId,
-						field: "accountId",
+						field: "providerId",
+						value: providerId,
 					},
 					{
-						value: providerId,
-						field: "providerId",
+						field: "accountId",
+						value: accountId,
 					},
 				],
+				limit: 2,
 				join: {
 					user: true,
 				},
 			});
-			if (account) {
-				if (account.user) {
-					return {
-						user: account.user,
-						linkedAccount: account,
-						accounts: [account],
-					};
-				} else {
-					const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-						model: "user",
-						where: [
-							{
-								value: email.toLowerCase(),
-								field: "email",
-							},
-						],
-					});
-					if (user) {
-						return {
-							user,
-							linkedAccount: account,
-							accounts: [account],
-						};
-					}
-					return null;
-				}
-			} else {
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-					model: "user",
-					where: [
-						{
-							value: email.toLowerCase(),
-							field: "email",
-						},
-					],
-				});
-				if (user) {
-					const accounts = await (
-						await getCurrentAdapter(adapter)
-					).findMany<Account>({
-						model: "account",
-						where: [
-							{
-								value: user.id,
-								field: "userId",
-							},
-						],
-					});
-					return {
-						user,
-						linkedAccount: null,
-						accounts: accounts || [],
-					};
-				} else {
-					return null;
-				}
+			if (accountsWithUsers.length > 1) {
+				throw new BetterAuthError(
+					`Multiple accounts match the same accountId for provider ${JSON.stringify(providerId)}. Resolve duplicate account identities before continuing.`,
+				);
 			}
+			const accountWithUser = accountsWithUsers[0];
+			if (!accountWithUser) return null;
+			const { user, ...account } = accountWithUser;
+			return user
+				? { kind: "owned" as const, user, account }
+				: { kind: "orphaned" as const, account };
 		},
 		findUserByEmail: async (
 			email: string,
@@ -1029,7 +1139,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updateUserByEmail: async (
@@ -1050,7 +1167,14 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-			await refreshUserSessions(user);
+			await queueAfterTransactionHook(() => refreshUserSessions(user), {
+				onError(error) {
+					logger.error(
+						"Failed to refresh committed user sessions in secondary storage",
+						error,
+					);
+				},
+			});
 			return user;
 		},
 		updatePassword: async (userId: string, password: string) => {
@@ -1066,6 +1190,10 @@ export const createInternalAdapter = (
 					{
 						field: "providerId",
 						value: "credential",
+					},
+					{
+						field: "accountId",
+						value: userId,
 					},
 				],
 				"account",
@@ -1086,23 +1214,39 @@ export const createInternalAdapter = (
 			});
 			return accounts;
 		},
-		findAccountByProviderId: async (accountId: string, providerId: string) => {
-			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
-				{
-					model: "account",
-					where: [
-						{
-							field: "accountId",
-							value: accountId,
-						},
-						{
-							field: "providerId",
-							value: providerId,
-						},
-					],
-				},
-			);
-			return account;
+		findCredentialAccount: async (userId: string) => {
+			return (await getCurrentAdapter(adapter)).findOne<Account>({
+				model: "account",
+				where: [
+					{ field: "userId", value: userId },
+					{ field: "providerId", value: "credential" },
+					{ field: "accountId", value: userId },
+				],
+			});
+		},
+		findAccountByKey: async ({ providerId, accountId }) => {
+			const accounts = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account>({
+				model: "account",
+				limit: 2,
+				where: [
+					{
+						field: "providerId",
+						value: providerId,
+					},
+					{
+						field: "accountId",
+						value: accountId,
+					},
+				],
+			});
+			if (accounts.length > 1) {
+				throw new BetterAuthError(
+					`Multiple accounts match the same accountId for provider ${JSON.stringify(providerId)}. Resolve duplicate account identities before continuing.`,
+				);
+			}
+			return accounts[0] ?? null;
 		},
 		findAccountByUserId: async (userId: string) => {
 			const account = await (
@@ -1405,7 +1549,9 @@ export const createInternalAdapter = (
 		 * already taken.
 		 *
 		 * The `verification.identifier` column is non-unique, so uniqueness comes
-		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
+		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`,
+		 * encoded by `encodeDeterministicId` so the configured id strategy keeps
+		 * it; see its note on `generateId: "serial"`).
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
 		 * re-reading the row rather than matching adapter-specific errors.
@@ -1423,13 +1569,13 @@ export const createInternalAdapter = (
 			value: string;
 			expiresAt: Date;
 		}): Promise<boolean> => {
-			const reservationId = base64Url.encode(
+			const reservationId = encodeDeterministicId(
 				new Uint8Array(
 					await createHash("SHA-256").digest(
 						new TextEncoder().encode("reserve:" + data.identifier),
 					),
 				),
-				{ padding: false },
+				options,
 			);
 			const storageOption = getStorageOption(
 				data.identifier,

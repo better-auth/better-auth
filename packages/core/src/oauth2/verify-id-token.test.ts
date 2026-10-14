@@ -4,11 +4,13 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
 import { facebook } from "../social-providers/facebook";
 import { paypal } from "../social-providers/paypal";
-import type { OAuthIdTokenConfig, UpstreamProvider } from "./oauth-provider";
+import type { OAuthIdTokenConfig } from "./oauth-provider";
 import {
 	supportsIdTokenSignIn,
 	verifyProviderIdToken,
 } from "./verify-id-token";
+
+type ProviderWithIdTokenConfig = Parameters<typeof verifyProviderIdToken>[0];
 
 const ISSUER = "https://issuer.test";
 const AUDIENCE = "client-123";
@@ -36,8 +38,8 @@ async function makeKeyset() {
 function providerWith(
 	idToken: OAuthIdTokenConfig | undefined,
 	options: Record<string, unknown> = {},
-): UpstreamProvider<any, any> {
-	return { idToken, options } as UpstreamProvider<any, any>;
+): ProviderWithIdTokenConfig {
+	return { idToken, options };
 }
 
 const sha256Hex = (value: string) =>
@@ -193,6 +195,41 @@ describe("verifyProviderIdToken", () => {
 				opaque,
 			),
 		).toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11636
+	 */
+	describe("clock skew", () => {
+		// Offsets sit 5s inside and outside the 30s tolerance on each time claim.
+		it.each([
+			["nbf", 25, true],
+			["nbf", 35, false],
+			["iat", 25, true],
+			["iat", 35, false],
+			["exp", -25, true],
+			["exp", -35, false],
+		] as const)("%s %is from now verifies: %s", async (claim, offset, valid) => {
+			const { jwks, privateKey } = await makeKeyset();
+			const now = Math.floor(Date.now() / 1000);
+			const times = { iat: now - 60, exp: now + 3600, [claim]: now + offset };
+			const token = await new SignJWT(
+				claim === "nbf" ? { sub: "u1", nbf: times.nbf } : { sub: "u1" },
+			)
+				.setProtectedHeader({ alg: "RS256", kid: "test-key" })
+				.setIssuer(ISSUER)
+				.setAudience(AUDIENCE)
+				.setIssuedAt(times.iat)
+				.setExpirationTime(times.exp)
+				.sign(privateKey);
+			const provider = providerWith({
+				jwks,
+				issuer: ISSUER,
+				audience: AUDIENCE,
+				maxTokenAge: "1h",
+			});
+			expect(await verifyProviderIdToken(provider, token)).toBe(valid);
+		});
 	});
 
 	describe("provider regressions", () => {

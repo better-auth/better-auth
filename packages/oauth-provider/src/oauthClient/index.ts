@@ -3,7 +3,11 @@ import * as z from "zod";
 import { publicSessionMiddleware } from "../middleware";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
-import { SafeUrlSchema } from "../types/zod";
+import {
+	clientJwksSchema,
+	ResourceUriSchema,
+	SafeUrlSchema,
+} from "../types/zod";
 import {
 	deleteClientEndpoint,
 	getClientEndpoint,
@@ -36,19 +40,16 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				backchannel_logout_uri: SafeUrlSchema.optional(),
 				backchannel_logout_session_required: z.boolean().optional(),
+				frontchannel_logout_uri: SafeUrlSchema.optional(),
+				frontchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
-				jwks: z
-					.union([
-						z.array(z.record(z.string(), z.unknown())).min(1),
-						z.object({
-							keys: z.array(z.record(z.string(), z.unknown())).min(1),
-						}),
-					])
-					.optional(),
+				application_type: z.enum(["web", "native"]).optional(),
+				jwks: clientJwksSchema.optional(),
 				jwks_uri: z.string().optional(),
 				grant_types: grantTypesSchema.optional(),
+				client_credentials_scopes: z.array(z.string().trim().min(1)).optional(),
+				resources: z.array(ResourceUriSchema).optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
-				type: z.enum(["web", "native", "user-agent-based"]).optional(),
 				// SERVER_ONLY applicable fields
 				client_secret_expires_at: z
 					.union([z.string(), z.number()])
@@ -94,6 +95,12 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												description:
 													"Space-separated scopes allowed by the client",
 											},
+											client_credentials_scopes: {
+												type: "array",
+												items: { type: "string" },
+												description:
+													"Server-authorized scope ceiling for client_credentials tokens",
+											},
 											user_id: {
 												type: "string",
 												description:
@@ -175,15 +182,20 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												description:
 													"Response types the client may use at the authorization endpoint",
 											},
-											public: {
-												type: "boolean",
-												description:
-													"Whether the client is public as determined by the type",
-											},
-											type: {
+											application_type: {
 												type: "string",
-												description: "Type of the client",
-												enum: ["web", "native", "user-agent-based"],
+												description:
+													"OIDC application type used to classify redirect URI policy",
+												enum: ["web", "native"],
+											},
+											resources: {
+												type: "array",
+												items: {
+													type: "string",
+													format: "uri",
+												},
+												description:
+													"Final server-owned resources linked to the client",
 											},
 											disabled: {
 												type: "boolean",
@@ -211,9 +223,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return createOAuthClientEndpoint(ctx, opts, {
-				isRegister: false,
-			});
+			return createOAuthClientEndpoint(ctx, opts, { admin: true });
 		},
 	);
 
@@ -238,19 +248,14 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				backchannel_logout_uri: SafeUrlSchema.optional(),
 				backchannel_logout_session_required: z.boolean().optional(),
+				frontchannel_logout_uri: SafeUrlSchema.optional(),
+				frontchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
-				jwks: z
-					.union([
-						z.array(z.record(z.string(), z.unknown())).min(1),
-						z.object({
-							keys: z.array(z.record(z.string(), z.unknown())).min(1),
-						}),
-					])
-					.optional(),
+				application_type: z.enum(["web", "native"]).optional(),
+				jwks: clientJwksSchema.optional(),
 				jwks_uri: z.string().optional(),
 				grant_types: grantTypesSchema.optional(),
 				response_types: z.array(z.enum(["code"])).optional(),
-				type: z.enum(["web", "native", "user-agent-based"]).optional(),
 				// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 				dpop_bound_access_tokens: z.boolean().optional(),
 			}),
@@ -366,15 +371,20 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												description:
 													"Response types the client may use at the authorization endpoint",
 											},
-											public: {
-												type: "boolean",
-												description:
-													"Whether the client is public as determined by the type",
-											},
-											type: {
+											application_type: {
 												type: "string",
-												description: "Type of the client",
-												enum: ["web", "native", "user-agent-based"],
+												description:
+													"OIDC application type used to classify redirect URI policy",
+												enum: ["web", "native"],
+											},
+											resources: {
+												type: "array",
+												items: {
+													type: "string",
+													format: "uri",
+												},
+												description:
+													"Final server-owned resources linked to the client",
 											},
 											disabled: {
 												type: "boolean",
@@ -397,9 +407,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return createOAuthClientEndpoint(ctx, opts, {
-				isRegister: false,
-			});
+			return createOAuthClientEndpoint(ctx, opts);
 		},
 	);
 
@@ -504,18 +512,26 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-					backchannel_logout_uri: SafeUrlSchema.optional(),
+					// `null` removes the URI and its session_required flag.
+					backchannel_logout_uri: SafeUrlSchema.nullable().optional(),
 					backchannel_logout_session_required: z.boolean().optional(),
-					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
+					frontchannel_logout_uri: SafeUrlSchema.nullable().optional(),
+					frontchannel_logout_session_required: z.boolean().optional(),
+					// token_endpoint_auth_method is immutable because changing the
+					// registered authentication method also changes credential handling.
+					application_type: z.enum(["web", "native"]).optional(),
 					grant_types: grantTypesSchema.optional(),
+					client_credentials_scopes: z
+						.array(z.string().trim().min(1))
+						.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
-					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 					// SERVER_ONLY applicable fields
 					client_secret_expires_at: z
 						.union([z.string(), z.number()])
 						.optional(),
 					skip_consent: z.boolean().optional(),
 					enable_end_session: z.boolean().optional(),
+					disabled: z.boolean().optional(),
 					// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 					dpop_bound_access_tokens: z.boolean().optional(),
 					metadata: z.record(z.string(), z.unknown()).optional(),
@@ -529,7 +545,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return updateClientEndpoint(ctx, opts);
+			return updateClientEndpoint(ctx, opts, { admin: true });
 		},
 	);
 
@@ -554,12 +570,16 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-					backchannel_logout_uri: SafeUrlSchema.optional(),
+					// `null` removes the URI and its session_required flag.
+					backchannel_logout_uri: SafeUrlSchema.nullable().optional(),
 					backchannel_logout_session_required: z.boolean().optional(),
-					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
+					frontchannel_logout_uri: SafeUrlSchema.nullable().optional(),
+					frontchannel_logout_session_required: z.boolean().optional(),
+					// token_endpoint_auth_method is immutable because changing the
+					// registered authentication method also changes credential handling.
+					application_type: z.enum(["web", "native"]).optional(),
 					grant_types: grantTypesSchema.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
-					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 				}),
 			}),
 			metadata: {

@@ -73,6 +73,13 @@ describe("oauth-provider extensions", async () => {
 							idTokenClaims: {
 								grant_id_claim: "grant-id",
 								sub: "malicious-sub",
+								auth_time: 0,
+								amr: ["malicious-grant"],
+								azp: "malicious-authorized-party",
+								nbf: 0,
+								jti: "malicious-jti",
+								c_hash: "malicious-code-hash",
+								s_hash: "malicious-state-hash",
 								// Collides with the extension idToken contributor below;
 								// the per-issuance value must win.
 								order_probe: "grant",
@@ -183,6 +190,8 @@ describe("oauth-provider extensions", async () => {
 						extension_id_claim: "extension-id",
 						sub: "malicious-extension-sub",
 						email: "evil@malicious.example",
+						azp: "malicious-extension-authorized-party",
+						jti: "malicious-extension-jti",
 						order_probe: "extension",
 					}),
 					userInfo: () => ({
@@ -216,10 +225,6 @@ describe("oauth-provider extensions", async () => {
 					sub: "malicious-custom-sub", // re-pinned by the endpoint
 					email_verified: true, // first-party override of a base claim
 				}),
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			extensionPlugin,
 		],
@@ -264,7 +269,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		expect(adminClient?.client_id).toBeDefined();
@@ -280,7 +285,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		expect(registeredClient?.client_id).toBeDefined();
@@ -302,7 +307,7 @@ describe("oauth-provider extensions", async () => {
 					grant_types: [extensionGrant],
 					response_types: ["code"],
 					scope: "openid email vc",
-					type: "web",
+					application_type: "web",
 				},
 			});
 		} catch (e) {
@@ -327,7 +332,7 @@ describe("oauth-provider extensions", async () => {
 					grant_types: [extensionGrant],
 					jwks_uri: "https://127.0.0.1/jwks",
 					scope: "openid email vc",
-					type: "web",
+					application_type: "web",
 				},
 			});
 		} catch (e) {
@@ -350,10 +355,12 @@ describe("oauth-provider extensions", async () => {
 				body: {
 					token_endpoint_auth_method: extensionAuthMethod,
 					grant_types: [extensionGrant],
-					jwks: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+					jwks: {
+						keys: [{ kty: "RSA", n: "test", e: "test-exponent" }],
+					},
 					jwks_uri: "https://client.example.com/jwks",
 					scope: "openid email vc",
-					type: "web",
+					application_type: "web",
 				},
 			});
 		} catch (e) {
@@ -388,7 +395,7 @@ describe("oauth-provider extensions", async () => {
 			body: {
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const response = await client.$fetch("/oauth2/token", {
@@ -408,6 +415,65 @@ describe("oauth-provider extensions", async () => {
 			(response.error as { error_description?: string } | undefined)
 				?.error_description,
 		).toContain("client registered for client_secret_basic cannot use");
+	});
+
+	it("returns invalid_client when an extension grant omits required credentials", async () => {
+		const confidentialClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [extensionGrant],
+				scope: "openid email vc",
+				application_type: "web",
+			},
+		});
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: extensionGrant,
+				client_id: confidentialClient!.client_id,
+			}),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+			},
+		});
+
+		expect(response.error?.status).toBe(400);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_client",
+		);
+	});
+
+	it("challenges Basic authentication with an empty secret", async () => {
+		const confidentialClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: [extensionGrant],
+				scope: "openid email vc",
+				application_type: "web",
+			},
+		});
+		if (!confidentialClient?.client_id) {
+			throw new Error("confidential OAuth client was not created");
+		}
+
+		let responseHeaders: Headers | undefined;
+		const response = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({ grant_type: extensionGrant }),
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				authorization: `Basic ${Buffer.from(`${confidentialClient.client_id}:`).toString("base64")}`,
+			},
+			onError(context) {
+				responseHeaders = context.response.headers;
+			},
+		});
+
+		expect(response.error?.status).toBe(401);
+		expect((response.error as { error?: string } | undefined)?.error).toBe(
+			"invalid_client",
+		);
+		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
 	});
 
 	it("authorizes against the resolved record, not the strategy", async () => {
@@ -487,7 +553,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		expect(oauthClient?.client_id).toBeDefined();
@@ -537,10 +603,16 @@ describe("oauth-provider extensions", async () => {
 		expect(idTokenPayload.extension_id_claim).toBe("extension-id");
 		expect(idTokenPayload.grant_id_claim).toBe("grant-id");
 		expect(idTokenPayload.sub).toBe(user.id);
-		// Extension id-token claims are additive: they cannot replace the user's
-		// identity claims.
-		expect(idTokenPayload.email).toBe(user.email);
-		expect(idTokenPayload.email).not.toBe("evil@malicious.example");
+		expect(idTokenPayload.auth_time).toBeUndefined();
+		expect(idTokenPayload.amr).toBeUndefined();
+		expect(idTokenPayload.azp).toBeUndefined();
+		expect(idTokenPayload.nbf).toBeUndefined();
+		expect(idTokenPayload.jti).toBeUndefined();
+		expect(idTokenPayload.c_hash).toBeUndefined();
+		expect(idTokenPayload.s_hash).toBeUndefined();
+		// Extension id-token claims are additive: they cannot fill standard
+		// identity claims that scope values only request from UserInfo.
+		expect(idTokenPayload.email).toBeUndefined();
 		// Per-issuance idTokenClaims win a collision against an extension idToken
 		// contributor (extension < per-issuance), matching the access-token ladder.
 		expect(idTokenPayload.order_probe).toBe("grant");
@@ -593,7 +665,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionOpaqueGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const response = await client.$fetch("/oauth2/token", {
@@ -658,10 +730,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -700,10 +768,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -744,10 +808,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -788,10 +848,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					invalidExtensionPlugin,
 				],
@@ -825,10 +881,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeExtensionPlugin("ext-a"),
 					makeExtensionPlugin("ext-b"),
@@ -866,10 +918,6 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeAuthExtensionPlugin("auth-ext-a", "urn:better-auth:test:a"),
 					makeAuthExtensionPlugin("auth-ext-b", "urn:better-auth:test:b"),
@@ -907,16 +955,43 @@ describe("oauth-provider extensions", async () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 					makeAssertionExtensionPlugin("assert-ext-a", "method_a_jwt"),
 					makeAssertionExtensionPlugin("assert-ext-b", "method_b_jwt"),
 				],
 			}),
 		).rejects.toThrow("register client_assertion_type");
+	});
+
+	it("rejects duplicate client discovery identifiers", async () => {
+		const makeDiscoveryExtensionPlugin = (pluginId: string) =>
+			({
+				id: pluginId,
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientDiscovery: {
+							id: "shared-client-discovery",
+							matches: () => false,
+							resolve: () => null,
+						},
+					});
+				},
+			}) satisfies BetterAuthPlugin;
+
+		await expect(
+			getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt({ jwt: { issuer: authServerBaseUrl } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+					}),
+					makeDiscoveryExtensionPlugin("discovery-ext-a"),
+					makeDiscoveryExtensionPlugin("discovery-ext-b"),
+				],
+			}),
+		).rejects.toThrow("register client discovery id");
 	});
 
 	it("resolves a metadata key collision to the first-registered extension", async () => {
@@ -936,10 +1011,6 @@ describe("oauth-provider extensions", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				makeMetadataExtensionPlugin("meta-ext-a", "first"),
 				makeMetadataExtensionPlugin("meta-ext-b", "second"),
@@ -960,7 +1031,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionOpaqueGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const tokenResponse = await client.$fetch<{ access_token: string }>(
@@ -1010,7 +1081,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const response = await client.$fetch("/oauth2/token", {
@@ -1037,7 +1108,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionOpaqueGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const tokenResponse = await client.$fetch<{ access_token: string }>(
@@ -1119,7 +1190,7 @@ describe("oauth-provider extensions", async () => {
 				token_endpoint_auth_method: extensionAuthMethod,
 				grant_types: [extensionOpaqueBoundGrant],
 				scope: "openid email vc",
-				type: "web",
+				application_type: "web",
 			},
 		});
 		const clientAuth = {

@@ -11,7 +11,7 @@ import {
 	ATTR_HOOK_TYPE,
 	ATTR_HTTP_RESPONSE_STATUS_CODE,
 	ATTR_HTTP_ROUTE,
-	withSpan,
+	createWithSpan,
 } from "@better-auth/core/instrumentation";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
@@ -174,6 +174,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 	ctx: Awaitable<AuthContext>,
 	options: Option,
 ) {
+	const withSpan = createWithSpan(options);
 	const pluginEndpoints =
 		options.plugins?.reduce<Record<string, Endpoint>>((acc, plugin) => {
 			return {
@@ -274,6 +275,7 @@ export const router = <Option extends BetterAuthOptions>(
 	ctx: AuthContext,
 	options: Option,
 ) => {
+	const withSpan = createWithSpan(options);
 	const { api, middlewares } = getEndpoints(ctx, options);
 	const basePath = new URL(ctx.baseURL).pathname;
 
@@ -300,7 +302,16 @@ export const router = <Option extends BetterAuthOptions>(
 				return new Response("Not Found", { status: 404 });
 			}
 
+			const pendingSchemaCheck = ctx.checkSchema?.();
+			if (pendingSchemaCheck) await pendingSchemaCheck;
+
 			let currentRequest = req;
+
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			if (rateLimitResponse) {
+				return rateLimitResponse;
+			}
+
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
 					const response = await withSpan(
@@ -318,11 +329,6 @@ export const router = <Option extends BetterAuthOptions>(
 						currentRequest = response.request;
 					}
 				}
-			}
-
-			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
-			if (rateLimitResponse) {
-				return rateLimitResponse;
 			}
 
 			return currentRequest;
@@ -409,7 +415,7 @@ export {
 	optionsMiddleware,
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
-export { getIp } from "../utils/get-request-ip";
+export { getIP } from "@better-auth/core/utils/ip";
 export { isAPIError } from "../utils/is-api-error";
 export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";

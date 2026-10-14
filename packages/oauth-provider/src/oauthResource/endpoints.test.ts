@@ -16,11 +16,6 @@ import type {
 	Scope,
 } from "../types";
 
-const silenceWarnings = {
-	oauthAuthServerConfig: true,
-	openidConfig: true,
-} as const;
-
 beforeEach(() => {
 	vi.spyOn(logger, "warn").mockImplementation(() => undefined);
 	vi.spyOn(logger, "info").mockImplementation(() => undefined);
@@ -34,7 +29,6 @@ const boot = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		...options,
 	} as OAuthOptions<Scope[]>;
 	const instance = await getTestInstance({
@@ -96,6 +90,24 @@ describe("resource admin CRUD", () => {
 		await expect(
 			instance.auth.api.adminCreateOAuthResource({
 				body: { identifier: "https://api.example.com/x#fragment" },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({ error: "invalid_target" }),
+		});
+	});
+
+	it.each([
+		"https://api.example.com/x#",
+		"javascript:alert(1)",
+		"data:text/plain,hello",
+		"vbscript:msgbox(1)",
+	])("rejects a resource identifier disallowed by the shared URI schema: %s", async (identifier) => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		await expect(
+			instance.auth.api.adminCreateOAuthResource({
+				body: { identifier },
 				headers,
 			}),
 		).rejects.toMatchObject({
@@ -365,12 +377,8 @@ describe("client/resource linking", () => {
 		});
 	});
 
-	// Composite uniqueness on (clientId, resourceId).
-	//
-	// The schema layer can't declare `UNIQUE(clientId, resourceId)` directly;
-	// the row's `id` is a deterministic `${clientId}::${resourceId}` so the
-	// PK uniqueness constraint enforces composite uniqueness. Two concurrent
-	// link attempts for the same pair MUST result in exactly one row.
+	// Compound uniqueness on (clientId, resourceId) makes concurrent link
+	// attempts for the same pair produce exactly one row.
 	it("concurrent link attempts for the same pair produce exactly one row", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
@@ -380,8 +388,8 @@ describe("client/resource linking", () => {
 			headers,
 		});
 
-		// Fire many parallel link calls. With the deterministic-id strategy
-		// only one insert wins; the rest catch the UNIQUE conflict and return
+		// Fire many parallel link calls. With the compound unique index only
+		// one insert wins; the rest catch the UNIQUE conflict and return
 		// `alreadyLinked: true`.
 		const results = await Promise.all(
 			Array.from({ length: 5 }).map(() =>

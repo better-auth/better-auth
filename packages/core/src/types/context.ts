@@ -9,9 +9,15 @@ import type {
 	Verification,
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
+import type { AccountKey } from "../db/schema/account";
+import type { SchemaCheck } from "../db/schema-check";
 import type { createLogger } from "../env";
-import type { UpstreamProvider } from "../oauth2";
-import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
+import type { OAuthProvider } from "../oauth2";
+import type {
+	BetterAuthCookie,
+	BetterAuthCookies,
+	CookieCachePayload,
+} from "./cookie";
 import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
@@ -85,9 +91,33 @@ export type GenericEndpointContext<
 	context: AuthContext<Options>;
 };
 
+/**
+ * Signs and verifies session cookie-cache values.
+ */
+export type CookieCacheSigner = {
+	sign: (
+		ctx: GenericEndpointContext,
+		payload: CookieCachePayload,
+		expiresIn: number,
+	) => Promise<string>;
+	verify: (
+		ctx: GenericEndpointContext,
+		token: string,
+	) => Promise<{
+		payload: CookieCachePayload;
+		expiresAt: number;
+	} | null>;
+};
+
 export interface InternalAdapter<
 	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
+	createOAuthUser(
+		user: Omit<User, "id" | "createdAt" | "updatedAt">,
+		account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
+			Partial<Account>,
+	): Promise<{ user: User; account: Account }>;
+
 	createUser<T extends Record<string, any>>(
 		user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
 			Partial<User> &
@@ -126,6 +156,19 @@ export interface InternalAdapter<
 		dontRememberMe?: boolean | undefined,
 		override?: (Partial<Session> & Record<string, any>) | undefined,
 		overrideAll?: boolean | undefined,
+		storageOptions?:
+			| {
+					/**
+					 * Write the secondary-storage copy only after the current
+					 * transaction commits, so a rollback can't leave it cached.
+					 * Ignored when secondary storage is the session store
+					 * (`storeSessionInDatabase` off or `preserveSessionInDatabase`
+					 * on): the write then stays inside the transaction so a failure
+					 * rolls it back.
+					 */
+					deferSecondaryStorageWrites?: boolean | undefined;
+			  }
+			| undefined,
 	): Promise<Session>;
 
 	findSession(token: string): Promise<{
@@ -154,7 +197,7 @@ export interface InternalAdapter<
 	/**
 	 * Delete an account by its primary key.
 	 *
-	 * @param id - The account row's primary key (the `id` column, not the `accountId` column).
+	 * @param id - The account row's primary key, not its provider account ID.
 	 */
 	deleteAccount(id: string): Promise<void>;
 
@@ -168,15 +211,18 @@ export interface InternalAdapter<
 	 */
 	deleteSessions(sessionTokens: string[]): Promise<void>;
 
-	findOAuthUser(
-		email: string,
-		accountId: string,
-		providerId: string,
-	): Promise<{
-		user: User;
-		linkedAccount: Account | null;
-		accounts: Account[];
-	} | null>;
+	findAccountOwnerByKey(accountKey: AccountKey): Promise<
+		| {
+				kind: "owned";
+				user: User;
+				account: Account;
+		  }
+		| {
+				kind: "orphaned";
+				account: Account;
+		  }
+		| null
+	>;
 
 	findUserByEmail(
 		email: string,
@@ -204,10 +250,10 @@ export interface InternalAdapter<
 
 	findAccounts(userId: string): Promise<Account[]>;
 
-	findAccountByProviderId(
-		accountId: string,
-		providerId: string,
-	): Promise<Account | null>;
+	/** Find the credential account whose stable local subject is the user ID. */
+	findCredentialAccount(userId: string): Promise<Account | null>;
+
+	findAccountByKey(accountKey: AccountKey): Promise<Account | null>;
 
 	findAccountByUserId(userId: string): Promise<Account[]>;
 
@@ -369,7 +415,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 					user: User & Record<string, any>;
 				} | null,
 			) => void;
-			socialProviders: UpstreamProvider[];
+			socialProviders: OAuthProvider[];
 			authCookies: BetterAuthCookies;
 			logger: ReturnType<typeof createLogger>;
 			rateLimit: {
@@ -382,6 +428,20 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				"enabled" | "window" | "max" | "storage"
 			>;
 			adapter: DBAdapter<Options>;
+			/**
+			 * Confirms the database can hold what this configuration writes.
+			 *
+			 * Shared by initialization and requests for this adapter instance;
+			 * returns nothing once the schema is known to be clean.
+			 * Context construction does not await the verdict, so migration
+			 * tooling can still use a context whose schema needs repair.
+			 * Absent when the check is disabled or the adapter registers none.
+			 */
+			checkSchema?: SchemaCheck | undefined;
+			/**
+			 * Available for an explicit check even when runtime validation is disabled.
+			 */
+			explicitSchemaCheck?: SchemaCheck | undefined;
 			internalAdapter: InternalAdapter<Options>;
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;
@@ -390,6 +450,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				updateAge: number;
 				expiresIn: number;
 				freshAge: number;
+				cookieCacheSigner?: CookieCacheSigner | undefined;
 				cookieRefreshCache:
 					| false
 					| {

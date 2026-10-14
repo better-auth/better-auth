@@ -18,11 +18,7 @@ import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import {
-	buildClientResourceLinkId,
-	resetSeedStateForTests,
-	seedResourcesOnce,
-} from "./resources";
+import { resetSeedStateForTests, seedResourcesOnce } from "./resources";
 import type { OAuthClaimExtensionInput, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
@@ -31,11 +27,6 @@ const rpBaseUrl = "http://localhost:5000";
 const providerId = "test";
 const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
 const state = "123";
-
-const silenceWarnings = {
-	oauthAuthServerConfig: true,
-	openidConfig: true,
-} as const;
 
 const introspectHeaders = {
 	accept: "application/json",
@@ -56,7 +47,6 @@ async function bootHarness(
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
-		silenceWarnings,
 		enforcePerClientResources: false,
 		scopes,
 		...config,
@@ -86,6 +76,8 @@ async function bootHarness(
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: scopes.join(" "),
 				skip_consent: true,
 				...overrides,
@@ -102,7 +94,7 @@ async function bootHarness(
 		overrides: { resource?: string | string[] } = {},
 	) => {
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient.client_id!,
@@ -174,9 +166,7 @@ async function bootHarness(
 		const ctx = await auth.$context;
 		await ctx.adapter.create({
 			model: "oauthClientResource",
-			forceAllowId: true,
 			data: {
-				id: buildClientResourceLinkId(clientId, resourceId),
 				clientId,
 				resourceId,
 				createdAt: new Date(),

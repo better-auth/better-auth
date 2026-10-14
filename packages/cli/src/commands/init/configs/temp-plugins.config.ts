@@ -1520,7 +1520,7 @@ export const tempPluginsConfig = {
 				{
 					flag: "siwe-email-domain-name",
 					question: "What is the email domain name?",
-					description: "The email domain name for anonymous users.",
+					description: "A custom email domain for wallet-derived addresses.",
 					skip: "prompt",
 					argument: {
 						index: 0,
@@ -1548,30 +1548,6 @@ export const tempPluginsConfig = {
 				{
 					path: "better-auth/client/plugins",
 					imports: [createImport({ name: "siweClient" })],
-					isNamedImport: false,
-				},
-			],
-		},
-	},
-	scim: {
-		displayName: "SCIM",
-		dependencies: ["@better-auth/scim"],
-		auth: {
-			function: "scim",
-			imports: [
-				{
-					path: "@better-auth/scim",
-					imports: [createImport({ name: "scim" })],
-					isNamedImport: false,
-				},
-			],
-		},
-		authClient: {
-			function: "scimClient",
-			imports: [
-				{
-					path: "@better-auth/scim/client",
-					imports: [createImport({ name: "scimClient" })],
 					isNamedImport: false,
 				},
 			],

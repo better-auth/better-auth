@@ -1,18 +1,45 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import type { OAuthClientRegistrationMetadata } from "../register";
 import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
-import type { OAuthOptions, SchemaClient, Scope } from "../types";
-import type { OAuthClient } from "../types/oauth";
+import type {
+	OAuthClientAdministrativeResponse,
+	OAuthClientRegistrationResponse,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "../types";
+import type { GrantType } from "../types/oauth";
 import { getClient, storeClientSecret } from "../utils";
+import {
+	normalizeClientCredentialsScopes,
+	validateClientCredentialsScopes,
+} from "./client-credentials";
 import { assertClientPrivileges } from "./privileges";
+
+type OAuthClientUpdate = Omit<
+	OAuthClientRegistrationMetadata,
+	| "application_type"
+	| "client_id"
+	| "resources"
+	| "backchannel_logout_uri"
+	| "frontchannel_logout_uri"
+> & {
+	application_type?: "web" | "native";
+	client_credentials_scopes?: string[];
+	/** `null` removes the URI and `backchannel_logout_session_required`. */
+	backchannel_logout_uri?: string | null;
+	/** `null` removes the URI and `frontchannel_logout_session_required`. */
+	frontchannel_logout_uri?: string | null;
+};
 
 export async function getClientEndpoint(
 	ctx: GenericEndpointContext & { query: { client_id: string } },
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "read");
+	await assertClientPrivileges(ctx, session, opts, "read", ctx.query.client_id);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const client = await getClient(ctx, opts, ctx.query.client_id);
@@ -124,7 +151,13 @@ export async function deleteClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "delete");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"delete",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
@@ -164,17 +197,46 @@ export async function deleteClientEndpoint(
 	});
 }
 
+export function updateClientEndpoint(
+	ctx: GenericEndpointContext & {
+		body: {
+			client_id: string;
+			update: OAuthClientUpdate;
+		};
+	},
+	opts: OAuthOptions<Scope[]>,
+	settings: { admin: true },
+): Promise<OAuthClientAdministrativeResponse>;
+export function updateClientEndpoint(
+	ctx: GenericEndpointContext & {
+		body: {
+			client_id: string;
+			update: OAuthClientUpdate;
+		};
+	},
+	opts: OAuthOptions<Scope[]>,
+	settings?: { admin?: false },
+): Promise<OAuthClientRegistrationResponse>;
 export async function updateClientEndpoint(
 	ctx: GenericEndpointContext & {
 		body: {
 			client_id: string;
-			update: Omit<Partial<OAuthClient>, "client_id">;
+			update: OAuthClientUpdate;
 		};
 	},
 	opts: OAuthOptions<Scope[]>,
-) {
+	settings?: { admin?: boolean },
+): Promise<
+	OAuthClientAdministrativeResponse | OAuthClientRegistrationResponse
+> {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "update");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"update",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
@@ -194,38 +256,123 @@ export async function updateClientEndpoint(
 		});
 	}
 
-	if (client.userId) {
-		if (client.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
-	} else if (client.referenceId && opts.clientReference) {
-		if (client.referenceId !== (await opts.clientReference(session)))
-			throw new APIError("UNAUTHORIZED");
-	} else {
+	const {
+		client_credentials_scopes: rawClientCredentialsScopes,
+		backchannel_logout_uri: backchannelLogoutUri,
+		frontchannel_logout_uri: frontchannelLogoutUri,
+		...otherUpdates
+	} = ctx.body.update;
+	const clearsBackchannelLogout = backchannelLogoutUri === null;
+	const clearsFrontchannelLogout = frontchannelLogoutUri === null;
+	const updates = {
+		...otherUpdates,
+		...(backchannelLogoutUri != null
+			? { backchannel_logout_uri: backchannelLogoutUri }
+			: {}),
+		...(frontchannelLogoutUri != null
+			? { frontchannel_logout_uri: frontchannelLogoutUri }
+			: {}),
+	};
+	const hasUpdates =
+		Object.keys(updates).length > 0 ||
+		clearsBackchannelLogout ||
+		clearsFrontchannelLogout;
+	const ownsClient = client.userId
+		? client.userId === session.user.id
+		: client.referenceId && opts.clientReference
+			? client.referenceId === (await opts.clientReference(session))
+			: false;
+	const isCrossOwnerScopeConfiguration =
+		!ownsClient &&
+		settings?.admin &&
+		rawClientCredentialsScopes !== undefined &&
+		!hasUpdates;
+	if (!ownsClient && !isCrossOwnerScopeConfiguration) {
 		throw new APIError("UNAUTHORIZED");
 	}
+	if (isCrossOwnerScopeConfiguration) {
+		await assertClientPrivileges(
+			ctx,
+			session,
+			opts,
+			"configure-client-credentials-scopes",
+			clientId,
+		);
+	}
 
-	const updates = ctx.body.update as OAuthClient;
-	if (Object.keys(updates).length === 0) {
+	if (!hasUpdates && rawClientCredentialsScopes === undefined) {
 		// Never return @internal client_secret
 		const res = schemaToOAuth(client);
 		res.client_secret = undefined;
+		if (settings?.admin) {
+			return {
+				...res,
+				client_credentials_scopes: [...(client.clientCredentialsScopes ?? [])],
+			};
+		}
 		return res;
 	}
 
-	await checkOAuthClient(
-		{
-			...schemaToOAuth(client),
-			...updates,
-		},
-		opts,
-		{
-			ctx,
-		},
-	);
+	const finalGrantTypes = (updates.grant_types ??
+		client.grantTypes ??
+		[]) as GrantType[];
+	const finalTokenEndpointAuthMethod =
+		updates.token_endpoint_auth_method ?? client.tokenEndpointAuthMethod;
+	const clientCredentialsScopes =
+		rawClientCredentialsScopes === undefined
+			? undefined
+			: normalizeClientCredentialsScopes(rawClientCredentialsScopes);
+	if (clientCredentialsScopes !== undefined) {
+		validateClientCredentialsScopes(
+			clientCredentialsScopes,
+			finalGrantTypes,
+			finalTokenEndpointAuthMethod,
+			opts,
+		);
+		if (clientCredentialsScopes.length > 0 && !isCrossOwnerScopeConfiguration) {
+			await assertClientPrivileges(
+				ctx,
+				session,
+				opts,
+				"configure-client-credentials-scopes",
+				clientId,
+			);
+		}
+	}
+
+	const updatedMetadata = { ...schemaToOAuth(client), ...updates };
+	if (clearsBackchannelLogout) {
+		updatedMetadata.backchannel_logout_uri = undefined;
+		updatedMetadata.backchannel_logout_session_required = undefined;
+	}
+	if (clearsFrontchannelLogout) {
+		updatedMetadata.frontchannel_logout_uri = undefined;
+		updatedMetadata.frontchannel_logout_session_required = undefined;
+	}
+	await checkOAuthClient(updatedMetadata, opts, {
+		ctx,
+	});
 
 	// Clear obsolete auth material when switching auth methods
 	const schemaUpdates: Record<string, unknown> = {
 		...oauthToSchema(updates),
 	};
+	if (clearsBackchannelLogout) {
+		schemaUpdates.backchannelLogoutUri = null;
+		schemaUpdates.backchannelLogoutSessionRequired = null;
+	}
+	if (clearsFrontchannelLogout) {
+		schemaUpdates.frontchannelLogoutUri = null;
+		schemaUpdates.frontchannelLogoutSessionRequired = null;
+	}
+	if (
+		!finalGrantTypes.includes("client_credentials") ||
+		finalTokenEndpointAuthMethod === "none"
+	) {
+		schemaUpdates.clientCredentialsScopes = [];
+	} else if (clientCredentialsScopes !== undefined) {
+		schemaUpdates.clientCredentialsScopes = clientCredentialsScopes;
+	}
 	if (updates.token_endpoint_auth_method) {
 		if (updates.token_endpoint_auth_method === "private_key_jwt") {
 			schemaUpdates.clientSecret = null;
@@ -271,6 +418,14 @@ export async function updateClientEndpoint(
 	// Never return @internal client_secret
 	const res = schemaToOAuth(updatedClient);
 	res.client_secret = undefined;
+	if (settings?.admin) {
+		return {
+			...res,
+			client_credentials_scopes: [
+				...(updatedClient.clientCredentialsScopes ?? []),
+			],
+		};
+	}
 	return res;
 }
 
@@ -279,7 +434,13 @@ export async function rotateClientSecretEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "rotate");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"rotate",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
@@ -308,7 +469,7 @@ export async function rotateClientSecretEndpoint(
 		throw new APIError("UNAUTHORIZED");
 	}
 
-	if (client.public || !client.clientSecret) {
+	if (client.tokenEndpointAuthMethod === "none" || !client.clientSecret) {
 		throw new APIError("BAD_REQUEST", {
 			error_description:
 				"secret rotation is only available for clients using client_secret authentication",

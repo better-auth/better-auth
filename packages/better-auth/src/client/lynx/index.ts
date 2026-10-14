@@ -60,9 +60,7 @@ export type LynxAuthClient<Option extends BetterAuthClientOptions> =
 	UnionToIntersection<InferResolvedHooks<Option>> &
 		InferClientAPI<Option> &
 		InferActions<Option> & {
-			hydrateSession: (
-				session: NonNullable<ClientSession<Option>> | null,
-			) => void;
+			hydrateSession(session: NonNullable<ClientSession<Option>> | null): void;
 			useSession: () => {
 				data: ClientSession<Option>;
 				isPending: boolean;
@@ -116,8 +114,8 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	return proxy as LynxAuthClient<Option>;
 }
 
-export { useStore };
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
 export type * from "../../types/helper";
 export type { UnionToIntersection } from "../../types/helper";
+export { useStore };

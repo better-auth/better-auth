@@ -1,4 +1,10 @@
-import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type {
+	BetterAuthClientOptions,
+	BetterAuthClientPlugin,
+	ClientFetchOption,
+	ClientStore,
+} from "@better-auth/core";
+import type { BetterFetch } from "@better-fetch/fetch";
 import type { JSONWebKeySet } from "jose";
 import { PACKAGE_VERSION } from "../../version";
 import type { jwt } from "./index";
@@ -25,8 +31,12 @@ export const jwtClient = (options?: JwtClientOptions) => {
 		pathMethods: {
 			[jwksPath]: "GET",
 		},
-		getActions: ($fetch) => ({
-			jwks: async (fetchOptions?: any) => {
+		getActions: (
+			$fetch: BetterFetch,
+			_$store: ClientStore,
+			_options: BetterAuthClientOptions | undefined,
+		) => ({
+			jwks: async (fetchOptions?: ClientFetchOption) => {
 				return await $fetch<JSONWebKeySet>(jwksPath, {
 					method: "GET",
 					...fetchOptions,

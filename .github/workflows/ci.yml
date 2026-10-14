@@ -40,16 +40,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
 
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Reject stale release merge groups
+        if: github.event_name == 'merge_group'
+        env:
+          BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          BASE_VERSION=$(git show "${BASE_SHA}:packages/better-auth/package.json" | jq -r '.version')
+          HEAD_VERSION=$(jq -r '.version' packages/better-auth/package.json)
+          if [ "$BASE_VERSION" != "$HEAD_VERSION" ]; then
+            pnpm --filter @better-auth/release-tooling release-notes \
+              check-changesets --branch "$GITHUB_SHA"
+          fi
 
       - name: Build
         env:
@@ -111,22 +114,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
-        with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
-
-      - name: Install
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
 
       - name: Typecheck
         run: pnpm typecheck
+
+      - name: Build package declarations
+        run: pnpm build
+
+      - name: Typecheck workspace consumers
+        run: pnpm typecheck:consumers
 
       - name: Typecheck dist declarations
         run: pnpm typecheck:dist
@@ -159,16 +156,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
         with:
           node-version: ${{ matrix.node-version }}
-          registry-url: 'https://registry.npmjs.org'
-          cache: pnpm
 
-      - name: Install
-        run: pnpm install --frozen-lockfile
+      - name: Test release tooling
+        if: matrix.node-version == '24.x'
+        run: pnpm --filter @better-auth/release-tooling test
 
       - name: Rebuild native bindings for matrix node
         run: pnpm -r rebuild better-sqlite3

@@ -3,7 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { Account, User } from "@better-auth/core/db";
+import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
@@ -11,6 +11,7 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
+import { assertPasswordNotTooLong } from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
@@ -98,6 +99,16 @@ export type UsernameOptions = {
 	 * @default false
 	 */
 	immutableUsername?: boolean | undefined;
+	/**
+	 * Whether to add and maintain a separate `displayUsername` field.
+	 *
+	 * When set to `false`, the `displayUsername` field is not added to the user
+	 * schema, is never written during sign-up/update, and is excluded from the
+	 * inferred user/session types. Username normalization continues to work.
+	 *
+	 * @default true
+	 */
+	displayUsername?: boolean | undefined;
 };
 
 function defaultUsernameValidator(username: string) {
@@ -128,7 +139,10 @@ const isUsernameAvailableBodySchema = z.object({
 	}),
 });
 
-export const username = (options?: UsernameOptions | undefined) => {
+const usernameImpl = <IncludeDisplayUsername extends boolean>(
+	options: UsernameOptions | undefined,
+	includeDisplayUsername: IncludeDisplayUsername,
+) => {
 	const normalizer = (username: string) => {
 		if (options?.usernameNormalization === false) {
 			return username;
@@ -151,28 +165,38 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 	const pathsWithHttpHookValidation = ["/sign-up/email", "/update-user"];
 
+	const getUsernameToValidate = (username: string) =>
+		options?.validationOrder?.username === "post-normalization"
+			? normalizer(username)
+			: username;
+
+	async function validateUsernameValue(username: string) {
+		const usernameToValidate = getUsernameToValidate(username);
+		if (usernameToValidate.length < minUsernameLength) {
+			return ERROR_CODES.USERNAME_TOO_SHORT;
+		}
+
+		if (usernameToValidate.length > maxUsernameLength) {
+			return ERROR_CODES.USERNAME_TOO_LONG;
+		}
+
+		const valid = await validator(usernameToValidate);
+		if (!valid) {
+			return ERROR_CODES.INVALID_USERNAME;
+		}
+
+		return null;
+	}
+
 	async function validateUsername(
 		username: string,
 		displayUsername: string | null,
 		adapter: { findOne: <T>(opts: any) => Promise<T | null> },
 		currentUserId?: string | null,
 	) {
-		const usernameToValidate =
-			options?.validationOrder?.username === "post-normalization"
-				? normalizer(username)
-				: username;
-
-		if (usernameToValidate.length < minUsernameLength) {
-			throw APIError.from("BAD_REQUEST", ERROR_CODES.USERNAME_TOO_SHORT);
-		}
-
-		if (usernameToValidate.length > maxUsernameLength) {
-			throw APIError.from("BAD_REQUEST", ERROR_CODES.USERNAME_TOO_LONG);
-		}
-
-		const valid = await validator(usernameToValidate);
-		if (!valid) {
-			throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_USERNAME);
+		const validationError = await validateUsernameValue(username);
+		if (validationError) {
+			throw APIError.from("BAD_REQUEST", validationError);
 		}
 
 		const normalizedUsername = normalizer(username);
@@ -243,9 +267,13 @@ export const username = (options?: UsernameOptions | undefined) => {
 											data: {
 												...user,
 												username: normalizer(username),
-												displayUsername: displayUsername
-													? displayUsernameNormalizer(displayUsername)
-													: username,
+												...(includeDisplayUsername
+													? {
+															displayUsername: displayUsername
+																? displayUsernameNormalizer(displayUsername)
+																: username,
+														}
+													: {}),
 											},
 										};
 									}
@@ -253,7 +281,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 									return {
 										data: {
 											...user,
-											...(displayUsername
+											...(includeDisplayUsername && displayUsername
 												? {
 														displayUsername:
 															displayUsernameNormalizer(displayUsername),
@@ -294,7 +322,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 											data: {
 												...user,
 												username: normalizer(username),
-												...(displayUsername
+												...(includeDisplayUsername && displayUsername
 													? {
 															displayUsername:
 																displayUsernameNormalizer(displayUsername),
@@ -307,7 +335,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 									return {
 										data: {
 											...user,
-											...(displayUsername
+											...(includeDisplayUsername && displayUsername
 												? {
 														displayUsername:
 															displayUsernameNormalizer(displayUsername),
@@ -428,6 +456,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					}
 
+					assertPasswordNotTooLong(ctx, ctx.body.password);
+
 					const user = await ctx.context.adapter.findOne<
 						User & { username: string; displayUsername: string }
 					>({
@@ -450,19 +480,8 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					}
 
-					const account = await ctx.context.adapter.findOne<Account>({
-						model: "account",
-						where: [
-							{
-								field: "userId",
-								value: user.id,
-							},
-							{
-								field: "providerId",
-								value: "credential",
-							},
-						],
-					});
+					const account =
+						await ctx.context.internalAdapter.findCredentialAccount(user.id);
 					if (!account) {
 						throw APIError.from(
 							"UNAUTHORIZED",
@@ -613,14 +632,37 @@ export const username = (options?: UsernameOptions | undefined) => {
 			),
 		},
 		schema: mergeSchema(
-			getSchema({
-				username: normalizer,
-				displayUsername: displayUsernameNormalizer,
-			}),
+			getSchema<IncludeDisplayUsername>(
+				{
+					username: normalizer,
+					displayUsername: displayUsernameNormalizer,
+				},
+				includeDisplayUsername,
+			),
 			options?.schema,
 		),
 		hooks: {
 			before: [
+				// Apply valid displayUsername fallback before validation so fallback usernames are checked.
+				{
+					matcher(context) {
+						return context.path === "/sign-up/email";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (
+							typeof ctx.body.displayUsername !== "string" ||
+							ctx.body.username !== undefined
+						) {
+							return;
+						}
+						const validationError = await validateUsernameValue(
+							ctx.body.displayUsername,
+						);
+						if (!validationError) {
+							ctx.body.username = ctx.body.displayUsername;
+						}
+					}),
+				},
 				{
 					matcher(context) {
 						return (
@@ -629,40 +671,14 @@ export const username = (options?: UsernameOptions | undefined) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						const username =
-							typeof ctx.body.username === "string" &&
-							options?.validationOrder?.username === "post-normalization"
-								? normalizer(ctx.body.username)
-								: ctx.body.username;
+						const username = ctx.body.username;
 
 						if (username !== undefined && typeof username === "string") {
-							const minUsernameLength = options?.minUsernameLength || 3;
-							const maxUsernameLength = options?.maxUsernameLength || 30;
-							if (username.length < minUsernameLength) {
-								throw APIError.from(
-									"BAD_REQUEST",
-									ERROR_CODES.USERNAME_TOO_SHORT,
-								);
+							const validationError = await validateUsernameValue(username);
+							if (validationError) {
+								throw APIError.from("BAD_REQUEST", validationError);
 							}
-
-							if (username.length > maxUsernameLength) {
-								throw APIError.from(
-									"BAD_REQUEST",
-									ERROR_CODES.USERNAME_TOO_LONG,
-								);
-							}
-
-							const validator =
-								options?.usernameValidator || defaultUsernameValidator;
-
-							const valid = await validator(username);
-							if (!valid) {
-								throw APIError.from(
-									"BAD_REQUEST",
-									ERROR_CODES.INVALID_USERNAME,
-								);
-							}
-							const normalizedUsername = normalizer(ctx.body.username);
+							const normalizedUsername = normalizer(username);
 							const session =
 								ctx.path === "/update-user"
 									? await getSessionFromCtx(ctx)
@@ -707,6 +723,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 							}
 						}
 
+						if (!includeDisplayUsername) {
+							return;
+						}
+
 						const displayUsername =
 							typeof ctx.body.displayUsername === "string" &&
 							options?.validationOrder?.displayUsername === "post-normalization"
@@ -735,11 +755,11 @@ export const username = (options?: UsernameOptions | undefined) => {
 						return context.path === "/sign-up/email";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						if (!includeDisplayUsername) {
+							return;
+						}
 						if (ctx.body.username && !ctx.body.displayUsername) {
 							ctx.body.displayUsername = ctx.body.username;
-						}
-						if (ctx.body.displayUsername && !ctx.body.username) {
-							ctx.body.username = ctx.body.displayUsername;
 						}
 					}),
 				},
@@ -749,3 +769,16 @@ export const username = (options?: UsernameOptions | undefined) => {
 		$ERROR_CODES: ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type UsernamePlugin = ReturnType<typeof usernameImpl<true>>;
+export type UsernamePluginWithoutDisplayUsername = ReturnType<
+	typeof usernameImpl<false>
+>;
+
+export function username(
+	options: UsernameOptions & { displayUsername: false },
+): UsernamePluginWithoutDisplayUsername;
+export function username(options?: UsernameOptions): UsernamePlugin;
+export function username(options?: UsernameOptions) {
+	return usernameImpl(options, options?.displayUsername !== false);
+}

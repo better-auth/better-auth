@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { AUTHN_REQUEST_KEY_PREFIX } from "../constants";
+import { parseSSOProviderReference } from "../provider-reference";
 import type { AuthnRequestRecord, SAMLAssertionExtract } from "../types";
 
 function errorRedirectUrl(
@@ -45,9 +46,9 @@ export interface InResponseToValidationContext {
 export async function validateInResponseTo(
 	c: GenericEndpointContext,
 	ctx: InResponseToValidationContext,
-): Promise<void> {
+): Promise<AuthnRequestRecord | null> {
 	if (ctx.options.enableInResponseToValidation === false) {
-		return;
+		return null;
 	}
 
 	const inResponseTo = ctx.extract.response?.inResponseTo;
@@ -62,10 +63,19 @@ export async function validateInResponseTo(
 			`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 		);
 
-		let storedRequest: AuthnRequestRecord | null = null;
+		let storedRequest:
+			| (Omit<AuthnRequestRecord, "providerReference"> & {
+					providerReference?: unknown;
+			  })
+			| null = null;
 		if (consumed) {
 			try {
-				storedRequest = JSON.parse(consumed.value) as AuthnRequestRecord;
+				storedRequest = JSON.parse(consumed.value) as Omit<
+					AuthnRequestRecord,
+					"providerReference"
+				> & {
+					providerReference?: unknown;
+				};
 			} catch {
 				storedRequest = null;
 			}
@@ -102,6 +112,26 @@ export async function validateInResponseTo(
 				),
 			);
 		}
+		const providerReference = parseSSOProviderReference(
+			storedRequest.providerReference,
+		);
+		if (!providerReference) {
+			c.context.logger.error(
+				"SAML InResponseTo validation failed: provider reference missing or invalid",
+				{ inResponseTo, providerId: ctx.providerId },
+			);
+			throw c.redirect(
+				errorRedirectUrl(
+					ctx.redirectUrl,
+					"invalid_state",
+					"SSO provider reference missing or invalid",
+				),
+			);
+		}
+		return {
+			...storedRequest,
+			providerReference,
+		};
 	} else if (!allowIdpInitiated) {
 		c.context.logger.error(
 			"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
@@ -115,6 +145,7 @@ export async function validateInResponseTo(
 			),
 		);
 	}
+	return null;
 }
 
 export interface AudienceValidationContext {

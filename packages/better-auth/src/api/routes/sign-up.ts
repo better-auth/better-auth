@@ -10,6 +10,11 @@ import { parseUserInput } from "../../db";
 import { buildSyntheticUserOutput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
+import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -215,23 +220,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 				}
 
-				const minPasswordLength = ctx.context.password.config.minPasswordLength;
-				if (password.length < minPasswordLength) {
-					ctx.context.logger.warn("Password is too short");
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-					);
-				}
-
-				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-				if (password.length > maxPasswordLength) {
-					ctx.context.logger.warn("Password is too long");
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-					);
-				}
+				assertPasswordNotTooShort(ctx, password);
+				assertPasswordNotTooLong(ctx, password);
 				const shouldReturnGenericDuplicateResponse =
 					ctx.context.options.emailAndPassword.requireEmailVerification ||
 					ctx.context.options.emailAndPassword.autoSignIn === false;
@@ -319,7 +309,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 							await ctx.context.runInBackgroundOrAwait(
 								ctx.context.options.emailAndPassword.onExistingUserSignUp(
 									{ user: dbUser.user },
-									ctx.request?.clone(),
+									safeCloneRequest(ctx.request),
 								),
 							);
 						}
@@ -411,7 +401,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 									url,
 									token,
 								},
-								ctx.request?.clone(),
+								safeCloneRequest(ctx.request),
 							),
 						);
 					}
@@ -430,6 +420,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const session = await ctx.context.internalAdapter.createSession(
 					createdUser.id,
 					rememberMe === false,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
 				);
 				if (!session) {
 					throw APIError.from(

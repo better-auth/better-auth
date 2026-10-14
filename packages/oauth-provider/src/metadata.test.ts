@@ -27,12 +27,12 @@ describe("oauth metadata", async () => {
 		"sid",
 		"scope",
 		"azp",
-		"email",
-		"email_verified",
 		"name",
 		"picture",
-		"family_name",
 		"given_name",
+		"family_name",
+		"email",
+		"email_verified",
 	];
 
 	async function createTestInstance(opts?: {
@@ -50,10 +50,6 @@ describe("oauth metadata", async () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					allowDynamicClientRegistration: true,
 					...opts?.oauthProviderConfig,
 				}),
@@ -117,12 +113,15 @@ describe("oauth metadata", async () => {
 			dpop_signing_alg_values_supported: [...DPOP_SIGNING_ALGORITHMS],
 			backchannel_logout_supported: true,
 			backchannel_logout_session_supported: true,
+			frontchannel_logout_supported: true,
+			frontchannel_logout_session_supported: true,
 			claims_supported: baseClaims,
+			claims_parameter_supported: true,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
+			acr_values_supported: ["0"],
 			id_token_signing_alg_values_supported: ["EdDSA"],
 			end_session_endpoint: `${baseURL}/oauth2/end-session`,
-			acr_values_supported: ["urn:mace:incommon:iap:bronze"],
 			prompt_values_supported: [
 				"login",
 				"consent",
@@ -292,6 +291,8 @@ describe("oauth metadata", async () => {
 			authorization_response_iss_parameter_supported: true,
 			backchannel_logout_supported: true,
 			backchannel_logout_session_supported: true,
+			frontchannel_logout_supported: true,
+			frontchannel_logout_session_supported: true,
 		});
 	});
 
@@ -304,6 +305,20 @@ describe("oauth metadata", async () => {
 		const metadata = await auth.api.getOpenIdConfig();
 		expect(metadata.backchannel_logout_supported).toBe(false);
 		expect(metadata.backchannel_logout_session_supported).toBe(false);
+	});
+
+	it("advertises front-channel logout support even when the jwt plugin is disabled", async () => {
+		// Front-channel logout renders iframes carrying plain `iss`/`sid` query
+		// parameters — no signed artifact — so support does not depend on the
+		// jwt plugin.
+		const { auth } = await createTestInstance({
+			oauthProviderConfig: {
+				disableJwtPlugin: true,
+			},
+		});
+		const metadata = await auth.api.getOpenIdConfig();
+		expect(metadata.frontchannel_logout_supported).toBe(true);
+		expect(metadata.frontchannel_logout_session_supported).toBe(true);
 	});
 
 	it("should not provide dynamic client registration endpoint when disabled", async () => {
@@ -350,6 +365,22 @@ describe("oauth metadata", async () => {
 		expect(oauthMetadata).toMatchObject(metadata ?? {});
 	});
 
+	it("should explicitly advertise unsupported request object parameters", async () => {
+		const { auth } = await createTestInstance();
+		const metadata = await auth.api.getOpenIdConfig();
+
+		expect(metadata.request_parameter_supported).toBe(false);
+		expect(metadata.request_uri_parameter_supported).toBe(false);
+		expect(metadata.claims_parameter_supported).toBe(true);
+	});
+
+	it("should advertise the unspecified ACR value by default", async () => {
+		const { auth } = await createTestInstance();
+		const metadata = await auth.api.getOpenIdConfig();
+
+		expect(metadata.acr_values_supported).toEqual(["0"]);
+	});
+
 	it("should fail if advertised scope invalid", async () => {
 		const advertisedScopes = ["create:test"];
 		expect(() =>
@@ -361,10 +392,6 @@ describe("oauth metadata", async () => {
 						consentPage: "/consent",
 						advertisedMetadata: {
 							scopes_supported: advertisedScopes,
-						},
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
 						},
 					}),
 					jwt(),
@@ -448,10 +475,6 @@ describe("dynamic baseURL metadata wrappers", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 			jwt(),
 		],
@@ -502,10 +525,6 @@ describe("oauth resource metadata", async () => {
 				resources: [validResource],
 				enforcePerClientResources: false,
 				scopes: supportedScopes,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});

@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import {
@@ -106,7 +107,10 @@ async function getAnonUserEmail(
 		return `temp-${id}@${options.emailDomainName}`;
 	}
 
-	return `temp@${id}.com`;
+	return createPlaceholderEmail({
+		identifier: id,
+		namespace: "anonymous",
+	});
 }
 
 export const anonymous = (options?: AnonymousOptions | undefined) => {
@@ -409,14 +413,8 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							return;
 						}
 						try {
-							await ctx.context.internalAdapter.deleteUserSessions(
-								session.user.id,
-							);
 							await ctx.context.internalAdapter.deleteUser(session.user.id);
 						} catch (error) {
-							// TODO: collapse session+user cleanup into `internalAdapter.deleteUser`
-							// to remove the partial-state window where sessions are deleted but
-							// the user row remains.
 							ctx.context.logger.error(
 								"Failed to clean up anonymous user during post-link cleanup",
 								{ anonymousUserId: session.user.id, error },

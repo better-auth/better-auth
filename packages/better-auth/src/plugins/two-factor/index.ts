@@ -229,15 +229,21 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						return ctx.json({ method: "otp" as const });
 					}
 
-					const backupCodes = await generateBackupCodes(
-						ctx.context.secretConfig,
-						backupCodeOptions,
-					);
 					const existingTwoFactor =
 						await ctx.context.adapter.findOne<TwoFactorTable>({
 							model: opts.twoFactorTable,
 							where: [{ field: "userId", value: user.id }],
 						});
+					if (existingTwoFactor && existingTwoFactor.verified !== false) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TOTP_ALREADY_ENABLED,
+						);
+					}
+					const backupCodes = await generateBackupCodes(
+						ctx.context.secretConfig,
+						backupCodeOptions,
+					);
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
 						key: ctx.context.secretConfig,
@@ -266,10 +272,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					const totpData = {
 						secret: encryptedSecret,
 						backupCodes: backupCodes.encryptedBackupCodes,
-						verified:
-							(existingTwoFactor != null &&
-								existingTwoFactor.verified === true) ||
-							!!options?.skipVerificationOnEnable,
+						verified: !!options?.skipVerificationOnEnable,
 					};
 					if (existingTwoFactor) {
 						await ctx.context.adapter.update({
@@ -538,10 +541,19 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							},
 						);
 						const identifier = `2fa-${generateRandomString(20)}`;
+						const expiresAt = new Date(Date.now() + maxAge * 1000);
 						await ctx.context.internalAdapter.createVerificationValue({
 							value: data.user.id,
 							identifier,
-							expiresAt: new Date(Date.now() + maxAge * 1000),
+							expiresAt,
+						});
+						// Per-challenge attempt counter, consumed atomically by
+						// verify-totp and verify-backup-code as the race gate so a
+						// concurrent burst cannot exceed the budget.
+						await ctx.context.internalAdapter.createVerificationValue({
+							value: "0",
+							identifier: `2fa-attempts-${identifier}`,
+							expiresAt,
 						});
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,

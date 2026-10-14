@@ -6,12 +6,17 @@ import type {
 import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import {
+	runtimeSchemaCheckFor,
+	schemaCheckFor,
+} from "@better-auth/core/db/internal";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { UpstreamProvider } from "@better-auth/core/oauth2";
+import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
 import { generateId } from "@better-auth/core/utils/id";
+import { findInvalidTrustedProxies } from "@better-auth/core/utils/ip";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -20,8 +25,6 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
-import { getCookieCacheJwtSigningKey } from "../plugins/jwt/cookie-cache";
-import type { JwtOptions } from "../plugins/jwt/types";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
@@ -199,6 +202,17 @@ Most of the features of Better Auth will not work correctly.`,
 	};
 
 	checkEndpointConflicts(options, logger);
+
+	const trustedProxies = options.advanced?.ipAddress?.trustedProxies;
+	if (trustedProxies && trustedProxies.length > 0) {
+		const invalid = findInvalidTrustedProxies(trustedProxies);
+		if (invalid.length > 0) {
+			logger.warn(
+				`Ignoring invalid \`advanced.ipAddress.trustedProxies\` entries: ${invalid.join(", ")}. Each entry must be an IP address or CIDR range.`,
+			);
+		}
+	}
+
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
 	// TODO(#9294): allow registering the same provider multiple times under
@@ -227,9 +241,9 @@ Most of the features of Better Auth will not work correctly.`,
 					);
 				}
 				const provider = socialProviders[key](config as never);
-				(provider as UpstreamProvider).disableImplicitSignUp =
+				(provider as OAuthProvider).disableImplicitSignUp =
 					config.disableImplicitSignUp;
-				return provider as UpstreamProvider;
+				return provider as OAuthProvider;
 			}),
 		)
 	).filter((x) => x !== null);
@@ -258,37 +272,6 @@ Most of the features of Better Auth will not work correctly.`,
 				? "adapter"
 				: getDatabaseType(options.database),
 	});
-
-	const cookieCacheJwtSigningKey = getCookieCacheJwtSigningKey(options);
-	if (cookieCacheJwtSigningKey === "jwt-plugin") {
-		if (options.session?.cookieCache?.strategy !== "jwt") {
-			throw new BetterAuthError(
-				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires `session.cookieCache.strategy = "jwt"`.',
-			);
-		}
-
-		const jwtPlugin = options.plugins?.find((plugin) => plugin.id === "jwt");
-		if (!jwtPlugin) {
-			throw new BetterAuthError(
-				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires the `jwt()` plugin to be installed.',
-			);
-		}
-
-		const jwtPluginOptions = (jwtPlugin.options ?? {}) as JwtOptions;
-		if (jwtPluginOptions.jwt?.sign) {
-			throw new BetterAuthError(
-				'`session.cookieCache.jwt.signingKey = "jwt-plugin"` requires locally managed JWT plugin keys and does not support `jwt({ jwt: { sign } })`.',
-			);
-		}
-
-		const gracePeriod = jwtPluginOptions.jwks?.gracePeriod;
-		const cookieMaxAge = options.session?.cookieCache?.maxAge || 60 * 5;
-		if (gracePeriod !== undefined && cookieMaxAge > gracePeriod) {
-			logger.warn(
-				`[better-auth] \`session.cookieCache.maxAge\` (${cookieMaxAge}s) exceeds the JWT plugin JWKS grace period (${gracePeriod}s). Rotated keys may stop verifying cookie-cache JWTs before the cookie expires.`,
-			);
-		}
-	}
 
 	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 
@@ -454,5 +437,7 @@ Most of the features of Better Auth will not work correctly.`,
 		await initOrPromise;
 	}
 
+	ctx.checkSchema = runtimeSchemaCheckFor(ctx.adapter);
+	ctx.explicitSchemaCheck = schemaCheckFor(ctx.adapter);
 	return ctx as unknown as AuthContext<Options>;
 }

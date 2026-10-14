@@ -31,10 +31,6 @@ describe("oauth introspect", async () => {
 				consentPage: "/consent",
 				resources: [validResource],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -62,7 +58,7 @@ describe("oauth introspect", async () => {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -147,6 +143,8 @@ describe("oauth introspect", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
@@ -629,6 +627,12 @@ describe("oauth introspect - config", async () => {
 			"loginPage" | "consentPage"
 		>;
 	}) {
+		const clientCredentialsScopes = (
+			opts?.oauthProviderConfig?.scopes ?? scopes
+		).filter(
+			(scope) =>
+				!["openid", "profile", "email", "offline_access"].includes(scope),
+		);
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{
 				baseURL: authServerBaseUrl,
@@ -639,10 +643,9 @@ describe("oauth introspect - config", async () => {
 						resources: [validResource],
 						enforcePerClientResources: false,
 						scopes,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						...opts?.oauthProviderConfig,
 					}),
 					...(opts?.oauthProviderConfig?.disableJwtPlugin
@@ -675,8 +678,11 @@ describe("oauth introspect - config", async () => {
 					"client_credentials",
 					"refresh_token",
 				],
+				token_endpoint_auth_method: "client_secret_post",
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
+				client_credentials_scopes: clientCredentialsScopes,
 			},
 		});
 
@@ -691,7 +697,7 @@ describe("oauth introspect - config", async () => {
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
 	) {
 		const codeVerifier = generateRandomString(32);
-		const { url } = await createAuthorizationURL({
+		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient?.client_id,
@@ -1052,10 +1058,6 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 				consentPage: "/consent",
 				resources: [authServerBaseUrl],
 				enforcePerClientResources: false,
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -1077,6 +1079,8 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 			headers,
 			body: {
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				scope: "openid profile email offline_access",
 				skip_consent: true,
 			},
@@ -1086,7 +1090,7 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 
 	async function getOAuthJwtAccessToken() {
 		const codeVerifier = generateRandomString(32);
-		const { url: authUrl } = await createAuthorizationURL({
+		const authUrl = await createAuthorizationURL({
 			id: providerId,
 			options: {
 				clientId: oauthClient!.client_id!,

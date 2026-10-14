@@ -1,4 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { AuthEndpointContext } from "@better-auth/core/context";
+import { runWithEndpointContext } from "@better-auth/core/context";
+import { createLogger } from "@better-auth/core/env";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
@@ -14,6 +17,7 @@ import {
 	describe,
 	expect,
 	it,
+	onTestFinished,
 	vi,
 } from "vitest";
 import {
@@ -1179,12 +1183,9 @@ describe("Cookie Cache Field Filtering", () => {
 				cookieCache: {
 					enabled: true,
 					strategy: "jwt",
-					jwt: {
-						signingKey: "jwt-plugin",
-					},
 				},
 			},
-			plugins: [jwt()],
+			plugins: [jwt({ sessionCookieCache: true })],
 		});
 
 		const headers = new Headers();
@@ -1218,7 +1219,6 @@ describe("Cookie Cache Field Filtering", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				signingKey: "jwt-plugin",
 				jwks,
 			},
 		});
@@ -1274,6 +1274,79 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.session?.token).toEqual(expect.any(String));
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10902
+	 */
+	it("should use the configured logger for an invalid signed compact cookie", async () => {
+		const secret = "test-secret";
+		const bakeCookie = async (emailVerified: boolean | null) => {
+			const now = new Date().toISOString();
+			const sessionData = {
+				session: {
+					id: "s1",
+					token: "tok",
+					userId: "u1",
+					expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+					createdAt: now,
+					updatedAt: now,
+				},
+				user: {
+					id: "u1",
+					name: "Test",
+					email: "a@b.com",
+					emailVerified,
+					createdAt: now,
+					updatedAt: now,
+				},
+				updatedAt: Date.now(),
+				version: "1",
+			};
+			const expiresAt = Date.now() + 300_000;
+			const signature = await createHMAC("SHA-256", "base64urlnopad").sign(
+				secret,
+				JSON.stringify({ ...sessionData, expiresAt }),
+			);
+			return base64Url.encode(
+				JSON.stringify({ session: sessionData, expiresAt, signature }),
+				{ padding: false },
+			);
+		};
+		const config = {
+			cookiePrefix: "p",
+			isSecure: false,
+			secret,
+		};
+		const log = vi.fn();
+		const defaultWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		onTestFinished(() => defaultWarn.mockRestore());
+		const endpointContext = {
+			context: { logger: createLogger({ log }) },
+		} as unknown as AuthEndpointContext;
+		const validCookie = await bakeCookie(false);
+
+		const validCache = await runWithEndpointContext(endpointContext, () =>
+			getCookieCache(
+				new Headers({ cookie: `p.session_data=${validCookie}` }),
+				config,
+			),
+		);
+		expect(validCache).not.toBeNull();
+		expect(log).not.toHaveBeenCalled();
+		const invalidCookie = await bakeCookie(null);
+
+		const invalidCache = await runWithEndpointContext(endpointContext, () =>
+			getCookieCache(
+				new Headers({ cookie: `p.session_data=${invalidCookie}` }),
+				config,
+			),
+		);
+
+		expect(invalidCache).toBeNull();
+		expect(log).toHaveBeenCalledTimes(1);
+		expect(log.mock.calls[0]?.[0]).toBe("warn");
+		expect(defaultWarn).not.toHaveBeenCalled();
+	});
+
 	it("should return null for invalid JWT token", async () => {
 		const headers = new Headers();
 		// Set an invalid JWT token manually
@@ -1290,7 +1363,7 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache).toBeNull();
 	});
 
-	it("should require JWKS input for helper verification in JWKS mode", async () => {
+	it("should require a secret when helper verification has no JWKS", async () => {
 		const headers = new Headers();
 		headers.set("cookie", "better-auth.session_data=token");
 
@@ -1301,13 +1374,8 @@ describe("Cookie Cache Field Filtering", () => {
 		await expect(
 			getCookieCache(request, {
 				strategy: "jwt",
-				jwt: {
-					signingKey: "jwt-plugin",
-				},
 			}),
-		).rejects.toThrow(
-			'getCookieCache requires `jwt.jwks` when `jwt.signingKey` is set to `"jwt-plugin"`.',
-		);
+		).rejects.toThrow("getCookieCache requires a secret to be provided");
 	});
 
 	it("should reject JWT plugin tokens that are not cookie-cache JWTs", async () => {
@@ -1332,7 +1400,6 @@ describe("Cookie Cache Field Filtering", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				signingKey: "jwt-plugin",
 				jwks,
 			},
 		});
@@ -1346,12 +1413,9 @@ describe("Cookie Cache Field Filtering", () => {
 				cookieCache: {
 					enabled: true,
 					strategy: "jwt",
-					jwt: {
-						signingKey: "jwt-plugin",
-					},
 				},
 			},
-			plugins: [jwt()],
+			plugins: [jwt({ sessionCookieCache: true })],
 		});
 
 		const headers = new Headers();
@@ -1374,7 +1438,6 @@ describe("Cookie Cache Field Filtering", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				signingKey: "jwt-plugin",
 				jwks: {
 					keys: [],
 				},
@@ -1521,12 +1584,9 @@ describe("Cookie Chunking", () => {
 				cookieCache: {
 					enabled: true,
 					strategy: "jwt",
-					jwt: {
-						signingKey: "jwt-plugin",
-					},
 				},
 			},
-			plugins: [jwt()],
+			plugins: [jwt({ sessionCookieCache: true })],
 		});
 
 		const headers = new Headers();
@@ -1568,7 +1628,6 @@ describe("Cookie Chunking", () => {
 		const cache = await getCookieCache(request, {
 			strategy: "jwt",
 			jwt: {
-				signingKey: "jwt-plugin",
 				jwks: await auth.api.getJwks(),
 			},
 		});
@@ -2015,6 +2074,26 @@ describe("Cookie header without whitespace after semicolon", () => {
 		expect(getChunkedCookie(ctx, "better-auth.session_data")).toBe(
 			"chunkAchunkB",
 		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11119
+ */
+describe("getChunkedCookie", () => {
+	it.each([
+		"better-auth.session_data.0junk",
+		"better-auth.session_data.nested.0",
+		"better-auth.session_data.01",
+		"better-auth.session_data.-1",
+	])("ignores non-canonical chunk name %s", (name) => {
+		const headers = new Headers({ cookie: `${name}=chunk` });
+		const ctx = {
+			getCookie: () => undefined,
+			headers,
+		} as unknown as Parameters<typeof getChunkedCookie>[0];
+
+		expect(getChunkedCookie(ctx, "better-auth.session_data")).toBeNull();
 	});
 });
 

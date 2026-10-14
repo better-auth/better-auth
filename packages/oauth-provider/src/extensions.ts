@@ -86,6 +86,7 @@ interface ExtensionKeys {
 	grantTypes: string[];
 	authMethods: string[];
 	assertionTypes: string[];
+	clientDiscoveryIds: string[];
 }
 
 /**
@@ -119,7 +120,16 @@ function collectExtensionKeys(
 			assertionTypes.push(assertionType);
 		}
 	}
-	return { grantTypes, authMethods, assertionTypes };
+	const clientDiscoveries = extension.clientDiscovery
+		? Array.isArray(extension.clientDiscovery)
+			? extension.clientDiscovery
+			: [extension.clientDiscovery]
+		: [];
+	const clientDiscoveryIds = clientDiscoveries.map((discovery) => discovery.id);
+	for (const clientDiscoveryId of clientDiscoveryIds) {
+		assertNonEmptyExtensionValue("client discovery id", clientDiscoveryId);
+	}
+	return { grantTypes, authMethods, assertionTypes, clientDiscoveryIds };
 }
 
 function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
@@ -136,10 +146,10 @@ function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
 
 /**
  * Validates every extension and rejects two extensions registering the same
- * grant type, auth method, or assertion type: otherwise the first would win and
- * the second be silently unreachable. Runs at setup over the whole list;
- * extensions number in the single digits, so a full re-scan per registration is
- * cheaper than the bookkeeping to cache it.
+ * grant type, auth method, assertion type, or client discovery identifier:
+ * otherwise the first would win and the second be silently unreachable. Runs at
+ * setup over the whole list; extensions number in the single digits, so a full
+ * re-scan per registration is cheaper than the bookkeeping to cache it.
  */
 export function validateOAuthProviderExtensions(
 	extensions: OAuthProviderExtension[] | undefined,
@@ -156,6 +166,10 @@ export function validateOAuthProviderExtensions(
 	assertNoDuplicateAcrossExtensions(
 		"client_assertion_type",
 		keys.flatMap((k) => k.assertionTypes),
+	);
+	assertNoDuplicateAcrossExtensions(
+		"client discovery id",
+		keys.flatMap((k) => k.clientDiscoveryIds),
 	);
 }
 
@@ -193,8 +207,8 @@ export function getClientDiscoveries(
  * twice. It throws if the oauth-provider plugin is not installed, if a grant
  * type or assertion type is not an absolute URI, if a client authentication
  * method reuses a built-in name, or if the extension registers a grant type,
- * auth method, or assertion type that another extension already registered
- * (contributions must be disjoint).
+ * auth method, assertion type, or client discovery identifier that another
+ * extension already registered (contributions must be disjoint).
  *
  * @example
  * ```ts

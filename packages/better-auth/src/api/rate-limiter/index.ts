@@ -3,10 +3,9 @@ import type {
 	BetterAuthRateLimitStorage,
 } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { createRateLimitKey } from "@better-auth/core/utils/ip";
+import { createRateLimitKey, getIP } from "@better-auth/core/utils/ip";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { RateLimit } from "../../types";
-import { getIp } from "../../utils/get-request-ip";
 import { wildcardMatch } from "../../utils/wildcard";
 
 interface MemoryRateLimitEntry {
@@ -101,6 +100,7 @@ function rateLimitResponse(retryAfter: number) {
 			status: 429,
 			statusText: "Too Many Requests",
 			headers: {
+				"Content-Type": "application/json",
 				"X-Retry-After": retryAfter.toString(),
 			},
 		},
@@ -185,7 +185,7 @@ function createDatabaseStorageWrapper(
 				set: { count: 1, lastRequest: now },
 			});
 			if (reset) {
-				deleteExpiredRows(now);
+				await deleteExpiredRows(now);
 				return { allowed: true, retryAfter: null };
 			}
 			return consume(key, rule);
@@ -224,11 +224,12 @@ function createDatabaseStorageWrapper(
 		};
 	};
 
-	// Best-effort sweep of clearly-expired rows to bound table growth. A failure
-	// here never blocks the request.
-	const deleteExpiredRows = (now: number) => {
+	// Best-effort sweep of clearly-expired rows to bound table growth. Without a
+	// background handler, the request awaits cleanup so it survives teardown;
+	// failures are logged and do not reject the request.
+	const deleteExpiredRows = async (now: number) => {
 		const cutoff = now - longestObservedWindow * 1000;
-		ctx.runInBackground(
+		await ctx.runInBackgroundOrAwait(
 			db
 				.deleteMany({
 					model,
@@ -339,7 +340,7 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	const path = normalizePathname(req.url, basePath);
 	let currentWindow = ctx.rateLimit.window;
 	let currentMax = ctx.rateLimit.max;
-	const ip = getIp(req, ctx.options);
+	const ip = getIP(req, ctx.options);
 	if (!ip && ctx.options.advanced?.ipAddress?.disableIpTracking) {
 		// IP tracking is explicitly disabled; per-IP rate limiting does not apply.
 		return null;
@@ -348,7 +349,8 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 		ctx.logger.warn(
 			"Rate limiting could not determine a client IP and is falling back to a " +
 				"single shared per-path bucket. Ensure your runtime forwards a trusted " +
-				"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.",
+				"client IP header, then set `advanced.ipAddress.ipAddressHeaders` or " +
+				"`advanced.ipAddress.trustedProxies` so the address can be resolved.",
 		);
 		ipWarningLogged = true;
 	}

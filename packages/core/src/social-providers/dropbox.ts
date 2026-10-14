@@ -1,9 +1,8 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
 
@@ -26,15 +25,13 @@ export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
 	accessType?: ("offline" | "online" | "legacy") | undefined;
 }
 
-const DROPBOX_DEFAULT_SCOPES = ["account_info.read"];
-
 export const dropbox = (options: DropboxOptions) => {
 	const tokenEndpoint = "https://api.dropboxapi.com/oauth2/token";
 
 	return {
 		id: "dropbox",
 		name: "Dropbox",
-		callbackPath: "/callback/dropbox",
+		accountSubject: ({ profile }) => profile.account_id,
 		createAuthorizationURL: async ({
 			state,
 			scopes,
@@ -42,16 +39,14 @@ export const dropbox = (options: DropboxOptions) => {
 			redirectURI,
 			additionalParams,
 		}) => {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				DROPBOX_DEFAULT_SCOPES,
-				scopes,
-			);
-			return createAuthorizationURL({
+			const _scopes = options.disableDefaultScope ? [] : ["account_info.read"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
+			return await createAuthorizationURL({
 				id: "dropbox",
 				options,
 				authorizationEndpoint: "https://www.dropbox.com/oauth2/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				codeVerifier,
@@ -105,7 +100,6 @@ export const dropbox = (options: DropboxOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.account_id,
 					name: profile.name?.display_name,
 					email: profile.email,
 					emailVerified: profile.email_verified || false,
@@ -116,5 +110,5 @@ export const dropbox = (options: DropboxOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<DropboxProfile>;
+	} satisfies OAuthProvider<DropboxProfile>;
 };

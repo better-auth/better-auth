@@ -1,11 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
-import type { ProviderOptions, UpstreamProvider } from "../oauth2";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
-	resolveRequestedScopes,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { createPlaceholderEmail } from "../utils/email";
 
 export interface RobloxProfile extends Record<string, any> {
 	/** the user's id */
@@ -37,30 +37,21 @@ export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 		| undefined;
 }
 
-const ROBLOX_DEFAULT_SCOPES = ["openid", "profile"];
-
 export const roblox = (options: RobloxOptions) => {
 	const tokenEndpoint = "https://apis.roblox.com/oauth/v1/token";
 	return {
 		id: "roblox",
 		name: "Roblox",
-		callbackPath: "/callback/roblox",
-		async createAuthorizationURL({
-			state,
-			scopes,
-			redirectURI,
-			additionalParams,
-		}) {
-			const requestedScopes = resolveRequestedScopes(
-				options,
-				ROBLOX_DEFAULT_SCOPES,
-				scopes,
-			);
+		accountSubject: ({ profile }) => profile.sub,
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+			const _scopes = options.disableDefaultScope ? [] : ["openid", "profile"];
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "roblox",
 				options,
 				authorizationEndpoint: "https://apis.roblox.com/oauth/v1/authorize",
-				scopes: requestedScopes,
+				scopes: _scopes,
 				state,
 				redirectURI,
 				prompt: options.prompt || "select_account consent",
@@ -107,14 +98,14 @@ export const roblox = (options: RobloxOptions) => {
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
-			// Roblox does not provide email or email_verified claim.
-			// We default to false for security consistency.
 			return {
 				user: {
-					id: profile.sub,
 					name: profile.nickname || profile.preferred_username || "",
 					image: profile.picture,
-					email: profile.preferred_username || null, // Roblox does not provide email
+					email: createPlaceholderEmail({
+						identifier: profile.sub,
+						namespace: "roblox",
+					}),
 					emailVerified: false,
 					...userMap,
 				},
@@ -124,5 +115,5 @@ export const roblox = (options: RobloxOptions) => {
 			};
 		},
 		options,
-	} satisfies UpstreamProvider<RobloxProfile>;
+	} satisfies OAuthProvider<RobloxProfile>;
 };

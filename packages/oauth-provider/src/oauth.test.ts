@@ -76,10 +76,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -96,10 +92,6 @@ describe("oauth - init", () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						disableJwtPlugin: true,
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -114,10 +106,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -133,10 +121,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -157,10 +141,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -181,10 +161,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -203,10 +179,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -225,10 +197,6 @@ describe("oauth - init", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
 					}),
 				],
 			}),
@@ -253,10 +221,6 @@ describe("oauth", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 			}),
 		],
 	});
@@ -303,6 +267,8 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -340,6 +306,9 @@ describe("oauth", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -750,6 +719,7 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -764,6 +734,7 @@ describe("oauth", async () => {
 					config: [
 						{
 							scopes: ["openid", "profile", "email"],
+							accountSubject: ({ profile }) => profile.sub ?? "",
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -845,6 +816,7 @@ describe("oauth", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 				skip_consent: true,
 			},
 		});
@@ -859,6 +831,7 @@ describe("oauth", async () => {
 					config: [
 						{
 							scopes: ["openid", "profile", "email"],
+							accountSubject: ({ profile }) => profile.sub ?? "",
 							providerId,
 							redirectURI: redirectUri,
 							authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -1054,10 +1027,6 @@ describe("oauth - prompt", async () => {
 						return isUserRegistered ? false : "/setup";
 					},
 				},
-				silenceWarnings: {
-					oauthAuthServerConfig: true,
-					openidConfig: true,
-				},
 				scopes,
 				selectAccount: {
 					page: "/select-account",
@@ -1158,6 +1127,8 @@ describe("oauth - prompt", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 			},
 		});
 		expect(response?.client_id).toBeDefined();
@@ -1205,6 +1176,9 @@ describe("oauth - prompt", async () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -1394,6 +1368,7 @@ describe("oauth - prompt", async () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
 			},
 		});
 		if (!tempClient?.client_id || !tempClient.client_secret) {
@@ -1410,6 +1385,7 @@ describe("oauth - prompt", async () => {
 						config: [
 							{
 								scopes: ["openid", "profile", "email"],
+								accountSubject: ({ profile }) => profile.sub ?? "",
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
@@ -1769,22 +1745,28 @@ describe("oauth - prompt", async () => {
 			},
 		});
 		expect(authToken).toBeDefined();
+		if (!authToken) throw new Error("missing session bearer token");
 
 		// Retrieve the access token via the RP and verify narrowed scopes
+		const requestHeaders = new Headers({
+			authorization: `Bearer ${authToken}`,
+		});
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: requestHeaders },
+		});
+		const accountId = accounts.data?.find(
+			(account) => account.providerId === providerId,
+		)?.id;
+		expect(accountId).toBeDefined();
+		if (!accountId) throw new Error("missing provider account");
 		const tokens = await client.getAccessToken(
-			{ providerId },
-			{
-				auth: {
-					type: "Bearer",
-					token: authToken,
-				},
-			},
+			{ accountId },
+			{ headers: requestHeaders },
 		);
 		expect(tokens.data?.accessToken).toBeDefined();
 
-		// grantedScopes is normalized (deduped + sorted) per RFC 6749 §3.3.
-		expect(tokens.data?.grantedScopes).toEqual(["email", "openid", "profile"]);
-		expect(tokens.data?.grantedScopes).not.toContain("read:posts");
+		expect(tokens.data?.scopes).toEqual(["openid", "profile", "email"]);
+		expect(tokens.data?.scopes).not.toContain("read:posts");
 	});
 
 	it("select_account - should sign in requesting account selection", async ({
@@ -2897,6 +2879,9 @@ describe("oauth - config", () => {
 							{
 								scopes: ["openid", "profile", "email"],
 								...config,
+								accountSubject:
+									config?.accountSubject ??
+									(({ profile }) => profile.sub ?? ""),
 								providerId,
 								redirectURI: redirectUri,
 								authorizationUrl: config?.discoveryUrl
@@ -2938,10 +2923,10 @@ describe("oauth - config", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 					}),
 				],
 			});
@@ -2972,7 +2957,10 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 		expect(createdClient?.client_id).toBeDefined();
@@ -3025,10 +3013,6 @@ describe("oauth - config", () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					storeClientSecret,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				jwt(),
 			],
@@ -3056,6 +3040,8 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3132,10 +3118,6 @@ describe("oauth - config", () => {
 					consentPage: "/consent",
 					storeClientSecret,
 					disableJwtPlugin: true,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -3162,6 +3144,8 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3248,10 +3232,6 @@ describe("oauth - config", () => {
 					disableJwtPlugin: disableJwtPlugin,
 					resources: resource ? [validResource] : undefined,
 					enforcePerClientResources: false,
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 				...(disableJwtPlugin ? [] : [jwt()]),
 			],
@@ -3278,7 +3258,10 @@ describe("oauth - config", () => {
 					"refresh_token",
 				],
 				redirect_uris: [redirectUri],
-				token_endpoint_auth_method: publicClient ? "none" : undefined,
+				application_type: "native",
+				token_endpoint_auth_method: publicClient
+					? "none"
+					: "client_secret_post",
 				skip_consent: true,
 			},
 		});
@@ -3343,16 +3326,24 @@ describe("oauth - config", () => {
 			},
 		});
 		expect(callbackURL).toContain("/success");
+		expect(authToken).toBeDefined();
+		if (!authToken) throw new Error("missing session bearer token");
 
 		// Get and check tokens
+		const requestHeaders = new Headers({
+			authorization: `Bearer ${authToken}`,
+		});
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: requestHeaders },
+		});
+		const accountId = accounts.data?.find(
+			(account) => account.providerId === "test",
+		)?.id;
+		expect(accountId).toBeDefined();
+		if (!accountId) throw new Error("missing provider account");
 		const tokens = await client.getAccessToken(
-			{ providerId: "test", userId: user.id },
-			{
-				auth: {
-					type: "Bearer",
-					token: authToken,
-				},
-			},
+			{ accountId, userId: user.id },
+			{ headers: requestHeaders },
 		);
 
 		// Check for access tokens
@@ -3440,10 +3431,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 				}),
 			],
 		});
@@ -3502,10 +3489,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					rateLimit: {
 						token: { window: 1, max: 4 },
 						introspect: { window: 1, max: 50 },
@@ -3545,10 +3528,6 @@ describe("oauth - rate limiting", () => {
 				oauthProvider({
 					loginPage: "/login",
 					consentPage: "/consent",
-					silenceWarnings: {
-						oauthAuthServerConfig: true,
-						openidConfig: true,
-					},
 					rateLimit: {
 						token: false,
 						introspect: false,
@@ -3590,10 +3569,10 @@ describe("oauth - rate limiting", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						rateLimit: {
 							token: { window: 60, max: 3 },
 						},
@@ -3612,6 +3591,9 @@ describe("oauth - rate limiting", () => {
 					"refresh_token",
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 
@@ -3655,10 +3637,10 @@ describe("oauth - rate limiting", () => {
 					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
-						silenceWarnings: {
-							oauthAuthServerConfig: true,
-							openidConfig: true,
-						},
+						scopes: ["m2m:read"],
+						clientPrivileges: ({ action }) =>
+							action === "create" ||
+							action === "configure-client-credentials-scopes",
 						rateLimit: {
 							token: false, // Disable rate limiting for token endpoint
 						},
@@ -3677,6 +3659,9 @@ describe("oauth - rate limiting", () => {
 					"refresh_token",
 				],
 				redirect_uris: ["http://localhost:5000/callback"],
+				application_type: "native",
+				token_endpoint_auth_method: "client_secret_post",
+				client_credentials_scopes: ["m2m:read"],
 			},
 		});
 

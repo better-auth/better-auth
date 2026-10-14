@@ -402,6 +402,21 @@ export async function fetchOIDCEndpointResponse(
 	return response;
 }
 
+/** Enforces the OpenID Connect authorized-party rules for ID Tokens. */
+export function assertOIDCAuthorizedParty(
+	payload: { aud?: string | readonly string[] | undefined; azp?: unknown },
+	clientId: string,
+): void {
+	const hasMultipleAudiences =
+		Array.isArray(payload.aud) && payload.aud.length > 1;
+	if (
+		(hasMultipleAudiences && payload.azp === undefined) ||
+		(payload.azp !== undefined && payload.azp !== clientId)
+	) {
+		throw new Error("OIDC ID token authorized party does not match the client");
+	}
+}
+
 /**
  * Validate an OIDC ID token using the same endpoint fetch policy as the rest of
  * the SSO OIDC flow.
@@ -419,10 +434,14 @@ export async function validateOIDCIdToken(
 		[customFetch]: (url, init) =>
 			fetchOIDCEndpointResponse("jwksEndpoint", url, init, isTrustedOrigin),
 	});
-	return jwtVerify(token, jwks, {
+	const verified = await jwtVerify(token, jwks, {
 		audience: options.audience,
 		issuer: options.issuer,
 	});
+	if (typeof options.audience === "string") {
+		assertOIDCAuthorizedParty(verified.payload, options.audience);
+	}
+	return verified;
 }
 
 /**
@@ -561,14 +580,7 @@ export function validateDiscoveryDocument(
 		);
 	}
 
-	const discoveredIssuer = doc.issuer.endsWith("/")
-		? doc.issuer.slice(0, -1)
-		: doc.issuer;
-	const expectedIssuer = configuredIssuer.endsWith("/")
-		? configuredIssuer.slice(0, -1)
-		: configuredIssuer;
-
-	if (discoveredIssuer !== expectedIssuer) {
+	if (doc.issuer !== configuredIssuer) {
 		throw new DiscoveryError(
 			"issuer_mismatch",
 			`Discovered issuer "${doc.issuer}" does not match configured issuer "${configuredIssuer}"`,

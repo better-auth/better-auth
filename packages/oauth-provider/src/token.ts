@@ -1,6 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
+import {
+	generateRandomString,
+	symmetricDecrypt,
+	symmetricEncrypt,
+} from "better-auth/crypto";
 import {
 	createDpopReplayStore,
 	generateCodeChallenge,
@@ -12,15 +16,22 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import {
+	LEVEL_0_ACR,
+	stripReservedIdTokenClaims,
+} from "./authentication-context";
 import { resolveAccessTokenClaims } from "./claims";
+import { getRequestedUserInfoClaims } from "./claims-request";
 import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import {
 	collectExtensionIdTokenClaims,
 	getExtensionGrantHandler,
 	getSupportedGrantTypes,
 } from "./extensions";
+import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
+import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import type {
 	Confirmation,
 	OAuthAuthenticatedClient,
@@ -38,7 +49,7 @@ import type {
 } from "./types";
 import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
-import { pickClaims, userNormalClaims } from "./userinfo";
+import { pickClaims } from "./userinfo";
 import {
 	clientAllowsGrant,
 	decryptStoredClientSecret,
@@ -57,6 +68,15 @@ import {
 	toResourceList,
 	validateClientCredentials,
 } from "./utils";
+
+// Seed the ID token with the standard UserInfo claim names set to `undefined`,
+// so a `customIdTokenClaims` or extension contributor cannot inject a
+// scope-gated identity claim into the ID token. Derived from the one claim
+// registry so the guard tracks the standard claims with no separate list.
+const ID_TOKEN_SCOPE_CLAIM_GUARDS: Record<string, undefined> =
+	Object.fromEntries(
+		STANDARD_CLAIM_NAMES.map((name) => [name, undefined] as const),
+	);
 
 /**
  * Token presentation scheme implied by a confirmation: a DPoP key thumbprint
@@ -145,7 +165,7 @@ export function getOAuthProviderApi(
 			if (!clientId) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "Missing required client_id",
-					error: "invalid_grant",
+					error: "invalid_request",
 				});
 			}
 			if (
@@ -155,7 +175,7 @@ export function getOAuthProviderApi(
 			) {
 				throw new APIError("BAD_REQUEST", {
 					error_description: "Missing required client credentials",
-					error: "invalid_grant",
+					error: "invalid_client",
 				});
 			}
 			const client = await validateClientCredentials(
@@ -316,22 +336,19 @@ async function createIdToken(
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
-	const userClaims = userNormalClaims(user, scopes);
 	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
 	const authTimeSec =
 		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
-	// TODO: this should be validated against the login process
-	// - bronze : password only
-	// - silver : mfa
-	const acr = "urn:mace:incommon:iap:bronze";
 
-	const customClaims = opts.customIdTokenClaims
-		? await opts.customIdTokenClaims({
-				user,
-				scopes,
-				metadata: parseClientMetadata(client.metadata),
-			})
-		: {};
+	const customClaims = stripReservedIdTokenClaims(
+		opts.customIdTokenClaims
+			? await opts.customIdTokenClaims({
+					user,
+					scopes,
+					metadata: parseClientMetadata(client.metadata),
+				})
+			: undefined,
+	);
 
 	const jwtPluginOptions = opts.disableJwtPlugin
 		? undefined
@@ -352,12 +369,14 @@ async function createIdToken(
 		: undefined;
 
 	const emitSid = Boolean(
-		client.enableEndSession || client.backchannelLogoutUri,
+		client.enableEndSession ||
+			client.backchannelLogoutUri ||
+			client.frontchannelLogoutUri,
 	);
 	const payload: JWTPayload = {
-		...userClaims,
+		...ID_TOKEN_SCOPE_CLAIM_GUARDS,
 		auth_time: authTimeSec,
-		acr,
+		acr: LEVEL_0_ACR,
 		...customClaims,
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -368,11 +387,11 @@ async function createIdToken(
 		exp,
 		sid: emitSid ? sessionId : undefined,
 	};
-	// Extension and grant claims are additive: they only fill keys the provider
-	// does not already own, so a contributor cannot replace an identity claim
-	// (email/name/...), the authentication context, or an AS-owned claim.
-	// First-party `customIdTokenClaims` already overrode auth_time/acr above.
-	Object.assign(payload, pickClaims(extraClaims, payload));
+	// Extension and grant claims are additive: reserved OIDC/JWT names are
+	// stripped, and the remaining claims only fill keys the provider does not
+	// already own.
+	const additiveClaims = stripReservedIdTokenClaims(extraClaims);
+	Object.assign(payload, pickClaims(additiveClaims, payload));
 
 	// Public clients without a client secret cannot receive an idToken as it can't be verified
 	// Confidential clients would still receive an idToken signed by the clientSecret
@@ -466,8 +485,10 @@ async function createOpaqueAccessToken(
 	payload: JWTPayload,
 	resources?: string[],
 	referenceId?: string,
+	authorizationCodeId?: string,
 	refreshId?: string,
 	confirmation?: Confirmation,
+	requestedUserInfoClaims?: string[],
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -482,9 +503,13 @@ async function createOpaqueAccessToken(
 			sessionId: payload?.sid,
 			userId: user?.id,
 			referenceId,
+			authorizationCodeId,
 			resources,
 			refreshId,
 			confirmation,
+			requestedUserInfoClaims: requestedUserInfoClaims?.length
+				? requestedUserInfoClaims
+				: undefined,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
@@ -543,11 +568,36 @@ export async function invalidateRefreshFamily(
 	});
 }
 
+async function revokeTokensIssuedForAuthorizationCode(
+	ctx: GenericEndpointContext,
+	authorizationCodeId: string,
+) {
+	const deleteIssuedTokens = async (
+		model: "oauthAccessToken" | "oauthRefreshToken",
+	) => {
+		try {
+			await ctx.context.adapter.deleteMany({
+				model,
+				where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
+			});
+		} catch (error) {
+			ctx.context.logger.error(
+				"authorization code replay cleanup failed",
+				error,
+			);
+		}
+	};
+
+	await deleteIssuedTokens("oauthAccessToken");
+	await deleteIssuedTokens("oauthRefreshToken");
+}
+
 async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	user: User,
 	referenceId: string | undefined,
+	authorizationCodeId: string | undefined,
 	client: SchemaClient<Scope[]>,
 	scopes: string[],
 	payload: JWTPayload,
@@ -555,6 +605,7 @@ async function createRefreshToken(
 	authTime?: Date,
 	resources?: string[],
 	confirmation?: Confirmation,
+	requestedUserInfoClaims?: string[],
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -573,8 +624,12 @@ async function createRefreshToken(
 		sessionId,
 		userId: user.id,
 		referenceId,
+		authorizationCodeId,
 		authTime,
 		confirmation,
+		requestedUserInfoClaims: requestedUserInfoClaims?.length
+			? requestedUserInfoClaims
+			: undefined,
 		scopes,
 		resources,
 		createdAt: new Date(iat * 1000),
@@ -599,9 +654,8 @@ async function createRefreshToken(
 	// rotations against the same parent both observe `revoked === null` on
 	// the read in `handleRefreshTokenGrant`, but only one wins this update.
 	// The loser fails closed with `invalid_grant`; the parent row is now
-	// revoked, so any subsequent replay of the original refresh token
-	// triggers the existing family-invalidation guard in
-	// `handleRefreshTokenGrant`.
+	// revoked, so any subsequent reuse of the original refresh token is handled
+	// by the replay/invalid-grant path in `handleRefreshTokenGrant`.
 	//
 	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes
 	// immediate family invalidation on detected concurrent redemption.
@@ -611,6 +665,17 @@ async function createRefreshToken(
 	// with the winner's still-in-flight inserts. Tracked for a follow-up
 	// minor once the adapter contract exposes opt-in transactional
 	// rotation.
+	const rotatedAt = new Date(iat * 1000);
+	const rotationUpdate: Record<string, unknown> = {
+		revoked: rotatedAt,
+		rotatedAt,
+	};
+	const reuseInterval = opts.refreshTokenReuseInterval ?? 0;
+	if (reuseInterval > 0) {
+		rotationUpdate.rotationReplayExpiresAt = new Date(
+			(iat + reuseInterval) * 1000,
+		);
+	}
 	const won = await ctx.context.adapter.incrementOne<{ id: string }>({
 		model: "oauthRefreshToken",
 		where: [
@@ -618,9 +683,7 @@ async function createRefreshToken(
 			{ field: "revoked", operator: "eq", value: null },
 		],
 		increment: {},
-		set: {
-			revoked: new Date(iat * 1000),
-		},
+		set: rotationUpdate,
 	});
 
 	if (!won) {
@@ -645,6 +708,7 @@ async function createRefreshToken(
 
 type CreateUserTokensParams = OAuthTokenIssueParams & {
 	grantType: GrantType;
+	authorizationCodeId?: string;
 };
 
 interface ResourceGrantIssuance {
@@ -770,6 +834,265 @@ async function resolveDpopTokenBinding(
 	}
 }
 
+type RefreshTokenRotationReplayRequest = {
+	effectiveScopes: string[];
+	requestedResources?: string[];
+	confirmation?: Confirmation;
+};
+
+type RefreshTokenRotationReplay = {
+	request: RefreshTokenRotationReplayRequest;
+	response: OAuthTokenResponse;
+};
+
+function normalizeReplayValues(values: string[] | undefined) {
+	return values ? [...new Set(values)].sort() : undefined;
+}
+
+function sameReplayValues(
+	left: string[] | undefined,
+	right: string[] | undefined,
+) {
+	const normalizedLeft = normalizeReplayValues(left);
+	const normalizedRight = normalizeReplayValues(right);
+	if (normalizedLeft === undefined || normalizedRight === undefined) {
+		return normalizedLeft === normalizedRight;
+	}
+	if (normalizedLeft.length !== normalizedRight.length) {
+		return false;
+	}
+	return normalizedLeft.every(
+		(value, index) => value === normalizedRight[index],
+	);
+}
+
+function confirmationReplayKey(confirmation: Confirmation | undefined) {
+	if (!confirmation) {
+		return undefined;
+	}
+	if ("jkt" in confirmation) {
+		return `jkt:${confirmation.jkt}`;
+	}
+	return `x5t#S256:${confirmation["x5t#S256"]}`;
+}
+
+function sameConfirmation(
+	left: Confirmation | undefined,
+	right: Confirmation | undefined,
+) {
+	return confirmationReplayKey(left) === confirmationReplayKey(right);
+}
+
+function isConfirmation(value: unknown): value is Confirmation {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const confirmation = value as Record<string, unknown>;
+	return (
+		(typeof confirmation.jkt === "string" &&
+			confirmation["x5t#S256"] === undefined) ||
+		(typeof confirmation["x5t#S256"] === "string" &&
+			confirmation.jkt === undefined)
+	);
+}
+
+function isTokenType(value: unknown): value is TokenType {
+	return value === "Bearer" || value === "DPoP";
+}
+
+function isOAuthTokenResponse(value: unknown): value is OAuthTokenResponse {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const response = value as Record<string, unknown>;
+	return (
+		typeof response.access_token === "string" &&
+		typeof response.expires_in === "number" &&
+		typeof response.expires_at === "number" &&
+		isTokenType(response.token_type) &&
+		typeof response.scope === "string" &&
+		(response.refresh_token === undefined ||
+			typeof response.refresh_token === "string") &&
+		(response.id_token === undefined || typeof response.id_token === "string")
+	);
+}
+
+function isRefreshTokenRotationReplay(
+	value: unknown,
+): value is RefreshTokenRotationReplay {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+	const replay = value as Record<string, unknown>;
+	const request = replay.request as Record<string, unknown> | undefined;
+	return (
+		!!request &&
+		Array.isArray(request.effectiveScopes) &&
+		request.effectiveScopes.every((scope) => typeof scope === "string") &&
+		(request.requestedResources === undefined ||
+			(Array.isArray(request.requestedResources) &&
+				request.requestedResources.every(
+					(resource) => typeof resource === "string",
+				))) &&
+		(request.confirmation === undefined ||
+			isConfirmation(request.confirmation)) &&
+		isOAuthTokenResponse(replay.response)
+	);
+}
+
+function buildRefreshTokenRotationReplayRequest(params: {
+	effectiveScopes: string[];
+	requestedResources?: string[];
+	confirmation?: Confirmation;
+}): RefreshTokenRotationReplayRequest {
+	const requestedResources = normalizeReplayValues(params.requestedResources);
+	return {
+		effectiveScopes: normalizeReplayValues(params.effectiveScopes) ?? [],
+		...(requestedResources ? { requestedResources } : {}),
+		...(params.confirmation ? { confirmation: params.confirmation } : {}),
+	};
+}
+
+function sameRefreshTokenRotationReplayRequest(
+	left: RefreshTokenRotationReplayRequest,
+	right: RefreshTokenRotationReplayRequest,
+) {
+	return (
+		sameReplayValues(left.effectiveScopes, right.effectiveScopes) &&
+		sameReplayValues(left.requestedResources, right.requestedResources) &&
+		sameConfirmation(left.confirmation, right.confirmation)
+	);
+}
+
+async function encryptRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	replay: RefreshTokenRotationReplay,
+) {
+	return symmetricEncrypt({
+		key: ctx.context.secretConfig,
+		data: JSON.stringify(replay),
+	});
+}
+
+async function decryptRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	value: string,
+) {
+	const decrypted = await symmetricDecrypt({
+		key: ctx.context.secretConfig,
+		data: value,
+	});
+	const parsed: unknown = JSON.parse(decrypted);
+	if (!isRefreshTokenRotationReplay(parsed)) {
+		return undefined;
+	}
+	return parsed;
+}
+
+function isWithinRefreshTokenReuseInterval(
+	refreshToken: OAuthRefreshToken<Scope[]>,
+) {
+	return (
+		!!refreshToken.rotatedAt &&
+		!!refreshToken.rotationReplayExpiresAt &&
+		refreshToken.rotationReplayExpiresAt >= new Date()
+	);
+}
+
+async function storeRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
+	request: RefreshTokenRotationReplayRequest,
+	response: OAuthTokenResponse,
+) {
+	if ((opts.refreshTokenReuseInterval ?? 0) <= 0) {
+		return;
+	}
+	await ctx.context.adapter.update({
+		model: "oauthRefreshToken",
+		where: [{ field: "id", value: refreshToken.id }],
+		update: {
+			rotationReplayResponse: await encryptRefreshTokenRotationReplay(ctx, {
+				request,
+				response,
+			}),
+		},
+	});
+}
+
+async function getRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	refreshToken: OAuthRefreshToken<Scope[]>,
+	request: RefreshTokenRotationReplayRequest,
+) {
+	if (!isWithinRefreshTokenReuseInterval(refreshToken)) {
+		return undefined;
+	}
+	if (!refreshToken.rotationReplayResponse) {
+		return undefined;
+	}
+
+	try {
+		const replay = await decryptRefreshTokenRotationReplay(
+			ctx,
+			refreshToken.rotationReplayResponse,
+		);
+		if (
+			!replay ||
+			!sameRefreshTokenRotationReplayRequest(replay.request, request)
+		) {
+			return undefined;
+		}
+		return replay.response;
+	} catch (error) {
+		ctx.context.logger.error("refresh token rotation replay failed", error);
+		return undefined;
+	}
+}
+
+async function resolveRefreshTokenRotationReplayRequest(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
+		scopes: string[];
+		resources?: string[];
+	},
+) {
+	const iat = Math.floor(Date.now() / 1000);
+	const grantIssuance = await resolveResourceGrantIssuance(ctx, opts, {
+		clientId: params.client.clientId,
+		requestedScopes: params.scopes,
+		resources: params.resources,
+		refreshToken: params.refreshToken,
+		iat,
+		scopeExpiresAtSeconds: iat + (opts.accessTokenExpiresIn ?? 3600),
+	});
+	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
+		client: params.client,
+		grantIssuance,
+		refreshToken: params.refreshToken,
+	});
+	return buildRefreshTokenRotationReplayRequest({
+		effectiveScopes: grantIssuance.effectiveScopes,
+		requestedResources: params.resources,
+		confirmation,
+	});
+}
+
+function replayRefreshTokenRotationResponse(
+	ctx: GenericEndpointContext,
+	response: OAuthTokenResponse,
+) {
+	const now = Math.floor(Date.now() / 1000);
+	return ctx.json({
+		...response,
+		expires_in: Math.max(0, response.expires_at - now),
+	});
+}
+
 async function createUserTokens(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -874,6 +1197,10 @@ async function createUserTokens(
 			verificationValue,
 			refreshToken: existingRefreshToken,
 		}));
+	const requestedUserInfoClaims =
+		params.requestedUserInfoClaims ??
+		existingRefreshToken?.requestedUserInfoClaims ??
+		[];
 
 	// Refresh token may need to be created beforehand for id field
 	const earlyRefreshToken =
@@ -883,6 +1210,7 @@ async function createUserTokens(
 					opts,
 					user,
 					referenceId,
+					params.authorizationCodeId,
 					client,
 					effectiveScopes,
 					{
@@ -894,6 +1222,7 @@ async function createUserTokens(
 					authTime,
 					refreshResources,
 					confirmation,
+					requestedUserInfoClaims,
 				)
 			: undefined;
 
@@ -950,8 +1279,10 @@ async function createUserTokens(
 					},
 					params?.resources,
 					referenceId,
+					params.authorizationCodeId,
 					earlyRefreshToken?.id,
 					confirmation,
+					requestedUserInfoClaims,
 				),
 		earlyRefreshToken
 			? earlyRefreshToken
@@ -961,6 +1292,7 @@ async function createUserTokens(
 						opts,
 						user,
 						referenceId,
+						params.authorizationCodeId,
 						client,
 						effectiveScopes,
 						{
@@ -972,6 +1304,7 @@ async function createUserTokens(
 						authTime,
 						refreshResources,
 						confirmation,
+						requestedUserInfoClaims,
 					)
 				: undefined,
 	]);
@@ -992,7 +1325,7 @@ async function createUserTokens(
 			)
 		: undefined;
 
-	return ctx.json({
+	const responseBody: OAuthTokenResponse = {
 		...customFields,
 		...(params.tokenResponse ?? {}),
 		access_token: accessToken,
@@ -1002,7 +1335,28 @@ async function createUserTokens(
 		refresh_token: refreshToken?.token,
 		scope: effectiveScopes.join(" "),
 		id_token: idToken,
-	});
+	};
+	if (existingRefreshToken?.id && refreshToken?.id) {
+		try {
+			await storeRefreshTokenRotationReplay(
+				ctx,
+				opts,
+				existingRefreshToken,
+				buildRefreshTokenRotationReplayRequest({
+					effectiveScopes,
+					requestedResources: params.resources,
+					confirmation,
+				}),
+				responseBody,
+			);
+		} catch (error) {
+			ctx.context.logger.error(
+				"failed to store refresh token rotation replay",
+				error,
+			);
+		}
+	}
+	return ctx.json(responseBody);
 }
 
 /** Checks verification value */
@@ -1014,16 +1368,22 @@ async function checkVerificationValue(
 	redirect_uri?: string,
 	resource?: string[],
 ) {
+	const authorizationCodeId = await storeToken(
+		opts.storeTokens,
+		code,
+		"authorization_code",
+	);
 	// Atomic single-use redemption per RFC 6749 §4.1.2. The first caller
 	// receives the row and mints tokens; concurrent racers receive `null`
 	// and fall through to the `invalid_grant` error path (RFC 6749 §5.2).
 	const verification =
 		await ctx.context.internalAdapter.consumeVerificationValue(
-			await storeToken(opts.storeTokens, code, "authorization_code"),
+			authorizationCodeId,
 		);
 
 	if (!verification) {
-		throw new APIError("UNAUTHORIZED", {
+		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid code",
 			error: "invalid_grant",
 		});
@@ -1033,14 +1393,14 @@ async function checkVerificationValue(
 	try {
 		rawValue = JSON.parse(verification.value);
 	} catch {
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("BAD_REQUEST", {
 			error_description: "malformed verification value",
 			error: "invalid_grant",
 		});
 	}
 	const parsed = verificationValueSchema.safeParse(rawValue);
 	if (!parsed.success) {
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("BAD_REQUEST", {
 			error_description: "malformed verification value",
 			error: "invalid_grant",
 		});
@@ -1049,18 +1409,36 @@ async function checkVerificationValue(
 	const verificationValue = parsed.data as VerificationValue;
 
 	if (verificationValue.query.client_id !== client_id) {
-		throw new APIError("UNAUTHORIZED", {
+		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid client_id",
-			error: "invalid_client",
+			error: "invalid_grant",
 		});
 	}
-	if (
-		verificationValue.query?.redirect_uri &&
-		verificationValue.query?.redirect_uri !== redirect_uri
-	) {
+	// RFC 6749 §4.1.3: redirect_uri is bound at the token endpoint only when the
+	// authorization request carried one. Enforce an exact correspondence in both
+	// directions: a code minted with a redirect_uri must be redeemed with the
+	// identical value, and a headless code (first-party-apps / device-style)
+	// minted without one must be redeemed without one.
+	const boundRedirectUri = verificationValue.query.redirect_uri;
+	if (boundRedirectUri) {
+		if (!redirect_uri) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "redirect_uri is required",
+				error: "invalid_request",
+			});
+		}
+		if (boundRedirectUri !== redirect_uri) {
+			throw new APIError("BAD_REQUEST", {
+				// RFC 6749 §5.2: a redirect_uri that does not match the one bound to
+				// the code is an invalid grant, not a malformed request.
+				error_description: "redirect_uri mismatch",
+				error: "invalid_grant",
+			});
+		}
+	} else if (redirect_uri) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "redirect_uri mismatch",
-			error: "invalid_request",
+			error: "invalid_grant",
 		});
 	}
 	// Prefer the new top-level field, but keep compatibility with legacy values in query.resource.
@@ -1086,6 +1464,7 @@ async function checkVerificationValue(
 		verificationValue,
 		effectiveResources,
 		authorizedResources: storedResources,
+		authorizationCodeId,
 	};
 }
 
@@ -1133,12 +1512,9 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_request",
 		});
 	}
-	if (!redirect_uri) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "redirect_uri is required",
-			error: "invalid_request",
-		});
-	}
+	// redirect_uri is validated conditionally against the stored code in
+	// checkVerificationValue (RFC 6749 §4.1.3): required and matched only when the
+	// authorization request included one, so headless codes can omit it.
 
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
@@ -1151,15 +1527,19 @@ async function handleAuthorizationCodeGrant(
 	}
 
 	/** Get and check Verification Value */
-	const { verificationValue, effectiveResources, authorizedResources } =
-		await checkVerificationValue(
-			ctx,
-			opts,
-			code,
-			client_id,
-			redirect_uri,
-			resources,
-		);
+	const {
+		verificationValue,
+		effectiveResources,
+		authorizedResources,
+		authorizationCodeId,
+	} = await checkVerificationValue(
+		ctx,
+		opts,
+		code,
+		client_id,
+		redirect_uri,
+		resources,
+	);
 	const scopes = verificationValue.query.scope?.split(" ");
 	if (!scopes) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -1184,8 +1564,11 @@ async function handleAuthorizationCodeGrant(
 	const requestedScopes =
 		(verificationValue.query?.scope as string)?.split(" ") || [];
 
-	// Check if PKCE is required for this client
-	const pkceRequired = isPKCERequired(client, requestedScopes);
+	// Check if PKCE is required for this client and authorization request
+	const pkceRequired = isPKCERequired(client, {
+		scopes: requestedScopes,
+		nonce: verificationValue.query?.nonce,
+	});
 
 	// Validate credentials based on requirements
 	if (pkceRequired) {
@@ -1284,6 +1667,10 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.authTime != null
 			? normalizeTimestampValue(verificationValue.authTime)
 			: resolveSessionAuthTime(session);
+	const requestedUserInfoClaims = getRequestedUserInfoClaims(
+		verificationValue.query.claims,
+		getSupportedClaims(opts),
+	);
 
 	return createUserTokens(ctx, opts, {
 		client,
@@ -1295,6 +1682,8 @@ async function handleAuthorizationCodeGrant(
 		nonce: verificationValue.query?.nonce,
 		authTime,
 		verificationValue,
+		authorizationCodeId,
+		requestedUserInfoClaims,
 		resources: effectiveResources,
 		originalResources: authorizedResources,
 	});
@@ -1328,13 +1717,7 @@ async function handleClientCredentialsGrant(
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing required client_id",
-			error: "invalid_grant",
-		});
-	}
-	if (!client_secret && !preVerified) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "Missing a required client_secret",
-			error: "invalid_grant",
+			error: "invalid_request",
 		});
 	}
 
@@ -1349,19 +1732,27 @@ async function handleClientCredentialsGrant(
 		"client_credentials",
 		authMethod,
 	);
+	if (client.tokenEndpointAuthMethod === "none") {
+		throw new APIError("BAD_REQUEST", {
+			error_description:
+				"public clients cannot use the client_credentials grant",
+			error: "unauthorized_client",
+		});
+	}
+	const clientCredentialsScopes = client.clientCredentialsScopes;
+	if (!clientCredentialsScopes?.length) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "client has no authorized client_credentials scopes",
+			error: "unauthorized_client",
+		});
+	}
 
 	// OIDC scopes should not be requestable (code authorization grant should be used)
 	let requestedScopes = scope?.split(" ");
 	if (requestedScopes) {
-		const validScopes = new Set(client.scopes ?? opts.scopes);
-		const oidcScopes = new Set([
-			"openid",
-			"profile",
-			"email",
-			"offline_access",
-		]);
+		const validScopes = new Set(clientCredentialsScopes);
 		const invalidScopes = requestedScopes.filter((scope) => {
-			return !validScopes?.has(scope) || oidcScopes.has(scope);
+			return !validScopes.has(scope) || isUserDelegatedScope(scope);
 		});
 		if (invalidScopes.length) {
 			throw new APIError("BAD_REQUEST", {
@@ -1370,13 +1761,10 @@ async function handleClientCredentialsGrant(
 			});
 		}
 	}
-	// Set default scopes to all those available for that client or all provided scopes.
+	// The server-owned client_credentials ceiling is also the omitted-scope
+	// default. User-delegated client scopes never authorize machine access.
 	if (!requestedScopes) {
-		requestedScopes =
-			client.scopes ??
-			opts.clientCredentialGrantDefaultScopes ??
-			opts.scopes ??
-			[];
+		requestedScopes = [...clientCredentialsScopes];
 	}
 
 	return createUserTokens(ctx, opts, {
@@ -1423,7 +1811,7 @@ async function handleRefreshTokenGrant(
 	if (!client_id) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "Missing required client_id",
-			error: "invalid_grant",
+			error: "invalid_request",
 		});
 	}
 
@@ -1431,7 +1819,7 @@ async function handleRefreshTokenGrant(
 		throw new APIError("BAD_REQUEST", {
 			error_description:
 				"Missing a required refresh_token for refresh_token grant",
-			error: "invalid_grant",
+			error: "invalid_request",
 		});
 	}
 	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
@@ -1461,8 +1849,8 @@ async function handleRefreshTokenGrant(
 	}
 	if (refreshToken.clientId !== client_id) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid client_id",
-			error: "invalid_client",
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
 		});
 	}
 	if (refreshToken.expiresAt < new Date()) {
@@ -1471,15 +1859,6 @@ async function handleRefreshTokenGrant(
 			error: "invalid_grant",
 		});
 	}
-	// Replay revoke (RFC 9700 §4.14: tear down the family)
-	if (refreshToken.revoked) {
-		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid refresh token",
-			error: "invalid_grant",
-		});
-	}
-
 	// Check body resources against refresh token resources
 	if (
 		resources &&
@@ -1518,6 +1897,38 @@ async function handleRefreshTokenGrant(
 		authMethod,
 	);
 
+	if (refreshToken.revoked) {
+		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
+			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
+				ctx,
+				opts,
+				{
+					client,
+					refreshToken,
+					scopes: requestedScopes ?? scopes,
+					resources: resources ?? refreshToken.resources,
+				},
+			);
+			const replay = await getRefreshTokenRotationReplay(
+				ctx,
+				refreshToken,
+				replayRequest,
+			);
+			if (replay) {
+				return replayRefreshTokenRotationResponse(ctx, replay);
+			}
+			throw new APIError("BAD_REQUEST", {
+				error_description: "invalid refresh token",
+				error: "invalid_grant",
+			});
+		}
+		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
+
 	const user = await ctx.context.internalAdapter.findUserById(
 		refreshToken.userId,
 	);
@@ -1540,9 +1951,11 @@ async function handleRefreshTokenGrant(
 		user,
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
+		authorizationCodeId: refreshToken.authorizationCodeId,
 		sessionId: refreshToken.sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
+		requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
 	});
 }

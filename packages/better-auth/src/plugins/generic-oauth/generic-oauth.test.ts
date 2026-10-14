@@ -1,37 +1,66 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateKeyPair, SignJWT } from "jose";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
 import type {
 	MutableResponse,
 	TokenRequestIncomingMessage,
 } from "oauth2-mock-server";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	assert,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthClient } from "../../client";
 import { getAwaitableValue } from "../../context/helpers";
 import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecodeJWT } from "../../crypto";
+import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { Account } from "../../types";
+import { oauthPopup } from "../oauth-popup";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
 import { keycloak } from "./providers/keycloak";
 import { microsoftEntraId } from "./providers/microsoft-entra-id";
 import { okta } from "./providers/okta";
 import { slack } from "./providers/slack";
+import { yandex } from "./providers/yandex";
 
 describe("oauth2", async () => {
 	const providerId = "test";
 	const clientId = "test-client-id";
 	const clientSecret = "test-client-secret";
 	const server = new OAuth2Server();
+	const mswServer = setupServer();
 	await server.start();
 	const port = Number(server.issuer.url?.split(":")[2]!);
 
+	beforeAll(() => {
+		mswServer.listen({ onUnhandledRequest: "bypass" });
+	});
+
+	afterEach(() => {
+		mswServer.resetHandlers();
+	});
+
 	afterAll(async () => {
+		mswServer.close();
 		await server.stop();
 	});
 
@@ -66,6 +95,14 @@ describe("oauth2", async () => {
 			customFetchImpl,
 		},
 	});
+
+	async function createMicrosoftIdToken(payload: Record<string, unknown>) {
+		return new SignJWT(payload)
+			.setProtectedHeader({ alg: "HS256" })
+			.setIssuedAt()
+			.setExpirationTime("1h")
+			.sign(new TextEncoder().encode("microsoft-test-secret"));
+	}
 
 	beforeAll(async () => {
 		const context = await auth.$context;
@@ -129,6 +166,60 @@ describe("oauth2", async () => {
 
 		return { callbackURL, headers: newHeaders, setCookieHeader };
 	}
+
+	it("should discover end_session_endpoint for provider logout", async () => {
+		const fetchMock = vi.fn(async () => {
+			return new Response(
+				JSON.stringify({
+					issuer: "https://idp.example.com",
+					authorization_endpoint: "https://idp.example.com/authorize",
+					token_endpoint: "https://idp.example.com/token",
+					end_session_endpoint: "https://idp.example.com/logout",
+				}),
+				{
+					headers: {
+						"content-type": "application/json",
+					},
+				},
+			);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+		try {
+			const { auth } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "discovery-logout",
+								discoveryUrl:
+									"https://idp.example.com/.well-known/openid-configuration",
+								clientId: "client-id",
+								clientSecret: "client-secret",
+							},
+						],
+					}),
+				],
+			});
+			const context = await auth.$context;
+			const provider = await getAwaitableValue(context.socialProviders, {
+				value: "discovery-logout",
+			});
+			const logoutUrl = await provider?.createEndSessionURL?.({
+				idToken: "id-token",
+			});
+
+			expect(logoutUrl?.toString()).toBe(
+				"https://idp.example.com/logout?id_token_hint=id-token",
+			);
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			const calls = fetchMock.mock.calls as unknown as Array<[unknown]>;
+			expect(String(calls[0]?.[0])).toBe(
+				"https://idp.example.com/.well-known/openid-configuration",
+			);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
 
 	it("should delete state cookie with path attribute", async () => {
 		const headers = new Headers();
@@ -239,7 +330,7 @@ describe("oauth2", async () => {
 			refreshToken: expect.any(String),
 			accessTokenExpiresAt: expect.any(Date),
 			refreshTokenExpiresAt: null,
-			grantedScopes: expect.any(Array),
+			scope: expect.any(String),
 			idToken: expect.any(String),
 		});
 	});
@@ -399,11 +490,124 @@ describe("oauth2", async () => {
 		});
 
 		const accessTokenRes = await newAuthClient.getAccessToken(
-			{ providerId: "test-store-account" },
+			{ useAccountCookie: true },
 			{ headers: postCallbackHeaders },
 		);
 		expect(accessTokenRes.error).toBeNull();
 		expect(accessTokenRes.data?.accessToken).toBeTruthy();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10690
+	 */
+	it("keeps implicit links usable across stateless instances", async () => {
+		const providerA = "test-implicit-link-a";
+		const providerB = "test-implicit-link-b";
+		const sharedEmail = "implicit-link-stateless@test.com";
+		const options = {
+			database: undefined,
+			secret: "stateless-implicit-link-secret-with-32-chars",
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe" as const,
+				},
+			},
+			account: {
+				storeStateStrategy: "cookie" as const,
+				storeAccountCookie: true,
+			},
+			plugins: [
+				genericOAuth({
+					config: [providerA, providerB].map((providerId) => ({
+						providerId,
+						discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+						clientId,
+						clientSecret,
+						pkce: true,
+					})),
+				}),
+			],
+		};
+		const {
+			auth: firstAuth,
+			client,
+			customFetchImpl: firstFetch,
+		} = await getTestInstance(options);
+		const firstContext = await firstAuth.$context;
+		expect(firstContext.options.database).toBeUndefined();
+
+		async function completeSignIn(providerId: string, accountId: string) {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					email: sharedEmail,
+					name: "Implicit Link User",
+					sub: accountId,
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+
+			const stateHeaders = new Headers();
+			const signIn = await client.signIn.social({
+				provider: providerId,
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new-user",
+				fetchOptions: { onSuccess: cookieSetter(stateHeaders) },
+			});
+			assert(signIn.data?.url, "expected an OAuth authorization URL");
+			const callback = await simulateOAuthFlow(
+				signIn.data.url,
+				stateHeaders,
+				firstFetch,
+			);
+			const session = await client.getSession({
+				fetchOptions: { headers: callback.headers },
+			});
+			assert(session.data, "expected a session after OAuth callback");
+			return { ...callback, userId: session.data.user.id };
+		}
+
+		const first = await completeSignIn(providerA, "implicit-link-account-a");
+		expect(first.callbackURL).toBe("http://localhost:3000/new-user");
+		const second = await completeSignIn(providerB, "implicit-link-account-b");
+		expect(second.callbackURL).toBe("http://localhost:3000/dashboard");
+		expect(second.userId).toBe(first.userId);
+
+		const accountCookieName = firstContext.authCookies.accountData.name;
+		const accountCookie = parseSetCookieHeader(second.setCookieHeader).get(
+			accountCookieName,
+		);
+		assert(accountCookie?.value, "implicit link must set an account cookie");
+		const linkedAccount = await symmetricDecodeJWT<Account>(
+			accountCookie.value,
+			firstContext.secret,
+			"better-auth-account",
+		);
+		assert(
+			linkedAccount?.accessToken,
+			"linked account cookie must carry a token",
+		);
+		expect(linkedAccount).toMatchObject({
+			providerId: providerB,
+			accountId: "implicit-link-account-b",
+			userId: first.userId,
+		});
+
+		const { auth: secondAuth, client: secondClient } =
+			await getTestInstance(options);
+		const secondContext = await secondAuth.$context;
+		expect(secondContext.options.database).toBeUndefined();
+		expect(
+			await secondContext.internalAdapter.findAccounts(first.userId),
+		).toEqual([]);
+
+		const token = await secondClient.getAccessToken(
+			{ useAccountCookie: true },
+			{ headers: second.headers },
+		);
+		expect(token.error).toBeNull();
+		expect(token.data?.accessToken).toBe(linkedAccount.accessToken);
 	});
 
 	/**
@@ -472,10 +676,15 @@ describe("oauth2", async () => {
 				headers,
 				customFetchImpl,
 			);
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			const accountId = accounts.data?.[0]?.id;
+			expect(accountId).toBeDefined();
 
 			// Within the synthesized window: no premature refresh.
 			const fresh = await client.getAccessToken(
-				{ providerId: "exp-fallback" },
+				{ accountId: accountId! },
 				{ headers: postCallbackHeaders },
 			);
 			expect(fresh.data?.accessToken).toBeTruthy();
@@ -486,7 +695,7 @@ describe("oauth2", async () => {
 			try {
 				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
 				const refreshed = await client.getAccessToken(
-					{ providerId: "exp-fallback" },
+					{ accountId: accountId! },
 					{ headers: postCallbackHeaders },
 				);
 				expect(refreshed.data?.accessToken).toBeTruthy();
@@ -562,12 +771,17 @@ describe("oauth2", async () => {
 				headers,
 				customFetchImpl,
 			);
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			const accountId = accounts.data?.[0]?.id;
+			expect(accountId).toBeDefined();
 
 			vi.useFakeTimers({ toFake: ["Date"] });
 			try {
 				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
 				const res = await client.getAccessToken(
-					{ providerId: "exp-none" },
+					{ accountId: accountId! },
 					{ headers: postCallbackHeaders },
 				);
 				// Expiry stays unknown: the stored token is returned as-is, no refresh.
@@ -608,6 +822,7 @@ describe("oauth2", async () => {
 								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 								clientId,
 								clientSecret,
+								accountSubject: ({ profile }) => profile.id ?? "",
 								pkce: true,
 								accessTokenExpiresIn: 3600,
 								// Custom exchange that omits the expiry.
@@ -643,11 +858,16 @@ describe("oauth2", async () => {
 				headers,
 				customFetchImpl,
 			);
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			const accountId = accounts.data?.[0]?.id;
+			expect(accountId).toBeDefined();
 
 			// getToken omitted the expiry; the fallback synthesized it, so within
 			// the window the stored token is returned without refreshing.
 			const fresh = await client.getAccessToken(
-				{ providerId: "exp-gettoken" },
+				{ accountId: accountId! },
 				{ headers: postCallbackHeaders },
 			);
 			expect(fresh.data?.accessToken).toBe("gettoken-initial");
@@ -659,7 +879,7 @@ describe("oauth2", async () => {
 			try {
 				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
 				const refreshed = await client.getAccessToken(
-					{ providerId: "exp-gettoken" },
+					{ accountId: accountId! },
 					{ headers: postCallbackHeaders },
 				);
 				expect(refreshed.data?.accessToken).toBeTruthy();
@@ -807,56 +1027,61 @@ describe("oauth2", async () => {
 					headers,
 					customFetchImpl,
 				);
-				return postCallbackHeaders;
+				const accounts = await client.listAccounts({
+					fetchOptions: { headers: postCallbackHeaders },
+				});
+				const accountId = accounts.data?.[0]?.id;
+				expect(accountId).toBeDefined();
+				return { headers: postCallbackHeaders, accountId: accountId! };
 			}
 
-			const ctxHeaders = await signIn("refresh-params-ctx");
-			const staticHeaders = await signIn("refresh-params-static");
-			const dynamicHeaders = await signIn("refresh-params-dynamic");
-			const noopHeaders = await signIn("refresh-params-noop");
-			const protectedHeaders = await signIn("refresh-params-protected");
+			const ctxAccount = await signIn("refresh-params-ctx");
+			const staticAccount = await signIn("refresh-params-static");
+			const dynamicAccount = await signIn("refresh-params-dynamic");
+			const noopAccount = await signIn("refresh-params-noop");
+			const protectedAccount = await signIn("refresh-params-protected");
 
 			vi.useFakeTimers({ toFake: ["Date"] });
 			try {
 				vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
 
-				const ctxHeadersWithOrg = new Headers(ctxHeaders);
+				const ctxHeadersWithOrg = new Headers(ctxAccount.headers);
 				ctxHeadersWithOrg.set("x-active-org", "org-from-header");
 				const ctxRefresh = await client.getAccessToken(
-					{ providerId: "refresh-params-ctx" },
+					{ accountId: ctxAccount.accountId },
 					{ headers: ctxHeadersWithOrg },
 				);
 				expect(ctxRefresh.data?.accessToken).toBeTruthy();
 
 				const staticRefresh = await client.getAccessToken(
-					{ providerId: "refresh-params-static" },
-					{ headers: staticHeaders },
+					{ accountId: staticAccount.accountId },
+					{ headers: staticAccount.headers },
 				);
 				expect(staticRefresh.data?.accessToken).toBeTruthy();
 
 				const firstDynamic = await client.getAccessToken(
-					{ providerId: "refresh-params-dynamic" },
-					{ headers: dynamicHeaders },
+					{ accountId: dynamicAccount.accountId },
+					{ headers: dynamicAccount.headers },
 				);
 				expect(firstDynamic.data?.accessToken).toBeTruthy();
 
 				dynamicScope = "urn:zitadel:iam:org:id:org-B";
 				vi.setSystemTime(new Date(Date.now() + 4 * 60 * 60 * 1000));
 				const secondDynamic = await client.getAccessToken(
-					{ providerId: "refresh-params-dynamic" },
-					{ headers: dynamicHeaders },
+					{ accountId: dynamicAccount.accountId },
+					{ headers: dynamicAccount.headers },
 				);
 				expect(secondDynamic.data?.accessToken).toBeTruthy();
 
 				const noopRefresh = await client.getAccessToken(
-					{ providerId: "refresh-params-noop" },
-					{ headers: noopHeaders },
+					{ accountId: noopAccount.accountId },
+					{ headers: noopAccount.headers },
 				);
 				expect(noopRefresh.data?.accessToken).toBeTruthy();
 
 				const protectedRefresh = await client.getAccessToken(
-					{ providerId: "refresh-params-protected" },
-					{ headers: protectedHeaders },
+					{ accountId: protectedAccount.accountId },
+					{ headers: protectedAccount.headers },
 				);
 				expect(protectedRefresh.data?.accessToken).toBeTruthy();
 			} finally {
@@ -1590,7 +1815,9 @@ describe("oauth2", async () => {
 		expect(firstSession.data).toBeNull();
 
 		// No account should have been created with an empty/undefined account id.
-		const emptyIdAccounts = await ctx.adapter.findMany<{ accountId: string }>({
+		const emptyIdAccounts = await ctx.adapter.findMany<{
+			accountId: string;
+		}>({
 			model: "account",
 			where: [{ field: "providerId", value: "no-sub-test" }],
 		});
@@ -1683,7 +1910,7 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(0);
 	});
 
-	it("falls back to sub when a custom getUserInfo returns an empty id", async () => {
+	it("does not switch a plain OAuth account from id to sub", async () => {
 		const { customFetchImpl, auth, cookieSetter, client } =
 			await getTestInstance({
 				databaseHooks: {
@@ -1731,25 +1958,22 @@ describe("oauth2", async () => {
 			customFetchImpl,
 		);
 
-		expect(flow.callbackURL).toBe("http://localhost:3000/new_user");
+		expect(flow.callbackURL).toContain("error=unable_to_get_user_info");
 
 		const session = await client.getSession({
 			fetchOptions: { headers: flow.headers },
 		});
-		expect(session.data).not.toBeNull();
+		expect(session.data).toBeNull();
 
 		const ctx = await auth.$context;
-		const accounts = await ctx.internalAdapter.findAccounts(
-			session.data?.user.id!,
-		);
-		expect(accounts).toHaveLength(1);
-		expect(accounts[0]).toMatchObject({
-			providerId: "empty-id-with-sub-test",
-			accountId: "custom-sub-id",
+		const accounts = await ctx.adapter.findMany({
+			model: "account",
+			where: [{ field: "providerId", value: "empty-id-with-sub-test" }],
 		});
+		expect(accounts).toHaveLength(0);
 	});
 
-	it("completes sign-in when mapProfileToUser derives the account id from a non-standard userinfo field", async () => {
+	it("completes sign-in when accountSubject derives identity from a non-standard profile field", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				username: "derived-id-user",
@@ -1771,9 +1995,9 @@ describe("oauth2", async () => {
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
+							accountSubject: ({ profile }) => String(profile.username),
 							mapProfileToUser: (profile) => {
 								return {
-									id: String(profile.username),
 									email: profile.email ?? undefined,
 									name: profile.name,
 									emailVerified: !!profile.email_verified,
@@ -1825,7 +2049,7 @@ describe("oauth2", async () => {
 		});
 	});
 
-	it("falls back to sub when the userinfo id field is empty", async () => {
+	it("uses the OIDC sub when the userinfo id field is empty", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				sub: "abc",
@@ -1894,7 +2118,7 @@ describe("oauth2", async () => {
 		});
 	});
 
-	it("falls back to sub when the userinfo id field is null", async () => {
+	it("uses the OIDC sub when the userinfo id field is null", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				sub: "null-id-sub",
@@ -1963,7 +2187,7 @@ describe("oauth2", async () => {
 		});
 	});
 
-	it("keeps a non-empty id field as the account id when the userinfo response also has sub", async () => {
+	it("uses the OIDC sub as the account subject when userinfo also has an id field", async () => {
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
 			userInfoResponse.body = {
 				sub: "subject-1",
@@ -2028,7 +2252,161 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
 			providerId: "id-over-sub-test",
-			accountId: "raw-id-1",
+			accountId: "subject-1",
+		});
+	});
+
+	it("links provider aliases as separate accounts of one user when mutable profile fields change", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "workforce-web",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+						},
+						{
+							providerId: "workforce-mobile",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+						},
+					],
+				}),
+			],
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		async function signIn(
+			provider: "workforce-web" | "workforce-mobile",
+			profileId: string,
+			name: string,
+		) {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					sub: "workforce-subject",
+					id: profileId,
+					email: "employee@workforce.test",
+					name,
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+			const stateHeaders = new Headers();
+			const response = await client.signIn.social({
+				provider,
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new-user",
+				fetchOptions: { onSuccess: cookieSetter(stateHeaders) },
+			});
+			const flow = await simulateOAuthFlow(
+				response.data?.url ?? "",
+				stateHeaders,
+				customFetchImpl,
+			);
+			const session = await client.getSession({
+				fetchOptions: { headers: flow.headers },
+			});
+			expect(session.data).not.toBeNull();
+			return session.data!;
+		}
+
+		const firstSession = await signIn(
+			"workforce-web",
+			"mutable-profile-id-1",
+			"Employee One",
+		);
+		const secondSession = await signIn(
+			"workforce-mobile",
+			"mutable-profile-id-2",
+			"Employee Two",
+		);
+
+		expect(secondSession.user.id).toBe(firstSession.user.id);
+		const context = await auth.$context;
+		const accounts = await context.internalAdapter.findAccounts(
+			firstSession.user.id,
+		);
+		expect(accounts.map((account) => account.providerId).sort()).toEqual([
+			"workforce-mobile",
+			"workforce-web",
+		]);
+		expect(
+			accounts.every((account) => account.accountId === "workforce-subject"),
+		).toBe(true);
+	});
+
+	it("keeps different OIDC subjects separate when a mutable id field is reused", async () => {
+		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "subject-boundary",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId,
+							clientSecret,
+						},
+					],
+				}),
+			],
+		});
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		async function signIn(subject: string, email: string) {
+			server.service.once("beforeUserinfo", (userInfoResponse) => {
+				userInfoResponse.body = {
+					subject,
+					sub: subject,
+					id: "reused-profile-id",
+					email,
+					name: subject,
+					email_verified: true,
+				};
+				userInfoResponse.statusCode = 200;
+			});
+			const stateHeaders = new Headers();
+			const response = await client.signIn.social({
+				provider: "subject-boundary",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(stateHeaders) },
+			});
+			const flow = await simulateOAuthFlow(
+				response.data?.url ?? "",
+				stateHeaders,
+				customFetchImpl,
+			);
+			const session = await client.getSession({
+				fetchOptions: { headers: flow.headers },
+			});
+			expect(session.data).not.toBeNull();
+			return session.data!;
+		}
+
+		const firstSession = await signIn("subject-a", "subject-a@workforce.test");
+		const secondSession = await signIn("subject-b", "subject-b@workforce.test");
+
+		expect(secondSession.user.id).not.toBe(firstSession.user.id);
+		const context = await auth.$context;
+		const firstAccounts = await context.internalAdapter.findAccounts(
+			firstSession.user.id,
+		);
+		const secondAccounts = await context.internalAdapter.findAccounts(
+			secondSession.user.id,
+		);
+		expect(firstAccounts[0]).toMatchObject({
+			accountId: "subject-a",
+		});
+		expect(secondAccounts[0]).toMatchObject({
+			accountId: "subject-b",
 		});
 	});
 
@@ -2097,7 +2475,7 @@ describe("oauth2", async () => {
 		expect(accounts[0]!.accountId).toBe(String(numericId));
 	});
 
-	it("should handle mapProfileToUser returning numeric ID", async () => {
+	it("should handle accountSubject returning a numeric subject", async () => {
 		const numericProfileId = 111222333;
 
 		server.service.once("beforeUserinfo", (userInfoResponse) => {
@@ -2122,9 +2500,9 @@ describe("oauth2", async () => {
 							clientId: clientId,
 							clientSecret: clientSecret,
 							pkce: true,
+							accountSubject: ({ profile }) => Number(profile.user_id),
 							mapProfileToUser: (profile) => {
 								return {
-									id: String(profile.user_id),
 									email: profile.email ?? undefined,
 									name: profile.name,
 									emailVerified: !!profile.email_verified,
@@ -2203,7 +2581,6 @@ describe("oauth2", async () => {
 							mapProfileToUser: (profile) => {
 								const fullName = `${profile.firstname} ${profile.lastname}`;
 								return {
-									id: String(profile.id),
 									email: `${profile.id}@strava.local`,
 									name: fullName,
 									image: profile.profile as string,
@@ -2502,7 +2879,7 @@ describe("oauth2", async () => {
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
 	});
 
-	it("falls back to sub when provider wrapper getUserInfo returns an empty id", async () => {
+	it("keeps provider sub in raw data when the plain OAuth id is empty", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -2535,7 +2912,8 @@ describe("oauth2", async () => {
 			refreshToken: undefined,
 		});
 
-		expect(result?.user.id).toBe("wrapped-sub");
+		expect(result?.data).toMatchObject({ sub: "wrapped-sub" });
+		expect(result?.user).not.toHaveProperty("id");
 	});
 
 	describe("Okta Provider Helper", () => {
@@ -2611,11 +2989,15 @@ describe("oauth2", async () => {
 			expect(auth0Config.getUserInfo).toBeUndefined();
 		});
 
-		it("should handle domain with protocol prefix", () => {
+		it.each([
+			["HTTP URL", "http://dev-xxx.eu.auth0.com"],
+			["HTTPS URL", "https://dev-xxx.eu.auth0.com"],
+			["trailing slashes", "https://dev-xxx.eu.auth0.com///"],
+		])("normalizes an Auth0 domain supplied as %s", (_case, domain) => {
 			const auth0Config = auth0({
 				clientId: "auth0-client-id",
 				clientSecret: "auth0-client-secret",
-				domain: "https://dev-xxx.eu.auth0.com",
+				domain,
 			});
 
 			expect(auth0Config.discoveryUrl).toBe(
@@ -2649,32 +3031,37 @@ describe("oauth2", async () => {
 	});
 
 	describe("Microsoft Entra ID Provider Helper", () => {
+		const tenantId = "12345678-1234-1234-1234-123456789012";
+
 		it("should return correct GenericOAuthConfig", () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "common",
+				tenantId,
 			});
 
 			expect(msConfig.providerId).toBe("microsoft-entra-id");
 			expect(msConfig.authorizationUrl).toBe(
-				"https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+				"https://login.microsoftonline.com/12345678-1234-1234-1234-123456789012/oauth2/v2.0/authorize",
 			);
 			expect(msConfig.tokenUrl).toBe(
-				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+				"https://login.microsoftonline.com/12345678-1234-1234-1234-123456789012/oauth2/v2.0/token",
 			);
 			expect(msConfig.userInfoUrl).toBe(
 				"https://graph.microsoft.com/oidc/userinfo",
+			);
+			expect(msConfig.discoveryUrl).toBe(
+				`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
 			);
 			expect(msConfig.scopes).toEqual(["openid", "profile", "email"]);
 			expect(msConfig.clientId).toBe("ms-client-id");
 			expect(msConfig.clientSecret).toBe("ms-client-secret");
 			expect(msConfig.getUserInfo).toBeDefined();
 			expect(typeof msConfig.getUserInfo).toBe("function");
+			expect(msConfig.requireIdTokenVerification).toBe(true);
 		});
 
 		it("should handle tenant ID as GUID", () => {
-			const tenantId = "12345678-1234-1234-1234-123456789012";
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
@@ -2690,7 +3077,7 @@ describe("oauth2", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "common",
+				tenantId,
 				scopes: ["openid", "profile"],
 			});
 
@@ -2701,13 +3088,333 @@ describe("oauth2", async () => {
 			const msConfig = microsoftEntraId({
 				clientId: "ms-client-id",
 				clientSecret: "ms-client-secret",
-				tenantId: "common",
+				tenantId,
 				pkce: true,
 				disableImplicitSignUp: true,
 			});
 
 			expect(msConfig.pkce).toBe(true);
 			expect(msConfig.disableImplicitSignUp).toBe(true);
+		});
+
+		it("skips the Microsoft provider when discovery is unavailable", async () => {
+			mswServer.use(
+				http.get(
+					`https://login.microsoftonline.com/${tenantId}/v2.0/.well-known/openid-configuration`,
+					() => new HttpResponse(null, { status: 503 }),
+				),
+			);
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({
+							config: [
+								microsoftEntraId({
+									clientId: "ms-client-id",
+									clientSecret: "ms-client-secret",
+									tenantId,
+								}),
+							],
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+
+			const ctx = await auth.$context;
+			expect(ctx.socialProviders.map((provider) => provider.id)).not.toContain(
+				"microsoft-entra-id",
+			);
+		});
+
+		it.each([
+			"common",
+			"organizations",
+			"consumers",
+		])("rejects the multi-tenant %s endpoint because it cannot provide a stable issuer", (tenantId) => {
+			expect(() =>
+				microsoftEntraId({
+					clientId: "ms-client-id",
+					clientSecret: "ms-client-secret",
+					tenantId,
+				}),
+			).toThrow("requires a concrete Microsoft Entra tenant GUID");
+		});
+
+		it("rejects a missing tenant ID from an untyped runtime configuration", () => {
+			expect(() =>
+				microsoftEntraId({
+					clientId: "ms-client-id",
+					clientSecret: "ms-client-secret",
+					tenantId: undefined,
+				} as unknown as Parameters<typeof microsoftEntraId>[0]),
+			).toThrow("requires a concrete Microsoft Entra tenant GUID");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10194
+		 */
+		it("should use oid from the ID token as the account id instead of sub", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: "token-pairwise-sub",
+						email: "graph@example.com",
+						name: "Graph User",
+						picture: "https://example.com/graph.png",
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+				image: "https://example.com/graph.png",
+			});
+			expect(
+				await msConfig.accountSubject?.({
+					tokens: { accessToken: "ms-access-token", idToken },
+					profile: userInfo!,
+				}),
+			).toBe("token-stable-oid");
+		});
+
+		it.each([
+			["does not match", "different-graph-sub"],
+			["is missing", undefined],
+		])("should ignore Graph userinfo when its subject %s", async (_, graphSub) => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: graphSub,
+						email: "graph@example.com",
+						name: "Graph User",
+						picture: "https://example.com/graph.png",
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
+				emailVerified: false,
+			});
+			expect(userInfo?.name).toBeUndefined();
+			expect(userInfo?.image).toBeUndefined();
+		});
+
+		it("keeps the placeholder unverified for an unexpected null Graph email claim", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: "token-pairwise-sub",
+						name: "Graph User",
+						email: null,
+						email_verified: true,
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				name: "Graph User",
+				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
+				emailVerified: false,
+			});
+		});
+
+		it("should normalize personal Microsoft account givenname and familyname claims", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+					HttpResponse.json({
+						sub: "token-pairwise-sub",
+					}),
+				),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				givenname: "Personal",
+				familyname: "Account",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo?.name).toBe("Personal Account");
+		});
+
+		it("should fall back to ID token claims when Graph userinfo fails", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			let graphCalls = 0;
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () => {
+					graphCalls++;
+					return new HttpResponse(null, { status: 503 });
+				}),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+				picture: "https://example.com/token.png",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toMatchObject({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+				image: "https://example.com/token.png",
+				emailVerified: false,
+			});
+			expect(graphCalls).toBe(1);
+		});
+
+		it("should return token claims without fetching Graph when accessToken is missing", async () => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			let graphCalls = 0;
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () => {
+					graphCalls++;
+					return HttpResponse.json({
+						sub: "token-pairwise-sub",
+						email: "graph@example.com",
+						name: "Graph User",
+					});
+				}),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({ idToken });
+
+			expect(userInfo).toMatchObject({
+				sub: "token-pairwise-sub",
+				oid: "token-stable-oid",
+				tid: "token-tenant-id",
+				email: "token@example.com",
+				name: "Token User",
+				emailVerified: false,
+			});
+			expect(graphCalls).toBe(0);
+		});
+
+		it.each([
+			["missing", undefined],
+			["not a string", 123],
+			["blank", " \t"],
+		])("rejects an ID token whose oid is %s", async (_, oid) => {
+			const msConfig = microsoftEntraId({
+				clientId: "ms-client-id",
+				clientSecret: "ms-client-secret",
+				tenantId,
+			});
+			let graphCalls = 0;
+			mswServer.use(
+				http.get("https://graph.microsoft.com/oidc/userinfo", () => {
+					graphCalls++;
+					return HttpResponse.json({
+						sub: "legacy-sub",
+						email: "legacy@example.com",
+						name: "Legacy User",
+					});
+				}),
+			);
+			const idToken = await createMicrosoftIdToken({
+				sub: "legacy-sub",
+				oid,
+				email: "legacy@example.com",
+				name: "Legacy User",
+			});
+
+			const userInfo = await msConfig.getUserInfo!({
+				accessToken: "ms-access-token",
+				idToken,
+			});
+
+			expect(userInfo).toBeNull();
+			expect(graphCalls).toBe(0);
 		});
 	});
 
@@ -2755,6 +3462,78 @@ describe("oauth2", async () => {
 
 			expect(slackConfig.pkce).toBe(true);
 			expect(slackConfig.disableImplicitSignUp).toBe(true);
+		});
+	});
+
+	describe("Yandex Provider Helper", () => {
+		it("should return correct GenericOAuthConfig", () => {
+			const yandexConfig = yandex({
+				clientId: "yandex-client-id",
+				clientSecret: "yandex-client-secret",
+				endSessionEndpoint: "https://oauth.yandex.com/logout",
+				postLogoutRedirectURI: "https://example.com/signed-out",
+				disableProviderLogout: true,
+			});
+
+			expect(yandexConfig.providerId).toBe("yandex");
+			expect(yandexConfig.authorizationUrl).toBe(
+				"https://oauth.yandex.com/authorize",
+			);
+			expect(yandexConfig.tokenUrl).toBe("https://oauth.yandex.com/token");
+			expect(yandexConfig.scopes).toEqual([
+				"login:info",
+				"login:email",
+				"login:avatar",
+			]);
+			expect(yandexConfig.clientId).toBe("yandex-client-id");
+			expect(yandexConfig.clientSecret).toBe("yandex-client-secret");
+			expect(yandexConfig.endSessionEndpoint).toBe(
+				"https://oauth.yandex.com/logout",
+			);
+			expect(yandexConfig.postLogoutRedirectURI).toBe(
+				"https://example.com/signed-out",
+			);
+			expect(yandexConfig.disableProviderLogout).toBe(true);
+			expect(yandexConfig.getUserInfo).toBeDefined();
+			expect(typeof yandexConfig.getUserInfo).toBe("function");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/pull/10278#discussion_r3495058505
+		 */
+		it("returns null when Yandex does not return an email", async () => {
+			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+				new Response(
+					JSON.stringify({
+						id: "yandex-user-id",
+						login: "yandex-user",
+						client_id: "yandex-client-id",
+						/* cspell:disable-next-line */
+						psuid: "yandex-psuid",
+						emails: [],
+					}),
+					{
+						headers: {
+							"content-type": "application/json",
+						},
+					},
+				),
+			);
+
+			try {
+				const yandexConfig = yandex({
+					clientId: "yandex-client-id",
+					clientSecret: "yandex-client-secret",
+				});
+
+				const userInfo = await yandexConfig.getUserInfo?.({
+					accessToken: "yandex-access-token",
+				});
+
+				expect(userInfo).toBeNull();
+			} finally {
+				fetchSpy.mockRestore();
+			}
 		});
 	});
 
@@ -2850,6 +3629,20 @@ describe("oauth2", async () => {
 	});
 
 	it("should integrate microsoftEntraId provider helper with genericOAuth", async () => {
+		const tenantId = "12345678-1234-1234-1234-123456789012";
+		const issuer = `https://login.microsoftonline.com/${tenantId}/v2.0`;
+		mswServer.use(
+			http.get(`${issuer}/.well-known/openid-configuration`, () =>
+				HttpResponse.json({
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					userinfo_endpoint: "https://graph.microsoft.com/oidc/userinfo",
+					jwks_uri: `${issuer}/discovery/v2.0/keys`,
+					id_token_signing_alg_values_supported: ["RS256"],
+				}),
+			),
+		);
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -2857,7 +3650,7 @@ describe("oauth2", async () => {
 						microsoftEntraId({
 							clientId: "ms-client-id",
 							clientSecret: "ms-client-secret",
-							tenantId: "common",
+							tenantId,
 						}),
 					],
 				}),
@@ -2925,6 +3718,7 @@ describe("oauth2", async () => {
 							clientSecret: clientSecret,
 							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							scopes: ["snsapi_login"],
+							accountSubject: ({ profile }) => profile.id ?? "",
 							pkce: true,
 							// Custom token exchange that doesn't use standard OAuth flow
 							getToken: async ({ code }) => {
@@ -3090,6 +3884,7 @@ describe("oauth2", async () => {
 							clientSecret: clientSecret,
 							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
 							scopes: ["profile", "email"],
+							accountSubject: ({ profile }) => profile.id ?? "",
 							pkce: true,
 							// Simulates providers that use GET request with query params instead of POST
 							getToken: async () => {
@@ -4396,7 +5191,53 @@ describe("oauth2", async () => {
 			expect(session.data?.user.email).toBe("forged@test.com");
 		});
 
-		it("should not break provider registration when jwks_uri is malformed", async () => {
+		it("skips a provider when required ID token verification metadata is unavailable", async () => {
+			const discoveryServer = createServer((_req, res) => {
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						issuer: `http://localhost:${port}`,
+						authorization_endpoint: `http://localhost:${port}/authorize`,
+						token_endpoint: `http://localhost:${port}/token`,
+					}),
+				);
+			});
+			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
+			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
+			try {
+				const { auth } = await getTestInstance(
+					{
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: "verified-id-token-required",
+										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
+										authorizationUrl: `http://localhost:${port}/authorize`,
+										tokenUrl: `http://localhost:${port}/token`,
+										requireIdTokenVerification: true,
+										clientId,
+										clientSecret,
+									},
+								],
+							}),
+						],
+					},
+					{ disableTestUser: true },
+				);
+
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("verified-id-token-required");
+			} finally {
+				await new Promise<void>((resolve, reject) =>
+					discoveryServer.close((error) => (error ? reject(error) : resolve())),
+				);
+			}
+		});
+
+		it("skips a provider when discovery returns a malformed jwks_uri", async () => {
 			const discoveryServer = createServer((_req, res) => {
 				res.setHeader("content-type", "application/json");
 				res.end(
@@ -4413,38 +5254,28 @@ describe("oauth2", async () => {
 			await new Promise<void>((resolve) => discoveryServer.listen(0, resolve));
 			const discoveryPort = (discoveryServer.address() as AddressInfo).port;
 			try {
-				const { customFetchImpl, cookieSetter } = await getTestInstance({
-					plugins: [
-						genericOAuth({
-							config: [
-								{
-									providerId: "malformed-jwks",
-									discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
-									clientId,
-									clientSecret,
-									pkce: true,
-								},
-							],
-						}),
-					],
-				});
-				const client = createAuthClient({
-					baseURL: "http://localhost:3000",
-					fetchOptions: { customFetchImpl },
-				});
-				const headers = new Headers();
-				const res = await client.signIn.social({
-					provider: "malformed-jwks",
-					callbackURL: "http://localhost:3000/dashboard",
-					newUserCallbackURL: "http://localhost:3000/new_user",
-					fetchOptions: { onSuccess: cookieSetter(headers) },
-				});
-				const { callbackURL } = await simulateOAuthFlow(
-					res.data?.url || "",
-					headers,
-					customFetchImpl,
+				const { auth } = await getTestInstance(
+					{
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: "malformed-jwks",
+										discoveryUrl: `http://localhost:${discoveryPort}/.well-known/openid-configuration`,
+										clientId,
+										clientSecret,
+										pkce: true,
+									},
+								],
+							}),
+						],
+					},
+					{ disableTestUser: true },
 				);
-				expect(callbackURL).not.toContain("?error=");
+				const context = await auth.$context;
+				expect(
+					context.socialProviders.map((provider) => provider.id),
+				).not.toContain("malformed-jwks");
 			} finally {
 				await new Promise<void>((resolve, reject) =>
 					discoveryServer.close((err) => (err ? reject(err) : resolve())),
@@ -4453,165 +5284,401 @@ describe("oauth2", async () => {
 		});
 	});
 
-	it("rejects sign-in when the provider omits an account id, preventing account collisions", async () => {
-		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => ({
-							data: { ...user, emailVerified: true },
-						}),
-					},
-				},
-			},
-			plugins: [
-				genericOAuth({
-					config: [
-						{
-							providerId: "no-sub-test",
-							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-							clientId: clientId,
-							clientSecret: clientSecret,
-							pkce: true,
-						},
-					],
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 */
+	it.each([
+		"authorization",
+		"token",
+		"both",
+	])("skips discovery missing %s endpoints", async (missing) => {
+		const discoveryUrl =
+			"https://incomplete-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({
+					issuer: "https://incomplete-idp.test",
+					...(missing === "token"
+						? {
+								authorization_endpoint: "https://incomplete-idp.test/authorize",
+							}
+						: {}),
+					...(missing === "authorization"
+						? { token_endpoint: "https://incomplete-idp.test/token" }
+						: {}),
 				}),
-			],
-		});
-		const ctx = await auth.$context;
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: { customFetchImpl },
-		});
-
-		// A userinfo response that includes email/name but no `sub`/`id`.
-		const respondWithoutSub = (email: string, name: string) => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email,
-					name,
-					picture: "https://test.com/picture.png",
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
-			});
-		};
-
-		// First user signs in — must be rejected, not stored under an empty id.
-		respondWithoutSub("first-no-sub@test.com", "First No Sub");
-		const firstHeaders = new Headers();
-		const firstSignIn = await authClient.signIn.social({
-			provider: "no-sub-test",
-			callbackURL: "http://localhost:3000/dashboard",
-			newUserCallbackURL: "http://localhost:3000/new_user",
-			fetchOptions: { onSuccess: cookieSetter(firstHeaders) },
-		});
-		const firstFlow = await simulateOAuthFlow(
-			firstSignIn.data?.url || "",
-			firstHeaders,
-			customFetchImpl,
+			),
 		);
-		// Rejected at the error page rather than landing on a success URL.
-		expect(firstFlow.callbackURL).toContain("error=");
-		expect(firstFlow.callbackURL).not.toContain("/dashboard");
-		expect(firstFlow.callbackURL).not.toContain("/new_user");
-
-		const firstSession = await authClient.getSession({
-			fetchOptions: { headers: firstFlow.headers },
-		});
-		expect(firstSession.data).toBeNull();
-
-		// No account should have been created with an empty/undefined account id.
-		const emptyIdAccounts = await ctx.adapter.findMany<{ accountId: string }>({
-			model: "account",
-			where: [{ field: "providerId", value: "no-sub-test" }],
-		});
-		expect(emptyIdAccounts).toHaveLength(0);
-
-		// A second, different user signing in through the same provider must not
-		// resolve to the first user's account.
-		respondWithoutSub("second-no-sub@test.com", "Second No Sub");
-		const secondHeaders = new Headers();
-		const secondSignIn = await authClient.signIn.social({
-			provider: "no-sub-test",
-			callbackURL: "http://localhost:3000/dashboard",
-			fetchOptions: { onSuccess: cookieSetter(secondHeaders) },
-		});
-		const secondFlow = await simulateOAuthFlow(
-			secondSignIn.data?.url || "",
-			secondHeaders,
-			customFetchImpl,
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "incomplete",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
 		);
-		expect(secondFlow.callbackURL).toContain("error=");
-		const secondSession = await authClient.getSession({
-			fetchOptions: { headers: secondFlow.headers },
-		});
-		// Must NOT have resolved to the first user (the collision being fixed).
-		expect(secondSession.data).toBeNull();
+		expect(
+			(await auth.$context).socialProviders.map((provider) => provider.id),
+		).not.toContain("incomplete");
 	});
 
-	it("rejects sign-in when a custom getUserInfo returns an empty id", async () => {
-		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
-			databaseHooks: {
-				user: {
-					create: {
-						before: async (user) => ({
-							data: { ...user, emailVerified: true },
-						}),
-					},
-				},
+	it.each([
+		false,
+		true,
+	])("keeps explicit token exchange with incomplete discovery (custom=%s)", async (custom) => {
+		const discoveryUrl =
+			"https://incomplete-idp.test/.well-known/openid-configuration";
+		mswServer.use(
+			http.get(discoveryUrl, () =>
+				HttpResponse.json({ issuer: "https://incomplete-idp.test" }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "explicit",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								authorizationUrl: "https://incomplete-idp.test/authorize",
+								...(custom
+									? { getToken: async () => ({ accessToken: "custom-token" }) }
+									: { tokenUrl: "https://incomplete-idp.test/token" }),
+							},
+						],
+					}),
+				],
 			},
-			plugins: [
-				genericOAuth({
-					config: [
+			{ disableTestUser: true },
+		);
+		expect(
+			(await auth.$context).socialProviders.map((provider) => provider.id),
+		).toContain("explicit");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10961
+	 */
+	it("does not take down the auth API when one provider's discovery is unreachable", async () => {
+		mswServer.use(
+			http.get(
+				"https://broken-idp.test/.well-known/openid-configuration",
+				() => new HttpResponse(null, { status: 503 }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "broken-idp",
+								clientId: "client",
+								clientSecret: "secret",
+								discoveryUrl:
+									"https://broken-idp.test/.well-known/openid-configuration",
+							},
+							{
+								providerId: "healthy-idp",
+								clientId,
+								clientSecret,
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const ctx = await auth.$context;
+		const providerIds = ctx.socialProviders.map((provider) => provider.id);
+		expect(providerIds).toContain("healthy-idp");
+		expect(providerIds).not.toContain("broken-idp");
+
+		const signUp = await auth.api.signUpEmail({
+			body: {
+				email: "isolated@example.test",
+				password: "correct-horse-battery-staple",
+				name: "Repro",
+			},
+		});
+		expect(signUp.token).toEqual(expect.any(String));
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11404
+	 */
+	describe("retrying discovery that failed at startup", () => {
+		// Serves a discovery document for `${providerId}.test` only once `idp.up` is set.
+		function flakyDiscovery(providerId: string) {
+			const origin = `https://${providerId}.test`;
+			const idp = { up: false, fetches: 0 };
+			mswServer.use(
+				http.get(`${origin}/.well-known/openid-configuration`, () => {
+					idp.fetches++;
+					return idp.up
+						? HttpResponse.json({
+								issuer: origin,
+								authorization_endpoint: `${origin}/authorize`,
+								token_endpoint: `${origin}/token`,
+							})
+						: new HttpResponse(null, { status: 503 });
+				}),
+			);
+			const config = {
+				providerId,
+				clientId: "client",
+				clientSecret: "secret",
+				discoveryUrl: `${origin}/.well-known/openid-configuration`,
+			};
+			return { idp, config, authorizeUrl: `${origin}/authorize` };
+		}
+
+		it("recovers a provider once the IdP is reachable", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("flaky-idp");
+			const { auth } = await getTestInstance(
+				{ plugins: [genericOAuth({ config: [config] })] },
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				auth.api.signInSocial({
+					body: { provider: "flaky-idp", callbackURL: "/" },
+				});
+			await expect(signIn()).rejects.toThrow();
+			expect(idp.fetches).toBe(2);
+			// Concurrent requests share one retry, and a failed retry stays pending.
+			await Promise.all([
+				expect(signIn()).rejects.toThrow(),
+				expect(signIn()).rejects.toThrow(),
+			]);
+			expect(idp.fetches).toBe(3);
+
+			idp.up = true;
+			expect((await signIn()).url).toContain(authorizeUrl);
+			await signIn();
+			expect(idp.fetches).toBe(4);
+		});
+
+		it("recovers a provider requested through the popup start endpoint", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("popup-idp");
+			const { auth } = await getTestInstance(
+				{ plugins: [genericOAuth({ config: [config] }), oauthPopup()] },
+				{ disableTestUser: true },
+			);
+			const origin = "http://localhost:3000";
+			const start = () =>
+				auth.handler(
+					new Request(
+						`${origin}/api/auth/oauth-popup/start?provider=popup-idp&popupOrigin=${encodeURIComponent(origin)}&popupNonce=n1`,
+					),
+				);
+			expect(await (await start()).text()).toContain("provider_not_found");
+
+			idp.up = true;
+			expect((await start()).headers.get("location")).toContain(authorizeUrl);
+		});
+
+		it("recovers a provider after a later plugin replaces the provider list", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("late-idp");
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({ config: [config] }),
 						{
-							providerId: "empty-id-test",
-							authorizationUrl: `http://localhost:${port}/authorize`,
-							tokenUrl: `http://localhost:${port}/token`,
-							clientId: clientId,
-							clientSecret: clientSecret,
-							pkce: true,
-							// A misconfigured custom mapper that yields no account id.
-							getUserInfo: async () => ({
-								id: "",
-								email: "empty-id@test.com",
-								name: "Empty Id",
-								emailVerified: true,
+							id: "replace-provider-list",
+							init: (ctx) => ({
+								context: { socialProviders: [...ctx.socialProviders] },
 							}),
 						},
 					],
+				},
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				auth.api.signInSocial({
+					body: { provider: "late-idp", callbackURL: "/" },
+				});
+			await expect(signIn()).rejects.toThrow();
+
+			idp.up = true;
+			expect((await signIn()).url).toContain(authorizeUrl);
+		});
+
+		it("recovers the provider in every auth instance that shares one plugin object and adapter", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("shared-idp");
+			const plugin = genericOAuth({ config: [config] });
+			// A database callback may hand every instance the same adapter object.
+			const createAdapter = memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			});
+			let adapter: ReturnType<typeof createAdapter> | undefined;
+			const database = (options: BetterAuthOptions) =>
+				(adapter ??= createAdapter(options));
+			const first = await getTestInstance(
+				{ database, plugins: [plugin] },
+				{ disableTestUser: true },
+			);
+			const second = await getTestInstance(
+				{ database, plugins: [plugin] },
+				{ disableTestUser: true },
+			);
+			const signIn = ({ auth }: typeof first) =>
+				auth.api.signInSocial({
+					body: { provider: "shared-idp", callbackURL: "/" },
+				});
+			await expect(signIn(first)).rejects.toThrow();
+			await expect(signIn(second)).rejects.toThrow();
+
+			idp.up = true;
+			for (const instance of [first, second]) {
+				expect((await signIn(instance)).url).toContain(authorizeUrl);
+			}
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ * @see https://github.com/better-auth/better-auth/issues/9593
+ */
+describe("redirect_uri composition under dynamic baseURL", async () => {
+	const dynamicServer = new OAuth2Server();
+	await dynamicServer.start();
+	const dynamicPort = Number(new URL(dynamicServer.issuer.url!).port);
+
+	afterAll(async () => {
+		await dynamicServer.stop();
+	});
+
+	beforeAll(async () => {
+		await dynamicServer.issuer.keys.generate("RS256");
+	});
+
+	async function getAuthorizeRedirectUri(
+		auth: { handler: (request: Request) => Promise<Response> },
+		signInPath: string,
+		host: string,
+		providerId: string,
+	) {
+		const response = await auth.handler(
+			new Request(`http://${host}${signInPath}`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					provider: providerId,
+					callbackURL: "/dashboard",
+					disableRedirect: true,
+				}),
+			}),
+		);
+		const json = (await response.json()) as { url?: string };
+		expect(json.url).toBeDefined();
+		const authUrl = new URL(json.url!);
+		return authUrl.searchParams.get("redirect_uri");
+	}
+
+	it("composes an absolute redirect_uri for a generic-oauth provider at the default basePath", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "dynamic-oauth-test",
+							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+						},
+					],
 				}),
 			],
 		});
-		const ctx = await auth.$context;
-		const authClient = createAuthClient({
-			baseURL: "http://localhost:3000",
-			fetchOptions: { customFetchImpl },
-		});
 
-		const headers = new Headers();
-		const signIn = await authClient.signIn.social({
-			provider: "empty-id-test",
-			callbackURL: "http://localhost:3000/dashboard",
-			fetchOptions: { onSuccess: cookieSetter(headers) },
-		});
-		const flow = await simulateOAuthFlow(
-			signIn.data?.url || "",
-			headers,
-			customFetchImpl,
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/api/auth/sign-in/social",
+			"localhost:3000",
+			"dynamic-oauth-test",
 		);
-		// The callback guard rejects the empty resolved account id.
-		expect(flow.callbackURL).toContain("error=unable_to_get_user_info");
 
-		const session = await authClient.getSession({
-			fetchOptions: { headers: flow.headers },
-		});
-		expect(session.data).toBeNull();
+		expect(redirectUri).toBe(
+			"http://localhost:3000/api/auth/callback/dynamic-oauth-test",
+		);
+	});
 
-		const accounts = await ctx.adapter.findMany({
-			model: "account",
-			where: [{ field: "providerId", value: "empty-id-test" }],
+	it("composes an absolute redirect_uri for a generic-oauth provider at a custom basePath", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			basePath: "/auth",
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "dynamic-oauth-test",
+							discoveryUrl: `http://localhost:${dynamicPort}/.well-known/openid-configuration`,
+							clientId: "test-client-id",
+							clientSecret: "test-client-secret",
+						},
+					],
+				}),
+			],
 		});
-		expect(accounts).toHaveLength(0);
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/auth/sign-in/social",
+			"localhost:3000",
+			"dynamic-oauth-test",
+		);
+
+		expect(redirectUri).toBe(
+			"http://localhost:3000/auth/callback/dynamic-oauth-test",
+		);
+	});
+
+	it("composes an absolute redirect_uri for a built-in social provider", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: { allowedHosts: ["localhost:3000"] },
+			socialProviders: {
+				google: {
+					clientId: "google-client-id",
+					clientSecret: "google-client-secret",
+				},
+			},
+		});
+
+		const redirectUri = await getAuthorizeRedirectUri(
+			auth,
+			"/api/auth/sign-in/social",
+			"localhost:3000",
+			"google",
+		);
+
+		expect(redirectUri).toBe("http://localhost:3000/api/auth/callback/google");
+	});
+
+	it("normalizes custom callbackPath values without a leading slash", () => {
+		expect(
+			getOAuthCallbackPath({
+				id: "custom-oauth-test",
+				callbackPath: "callback/custom-oauth-test",
+			}),
+		).toBe("/callback/custom-oauth-test");
 	});
 });

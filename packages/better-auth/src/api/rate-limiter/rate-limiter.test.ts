@@ -51,6 +51,31 @@ describe("rate-limiter", async () => {
 		},
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11463
+	 */
+	it("should send JSON content type for rate limit responses", async () => {
+		const { auth } = await getTestInstance(
+			{ rateLimit: { enabled: true, window: 10, max: 1 } },
+			{ disableTestUser: true },
+		);
+		const request = () =>
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "203.0.113.114" },
+			});
+
+		const first = await auth.handler(request());
+		expect(first.status).toBe(200);
+
+		const limited = await auth.handler(request());
+		expect(limited.status).toBe(429);
+		expect(limited.headers.get("content-type")).toBe("application/json");
+		expect(limited.headers.get("x-retry-after")).toBeTruthy();
+		expect(await limited.json()).toEqual({
+			message: "Too many requests. Please try again later.",
+		});
+	});
+
 	it("should return 429 after 3 request for sign-in", async () => {
 		for (let i = 0; i < 5; i++) {
 			const response = await client.signIn.email({
@@ -358,6 +383,62 @@ describe("database rate-limit pruning with dynamic rules", async () => {
 	});
 });
 
+describe("database rate-limit cleanup scheduling", async () => {
+	const { auth, client } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			window: 10,
+			max: 20,
+		},
+	});
+	const ctx = await auth.$context;
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10618
+	 */
+	it("awaits expired row cleanup when no background handler is configured", async () => {
+		await ctx.adapter.create({
+			model: "rateLimit",
+			data: {
+				key: "127.0.0.1|/get-session",
+				count: 1,
+				lastRequest: Date.now() - 11_000,
+			},
+		});
+
+		let releaseCleanup = () => {};
+		const cleanupGate = new Promise<void>((resolve) => {
+			releaseCleanup = resolve;
+		});
+		const originalDeleteMany = ctx.adapter.deleteMany.bind(ctx.adapter);
+		const deleteMany = vi
+			.spyOn(ctx.adapter, "deleteMany")
+			.mockImplementation(async (data) => {
+				await cleanupGate;
+				return originalDeleteMany(data);
+			});
+
+		let requestSettled = false;
+		const request = client.getSession().finally(() => {
+			requestSettled = true;
+		});
+
+		let settledBeforeCleanup: boolean;
+		try {
+			await vi.waitFor(() => expect(deleteMany).toHaveBeenCalledOnce());
+			await Promise.resolve();
+			settledBeforeCleanup = requestSettled;
+		} finally {
+			releaseCleanup();
+			deleteMany.mockRestore();
+		}
+
+		await request;
+		expect(settledBeforeCleanup).toBe(false);
+	});
+});
+
 describe("custom rate limiting storage", async () => {
 	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();
@@ -548,14 +629,15 @@ describe("missing client IP warning", () => {
 	const warningMessage =
 		"Rate limiting could not determine a client IP and is falling back to a " +
 		"single shared per-path bucket. Ensure your runtime forwards a trusted " +
-		"client IP header and configure `advanced.ipAddress.ipAddressHeaders` if needed.";
+		"client IP header, then set `advanced.ipAddress.ipAddressHeaders` or " +
+		"`advanced.ipAddress.trustedProxies` so the address can be resolved.";
 
 	afterEach(() => {
 		vi.unstubAllEnvs();
 		vi.resetModules();
 	});
 
-	it("should point users to ipAddressHeaders when no client IP is available outside dev/test", async () => {
+	it("should point users to ipAddressHeaders and trustedProxies when no client IP is available outside dev/test", async () => {
 		vi.stubEnv("NODE_ENV", "production");
 		vi.stubEnv("TEST", "false");
 		vi.resetModules();
@@ -581,11 +663,6 @@ describe("missing client IP warning", () => {
 		expect(response.error?.status).not.toBe(429);
 		expect(log).toHaveBeenCalledOnce();
 		expect(log).toHaveBeenCalledWith("warn", warningMessage);
-		expect(
-			log.mock.calls.some(([, message]) =>
-				`${message}`.includes("trustedProxies"),
-			),
-		).toBe(false);
 	});
 
 	it("should fail closed and still enforce the limit when no client IP is available", async () => {
@@ -616,6 +693,99 @@ describe("missing client IP warning", () => {
 			}
 		}
 		expect(limited).toBe(true);
+	});
+});
+
+describe("forwarded IP chains", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.resetModules();
+	});
+
+	it("should not key limits by untrusted forwarded chain entries", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const store = new Map<string, string>();
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const { client, testUser } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 20,
+			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
+		});
+
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					headers: {
+						"x-forwarded-for": `198.51.100.${i + 20}, 10.0.0.5`,
+					},
+				},
+			});
+
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		expect(store.has("no-trusted-ip|/sign-in/email")).toBe(true);
+	});
+
+	it("should key the real client when trusted proxies are configured", async () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("TEST", "false");
+		vi.resetModules();
+
+		const store = new Map<string, string>();
+		const { getTestInstance: getTestInstanceReloaded } = await import(
+			"../../test-utils/test-instance"
+		);
+		const { client, testUser } = await getTestInstanceReloaded({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 20,
+			},
+			advanced: {
+				ipAddress: {
+					trustedProxies: ["10.0.0.0/8"],
+				},
+			},
+			secondaryStorage: createRateLimitSecondaryStorage(store),
+		});
+
+		// `<rotating spoofed>, <real client>, <trusted proxy>`: spoofed rotation
+		// cannot escape the bucket keyed by the constant real client.
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					headers: {
+						"x-forwarded-for": `203.0.113.${i + 20}, 198.51.100.10, 10.0.0.5`,
+					},
+				},
+			});
+
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		expect(store.has("198.51.100.10|/sign-in/email")).toBe(true);
+		expect(store.has("no-trusted-ip|/sign-in/email")).toBe(false);
 	});
 });
 
