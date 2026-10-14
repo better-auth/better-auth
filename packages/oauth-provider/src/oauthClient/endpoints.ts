@@ -370,6 +370,11 @@ export async function updateClientEndpoint(
 		schemaUpdates.frontchannelLogoutUri = null;
 		schemaUpdates.frontchannelLogoutSessionRequired = null;
 	}
+	// oauthToSchema drops a replacement that is empty after stripping reserved
+	// keys; clear the column so storage matches what was validated.
+	if (updates.metadata !== undefined && schemaUpdates.metadata === undefined) {
+		schemaUpdates.metadata = null;
+	}
 	if (
 		!finalGrantTypes.includes("client_credentials") ||
 		finalTokenEndpointAuthMethod === "none"

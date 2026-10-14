@@ -1390,6 +1390,22 @@ describe("oauth-provider client metadata extensions", async () => {
 		).rejects.toMatchObject(invalid);
 	});
 
+	it("clears stored metadata when an admin update replaces it with an empty object", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectUri], metadata: { example_mode: "ok" } },
+		});
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: client.client_id, update: { metadata: {} } },
+		});
+		const stored = await auth.api.getOAuthClient({
+			headers,
+			query: { client_id: client.client_id },
+		});
+		expect(Reflect.get(stored, "example_mode")).toBeUndefined();
+	});
+
 	it("rejects an extension that claims a core client field", async () => {
 		await expect(
 			getTestInstance({
