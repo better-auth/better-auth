@@ -44,7 +44,13 @@ export type PasskeyRPIDResolver =
 export type PasskeyExpectedRPIDResolver =
 	| string
 	| string[]
-	| ((args: { ctx: GenericEndpointContext }) => Awaitable<string | string[]>);
+	| ((args: {
+			ctx: GenericEndpointContext;
+			/**
+			 * The RP ID sent in the options for this challenge.
+			 */
+			rpID: string;
+	  }) => Awaitable<string | string[]>);
 
 export interface PasskeyRegistrationOptions {
 	/**
@@ -122,7 +128,9 @@ export interface PasskeyOptions {
 	 * to. Use this when the RP ID hash in the authenticator data differs from
 	 * the `rpID` sent in the options (Chrome extension pages send the bare
 	 * extension ID, but the hash is of `chrome-extension://<id>`), or to
-	 * accept several RP IDs.
+	 * accept several RP IDs. A function receives the `rpID` sent in the
+	 * options for the challenge, so it can accept only the RP ID(s) that
+	 * challenge was issued for.
 	 *
 	 * @default the `rpID` sent in the options for the challenge
 	 */
