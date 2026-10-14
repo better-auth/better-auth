@@ -1,5 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
-import { createAuthEndpoint } from "better-auth/api";
+import { createAuthEndpoint, NO_STORE_HEADERS } from "better-auth/api";
 import type {
 	EndpointContext,
 	EndpointOptions,
@@ -7,6 +7,7 @@ import type {
 } from "better-call";
 import { APIError } from "better-call";
 import * as z from "zod";
+import { applyFormParams, readFormParams } from "./utils";
 
 /**
  * Canonical OAuth 2.0 / OpenID Connect error codes. The union is the single
@@ -108,11 +109,17 @@ export interface OAuthEndpointExtras<
 	errorCodesByField?: Record<string, OAuthFieldErrorCode>;
 	/**
 	 * RFC code returned when no `errorCodesByField` entry matches or the failure is
-	 * structurally malformed (wrong type, duplicated params, bad format,
-	 * failed refinement).
+	 * structurally malformed (wrong type, duplicated params, bad format).
 	 * @default "invalid_request"
 	 */
 	defaultError?: OAuthErrorCode;
+	/**
+	 * Re-reads the raw form before validation, because the form parser keeps
+	 * only the last value of a repeated key. Empty values count as omitted and
+	 * repeated parameters return `invalid_request` (RFC 6749 §3.2), except the
+	 * names in `repeatable`, which become arrays. Enables `cloneRequest`.
+	 */
+	formParams?: { repeatable?: readonly string[] };
 }
 
 /**
@@ -122,7 +129,8 @@ export interface OAuthEndpointExtras<
  *
  * A failing issue is routed by its first path segment via `errorCodesByField`:
  * - missing required (`invalid_type` + "received undefined") → `.missing`
- * - unsupported value (`invalid_value`) → `.invalid`
+ * - unsupported value (`invalid_value`) or a value a refinement rejected
+ *   (`custom`, also inside a union branch) → `.invalid`
  * - anything else (wrong type, duplicated params, bad format) → `defaultError`
  *
  * For enum fields that need to distinguish missing from unsupported, compose
@@ -145,29 +153,29 @@ export function createOAuthEndpoint<
 		onValidationError: userHook,
 		errorCodesByField,
 		defaultError = "invalid_request",
+		formParams,
 		...rest
 	} = options;
 
-	if (!redirectOnError) {
+	if (!redirectOnError && !formParams) {
+		// Schema validation runs before the handler that applies
+		// `metadata.noStore`, so validation errors attach the headers here.
+		const noStore =
+			(rest as { metadata?: { noStore?: boolean } }).metadata?.noStore === true;
 		const forwarded = {
 			...rest,
 			onValidationError: async (args: ValidationErrorHookArgs) => {
 				if (userHook) await userHook(args);
-				throw new APIError("BAD_REQUEST", {
-					...mapIssuesToOAuthError(
-						args.issues,
-						errorCodesByField,
-						defaultError,
-					),
-				});
+				throw new APIError(
+					"BAD_REQUEST",
+					mapIssuesToOAuthError(args.issues, errorCodesByField, defaultError),
+					noStore ? NO_STORE_HEADERS : undefined,
+				);
 			},
 		} as unknown as Options;
 		return createAuthEndpoint(path, forwarded, handler);
 	}
 
-	// Bind so the non-null narrowing from the guard above survives into `validateSlot`;
-	// TS drops narrowing when crossing into a nested function declaration.
-	const redirect = redirectOnError;
 	const {
 		body: bodySchema,
 		query: querySchema,
@@ -176,6 +184,8 @@ export function createOAuthEndpoint<
 		body?: z.ZodTypeAny;
 		query?: z.ZodTypeAny;
 	};
+	// A second read of the raw form needs its own copy of the request body.
+	if (formParams) (forwarded as { cloneRequest?: boolean }).cloneRequest = true;
 
 	async function validateSlot(
 		ctx: EndpointContext<Path, Options, AuthContext>,
@@ -194,23 +204,30 @@ export function createOAuthEndpoint<
 				issues: result.error.issues,
 			});
 		}
-		return {
-			ok: false,
-			response: redirect({
-				...mapIssuesToOAuthError(
-					result.error.issues,
-					errorCodesByField,
-					defaultError,
-				),
-				ctx,
-			}),
-		};
+		const error = mapIssuesToOAuthError(
+			result.error.issues,
+			errorCodesByField,
+			defaultError,
+		);
+		if (!redirectOnError) throw new APIError("BAD_REQUEST", error);
+		return { ok: false, response: redirectOnError({ ...error, ctx }) };
 	}
 
 	return createAuthEndpoint(
 		path,
 		forwarded as unknown as Options,
 		async (ctx) => {
+			const form =
+				formParams && ctx.request
+					? await readFormParams(ctx.request)
+					: undefined;
+			if (form) {
+				(ctx as { body: unknown }).body = applyFormParams(
+					form,
+					(ctx.body ?? {}) as Record<string, unknown>,
+					formParams?.repeatable,
+				);
+			}
 			const body = await validateSlot(ctx, "body", bodySchema);
 			if (!body.ok) return body.response;
 			const query = await validateSlot(ctx, "query", querySchema);
@@ -237,15 +254,17 @@ export function mapIssuesToOAuthError(
 	const fieldKey = typeof first === "string" ? first : undefined;
 	const mapping = fieldKey ? errorCodesByField?.[fieldKey] : undefined;
 	const field = issue.path?.length ? z.core.toDotPath(issue.path) : "";
+	const invalidValue = findInvalidValueIssue(issue);
 
 	return {
-		error: resolveErrorCode(issue, mapping, defaultError),
-		error_description: describeIssue(issue, field),
+		error: resolveErrorCode(issue, invalidValue, mapping, defaultError),
+		error_description: describeIssue(invalidValue ?? issue, field),
 	};
 }
 
 function resolveErrorCode(
 	issue: z.core.$ZodIssue,
+	invalidValue: z.core.$ZodIssue | undefined,
 	mapping: OAuthFieldErrorCode | undefined,
 	defaultError: OAuthErrorCode,
 ): OAuthErrorCode {
@@ -254,10 +273,29 @@ function resolveErrorCode(
 	if (isMissingValueIssue(issue)) {
 		return mapping?.missing ?? defaultError;
 	}
-	if (issue.code === "invalid_value") {
+	if (invalidValue) {
 		return mapping?.invalid ?? defaultError;
 	}
 	return defaultError;
+}
+
+/**
+ * Returns the issue that routes to `errorCodesByField[field].invalid`: an
+ * unsupported enum value, or a value of the expected type that a refinement
+ * rejected, such as a resource URI with a fragment. A union reports a
+ * refinement failure as `invalid_union`, so its branches are searched too.
+ */
+function findInvalidValueIssue(
+	issue: z.core.$ZodIssue,
+): z.core.$ZodIssue | undefined {
+	if (issue.code === "invalid_value" || issue.code === "custom") return issue;
+	if (issue.code === "invalid_union") {
+		for (const branch of issue.errors) {
+			const rejected = branch.find((nested) => nested.code === "custom");
+			if (rejected) return rejected;
+		}
+	}
+	return undefined;
 }
 
 /**
