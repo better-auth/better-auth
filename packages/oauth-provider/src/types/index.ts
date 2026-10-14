@@ -868,6 +868,27 @@ export interface OAuthOptions<
 	 */
 	clientRegistrationRequirePKCE?: boolean;
 	/**
+	 * Default `application_type` for dynamic client registrations that omit the
+	 * field.
+	 *
+	 * - `"web"`: the OIDC Registration §2 default. Omitted `application_type` is
+	 *   treated as `web`, so custom-scheme redirect URIs are rejected.
+	 * - `"native"`: omitted `application_type` is treated as `native`.
+	 * - `"infer"`: omitted `application_type` is treated as `native` when any
+	 *   `redirect_uris` entry uses a non-http(s) scheme; otherwise `web`. Every
+	 *   redirect URI is then validated against the native rules. Lets native MCP
+	 *   clients that omit `application_type` (for example Cursor, which also
+	 *   registers https and loopback callbacks) register without loosening
+	 *   web-client redirect policy.
+	 *
+	 * An `application_type` the client actually sends is never overridden.
+	 * Applies only to dynamic client registration; managed clients and Client ID
+	 * Metadata Documents are unaffected.
+	 *
+	 * @default "web"
+	 */
+	clientRegistrationDefaultApplicationType?: "web" | "native" | "infer";
+	/**
 	 * How long a dynamically created confidential client
 	 * should last for.
 	 *
@@ -925,6 +946,16 @@ export interface OAuthOptions<
 			| "configure-client-credentials-scopes";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
+		/**
+		 * The `client_id` from the request, for actions on an existing client.
+		 * Absent for `create`, `list`, and scope configuration during creation.
+		 * The client may not exist, and this value does not establish ownership.
+		 * Client CRUD enforces ownership except when `adminUpdateOAuthClient`
+		 * changes only `client_credentials_scopes`: the `update` and
+		 * `configure-client-credentials-scopes` decisions can authorize access
+		 * to another owner's client.
+		 */
+		clientId?: string;
 	}) => Awaitable<boolean | undefined>;
 	/**
 	 * Grant types supported by the token endpoint
@@ -1802,6 +1833,25 @@ export interface SchemaClient<
 	 * @default false
 	 */
 	backchannelLogoutSessionRequired?: boolean;
+	/**
+	 * RP URL rendered in a hidden iframe on the OP's logout page when the
+	 * end-user's session ends at `/oauth2/end-session`. Registering it is the
+	 * per-client opt-in for front-channel logout. Must be absolute, without a
+	 * fragment, and share the scheme, host, and port of a registered redirect
+	 * URI.
+	 *
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	frontchannelLogoutUri?: string;
+	/**
+	 * When true, the RP requires `iss` and `sid` query parameters on its
+	 * front-channel logout URI. The OP includes both whenever it notifies a
+	 * front-channel client, so this flag is stored but does not change
+	 * delivery.
+	 *
+	 * @default false
+	 */
+	frontchannelLogoutSessionRequired?: boolean;
 	tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 	grantTypes?: GrantType[];
 	responseTypes?: "code"[];

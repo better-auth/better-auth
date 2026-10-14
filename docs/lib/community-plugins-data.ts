@@ -419,4 +419,26 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/devodii.png",
 		},
 	},
+	{
+		name: "@octopi-ai/better-enrollment",
+		url: "https://github.com/OctopiAI/better-enrollment",
+		description:
+			"Invite-only sign-ups, role-merging invite links, and organization invites. Supports private (email-bound) and public (shareable, capped, revocable) invites, organization seat limits, and an append-only audit trail.",
+		author: {
+			name: "Talat Mahmud",
+			github: "FalconiZzare",
+			avatar: "https://github.com/FalconiZzare.png",
+		},
+	},
+	{
+		name: "good-webhooks",
+		url: "https://github.com/pplytas/good-webhooks",
+		description:
+			"Authenticated webhook endpoint management with typed client APIs, scoped permissions, signing-secret rotation, and optional self-hosted delivery. Currently in beta with a frozen public API.",
+		author: {
+			name: "Panagiotis Plytas",
+			github: "pplytas",
+			avatar: "https://github.com/pplytas.png",
+		},
+	},
 ];
