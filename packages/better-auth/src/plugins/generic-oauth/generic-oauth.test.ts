@@ -1,8 +1,12 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -29,6 +33,7 @@ import { symmetricDecodeJWT } from "../../crypto";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
+import { oauthPopup } from "../oauth-popup";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
 import { keycloak } from "./providers/keycloak";
@@ -5411,6 +5416,140 @@ describe("oauth2", async () => {
 			},
 		});
 		expect(signUp.token).toEqual(expect.any(String));
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11404
+	 */
+	describe("retrying discovery that failed at startup", () => {
+		// Serves a discovery document for `${providerId}.test` only once `idp.up` is set.
+		function flakyDiscovery(providerId: string) {
+			const origin = `https://${providerId}.test`;
+			const idp = { up: false, fetches: 0 };
+			mswServer.use(
+				http.get(`${origin}/.well-known/openid-configuration`, () => {
+					idp.fetches++;
+					return idp.up
+						? HttpResponse.json({
+								issuer: origin,
+								authorization_endpoint: `${origin}/authorize`,
+								token_endpoint: `${origin}/token`,
+							})
+						: new HttpResponse(null, { status: 503 });
+				}),
+			);
+			const config = {
+				providerId,
+				clientId: "client",
+				clientSecret: "secret",
+				discoveryUrl: `${origin}/.well-known/openid-configuration`,
+			};
+			return { idp, config, authorizeUrl: `${origin}/authorize` };
+		}
+
+		it("recovers a provider once the IdP is reachable", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("flaky-idp");
+			const { auth } = await getTestInstance(
+				{ plugins: [genericOAuth({ config: [config] })] },
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				auth.api.signInSocial({
+					body: { provider: "flaky-idp", callbackURL: "/" },
+				});
+			await expect(signIn()).rejects.toThrow();
+			expect(idp.fetches).toBe(2);
+			// Concurrent requests share one retry, and a failed retry stays pending.
+			await Promise.all([
+				expect(signIn()).rejects.toThrow(),
+				expect(signIn()).rejects.toThrow(),
+			]);
+			expect(idp.fetches).toBe(3);
+
+			idp.up = true;
+			expect((await signIn()).url).toContain(authorizeUrl);
+			await signIn();
+			expect(idp.fetches).toBe(4);
+		});
+
+		it("recovers a provider requested through the popup start endpoint", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("popup-idp");
+			const { auth } = await getTestInstance(
+				{ plugins: [genericOAuth({ config: [config] }), oauthPopup()] },
+				{ disableTestUser: true },
+			);
+			const origin = "http://localhost:3000";
+			const start = () =>
+				auth.handler(
+					new Request(
+						`${origin}/api/auth/oauth-popup/start?provider=popup-idp&popupOrigin=${encodeURIComponent(origin)}&popupNonce=n1`,
+					),
+				);
+			expect(await (await start()).text()).toContain("provider_not_found");
+
+			idp.up = true;
+			expect((await start()).headers.get("location")).toContain(authorizeUrl);
+		});
+
+		it("recovers a provider after a later plugin replaces the provider list", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("late-idp");
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({ config: [config] }),
+						{
+							id: "replace-provider-list",
+							init: (ctx) => ({
+								context: { socialProviders: [...ctx.socialProviders] },
+							}),
+						},
+					],
+				},
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				auth.api.signInSocial({
+					body: { provider: "late-idp", callbackURL: "/" },
+				});
+			await expect(signIn()).rejects.toThrow();
+
+			idp.up = true;
+			expect((await signIn()).url).toContain(authorizeUrl);
+		});
+
+		it("recovers the provider in every auth instance that shares one plugin object and adapter", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("shared-idp");
+			const plugin = genericOAuth({ config: [config] });
+			// A database callback may hand every instance the same adapter object.
+			const createAdapter = memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			});
+			let adapter: ReturnType<typeof createAdapter> | undefined;
+			const database = (options: BetterAuthOptions) =>
+				(adapter ??= createAdapter(options));
+			const first = await getTestInstance(
+				{ database, plugins: [plugin] },
+				{ disableTestUser: true },
+			);
+			const second = await getTestInstance(
+				{ database, plugins: [plugin] },
+				{ disableTestUser: true },
+			);
+			const signIn = ({ auth }: typeof first) =>
+				auth.api.signInSocial({
+					body: { provider: "shared-idp", callbackURL: "/" },
+				});
+			await expect(signIn(first)).rejects.toThrow();
+			await expect(signIn(second)).rejects.toThrow();
+
+			idp.up = true;
+			for (const instance of [first, second]) {
+				expect((await signIn(instance)).url).toContain(authorizeUrl);
+			}
+		});
 	});
 });
 
