@@ -111,18 +111,19 @@ export const createInternalAdapter = (
 		});
 	};
 
-	async function writeActiveSessions(
+	/** Writes the user's active-sessions list, dropping expired entries. */
+	async function writeActiveSessionReferences(
 		userId: string,
-		sessions: { token: string; expiresAt: number }[],
+		references: readonly ActiveSessionReference[],
 	) {
 		if (!secondaryStorage) return;
 		const now = Date.now();
-		const sorted = sessions
+		const sorted = references
 			.filter((entry) => entry.expiresAt > now)
 			.sort((a, b) => a.expiresAt - b.expiresAt);
 		const furthestSessionExp = sorted.at(-1)?.expiresAt;
 		const listKey = `active-sessions-${userId}`;
-		if (furthestSessionExp && furthestSessionExp > now) {
+		if (furthestSessionExp) {
 			await secondaryStorage.set(
 				listKey,
 				JSON.stringify(sorted),
@@ -158,10 +159,11 @@ export const createInternalAdapter = (
 		return new Date(session.expiresAt).getTime() <= Date.now();
 	}
 
-	async function writeRefreshedCachedSession(
-		sessionToken: string,
-		session: Session,
-	) {
+	/**
+	 * Rewrites the cached copy of an updated session and its list entry. Does
+	 * nothing when no copy is cached, so it never recreates a deleted key.
+	 */
+	async function updateCachedSession(sessionToken: string, session: Session) {
 		if (!secondaryStorage) return;
 		const currentSession = await secondaryStorage.get(sessionToken);
 		if (!currentSession) return;
@@ -194,15 +196,11 @@ export const createInternalAdapter = (
 			sessionTTL,
 		);
 
-		const listKey = `active-sessions-${sessionToStore.userId}`;
-		const listRaw = await secondaryStorage.get(listKey);
-		const list: { token: string; expiresAt: number }[] = listRaw
-			? safeJSONParse(listRaw) || []
-			: [];
-		const filtered = list
-			.filter((entry) => entry.token !== sessionToken && entry.expiresAt > now)
-			.concat([{ token: sessionToken, expiresAt: expiresMs }]);
-		await writeActiveSessions(sessionToStore.userId, filtered);
+		const references = await getActiveSessionReferences(sessionToStore.userId);
+		await writeActiveSessionReferences(sessionToStore.userId, [
+			...references.filter((entry) => entry.token !== sessionToken),
+			{ token: sessionToken, expiresAt: expiresMs },
+		]);
 	}
 
 	/**
@@ -215,7 +213,7 @@ export const createInternalAdapter = (
 	 * session lifetime. The cache gets the row returned by the write, not a
 	 * separate read that a lagging read replica could serve.
 	 */
-	async function updateStoredSession(
+	async function updateDatabaseSession(
 		sessionToken: string,
 		session: Partial<Session> & Record<string, any>,
 	) {
@@ -225,30 +223,23 @@ export const createInternalAdapter = (
 			// ended instead of extending it from a stale cache.
 			{ field: "expiresAt", value: new Date(), operator: "gt" },
 		];
-		let beforeHooksPassed = false;
-		const updatedSession = await updateWithHooks<Session>(
-			session,
-			where,
-			"session",
-			{
-				async fn(data) {
-					beforeHooksPassed = true;
-					const updated = await (
-						await getCurrentAdapter(adapter)
-					).update<Session>({ model: "session", update: data, where });
-					if (updated) await writeRefreshedCachedSession(sessionToken, updated);
-					return updated;
-				},
-				executeMainFn: false,
+		// `fn` runs only after the before hooks pass, so a rejected update leaves
+		// the cached copy in place.
+		return updateWithHooks<Session>(session, where, "session", {
+			async fn(data) {
+				const updated = await (
+					await getCurrentAdapter(adapter)
+				).update<Session>({ model: "session", update: data, where });
+				if (!updated) {
+					// No live row matched: the session was revoked or has ended.
+					await deleteCachedSession(sessionToken);
+					return null;
+				}
+				await updateCachedSession(sessionToken, updated);
+				return updated;
 			},
-		);
-
-		// No live row matched, so the session was revoked or has ended. A before
-		// hook that rejects the update leaves the cached copy in place.
-		if (!updatedSession && beforeHooksPassed) {
-			await deleteCachedSession(sessionToken);
-		}
-		return updatedSession;
+			executeMainFn: false,
+		});
 	}
 
 	async function refreshUserSessions(user: User) {
@@ -377,7 +368,7 @@ export const createInternalAdapter = (
 			changed = true;
 			return [{ token: entry.token, expiresAt: rowExpiresAt }];
 		});
-		if (changed) await writeActiveSessions(user.id, next);
+		if (changed) await writeActiveSessionReferences(user.id, next);
 	}
 
 	async function getActiveSessionReferences(userId: string) {
@@ -1034,7 +1025,7 @@ export const createInternalAdapter = (
 			session: Partial<Session> & Record<string, any>,
 		) => {
 			if (secondaryStorage && options.session?.storeSessionInDatabase) {
-				return updateStoredSession(sessionToken, session);
+				return updateDatabaseSession(sessionToken, session);
 			}
 			const updatedSession = await updateWithHooks<Session>(
 				session,
