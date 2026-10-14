@@ -2567,9 +2567,17 @@ describe("SAML SSO", async () => {
 				email: string;
 				emailVerified: boolean;
 			}>({ model: "user" });
+			const accounts = await context.adapter.findMany<{
+				accountId: string;
+				providerId: string;
+			}>({
+				model: "account",
+				where: [{ field: "providerId", value: "nameid-provider" }],
+			});
 			return {
 				location: response.headers.get("location") ?? "",
 				ssoUsers: users.filter((user) => user.email !== "test@test.com"),
+				ssoAccountIds: accounts.map((account) => account.accountId),
 			};
 		}
 
@@ -2580,7 +2588,7 @@ describe("SAML SSO", async () => {
 				PERSISTENT_NAME_ID_FORMAT,
 			);
 
-			expect(location).toContain("error=");
+			expect(location).toContain("error=missing_user_info");
 			expect(ssoUsers).toEqual([]);
 		});
 
@@ -2614,6 +2622,37 @@ describe("SAML SSO", async () => {
 			expect(ssoUsers.map((user) => user.email)).toEqual(["a1b2c3d4-opaque"]);
 		});
 
+		it("keeps the signed NameID as the account ID when mapProfileToUser mutates its input", async () => {
+			const { location, ssoAccountIds } = await signInWithNameID(
+				{
+					mapProfileToUser: (input) => {
+						input.accountKey.accountId = "attacker-chosen-subject";
+						return { email: "mutating@example.com" };
+					},
+				},
+				"a1b2c3d4-opaque",
+				PERSISTENT_NAME_ID_FORMAT,
+			);
+
+			expect(location).not.toContain("error=");
+			expect(ssoAccountIds).toEqual(["a1b2c3d4-opaque"]);
+		});
+
+		it("redirects with an error when mapProfileToUser throws", async () => {
+			const { location, ssoUsers } = await signInWithNameID(
+				{
+					mapProfileToUser: () => {
+						throw new Error("directory unavailable");
+					},
+				},
+				"nameid-user@example.com",
+				SAML_EMAIL_NAME_ID_FORMAT,
+			);
+
+			expect(location).toContain("error=SSO_PROFILE_MAPPING_FAILED");
+			expect(ssoUsers).toEqual([]);
+		});
+
 		it("rejects the sign-in when mapProfileToUser discards the email", async () => {
 			const { location, ssoUsers } = await signInWithNameID(
 				{ mapProfileToUser: () => ({ email: null }) },
@@ -2621,7 +2660,7 @@ describe("SAML SSO", async () => {
 				SAML_EMAIL_NAME_ID_FORMAT,
 			);
 
-			expect(location).toContain("error=");
+			expect(location).toContain("error=missing_user_info");
 			expect(ssoUsers).toEqual([]);
 		});
 

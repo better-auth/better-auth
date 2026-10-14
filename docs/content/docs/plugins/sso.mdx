@@ -418,7 +418,7 @@ Database writes made through the transaction adapter during resolution, account 
 
 ### Providers Without an Email
 
-Better Auth needs an email to find, link, and create the user. It reads the email from the provider's `mapping`, which defaults to the `email` claim or attribute. For SAML, when that attribute is missing, the `NameID` becomes the email only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. Persistent, transient, and unspecified NameIDs are opaque identifiers and never become the email. When no email is found, OIDC sign-in redirects with `missing_user_info` and SAML sign-in redirects with an error.
+Better Auth needs an email to find, link, and create the user. It reads the email from the provider's `mapping`, which defaults to the `email` claim or attribute. For SAML, when that attribute is missing, the `NameID` becomes the email only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. Persistent, transient, and unspecified NameIDs are opaque identifiers and never become the email. When no email is found, sign-in redirects with `missing_user_info`: as `error_description` for OIDC and as `error` for SAML.
 
 To sign in users from a provider that sends no email, return one from `mapProfileToUser`. It runs on every OIDC and SAML sign-in, after `mapping` is applied and before the user is looked up:
 
@@ -439,7 +439,9 @@ export const auth = betterAuth({
 });
 ```
 
-The callback receives `protocol`, `providerId`, `accountKey`, and `providerUser`, plus `providerClaims` for OIDC or `providerAttributes`, `nameID`, and `nameIDFormat` for SAML. It can return `email`, `name`, `image`, and `emailVerified`. Return `email: null` to discard the email the provider sent. The account identity always stays the verified `sub` claim or `NameID`. If that value can contain characters that are not valid in an email address, encode it before building a placeholder.
+The callback receives `protocol`, `providerId`, `accountKey`, and `providerUser`, plus `providerClaims` for OIDC or `providerAttributes`, `nameID`, and `nameIDFormat` for SAML. It can return `email`, `name`, `image`, and `emailVerified`. Return `email: null` to discard the email the provider sent. A returned email that differs from the provider's is unverified unless you also return `emailVerified`. The account identity always stays the verified `sub` claim or `NameID`. If the callback throws, sign-in redirects with `SSO_PROFILE_MAPPING_FAILED`.
+
+The example assumes the provider ID is a valid domain label (letters, digits, and hyphens) and the subject is valid in an email address. Encode either one before building a placeholder when it is not.
 
 <Callout type="warn">
   The returned email is used to match existing users and, for a provider with a verified domain, to decide whether the account links automatically. Return only addresses the provider vouches for, or a placeholder on the reserved `.invalid` domain. Placeholder emails cannot receive mail; see [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).

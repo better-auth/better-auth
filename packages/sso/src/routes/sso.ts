@@ -1650,17 +1650,26 @@ async function handleOIDCCallback(
 			provider.issuer,
 		accountId: userInfo.id,
 	};
-	const mappedUser = await mapSSOProfile(options, {
-		protocol: "oidc",
-		providerId,
-		accountKey,
-		providerUser: {
-			email: userInfo.email,
-			emailVerified: userInfo.emailVerified === true,
-			name: userInfo.name,
-			image: userInfo.image,
+	const mappedUser = await mapSSOProfile(
+		options,
+		{
+			protocol: "oidc",
+			providerId,
+			accountKey,
+			providerUser: {
+				email: userInfo.email,
+				emailVerified: userInfo.emailVerified === true,
+				name: userInfo.name,
+				image: userInfo.image,
+			},
+			providerClaims: rawProfile ?? {},
 		},
-		providerClaims: rawProfile ?? {},
+		ctx.context.logger,
+	).catch((e) => {
+		if (isAPIError(e) && e.body?.code) {
+			redirectOIDCError(e.body.code, e.body.message);
+		}
+		throw e;
 	});
 	if (!mappedUser.email) {
 		ctx.context.logger.error(

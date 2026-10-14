@@ -405,6 +405,10 @@ export interface SSOMappedUser {
 	id?: never;
 	/** Return `null` to discard the email the provider sent. */
 	email?: string | null | undefined;
+	/**
+	 * Defaults to the provider's verification when the email is unchanged, and
+	 * to `false` when this callback returns a different email.
+	 */
 	emailVerified?: boolean | undefined;
 	name?: string | undefined;
 	image?: string | undefined;
@@ -452,7 +456,8 @@ export interface SSOOptions {
 	 * applied. Use it for providers that send no email: sign-in fails when
 	 * neither the provider nor this callback yields one. A SAML NameID is used
 	 * as the email only when its `Format` is
-	 * `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`.
+	 * `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. If the callback
+	 * throws, sign-in redirects with `SSO_PROFILE_MAPPING_FAILED`.
 	 *
 	 * The returned email is used to find, link, and create the user, and to
 	 * decide whether the provider's verified domain trusts it. Return only

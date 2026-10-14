@@ -659,6 +659,7 @@ export async function processSAMLResponse(
 			hasEmail,
 		});
 		return new APIError("BAD_REQUEST", {
+			code: "MISSING_USER_INFO",
 			message:
 				"Unable to extract user ID or email from SAML response. Map an email attribute, or create a placeholder with `mapProfileToUser`.",
 		});
@@ -667,22 +668,36 @@ export async function processSAMLResponse(
 		throw missingUserInfo(false, Boolean(userInfo.email));
 	}
 	const accountKey = { issuer, accountId: userInfo.id };
-	const mappedUser = await mapSSOProfile(options, {
-		protocol: "saml",
-		providerId,
-		accountKey,
-		providerUser: {
-			email: userInfo.email,
-			emailVerified: userInfo.emailVerified,
-			name: userInfo.name,
-			image:
-				typeof providerUserAttributes.image === "string"
-					? providerUserAttributes.image
-					: undefined,
+	const mappedUser = await mapSSOProfile(
+		options,
+		{
+			protocol: "saml",
+			providerId,
+			accountKey,
+			providerUser: {
+				email: userInfo.email,
+				emailVerified: userInfo.emailVerified,
+				name: userInfo.name,
+				image:
+					typeof providerUserAttributes.image === "string"
+						? providerUserAttributes.image
+						: undefined,
+			},
+			providerAttributes,
+			nameID: userInfo.id,
+			nameIDFormat,
 		},
-		providerAttributes,
-		nameID: userInfo.id,
-		nameIDFormat,
+		ctx.context.logger,
+	).catch((e) => {
+		if (isAPIError(e) && e.body?.code) {
+			throw ctx.redirect(
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+					error: e.body.code,
+					...(e.body.message ? { error_description: e.body.message } : {}),
+				}),
+			);
+		}
+		throw e;
 	});
 	const email = mappedUser.email?.toLowerCase();
 	if (!email) {

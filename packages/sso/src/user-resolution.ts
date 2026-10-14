@@ -7,6 +7,7 @@ import type {
 import { APIError } from "better-auth/api";
 import type { handleOAuthUserInfo } from "better-auth/oauth2";
 import type {
+	SSOMappedUser,
 	SSOOptions,
 	SSOProfileMappingInput,
 	SSOUserResolution,
@@ -22,17 +23,35 @@ const SSO_AUTHENTICATION_FAILURE = Symbol("SSO_AUTHENTICATION_FAILURE");
 export async function mapSSOProfile(
 	options: SSOOptions | undefined,
 	input: SSOProfileMappingInput,
+	logger: ResolutionLogger,
 ): Promise<SSOProfileMappingInput["providerUser"]> {
 	if (!options?.mapProfileToUser) {
 		return input.providerUser;
 	}
-	const { email, emailVerified, name, image } =
-		await options.mapProfileToUser(input);
+	let mappedUser: SSOMappedUser;
+	try {
+		// A clone keeps the verified identity and provider data authoritative.
+		mappedUser = await options.mapProfileToUser(structuredClone(input));
+	} catch {
+		logFailure(logger, "SSO profile mapping failed");
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			code: "SSO_PROFILE_MAPPING_FAILED",
+			message: "Unable to map the SSO profile",
+		});
+	}
+	const { email, emailVerified, name, image } = mappedUser;
+	const providerUser = input.providerUser;
+	const mappedEmail =
+		email === null ? undefined : (email ?? providerUser.email);
 	return {
-		email: email === null ? undefined : (email ?? input.providerUser.email),
-		emailVerified: emailVerified ?? input.providerUser.emailVerified,
-		name: name ?? input.providerUser.name,
-		image: image ?? input.providerUser.image,
+		email: mappedEmail,
+		// The provider's verification covers only the address it sent.
+		emailVerified:
+			emailVerified ??
+			(providerUser.emailVerified &&
+				mappedEmail?.toLowerCase() === providerUser.email?.toLowerCase()),
+		name: name ?? providerUser.name,
+		image: image ?? providerUser.image,
 	};
 }
 
