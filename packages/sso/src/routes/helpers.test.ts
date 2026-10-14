@@ -120,6 +120,28 @@ describe("createSP assertion-signing metadata", () => {
 		expect(provider.getMetadata()).toContain('WantAssertionsSigned="true"');
 	});
 
+	it("preserves registered endpoint identities in metadata", () => {
+		const provider = createSP(
+			configuration,
+			"https://Auth.Example.com:443/api/auth/",
+			"acme:prod@team+dev%2Fmember",
+			{
+				sloOptions: {
+					wantLogoutRequestSigned: false,
+					wantLogoutResponseSigned: false,
+				},
+			},
+		);
+		const metadata = provider.getMetadata();
+
+		expect(metadata).toContain(
+			"https://Auth.Example.com:443/api/auth//sso/saml2/sp/acs/acme:prod@team+dev%2Fmember",
+		);
+		expect(metadata).toContain(
+			"https://Auth.Example.com:443/api/auth//sso/saml2/sp/slo/acme:prod@team+dev%2Fmember",
+		);
+	});
+
 	it("accepts custom metadata that requires signed assertions", () => {
 		expect(() =>
 			createSP(

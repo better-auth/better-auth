@@ -3,7 +3,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
-import { appendQueryParams } from "@better-auth/core/utils/url";
+import { appendQueryParams, appendURLPath } from "@better-auth/core/utils/url";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
@@ -94,6 +94,7 @@ import {
 	createSAMLPostForm,
 	createSP,
 	findSAMLProvider,
+	getSAMLServiceProviderURL,
 } from "./helpers";
 import {
 	filterSSOProviderAdditionalFields,
@@ -130,17 +131,13 @@ function getOIDCRedirectURI(
 	options?: SSOOptions,
 ): string {
 	if (options?.redirectURI?.trim()) {
-		try {
-			// Full URL — use as-is
-			new URL(options.redirectURI);
+		if (URL.canParse(options.redirectURI)) {
 			return options.redirectURI;
-		} catch {
-			// Relative path — append to baseURL
-			const path = options.redirectURI.startsWith("/")
-				? options.redirectURI
-				: `/${options.redirectURI}`;
-			return `${baseURL}${path}`;
 		}
+		const path = options.redirectURI.startsWith("/")
+			? options.redirectURI
+			: `/${options.redirectURI}`;
+		return `${baseURL}${path}`;
 	}
 	return `${baseURL}/sso/callback/${providerId}`;
 }
@@ -1315,7 +1312,7 @@ async function handleOIDCCallback(
 	if (!stateData) {
 		const errorURL =
 			ctx.context.options.onAPIError?.errorURL ||
-			`${ctx.context.baseURL}/error`;
+			appendURLPath(ctx.context.baseURL, "/error");
 		const params = new URLSearchParams({ error: "invalid_state" });
 		const redirectURL = appendQueryParams(errorURL, params);
 
@@ -1991,7 +1988,7 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 			if (!stateData) {
 				const errorURL =
 					ctx.context.options.onAPIError?.errorURL ||
-					`${ctx.context.baseURL}/error`;
+					appendURLPath(ctx.context.baseURL, "/error");
 				const params = new URLSearchParams({ error: "invalid_state" });
 				const redirectURL = appendQueryParams(errorURL, params);
 
@@ -2067,7 +2064,11 @@ export const acsEndpoint = (options?: SSOOptions) => {
 		},
 		async (ctx) => {
 			const { providerId } = ctx.params;
-			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
+			const currentCallbackPath = getSAMLServiceProviderURL(
+				ctx.context.baseURL,
+				"acs",
+				providerId,
+			);
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			let resolvedErrorRedirectUrl: string | undefined;
 
@@ -2077,7 +2078,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				const session = await getSessionFromCtx(ctx);
 				if (!session?.session) {
 					const errorURL =
-						ctx.context.options.onAPIError?.errorURL || `${appOrigin}/error`;
+						ctx.context.options.onAPIError?.errorURL ||
+						appendURLPath(appOrigin, "/error");
 					const params = new URLSearchParams({ error: "invalid_request" });
 					const redirectURL = appendQueryParams(errorURL, params);
 
@@ -2207,7 +2209,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const safeErrorURL = getSafeRedirectUrl(
 				[relayState],
-				`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
+				getSAMLServiceProviderURL(ctx.context.baseURL, "slo", providerId),
 				appOrigin,
 				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 			);
@@ -2319,7 +2321,7 @@ async function handleLogoutResponse(
 	const appOrigin = new URL(ctx.context.baseURL).origin;
 	const safeRedirectUrl = getSafeRedirectUrl(
 		[relayState],
-		`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
+		getSAMLServiceProviderURL(ctx.context.baseURL, "slo", providerId),
 		appOrigin,
 		(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 	);

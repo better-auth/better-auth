@@ -5700,6 +5700,33 @@ describe("SAML Single Logout (SLO)", () => {
 	});
 
 	describe("SLO enabled - error cases", () => {
+		it.each([
+			"relative",
+			"absolute",
+		] as const)("does not redirect to its own %s SLO route under a custom base path", async (relayStateType) => {
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				basePath: "/custom/auth",
+				plugins: [sso({ saml: { enableSingleLogout: true } })],
+			});
+			const sloURL =
+				"http://localhost:3000/custom/auth/sso/saml2/sp/slo/workforce";
+			const requestURL = new URL(sloURL);
+			requestURL.searchParams.set(
+				"RelayState",
+				relayStateType === "relative" ? requestURL.pathname : sloURL,
+			);
+
+			const response = await auth.handler(new Request(requestURL));
+			const location = response.headers.get("location");
+
+			expect(response.status).toBe(302);
+			expect(location).not.toBeNull();
+			const redirectURL = new URL(location!, requestURL.origin);
+			expect(redirectURL.pathname).toBe("/");
+			expect(redirectURL.searchParams.get("error")).toBe("invalid_request");
+		});
+
 		it("should return error when provider not found", async () => {
 			const { auth } = await getTestInstance({
 				plugins: [

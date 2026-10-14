@@ -12,6 +12,55 @@ import { ssoClient } from "./client";
 
 const server = new OAuth2Server();
 
+/** @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest */
+describe("registered OIDC redirect URI compatibility", () => {
+	it.each([
+		{ redirectURI: undefined, expectedPath: "/sso/callback/acme:prod" },
+		{
+			providerId: "team%2Fmember",
+			expectedPath: "/sso/callback/team%2Fmember",
+		},
+		{
+			issuer: "urn:example:identity",
+			expectedPath: "/sso/callback/acme:prod",
+		},
+		{
+			redirectURI: "/sso/callback?source=a%2Fb",
+			expectedPath: "/sso/callback?source=a%2Fb",
+		},
+	])("preserves the configured base and $expectedPath", async ({
+		providerId = "acme:prod",
+		issuer = "https://idp.example.com",
+		redirectURI,
+		expectedPath,
+	}) => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			baseURL: "http://LOCALHOST:3000/api/auth/",
+			plugins: [sso({ redirectURI })],
+		});
+		const { headers } = await signInWithTestUser();
+		const provider = await auth.api.registerSSOProvider({
+			headers,
+			body: {
+				providerId,
+				issuer,
+				domain: "corp.example.com",
+				oidcConfig: {
+					clientId: "client-id",
+					clientSecret: "client-secret",
+					skipDiscovery: true,
+					authorizationEndpoint: "https://idp.example.com/authorize",
+					tokenEndpoint: "https://idp.example.com/token",
+					jwksEndpoint: "https://idp.example.com/jwks",
+				},
+			},
+		});
+		expect(provider.redirectURI).toBe(
+			`http://LOCALHOST:3000/api/auth/${expectedPath}`,
+		);
+	});
+});
+
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({

@@ -60,6 +60,7 @@ import {
 	createSP,
 	deriveSAMLServiceProviderPolicy,
 	findSAMLProvider,
+	getSAMLServiceProviderURL,
 } from "./helpers";
 import { lockSSOProviderForAccountLink } from "./providers";
 
@@ -221,7 +222,7 @@ function getExpectedSAMLRecipients(
 
 	return [
 		currentCallbackPath,
-		`${baseURL}/sso/saml2/sp/acs/${providerId}`,
+		getSAMLServiceProviderURL(baseURL, "acs", providerId),
 		...configuredPostAssertionConsumerServiceUrls,
 		...toArray(assertionConsumerServiceUrl),
 	];

@@ -50,6 +50,15 @@ export async function findSAMLProvider(
 	};
 }
 
+/** Builds the registered SP endpoint identifier without changing its spelling. */
+export function getSAMLServiceProviderURL(
+	baseURL: string,
+	endpoint: "acs" | "slo",
+	providerId: string,
+): string {
+	return `${baseURL}/sso/saml2/sp/${endpoint}/${providerId}`;
+}
+
 export function createSP(
 	config: SAMLConfig,
 	baseURL: string,
@@ -64,8 +73,8 @@ export function createSP(
 	},
 ) {
 	const spData = config.spMetadata;
-	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
-	const acsUrl = `${baseURL}/sso/saml2/sp/acs/${providerId}`;
+	const sloLocation = getSAMLServiceProviderURL(baseURL, "slo", providerId);
+	const acsUrl = getSAMLServiceProviderURL(baseURL, "acs", providerId);
 
 	// When no SP metadata XML is provided, generate it so samlify can read
 	// authnRequestsSigned and other flags that only work via metadata.
