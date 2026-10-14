@@ -8,11 +8,33 @@ import { APIError } from "better-auth/api";
 import type { handleOAuthUserInfo } from "better-auth/oauth2";
 import type {
 	SSOOptions,
+	SSOProfileMappingInput,
 	SSOUserResolution,
 	SSOUserResolutionInput,
 } from "./types";
 
 const SSO_AUTHENTICATION_FAILURE = Symbol("SSO_AUTHENTICATION_FAILURE");
+
+/**
+ * Applies `mapProfileToUser` to the profile read from the provider. Only the
+ * documented user fields are taken from the callback's result.
+ */
+export async function mapSSOProfile(
+	options: SSOOptions | undefined,
+	input: SSOProfileMappingInput,
+): Promise<SSOProfileMappingInput["providerUser"]> {
+	if (!options?.mapProfileToUser) {
+		return input.providerUser;
+	}
+	const { email, emailVerified, name, image } =
+		await options.mapProfileToUser(input);
+	return {
+		email: email === null ? undefined : (email ?? input.providerUser.email),
+		emailVerified: emailVerified ?? input.providerUser.emailVerified,
+		name: name ?? input.providerUser.name,
+		image: image ?? input.providerUser.image,
+	};
+}
 
 type SSOAuthenticationResult = Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 type SSOAuthenticationFailure = Error & {

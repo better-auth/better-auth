@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import type { SSOProfileMappingInput } from "./types";
 
 const server = new OAuth2Server();
 
@@ -2569,5 +2570,108 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 
 		expect(res.status).toBe(302);
 		expect(res.headers.get("location")).toContain("state_not_found");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10209
+ */
+describe("OIDC providers without an email claim", async () => {
+	let mappingInput: SSOProfileMappingInput | undefined;
+	const { auth, client, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance(
+			{
+				trustedOrigins: ["http://localhost:8080"],
+				plugins: [
+					sso({
+						mapProfileToUser(input) {
+							mappingInput = input;
+							return {
+								email:
+									input.providerUser.email ??
+									`${input.accountKey.accountId}@${input.providerId}.placeholder.invalid`,
+							};
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [ssoClient()] } },
+		);
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		await server.start(8080, "localhost");
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "subject-without-email";
+			token.payload.name = "No Email User";
+			// Other suites register listeners that set an email on the shared server.
+			token.payload.email = undefined;
+		});
+	});
+
+	afterAll(async () => {
+		server.service.removeAllListeners("beforeTokenSigning");
+		await server.stop();
+	});
+
+	it("creates the user with the email returned by mapProfileToUser", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "no-email-oidc",
+				issuer: server.issuer.url!,
+				domain: "no-email.example.com",
+				oidcConfig: {
+					clientId: "no-email-client",
+					clientSecret: "test-client-secret",
+					skipDiscovery: true,
+					authorizationEndpoint: `${server.issuer.url!}/authorize`,
+					tokenEndpoint: `${server.issuer.url!}/token`,
+					jwksEndpoint: `${server.issuer.url!}/jwks`,
+					pkce: false,
+				},
+			},
+			headers,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await client.signIn.sso({
+			providerId: "no-email-oidc",
+			callbackURL: "/dashboard",
+			fetchOptions: { throw: true, onSuccess: cookieSetter(signInHeaders) },
+		});
+		let location: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+		let callbackURL = "";
+		const sessionHeaders = new Headers();
+		await betterFetch(location!, {
+			method: "GET",
+			customFetchImpl,
+			headers: signInHeaders,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(sessionHeaders)(context);
+			},
+		});
+
+		expect(callbackURL).toContain("/dashboard");
+		expect(mappingInput).toMatchObject({
+			protocol: "oidc",
+			providerId: "no-email-oidc",
+			accountKey: { accountId: "subject-without-email" },
+			providerClaims: { sub: "subject-without-email" },
+		});
+		expect(mappingInput?.providerUser.email).toBeUndefined();
+		const session = await auth.api.getSession({ headers: sessionHeaders });
+		expect(session?.user).toMatchObject({
+			email: "subject-without-email@no-email-oidc.placeholder.invalid",
+			emailVerified: false,
+		});
 	});
 });

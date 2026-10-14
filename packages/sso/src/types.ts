@@ -358,6 +358,58 @@ export interface SSOUserResolutionContext {
 	database: DBTransactionAdapter;
 }
 
+interface BaseSSOProfileMappingInput {
+	providerId: string;
+	accountKey: BaseSSOUserResolutionInput["accountKey"];
+	/**
+	 * Profile fields read from the provider with the provider's `mapping`.
+	 * `email` is absent when the provider sent no usable email.
+	 */
+	providerUser: {
+		email?: string | undefined;
+		emailVerified: boolean;
+		name?: string | undefined;
+		image?: string | undefined;
+	};
+}
+
+/** OIDC profile data available to `mapProfileToUser`. */
+export interface SSOOIDCProfileMappingInput extends BaseSSOProfileMappingInput {
+	protocol: "oidc";
+	/** Raw claims from UserInfo, or the verified ID Token when UserInfo is absent. */
+	providerClaims: Record<string, unknown>;
+}
+
+/** SAML profile data available to `mapProfileToUser`. */
+export interface SSOSAMLProfileMappingInput extends BaseSSOProfileMappingInput {
+	protocol: "saml";
+	/**
+	 * Attributes from the verified assertion. Multi-valued attributes remain
+	 * arrays and all scalar values remain strings.
+	 */
+	providerAttributes: Record<string, string | readonly string[]>;
+	/** The verified assertion's NameID, which is also `accountKey.accountId`. */
+	nameID: string;
+	/** The NameID `Format` attribute, when the assertion sets one. */
+	nameIDFormat?: string | undefined;
+}
+
+/** Provider profile data available to `mapProfileToUser`. */
+export type SSOProfileMappingInput =
+	| SSOOIDCProfileMappingInput
+	| SSOSAMLProfileMappingInput;
+
+/** User fields an application can set from `mapProfileToUser`. */
+export interface SSOMappedUser {
+	/** The account subject comes from the verified `sub` claim or NameID. */
+	id?: never;
+	/** Return `null` to discard the email the provider sent. */
+	email?: string | null | undefined;
+	emailVerified?: boolean | undefined;
+	name?: string | undefined;
+	image?: string | undefined;
+}
+
 interface BaseSSOProviderMutationGuardInput {
 	provider: {
 		id: string;
@@ -392,6 +444,25 @@ export interface SSOProviderMutationGuardContext {
 }
 
 export interface SSOOptions {
+	/**
+	 * Map a provider profile to user fields before the user is looked up or
+	 * created.
+	 *
+	 * Runs on every OIDC and SAML sign-in, after the provider's `mapping` is
+	 * applied. Use it for providers that send no email: sign-in fails when
+	 * neither the provider nor this callback yields one. A SAML NameID is used
+	 * as the email only when its `Format` is
+	 * `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`.
+	 *
+	 * The returned email is used to find, link, and create the user, and to
+	 * decide whether the provider's verified domain trusts it. Return only
+	 * addresses the provider vouches for, or a placeholder on the reserved
+	 * `.invalid` domain, such as
+	 * `${accountKey.accountId}@${providerId}.placeholder.invalid`.
+	 */
+	mapProfileToUser?:
+		| ((input: SSOProfileMappingInput) => Awaitable<SSOMappedUser>)
+		| undefined;
 	/**
 	 * Resolve a verified provider identity to a Better Auth user.
 	 *
