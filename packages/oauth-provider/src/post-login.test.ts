@@ -57,13 +57,15 @@ async function createPostLoginTestInstance() {
 	}
 
 	shouldRedirect.mockImplementation(
-		async ({ session, headers, isContinue }) => {
+		async ({ session, headers, isContinuation }) => {
 			const memberships = await auth.api.listOrganizations({ headers });
 			const hasActiveOrganization = memberships.some(
 				(organization) => organization.id === session.activeOrganizationId,
 			);
 
-			return !hasActiveOrganization || (!isContinue && memberships.length > 1);
+			return (
+				!hasActiveOrganization || (!isContinuation && memberships.length > 1)
+			);
 		},
 	);
 
@@ -116,7 +118,7 @@ describe("post-login organization selection", () => {
 
 		expect(consent.pathname).toBe("/consent");
 		expect(shouldRedirect).toHaveBeenLastCalledWith(
-			expect.objectContaining({ isContinue: true }),
+			expect.objectContaining({ isContinuation: true }),
 		);
 
 		const result = await client.oauth2.consent({
@@ -138,7 +140,7 @@ describe("post-login organization selection", () => {
 
 		expect((await authorize()).pathname).toBe("/select-organization");
 		expect(shouldRedirect).toHaveBeenLastCalledWith(
-			expect.objectContaining({ isContinue: false }),
+			expect.objectContaining({ isContinuation: false }),
 		);
 	});
 
