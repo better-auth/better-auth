@@ -433,26 +433,31 @@ function AdminDashboard() {
 														});
 														if (user.banned) {
 															setIsLoading(`ban-${user.id}`);
-															await authClient.admin.unbanUser(
-																{
-																	userId: user.id,
-																},
-																{
-																	onError(context) {
-																		toast.error(
-																			context.error.message ||
-																				"Failed to unban user",
-																		);
-																		setIsLoading(undefined);
+															try {
+																await authClient.admin.unbanUser(
+																	{
+																		userId: user.id,
 																	},
-																	async onSuccess() {
-																		await queryClient.invalidateQueries({
-																			queryKey: ["users"],
-																		});
-																		toast.success("User unbanned successfully");
+																	{
+																		onError(context) {
+																			toast.error(
+																				context.error.message ||
+																					"Failed to unban user",
+																			);
+																		},
+																		async onSuccess() {
+																			await queryClient.invalidateQueries({
+																				queryKey: ["users"],
+																			});
+																			toast.success(
+																				"User unbanned successfully",
+																			);
+																		},
 																	},
-																},
-															);
+																);
+															} finally {
+																setIsLoading(undefined);
+															}
 														} else {
 															setIsBanDialogOpen(true);
 														}
