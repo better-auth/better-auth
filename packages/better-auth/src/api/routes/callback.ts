@@ -204,11 +204,30 @@ export const callbackOAuth = createAuthEndpoint(
 				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
 			});
 		} catch (e) {
-			c.context.logger.error("", e);
+			c.context.logger.error("Failed to exchange OAuth authorization code", {
+				providerId: provider.id,
+				error: e,
+			});
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE);
 		}
 		if (!tokens) {
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE);
+		}
+		if (!tokens.accessToken && !tokens.idToken) {
+			// A 200 response with neither field means the provider reported an
+			// error in the response body instead of the HTTP status (e.g. Slack's
+			// `{ok:false,error:"invalid_code"}`). Log the provider-supplied error
+			// fields only; never log the raw token response, which may carry
+			// other secrets.
+			c.context.logger.error(
+				"OAuth token response contained no access_token or id_token",
+				{
+					providerId: provider.id,
+					error: tokens.raw?.error,
+					error_description: tokens.raw?.error_description,
+					ok: tokens.raw?.ok,
+				},
+			);
 		}
 		const parsedUserData = userData
 			? safeJSONParse<{
