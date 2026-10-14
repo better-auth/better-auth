@@ -8,8 +8,8 @@ import {
 	setSessionCookie,
 	toCookieOptions,
 } from "better-auth/cookies";
-import type { User } from "better-auth/db";
-import { parseUserOutput } from "better-auth/db";
+import type { Session, User } from "better-auth/db";
+import { parseSessionOutput, parseUserOutput } from "better-auth/db";
 import { generateCodeChallenge } from "better-auth/oauth2";
 import * as z from "zod";
 import { ELECTRON_ERROR_CODES } from "./error-codes";
@@ -53,8 +53,12 @@ export const electronToken = (_opts: ElectronOptions) =>
 												type: "object",
 												$ref: "#/components/schemas/User",
 											},
+											session: {
+												type: "object",
+												$ref: "#/components/schemas/Session",
+											},
 										},
-										required: ["token", "user"],
+										required: ["token", "user", "session"],
 									},
 								},
 							},
@@ -128,6 +132,8 @@ export const electronToken = (_opts: ElectronOptions) =>
 			return ctx.json({
 				token: session.token,
 				user: parseUserOutput(ctx.context.options, user) as User &
+					Record<string, any>,
+				session: parseSessionOutput(ctx.context.options, session) as Session &
 					Record<string, any>,
 			});
 		},

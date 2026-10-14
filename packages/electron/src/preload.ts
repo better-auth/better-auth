@@ -1,5 +1,5 @@
 import type { Awaitable } from "@better-auth/core";
-import type { User } from "@better-auth/core/db";
+import type { Session, User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import electron, { contextBridge } from "electron";
@@ -40,6 +40,7 @@ function exposeBridges<O extends ElectronClientOptions>(
 
 	type SanitizedUser = O["sanitizeUser"] extends (
 		user: User & Record<string, any>,
+		session: (Session & Record<string, any>) | null,
 	) => Awaitable<User & Record<string, any>>
 		? Awaited<ReturnType<O["sanitizeUser"]>>
 		: User & Record<string, any>;
