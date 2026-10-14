@@ -1568,18 +1568,7 @@ When upgrading to purpose-prefixed verification identifiers or purpose-specific 
 
 Better Auth derives the ACS URL automatically from your `baseURL` and `providerId`, so no SP-side configuration is required.
 
-<Callout type="info">
-  **`callbackUrl` vs. ACS in Better Auth 1.7+**
-
-  In Better Auth 1.7+, `callbackUrl` is strictly a post-login redirect destination, not the Assertion Consumer Service (ACS) endpoint.
-
-  * **ACS Endpoint**: The ACS URL is auto-derived as `baseURL` + `/sso/saml2/sp/acs/:providerId` (with the default base path, `https://yourapp.com/api/auth/sso/saml2/sp/acs/:providerId`) and must be registered at your IdP. If you need a legacy fixed ACS endpoint, set its `Location` in `spMetadata.metadata` and configure that endpoint to forward requests to Better Auth's `/sso/saml2/sp/acs/:providerId` route (metadata alone does not create a handler at the legacy URL).
-  * **SP-Initiated Flow**: Redirects users to the post-login destination passed to the client-side `signIn.sso({ callbackURL })`.
-  * **IdP-Initiated Fallback Chain**: When unsolicited logins are enabled (`allowIdpInitiated: true`), post-login redirection follows the fallback chain: `relayState` > `samlConfig.idpInitiatedCallbackUrl` > `saml.idpInitiatedCallbackUrl` > `samlConfig.callbackUrl`.
-  * **Validation & Errors**: `samlConfig.callbackUrl` values containing URL fragments are rejected; `idpInitiatedCallbackUrl` supports fragments. Redirect error codes in 1.7 use lowercased internal codes (such as `saml_multiple_assertions`).
-
-  See the [1.7 Upgrade Guide](/docs/guides/1-7-upgrade-guide#saml-configuration-is-simplified) for migration details (Refs #11296, #11730).
-</Callout>
+If your IdP already posts to another URL, such as an existing AD FS relying-party trust, list that URL as an HTTP-POST `AssertionConsumerService` in `spMetadata.metadata` and forward its POST requests to `/sso/saml2/sp/acs/:providerId`. Better Auth then accepts responses addressed to that URL. `samlConfig.callbackUrl` is the post-login redirect, not an ACS URL; see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#saml-configuration-is-simplified).
 
 Your IdP must include an `AudienceRestriction` for this SP. The accepted audience is the SP entity ID, or the explicit `audience` value in `samlConfig` when you need to match an IdP-specific SP identifier. Better Auth also checks bearer `Recipient` and response `Destination` values against this provider's ACS endpoints.
 
