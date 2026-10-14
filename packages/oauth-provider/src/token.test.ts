@@ -1,4 +1,5 @@
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
@@ -11,6 +12,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { BetterAuthPlugin } from "better-auth/types";
 import type { JWK } from "jose";
 import {
 	base64url,
@@ -24,7 +26,7 @@ import {
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import { confirmationTokenType } from "./token";
+import { confirmationTokenType, getOAuthProviderApi } from "./token";
 import type {
 	Confirmation,
 	OAuthOptions,
@@ -4646,10 +4648,31 @@ describe("oauth token - DPoP", async () => {
 	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
 	const internalTokenEndpoint =
 		"http://auth-service:3000/api/auth/oauth2/token";
+	const pluginIssueEndpoint = `${authServerBaseUrl}/api/auth/test/dpop-issue`;
+	// A plugin endpoint that issues tokens itself through the public provider API.
+	const pluginIssuer = {
+		id: "test-dpop-plugin-issuer",
+		endpoints: {
+			testDpopIssue: createAuthEndpoint(
+				"/test/dpop-issue",
+				{ method: "POST" },
+				async (ctx) => {
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+						"client_credentials",
+					);
+					const { client } = await provider.authenticateClient();
+					return ctx.json(await provider.issueTokens({ client, scopes: [] }));
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: `${authServerBaseUrl}/api/auth/`,
 		plugins: [
+			pluginIssuer,
 			jwt({ jwt: { issuer: authServerBaseUrl } }),
 			oauthProvider({
 				loginPage: "/login",
@@ -4814,6 +4837,36 @@ describe("oauth token - DPoP", async () => {
 		expect(tokens.data?.token_type).toBe("DPoP");
 		const payload = decodeJwt(tokens.data!.access_token!);
 		expect(payload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("validates DPoP against the plugin endpoint that issues the tokens", async () => {
+		const issuerClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+			},
+		});
+		const dpopKey = await createDpopKey();
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: pluginIssueEndpoint,
+			jti: "plugin-endpoint-proof",
+		});
+		const response = await customFetchImpl(pluginIssueEndpoint, {
+			method: "POST",
+			headers: { "content-type": "application/json", DPoP: proof },
+			body: JSON.stringify({
+				client_id: issuerClient.client_id,
+				client_secret: issuerClient.client_secret,
+			}),
+		});
+		const tokens: OAuthTokenResponse = await response.json();
+
+		expect(tokens).toMatchObject({ token_type: "DPoP" });
+		expect(response.status).toBe(200);
 	});
 
 	it("validates DPoP against the public token endpoint URL", async () => {

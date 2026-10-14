@@ -817,7 +817,9 @@ async function resolveDpopTokenBinding(
 		const proof = await verifyDpopProof({
 			proofJwt: dpopProofJwt,
 			method: "POST",
-			url: `${ctx.context.baseURL.replace(/\/+$/, "")}/oauth2/token`,
+			// The endpoint serving this request: the token endpoint, or a plugin's
+			// own endpoint that issues tokens out-of-grant.
+			url: `${ctx.context.baseURL.replace(/\/+$/, "")}${ctx.path ?? "/oauth2/token"}`,
 			expectedJkt,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
