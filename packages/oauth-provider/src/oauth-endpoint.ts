@@ -7,7 +7,7 @@ import type {
 } from "better-call";
 import { APIError } from "better-call";
 import * as z from "zod";
-import { formParamsToBody, readFormParams } from "./utils";
+import { applyFormParams, readFormParams } from "./utils";
 
 /**
  * Canonical OAuth 2.0 / OpenID Connect error codes. The union is the single
@@ -114,11 +114,10 @@ export interface OAuthEndpointExtras<
 	 */
 	defaultError?: OAuthErrorCode;
 	/**
-	 * Rebuilds the body from the raw form before validation, because the form
-	 * parser keeps only the last value of a repeated key. Empty values count as
-	 * omitted and repeated parameters return `invalid_request` (RFC 6749 §3.2),
-	 * except the names in `repeatable`, which become arrays. Requires
-	 * `cloneRequest: true`.
+	 * Re-reads the raw form before validation, because the form parser keeps
+	 * only the last value of a repeated key. Empty values count as omitted and
+	 * repeated parameters return `invalid_request` (RFC 6749 §3.2), except the
+	 * names in `repeatable`, which become arrays. Enables `cloneRequest`.
 	 */
 	formParams?: { repeatable?: readonly string[] };
 }
@@ -185,6 +184,8 @@ export function createOAuthEndpoint<
 		body?: z.ZodTypeAny;
 		query?: z.ZodTypeAny;
 	};
+	// A second read of the raw form needs its own copy of the request body.
+	if (formParams) (forwarded as { cloneRequest?: boolean }).cloneRequest = true;
 
 	async function validateSlot(
 		ctx: EndpointContext<Path, Options, AuthContext>,
@@ -221,8 +222,9 @@ export function createOAuthEndpoint<
 					? await readFormParams(ctx.request)
 					: undefined;
 			if (form) {
-				(ctx as { body: unknown }).body = formParamsToBody(
+				(ctx as { body: unknown }).body = applyFormParams(
 					form,
+					(ctx.body ?? {}) as Record<string, unknown>,
 					formParams?.repeatable,
 				);
 			}

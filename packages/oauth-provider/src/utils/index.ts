@@ -564,33 +564,35 @@ export async function readFormParams(
 }
 
 /**
- * Builds a request body from raw form parameters under RFC 6749 §3.2: a
- * parameter sent without a value counts as omitted, and a parameter sent more
- * than once is rejected with `invalid_request`. A name in `repeatable`, such
- * as RFC 8707 `resource`, keeps every value as an array when it repeats.
+ * Applies RFC 6749 §3.2 to a form body the parser collapsed to one value per
+ * key: a parameter sent without a value counts as omitted, and a parameter
+ * sent more than once is rejected with `invalid_request`. A name in
+ * `repeatable`, such as RFC 8707 `resource`, keeps every value as an array
+ * when it repeats. A value a `before` hook replaced is left as the hook set it.
  *
  * @internal
  */
-export function formParamsToBody(
+export function applyFormParams(
 	params: URLSearchParams,
+	body: Record<string, unknown>,
 	repeatable: readonly string[] = [],
-): Record<string, string | string[]> {
-	const body: Record<string, string | string[]> = {};
+): Record<string, unknown> {
+	const merged = { ...body };
 	for (const name of new Set(params.keys())) {
-		const values = params.getAll(name).filter(Boolean);
-		if (values.length === 1) {
-			body[name] = values[0]!;
-		} else if (values.length > 1) {
-			if (!repeatable.includes(name)) {
-				throw new APIError("BAD_REQUEST", {
-					error: "invalid_request",
-					error_description: `${name} must not be repeated`,
-				});
-			}
-			body[name] = values;
+		const raw = params.getAll(name);
+		const values = raw.filter(Boolean);
+		if (values.length > 1 && !repeatable.includes(name)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: `${name} must not be repeated`,
+			});
 		}
+		// The parser kept the last raw value; anything else came from a hook.
+		if (merged[name] !== raw.at(-1)) continue;
+		if (values.length === 0) delete merged[name];
+		else merged[name] = values.length === 1 ? values[0] : values;
 	}
-	return body;
+	return merged;
 }
 
 /**

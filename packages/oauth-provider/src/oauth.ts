@@ -875,8 +875,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					// `formParams` re-reads the raw form body.
-					cloneRequest: true,
 					// RFC 8707 §2 and RFC 8693 §2.1 let these repeat.
 					formParams: { repeatable: ["resource", "audience"] },
 					body: z
@@ -1053,8 +1051,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/introspect",
 				{
 					method: "POST",
-					// `formParams` re-reads the raw form body.
-					cloneRequest: true,
 					formParams: {},
 					body: z.object({
 						client_id: z.string().optional(),
@@ -1195,8 +1191,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/revoke",
 				{
 					method: "POST",
-					// `formParams` re-reads the raw form body.
-					cloneRequest: true,
 					formParams: {},
 					body: z.object({
 						client_id: z.string().optional(),

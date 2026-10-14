@@ -1,4 +1,4 @@
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -16,6 +16,16 @@ describe("token endpoint request parameters", async () => {
 	let observedAudience: unknown;
 	const { auth, signInWithTestUser } = await getTestInstance({
 		baseURL,
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				if (
+					ctx.path === "/oauth2/token" &&
+					(ctx.body as { scope?: string } | undefined)?.scope === "rewrite-me"
+				) {
+					return { context: { body: { scope: "m2m:read" } } };
+				}
+			}),
+		},
 		plugins: [
 			jwt(),
 			oauthProvider({
@@ -135,6 +145,15 @@ describe("token endpoint request parameters", async () => {
 			error_description: `${name} must not be repeated`,
 		});
 		expect(response.headers.get("cache-control")).toBe("no-store");
+	});
+
+	it("keeps a parameter a before hook replaced", async () => {
+		const { response, body } = await postToken([
+			["grant_type", "client_credentials"],
+			["scope", "rewrite-me"],
+		]);
+		expect(response.status).toBe(200);
+		expect(body.access_token).toBeDefined();
 	});
 
 	/**
