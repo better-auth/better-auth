@@ -178,7 +178,7 @@ test.describe("OAuth device-code grant over HTTP", () => {
 			);
 			expect(consentResponse.ok(), await consentResponse.text()).toBe(true);
 			const consentURL = new URL(
-				(await responseJson<{ url: string }>(consentResponse)).url,
+				((await consentResponse.json()) as { url: string }).url,
 				origin,
 			);
 			expect(consentURL.pathname).toBe("/consent");
@@ -197,7 +197,7 @@ test.describe("OAuth device-code grant over HTTP", () => {
 				},
 			);
 			expect(approvalResponse.ok(), await approvalResponse.text()).toBe(true);
-			expect(await responseJson<{ url: string }>(approvalResponse)).toEqual({
+			expect(await approvalResponse.json()).toEqual({
 				redirect: true,
 				url: `${origin}/device?user_code=${encodeURIComponent(userCode)}&status=approved`,
 			});
