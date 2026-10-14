@@ -22,7 +22,7 @@ import {
 } from "./authentication-context";
 import { resolveAccessTokenClaims } from "./claims";
 import { getRequestedUserInfoClaims } from "./claims-request";
-import { getDpopProofJwt } from "./dpop";
+import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import {
 	collectExtensionIdTokenClaims,
 	getExtensionGrantHandler,
@@ -819,7 +819,7 @@ async function resolveDpopTokenBinding(
 			method: "POST",
 			// The endpoint serving this request: the token endpoint, or a plugin's
 			// own endpoint that issues tokens out-of-grant.
-			url: `${ctx.context.baseURL.replace(/\/+$/, "")}${ctx.path ?? "/oauth2/token"}`,
+			url: getEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
 			expectedJkt,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,

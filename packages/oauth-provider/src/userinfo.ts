@@ -8,7 +8,7 @@ import {
 	parseAccessTokenAuthorization,
 } from "better-auth/oauth2";
 import type { User } from "better-auth/types";
-import { getDpopProofJwt } from "./dpop";
+import { getDpopProofJwt, getEndpointUrl } from "./dpop";
 import {
 	collectExtensionUserInfoClaims,
 	hasUserInfoClaimExtension,
@@ -126,9 +126,9 @@ export async function userInfoEndpoint(
 			accessTokenAuthorization.token,
 		);
 
-	// The DPoP `htm`/`htu` check needs the real request method and URL. Without a
-	// `ctx.request` (a programmatic `auth.api` call) the sender-constraint cannot
-	// be verified, so fail closed for a DPoP-bound token rather than assume "GET".
+	// The DPoP `htm` check needs the real request method. Without a `ctx.request`
+	// (a programmatic `auth.api` call) the sender-constraint cannot be verified,
+	// so fail closed for a DPoP-bound token rather than assume "GET".
 	if (getDpopJktFromPayload(jwt) && !ctx.request) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description:
@@ -143,7 +143,7 @@ export async function userInfoEndpoint(
 			authorization: accessTokenAuthorization,
 			proofJwt: getDpopProofJwt(ctx),
 			method: ctx.request?.method ?? "GET",
-			url: `${ctx.context.baseURL.replace(/\/+$/, "")}/oauth2/userinfo`,
+			url: getEndpointUrl(ctx, "/oauth2/userinfo"),
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
 			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
