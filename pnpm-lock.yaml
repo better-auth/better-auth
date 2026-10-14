@@ -542,6 +542,9 @@ importers:
       pg:
         specifier: ^8.21.0
         version: 8.22.0
+      postgres:
+        specifier: ^3.4.8
+        version: 3.4.8
       tarn:
         specifier: ^3.0.2
         version: 3.0.2
