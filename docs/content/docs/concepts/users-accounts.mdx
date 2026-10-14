@@ -106,6 +106,68 @@ export const auth = betterAuth({
   If `updateEmailWithoutVerification` is false (default), the email will not be updated until the new email is verified, even if the current email is unverified.
 </Callout>
 
+#### Explicit Confirmation Mode
+
+By default (`confirmationMode: "instant"`), the emailed verification link changes the email
+address the moment it's visited — a plain `GET`. Some email clients and security scanners open
+links automatically to scan them (Outlook Safe Links, link-preview proxies), which can trigger
+the change without the user's intent. Set `confirmationMode: "explicit"` to require a separate
+confirmation step instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    user: {
+        changeEmail: {
+            enabled: true,
+            confirmationMode: "explicit", // default: "instant"
+            sendChangeEmailConfirmation: async ({ url, token }) => { /* ... */ },
+        }
+    }
+})
+```
+
+In `"explicit"` mode, the `url` passed to `emailVerification.sendVerificationEmail` is your
+app's own URL (built from `callbackURL`) with `token` attached, instead of better-auth's
+`/verify-email` endpoint — this holds whether that's the only email sent, or the follow-up sent
+after the user approves `sendChangeEmailConfirmation`'s own link (which is always better-auth's
+instant callback, regardless of `confirmationMode`).
+
+Because that URL is emailed, every change request that sends a verification link must pass a
+`callbackURL` that is an **absolute** URL to your confirmation page, for example
+`https://app.example.com/account/email`, and that doesn't already carry a `token` query
+parameter. Changes that apply immediately, for an unverified user when
+`updateEmailWithoutVerification` is enabled, send no such link and don't need one. If your app is on a different origin than the auth server, add that origin to
+[`trustedOrigins`](/docs/reference/options#trustedorigins), or HTTP requests are rejected with
+`INVALID_ORIGIN` (the request's own origin) or `INVALID_CALLBACK_URL` (the `callbackURL`) before
+they reach the handler. That origin check only applies to requests that arrive over HTTP: when
+you call `auth.api.changeEmail` directly from server code there is no request to check, so pass
+a `callbackURL` you control. A missing, relative or invalid `callbackURL`, one that points at
+`/verify-email` (however its path is encoded), or one that already contains `token`, is rejected
+with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL` before anything is sent, and it fails the
+same way whether or not the new email is already registered.
+Your app renders a confirmation page from the app-owned URL, then:
+
+* `GET /change-email/preview` — validates the token and returns the pending email change
+  without applying it.
+* `POST /change-email/confirm` — applies the change, the same way the instant link does.
+
+Unlike the instant link — a direct browser navigation that may legitimately arrive with no
+active session — both `preview` and `confirm` require the caller to already be signed in as
+the user the token belongs to, and reject otherwise. Forward the user's session (cookies or an
+equivalent auth header) when your confirmation page calls them. A token issued for a different
+purpose, such as the `sendChangeEmailConfirmation` one, is rejected.
+
+<Callout type="warn">
+  The change-email token is a signed JWT, not a single-use database row, so it is not
+  invalidated after use. In practice a sequential replay of `/change-email/confirm` (or the
+  instant `/verify-email` link) fails once the change has applied, because the token's lookup
+  key is the *old* email address and that no longer belongs to any user — but two sufficiently
+  concurrent replays are not guarded against the way single-use verification rows are. This is
+  pre-existing behavior of the instant-mode link too; it is not specific to explicit mode.
+</Callout>
+
 #### Client Usage
 
 Use the `changeEmail` function on the client to initiate the process.
