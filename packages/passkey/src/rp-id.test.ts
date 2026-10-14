@@ -279,6 +279,44 @@ describe("passkey rpID", () => {
 		expect(extensionAuth.result.ok).toBe(true);
 	});
 
+	it("passes the issued rpID to an expectedRPID function", async () => {
+		// Each challenge accepts only the RP ID derived from the one it was
+		// issued for, unlike a static list that accepts any listed RP ID.
+		const flow = await setup({
+			rpID: ({ ctx }) => {
+				const origin = ctx.headers?.get("origin");
+				return origin === EXTENSION_ORIGIN ? EXTENSION_ID : "localhost";
+			},
+			expectedRPID: ({ rpID }) =>
+				rpID === EXTENSION_ID ? `chrome-extension://${rpID}` : rpID,
+		});
+
+		const extension = await flow.register({
+			origin: EXTENSION_ORIGIN,
+			signedRPID: EXTENSION_ORIGIN,
+		});
+		expect(extension.optionsRPID).toBe(EXTENSION_ID);
+		expect(extension.result.ok).toBe(true);
+
+		const web = await flow.authenticate({ origin: WEB_ORIGIN });
+		expect(web.optionsRPID).toBe("localhost");
+		expect(web.result.ok).toBe(true);
+
+		const webRejected = await flow.authenticate({
+			origin: WEB_ORIGIN,
+			signedRPID: EXTENSION_ORIGIN,
+		});
+		expect(webRejected.optionsRPID).toBe("localhost");
+		expect(webRejected.result.ok).toBe(false);
+
+		const extensionRejected = await flow.authenticate({
+			origin: EXTENSION_ORIGIN,
+			signedRPID: "localhost",
+		});
+		expect(extensionRejected.optionsRPID).toBe(EXTENSION_ID);
+		expect(extensionRejected.result.ok).toBe(false);
+	});
+
 	it("verifies against the rpID issued with the challenge, not one resolved again", async () => {
 		// The resolver reads a header that only the options request carries, so
 		// resolving it again on the verify request would pick another RP ID.
