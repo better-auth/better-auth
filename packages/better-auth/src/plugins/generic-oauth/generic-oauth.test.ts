@@ -1,8 +1,12 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
 import { generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
@@ -5475,7 +5479,7 @@ describe("oauth2", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11404
 	 */
-	it("recovers the provider in every auth instance that shares one plugin object", async () => {
+	it("recovers the provider in every auth instance that shares one plugin object and adapter", async () => {
 		let idpUp = false;
 		mswServer.use(
 			http.get(
@@ -5501,12 +5505,21 @@ describe("oauth2", async () => {
 				},
 			],
 		});
+		// A database callback may hand every instance the same adapter object.
+		let adapter: ReturnType<ReturnType<typeof memoryAdapter>> | undefined;
+		const database = (options: BetterAuthOptions) =>
+			(adapter ??= memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			})(options));
 		const first = await getTestInstance(
-			{ plugins: [plugin] },
+			{ database, plugins: [plugin] },
 			{ disableTestUser: true },
 		);
 		const second = await getTestInstance(
-			{ plugins: [plugin] },
+			{ database, plugins: [plugin] },
 			{ disableTestUser: true },
 		);
 

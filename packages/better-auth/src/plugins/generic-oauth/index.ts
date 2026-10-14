@@ -507,9 +507,10 @@ export const genericOAuth = <const ID extends string>(
 		return genericProviders;
 	};
 
-	// Providers skipped because startup discovery failed, per auth instance (keyed by its
-	// adapter, like oauth-provider's seed state) since one plugin object can serve several.
-	// Concurrent requests share one retry, and a failed retry stays pending.
+	// Providers skipped because startup discovery failed, per auth instance, since one
+	// plugin object can serve several. Keyed by the provider list init returns, which is
+	// unique to each instance and is the list a retry adds to. Concurrent requests share
+	// one retry, and a failed retry stays pending.
 	const pendingDiscovery = new WeakMap<
 		object,
 		Map<
@@ -518,7 +519,7 @@ export const genericOAuth = <const ID extends string>(
 		>
 	>();
 	const retryDiscovery = (ctx: AuthContext, providerId: string) => {
-		const pending = pendingDiscovery.get(ctx.adapter)?.get(providerId);
+		const pending = pendingDiscovery.get(ctx.socialProviders)?.get(providerId);
 		if (!pending) return;
 		pending.attempt ??= buildProviders(
 			[pending.config],
@@ -527,7 +528,7 @@ export const genericOAuth = <const ID extends string>(
 		)
 			.then(([provider]) => {
 				if (!provider) return;
-				pendingDiscovery.get(ctx.adapter)?.delete(providerId);
+				pendingDiscovery.get(ctx.socialProviders)?.delete(providerId);
 				ctx.socialProviders.unshift(provider);
 			})
 			.finally(() => {
@@ -555,8 +556,9 @@ export const genericOAuth = <const ID extends string>(
 		init: async (ctx: AuthContext) => {
 			const genericProviders = await buildProviders(options.config, ctx);
 			const built = new Set(genericProviders.map((p) => p.id));
+			const socialProviders = genericProviders.concat(ctx.socialProviders);
 			pendingDiscovery.set(
-				ctx.adapter,
+				socialProviders,
 				new Map(
 					options.config
 						.filter((c) => !built.has(c.providerId))
@@ -574,9 +576,7 @@ export const genericOAuth = <const ID extends string>(
 			}
 
 			return {
-				context: {
-					socialProviders: genericProviders.concat(ctx.socialProviders),
-				},
+				context: { socialProviders },
 			};
 		},
 		hooks: {
@@ -584,7 +584,7 @@ export const genericOAuth = <const ID extends string>(
 				{
 					matcher: (context) =>
 						pendingDiscovery
-							.get(context.context.adapter)
+							.get(context.context.socialProviders)
 							?.has(requestedProviderId(context) ?? "") === true,
 					handler: createAuthMiddleware(async (ctx) => {
 						const providerId = requestedProviderId(ctx);
