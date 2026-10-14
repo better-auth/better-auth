@@ -369,7 +369,9 @@ async function createIdToken(
 		: undefined;
 
 	const emitSid = Boolean(
-		client.enableEndSession || client.backchannelLogoutUri,
+		client.enableEndSession ||
+			client.backchannelLogoutUri ||
+			client.frontchannelLogoutUri,
 	);
 	const payload: JWTPayload = {
 		...ID_TOKEN_SCOPE_CLAIM_GUARDS,

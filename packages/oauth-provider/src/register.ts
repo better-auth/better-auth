@@ -4,7 +4,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
-import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
@@ -20,6 +20,7 @@ import {
 	validateClientCredentialsScopes,
 } from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
+import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
 import type {
 	ClientRegistrationRequest,
@@ -82,7 +83,7 @@ function resolveRegistrationResponseTypes(
 
 function applyOAuthClientRegistrationDefaults(
 	client: OAuthClientRegistrationMetadata,
-	defaultApplicationType: "web" | null = "web",
+	defaultApplicationType: "web" | "native" | null = "web",
 ): OAuthClientRegistrationMetadata {
 	const grantTypes = resolveRegistrationGrantTypes(client);
 	return {
@@ -97,14 +98,40 @@ function applyOAuthClientRegistrationDefaults(
 	};
 }
 
-const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
-	"file:",
-	"ftp:",
-	"mailto:",
-	"javascript:",
-	"data:",
-	"vbscript:",
-]);
+function isCustomSchemeWithHost(redirectUri: string): boolean {
+	const url = new URL(redirectUri);
+	return (
+		url.protocol !== "http:" && url.protocol !== "https:" && url.host !== ""
+	);
+}
+
+function isNonHttpRedirectUri(redirectUri: string): boolean {
+	try {
+		const protocol = new URL(redirectUri).protocol;
+		return protocol !== "http:" && protocol !== "https:";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Server-owned default for dynamic registrations that omit `application_type`.
+ * `"infer"` classifies as native when any redirect URI uses a non-http(s)
+ * scheme, because a web client can never register one. Every URI is then
+ * validated against the native rules. A sent `application_type` is never
+ * overridden because `applyOAuthClientRegistrationDefaults` only fills the
+ * absent field.
+ */
+function resolveDynamicRegistrationDefaultApplicationType(
+	opts: OAuthOptions<Scope[]>,
+	client: OAuthClientRegistrationMetadata,
+): "web" | "native" {
+	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
+	if (configured !== "infer") return configured;
+	return (client.redirect_uris ?? []).some(isNonHttpRedirectUri)
+		? "native"
+		: "web";
+}
 
 function invalidRedirectUri(description: string): never {
 	throw new APIError("BAD_REQUEST", {
@@ -126,14 +153,12 @@ function getRawHttpHostname(redirectUri: string): string | null {
 	return (hostAndPort.split(":")[0] ?? "").toLowerCase();
 }
 
-async function resolveClientRegistrationResources(
-	ctx: GenericEndpointContext,
+function assertDynamicRegistrationResourcesAllowed(
 	opts: OAuthOptions<Scope[]>,
 	requestedResources: readonly string[],
-): Promise<string[]> {
-	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
+) {
 	const allowedResources = new Set([
-		...defaultResources,
+		...(opts.clientRegistrationDefaultResources ?? []),
 		...(opts.clientRegistrationAllowedResources ?? []),
 	]);
 	for (const identifier of requestedResources) {
@@ -144,7 +169,14 @@ async function resolveClientRegistrationResources(
 			});
 		}
 	}
+}
 
+async function resolveClientRegistrationResources(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	requestedResources: readonly string[],
+): Promise<string[]> {
+	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
 	const resources = [...new Set([...defaultResources, ...requestedResources])];
 	for (const identifier of resources) {
 		const row = await getResource(ctx, opts, identifier);
@@ -225,12 +257,9 @@ function validateClientRedirectUri(
 		return;
 	}
 
-	if (
-		FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) ||
-		!isReverseDomainPrivateUseRedirectUri(url)
-	) {
+	if (!isNativePrivateUseRedirectUri(url)) {
 		invalidRedirectUri(
-			`native private-use redirect URI schemes must be well-formed reverse-domain names, omit the naming authority, and must not use a reserved scheme: ${redirectUri}`,
+			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with a host and a path: ${redirectUri}`,
 		);
 	}
 }
@@ -345,7 +374,11 @@ export async function checkOAuthClient(
 		settings?.registrationSource === "clientMetadataDocument";
 	const clientWithDefaults = applyOAuthClientRegistrationDefaults(
 		client,
-		isClientMetadataDocument ? null : "web",
+		isClientMetadataDocument
+			? null
+			: settings?.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(opts, client)
+				: "web",
 	);
 	const tokenEndpointAuthMethod =
 		clientWithDefaults.token_endpoint_auth_method ?? "client_secret_basic";
@@ -399,7 +432,8 @@ export async function checkOAuthClient(
 		// A CIMD document may omit application_type. Preserve that absence in
 		// storage while validating against the safe union of web and native
 		// redirect forms. The native validator is that union: non-loopback HTTPS,
-		// exact loopback HTTP, or an authority-free private-use scheme.
+		// exact loopback HTTP, an authority-free reverse-domain private-use
+		// scheme, or a host-bearing non-reserved custom scheme.
 		validateClientRedirectUri(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??
@@ -469,6 +503,19 @@ export async function checkOAuthClient(
 				error: "invalid_client_metadata",
 				error_description:
 					"pairwise subject_type requires server pairwiseSecret configuration",
+			});
+		}
+		// The pairwise sector is the redirect URI host. Any app can register a
+		// custom scheme, so the host in `app://rp.example.com/callback` does not
+		// identify the client and would share an HTTPS client's sector.
+		if (
+			clientWithDefaults.subject_type === "pairwise" &&
+			clientWithDefaults.redirect_uris?.some(isCustomSchemeWithHost)
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"pairwise clients cannot use custom-scheme redirect URIs that include a host",
 			});
 		}
 		// Per OIDC Core §8.1, when multiple redirect_uris have different hosts,
@@ -659,6 +706,56 @@ export async function checkOAuthClient(
 			});
 		}
 	}
+
+	// The browser, not the OP, requests this URI, so the back-channel SSRF
+	// guard does not apply and private or loopback hosts are allowed. Its trust
+	// comes from Front-Channel Logout 1.0 §2 instead: the URI must share the
+	// scheme, host, and port of a registered redirect URI, so it inherits that
+	// URI's scheme policy. Nothing is signed, so the JWT plugin is not required.
+	if (clientWithDefaults.frontchannel_logout_uri !== undefined) {
+		let url: URL;
+		try {
+			url = new URL(clientWithDefaults.frontchannel_logout_uri);
+		} catch {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: "frontchannel_logout_uri must be an absolute URL",
+			});
+		}
+		// Spec §2: the URI MUST NOT include a fragment. Check the raw value
+		// rather than `url.hash`, which is empty for a bare trailing `#`.
+		if (clientWithDefaults.frontchannel_logout_uri.includes("#")) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must not include a fragment component",
+			});
+		}
+		if (url.username || url.password) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must not contain credentials",
+			});
+		}
+		const isHttpOrHttps = url.protocol === "https:" || url.protocol === "http:";
+		const sharesRedirectOrigin = (clientWithDefaults.redirect_uris ?? []).some(
+			(redirectUri) => {
+				try {
+					return new URL(redirectUri).origin === url.origin;
+				} catch {
+					return false;
+				}
+			},
+		);
+		if (!isHttpOrHttps || !sharesRedirectOrigin) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"frontchannel_logout_uri must use the scheme, host, and port of a registered redirect_uri",
+			});
+		}
+	}
 }
 
 interface CreateOAuthClientRegistrationBaseInput {
@@ -679,7 +776,11 @@ export type CreateOAuthClientRegistrationInput =
 	  })
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
-			requestedResources?: never;
+			/**
+			 * Resources to link to the new client. The caller must authorize the
+			 * `link` resource privilege for each one before persisting.
+			 */
+			requestedResources?: string[];
 			/** Server-owned scope ceiling configured by an administrator. */
 			clientCredentialsScopes?: Scope[];
 	  });
@@ -760,7 +861,14 @@ async function persistOAuthClientRegistration(
 			: input.metadata;
 	const body = applyOAuthClientRegistrationDefaults(
 		registrationMetadata,
-		input.registrationSource === "clientMetadataDocument" ? null : "web",
+		input.registrationSource === "clientMetadataDocument"
+			? null
+			: input.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(
+						opts,
+						registrationMetadata,
+					)
+				: "web",
 	);
 
 	// Determine whether registration request for public client
@@ -852,12 +960,17 @@ async function persistOAuthClientRegistration(
 	) {
 		schema.applicationType = null;
 	}
+	const requestedResources =
+		input.registrationSource === "clientMetadataDocument"
+			? []
+			: (input.requestedResources ?? []);
+	if (input.registrationSource === "dynamic") {
+		assertDynamicRegistrationResourcesAllowed(opts, requestedResources);
+	}
 	const resources = await resolveClientRegistrationResources(
 		ctx,
 		opts,
-		input.registrationSource === "dynamic"
-			? (input.requestedResources ?? [])
-			: [],
+		requestedResources,
 	);
 	const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
 	const clientResourceModel =
@@ -1207,12 +1320,17 @@ export async function createOAuthClientEndpoint(
 			"configure-client-credentials-scopes",
 		);
 	}
+	const requestedResources = settings?.admin ? metadata.resources : undefined;
+	for (const identifier of new Set(requestedResources ?? [])) {
+		await assertResourcePrivileges(ctx, session, opts, "link", identifier);
+	}
 	const registrationInput: CreateOAuthClientRegistrationInput = {
 		metadata,
 		registrationSource: "managed",
 		userId: referenceId ? undefined : session.session.userId,
 		referenceId,
 		clientCredentialsScopes,
+		...(requestedResources ? { requestedResources } : {}),
 	};
 	const responseBody = settings?.admin
 		? await createOAuthClientAdministrativeRegistration(
@@ -1271,6 +1389,8 @@ export function oauthToSchema(
 		post_logout_redirect_uris: postLogoutRedirectUris,
 		backchannel_logout_uri: backchannelLogoutUri,
 		backchannel_logout_session_required: backchannelLogoutSessionRequired,
+		frontchannel_logout_uri: frontchannelLogoutUri,
+		frontchannel_logout_session_required: frontchannelLogoutSessionRequired,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -1326,6 +1446,8 @@ export function oauthToSchema(
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
+		frontchannelLogoutUri,
+		frontchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -1378,6 +1500,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
+		frontchannelLogoutUri,
+		frontchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -1440,6 +1564,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		backchannel_logout_uri: backchannelLogoutUri ?? undefined,
 		backchannel_logout_session_required:
 			backchannelLogoutSessionRequired ?? undefined,
+		frontchannel_logout_uri: frontchannelLogoutUri ?? undefined,
+		frontchannel_logout_session_required:
+			frontchannelLogoutSessionRequired ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
 		response_types: responseTypes ?? undefined,
