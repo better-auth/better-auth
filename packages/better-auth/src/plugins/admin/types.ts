@@ -3,9 +3,10 @@ import type { InferOptionSchema, Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type { AdminSchema } from "./schema";
 
-export interface UserWithRole extends User {
-	role?: string | undefined;
-	banned: boolean | null;
+export interface UserWithRole<O extends AdminOptions = AdminOptions>
+	extends User {
+	role?: InferAdminRolesFromOption<O> | undefined;
+	banned?: (boolean | null) | undefined;
 	banReason?: (string | null) | undefined;
 	banExpires?: (Date | null) | undefined;
 }
