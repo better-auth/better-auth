@@ -65,22 +65,28 @@ async function completeRequest(
 	decision: CibaDecision,
 	fields: Record<string, unknown> = {},
 ): Promise<{ status: CibaDecision }> {
-	if (request.expiresAt < new Date()) {
-		throw new APIError("BAD_REQUEST", {
+	const expired = () =>
+		new APIError("BAD_REQUEST", {
 			error: "expired_token",
 			error_description: CIBA_ERROR_CODES.EXPIRED_AUTH_REQ_ID.message,
 		});
-	}
+	if (request.expiresAt < new Date()) throw expired();
+	// Expiry is part of the guard, so a request cannot expire between the check
+	// above and the write.
 	const updated = await ctx.context.adapter.incrementOne<StoredCibaRequest>({
 		model: "cibaRequest",
 		where: [
 			{ field: "id", value: request.id },
 			{ field: "status", value: "pending" },
+			{ field: "expiresAt", operator: "gt", value: new Date() },
 		],
 		increment: {},
 		set: { ...fields, status: decision },
 	});
 	if (!updated) {
+		if (request.status === "pending" && request.expiresAt <= new Date()) {
+			throw expired();
+		}
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_request",
 			error_description: CIBA_ERROR_CODES.REQUEST_ALREADY_PROCESSED.message,
