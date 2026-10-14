@@ -345,9 +345,14 @@ A custom function to validate the phone number. It takes the phone number as an 
 
 ### `verifyOTP`
 
-A custom function to verify the OTP code. When provided, this function will be used instead of the default internal verification logic. This is useful when you want to integrate with external SMS providers that handle OTP verification (e.g., Twilio Verify, AWS SNS). The function takes an object with `phoneNumber` and `code` properties and a request object, and returns a boolean or a promise that resolves to a boolean indicating whether the OTP is valid.
+A custom function to verify the OTP code. When provided, this function will be used instead of the default internal verification logic. This is useful when you want to integrate with external verification providers that handle the full OTP generation and verification lifecycle (e.g., Twilio Verify, Vonage Verify). The function takes an object with `phoneNumber`, `code`, and `type` properties and a request object, and returns a boolean or a promise that resolves to a boolean indicating whether the OTP is valid.
 
-The function checks the codes for phone number verification, [`consumePhoneNumberOTP`](#consume-an-otp-on-the-server), and [password reset](#request-password-reset). If `sendPasswordResetOTP` sends the code Better Auth generates rather than a code from your provider, `verifyOTP` must accept that code too.
+The `type` field indicates the purpose of the verification:
+
+* `"phone-verification"`: phone number verification via `/phone-number/verify` or [`consumePhoneNumberOTP`](#consume-an-otp-on-the-server).
+* `"password-reset"`: password reset verification via [password reset](#request-password-reset).
+
+If `sendPasswordResetOTP` sends the code Better Auth generates rather than delegating OTP generation to your provider, `verifyOTP` must accept that code too.
 
 ```ts
 import { betterAuth } from "better-auth";
@@ -356,14 +361,21 @@ import { phoneNumber } from "better-auth/plugins"
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
-            sendOTP: ({ phoneNumber, code }, ctx) => {
-                // Send OTP via your SMS provider
+            sendOTP: async ({ phoneNumber }, ctx) => {
+                await twilioClient.verify.v2
+                    .services(VERIFY_SERVICE_SID)
+                    .verifications.create({ to: phoneNumber, channel: "sms" });
             },
-            verifyOTP: async ({ phoneNumber, code }, ctx) => { // [!code highlight]
-                // Verify OTP with your desired logic (e.g., Twilio Verify) // [!code highlight]
-                // This is just an example, not a real implementation. // [!code highlight]
-                const isValid = await twilioClient.verify // [!code highlight]
-                    .services('YOUR_SERVICE_SID') // [!code highlight]
+            sendPasswordResetOTP: async ({ phoneNumber }, ctx) => {
+                await twilioClient.verify.v2
+                    .services(RESET_SERVICE_SID)
+                    .verifications.create({ to: phoneNumber, channel: "sms" });
+            },
+            verifyOTP: async ({ phoneNumber, code, type }, ctx) => { // [!code highlight]
+                // type: "phone-verification" | "password-reset" // [!code highlight]
+                const service = type === "password-reset" ? RESET_SERVICE_SID : VERIFY_SERVICE_SID;
+                const isValid = await twilioClient.verify.v2 // [!code highlight]
+                    .services(service) // [!code highlight]
                     .verificationChecks // [!code highlight]
                     .create({ to: phoneNumber, code }); // [!code highlight]
                 return isValid.status === 'approved'; // [!code highlight]
