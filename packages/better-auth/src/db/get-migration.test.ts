@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import { getAuthTables } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { DatabaseConnection, Dialect, TableMetadata } from "kysely";
 import { PostgresAdapter, PostgresQueryCompiler } from "kysely";
@@ -536,6 +537,75 @@ function warnLogger(warnings: string[]) {
 		},
 	};
 }
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11520
+ */
+describe("get-migration: indexes on the implicit primary key", () => {
+	const memberOrganizationKeyPlugin = {
+		id: "member-organization-candidate-key",
+		schema: {
+			member: {
+				fields: {},
+				indexes: [
+					{
+						name: "member_organization_id_id_unique",
+						fields: ["organizationId", "id"],
+						unique: true,
+					},
+				],
+			},
+		},
+	} satisfies BetterAuthPlugin;
+
+	it("resolves the reported getAuthTables schema", () => {
+		expect(() =>
+			getAuthTables({
+				plugins: [organization(), memberOrganizationKeyPlugin],
+			}),
+		).not.toThrow();
+	});
+
+	it("creates an index on the primary key that a composite foreign key can reference", async () => {
+		const db = new DatabaseSync(":memory:");
+		const migrations = await getMigrations({
+			database: db,
+			plugins: [organization(), memberOrganizationKeyPlugin],
+		});
+		const sql = (await migrations.compileMigrations()).toLowerCase();
+
+		expect(sql).toContain(
+			'create unique index "member_organization_id_id_unique" on "member" ("organizationid", "id")',
+		);
+
+		await migrations.runMigrations();
+		db.exec(`
+			PRAGMA foreign_keys = ON;
+			INSERT INTO "user" ("id", "name", "email", "emailVerified", "createdAt", "updatedAt")
+			VALUES ('u1', 'User', 'u1@example.com', 0, '2020-01-01', '2020-01-01');
+			INSERT INTO "organization" ("id", "name", "slug", "createdAt")
+			VALUES ('o1', 'One', 'one', '2020-01-01'), ('o2', 'Two', 'two', '2020-01-01');
+			INSERT INTO "member" ("id", "organizationId", "userId", "role", "createdAt")
+			VALUES ('m1', 'o1', 'u1', 'owner', '2020-01-01');
+			CREATE TABLE "assignment" (
+				"id" text primary key not null,
+				"organizationId" text not null,
+				"memberId" text not null,
+				FOREIGN KEY ("organizationId", "memberId")
+					REFERENCES "member" ("organizationId", "id")
+			);
+			INSERT INTO "assignment" ("id", "organizationId", "memberId")
+			VALUES ('a1', 'o1', 'm1');
+		`);
+
+		expect(() =>
+			db.exec(`
+				INSERT INTO "assignment" ("id", "organizationId", "memberId")
+				VALUES ('a2', 'o2', 'm1');
+			`),
+		).toThrow();
+	});
+});
 
 describe("get-migration: unsafe schema changes on populated tables", () => {
 	it("refuses to add a required column without a default to a populated table", async () => {

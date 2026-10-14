@@ -147,3 +147,61 @@ describe.runIf(isMysqlAvailable)("MySQL unsafe migration guardrail", () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11520
+ */
+describe.runIf(isMysqlAvailable)("MySQL existing-table index budget", () => {
+	const pool = createPool({ uri: MYSQL_CONNECTION_STRING });
+	const wideLookupConfig = (
+		generateId: "serial" | undefined,
+	): BetterAuthOptions => ({
+		database: pool,
+		advanced: { database: { generateId } },
+		plugins: [
+			{
+				id: "wide-lookup",
+				schema: {
+					wideLookup: {
+						fields: Object.fromEntries(
+							["a", "b", "c", "d"].map((field) => [
+								field,
+								{ type: "string" as const },
+							]),
+						),
+						indexes: [{ fields: ["a", "b", "c", "d", "id"] }],
+					},
+				},
+			},
+		],
+	});
+	const createWideLookup = async (idColumn: string) => {
+		await pool.query("DROP TABLE IF EXISTS `wideLookup`");
+		await pool.query(
+			`CREATE TABLE \`wideLookup\` (${idColumn}, \`a\` varchar(191) not null, \`b\` varchar(191) not null, \`c\` varchar(191) not null, \`d\` varchar(191) not null)`,
+		);
+	};
+
+	afterAll(async () => {
+		await pool.query("DROP TABLE IF EXISTS `wideLookup`");
+		await pool.end();
+	});
+
+	it("counts a string id when adding an index to an existing table", async () => {
+		await createWideLookup("`id` varchar(36) primary key not null");
+
+		await expect(getMigrations(wideLookupConfig(undefined))).rejects.toThrow(
+			`Cannot create database index "wideLookup_a_b_c_d_id_idx" on existing table "wideLookup" because its columns can exceed MySQL's 3072-byte index-key limit.`,
+		);
+	});
+
+	it("counts a serial id as a fixed-size column on an existing table", async () => {
+		await createWideLookup("`id` int auto_increment primary key not null");
+
+		const migrations = await getMigrations(wideLookupConfig("serial"));
+
+		expect(await migrations.compileMigrations()).toContain(
+			"create index `wideLookup_a_b_c_d_id_idx` on `wideLookup` (`a`, `b`, `c`, `d`, `id`)",
+		);
+	});
+});

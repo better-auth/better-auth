@@ -1,4 +1,5 @@
 import { BetterAuthError } from "../error";
+import type { BetterAuthOptions } from "../types";
 import type { DBFieldAttribute, DBTableIndex } from "./type";
 
 const MAX_DATABASE_INDEX_NAME_BYTES = 63;
@@ -31,6 +32,45 @@ function getStableIndexNameHash(value: string) {
 		hash = Math.imul(hash, 0x01000193);
 	}
 	return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+/** The configured `advanced.database.generateId` strategy. */
+export type DatabaseIdStrategy = NonNullable<
+	NonNullable<BetterAuthOptions["advanced"]>["database"]
+>["generateId"];
+
+/** Generated string ids are stored as `varchar(36)` on MySQL and MSSQL. */
+const GENERATED_ID_LENGTH = 36;
+
+/**
+ * Every table has a primary-key `id` column that schemas usually do not
+ * declare. It is never nullable, and it is an integer only for serial ids.
+ */
+const implicitStringIdField = {
+	type: "string",
+	required: true,
+} satisfies DBFieldAttribute;
+const implicitNumberIdField = {
+	type: "number",
+	required: true,
+} satisfies DBFieldAttribute;
+
+/**
+ * Adds the implicit primary key, or marks a declared `id` as required because
+ * adapters declare it as optional input when the database generates it.
+ */
+export function withImplicitIdField(
+	fields: Readonly<Record<string, DBFieldAttribute>>,
+	generateId?: DatabaseIdStrategy | undefined,
+): Readonly<Record<string, DBFieldAttribute>> {
+	return {
+		...fields,
+		id: fields.id
+			? { ...fields.id, required: true }
+			: generateId === "serial"
+				? implicitNumberIdField
+				: implicitStringIdField,
+	};
 }
 
 /** A table-level index resolved to physical database columns. */
@@ -99,7 +139,7 @@ export function getDatabaseFieldIndexName(
 
 /** Resolves logical index fields to their configured database column names. */
 export function resolveDatabaseTableIndexes({
-	fields,
+	fields: declaredFields,
 	indexes,
 	tableName,
 }: {
@@ -107,6 +147,7 @@ export function resolveDatabaseTableIndexes({
 	indexes: readonly DBTableIndex[] | undefined;
 	tableName: string;
 }): readonly ResolvedDBTableIndex[] {
+	const fields = withImplicitIdField(declaredFields);
 	const resolvedIndexes = (indexes ?? []).map((index) => {
 		if (index.fields.length === 0) {
 			throw new BetterAuthError(
@@ -203,18 +244,23 @@ export function getDatabaseIndexStringLength({
 	columnName,
 	dialect,
 	fields,
+	generateId,
+	idLength = GENERATED_ID_LENGTH,
 	indexes,
 }: {
 	columnName: string;
 	dialect: BoundedDatabaseIndexDialect;
 	fields: Readonly<Record<string, DBFieldAttribute>>;
+	/** The id strategy, which decides whether the implicit `id` is a string. */
+	generateId?: DatabaseIdStrategy | undefined;
+	/** Characters in a generated string `id` column. Defaults to 36. */
+	idLength?: number | undefined;
 	indexes: readonly ResolvedDBTableIndex[];
 }): number | undefined {
 	const fieldsByColumn = new Map(
-		Object.entries(fields).map(([fieldName, field]) => [
-			field.fieldName || fieldName,
-			field,
-		]),
+		Object.entries(withImplicitIdField(fields, generateId)).map(
+			([fieldName, field]) => [field.fieldName || fieldName, field],
+		),
 	);
 	const containingIndexes = indexes.filter((index) =>
 		index.columns.includes(columnName),
@@ -226,14 +272,22 @@ export function getDatabaseIndexStringLength({
 	const defaultLength = dialect === "mysql" ? 191 : 255;
 	return containingIndexes.reduce((length, index) => {
 		const stringColumnCount = index.columns.filter((column) => {
-			const type = fieldsByColumn.get(column)?.type;
-			return type === "string" || Array.isArray(type);
+			const field = fieldsByColumn.get(column);
+			if (field === implicitStringIdField) return false;
+			return field?.type === "string" || Array.isArray(field?.type);
 		}).length;
 		if (stringColumnCount === 0) return length;
-		const nonStringColumnBytes =
-			(index.columns.length - stringColumnCount) * 16;
+		const fixedColumnBytes = index.columns.reduce((bytes, column) => {
+			const field = fieldsByColumn.get(column);
+			if (field === implicitStringIdField) {
+				return bytes + idLength * bytesPerCharacter;
+			}
+			return field?.type === "string" || Array.isArray(field?.type)
+				? bytes
+				: bytes + 16;
+		}, 0);
 		const safeLength = Math.floor(
-			Math.max(1, byteBudget - nonStringColumnBytes) /
+			Math.max(1, byteBudget - fixedColumnBytes) /
 				bytesPerCharacter /
 				stringColumnCount,
 		);
