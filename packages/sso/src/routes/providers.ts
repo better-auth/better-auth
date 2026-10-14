@@ -84,7 +84,7 @@ const OIDC_IDENTITY_BOUNDARY_FIELDS = [
 	"tokenEndpoint",
 	"userInfoEndpoint",
 ] as const;
-const SAML_IDENTITY_BOUNDARY_FIELDS = ["audience", "callbackUrl"] as const;
+const SAML_IDENTITY_BOUNDARY_FIELDS = ["audience"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -169,11 +169,10 @@ function samlBoundaryChanges(
 				config.issuer,
 			spNameIDFormat:
 				serviceProvider?.nameIDFormats.at(0) ?? config.identifierFormat,
+			// Without SP metadata, the ACS is always the providerId-derived route.
 			spPostServices: serviceProvider
 				? getSAMLPostAssertionConsumerServiceUrls(config.spMetadata?.metadata)
-				: config.callbackUrl
-					? [config.callbackUrl]
-					: [],
+				: [],
 			wantAssertionsSigned:
 				serviceProvider?.wantAssertionsSigned ??
 				config.wantAssertionsSigned === true,
