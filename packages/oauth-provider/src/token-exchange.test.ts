@@ -407,6 +407,45 @@ describe("oauthTokenExchange", () => {
 		});
 	});
 
+	it("rejects a tampered or foreign-issuer subject token as invalid", async () => {
+		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario();
+		const subject = await userTokenForMcp();
+		const [header, payload, signature] = subject.access_token.split(".");
+		const tampered = `${header}.${payload}.${signature!.slice(0, -2)}${
+			signature!.endsWith("AA") ? "BB" : "AA"
+		}`;
+		const { privateKey } = await generateKeyPair("ES256");
+		const foreign = await new SignJWT(decodeJwt(subject.access_token))
+			.setProtectedHeader({ alg: "ES256", typ: "at+jwt", kid: "foreign" })
+			.setIssuer("https://foreign.example.com")
+			.sign(privateKey);
+		for (const token of [tampered, foreign]) {
+			const { error } = await exchangeAs(mcpServer, token);
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description: "subject_token is invalid",
+			});
+		}
+	});
+
+	it("never calls allowExchange for an invalid target", async () => {
+		let calls = 0;
+		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario({
+			allowExchange: () => {
+				calls++;
+				return false;
+			},
+		});
+		const subject = await userTokenForMcp();
+		for (const resource of [other, "https://unknown.example.com"]) {
+			const { error } = await exchangeAs(mcpServer, subject.access_token, {
+				resource,
+			});
+			expect(error?.error).toBe("invalid_target");
+		}
+		expect(calls).toBe(0);
+	});
+
 	it("returns each requested scope once", async () => {
 		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario();
 		const subject = await userTokenForMcp();

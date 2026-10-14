@@ -2,7 +2,9 @@ import type { AuthContext } from "@better-auth/core";
 import { isAPIError } from "better-auth/api";
 import type { User } from "better-auth/types";
 import type { JWTPayload } from "jose";
+import { errors as joseErrors } from "jose";
 import { extendOAuthProvider } from "./extensions";
+import { resolveResourcePolicy } from "./resources";
 import type {
 	OAuthConsent,
 	OAuthExtensionGrantHandlerInput,
@@ -63,7 +65,7 @@ function deny(description: string): never {
 }
 
 async function exchangeToken(
-	{ ctx, provider }: OAuthExtensionGrantHandlerInput,
+	{ ctx, opts, provider }: OAuthExtensionGrantHandlerInput,
 	options: OAuthTokenExchangeOptions,
 ): Promise<OAuthTokenResponse> {
 	const body = (ctx.body ?? {}) as Record<string, unknown>;
@@ -104,11 +106,14 @@ async function exchangeToken(
 
 	// The caller must be the token's client or a resource server in its
 	// audience, so a client cannot exchange a token that was never sent to it.
-	// Unknown or malformed tokens throw APIError; anything else is a server fault.
+	// An unknown, malformed, tampered, or foreign token is an invalid subject;
+	// anything else (for example a database failure) is a server fault.
 	const subject = await Promise.resolve(
 		provider.validateAccessToken(subjectToken, client.clientId),
 	).catch((error: unknown) => {
-		if (isAPIError(error)) return undefined;
+		if (isAPIError(error) || error instanceof joseErrors.JOSEError) {
+			return undefined;
+		}
 		throw error;
 	});
 	if (!subject?.active || !subject.sub || !subject.exp) {
@@ -136,6 +141,13 @@ async function exchangeToken(
 		);
 	}
 	validateClientScopes(client, scopes);
+	// Resolve the targets now, so consent and allowExchange only ever see valid
+	// targets and the scopes their allowlists leave.
+	const { effectiveScopes } = await resolveResourcePolicy(ctx, opts, {
+		resource: resources,
+		clientId: client.clientId,
+		requestedScopes: scopes,
+	});
 	// Keep the reference the user approved, not their current one (RFC 9068 §2.2.1).
 	const referenceId =
 		typeof subject.reference_id === "string" ? subject.reference_id : undefined;
@@ -150,7 +162,9 @@ async function exchangeToken(
 			where: consentWhere(client.clientId, user.id, referenceId ?? null),
 		});
 		if (
-			!consents.some((consent) => consentCovers(consent, scopes, resources))
+			!consents.some((consent) =>
+				consentCovers(consent, effectiveScopes, resources),
+			)
 		) {
 			deny("the user has not consented to this client for this exchange");
 		}
@@ -162,7 +176,7 @@ async function exchangeToken(
 			user,
 			subjectToken: subject,
 			resources,
-			scopes,
+			scopes: effectiveScopes,
 			referenceId,
 		}))
 	) {
@@ -172,7 +186,7 @@ async function exchangeToken(
 	return provider.issueTokens({
 		client,
 		user,
-		scopes,
+		scopes: effectiveScopes,
 		resources,
 		referenceId,
 		// Introspection reports the exchanged token inactive once the session ends.
