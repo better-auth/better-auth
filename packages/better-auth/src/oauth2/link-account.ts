@@ -8,6 +8,7 @@ import {
 } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
+import { mergeScopes } from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
@@ -17,6 +18,143 @@ import { assertValidUserInfo } from "../utils/validate-user-info";
 import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
 import { setTokenUtil } from "./utils";
 
+type OAuthAccountData = Omit<
+	Account,
+	"id" | "userId" | "createdAt" | "updatedAt"
+>;
+
+/**
+ * Provider profile a freshly linked account may copy onto the local user.
+ * `email` and `emailVerified` are identity anchors and are stripped before
+ * the remaining fields are written. Provider identity is resolved separately
+ * from the raw profile through the provider's account-key contract.
+ */
+type LinkedProviderProfile = {
+	name?: string | undefined;
+	email?: string | null | undefined;
+	emailVerified?: boolean | undefined;
+	image?: string | null | undefined;
+};
+
+interface LinkOAuthAccountOptions {
+	link: {
+		userId: string;
+		email: string;
+	};
+	userInfo: LinkedProviderProfile;
+	account: OAuthAccountData;
+	profile: Record<string, unknown>;
+	scopes?: string[] | undefined;
+}
+
+interface LinkOAuthAccountFailure {
+	linked: false;
+	error: {
+		code: string;
+		message?: string | undefined;
+	};
+}
+
+type LinkOAuthAccountResult = { linked: true } | LinkOAuthAccountFailure;
+
+function linkOAuthAccountFailure(
+	code: string,
+	message?: string,
+): LinkOAuthAccountFailure {
+	return { linked: false, error: { code, message } };
+}
+
+export async function linkOAuthAccount(
+	c: GenericEndpointContext,
+	{ link, userInfo, account, profile, scopes }: LinkOAuthAccountOptions,
+): Promise<LinkOAuthAccountResult> {
+	try {
+		await assertValidUserInfo(c, {
+			user: {
+				...userInfo,
+				id: link.userId,
+				email: userInfo.email ?? undefined,
+			},
+			source: {
+				action: "link-account",
+				method: "oauth",
+				oauth: {
+					providerId: account.providerId,
+					profile,
+				},
+			},
+		});
+	} catch (error) {
+		if (!isAPIError(error) || !error.body?.code) throw error;
+		return linkOAuthAccountFailure(error.body.code, error.body.message);
+	}
+
+	const isTrustedProvider = c.context.trustedProviders.includes(
+		account.providerId,
+	);
+	if (
+		(!isTrustedProvider && !userInfo.emailVerified) ||
+		c.context.options.account?.accountLinking?.enabled === false
+	) {
+		c.context.logger.error("Unable to link account - untrusted provider");
+		return linkOAuthAccountFailure(
+			OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+		);
+	}
+
+	if (
+		userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
+		c.context.options.account?.accountLinking?.allowDifferentEmails !== true
+	) {
+		return linkOAuthAccountFailure(
+			OAUTH_CALLBACK_ERROR_CODES.EMAIL_DOES_NOT_MATCH,
+		);
+	}
+
+	const existingAccount =
+		await c.context.internalAdapter.findAccountByKey(account);
+
+	if (existingAccount) {
+		if (existingAccount.userId.toString() !== link.userId.toString()) {
+			return linkOAuthAccountFailure(
+				OAUTH_CALLBACK_ERROR_CODES.ACCOUNT_ALREADY_LINKED_TO_DIFFERENT_USER,
+			);
+		}
+		const mergedScope = mergeScopes(existingAccount.scope, scopes);
+		const updateData = Object.fromEntries(
+			Object.entries({
+				providerId: account.providerId,
+				accessToken: await setTokenUtil(account.accessToken, c.context),
+				refreshToken: await setTokenUtil(account.refreshToken, c.context),
+				idToken: account.idToken,
+				accessTokenExpiresAt: account.accessTokenExpiresAt,
+				refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+				scope: mergedScope || undefined,
+			}).filter(([_, value]) => value !== undefined),
+		);
+		await c.context.internalAdapter.updateAccount(
+			existingAccount.id,
+			updateData,
+		);
+	} else {
+		const newAccount = await c.context.internalAdapter.createAccount({
+			userId: link.userId,
+			...account,
+			accessToken: await setTokenUtil(account.accessToken, c.context),
+			refreshToken: await setTokenUtil(account.refreshToken, c.context),
+			scope: scopes?.join(",") ?? account.scope,
+		});
+		if (!newAccount) {
+			return linkOAuthAccountFailure(
+				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
+			);
+		}
+	}
+
+	await applyUpdateUserInfoOnLink(c, link.userId, userInfo);
+	return { linked: true };
+}
+
 // TODO(#9124): v2 widens `User.email` to nullable; every `userInfo.email.toLowerCase()`
 // call below needs null-safety before account recognition can be fully
 // independent from email-based implicit linking.
@@ -24,7 +162,7 @@ export async function handleOAuthUserInfo(
 	c: GenericEndpointContext,
 	opts: {
 		userInfo: Omit<User, "createdAt" | "updatedAt">;
-		account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+		account: OAuthAccountData;
 		callbackURL?: string | undefined;
 		disableSignUp?: boolean | undefined;
 		overrideUserInfo?: boolean | undefined;
@@ -568,19 +706,6 @@ async function dispatchVerificationEmail(
 		await send();
 	}
 }
-
-/**
- * Provider profile a freshly linked account may copy onto the local user.
- * `email` and `emailVerified` are identity anchors and are stripped before
- * the remaining fields are written. Provider identity is resolved separately
- * from the raw profile through the provider's account-key contract.
- */
-type LinkedProviderProfile = {
-	name?: string | undefined;
-	email?: string | null | undefined;
-	emailVerified?: boolean | undefined;
-	image?: string | null | undefined;
-};
 
 /**
  * Apply the `account.accountLinking.updateUserInfoOnLink` policy: when enabled,

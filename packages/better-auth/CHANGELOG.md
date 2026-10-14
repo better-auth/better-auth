@@ -1,5 +1,95 @@
 # better-auth
 
+## 1.7.7
+
+### Patch Changes
+
+- [#11476](https://github.com/better-auth/better-auth/pull/11476) [`4186e36`](https://github.com/better-auth/better-auth/commit/4186e36d1505f881585dea03353a4fc4ff864474) Thanks [@bytaesu](https://github.com/bytaesu)! - Return CAPTCHA errors with the correct JSON Content-Type header.
+
+- [#11469](https://github.com/better-auth/better-auth/pull/11469) [`8620aa9`](https://github.com/better-auth/better-auth/commit/8620aa94fdb9e158824cbba0d0fcf364143c56fe) Thanks [@aryan1306](https://github.com/aryan1306)! - Return rate limit errors with a JSON Content-Type header.
+
+- [#11491](https://github.com/better-auth/better-auth/pull/11491) [`55cb92e`](https://github.com/better-auth/better-auth/commit/55cb92e940e6ac26e746bbb06b92c445050cdb09) Thanks [@bytaesu](https://github.com/bytaesu)! - Respect social provider `disableSignUp` when signing in with an ID token.
+
+- [#11375](https://github.com/better-auth/better-auth/pull/11375) [`69defbc`](https://github.com/better-auth/better-auth/commit/69defbcabae430ca48e4ff1088c52a051566905e) Thanks [@bytaesu](https://github.com/bytaesu)! - Refresh the active organization after sign-in when a session hook selects the initial organization.
+
+- [#11494](https://github.com/better-auth/better-auth/pull/11494) [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Isolate OAuth state cookies and each OAuth Proxy payload with purpose-specific encryption keys. The `oAuthProxy` options and supported configuration remain unchanged.
+
+  Upgrade all Better Auth nodes that handle the same cookie-backed OAuth or SAML relay-state flow together. Upgrade every OAuth Proxy participant, including production and preview or development deployments, in the same cutover. OAuth sign-in, account-linking, and cookie-backed SAML sign-in flows started before the upgrade must be restarted. Mixed old and new participants cannot exchange existing state or proxy payloads, and there is no fallback to the previous shared key.
+
+- [#11494](https://github.com/better-auth/better-auth/pull/11494) [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Magic Link verification now accepts only records issued for Magic Link. Magic
+  Link records and database-backed OAuth or SAML state use separate verification
+  identifier prefixes. Links and database-backed sign-ins started before the
+  upgrade cannot complete; request new Magic Links and restart those sign-ins.
+  Upgrade servers sharing verification storage together, and update
+  `verification.storeIdentifier.overrides` rules for these flows to match the new
+  `magic-link:` and `auth-state:` prefixes. The link token, callback state,
+  endpoints, and public option types are unchanged.
+
+  Upgrade installed Better Auth adapters, plugins, and integrations released
+  with `better-auth` alongside it so participating packages use the same release
+  version.
+
+- Updated dependencies [[`35d7cd3`](https://github.com/better-auth/better-auth/commit/35d7cd389220f99cfc98ac699e6a42b48313a740), [`07bdf7e`](https://github.com/better-auth/better-auth/commit/07bdf7ecafb75222f7a24e0733cc3b056f84e9e8)]:
+  - @better-auth/drizzle-adapter@1.7.7
+  - @better-auth/kysely-adapter@1.7.7
+  - @better-auth/core@1.7.7
+  - @better-auth/memory-adapter@1.7.7
+  - @better-auth/mongo-adapter@1.7.7
+  - @better-auth/prisma-adapter@1.7.7
+  - @better-auth/telemetry@1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11325](https://github.com/better-auth/better-auth/pull/11325) [`af88385`](https://github.com/better-auth/better-auth/commit/af883851ae9c3b55c0d8240fabea3dc797cd5cd0) Thanks [@Wadiou](https://github.com/Wadiou)! - Admin plugin `bannedUserMessage` can now be a function that receives the banned user, so sign-in errors can include details such as the ban reason.
+
+- [#11268](https://github.com/better-auth/better-auth/pull/11268) [`2fa501c`](https://github.com/better-auth/better-auth/commit/2fa501cdf9e022d5f7241fabce1a67f1828d777b) Thanks [@bytaesu](https://github.com/bytaesu)! - Support linking social accounts through the OAuth Proxy plugin.
+
+- [#11366](https://github.com/better-auth/better-auth/pull/11366) [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5) Thanks [@bytaesu](https://github.com/bytaesu)! - Use targeted PRAGMA queries when a Kysely dialect cannot introspect Cloudflare D1.
+
+- [#11016](https://github.com/better-auth/better-auth/pull/11016) [`3d0efa3`](https://github.com/better-auth/better-auth/commit/3d0efa308d575c4aa184d65deaf29f2626add8fd) Thanks [@davbrito](https://github.com/davbrito)! - Support Vercel BotID checks on protected authentication routes in Vercel-hosted applications.
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
+- [#11324](https://github.com/better-auth/better-auth/pull/11324) [`8853419`](https://github.com/better-auth/better-auth/commit/88534192c1d0fd62b108b568243a134e6df61ab1) Thanks [@XXMOHAMED012](https://github.com/XXMOHAMED012)! - Passwords longer than `maxPasswordLength` are now rejected with `PASSWORD_TOO_LONG` before hashing on sign-in (email, username, phone number), verify-password, change-password (`currentPassword`), delete-user, the two-factor endpoints that take a password, and admin create-user, matching what sign-up and password reset already did.
+
+- [#11316](https://github.com/better-auth/better-auth/pull/11316) [`2ee1545`](https://github.com/better-auth/better-auth/commit/2ee1545f244d87e5edd6a003b48b90a5539f8afa) Thanks [@Smidge](https://github.com/Smidge)! - Fix React hydration mismatches when a session or plugin auth query resolves before a streamed component hydrates. Preserve the server-rendered pending state during hydration, then update to the current client state without changing ordinary or computed plugin stores.
+
+- [#11376](https://github.com/better-auth/better-auth/pull/11376) [`fc45d08`](https://github.com/better-auth/better-auth/commit/fc45d08b26ac8e433fc7899a12be392cc52735ba) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent older auth-query responses from replacing newer results when requests overlap.
+
+- Updated dependencies [[`41b7dc1`](https://github.com/better-auth/better-auth/commit/41b7dc15de41a8726422c392a4857d8764828891), [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5), [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da), [`2b13e01`](https://github.com/better-auth/better-auth/commit/2b13e011b4a4f8be4e4c39573b9e962cbabb2094)]:
+  - @better-auth/prisma-adapter@1.7.6
+  - @better-auth/kysely-adapter@1.7.6
+  - @better-auth/core@1.7.6
+  - @better-auth/drizzle-adapter@1.7.6
+  - @better-auth/memory-adapter@1.7.6
+  - @better-auth/mongo-adapter@1.7.6
+  - @better-auth/telemetry@1.7.6
+
+## 1.7.5
+
+### Patch Changes
+
+- [#11283](https://github.com/better-auth/better-auth/pull/11283) [`e56c45b`](https://github.com/better-auth/better-auth/commit/e56c45bddb8ca859175a47ab345b6c6dcc6da5d7) Thanks [@bytaesu](https://github.com/bytaesu)! - Log Cloudflare Turnstile error codes and binding mismatches on the server so CAPTCHA verification failures can be diagnosed.
+
+- [#11209](https://github.com/better-auth/better-auth/pull/11209) [`8d37cc3`](https://github.com/better-auth/better-auth/commit/8d37cc3b7732a04908b28d8abb7f010a286d6c43) Thanks [@siam923](https://github.com/siam923)! - Remove the unused optional `better-sqlite3` peer dependency to prevent installation conflicts.
+
+- [#11272](https://github.com/better-auth/better-auth/pull/11272) [`348fc26`](https://github.com/better-auth/better-auth/commit/348fc26c9904d800cd471947ba98abb5e8431b60) Thanks [@bytaesu](https://github.com/bytaesu)! - Use MySQL's reported byte lengths when validating indexes on existing string columns.
+
+- [#11203](https://github.com/better-auth/better-auth/pull/11203) [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8) Thanks [@dshukertjr](https://github.com/dshukertjr)! - Add a `database.schemaName` option for direct PostgreSQL connections. When set, the adapter and the CLI qualify every statement with that schema, so `auth generate` writes a schema-qualified migration that creates the schema before its tables instead of relying on the connection's `search_path`.
+
+- [#11270](https://github.com/better-auth/better-auth/pull/11270) [`133f6a2`](https://github.com/better-auth/better-auth/commit/133f6a27175ba21193742564d94aebfc9ec89920) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent PostgreSQL migrations from treating tables in other schemas or views in the active schema as Better Auth tables.
+
+- Updated dependencies [[`e18bc83`](https://github.com/better-auth/better-auth/commit/e18bc83172dca1804f0c5c3eff41d65e2849c557), [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8), [`dae97ed`](https://github.com/better-auth/better-auth/commit/dae97ed932a084a11faa96a2e1abf052fc85d2ea)]:
+  - @better-auth/drizzle-adapter@1.7.5
+  - @better-auth/kysely-adapter@1.7.5
+  - @better-auth/core@1.7.5
+  - @better-auth/memory-adapter@1.7.5
+  - @better-auth/mongo-adapter@1.7.5
+  - @better-auth/prisma-adapter@1.7.5
+  - @better-auth/telemetry@1.7.5
+
 ## 1.7.4
 
 ### Patch Changes

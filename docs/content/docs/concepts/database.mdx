@@ -125,7 +125,7 @@ await runMigrations();
 
 ## Schema Validation
 
-During initialization, Better Auth compares the schema with the tables it writes and reports missing tables, missing columns, and required columns it never fills, together with their fixes. Errors appear through your configured logger without waiting for an authentication request. Requests await the same check and fail if the schema does not match; validation does not automatically stop your server or build.
+During initialization, Better Auth compares the schema with the tables it writes and reports missing tables, missing columns, and required columns it never fills, together with their fixes. Errors appear through your configured logger without waiting for an authentication request. Requests await the same check and fail if the schema does not match; validation does not automatically stop your server or build. Run [`npx auth@latest check schema`](/docs/concepts/cli#schema) whenever you want to check explicitly without making an authentication request.
 
 Validation is enabled by default, including in production, and caches a clean result or mismatch per adapter instance. Programmatic migrations invalidate cached checks for the same database instance. Requests waiting on an invalidated check await the new result. Restart after applying schema changes with other tools. Kysely reads live database metadata and needs database access during initialization. Drizzle checks the configured schema object and Prisma checks the generated client's data model, without querying the database. These local checks cannot detect migrations that were not applied to the database. The compact `prisma-client` model omits nullability, so required unwritten columns are reported by `auth generate` instead. Custom adapters without a registered check are not validated.
 
@@ -883,12 +883,12 @@ There are two types of hooks you can define:
 #### 1. Before Hook
 
 * **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
-* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
+* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload. On MongoDB with transactions, a before hook can run more than once for one operation: when MongoDB aborts the transaction because of a concurrent write, the adapter runs it again. Send emails and call other services from an after hook instead.
 
 #### 2. After Hook
 
 * **Purpose**: This hook is called after the respective entity is created or updated.
-* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
+* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated. When the operation is part of a transaction, the hook runs after it commits and is skipped if it rolls back. If transactions aren't enabled for your database adapter, the hook also runs when a later step of the same request fails, because the database change was already applied.
 
 **Example Usage**
 

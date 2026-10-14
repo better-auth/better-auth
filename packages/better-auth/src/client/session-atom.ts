@@ -4,6 +4,7 @@ import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
 import { isJsonEqual, withEquality } from "./equality";
 import type { AuthQueryAtom, AuthQueryState } from "./query";
+import { createAuthQueryAtom } from "./query-atom";
 import { createSessionRefreshManager } from "./session-refresh";
 import type { SessionQueryParams } from "./types";
 
@@ -113,13 +114,15 @@ export function getSessionAtom(
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => fetchSession(queryParams);
 
-	const session: SessionAtom = atom<AuthQueryState<SessionData>>({
-		data: null,
-		error: null,
-		isPending: true,
-		isRefetching: false,
-		refetch,
-	});
+	const session: SessionAtom = createAuthQueryAtom<AuthQueryState<SessionData>>(
+		{
+			data: null,
+			error: null,
+			isPending: true,
+			isRefetching: false,
+			refetch,
+		},
+	);
 	withEquality(session, isSessionAtomEqual);
 
 	const executeSessionFetch = async (

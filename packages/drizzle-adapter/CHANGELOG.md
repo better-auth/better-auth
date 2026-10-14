@@ -1,5 +1,23 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.7
+
+### Patch Changes
+
+- [#11331](https://github.com/better-auth/better-auth/pull/11331) [`35d7cd3`](https://github.com/better-auth/better-auth/commit/35d7cd389220f99cfc98ac699e6a42b48313a740) Thanks [@gitmotion](https://github.com/gitmotion)! - Drizzle `incrementOne` now rejects updates when a concurrent write makes the original `where` condition false. This prevents stale updates and counter limits from being exceeded on PostgreSQL. Both the default adapter and `relations-v2` retain the single-row limit.
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
+## 1.7.5
+
+### Patch Changes
+
+- [#11263](https://github.com/better-auth/better-auth/pull/11263) [`e18bc83`](https://github.com/better-auth/better-auth/commit/e18bc83172dca1804f0c5c3eff41d65e2849c557) Thanks [@bytaesu](https://github.com/bytaesu)! - Defer Drizzle relation metadata access until a relational query runs, preserving lazy database initialization during application builds.
+
 ## 1.7.4
 
 ### Patch Changes

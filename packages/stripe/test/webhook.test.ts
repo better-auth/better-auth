@@ -2714,4 +2714,70 @@ describe("stripe webhook", () => {
 			expect(updatedSub!.endedAt!.getTime()).toBe(now * 1000);
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/4565
+	 */
+	describe("webhook: non-subscription checkout session modes", () => {
+		test.for([
+			"payment",
+			"setup",
+		] as const)("mode: %s does not call subscriptions.retrieve or onSubscriptionComplete", async (mode, {
+			memory,
+			stripeOptions,
+		}) => {
+			const onSubscriptionComplete = vi.fn();
+			const subscriptionsRetrieve = vi.fn();
+
+			const webhookEvent = {
+				type: "checkout.session.completed",
+				data: {
+					object: {
+						id: `cs_4565_${mode}`,
+						mode,
+						subscription: null,
+						customer: `cus_4565_${mode}`,
+						metadata: {},
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					retrieve: subscriptionsRetrieve,
+				},
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				subscription: {
+					...stripeOptions.subscription,
+					onSubscriptionComplete,
+				},
+			} satisfies StripeOptions;
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{ database: memory, plugins: [stripe(testOptions)] },
+				{ disableTestUser: true },
+			);
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(subscriptionsRetrieve).not.toHaveBeenCalled();
+			expect(onSubscriptionComplete).not.toHaveBeenCalled();
+		});
+	});
 });

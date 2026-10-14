@@ -1,5 +1,11 @@
 import type { Db } from "mongodb";
-import { ObjectId, UUID } from "mongodb";
+import {
+	MongoClient,
+	MongoErrorLabel,
+	MongoServerError,
+	ObjectId,
+	UUID,
+} from "mongodb";
 import { describe, expect, it, vi } from "vitest";
 import { mongodbAdapter } from "./mongodb-adapter";
 
@@ -10,6 +16,214 @@ describe("mongodb-adapter", () => {
 		} as any;
 		const adapter = mongodbAdapter(db);
 		expect(adapter).toBeDefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10925
+	 */
+	it("preserves the commit error without aborting a committed MongoDB session", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const commitTransaction = session.commitTransaction.bind(session);
+		const commitError = new MongoServerError({ errmsg: "commit failed" });
+		const commit = vi
+			.spyOn(session, "commitTransaction")
+			.mockImplementation(async () => {
+				await commitTransaction();
+				throw commitError;
+			});
+		const abort = vi.spyOn(session, "abortTransaction");
+		const end = vi.spyOn(session, "endSession");
+		const adapter = mongodbAdapter(client.db("test"), { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await expect(transaction(async () => "ok")).rejects.toBe(commitError);
+		expect(commit).toHaveBeenCalledOnce();
+		expect(abort).not.toHaveBeenCalled();
+		expect(end).toHaveBeenCalledOnce();
+		await client.close();
+	});
+
+	it("aborts the MongoDB transaction when an operation fails before commit", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const commit = vi.spyOn(session, "commitTransaction");
+		const abort = vi.spyOn(session, "abortTransaction");
+		const end = vi.spyOn(session, "endSession");
+		const operationError = new Error("operation failed");
+		const adapter = mongodbAdapter(client.db("test"), { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await expect(
+			transaction(async () => {
+				throw operationError;
+			}),
+		).rejects.toBe(operationError);
+		expect(abort).toHaveBeenCalledOnce();
+		expect(commit).not.toHaveBeenCalled();
+		expect(end).toHaveBeenCalledOnce();
+		await client.close();
+	});
+
+	/**
+	 * @see https://github.com/mongodb/specifications/blob/master/source/transactions/transactions.md#aborttransaction
+	 */
+	it("preserves a transaction start error when no transaction is active", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession({ snapshot: true });
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const abort = vi.spyOn(session, "abortTransaction");
+		const adapter = mongodbAdapter(client.db("test"), { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await expect(transaction(async () => "ok")).rejects.toThrow(
+			"Transactions are not supported in snapshot sessions",
+		);
+		expect(abort).not.toHaveBeenCalled();
+		expect(session.hasEnded).toBe(true);
+		await client.close();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11554
+	 */
+	it("aborts a transaction whose commit did not complete", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const commitError = new MongoServerError({
+			errmsg: "commit did not complete",
+		});
+		const commit = vi
+			.spyOn(session, "commitTransaction")
+			.mockRejectedValue(commitError);
+		// Once a commit has been attempted the driver stops reporting the session
+		// as being in a transaction, even when the commit never reached the server.
+		vi.spyOn(session, "inTransaction").mockReturnValue(false);
+		const abort = vi.spyOn(session, "abortTransaction");
+		const end = vi.spyOn(session, "endSession");
+		const db = client.db("test");
+		const command = vi.fn().mockResolvedValue({ ok: 1 });
+		vi.spyOn(client, "db").mockReturnValue({ command } as unknown as Db);
+		const adapter = mongodbAdapter(db, { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await expect(transaction(async () => "ok")).rejects.toBe(commitError);
+		expect(commit).toHaveBeenCalledOnce();
+		expect(abort).not.toHaveBeenCalled();
+		expect(command).toHaveBeenCalledWith({ abortTransaction: 1 }, { session });
+		expect(end).toHaveBeenCalledOnce();
+		await client.close();
+	});
+
+	it("preserves the commit error when the transaction is already gone", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const commitError = new MongoServerError({
+			errmsg: "commit did not complete",
+		});
+		vi.spyOn(session, "commitTransaction").mockRejectedValue(commitError);
+		vi.spyOn(session, "inTransaction").mockReturnValue(false);
+		const end = vi.spyOn(session, "endSession");
+		const db = client.db("test");
+		// NoSuchTransaction: the server has nothing left open, so the abort
+		// failing must not replace the error the caller needs to see.
+		const command = vi.fn().mockRejectedValue(
+			Object.assign(new MongoServerError({ errmsg: "no such transaction" }), {
+				code: 251,
+			}),
+		);
+		vi.spyOn(client, "db").mockReturnValue({ command } as unknown as Db);
+		const adapter = mongodbAdapter(db, { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await expect(transaction(async () => "ok")).rejects.toBe(commitError);
+		expect(command).toHaveBeenCalledOnce();
+		expect(end).toHaveBeenCalledOnce();
+		await client.close();
+	});
+
+	it("does not send an abort when the failure came before the commit", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const commit = vi.spyOn(session, "commitTransaction");
+		// A transaction that never started leaves nothing open on the server, and
+		// reports itself the same way a failed commit does.
+		vi.spyOn(session, "inTransaction").mockReturnValue(false);
+		const abort = vi.spyOn(session, "abortTransaction");
+		const end = vi.spyOn(session, "endSession");
+		const db = client.db("test");
+		const command = vi.fn().mockResolvedValue({ ok: 1 });
+		vi.spyOn(client, "db").mockReturnValue({ command } as unknown as Db);
+		const adapter = mongodbAdapter(db, { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		const callbackError = new Error("the work failed");
+		await expect(
+			transaction(async () => {
+				throw callbackError;
+			}),
+		).rejects.toBe(callbackError);
+		expect(commit).not.toHaveBeenCalled();
+		// `withTransaction` aborts a failed callback itself; no raw command is needed.
+		expect(abort).toHaveBeenCalledOnce();
+		expect(command).not.toHaveBeenCalled();
+		expect(end).toHaveBeenCalledOnce();
+		await client.close();
+	});
+
+	it("retries the abort once when it fails with a retryable write", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const session = client.startSession();
+		vi.spyOn(client, "startSession").mockReturnValue(session);
+		const commitError = new MongoServerError({
+			errmsg: "commit did not complete",
+		});
+		vi.spyOn(session, "commitTransaction").mockRejectedValue(commitError);
+		vi.spyOn(session, "inTransaction").mockReturnValue(false);
+		const end = vi.spyOn(session, "endSession");
+		const db = client.db("test");
+		// The driver retries `abortTransaction()` itself on a transient error, so
+		// the raw command has to do the same or the transaction stays open.
+		const retryable = new MongoServerError({ errmsg: "connection reset" });
+		retryable.addErrorLabel(MongoErrorLabel.RetryableWriteError);
+		const command = vi
+			.fn()
+			.mockRejectedValueOnce(retryable)
+			.mockResolvedValueOnce({ ok: 1 });
+		vi.spyOn(client, "db").mockReturnValue({ command } as unknown as Db);
+		const adapter = mongodbAdapter(db, { client })({});
+		const transaction = adapter.options?.adapterConfig.transaction;
+		if (typeof transaction !== "function") {
+			throw new Error("MongoDB transaction is not configured");
+		}
+
+		await expect(transaction(async () => "ok")).rejects.toBe(commitError);
+		expect(command).toHaveBeenCalledTimes(2);
+		expect(end).toHaveBeenCalledOnce();
+		await client.close();
 	});
 
 	it("creates configured compound indexes before the first write", async () => {
@@ -394,6 +608,32 @@ describe("mongodb-adapter", () => {
 		});
 
 		expect(result).toBeNull();
+	});
+});
+
+describe("transactions", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 * @see https://www.mongodb.com/docs/manual/core/transactions-in-applications/
+	 */
+	it("retries the callback when MongoDB aborts the transaction with a transient error", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const adapter = mongodbAdapter(client.db("test"), { client })({});
+		let attempts = 0;
+
+		const result = await adapter.transaction(async () => {
+			attempts += 1;
+			if (attempts === 1) {
+				const writeConflict = new MongoServerError({ errmsg: "WriteConflict" });
+				writeConflict.addErrorLabel(MongoErrorLabel.TransientTransactionError);
+				throw writeConflict;
+			}
+			return "committed";
+		});
+
+		expect(result).toBe("committed");
+		expect(attempts).toBe(2);
+		await client.close();
 	});
 });
 

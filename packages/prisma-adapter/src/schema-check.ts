@@ -79,8 +79,10 @@ export function findPrismaSchemaProblems(
 	options: BetterAuthOptions,
 	usePlural?: boolean | undefined,
 ): SchemaFinding[] {
-	return diffSchema(
-		getExpectedSchema(options, { usePlural }),
-		introspectPrismaDataModel(dataModel),
+	const expected = Object.fromEntries(
+		Object.entries(getExpectedSchema(options, { usePlural })).map(
+			([model, table]) => [clientProperty(model), table],
+		),
 	);
+	return diffSchema(expected, introspectPrismaDataModel(dataModel));
 }

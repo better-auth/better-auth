@@ -1,6 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
-import { getAuthTables } from "@better-auth/core/db";
 import {
 	initGetFieldName,
 	initGetModelName,
@@ -33,12 +32,13 @@ import type {
 	AlterTableColumnAlteringBuilder,
 	ColumnDataType,
 	CreateIndexBuilder,
+	CreateSchemaBuilder,
 	CreateTableBuilder,
 	Kysely,
 	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { getSchema } from "./get-schema";
+import { buildSchema } from "./get-schema";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
@@ -575,8 +575,11 @@ export async function getMigrations(
 	config: BetterAuthOptions,
 	{ throwOnUnsafe = true }: { throwOnUnsafe?: boolean } = {},
 ) {
-	const betterAuthSchema = getSchema(config);
-	const authTables = getAuthTables(config);
+	const {
+		schema: betterAuthSchema,
+		tables: authTables,
+		referenceKeys,
+	} = buildSchema(config);
 	const logger = createLogger(config.logger);
 	const unsafeChanges: string[] = [];
 	const reportUnsafeChange = (message: string) => {
@@ -588,6 +591,7 @@ export async function getMigrations(
 		kysely: db,
 		databaseType: dbType,
 		introspectIndexes,
+		schemaName,
 	} = await createKyselyAdapter(config);
 
 	if (!dbType) {
@@ -609,18 +613,24 @@ export async function getMigrations(
 	let tableMetadata = allTableMetadata;
 	switch (dbType) {
 		case "postgres": {
-			const schema = await getPostgresSchema(db);
+			const schema = schemaName ?? (await getPostgresSchema(db));
 			target = { type: "postgres", schema };
 			logger.debug(
-				`PostgreSQL migration: Using schema '${schema}' (from search_path)`,
+				`PostgreSQL migration: Using schema '${schema}' (${schemaName ? "from database.schemaName" : "from search_path"})`,
 			);
 
 			try {
 				const schemas = await db.introspection.getSchemas();
 				if (!schemas.some(({ name }) => name === schema)) {
-					logger.warn(
-						`Schema '${schema}' does not exist. Create it before running migrations or check your database configuration.`,
-					);
+					if (schemaName) {
+						logger.debug(
+							`Schema '${schema}' does not exist yet. The migration creates it before creating tables.`,
+						);
+					} else {
+						logger.warn(
+							`Schema '${schema}' does not exist. Create it before running migrations or check your database configuration.`,
+						);
+					}
 				}
 			} catch (error) {
 				logger.debug(
@@ -815,9 +825,14 @@ export async function getMigrations(
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
+		| CreateSchemaBuilder
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
+
+	if (schemaName && toBeCreated.length > 0) {
+		migrations.push(db.schema.createSchema(schemaName).ifNotExists());
+	}
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
 	const useNumberId = config.advanced?.database?.generateId === "serial";
@@ -955,14 +970,27 @@ export async function getMigrations(
 
 	// Helper function to safely resolve model and field names, falling back to
 	// user-supplied strings for external tables not in the BetterAuth schema
-	function getReferencePath(model: string, field: string): string {
+	function getReferencePath(field: DBFieldAttribute): string {
+		const reference = field.references;
+		if (!reference) {
+			throw new BetterAuthError("Cannot resolve a field without references.");
+		}
+		const keys = referenceKeys.get(field);
+		if (!keys) {
+			throw new BetterAuthError(
+				`Missing migration reference metadata for "${reference.model}.${reference.field}".`,
+			);
+		}
 		try {
-			const modelName = getModelName(model);
-			const fieldName = getFieldName({ model, field });
+			const modelName = getModelName(keys.modelKey);
+			const fieldName = getFieldName({
+				model: keys.modelKey,
+				field: keys.fieldKey,
+			});
 			return `${modelName}.${fieldName}`;
 		} catch {
 			// If resolution fails (external table), fall back to user-supplied references
-			return `${model}.${field}`;
+			return `${reference.model}.${reference.field}`;
 		}
 	}
 
@@ -1048,12 +1076,7 @@ export async function getMigrations(
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(
-								getReferencePath(
-									field.references.model,
-									field.references.field,
-								),
-							)
+							.references(getReferencePath(field))
 							.onDelete(field.references.onDelete || "cascade");
 					}
 					if (timestampDefault) {
@@ -1119,12 +1142,7 @@ export async function getMigrations(
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(
-								getReferencePath(
-									field.references.model,
-									field.references.field,
-								),
-							)
+							.references(getReferencePath(field))
 							.onDelete(field.references.onDelete || "cascade");
 					}
 
