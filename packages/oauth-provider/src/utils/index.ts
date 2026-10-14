@@ -536,6 +536,67 @@ function throwInvalidAuthenticationRequest(errorDescription: string): never {
 }
 
 /**
+ * Re-reads a request's raw `application/x-www-form-urlencoded` body, keeping
+ * every value of a repeated key. better-call's form-body parser keeps only the
+ * last one, so `resource=https://a&resource=https://b` reaches the handler as
+ * `{ resource: "https://b" }`. Query strings are unaffected: the router keeps
+ * repeated query keys as arrays.
+ *
+ * Returns `undefined` for other media types or an unreadable or empty body.
+ * The endpoint MUST set `cloneRequest: true`, because the body stream is read
+ * a second time.
+ *
+ * @internal
+ */
+export async function readFormParams(
+	request: Request,
+): Promise<URLSearchParams | undefined> {
+	const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+	if (!contentType.includes("application/x-www-form-urlencoded")) {
+		return undefined;
+	}
+	let text: string;
+	try {
+		text = await request.clone().text();
+	} catch {
+		return undefined;
+	}
+	return text ? new URLSearchParams(text) : undefined;
+}
+
+/**
+ * Applies RFC 6749 §3.2 to a form body the parser collapsed to one value per
+ * key: a parameter sent without a value counts as omitted, and a parameter
+ * sent more than once is rejected with `invalid_request`. A name in
+ * `repeatable`, such as RFC 8707 `resource`, keeps every value as an array
+ * when it repeats. A value a `before` hook replaced is left as the hook set it.
+ *
+ * @internal
+ */
+export function applyFormParams(
+	params: URLSearchParams,
+	body: Record<string, unknown>,
+	repeatable: readonly string[] = [],
+): Record<string, unknown> {
+	const merged = { ...body };
+	for (const name of new Set(params.keys())) {
+		const raw = params.getAll(name);
+		const values = raw.filter(Boolean);
+		if (values.length > 1 && !repeatable.includes(name)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: `${name} must not be repeated`,
+			});
+		}
+		// The parser kept the last raw value; anything else came from a hook.
+		if (merged[name] !== raw.at(-1)) continue;
+		if (values.length === 0) delete merged[name];
+		else merged[name] = values.length === 1 ? values[0] : values;
+	}
+	return merged;
+}
+
+/**
  * Normalizes client identification and authentication parameters while
  * enforcing RFC 6749 §2.3 and RFC 8628 §3.1 cardinality. Empty values are
  * omitted. Client identification remains separate from authentication-method
