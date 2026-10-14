@@ -466,17 +466,39 @@ export const createInternalAdapter = (
 				const shouldDeleteSessionsFromDb =
 					!secondaryStorage || options.session?.storeSessionInDatabase;
 
-				const sessions = shouldDeleteSessionsFromDb
-					? await currentAdapter.findMany<Session>({
+				const sessions: Session[] = [];
+				if (shouldDeleteSessionsFromDb) {
+					let offset = 0;
+					const batchSize = 100;
+					while (true) {
+						const batch = await currentAdapter.findMany<Session>({
 							model: "session",
 							where: [{ field: "userId", value: userId }],
-						})
-					: [];
+							limit: batchSize,
+							offset,
+						});
+						sessions.push(...batch);
+						if (batch.length < batchSize) break;
+						offset += batch.length;
+					}
+				}
 
-				const accounts = await currentAdapter.findMany<Account>({
-					model: "account",
-					where: [{ field: "userId", value: userId }],
-				});
+				const accounts: Account[] = [];
+				{
+					let offset = 0;
+					const batchSize = 100;
+					while (true) {
+						const batch = await currentAdapter.findMany<Account>({
+							model: "account",
+							where: [{ field: "userId", value: userId }],
+							limit: batchSize,
+							offset,
+						});
+						accounts.push(...batch);
+						if (batch.length < batchSize) break;
+						offset += batch.length;
+					}
+				}
 
 				for (const session of sessions) {
 					const allowed = await runDeleteBeforeHooks(session, "session");

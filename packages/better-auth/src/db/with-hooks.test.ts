@@ -3,7 +3,7 @@ import { runWithTransaction } from "@better-auth/core/context";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import type { User } from "../types";
+import type { Session, User } from "../types";
 import { getMigrations } from "./get-migration";
 import { getWithHooks } from "./with-hooks";
 
@@ -191,7 +191,7 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 
 	it("internalAdapter.deleteUser does not delete sessions/accounts when user is not found or vetoed", async () => {
 		const database = new DatabaseSync(":memory:");
-		(await getMigrations({ database })).runMigrations();
+		await (await getMigrations({ database })).runMigrations();
 		const { auth, db } = await getTestInstance({
 			database,
 			user: {
@@ -674,5 +674,47 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 
 		expect(deleteSpy).not.toHaveBeenCalled();
 		expect(result).toBeNull();
+	});
+
+	it("deleteUser deletes all sessions when user has more sessions than the default findMany limit", async () => {
+		const { auth, db, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+		});
+
+		const { user } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const internalAdapter = ctx.internalAdapter;
+
+		// Create 105 sessions (exceeding default 100 limit)
+		const sessionCount = 105;
+		for (let i = 0; i < sessionCount; i++) {
+			await internalAdapter.createSession(user.id);
+		}
+
+		const sessionsBefore = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+			limit: 200,
+		});
+		expect(sessionsBefore.length).toBeGreaterThanOrEqual(sessionCount);
+
+		await internalAdapter.deleteUser(user.id);
+
+		const remainingSessions = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: user.id }],
+			limit: 200,
+		});
+		expect(remainingSessions.length).toBe(0);
+
+		const userInDb = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		expect(userInDb).toBeNull();
 	});
 });
