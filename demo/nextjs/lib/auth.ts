@@ -442,7 +442,7 @@ const authOptions = {
 			},
 			postLogin: {
 				page: "/oauth/select-organization",
-				async shouldRedirect({ session, scopes, headers }) {
+				async shouldRedirect({ session, scopes, headers, isContinuation }) {
 					const userOnlyScopes = [
 						"openid",
 						"profile",
@@ -452,18 +452,22 @@ const authOptions = {
 					if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
 						return false;
 					}
-					// Check if user has multiple organizations to select from
+					if (!session.activeOrganizationId) {
+						return true;
+					}
 					try {
 						const organizations = (await getAllUserOrganizations(
 							headers,
 						)) as Organization[];
-						return (
-							organizations.length > 1 ||
-							!(
-								organizations.length === 1 &&
-								organizations.at(0)?.id === session.activeOrganizationId
+						if (
+							!organizations.some(
+								(org) => org.id === session.activeOrganizationId,
 							)
-						);
+						) {
+							return true;
+						}
+						// Ask on every new authorization; accept the selection on continuation
+						return !isContinuation && organizations.length > 1;
 					} catch {
 						return true;
 					}
