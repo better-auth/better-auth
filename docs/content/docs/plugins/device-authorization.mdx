@@ -156,17 +156,26 @@ Register the CLI as a public native client and link it to the API resource. Publ
 ```ts title="register-cli.ts"
 import { DEVICE_CODE_GRANT_TYPE } from "@better-auth/oauth-provider";
 
-await auth.api.adminCreateOAuthClient({
+const client = await auth.api.adminCreateOAuthClient({
   headers,
   body: {
     token_endpoint_auth_method: "none",
-    type: "native",
+    application_type: "native",
     grant_types: [DEVICE_CODE_GRANT_TYPE, "refresh_token"],
     scope: "openid profile offline_access api:read",
-    resources: ["https://api.example.com"],
+  },
+});
+
+await auth.api.adminLinkClientResource({
+  headers,
+  params: {
+    identifier: "https://api.example.com",
+    client_id: client.client_id,
   },
 });
 ```
+
+The provider rejects a `resource` the client is not linked to, because `enforcePerClientResources` defaults to `true`. `adminLinkClientResource` creates that link. To link every newly registered client to the API instead, list it in `clientRegistrationDefaultResources`.
 
 Public clients use `token_endpoint_auth_method: "none"` and must send `client_id`. A confidential client using `client_secret_basic` may authenticate at `/device/code` with an `Authorization: Basic ...` header and omit the body `client_id`; `client_secret_post` sends both values in the form body.
 
@@ -197,7 +206,7 @@ console.log(`Open ${data.verification_uri}`);
 console.log(`Enter code ${data.user_code}`);
 ```
 
-While the user signs in and approves the request, repeat the following request at the interval returned by the device-code response:
+While the user signs in and approves the request, repeat the following request every `data.interval` seconds. Add 5 seconds to the interval each time the response is `slow_down`, as [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628#section-3.5) requires.
 
 ```ts title="cli.ts"
 const response = await fetch(`${authBaseURL}/oauth2/token`, {
@@ -221,11 +230,43 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
   Do not call `authClient.device.token` for this OAuth flow. That client method polls `/device/token` and returns a Better Auth session token. Registered OAuth clients must poll `/oauth2/token`.
 </Callout>
 
-`oauthDeviceAuthorization()` owns the Device Authorization endpoints and registers the `urn:ietf:params:oauth:grant-type:device_code` grant with OAuth Provider. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request. The approval page can show the client, scopes, and resource to the signed-in user.
+`oauthDeviceAuthorization()` owns the Device Authorization endpoints and registers the `urn:ietf:params:oauth:grant-type:device_code` grant with OAuth Provider. The provider validates the registered client, scopes, and [RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707) resource before creating the request.
 
 <Callout type="info">
   Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `oauthDeviceAuthorization()` prevents their device codes from being redeemed for a Better Auth session token.
 </Callout>
+
+#### Approve the device
+
+The user approves an OAuth device code on the same sign-in, post-login, and consent pages as an authorization request. Your verification page collects the user code and sends the browser to `/oauth2/authorize` with it:
+
+```ts title="app/device/page.tsx"
+window.location.href = `${authBaseURL}/oauth2/authorize?user_code=${encodeURIComponent(userCode)}`;
+```
+
+The provider reads only `user_code` from this request and takes the client, scopes, and resources from the stored device code. It then:
+
+1. Sends the user to `loginPage` when they are not signed in, then runs `selectAccount` and `postLogin` as it does for an authorization request.
+2. Always shows `consentPage`, even for a client with `skip_consent` or an existing consent, because the user must confirm the device ([RFC 8628 §5.4](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)). The consent page receives `user_code` in its query. Show it so the user can check that it matches the code on their device.
+3. Binds the device code to the signed-in user, records the consent, and sends the user to your verification page with `user_code` and `status=approved`, or `status=denied` when they deny on the consent page.
+
+`/device`, `/device/approve`, and `/device/deny` refuse OAuth device codes with `invalid_request`, and the description names the `/oauth2/authorize` URL to use. Standalone device codes keep using those endpoints.
+
+#### Grant device access for an organization
+
+Device approvals run `postLogin`, so [`postLogin.consentReferenceId`](/docs/plugins/oauth-provider#post-login-screen) selects the organization the same way it does for an authorization request. The device's access tokens and refresh tokens carry the returned `referenceId`, so `customAccessTokenClaims` receives it on every issuance, including refreshes:
+
+```ts title="auth.ts"
+oauthProvider({
+  // ...
+  postLogin: {
+    // `page`, `shouldRedirect`, and `consentReferenceId`, as in Post Login Screen
+  },
+  customAccessTokenClaims: ({ referenceId }) => ({
+    "https://example.com/organization": referenceId,
+  }),
+}),
+```
 
 ## First-party session flow
 
@@ -373,7 +414,7 @@ The user authorization flow requires two steps:
   Users must be authenticated when calling `GET /device`, because the verification step binds the pending device code to the signed-in user. Only that user can later approve or deny it. If the user is not authenticated when entering the code, redirect them to the login page with a return URL and re-call `GET /device` after sign-in.
 </Callout>
 
-When the OAuth Provider integration is enabled, `GET /device` also returns the approved resource context to the authenticated user who owns the request. Show that context in the approval UI alongside the client and scopes. Standalone Device Authorization does not return an RFC 8707 `resource` field.
+With `oauthDeviceAuthorization()`, OAuth device codes are approved through the provider instead. See [Approve the device](#approve-the-device).
 
 Create a page where users can enter their code:
 
@@ -438,6 +479,8 @@ Users must be authenticated to approve or deny device authorization requests. On
 | `invalid_request` | The user code is unknown, has no user yet (it was neither claimed with `GET /device` nor pre-bound with `user_id`), or already has a decision ("Device code already processed"), including from a concurrent approve or deny that finished first |
 | `expired_token`   | The code has expired                                                                                                                                                                                                                             |
 | `access_denied`   | The code belongs to another user                                                                                                                                                                                                                 |
+
+With `oauthDeviceAuthorization()`, both endpoints refuse OAuth device codes. Approve those through the provider instead. See [Approve the device](#approve-the-device).
 
 #### Approve Device
 
@@ -853,4 +896,4 @@ export const deviceCodeTableFields = [
 
 <DatabaseTable name="deviceCode" fields={deviceCodeTableFields} />
 
-`oauthDeviceAuthorization()` extends this table with optional `oauthClientId` and `resources` fields. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.
+`oauthDeviceAuthorization()` extends this table with optional `oauthClientId`, `resources`, `referenceId`, and `authTime` fields. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.

@@ -81,7 +81,7 @@ function normalizeUserCode(userCode: string) {
 /**
  * Preserve exact custom user codes, and normalize only default-alphabet codes.
  */
-async function findDeviceCodeByUserCode(
+export async function findDeviceCodeByUserCode(
 	ctx: GenericEndpointContext,
 	userCode: string,
 ) {
@@ -122,7 +122,7 @@ const deviceCodeAlreadyProcessed = () =>
 	});
 
 /** Throws unless the device code is unexpired and still awaiting a decision. */
-function assertDeviceCodePending(deviceCode: DeviceCode) {
+export function assertDeviceCodePending(deviceCode: DeviceCode) {
 	if (deviceCode.expiresAt < new Date()) {
 		throw expiredUserCode();
 	}
@@ -132,12 +132,50 @@ function assertDeviceCodePending(deviceCode: DeviceCode) {
 }
 
 /**
- * Records the signed-in owner's approval or denial of a pending device code.
- * The write is guarded on the pending status and owner, so a decision that
- * loses a race with another approve or deny fails instead of overwriting it.
+ * Records `userId`'s approval or denial of a pending, unexpired device code,
+ * binding an unclaimed code to that user in the same write. The write is
+ * guarded, so a decision that loses a race with another decision, or outlasts
+ * the code, fails instead of overwriting it.
  */
+export async function decideDeviceCode(
+	ctx: GenericEndpointContext,
+	input: {
+		deviceCode: DeviceCode;
+		userId: string;
+		decision: "approved" | "denied";
+		/** Grant-owned fields to persist with the decision. */
+		fields?: Record<string, unknown> | undefined;
+	},
+) {
+	const { deviceCode, userId, decision } = input;
+	if (deviceCode.userId && deviceCode.userId !== userId) {
+		throw new APIError("FORBIDDEN", {
+			error: "access_denied",
+			error_description: `You are not authorized to ${decision === "approved" ? "approve" : "deny"} this device authorization`,
+		});
+	}
+	const decided = await ctx.context.adapter.incrementOne<DeviceCode>({
+		model: "deviceCode",
+		where: [
+			{ field: "id", value: deviceCode.id },
+			{ field: "status", value: "pending" },
+			{ field: "userId", operator: "eq", value: deviceCode.userId ?? null },
+			{ field: "expiresAt", operator: "gt", value: new Date() },
+		],
+		increment: {},
+		set: { ...input.fields, userId, status: decision },
+	});
+	if (!decided) {
+		throw deviceCode.expiresAt < new Date()
+			? expiredUserCode()
+			: deviceCodeAlreadyProcessed();
+	}
+}
+
+/** Handles `/device/approve` and `/device/deny` for a code the user claimed. */
 async function recordDeviceCodeDecision(
 	ctx: GenericEndpointContext,
+	grant: DeviceAuthorizationGrant | undefined,
 	userCode: string,
 	decision: "approved" | "denied",
 ) {
@@ -158,7 +196,11 @@ async function recordDeviceCodeDecision(
 				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
 		});
 	}
-
+	await grant?.assertStandaloneUse({
+		ctx,
+		deviceCode: deviceCodeRecord,
+		use: "approve",
+	});
 	assertDeviceCodePending(deviceCodeRecord);
 
 	if (!deviceCodeRecord.userId) {
@@ -169,26 +211,11 @@ async function recordDeviceCodeDecision(
 		});
 	}
 
-	if (deviceCodeRecord.userId !== session.user.id) {
-		throw new APIError("FORBIDDEN", {
-			error: "access_denied",
-			error_description: `You are not authorized to ${decision === "approved" ? "approve" : "deny"} this device authorization`,
-		});
-	}
-
-	const decided = await ctx.context.adapter.incrementOne<DeviceCode>({
-		model: "deviceCode",
-		where: [
-			{ field: "id", value: deviceCodeRecord.id },
-			{ field: "status", value: "pending" },
-			{ field: "userId", value: session.user.id },
-		],
-		increment: {},
-		set: { status: decision },
+	await decideDeviceCode(ctx, {
+		deviceCode: deviceCodeRecord,
+		userId: session.user.id,
+		decision,
 	});
-	if (!decided) {
-		throw deviceCodeAlreadyProcessed();
-	}
 }
 
 const deviceCodeBodySchema = z.object({
@@ -266,25 +293,6 @@ type GrantRequestErrorCodes<
 }
 	? ErrorCodes
 	: readonly [];
-
-type GrantVerificationContext<
-	Grant extends DeviceAuthorizationGrant | undefined,
-> =
-	Grant extends DeviceAuthorizationGrant<
-		infer _RequestFields,
-		infer VerificationContext
-	>
-		? VerificationContext
-		: Record<never, never>;
-
-type DeviceVerificationResponse<
-	Grant extends DeviceAuthorizationGrant | undefined,
-> = {
-	user_code: string;
-	status: string;
-	client_id?: string | undefined;
-	scope?: string | undefined;
-} & Partial<GrantVerificationContext<Grant>>;
 
 export const deviceCode = <Grant extends DeviceAuthorizationGrant | undefined>(
 	opts: DeviceAuthorizationOptions,
@@ -821,9 +829,10 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 							error_description: "Client ID mismatch",
 						});
 					}
-					await grant?.assertSessionRedemption({
+					await grant?.assertStandaloneUse({
 						ctx,
 						deviceCode: deviceCodeRecord,
+						use: "redeem",
 					});
 					return {
 						ownershipWhere: { field: "clientId", value: client_id },
@@ -866,11 +875,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 		},
 	);
 
-export const deviceVerify = <
-	Grant extends DeviceAuthorizationGrant | undefined,
->(
-	grant: Grant,
-) =>
+export const deviceVerify = (grant: DeviceAuthorizationGrant | undefined) =>
 	createAuthEndpoint(
 		"/device",
 		{
@@ -919,7 +924,6 @@ export const deviceVerify = <
 												description:
 													"The requested scopes, returned only to the authenticated user who owns this request",
 											},
-											...grant?.verificationOpenAPIProperties,
 										},
 									},
 								},
@@ -940,13 +944,14 @@ export const deviceVerify = <
 						DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
 				});
 			}
+			await grant?.assertStandaloneUse({
+				ctx,
+				deviceCode: deviceCodeRecord,
+				use: "approve",
+			});
 
 			if (deviceCodeRecord.expiresAt < new Date()) {
-				throw new APIError("BAD_REQUEST", {
-					error: "expired_token",
-					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
-				});
+				throw expiredUserCode();
 			}
 
 			const session = await getSessionFromCtx(ctx);
@@ -974,13 +979,7 @@ export const deviceVerify = <
 			const canReviewRequest =
 				session?.user.id !== undefined &&
 				deviceCodeRecord.userId === session.user.id;
-			const grantContext = (
-				canReviewRequest
-					? grant?.getVerificationContext(deviceCodeRecord)
-					: undefined
-			) as GrantVerificationContext<Grant> | undefined;
-			const response = {
-				...(canReviewRequest ? grantContext : undefined),
+			return ctx.json({
 				user_code: user_code,
 				status: deviceCodeRecord.status,
 				...(canReviewRequest
@@ -989,16 +988,16 @@ export const deviceVerify = <
 							scope: deviceCodeRecord.scope,
 						}
 					: {}),
-			} as DeviceVerificationResponse<Grant>;
-			return ctx.json(response);
+			});
 		},
 	);
 
 /** `/device/approve` and `/device/deny`, which differ only in the decision. */
-const deviceDecisionEndpoint = <
+export const deviceDecisionEndpoint = <
 	Path extends "/device/approve" | "/device/deny",
 >(
 	path: Path,
+	grant: DeviceAuthorizationGrant | undefined,
 ) => {
 	const decision = path === "/device/approve" ? "approved" : "denied";
 	const action = decision === "approved" ? "Approve" : "Deny";
@@ -1051,7 +1050,7 @@ const deviceDecisionEndpoint = <
 			},
 		},
 		async (ctx) => {
-			await recordDeviceCodeDecision(ctx, ctx.body.userCode, decision);
+			await recordDeviceCodeDecision(ctx, grant, ctx.body.userCode, decision);
 			return ctx.json({
 				success: true,
 			});
@@ -1059,14 +1058,10 @@ const deviceDecisionEndpoint = <
 	);
 };
 
-export const deviceApprove = deviceDecisionEndpoint("/device/approve");
-
-export const deviceDeny = deviceDecisionEndpoint("/device/deny");
-
 /**
  * @internal
  */
-const buildVerificationUris = (
+export const buildVerificationUris = (
 	verificationUri: string | undefined,
 	baseURL: string,
 	userCode: string,

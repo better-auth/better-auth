@@ -12,6 +12,7 @@ import {
 	getRequestedUserInfoClaims,
 	isValidOidcClaimsRequest,
 } from "./claims-request";
+import { getExtensionInteractionRequest } from "./extensions";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
@@ -26,8 +27,8 @@ import { getSupportedClaims } from "./standard-claims";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
+	OAuthInteractionRequest,
 	OAuthOptions,
-	SchemaClient,
 	Scope,
 	VerificationValue,
 } from "./types";
@@ -435,11 +436,6 @@ export async function authorizeEndpoint(
 	opts: OAuthOptions<Scope[]>,
 	settings?: AuthorizeEndpointSettings,
 ): Promise<OAuthRedirectResult> {
-	// Grant type must include authorization_code to use this endpoint
-	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
-		throw new APIError("NOT_FOUND");
-	}
-
 	if (!ctx.request) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "request not found",
@@ -454,6 +450,43 @@ export async function authorizeEndpoint(
 		ctx,
 		settings,
 	);
+
+	const interaction = getExtensionInteractionRequest(opts, query);
+	if (interaction) {
+		const toErrorURL = (error: unknown) => {
+			if (!(error instanceof APIError)) throw error;
+			const body = error.body as
+				| { error?: OAuthErrorCode; error_description?: string }
+				| undefined;
+			return getErrorURL(
+				ctx,
+				body?.error ?? "invalid_request",
+				body?.error_description ?? "invalid request",
+			);
+		};
+		let interactionRequest: OAuthInteractionRequest;
+		try {
+			interactionRequest = await interaction.handler.load({
+				ctx,
+				opts,
+				value: interaction.value,
+				// Resumed queries were signed by this server; a direct request is not.
+				signedQuery: settings?.isAuthorize === true ? undefined : query,
+			});
+		} catch (error) {
+			return handleRedirect(ctx, toErrorURL(error));
+		}
+		return runAuthorizationInteraction(ctx, opts, request.headers, settings, {
+			...interactionRequest,
+			approve: (approval) =>
+				interactionRequest.approve(approval).catch(toErrorURL),
+		});
+	}
+
+	// Grant type must include authorization_code to use this endpoint
+	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
+		throw new APIError("NOT_FOUND");
+	}
 	ctx.query = query;
 	const requestObject = getStringParameter(query.request);
 	const requestUri = getStringParameter(query.request_uri);
@@ -785,27 +818,6 @@ export async function authorizeEndpoint(
 }
 
 /**
- * The request the user reviews through sign-in, account selection, signup,
- * post-login selection, and consent.
- */
-export interface InteractionRequest {
-	/** Signed into each interaction page; carries `prompt` and `max_age`. */
-	query: OAuthAuthorizationQuery;
-	client: SchemaClient<Scope[]>;
-	/**
-	 * Records the approval once every interaction is complete and returns the
-	 * URL to send the user to.
-	 */
-	approve: (approval: {
-		query: OAuthAuthorizationQuery;
-		userId: string;
-		sessionId: string;
-		authTime: number;
-		referenceId?: string;
-	}) => Promise<string>;
-}
-
-/**
  * Sends the user to the next required interaction page, or approves the
  * request once none remain.
  */
@@ -814,7 +826,7 @@ async function runAuthorizationInteraction(
 	opts: OAuthOptions<Scope[]>,
 	headers: Headers,
 	settings: AuthorizeEndpointSettings | undefined,
-	request: InteractionRequest,
+	request: OAuthInteractionRequest,
 ): Promise<OAuthRedirectResult> {
 	let { query } = request;
 	const { client } = request;

@@ -480,6 +480,60 @@ export interface OAuthProviderExtension {
 	 * registry, an attestation header) contributes it here.
 	 */
 	clientDiscovery?: ClientDiscovery | ClientDiscovery[];
+	/**
+	 * Requests other than an authorization request that users approve through
+	 * the `/oauth2/authorize` sign-in, account selection, post-login, and
+	 * consent pages, keyed by the query parameter that identifies one, such as
+	 * `user_code`. Every interaction page resumes them through
+	 * `/oauth2/authorize`.
+	 */
+	interactionRequests?: Record<string, OAuthInteractionRequestHandler>;
+}
+
+/**
+ * A request the user reviews through the `/oauth2/authorize` sign-in,
+ * account selection, signup, post-login, and consent pages.
+ */
+export interface OAuthInteractionRequest {
+	/** Signed into each interaction page; carries `prompt` and `max_age`. */
+	query: OAuthAuthorizationQuery;
+	client: SchemaClient<Scope[]>;
+	/**
+	 * Records the approval once every interaction is complete and returns the
+	 * URL to send the user to.
+	 */
+	approve: (approval: {
+		query: OAuthAuthorizationQuery;
+		userId: string;
+		sessionId: string;
+		authTime: number;
+		referenceId?: string;
+	}) => Promise<string>;
+}
+
+/** Loads and denies one kind of {@link OAuthInteractionRequest}. */
+export interface OAuthInteractionRequestHandler {
+	/**
+	 * Loads the request identified by `value`. On a direct `/oauth2/authorize`
+	 * request only `value` comes from the caller; when resuming after an
+	 * interaction page, `signedQuery` is the query this server signed into it.
+	 * Throw an `APIError` when the request can no longer be approved.
+	 */
+	load: (input: {
+		ctx: GenericEndpointContext;
+		opts: OAuthOptions<Scope[]>;
+		value: string;
+		signedQuery?: OAuthAuthorizationQuery | undefined;
+	}) => Promise<OAuthInteractionRequest>;
+	/**
+	 * Records a denial from the consent page and returns the URL to send the
+	 * user to.
+	 */
+	deny: (input: {
+		ctx: GenericEndpointContext;
+		value: string;
+		userId: string;
+	}) => Promise<string>;
 }
 
 /**

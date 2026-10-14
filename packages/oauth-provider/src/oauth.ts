@@ -372,6 +372,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "OAuth 2.1 response type (e.g., 'code')",
 						},
 						{
+							name: "user_code",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description:
+								"Device user code to approve instead of an authorization request (requires oauthDeviceAuthorization())",
+						},
+						{
 							name: "client_id",
 							in: "query",
 							required: true,

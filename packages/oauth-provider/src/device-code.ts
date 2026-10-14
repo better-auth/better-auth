@@ -1,12 +1,18 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import { APIError } from "better-auth/api";
 import type {
 	DeviceAuthorizationGrant,
 	DeviceAuthorizationPluginOptions,
+	DeviceCode,
 } from "better-auth/plugins/device-authorization";
 import {
+	assertDeviceCodePending,
+	buildVerificationUris,
+	decideDeviceCode,
 	deviceAuthorization,
+	findDeviceCodeByUserCode,
 	redeemDeviceCode,
 } from "better-auth/plugins/device-authorization";
 import * as z from "zod";
@@ -14,7 +20,9 @@ import { extendOAuthProvider } from "./extensions";
 import { resolveResourcePolicy } from "./resources";
 import { getOAuthProviderApi } from "./token";
 import type {
+	OAuthAuthorizationQuery,
 	OAuthExtensionGrantHandlerInput,
+	OAuthInteractionRequestHandler,
 	OAuthProviderExtension,
 	OAuthTokenResponse,
 } from "./types";
@@ -24,7 +32,6 @@ import {
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
 	readFormParams,
-	toAudienceClaim,
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
@@ -74,6 +81,8 @@ const oauthDeviceRequestFields = {
 type OAuthDeviceCodeFields = {
 	oauthClientId?: string | null;
 	resources?: string[] | null;
+	referenceId?: string | null;
+	authTime?: Date | null;
 };
 
 function tokenError(
@@ -117,6 +126,7 @@ async function exchangeOAuthDeviceCode(
 	> & { scopes: string[] };
 	const {
 		authorizationContext: { client, confirmation, scopes },
+		claimedDeviceCode,
 		redemptionContext: resources,
 		user,
 	} = await redeemDeviceCode<
@@ -185,12 +195,99 @@ async function exchangeOAuthDeviceCode(
 		scopes,
 		user,
 		resources,
+		referenceId: claimedDeviceCode.referenceId ?? undefined,
+		authTime: claimedDeviceCode.authTime ?? undefined,
 		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});
 }
 
-function buildOAuthDeviceGrant() {
+/**
+ * Lets the user approve an OAuth device code through `/oauth2/authorize`, so
+ * device approvals run the same sign-in, account selection, post-login, and
+ * consent pages as authorization requests. The user is bound to the code only
+ * at the final approval, after any account switch.
+ */
+function deviceApprovalRequest(
+	verificationUri: string | undefined,
+): OAuthInteractionRequestHandler {
+	async function findOAuthDeviceCode(
+		ctx: GenericEndpointContext,
+		userCode: string,
+	) {
+		const deviceCode = (await findDeviceCodeByUserCode(ctx, userCode)) as
+			| (DeviceCode & OAuthDeviceCodeFields)
+			| null;
+		if (!deviceCode?.oauthClientId) {
+			tokenError("BAD_REQUEST", "invalid_request", "Invalid user code");
+		}
+		return { ...deviceCode, oauthClientId: deviceCode.oauthClientId };
+	}
+	// Sends the user back to the device verification page with the outcome.
+	const completionURL = (
+		ctx: GenericEndpointContext,
+		userCode: string,
+		status: "approved" | "denied",
+	) =>
+		appendQueryParams(
+			buildVerificationUris(verificationUri, ctx.context.baseURL, userCode)
+				.verificationUriComplete,
+			new URLSearchParams({ status }),
+		);
+
+	return {
+		load: async ({ ctx, opts, value, signedQuery }) => {
+			const deviceCode = await findOAuthDeviceCode(ctx, value);
+			assertDeviceCodePending(deviceCode);
+			const client = await getClient(ctx, opts, deviceCode.oauthClientId);
+			if (!client) {
+				tokenError("BAD_REQUEST", "invalid_client", "client_id is required");
+			}
+			if (client.disabled) {
+				tokenError("BAD_REQUEST", "client_disabled", "client is disabled");
+			}
+			const query: Partial<OAuthAuthorizationQuery> & { user_code: string } = {
+				user_code: deviceCode.userCode,
+				client_id: client.clientId,
+				// The consent page may have narrowed the scopes of a signed query.
+				scope: parseScopes(signedQuery?.scope ?? deviceCode.scope).join(" "),
+				resource: deviceCode.resources ?? [],
+				// RFC 8628 section 5.4: always show consent for a device, even when
+				// consent is stored or the client skips it.
+				prompt: signedQuery ? signedQuery.prompt : "consent",
+			};
+			return {
+				// Device requests never use prompt=none, so no redirect_uri is read.
+				query: query as OAuthAuthorizationQuery,
+				client,
+				approve: async (approval) => {
+					await decideDeviceCode(ctx, {
+						deviceCode,
+						userId: approval.userId,
+						decision: "approved",
+						fields: {
+							scope: approval.query.scope,
+							referenceId: approval.referenceId ?? null,
+							authTime: new Date(approval.authTime),
+						},
+					});
+					return completionURL(ctx, deviceCode.userCode, "approved");
+				},
+			};
+		},
+		deny: async ({ ctx, value, userId }) => {
+			const deviceCode = await findOAuthDeviceCode(ctx, value);
+			await decideDeviceCode(ctx, {
+				deviceCode,
+				userId,
+				decision: "denied",
+			});
+			return completionURL(ctx, deviceCode.userCode, "denied");
+		},
+	};
+}
+
+function buildOAuthDeviceGrant(verificationUri: string | undefined) {
 	return {
 		requestSchemaFields: oauthDeviceRequestFields,
 		requestErrorCodes: ["invalid_target"] as const,
@@ -239,6 +336,14 @@ function buildOAuthDeviceGrant() {
 			},
 			oauthClientId: {
 				type: "string",
+				required: false,
+			},
+			referenceId: {
+				type: "string",
+				required: false,
+			},
+			authTime: {
+				type: "date",
 				required: false,
 			},
 		},
@@ -313,39 +418,25 @@ function buildOAuthDeviceGrant() {
 				},
 			};
 		},
-		assertSessionRedemption: ({ deviceCode }) => {
+		assertStandaloneUse: ({ deviceCode, use }) => {
 			if (typeof deviceCode.oauthClientId !== "string") return;
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_grant",
-				error_description:
+			if (use === "redeem") {
+				tokenError(
+					"BAD_REQUEST",
+					"invalid_grant",
 					"This device code must be exchanged at the OAuth token endpoint (/oauth2/token).",
-			});
-		},
-		getVerificationContext: (deviceCode) => {
-			if (typeof deviceCode.oauthClientId !== "string") return;
-			const resources = deviceCode.resources;
-			if (
-				!Array.isArray(resources) ||
-				!resources.every((resource) => typeof resource === "string")
-			) {
-				return;
+				);
 			}
-			return { resource: toAudienceClaim(resources) };
+			tokenError(
+				"BAD_REQUEST",
+				"invalid_request",
+				`Approve this device code through the OAuth provider: send the user to /oauth2/authorize?user_code=${encodeURIComponent(String(deviceCode.userCode))}.`,
+			);
 		},
-		verificationOpenAPIProperties: {
-			resource: {
-				oneOf: [
-					{ type: "string" },
-					{ type: "array", items: { type: "string" } },
-				],
-				description:
-					"The requested resource indicators, returned only to the authenticated user who owns this request",
-			},
+		interactionRequests: {
+			user_code: deviceApprovalRequest(verificationUri),
 		},
-	} satisfies DeviceAuthorizationGrant<
-		typeof oauthDeviceRequestFields,
-		{ resource: string | string[] | undefined }
-	> &
+	} satisfies DeviceAuthorizationGrant<typeof oauthDeviceRequestFields> &
 		OAuthProviderExtension;
 }
 
@@ -379,7 +470,7 @@ export type OAuthDeviceAuthorizationOptions = Omit<
 export function oauthDeviceAuthorization(
 	options: OAuthDeviceAuthorizationOptions = {},
 ) {
-	const grant = buildOAuthDeviceGrant();
+	const grant = buildOAuthDeviceGrant(options.verificationUri);
 	const plugin = deviceAuthorization({ ...options, grant });
 
 	return {
