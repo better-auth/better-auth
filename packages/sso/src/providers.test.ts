@@ -2473,6 +2473,13 @@ kBGIJYs=
 
 			expect(response.status).toBe(200);
 			expect(isAuthenticationBoundaryChange).toBe(false);
+			const storedProvider = data.ssoProvider.find(
+				(provider) => provider.providerId === "my-saml-provider",
+			);
+			expect(
+				safeJsonParse<SAMLConfig>(storedProvider?.samlConfig ?? "")
+					?.callbackUrl,
+			).toBe("https://app.example.com/after-login");
 		});
 
 		/**
