@@ -232,66 +232,66 @@ describe("secondary storage - bulk session cache eviction", () => {
 		);
 	});
 
-	it.each([
-		true,
-		false,
-	])("returns sessions once in input order (secondary storage: %s)", async (secondaryStorageEnabled) => {
-		const store = new Map<string, string>();
-		const { auth, signInWithTestUser } = await getTestInstance({
-			secondaryStorage: secondaryStorageEnabled
-				? createStringSecondaryStorage(store)
-				: undefined,
-			session: { storeSessionInDatabase: true },
-		});
-		const { user } = await signInWithTestUser();
-		const { internalAdapter } = await auth.$context;
-		const first = await internalAdapter.createSession(user.id);
-		const second = await internalAdapter.createSession(user.id);
-		const third = await internalAdapter.createSession(user.id);
-		store.delete(first.token);
-		store.delete(third.token);
+	it.each([true, false])(
+		"returns sessions once in input order (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+			});
+			const { user } = await signInWithTestUser();
+			const { internalAdapter } = await auth.$context;
+			const first = await internalAdapter.createSession(user.id);
+			const second = await internalAdapter.createSession(user.id);
+			const third = await internalAdapter.createSession(user.id);
+			store.delete(first.token);
+			store.delete(third.token);
 
-		const sessions = await internalAdapter.findSessions([
-			third.token,
-			second.token,
-			first.token,
-			third.token,
-			"missing-session",
-		]);
-		expect(sessions.map(({ session }) => session.token)).toEqual([
-			third.token,
-			second.token,
-			first.token,
-		]);
-	});
+			const sessions = await internalAdapter.findSessions([
+				third.token,
+				second.token,
+				first.token,
+				third.token,
+				"missing-session",
+			]);
+			expect(sessions.map(({ session }) => session.token)).toEqual([
+				third.token,
+				second.token,
+				first.token,
+			]);
+		},
+	);
 
-	it.each([
-		true,
-		false,
-	])("returns every requested session beyond the default query limit (secondary storage: %s)", async (secondaryStorageEnabled) => {
-		const store = new Map<string, string>();
-		const { auth, signInWithTestUser } = await getTestInstance({
-			secondaryStorage: secondaryStorageEnabled
-				? createStringSecondaryStorage(store)
-				: undefined,
-			session: { storeSessionInDatabase: true },
-			advanced: { database: { defaultFindManyLimit: 1 } },
-		});
-		const { user } = await signInWithTestUser();
-		const { internalAdapter } = await auth.$context;
-		const first = await internalAdapter.createSession(user.id);
-		const second = await internalAdapter.createSession(user.id);
-		store.clear();
+	it.each([true, false])(
+		"returns every requested session beyond the default query limit (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+				advanced: { database: { defaultFindManyLimit: 1 } },
+			});
+			const { user } = await signInWithTestUser();
+			const { internalAdapter } = await auth.$context;
+			const first = await internalAdapter.createSession(user.id);
+			const second = await internalAdapter.createSession(user.id);
+			store.clear();
 
-		const sessions = await internalAdapter.findSessions([
-			first.token,
-			second.token,
-		]);
-		expect(sessions.map(({ session }) => session.token)).toEqual([
-			first.token,
-			second.token,
-		]);
-	});
+			const sessions = await internalAdapter.findSessions([
+				first.token,
+				second.token,
+			]);
+			expect(sessions.map(({ session }) => session.token)).toEqual([
+				first.token,
+				second.token,
+			]);
+		},
+	);
 
 	it("does not replace corrupt or expired cache entries with database sessions", async () => {
 		const store = new Map<string, string>();
@@ -319,58 +319,58 @@ describe("secondary storage - bulk session cache eviction", () => {
 		).toEqual([]);
 	});
 
-	it.each([
-		true,
-		false,
-	])("keeps valid sessions when a database session has no user (secondary storage: %s)", async (secondaryStorageEnabled) => {
-		const store = new Map<string, string>();
-		const { auth, signInWithTestUser } = await getTestInstance({
-			database: memoryAdapter({
-				user: [],
-				account: [],
-				session: [],
-				verification: [],
-			}),
-			secondaryStorage: secondaryStorageEnabled
-				? createStringSecondaryStorage(store)
-				: undefined,
-			session: { storeSessionInDatabase: true },
-		});
-		const { user } = await signInWithTestUser();
-		const { adapter, internalAdapter } = await auth.$context;
-		const cached = await internalAdapter.createSession(user.id);
-		const evicted = await internalAdapter.createSession(user.id);
-		const deletedUser = await internalAdapter.createUser(
-			{
-				name: "Deleted user",
-				email: "deleted@test.com",
-			},
-			{ method: "test" },
-		);
-		const orphaned = await internalAdapter.createSession(deletedUser.id);
-		await adapter.delete({
-			model: "user",
-			where: [{ field: "id", value: deletedUser.id }],
-		});
-		store.delete(evicted.token);
-		store.delete(orphaned.token);
-		expect(
-			await adapter.findOne({
-				model: "session",
-				where: [{ field: "token", value: orphaned.token }],
-			}),
-		).not.toBeNull();
-		expect(await internalAdapter.findSession(orphaned.token)).toBeNull();
+	it.each([true, false])(
+		"keeps valid sessions when a database session has no user (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				database: memoryAdapter({
+					user: [],
+					account: [],
+					session: [],
+					verification: [],
+				}),
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+			});
+			const { user } = await signInWithTestUser();
+			const { adapter, internalAdapter } = await auth.$context;
+			const cached = await internalAdapter.createSession(user.id);
+			const evicted = await internalAdapter.createSession(user.id);
+			const deletedUser = await internalAdapter.createUser(
+				{
+					name: "Deleted user",
+					email: "deleted@test.com",
+				},
+				{ method: "test" },
+			);
+			const orphaned = await internalAdapter.createSession(deletedUser.id);
+			await adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: deletedUser.id }],
+			});
+			store.delete(evicted.token);
+			store.delete(orphaned.token);
+			expect(
+				await adapter.findOne({
+					model: "session",
+					where: [{ field: "token", value: orphaned.token }],
+				}),
+			).not.toBeNull();
+			expect(await internalAdapter.findSession(orphaned.token)).toBeNull();
 
-		const sessions = await internalAdapter.findSessions([
-			cached.token,
-			evicted.token,
-			orphaned.token,
-		]);
-		expect(sessions.map(({ session }) => session.token).sort()).toEqual(
-			[cached.token, evicted.token].sort(),
-		);
-	});
+			const sessions = await internalAdapter.findSessions([
+				cached.token,
+				evicted.token,
+				orphaned.token,
+			]);
+			expect(sessions.map(({ session }) => session.token).sort()).toEqual(
+				[cached.token, evicted.token].sort(),
+			);
+		},
+	);
 });
 
 describe("secondary storage - storeSessionInDatabase", () => {

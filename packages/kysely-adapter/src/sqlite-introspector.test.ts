@@ -240,24 +240,25 @@ describe("SQLite generated primary keys", () => {
 			definition: "CREATE TABLE entries (seq INT PRIMARY KEY, id TEXT)",
 			generated: undefined,
 		},
-	])("recognizes $name", async ({ definition, generated }, {
-		onTestFinished,
-	}) => {
-		const sqlite = new DatabaseSync(":memory:");
-		sqlite.exec(definition);
-		const db = new Kysely({
-			dialect: new NodeSqliteDialect({ database: sqlite }),
-		});
-		onTestFinished(() => db.destroy());
+	])(
+		"recognizes $name",
+		async ({ definition, generated }, { onTestFinished }) => {
+			const sqlite = new DatabaseSync(":memory:");
+			sqlite.exec(definition);
+			const db = new Kysely({
+				dialect: new NodeSqliteDialect({ database: sqlite }),
+			});
+			onTestFinished(() => db.destroy());
 
-		const tables = await db.introspection.getTables();
-		const entries = tables.find((table) => table.name === "entries");
-		expect(
-			entries?.columns
-				.filter((column) => column.isAutoIncrementing)
-				.map((column) => column.name),
-		).toEqual(generated ? [generated] : []);
-	});
+			const tables = await db.introspection.getTables();
+			const entries = tables.find((table) => table.name === "entries");
+			expect(
+				entries?.columns
+					.filter((column) => column.isAutoIncrementing)
+					.map((column) => column.name),
+			).toEqual(generated ? [generated] : []);
+		},
+	);
 
 	it("BunSqliteDialect recognizes an INTEGER PRIMARY KEY", async ({
 		onTestFinished,

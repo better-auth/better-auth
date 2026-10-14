@@ -261,22 +261,25 @@ describe("resource seeding at startup", () => {
 				"Model oauthResource does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'",
 			),
 		],
-	])("defers quietly on a %s error and seeds once the table exists", async (_, error) => {
-		const fault = {
-			current: (() => {
-				throw error;
-			}) as ResourceFault | null,
-		};
-		const { register, database, errorLogs } =
-			await bootWithResourceFault(fault);
+	])(
+		"defers quietly on a %s error and seeds once the table exists",
+		async (_, error) => {
+			const fault = {
+				current: (() => {
+					throw error;
+				}) as ResourceFault | null,
+			};
+			const { register, database, errorLogs } =
+				await bootWithResourceFault(fault);
 
-		expect(errorLogs()).toEqual([]);
-		await expect(register()).rejects.toThrow(error.message);
+			expect(errorLogs()).toEqual([]);
+			await expect(register()).rejects.toThrow(error.message);
 
-		fault.current = null;
-		await expect(register()).resolves.toMatchObject({
-			resources: [resource],
-		});
-		expect(database.oauthResource).toHaveLength(1);
-	});
+			fault.current = null;
+			await expect(register()).resolves.toMatchObject({
+				resources: [resource],
+			});
+			expect(database.oauthResource).toHaveLength(1);
+		},
+	);
 });
