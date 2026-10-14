@@ -98,7 +98,8 @@ async function fetchDiscovery(
 	const result = await betterFetch<DiscoveryDocument>(url, {
 		method: "GET",
 		headers,
-		timeout,
+		// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
+		signal: timeout ? AbortSignal.timeout(timeout) : undefined,
 	});
 	if (result.error || !result.data) {
 		return null;
@@ -506,14 +507,18 @@ export const genericOAuth = <const ID extends string>(
 		return genericProviders;
 	};
 
-	// Providers skipped because startup discovery failed. Concurrent requests share one
-	// retry, and a failed retry leaves the provider pending for the next request.
-	const pendingDiscovery = new Map<
-		string,
-		{ config: GenericOAuthConfig; attempt?: Promise<void> | undefined }
+	// Providers skipped because startup discovery failed, per auth instance (keyed by its
+	// adapter, like oauth-provider's seed state) since one plugin object can serve several.
+	// Concurrent requests share one retry, and a failed retry stays pending.
+	const pendingDiscovery = new WeakMap<
+		object,
+		Map<
+			string,
+			{ config: GenericOAuthConfig; attempt?: Promise<void> | undefined }
+		>
 	>();
 	const retryDiscovery = (ctx: AuthContext, providerId: string) => {
-		const pending = pendingDiscovery.get(providerId);
+		const pending = pendingDiscovery.get(ctx.adapter)?.get(providerId);
 		if (!pending) return;
 		pending.attempt ??= buildProviders(
 			[pending.config],
@@ -522,7 +527,7 @@ export const genericOAuth = <const ID extends string>(
 		)
 			.then(([provider]) => {
 				if (!provider) return;
-				pendingDiscovery.delete(providerId);
+				pendingDiscovery.get(ctx.adapter)?.delete(providerId);
 				ctx.socialProviders.unshift(provider);
 			})
 			.finally(() => {
@@ -550,11 +555,14 @@ export const genericOAuth = <const ID extends string>(
 		init: async (ctx: AuthContext) => {
 			const genericProviders = await buildProviders(options.config, ctx);
 			const built = new Set(genericProviders.map((p) => p.id));
-			for (const c of options.config) {
-				if (!built.has(c.providerId)) {
-					pendingDiscovery.set(c.providerId, { config: c });
-				}
-			}
+			pendingDiscovery.set(
+				ctx.adapter,
+				new Map(
+					options.config
+						.filter((c) => !built.has(c.providerId))
+						.map((c) => [c.providerId, { config: c }]),
+				),
+			);
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));
 			for (const gp of genericProviders) {
@@ -575,7 +583,9 @@ export const genericOAuth = <const ID extends string>(
 			before: [
 				{
 					matcher: (context) =>
-						pendingDiscovery.has(requestedProviderId(context) ?? ""),
+						pendingDiscovery
+							.get(context.context.adapter)
+							?.has(requestedProviderId(context) ?? "") === true,
 					handler: createAuthMiddleware(async (ctx) => {
 						const providerId = requestedProviderId(ctx);
 						if (providerId) await retryDiscovery(ctx.context, providerId);

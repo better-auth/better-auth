@@ -5471,6 +5471,59 @@ describe("oauth2", async () => {
 		await signIn();
 		expect(discoveryFetches).toBe(4);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11404
+	 */
+	it("recovers the provider in every auth instance that shares one plugin object", async () => {
+		let idpUp = false;
+		mswServer.use(
+			http.get(
+				"https://shared-idp.test/.well-known/openid-configuration",
+				() =>
+					idpUp
+						? HttpResponse.json({
+								issuer: "https://shared-idp.test",
+								authorization_endpoint: "https://shared-idp.test/authorize",
+								token_endpoint: "https://shared-idp.test/token",
+							})
+						: new HttpResponse(null, { status: 503 }),
+			),
+		);
+		const plugin = genericOAuth({
+			config: [
+				{
+					providerId: "shared-idp",
+					clientId: "client",
+					clientSecret: "secret",
+					discoveryUrl:
+						"https://shared-idp.test/.well-known/openid-configuration",
+				},
+			],
+		});
+		const first = await getTestInstance(
+			{ plugins: [plugin] },
+			{ disableTestUser: true },
+		);
+		const second = await getTestInstance(
+			{ plugins: [plugin] },
+			{ disableTestUser: true },
+		);
+
+		const signIn = ({ auth }: typeof first) =>
+			auth.api.signInSocial({
+				body: { provider: "shared-idp", callbackURL: "/" },
+			});
+		await expect(signIn(first)).rejects.toThrow();
+		await expect(signIn(second)).rejects.toThrow();
+
+		idpUp = true;
+		for (const instance of [first, second]) {
+			expect((await signIn(instance)).url).toContain(
+				"https://shared-idp.test/authorize",
+			);
+		}
+	});
 });
 
 /**
