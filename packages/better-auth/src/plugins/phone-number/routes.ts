@@ -810,16 +810,15 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		},
 		async (ctx) => {
 			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
-			// Before any code check, since a custom verifier spends the code.
-			assertPasswordNotTooShort(ctx, ctx.body.newPassword);
-			assertPasswordNotTooLong(ctx, ctx.body.newPassword);
-			// A custom verifier spends the provider's code. Otherwise the stored
-			// code is checked without spending it, so a rejected password leaves it
-			// usable: a wrong or unusable code goes through verifyPhoneNumberOTP,
-			// which counts the attempt and throws, and a correct one is consumed
-			// inside the reset transaction.
+			// Check the code without spending it, so a rejected password leaves it
+			// usable. A wrong or unusable code goes through verifyPhoneNumberOTP,
+			// which counts the attempt and throws; a correct one is consumed inside
+			// the reset transaction.
 			let otpConsumed = false;
 			if (opts.verifyOTP) {
+				// A custom verifier spends the code, so reject a bad password first.
+				assertPasswordNotTooShort(ctx, ctx.body.newPassword);
+				assertPasswordNotTooLong(ctx, ctx.body.newPassword);
 				await verifyWithCustomVerifier(
 					ctx,
 					opts.verifyOTP,
@@ -859,6 +858,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				);
 			}
+			assertPasswordNotTooShort(ctx, ctx.body.newPassword);
+			assertPasswordNotTooLong(ctx, ctx.body.newPassword);
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);
