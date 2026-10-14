@@ -201,43 +201,34 @@ describe("verifyProviderIdToken", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/11636
 	 */
 	describe("clock skew", () => {
-		const now = () => Math.floor(Date.now() / 1000);
-		const provider = (
-			jwks: Awaited<ReturnType<typeof makeKeyset>>["jwks"],
-			maxTokenAge?: string,
-		) =>
-			providerWith({ jwks, issuer: ISSUER, audience: AUDIENCE, maxTokenAge });
-
-		it("accepts a token whose nbf is a few seconds ahead of the server clock", async () => {
-			const { jwks, sign } = await makeKeyset();
-			const token = await sign({ sub: "u1", nbf: now() + 5 });
-			expect(await verifyProviderIdToken(provider(jwks), token)).toBe(true);
-		});
-
-		it("accepts a token whose iat is a few seconds ahead when maxTokenAge is set", async () => {
+		// Offsets sit 5s inside and outside the 30s tolerance on each time claim.
+		it.each([
+			["nbf", 25, true],
+			["nbf", 35, false],
+			["iat", 25, true],
+			["iat", 35, false],
+			["exp", -25, true],
+			["exp", -35, false],
+		] as const)("%s %is from now verifies: %s", async (claim, offset, valid) => {
 			const { jwks, privateKey } = await makeKeyset();
-			const token = await new SignJWT({ sub: "u1" })
+			const now = Math.floor(Date.now() / 1000);
+			const times = { iat: now - 60, exp: now + 3600, [claim]: now + offset };
+			const token = await new SignJWT(
+				claim === "nbf" ? { sub: "u1", nbf: times.nbf } : { sub: "u1" },
+			)
 				.setProtectedHeader({ alg: "RS256", kid: "test-key" })
 				.setIssuer(ISSUER)
 				.setAudience(AUDIENCE)
-				.setIssuedAt(now() + 5)
-				.setExpirationTime("1h")
+				.setIssuedAt(times.iat)
+				.setExpirationTime(times.exp)
 				.sign(privateKey);
-			expect(await verifyProviderIdToken(provider(jwks, "1h"), token)).toBe(
-				true,
-			);
-		});
-
-		it("still rejects a token that expired well beyond the tolerance", async () => {
-			const { jwks, privateKey } = await makeKeyset();
-			const token = await new SignJWT({ sub: "u1" })
-				.setProtectedHeader({ alg: "RS256", kid: "test-key" })
-				.setIssuer(ISSUER)
-				.setAudience(AUDIENCE)
-				.setIssuedAt(now() - 600)
-				.setExpirationTime(now() - 120)
-				.sign(privateKey);
-			expect(await verifyProviderIdToken(provider(jwks), token)).toBe(false);
+			const provider = providerWith({
+				jwks,
+				issuer: ISSUER,
+				audience: AUDIENCE,
+				maxTokenAge: "1h",
+			});
+			expect(await verifyProviderIdToken(provider, token)).toBe(valid);
 		});
 	});
 
