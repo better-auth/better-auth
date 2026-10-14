@@ -216,7 +216,9 @@ function toReleaseTitle(line: string): string {
 	if (line.length <= releaseTitleMaxLength) return line;
 	const cut = line.slice(0, releaseTitleMaxLength - 1);
 	const wordEnd = cut.lastIndexOf(" ");
-	return `${(wordEnd > 0 ? cut.slice(0, wordEnd) : cut).trimEnd()}…`;
+	const head =
+		wordEnd > 0 ? cut.slice(0, wordEnd) : cut.replace(/[\uD800-\uDBFF]$/, "");
+	return `${head.trimEnd()}…`;
 }
 
 function findChangesetSourcePR(id: string, ref: string): number | null {
