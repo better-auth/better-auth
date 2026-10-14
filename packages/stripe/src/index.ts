@@ -21,7 +21,12 @@ import type {
 	Subscription,
 	WithStripeCustomerId,
 } from "./types";
-import { escapeStripeSearchValue, getPlans, isActiveOrTrialing } from "./utils";
+import {
+	escapeStripeSearchValue,
+	getPlans,
+	isActiveOrTrialing,
+	resolveOrganizationSeatCount,
+} from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -184,14 +189,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 
 					try {
-						const memberCount = await ctx.adapter.count({
-							model: "member",
-							where: [
-								{
-									field: "organizationId",
-									value: data.organization.id,
-								},
-							],
+						const memberCount = await resolveOrganizationSeatCount({
+							adapter: ctx.adapter,
+							organizationId: data.organization.id,
+							countActiveMembers: options.organization?.countActiveMembers,
 						});
 
 						const plans = await getPlans(options.subscription);
