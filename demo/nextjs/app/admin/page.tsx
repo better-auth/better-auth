@@ -453,9 +453,6 @@ function AdminDashboard() {
 																	},
 																},
 															);
-															await queryClient.invalidateQueries({
-																queryKey: ["users"],
-															});
 														} else {
 															setIsBanDialogOpen(true);
 														}
