@@ -219,6 +219,24 @@ describe("private_key_jwt authentication", async () => {
 		});
 	}
 
+	/** @see https://www.rfc-editor.org/rfc/rfc7523.html#section-3 */
+	it("preserves the default token audience spelling", async () => {
+		const context = await auth.$context;
+		const baseURL = "https://Auth.Example.com:443/api/auth/";
+		const ctx = { context: { ...context, baseURL } } as GenericEndpointContext;
+		const assertion = await signAssertion({ aud: `${baseURL}/oauth2/token` });
+
+		await expect(
+			verifyClientAssertion(
+				ctx,
+				{ loginPage: "/login", consentPage: "/consent" },
+				assertion,
+				CLIENT_ASSERTION_TYPE,
+				assertionClient.client_id,
+			),
+		).resolves.toEqual({ clientId: assertionClient.client_id });
+	});
+
 	async function createDiscoveredClientVerifier(input: {
 		baseURL: string;
 		clientId: string;

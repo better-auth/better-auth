@@ -13,6 +13,7 @@ import { oauthProviderClient } from "./client";
 import { verifyOAuthQueryParams } from "./index";
 import { oauthProvider } from "./oauth";
 import {
+	buildSignedOAuthQuery,
 	canonicalizeOAuthQueryParams,
 	postLoginClearedParam,
 	setSignedOAuthQueryParameterNames,
@@ -370,6 +371,55 @@ describe("oauth authorize - unauthenticated", async () => {
 			`iss=${encodeURIComponent(authServerBaseUrl)}`,
 		);
 		expect(callbackRedirectUrl).not.toContain("/login");
+	});
+});
+
+describe("oauth authorize - configured login page URL", () => {
+	it.each([
+		"/login?theme=dark#step",
+		"login?theme=dark#step",
+	])("preserves existing query and fragment in %s", async (loginPage) => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [oauthProvider({ loginPage, consentPage: "/consent" }), jwt()],
+		});
+		const { headers } = await signInWithTestUser();
+		const redirectUri = "https://rp.example.com/callback";
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		if (!client?.client_id) throw new Error("OAuth client was not created");
+
+		const authorizeURL = new URL(
+			"http://localhost:3000/api/auth/oauth2/authorize",
+		);
+		authorizeURL.searchParams.set("client_id", client.client_id);
+		authorizeURL.searchParams.set("redirect_uri", redirectUri);
+		authorizeURL.searchParams.set("response_type", "code");
+		authorizeURL.searchParams.set("scope", "openid");
+		authorizeURL.searchParams.set("state", "state-a");
+		authorizeURL.searchParams.set("code_challenge", generateRandomString(43));
+		authorizeURL.searchParams.set("code_challenge_method", "S256");
+
+		const response = await auth.handler(new Request(authorizeURL));
+		const location = response.headers.get("location");
+		const pagePath = loginPage.split("?")[0];
+		expect(location?.startsWith(`${pagePath}?`)).toBe(true);
+		const loginURL = new URL(location ?? "", "http://localhost:3000");
+		expect(loginURL.searchParams.get("theme")).toBe("dark");
+		expect(loginURL.hash).toBe("#step");
+		expect(loginURL.searchParams.get("client_id")).toBe(client.client_id);
+		const secret = (auth.options as unknown as { secret: string }).secret;
+		expect(
+			await verifyOAuthQueryParams(
+				buildSignedOAuthQuery(loginURL.search) ?? "",
+				secret,
+			),
+		).toBe(true);
 	});
 });
 

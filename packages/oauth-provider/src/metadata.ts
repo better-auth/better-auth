@@ -3,6 +3,7 @@ import {
 	DPOP_SIGNING_ALGORITHMS,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
+import { appendURLPath } from "@better-auth/core/utils/url";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
 import { LEVEL_0_ACR } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
@@ -48,7 +49,7 @@ export function authServerMetadata(
 		jwks_uri: overrides?.jwt_disabled
 			? undefined
 			: (opts?.jwks?.remoteUrl ??
-				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
+				appendURLPath(baseURL, opts?.jwks?.jwksPath ?? "/jwks")),
 		registration_endpoint: overrides?.dynamic_client_registration_supported
 			? `${baseURL}/oauth2/register`
 			: undefined,
