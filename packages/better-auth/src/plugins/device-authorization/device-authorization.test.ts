@@ -381,6 +381,15 @@ describe("device authorization flow", async () => {
 			vi.useRealTimers();
 		});
 
+		const pollDeviceToken = (deviceCode: string) =>
+			auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code: deviceCode,
+					client_id: "test-client",
+				},
+			});
+
 		it("should return authorization_pending when not approved", async () => {
 			const { device_code } = await auth.api.deviceCode({
 				body: {
@@ -431,6 +440,43 @@ describe("device authorization flow", async () => {
 			});
 
 			vi.useRealTimers();
+		});
+
+		it("returns expired_token, not slow_down, for an expired code polled too soon", async () => {
+			vi.useFakeTimers();
+			const { device_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await vi.advanceTimersByTimeAsync(299_500);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
+
+			await vi.advanceTimersByTimeAsync(1000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "expired_token" },
+			});
+		});
+
+		it("keeps the original interval after slow_down", async () => {
+			vi.useFakeTimers();
+			const { device_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
+
+			await vi.advanceTimersByTimeAsync(1000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "slow_down" },
+			});
+
+			// The rejected poll neither restarts the wait nor lengthens it.
+			await vi.advanceTimersByTimeAsync(1000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
 		});
 
 		it("should return error for invalid device code", async () => {
@@ -897,6 +943,45 @@ describe("device authorization flow", async () => {
 					error_description: "Device code already processed",
 				},
 			});
+		});
+	});
+
+	describe("concurrent approval decisions", () => {
+		it("keeps a denial that lands between the approval's read and write", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+
+			const { adapter } = await auth.$context;
+			const findOne = adapter.findOne.bind(adapter);
+			let denied = false;
+			const spy = vi.spyOn(adapter, "findOne").mockImplementation((async (
+				input: Parameters<typeof findOne>[0],
+			) => {
+				const row = await findOne(input);
+				if (!denied && input.model === "deviceCode") {
+					denied = true;
+					await auth.api.deviceDeny({ body: { userCode: user_code }, headers });
+				}
+				return row;
+			}) as typeof adapter.findOne);
+			try {
+				await expect(
+					auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+				).rejects.toMatchObject({
+					body: { error_description: "Device code already processed" },
+				});
+			} finally {
+				spy.mockRestore();
+			}
+
+			const stored = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(stored?.status).toBe("denied");
 		});
 	});
 
