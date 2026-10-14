@@ -37,6 +37,7 @@ import { resolveSCIMDemoSSOUser } from "./scim-demo-employee.ts";
 import { getSCIMDemoOIDCProvider } from "./scim-demo-oidc.ts";
 
 const DEMO_SQLITE_CONTENTION_TIMEOUT_MS = 5_000;
+const mcpResource = `${process.env.BETTER_AUTH_URL || "https://demo.better-auth.com"}/api/mcp`;
 
 const database = (() => {
 	if (process.env.DEMO_SQLITE_PATH) {
@@ -420,9 +421,10 @@ const authOptions = {
 			],
 			resources: [
 				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
-				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
-					"/api/mcp",
+				mcpResource,
 			],
+			// DCR clients omit `resources`; link them to the MCP server like `mcp()` does.
+			clientRegistrationDefaultResources: [mcpResource],
 			selectAccount: {
 				page: "/oauth/select-account",
 				shouldRedirect: async ({ headers }) => {
