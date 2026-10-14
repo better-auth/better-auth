@@ -42,7 +42,12 @@ function sendInvalidToken(response: ServerResponse, description: string) {
 }
 
 const server = createServer(async (request, response) => {
-	const path = new URL(request.url ?? "/", "http://localhost").pathname;
+	// URL.parse returns null instead of throwing on a malformed request target.
+	const path = URL.parse(request.url ?? "/", "http://localhost")?.pathname;
+	if (!path) {
+		sendJSON(response, 400, { error: "invalid_request" });
+		return;
+	}
 	if (request.method === "GET" && path === "/health") {
 		sendJSON(response, 200, { ok: true });
 		return;

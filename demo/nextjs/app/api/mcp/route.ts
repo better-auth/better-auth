@@ -73,7 +73,8 @@ async function callDownstreamAPI(subjectToken: string) {
 	if (typeof exchange.access_token !== "string") {
 		return toolError("Token exchange response has no access_token");
 	}
-	const downstreamResponse = await fetch(`${apiURL}/me`, {
+	// The API URL is also the resource identifier, so it is used as given.
+	const downstreamResponse = await fetch(`${apiURL.replace(/\/$/, "")}/me`, {
 		headers: { Authorization: `Bearer ${exchange.access_token}` },
 	});
 	const downstream: unknown = await downstreamResponse.json().catch(() => null);

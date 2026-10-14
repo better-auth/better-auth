@@ -34,7 +34,9 @@ export async function getAvailablePort(): Promise<number> {
 export async function stopProcess(
 	child: ChildProcessWithoutNullStreams | undefined,
 ): Promise<void> {
-	if (!child?.pid || child.exitCode !== null) return;
+	if (!child?.pid || child.exitCode !== null || child.signalCode !== null) {
+		return;
+	}
 	const { terminate } = await import("@better-auth-test/test-utils/playwright");
 	await terminate(child.pid);
 }
@@ -65,7 +67,8 @@ export async function runDemoNodeScript(
 	});
 	const exitCode = await new Promise<number | null>((resolveExit, reject) => {
 		child.once("error", reject);
-		child.once("exit", resolveExit);
+		// "close" fires after stdout and stderr drain; "exit" can come first.
+		child.once("close", resolveExit);
 	});
 	if (exitCode !== 0) {
 		throw new Error(`${label} failed:\n${output}`);
@@ -120,7 +123,7 @@ export async function startDemoProcess(input: {
 	try {
 		const deadline = Date.now() + 60_000;
 		while (Date.now() < deadline) {
-			if (child.exitCode !== null) {
+			if (child.exitCode !== null || child.signalCode !== null) {
 				throw new Error(`${input.label} exited before startup:\n${output}`);
 			}
 			try {

@@ -1751,7 +1751,7 @@ export const customOAuthExtension = () =>
   }) satisfies BetterAuthPlugin;
 ```
 
-`issueTokens` does not re-check what it is given: the grant handler must validate scopes, the user, and resources before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
+`issueTokens` applies the provider's resource policy (registered and linked resources and each resource's `allowedScopes`) but does not re-check anything else it is given: the grant handler must validate the user, the client's registered scopes, and any grant-specific policy before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
 
 Add companion plugins such as `oauthDeviceAuthorization()` and `oauthTokenExchange()` to every `betterAuth()` instance that registers OAuth clients, including a separate admin or provisioning instance. Registration accepts only grant types the instance supports, so registering a client for an extension grant on an instance without that plugin fails with `invalid_client_metadata` and `unsupported grant_type`.
 
@@ -1796,11 +1796,11 @@ authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
 
 Three claim surfaces resolve contributions in a fixed order. Across all three, third-party extension claims are strictly additive, while the operator's own first-party callbacks may override profile-style identity claims; protocol-owned identity, lifetime, binding, and authentication-context claims are always pinned or reserved by the provider.
 
-| Token        | Order (lowest to highest authority)                                                                                                   | Pinned or reserved by provider                                                                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`) and the provider-owned `cnf` and `reference_id`, stripped before signing      |
-| ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names |
-| UserInfo     | scope and `claims.userinfo` identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                  | `sub` (re-pinned last)                                                                                                                                                                            |
+| Token        | Order (lowest to highest authority)                                                                                                   | Pinned or reserved by provider                                                                                                                                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`) and the provider-owned `cnf` and `reference_id`, stripped before signing; the provider also sets `azp` and `sid` after contributed claims |
+| ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names                                                             |
+| UserInfo     | scope and `claims.userinfo` identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                  | `sub` (re-pinned last)                                                                                                                                                                                                                                        |
 
 Per-issuance `accessTokenClaims` are signed into JWT access tokens, so introspecting a JWT access token returns them. An opaque access token persists no per-issuance claims, so introspecting it does not return them. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
 
@@ -1866,16 +1866,14 @@ The client's linked [resources](#resources) do two jobs here:
 
 The service sends the user's token as `subject_token` and names the target with `resource`:
 
-```http
-POST /api/auth/oauth2/token
-Content-Type: application/x-www-form-urlencoded
-Authorization: Basic <exchanging client credentials>
-
-grant_type=urn:ietf:params:oauth:grant-type:token-exchange
-&subject_token=<the user's access token for https://mcp.example.com>
-&subject_token_type=urn:ietf:params:oauth:token-type:access_token
-&resource=https://api.example.com
-&scope=read
+```bash
+curl https://auth.example.com/api/auth/oauth2/token \
+  -u "$EXCHANGING_CLIENT_ID:$EXCHANGING_CLIENT_SECRET" \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  --data-urlencode "subject_token=$USER_ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  --data-urlencode resource=https://api.example.com \
+  -d scope=read
 ```
 
 ```json
@@ -1894,7 +1892,7 @@ grant_type=urn:ietf:params:oauth:grant-type:token-exchange
 | `subject_token`                   | Required. An active access token this server issued                                                                                                          |
 | `subject_token_type`              | Required. Must be `urn:ietf:params:oauth:token-type:access_token`                                                                                            |
 | `resource`                        | Required, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource linked to the client |
-| `scope`                           | Optional. Defaults to the subject token's scopes without `openid` and `offline_access`                                                                       |
+| `scope`                           | Optional. Defaults to the subject token's scopes, without `openid` and `offline_access`, that the client is also registered for                              |
 | `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                   |
 | `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                      |
 | `audience`                        | Not supported. Sending it returns `invalid_target`; name targets with `resource`                                                                             |
