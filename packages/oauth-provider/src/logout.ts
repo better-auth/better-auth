@@ -1052,9 +1052,9 @@ async function completeConfirmedLogout(
  *
  * Session termination goes through `internalAdapter.deleteSession`, which fires
  * `session.delete.after` so the hook drives revocation and back-channel
- * notifications to every RP with tokens on the session. For browser
- * navigations, RPs with a `frontchannel_logout_uri` are then notified through
- * hidden iframes before the redirect.
+ * notifications to every RP with tokens on the session. When the browser
+ * navigates here, RPs with a `frontchannel_logout_uri` are then notified
+ * through hidden iframes before the redirect.
  *
  * @see https://openid.net/specs/openid-connect-rpinitiated-1_0.html
  */
