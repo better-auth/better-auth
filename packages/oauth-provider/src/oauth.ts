@@ -40,7 +40,6 @@ import * as oauthConsentEndpoints from "./oauthConsent";
 import * as oauthResourceEndpoints from "./oauthResource";
 import { registerEndpoint } from "./register";
 import {
-	extractRepeatedResourceFromForm,
 	logEnforcePerClientResourcesResolution,
 	seedResources,
 } from "./resources";
@@ -60,6 +59,8 @@ import {
 	getSignedQueryIssuedAt,
 	isSessionFreshForSignedQuery,
 	postLoginClearedParam,
+	readFormParams,
+	rejectRepeatedParams,
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
@@ -67,6 +68,8 @@ import {
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
+
+const resourceListSchema = z.array(ResourceUriSchema).min(1);
 
 /**
  * Default scopes advertised and accepted when a configuration sets none. Shared
@@ -876,13 +879,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					// RFC 8707 §2 allows the client to repeat the `resource`
-					// parameter. better-call's form-body parser collapses
-					// repeated keys (last-write-wins) so we re-parse the raw
-					// body in the handler to recover the full list. That
-					// requires the underlying request body to be readable a
-					// second time, which only works when better-call clones
-					// the request before its own parse.
+					// The handler re-reads the raw form body to reject repeated
+					// parameters and recover every RFC 8707 `resource` value,
+					// which needs a second readable copy of the body.
 					cloneRequest: true,
 					body: z
 						.object({
@@ -896,7 +895,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							redirect_uri: SafeUrlSchema.optional(),
 							refresh_token: z.string().optional(),
 							resource: z
-								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
+								// RFC 6749 §3.2: an empty value counts as omitted.
+								.union([ResourceUriSchema, resourceListSchema, z.literal("")])
 								.optional(),
 							scope: z.string().optional(),
 						})
@@ -1051,18 +1051,27 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					// RFC 8707 §2 conformance — recover repeated `resource`
-					// values from the raw body before delegating to the token
-					// pipeline. Only patches `ctx.body.resource` when the raw
-					// form actually carried multiple entries; the
-					// single-value path (and the in-process auth.api.* call
-					// path where there is no Request body to re-read) is left
-					// untouched. See `extractRepeatedResourceFromForm` in
-					// resources.ts for rationale.
-					if (ctx.request) {
-						const repeated = await extractRepeatedResourceFromForm(ctx.request);
-						if (repeated && repeated.length > 1) {
-							ctx.body.resource = repeated;
+					// better-call keeps only the last value of a repeated form key,
+					// so read the raw body to enforce parameter cardinality. The
+					// in-process auth.api.* path has no Request body to re-read.
+					const form = ctx.request
+						? await readFormParams(ctx.request)
+						: undefined;
+					if (ctx.body.resource === "") ctx.body.resource = undefined;
+					if (form) {
+						// RFC 8707 §2 and RFC 8693 §2.1 let these repeat.
+						rejectRepeatedParams(form, ["resource", "audience"]);
+						const resources = form.getAll("resource").filter(Boolean);
+						if (resources.length > 0) {
+							const parsed = resourceListSchema.safeParse(resources);
+							if (!parsed.success) {
+								throw new APIError("BAD_REQUEST", {
+									error: "invalid_target",
+									error_description: "Invalid resource indicator",
+								});
+							}
+							ctx.body.resource =
+								parsed.data.length > 1 ? parsed.data : parsed.data[0];
 						}
 					}
 					return tokenEndpoint(ctx, opts);
@@ -1072,7 +1081,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/introspect",
 				{
 					method: "POST",
-					// Credential cardinality is enforced from the raw form body.
+					// Parameter cardinality is enforced from the raw form body.
 					cloneRequest: true,
 					body: z.object({
 						client_id: z.string().optional(),
@@ -1206,6 +1215,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
+					const form = ctx.request
+						? await readFormParams(ctx.request)
+						: undefined;
+					if (form) rejectRepeatedParams(form);
 					return introspectEndpoint(ctx, opts);
 				},
 			),
@@ -1213,7 +1226,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/revoke",
 				{
 					method: "POST",
-					// Credential cardinality is enforced from the raw form body.
+					// Parameter cardinality is enforced from the raw form body.
 					cloneRequest: true,
 					body: z.object({
 						client_id: z.string().optional(),
@@ -1295,6 +1308,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
+					const form = ctx.request
+						? await readFormParams(ctx.request)
+						: undefined;
+					if (form) rejectRepeatedParams(form);
 					return revokeEndpoint(ctx, opts);
 				},
 			),

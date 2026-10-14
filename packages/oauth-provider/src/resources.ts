@@ -213,47 +213,6 @@ export interface ResolvedResourcePolicy {
 const userInfoResource = (baseURL: string) => `${baseURL}/oauth2/userinfo`;
 
 /**
- * Re-parses a request's raw `application/x-www-form-urlencoded` body to
- * recover every value of the repeated `resource` parameter (RFC 8707 §2).
- *
- * Workaround for better-call's form-body parser (better-call ≤1.3.5), which
- * collapses repeated form keys with last-write-wins. A client sending
- * `resource=https://a&resource=https://b` would otherwise arrive in the
- * handler as `{ resource: "https://b" }`, silently narrowing the issued
- * token's `aud` to a single resource.
- *
- * Returns the full ordered list when the body is form-encoded and contains
- * any `resource` entries; `undefined` otherwise. Caller MUST enable
- * `cloneRequest: true` on the endpoint — the body stream is read here a
- * second time, and that only works when better-call cloned the request
- * before its own parse.
- *
- * Note: the URL-encoded body path is the only one affected. The query-string
- * path (e.g. `/oauth2/authorize?resource=…&resource=…`) is parsed by the
- * router itself, which DOES array-promote duplicate keys correctly.
- *
- * @internal
- */
-export async function extractRepeatedResourceFromForm(
-	request: Request,
-): Promise<string[] | undefined> {
-	const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
-	if (!contentType.includes("application/x-www-form-urlencoded")) {
-		return undefined;
-	}
-	let text: string;
-	try {
-		text = await request.clone().text();
-	} catch {
-		return undefined;
-	}
-	if (!text) return undefined;
-	const params = new URLSearchParams(text);
-	const values = params.getAll("resource").filter((value) => value.length > 0);
-	return values.length > 0 ? values : undefined;
-}
-
-/**
  * Normalizes a `resource` parameter into an array. Accepts the RFC 8707
  * forms: a single string, a string[], or undefined.
  *

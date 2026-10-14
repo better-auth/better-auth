@@ -1,5 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
-import { createAuthEndpoint } from "better-auth/api";
+import { createAuthEndpoint, NO_STORE_HEADERS } from "better-auth/api";
 import type {
 	EndpointContext,
 	EndpointOptions,
@@ -108,8 +108,7 @@ export interface OAuthEndpointExtras<
 	errorCodesByField?: Record<string, OAuthFieldErrorCode>;
 	/**
 	 * RFC code returned when no `errorCodesByField` entry matches or the failure is
-	 * structurally malformed (wrong type, duplicated params, bad format,
-	 * failed refinement).
+	 * structurally malformed (wrong type, duplicated params, bad format).
 	 * @default "invalid_request"
 	 */
 	defaultError?: OAuthErrorCode;
@@ -122,7 +121,8 @@ export interface OAuthEndpointExtras<
  *
  * A failing issue is routed by its first path segment via `errorCodesByField`:
  * - missing required (`invalid_type` + "received undefined") → `.missing`
- * - unsupported value (`invalid_value`) → `.invalid`
+ * - unsupported value (`invalid_value`) or a value a refinement rejected
+ *   (`custom`, also inside a union branch) → `.invalid`
  * - anything else (wrong type, duplicated params, bad format) → `defaultError`
  *
  * For enum fields that need to distinguish missing from unsupported, compose
@@ -149,17 +149,19 @@ export function createOAuthEndpoint<
 	} = options;
 
 	if (!redirectOnError) {
+		// Schema validation runs before the handler that applies
+		// `metadata.noStore`, so validation errors attach the headers here.
+		const noStore =
+			(rest as { metadata?: { noStore?: boolean } }).metadata?.noStore === true;
 		const forwarded = {
 			...rest,
 			onValidationError: async (args: ValidationErrorHookArgs) => {
 				if (userHook) await userHook(args);
-				throw new APIError("BAD_REQUEST", {
-					...mapIssuesToOAuthError(
-						args.issues,
-						errorCodesByField,
-						defaultError,
-					),
-				});
+				throw new APIError(
+					"BAD_REQUEST",
+					mapIssuesToOAuthError(args.issues, errorCodesByField, defaultError),
+					noStore ? NO_STORE_HEADERS : undefined,
+				);
 			},
 		} as unknown as Options;
 		return createAuthEndpoint(path, forwarded, handler);
@@ -237,15 +239,17 @@ export function mapIssuesToOAuthError(
 	const fieldKey = typeof first === "string" ? first : undefined;
 	const mapping = fieldKey ? errorCodesByField?.[fieldKey] : undefined;
 	const field = issue.path?.length ? z.core.toDotPath(issue.path) : "";
+	const invalidValue = findInvalidValueIssue(issue);
 
 	return {
-		error: resolveErrorCode(issue, mapping, defaultError),
-		error_description: describeIssue(issue, field),
+		error: resolveErrorCode(issue, invalidValue, mapping, defaultError),
+		error_description: describeIssue(invalidValue ?? issue, field),
 	};
 }
 
 function resolveErrorCode(
 	issue: z.core.$ZodIssue,
+	invalidValue: z.core.$ZodIssue | undefined,
 	mapping: OAuthFieldErrorCode | undefined,
 	defaultError: OAuthErrorCode,
 ): OAuthErrorCode {
@@ -254,10 +258,29 @@ function resolveErrorCode(
 	if (isMissingValueIssue(issue)) {
 		return mapping?.missing ?? defaultError;
 	}
-	if (issue.code === "invalid_value") {
+	if (invalidValue) {
 		return mapping?.invalid ?? defaultError;
 	}
 	return defaultError;
+}
+
+/**
+ * Returns the issue that routes to `errorCodesByField[field].invalid`: an
+ * unsupported enum value, or a value of the expected type that a refinement
+ * rejected, such as a resource URI with a fragment. A union reports a
+ * refinement failure as `invalid_union`, so its branches are searched too.
+ */
+function findInvalidValueIssue(
+	issue: z.core.$ZodIssue,
+): z.core.$ZodIssue | undefined {
+	if (issue.code === "invalid_value" || issue.code === "custom") return issue;
+	if (issue.code === "invalid_union") {
+		for (const branch of issue.errors) {
+			const rejected = branch.find((nested) => nested.code === "custom");
+			if (rejected) return rejected;
+		}
+	}
+	return undefined;
 }
 
 /**
