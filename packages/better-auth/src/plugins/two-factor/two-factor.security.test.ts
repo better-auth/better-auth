@@ -983,7 +983,10 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 				model: "twoFactor",
 				where: [{ field: "userId", value: dbUser!.id }],
 			});
-			const replayId = `totp-used:${row!.id}:${code}`;
+			// Tombstones are keyed by time step (see totp/index.ts); the code
+			// was generated for the current step under fake timers.
+			const matchedStep = Math.floor(Date.now() / 30000);
+			const replayId = `totp-used:${row!.id}:${matchedStep}`;
 
 			const origUpdate = adapter.update.bind(adapter);
 			const updateSpy = vi
@@ -1024,7 +1027,7 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 		}
 	});
 
-	it("should remove expired stale reservations and accept valid occurrences of the same code", async () => {
+	it("should ignore expired stale reservations and accept valid occurrences of the same code", async () => {
 		vi.useFakeTimers();
 		try {
 			vi.setSystemTime(new Date(Date.now() + 350000));
@@ -1039,16 +1042,22 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 				model: "twoFactor",
 				where: [{ field: "userId", value: dbUser!.id }],
 			});
-			const replayId = `totp-used:${row!.id}:${code}`;
+			// Tombstones are keyed by time step (see totp/index.ts); the code
+			// was generated for the current step under fake timers.
+			const matchedStep = Math.floor(Date.now() / 30000);
+			const replayId = `totp-used:${row!.id}:${matchedStep}`;
 
-			// Manually seed an expired reservation in the verification table (e.g. from an earlier cycle)
+			// Manually seed an expired row in the verification table (e.g. a leftover
+			// from an earlier cycle). Step-keyed tombstones are claimed with a direct
+			// atomic reserve that never consults such rows, so stale entries cannot
+			// block a fresh reservation.
 			await internalAdapter.createVerificationValue({
 				identifier: replayId,
 				value: "used",
 				expiresAt: new Date(Date.now() - 60000), // 1 minute in the past
 			});
 
-			// Stale reservation must be removed and valid code accepted
+			// Stale row must not block the valid code
 			const res = await auth.api.verifyTOTP({
 				body: { code },
 				headers: activeSessionHeaders,

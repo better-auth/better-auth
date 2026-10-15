@@ -297,7 +297,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 				: null;
 			let replayIdToClean: string | null = null;
-			let status: boolean;
+			let status = false;
 			try {
 				const decrypted = await symmetricDecrypt({
 					key: ctx.context.secretConfig,
@@ -314,7 +314,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					// cspell:ignore hotp
 					const candidateCode = await otp.hotp(candidateStep);
 					if (constantTimeEqual(candidateCode, ctx.body.code)) {
-						matchedStep = candidateStep;
+						matchedStep ??= candidateStep;
 					}
 				}
 				const shouldReserve =
@@ -326,7 +326,10 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					status = false;
 				} else if (shouldReserve) {
 					const expiresAt = new Date((matchedStep + 2) * opts.period * 1000);
-					const replayId = `totp-used:${twoFactor.id}:${ctx.body.code}`;
+					// Key the replay tombstone by time step, not by code: each step
+					// is unique, so expired markers never need pre-reserve cleanup
+					// and adjacent-step code collisions cannot false-block.
+					const replayId = `totp-used:${twoFactor.id}:${matchedStep}`;
 					if (
 						ctx.context.secondaryStorage &&
 						!ctx.context.options.verification?.storeInDatabase
@@ -342,44 +345,28 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						if (count === 1) {
 							status = true;
 							replayIdToClean = replayId;
-						} else {
-							status = false;
 						}
 					} else {
-						try {
-							const existing =
-								await ctx.context.internalAdapter.findVerificationValue(
-									replayId,
-								);
-							if (existing) {
-								if (new Date(existing.expiresAt) <= new Date()) {
-									await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-										replayId,
-									);
-								} else {
-									status = false;
-								}
-							}
-							if (status !== false) {
-								const reservation =
-									await ctx.context.internalAdapter.reserveVerificationValue({
-										identifier: replayId,
-										value: "used",
-										expiresAt,
-									});
-								status = !!reservation;
-								if (status) {
-									replayIdToClean = replayId;
-								}
-							}
-						} catch (error) {
-							await ctx.context.internalAdapter
-								.deleteVerificationByIdentifier(replayId)
-								.catch(() => {});
-							throw error;
+						// Single atomic first-writer-wins gate (no read-modify-write),
+						// so concurrent same-code requests cannot both succeed. A
+						// `false` return means the step was already consumed (replay).
+						const reserved =
+							await ctx.context.internalAdapter.reserveVerificationValue({
+								identifier: replayId,
+								value: "used",
+								expiresAt,
+							});
+						status = reserved;
+						if (reserved) {
+							replayIdToClean = replayId;
 						}
 					}
 				} else {
+					// First enrollment verification claims no replay marker: the factor
+					// is not verified yet, so there is no prior consumption to replay
+					// against. Single-use is enforced from the next verification on -
+					// the row is now verified, so any repeat reserves the step tombstone
+					// above and is rejected as INVALID_CODE.
 					status = true;
 				}
 			} catch (error) {
@@ -395,6 +382,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				return invalid("INVALID_CODE");
 			}
 
+			let validStarted = false;
 			try {
 				if (isSignIn) {
 					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
@@ -438,13 +426,17 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						where: [{ field: "id", value: twoFactor.id }],
 					});
 				}
-				// Once session issuance begins, do not remove the replay marker
-				// if a downstream failure occurs (e.g. during trusted device creation).
-				// The session may already be issued and cookies attached to the context.
+				// Once session issuance begins, the replay marker must be kept even
+				// if a downstream failure occurs (e.g. trust-device write after the
+				// session was created): rolling back would let the same code mint a
+				// second session. Rollback stays available for pre-session failures
+				// (enrollment updates above), which cannot have issued a session.
+				validStarted = true;
+				const result = await valid(ctx);
 				replayIdToClean = null;
-				return await valid(ctx);
+				return result;
 			} catch (error) {
-				if (replayIdToClean) {
+				if (!validStarted && replayIdToClean) {
 					if (
 						ctx.context.secondaryStorage &&
 						!ctx.context.options.verification?.storeInDatabase
