@@ -2003,7 +2003,7 @@ export interface SchemaClient<
 	 *
 	 * Unset means the secret never expires.
 	 */
-	expiresAt?: Date;
+	expiresAt?: Date | null;
 	//---- UI Metadata ----//
 	/** The name of the client. */
 	name?: string;
