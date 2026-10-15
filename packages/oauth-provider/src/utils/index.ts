@@ -269,6 +269,22 @@ export async function verifyOAuthQueryParams(
 }
 
 /**
+ * Rejects changes to a client listed in `cachedTrustedClients`. Cached trusted
+ * clients are immutable through the client management endpoints.
+ */
+export function assertNotTrustedClient(
+	opts: OAuthOptions<Scope[]>,
+	clientId: string,
+) {
+	if (opts.cachedTrustedClients?.has(clientId)) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description: "trusted clients must be updated manually",
+		});
+	}
+}
+
+/**
  * Get a client by ID, checking trusted clients first, then database
  */
 export async function getClient(

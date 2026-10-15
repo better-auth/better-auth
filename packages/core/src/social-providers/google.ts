@@ -10,6 +10,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { ID_TOKEN_CLOCK_TOLERANCE_SECONDS } from "../oauth2/verify-id-token";
 
 export interface GoogleProfile {
 	aud: string;
@@ -112,6 +113,7 @@ export const verifyGoogleIdToken = async ({
 					issuer: ["https://accounts.google.com", "accounts.google.com"],
 					audience,
 					maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+					clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
 				});
 
 				if (nonce && jwtClaims.nonce !== nonce) {

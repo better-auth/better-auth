@@ -36,6 +36,7 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import { fromDriverDate, toDriverDate } from "./date-columns";
 import type { RelationKeysByModel } from "./join-relation-key";
 import {
 	buildRelationKeysByModel,
@@ -1236,6 +1237,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					? true
 					: false,
 			supportsArrays: config.provider === "pg" ? true : false,
+			customTransformInput: ({ data, fieldAttributes, model, field }) => {
+				if (fieldAttributes.type !== "date") return data;
+				const schema = config.schema || db._.fullSchema;
+				return toDriverDate(data, schema?.[model]?.[field], config.provider);
+			},
 			customTransformOutput: ({ data, fieldAttributes }) => {
 				// not all providers support dates
 				// one such example case is https://github.com/better-auth/better-auth/issues/7819
@@ -1243,7 +1249,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (data === null || data === undefined) {
 						return data;
 					}
-					return new Date(data);
+					return fromDriverDate(data);
 				}
 				return data;
 			},

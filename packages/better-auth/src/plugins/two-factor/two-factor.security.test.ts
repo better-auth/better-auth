@@ -163,57 +163,55 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		},
 	];
 
-	it.each(
-		cases,
-	)("$path: response carries no valid signed session_token or session_data", async ({
-		call,
-	}) => {
-		const res = await call();
-		expect(res.status).toBe(200);
-		expect(res.headers.get("x-new-session-visible")).toBeNull();
+	it.each(cases)(
+		"$path: response carries no valid signed session_token or session_data",
+		async ({ call }) => {
+			const res = await call();
+			expect(res.status).toBe(200);
+			expect(res.headers.get("x-new-session-visible")).toBeNull();
 
-		const setCookies = extractSetCookies(res);
-		expect(setCookies.length).toBeGreaterThan(0);
+			const setCookies = extractSetCookies(res);
+			expect(setCookies.length).toBeGreaterThan(0);
 
-		const sessionEntries = setCookies.filter(
-			(entry) =>
-				entry.startsWith("better-auth.session_token=") ||
-				entry.startsWith("better-auth.session_data=") ||
-				entry.startsWith("better-auth.session_data."),
-		);
+			const sessionEntries = setCookies.filter(
+				(entry) =>
+					entry.startsWith("better-auth.session_token=") ||
+					entry.startsWith("better-auth.session_data=") ||
+					entry.startsWith("better-auth.session_data."),
+			);
 
-		for (const entry of sessionEntries) {
-			expect(getCookieValue(entry)).toBe("");
-		}
+			for (const entry of sessionEntries) {
+				expect(getCookieValue(entry)).toBe("");
+			}
 
-		const twoFactorEntry = setCookies.find((entry) =>
-			entry.startsWith("better-auth.two_factor="),
-		);
-		expect(twoFactorEntry).toBeDefined();
-	});
+			const twoFactorEntry = setCookies.find((entry) =>
+				entry.startsWith("better-auth.two_factor="),
+			);
+			expect(twoFactorEntry).toBeDefined();
+		},
+	);
 
-	it.each(
-		cases,
-	)("$path: replaying captured cookies cannot authenticate or disable 2FA", async ({
-		call,
-	}) => {
-		const res = await call();
-		const setCookies = extractSetCookies(res);
-		const replay = buildCookieHeader(setCookies, [
-			"better-auth.session_token",
-			"better-auth.session_data",
-		]);
+	it.each(cases)(
+		"$path: replaying captured cookies cannot authenticate or disable 2FA",
+		async ({ call }) => {
+			const res = await call();
+			const setCookies = extractSetCookies(res);
+			const replay = buildCookieHeader(setCookies, [
+				"better-auth.session_token",
+				"better-auth.session_data",
+			]);
 
-		const session = await auth.api.getSession({ headers: replay });
-		expect(session).toBeNull();
+			const session = await auth.api.getSession({ headers: replay });
+			expect(session).toBeNull();
 
-		const disableRes = await auth.api.disableTwoFactor({
-			body: { password: testUser.password },
-			headers: replay,
-			asResponse: true,
-		});
-		expect(disableRes.status).toBe(401);
-	});
+			const disableRes = await auth.api.disableTwoFactor({
+				body: { password: testUser.password },
+				headers: replay,
+				asResponse: true,
+			});
+			expect(disableRes.status).toBe(401);
+		},
+	);
 });
 
 describe("two-factor security: sign-in does not leak session cookies (cookieCache disabled)", async () => {

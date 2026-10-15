@@ -752,6 +752,21 @@ export interface OAuthOptions<
 	 */
 	assertionMaxLifetime?: number;
 	/**
+	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
+	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
+	 * signed with one of its current keys. No user session is involved.
+	 *
+	 * Clients that publish their keys at a `jwks_uri` rotate them there, so they
+	 * cannot use this endpoint.
+	 *
+	 * Each rotation assertion must be single-use, so the provider refuses to
+	 * start with this enabled on the memory adapter or with
+	 * `advanced.database.generateId: "serial"`, neither of which enforces it.
+	 *
+	 * @default false
+	 */
+	allowClientKeyRotation?: boolean;
+	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
 	 */
@@ -1084,7 +1099,8 @@ export interface OAuthOptions<
 		 * For example, allow selection of an organization or team.
 		 *
 		 * Upon selection of a specific account, use `/oauth2/continue`
-		 * with `postLogin: true` to continue the login flow.
+		 * with `postLogin: true` to continue the login flow. The continue
+		 * request runs `shouldRedirect` again with `isContinuation: true`.
 		 *
 		 * @returns
 		 * - `true`: account is not selected and needs selection
@@ -1095,6 +1111,12 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * `true` when the user returns from `page` through `/oauth2/continue`.
+			 * The client chooses to send that request, so it does not prove a
+			 * selection was made: validate the session before returning `false`.
+			 */
+			isContinuation: boolean;
 		}) => Awaitable<boolean>;
 	};
 	/**
@@ -1391,6 +1413,7 @@ export interface OAuthOptions<
 	 *   introspect: { window: 60, max: 100 },
 	 *   revoke: { window: 60, max: 30 },
 	 *   register: { window: 60, max: 5 },
+	 *   rotateClientKeys: { window: 60, max: 5 },
 	 *   userinfo: { window: 60, max: 60 },
 	 * }
 	 * ```
@@ -1421,6 +1444,11 @@ export interface OAuthOptions<
 		 * @default { window: 60, max: 5 }
 		 */
 		register?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/client/rotate-keys endpoint
+		 * @default { window: 60, max: 5 }
+		 */
+		rotateClientKeys?: { window: number; max: number } | false;
 		/**
 		 * Rate limit for /oauth2/userinfo endpoint
 		 * @default { window: 60, max: 60 }

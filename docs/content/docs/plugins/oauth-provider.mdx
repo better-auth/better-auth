@@ -551,6 +551,7 @@ Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC
 When a token is DPoP-bound:
 
 * The token endpoint requires a valid `DPoP` proof JWT.
+* The proof's `htu` must be the endpoint's public URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`. This holds even when a proxy or dev server rewrites the request host.
 * The token response returns `token_type: "DPoP"`.
 * JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
 * Refresh token rotation requires a DPoP proof from the same key.
@@ -632,6 +633,44 @@ The assertion JWT must contain:
 
 Supported signing algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`.
 
+##### Rotating client keys
+
+A client with inline `jwks` can replace its own keys without a user session. This is how a service rotates its signing key on a schedule. Enable it on the provider:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowClientKeyRotation: true,
+})
+```
+
+The client generates a new key pair, then calls the endpoint with a client assertion signed by one of its current keys:
+
+```
+POST /api/auth/oauth2/client/rotate-keys
+Content-Type: application/json
+
+{
+  "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+  "client_assertion": "eyJhbGciOiJFUzI1NiIs...",
+  "jwks": { "keys": [{ "kty": "EC", "crv": "P-256", "kid": "key-2", "x": "...", "y": "..." }] }
+}
+```
+
+The assertion follows the claims in the table above, with one difference: `aud` must include the URL of the rotation endpoint. The token endpoint and the issuer do not count as audiences here, so an assertion minted only for them cannot be redirected to take over a client's keys.
+
+`jwks` is the client's complete new key set. A key left out of it stops verifying at once, so leaving out a leaked key retires it with that request. The response returns `client_id` and the stored `jwks`.
+
+To replace a key without breaking instances that still sign with the old one, roll it in two steps, the way a client that publishes a `jwks_uri` does:
+
+1. Send both the old and the new key, signed by the old key.
+2. Once every instance signs with the new key, send only the new key, signed by the new key.
+
+If the keys change while a rotation is in flight, the losing request fails with `409`, or with `401` if its signing key was already removed. Sign a fresh assertion with a current key and retry.
+
+<Callout type="info">
+  Each rotation assertion must be single-use, so the provider refuses to start with `allowClientKeyRotation` on the memory adapter or with `advanced.database.generateId: "serial"`. Only clients that register inline `jwks` can use this endpoint. A client that publishes a `jwks_uri` rotates its keys at that URI, and clients listed in `cachedTrustedClients` cannot be changed through the client management endpoints. `client_secret_*` clients use `/oauth2/client/rotate-secret` instead.
+</Callout>
+
 #### Authorization code grant
 
 The authorization code grant enables clients to obtain access user access tokens and optionally refresh tokens (with the "offline\_access" scope).
@@ -707,7 +746,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
      */
     created?: boolean,
     /**
-     * Confirms completion of post login activity
+     * Resumes after the post login page. `postLogin.shouldRedirect` runs again with `isContinuation: true`.
      */
     postLogin?: boolean,
   }
@@ -1173,20 +1212,25 @@ The following example uses the organization plugin to automatically redirect to 
 
 ```ts title="auth.ts"
 oauthProvider({
-  scopes: ["openid", "profile", "email", "read:organization"]
+  scopes: ["openid", "profile", "email", "read:organization"],
   postLogin: {
     page: "/select-organization", // [!code highlight]
-    shouldRedirect: async ({ session, scopes, headers }) => { // [!code highlight]
+    shouldRedirect: async ({ session, scopes, headers, isContinuation }) => { // [!code highlight]
       const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
       if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
         return false;
       }
+      if (!session.activeOrganizationId) {
+        return true;
+      }
       const organizations = await auth.api.listOrganizations({
         headers,
       });
-      return organizations.length > 1 || !(
-        organizations.length === 1 && organizations.at(0)?.id === session.activeOrganizationId
-      )
+      if (!organizations.some((org) => org.id === session.activeOrganizationId)) {
+        return true;
+      }
+      // Ask on every new authorization; accept the selection on continuation
+      return !isContinuation && organizations.length > 1;
     },
     consentReferenceId: ({ session, scopes }) => { // [!code highlight]
       if (scopes.includes("read:organization")) {
@@ -1206,7 +1250,9 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, you should call `oauth2Continue`.
+The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`.
+
+`shouldRedirect` runs again on continuation with `isContinuation: true`. Use this value to check the selected organization without asking multi-organization users to select again. It is not proof of selection: check the current session and organization membership before returning `false`. Each new authorization request starts with `isContinuation: false`.
 
 ```ts title="select-organization.ts"
 import { authClient } from "@/lib/auth-client"
@@ -1214,7 +1260,7 @@ import { authClient } from "@/lib/auth-client"
 await authClient.organization.setActive({
   organizationId,
 });
-await client.oauth2.oauth2Continue({
+await authClient.oauth2.continue({
   postLogin: true,
 });
 ```
@@ -1251,6 +1297,23 @@ oauthProvider({
 ```
 
 Use the admin resource endpoints when resource policy needs to change at runtime.
+
+Configured resources are written to the `oauthResource` table when the auth instance starts. `resourceSeedMode` decides what happens to a row that already exists. If the write fails because the database is unreachable or the table has not been migrated yet, the error is logged and the write is retried on the first request that needs a resource. Requests that do not use resources, such as sign-in and session checks, are not affected.
+
+<Callout type="warn">
+  With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. Requests that use any configured resource fail until you declare `allowedScopes` for that resource, listing every scope clients may request for it. This includes the resource `mcp()` adds; declare it in `resources` with the same identifier:
+
+  ```ts title="auth.ts"
+  mcp({
+    loginPage: "/sign-in",
+    consentPage: "/consent",
+    resource: "https://api.example.com/mcp",
+    resources: [
+      { identifier: "https://api.example.com/mcp", allowedScopes: ["openid", "profile", "offline_access"] },
+    ],
+  })
+  ```
+</Callout>
 
 Dynamic registration can attach protected resources to the new client in the same transaction as the client row. `clientRegistrationDefaultResources` adds server-owned defaults to every registration. `clientRegistrationAllowedResources` lists additional resources a client may request; the effective allowlist is the union of the default and allowed lists. Defaults appear first, duplicates are removed, and every configured value must also be present in `resources`.
 
@@ -1793,14 +1856,15 @@ The OAuth Provider includes built-in rate limiting for all OAuth endpoints to pr
 
 **Default limits:**
 
-| Endpoint             | Window | Max Requests |
-| -------------------- | ------ | ------------ |
-| `/oauth2/token`      | 60s    | 20           |
-| `/oauth2/authorize`  | 60s    | 30           |
-| `/oauth2/introspect` | 60s    | 100          |
-| `/oauth2/revoke`     | 60s    | 30           |
-| `/oauth2/register`   | 60s    | 5            |
-| `/oauth2/userinfo`   | 60s    | 60           |
+| Endpoint                     | Window | Max Requests |
+| ---------------------------- | ------ | ------------ |
+| `/oauth2/token`              | 60s    | 20           |
+| `/oauth2/authorize`          | 60s    | 30           |
+| `/oauth2/introspect`         | 60s    | 100          |
+| `/oauth2/revoke`             | 60s    | 30           |
+| `/oauth2/register`           | 60s    | 5            |
+| `/oauth2/client/rotate-keys` | 60s    | 5            |
+| `/oauth2/userinfo`           | 60s    | 60           |
 
 You can customize the rate limits for each endpoint:
 
@@ -1812,6 +1876,7 @@ oauthProvider({
     introspect: { window: 60, max: 100 },  // 100 requests per minute
     revoke: { window: 60, max: 30 },       // 30 requests per minute
     register: { window: 60, max: 5 },      // 5 requests per minute
+    rotateClientKeys: { window: 60, max: 5 }, // 5 requests per minute
     userinfo: { window: 60, max: 60 },     // 60 requests per minute
   },
 })
@@ -2203,6 +2268,20 @@ export const oauthClientTableFields = [
     type: "string",
     description:
       "OIDC application type used to classify redirect URI policy. Supports: ['web', 'native']",
+    isOptional: true,
+  },
+  {
+    name: "jwks",
+    type: "string",
+    description:
+      "The client's public JWK Set as JSON, for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`",
+    isOptional: true,
+  },
+  {
+    name: "jwksUri",
+    type: "string",
+    description:
+      "HTTPS URI of the client's public JWK Set. Mutually exclusive with `jwks`",
     isOptional: true,
   },
   {
