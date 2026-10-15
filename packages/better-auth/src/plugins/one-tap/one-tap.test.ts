@@ -1,5 +1,6 @@
 // cspell:ignore AQAB
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
@@ -47,6 +48,7 @@ vi.mock("jose", async (importOriginal) => {
 			kid: "test-google-key",
 			alg: "RS256",
 		})),
+		decodeJwt: vi.fn(() => verifiedPayload),
 		importJWK: vi.fn(async () => ({})),
 		jwtVerify: vi.fn(async () => ({
 			payload: verifiedPayload,
@@ -792,6 +794,108 @@ describe("one-tap disableSignUp", () => {
 			statusCode: 401,
 			status: "UNAUTHORIZED",
 			body: { message: "signup disabled" },
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9460
+ */
+describe("one-tap Google profile mapping", () => {
+	afterEach(() => {
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
+	it("applies socialProviders.google.mapProfileToUser", async () => {
+		verifiedPayload.email = "one-tap-mapper@example.com";
+		verifiedPayload.sub = "one-tap-mapper-sub";
+		Object.assign(verifiedPayload, { given_name: "Mary Jane" });
+
+		const { auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					firstName: { type: "string", required: false },
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					mapProfileToUser: (profile) => ({
+						firstName: profile.given_name,
+						name: "Mapped Name",
+					}),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.user).toMatchObject({
+			email: "one-tap-mapper@example.com",
+			name: "Mapped Name",
+			firstName: "Mary Jane",
+		});
+	});
+
+	it("uses a custom socialProviders.google.getUserInfo, keeping the verified sub as the account id", async () => {
+		verifiedPayload.email = "one-tap-override@example.com";
+		verifiedPayload.sub = "one-tap-override-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					getUserInfo: async () => ({
+						user: {
+							name: "From Override",
+							email: "one-tap-override@example.com",
+							emailVerified: true,
+						},
+						data: { ...verifiedPayload } as GoogleProfile,
+					}),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.user.name).toBe("From Override");
+		const ctx = await auth.$context;
+		const accounts = await ctx.adapter.findMany<{ accountId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: res.user.id }],
+		});
+		expect(accounts).toEqual([
+			expect.objectContaining({ accountId: "one-tap-override-sub" }),
+		]);
+	});
+
+	it("builds the user from the token claims without a Google provider", async () => {
+		verifiedPayload.email = "One-Tap-No-Provider@Example.com";
+		verifiedPayload.sub = "one-tap-no-provider-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {},
+			plugins: [oneTap({ clientId: "explicit-one-tap-client" })],
+		});
+
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.user).toMatchObject({
+			email: "one-tap-no-provider@example.com",
+			emailVerified: true,
+			name: defaultVerifiedPayload.name,
+			image: defaultVerifiedPayload.picture,
 		});
 	});
 });

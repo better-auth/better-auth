@@ -224,6 +224,20 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
   Workspace domain, configure `socialProviders.google` with `hd`.
 </Callout>
 
+<Callout type="info">
+  **Mapping the Google profile to your user**
+
+  When `socialProviders.google` is configured, One Tap builds the user from
+  its `mapProfileToUser` or `getUserInfo`, the same as the standard Google
+  sign-in. Any extra fields you map, such as a first name from
+  `given_name`, are written to the user, so declare them in
+  `user.additionalFields`. The account is always keyed by the verified
+  token's `sub`.
+
+  With only `oneTap({ clientId })` and no `socialProviders.google`, One Tap
+  uses the token's `name`, `email`, `email_verified`, and `picture` claims.
+</Callout>
+
 ### Authorized JavaScript origins
 
 Ensure you have configured the Authorized JavaScript origins (e.g., [http://localhost:3000](http://localhost:3000), [https://example.com](https://example.com)) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.
