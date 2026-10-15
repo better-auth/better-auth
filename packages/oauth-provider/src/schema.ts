@@ -35,6 +35,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			sectorIdentifier: {
+				type: "string",
+				required: false,
+			},
 			scopes: {
 				type: "string[]",
 				required: false,

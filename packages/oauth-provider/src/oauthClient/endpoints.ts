@@ -11,7 +11,12 @@ import type {
 	Scope,
 } from "../types";
 import type { GrantType } from "../types/oauth";
-import { getClient, parseClientMetadata, storeClientSecret } from "../utils";
+import {
+	deriveSectorIdentifier,
+	getClient,
+	parseClientMetadata,
+	storeClientSecret,
+} from "../utils";
 import {
 	normalizeClientCredentialsScopes,
 	validateClientCredentialsScopes,
@@ -364,6 +369,14 @@ export async function updateClientEndpoint(
 	const schemaUpdates: Record<string, unknown> = {
 		...oauthToSchema(updates),
 	};
+	// A client created before sectors were stored keeps deriving its sector
+	// from its redirect URI host, so only recompute a stored sector.
+	if (updates.redirect_uris && client.sectorIdentifier) {
+		schemaUpdates.sectorIdentifier = deriveSectorIdentifier(
+			client.clientId,
+			updates.redirect_uris,
+		);
+	}
 	if (clearsBackchannelLogout) {
 		schemaUpdates.backchannelLogoutUri = null;
 		schemaUpdates.backchannelLogoutSessionRequired = null;
