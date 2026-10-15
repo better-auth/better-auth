@@ -1,0 +1,562 @@
+import type { OAuthClient } from "@better-auth/oauth-provider";
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
+import { deriveDpopJkt } from "better-auth/oauth2";
+import { jwt } from "better-auth/plugins/jwt";
+import { getTestInstance } from "better-auth/test";
+import type { JWK } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { CibaNotification } from "./index";
+import { CIBA_GRANT_TYPE, ciba } from "./index";
+
+const baseURL = "http://localhost:3000";
+const resource = "https://api.example.com";
+const secondResource = "https://files.example.com";
+const INTERVAL = 1;
+const POLL = { backchannel_token_delivery_mode: "poll" };
+
+let lastNotification: CibaNotification | undefined;
+const sendNotification = vi.fn((notification: CibaNotification) => {
+	lastNotification = notification;
+});
+
+const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
+	await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [resource, secondResource],
+				enforcePerClientResources: false,
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
+			}),
+			ciba({ resultPage: "/ciba", interval: INTERVAL, sendNotification }),
+		],
+	});
+
+const { headers } = await signInWithTestUser();
+const secondUser = {
+	email: "second@example.com",
+	password: "password1234",
+	name: "Second User",
+};
+
+let pollClient: OAuthClient;
+let otherClient: OAuthClient;
+let secondUserHeaders: Headers;
+
+function createClient(metadata?: Record<string, unknown>, extra = {}) {
+	return auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			client_name: "Support Agent",
+			grant_types: [CIBA_GRANT_TYPE],
+			metadata,
+			...extra,
+		},
+	});
+}
+
+function basicAuth(client: OAuthClient): string {
+	return `Basic ${btoa(`${client.client_id}:${client.client_secret}`)}`;
+}
+
+/** The provider's default token hash, used to reach rows by raw auth_req_id. */
+async function hashAuthReqId(authReqId: string): Promise<string> {
+	const digest = await createHash("SHA-256").digest(
+		new TextEncoder().encode(authReqId),
+	);
+	return base64Url.encode(new Uint8Array(digest), { padding: false });
+}
+
+async function expireRequest(authReqId: string) {
+	const ctx = await auth.$context;
+	await ctx.adapter.update({
+		model: "cibaRequest",
+		where: [{ field: "authReqId", value: await hashAuthReqId(authReqId) }],
+		update: { expiresAt: new Date(Date.now() - 1000) },
+	});
+}
+
+const waitInterval = () =>
+	new Promise((resolve) => setTimeout(resolve, INTERVAL * 1000 + 50));
+
+/** CIBA §7.1: the backchannel request is form-encoded. */
+async function bcAuthorize(
+	params: Record<string, string | string[]>,
+	client: OAuthClient | null = pollClient,
+) {
+	const body = new URLSearchParams();
+	for (const [key, value] of Object.entries(params)) {
+		for (const v of [value].flat()) body.append(key, v);
+	}
+	const res = await customFetchImpl(`${baseURL}/api/auth/oauth2/bc-authorize`, {
+		method: "POST",
+		headers: {
+			"content-type": "application/x-www-form-urlencoded",
+			...(client ? { authorization: basicAuth(client) } : {}),
+		},
+		body: body.toString(),
+	});
+	return { status: res.status, headers: res.headers, body: await res.json() };
+}
+
+/** Starts a request and returns its auth_req_id and the link sent to the user. */
+async function start(params: Record<string, string> = {}, client = pollClient) {
+	const res = await bcAuthorize(
+		{ scope: "openid profile", login_hint: testUser.email, ...params },
+		client,
+	);
+	expect(res.status).toBe(200);
+	return {
+		authReqId: res.body.auth_req_id as string,
+		url: lastNotification!.url,
+	};
+}
+
+async function poll(
+	authReqId: string,
+	client: OAuthClient = pollClient,
+	extraHeaders: Record<string, string> = {},
+) {
+	const res = await customFetchImpl(`${baseURL}/api/auth/oauth2/token`, {
+		method: "POST",
+		headers: {
+			"content-type": "application/x-www-form-urlencoded",
+			authorization: basicAuth(client),
+			...extraHeaders,
+		},
+		body: new URLSearchParams({
+			grant_type: CIBA_GRANT_TYPE,
+			auth_req_id: authReqId,
+		}).toString(),
+	});
+	return { status: res.status, body: await res.json() };
+}
+
+/** Follows a browser request and returns the URL the provider sends it to. */
+async function redirectOf(
+	url: string,
+	sessionHeaders: Headers,
+	body?: Record<string, unknown>,
+) {
+	const requestHeaders = new Headers(sessionHeaders);
+	requestHeaders.set("accept", "application/json");
+	if (body) requestHeaders.set("content-type", "application/json");
+	const res = await customFetchImpl(url, {
+		method: body ? "POST" : "GET",
+		headers: requestHeaders,
+		body: body ? JSON.stringify(body) : undefined,
+	});
+	const json = (await res.json()) as { url?: string };
+	if (!json.url) throw new Error(`No redirect from ${url}: ${res.status}`);
+	return new URL(json.url, baseURL);
+}
+
+/** Opens the link from the notification, as the user's browser does. */
+function openLink(url: string, sessionHeaders = headers) {
+	return redirectOf(url, sessionHeaders);
+}
+
+/** Answers the consent page the link led to. */
+function answerConsent(
+	consent: URL,
+	accept: boolean,
+	sessionHeaders = headers,
+	scope?: string,
+) {
+	return redirectOf(`${baseURL}/api/auth/oauth2/consent`, sessionHeaders, {
+		accept,
+		...(scope ? { scope } : {}),
+		oauth_query: consent.search.slice(1),
+	});
+}
+
+async function approve(url: string) {
+	const consent = await openLink(url);
+	const result = await answerConsent(consent, true);
+	expect(result.toString()).toBe(`${baseURL}/ciba?status=approved`);
+}
+
+beforeAll(async () => {
+	pollClient = await createClient(POLL);
+	otherClient = await createClient(POLL);
+	await auth.api.signUpEmail({ body: secondUser });
+	secondUserHeaders = (
+		await signInWithUser(secondUser.email, secondUser.password)
+	).headers;
+});
+
+/**
+ * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html
+ */
+describe("ciba poll mode", () => {
+	it("issues tokens once after the hinted user approves on the consent page", async () => {
+		const res = await bcAuthorize({
+			scope: "openid profile",
+			login_hint: testUser.email,
+			binding_message: "Code 4821",
+		});
+		expect(res.status).toBe(200);
+		expect(res.headers.get("Cache-Control")).toBe("no-store");
+		expect(res.body).toMatchObject({ expires_in: 300, interval: INTERVAL });
+		const authReqId = res.body.auth_req_id as string;
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+
+		const consent = await openLink(lastNotification!.url);
+		expect(consent.pathname).toBe("/consent");
+		expect(consent.searchParams.get("client_id")).toBe(pollClient.client_id);
+		expect(consent.searchParams.get("scope")).toBe("openid profile");
+		expect(consent.searchParams.get("binding_message")).toBe("Code 4821");
+		const result = await answerConsent(consent, true);
+		expect(result.toString()).toBe(`${baseURL}/ciba?status=approved`);
+
+		await waitInterval();
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(issued.body.token_type).toBe("Bearer");
+		expect(decodeJwt(issued.body.id_token as string).sub).toBe(
+			lastNotification!.user.id,
+		);
+
+		await waitInterval();
+		expect((await poll(authReqId)).body.error).toBe("invalid_grant");
+	});
+
+	it("sends the user a link to the provider with the request details", async () => {
+		const { url } = await start({ binding_message: "Code 77" });
+		expect(lastNotification).toMatchObject({
+			user: { email: testUser.email },
+			clientId: pollClient.client_id,
+			clientName: "Support Agent",
+			scopes: ["openid", "profile"],
+			bindingMessage: "Code 77",
+			expiresAt: expect.any(Date),
+		});
+		expect(url).toMatch(
+			new RegExp(`^${baseURL}/api/auth/oauth2/authorize\\?ciba_request_id=`),
+		);
+	});
+
+	it("still answers the client when the notification fails", async () => {
+		sendNotification.mockImplementationOnce(() => {
+			throw new Error("push service down");
+		});
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(200);
+		expect(res.body.auth_req_id).toEqual(expect.any(String));
+	});
+
+	it("shows consent every time, even for a client that skips consent", async () => {
+		const trusted = await createClient(POLL, { skip_consent: true });
+		const first = await start({}, trusted);
+		await approve(first.url);
+		const second = await start({}, trusted);
+		expect((await openLink(second.url)).pathname).toBe("/consent");
+	});
+
+	it("sends a signed-out user to sign in before showing anything", async () => {
+		const { url } = await start({ binding_message: "Code 9" });
+		const login = await openLink(url, new Headers());
+		expect(login.pathname).toBe("/login");
+		expect(login.searchParams.get("binding_message")).toBeNull();
+		expect(login.searchParams.get("scope")).toBeNull();
+	});
+
+	it("lets only the hinted user open, approve, or deny the request", async () => {
+		const { authReqId, url } = await start();
+		const refused = await openLink(url, secondUserHeaders);
+		expect(refused.pathname).toBe("/ciba");
+		expect(refused.searchParams.get("error")).toBe("invalid_request");
+
+		// Another user replays the owner's consent page.
+		const consent = await openLink(url);
+		for (const accept of [true, false]) {
+			const replay = await answerConsent(consent, accept, secondUserHeaders);
+			expect(replay.searchParams.get("error")).toBe("invalid_request");
+		}
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+
+		await answerConsent(consent, true);
+		await waitInterval();
+		expect((await poll(authReqId)).status).toBe(200);
+	});
+
+	it("ends the request when the user denies it", async () => {
+		const { authReqId, url } = await start();
+		const consent = await openLink(url);
+		const result = await answerConsent(consent, false);
+		expect(result.toString()).toBe(`${baseURL}/ciba?status=denied`);
+		// The decision is final: the link no longer opens the request.
+		expect((await openLink(url)).searchParams.get("error")).toBe(
+			"invalid_request",
+		);
+
+		expect((await poll(authReqId)).body.error).toBe("access_denied");
+		await waitInterval();
+		expect((await poll(authReqId)).body.error).toBe("invalid_grant");
+	});
+
+	it("narrows the token to the scopes the user approved", async () => {
+		const { authReqId, url } = await start();
+		const consent = await openLink(url);
+		await answerConsent(consent, true, headers, "openid");
+		const issued = await poll(authReqId);
+		expect(issued.body.scope).toBe("openid");
+	});
+
+	it("returns slow_down at a fixed interval", async () => {
+		const { authReqId } = await start();
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+		expect((await poll(authReqId)).body.error).toBe("slow_down");
+		// The interval does not grow after slow_down.
+		await waitInterval();
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+	});
+
+	it("issues to only one of two concurrent polls", async () => {
+		const { authReqId, url } = await start();
+		await approve(url);
+		const results = await Promise.all([poll(authReqId), poll(authReqId)]);
+		expect(results.map((r) => r.status).sort()).toEqual([200, 400]);
+	});
+
+	it("expires the request for both the client and the link", async () => {
+		const { authReqId, url } = await start();
+		await expireRequest(authReqId);
+		expect((await openLink(url)).searchParams.get("error")).toBe(
+			"invalid_request",
+		);
+		expect((await poll(authReqId)).body.error).toBe("expired_token");
+	});
+
+	it("refuses another client's auth_req_id without consuming it", async () => {
+		const { authReqId, url } = await start();
+		await approve(url);
+		expect((await poll(authReqId, otherClient)).body.error).toBe(
+			"invalid_grant",
+		);
+		expect((await poll(authReqId)).status).toBe(200);
+	});
+
+	it("rejects an unknown auth_req_id", async () => {
+		expect((await poll("unknown")).body.error).toBe("invalid_grant");
+	});
+
+	it("issues auth_time from the approving session", async () => {
+		const { authReqId, url } = await start();
+		await approve(url);
+		const issued = await poll(authReqId);
+		const session = await auth.api.getSession({ headers });
+		expect(decodeJwt(issued.body.id_token as string).auth_time).toBe(
+			Math.floor(new Date(session!.session.createdAt).getTime() / 1000),
+		);
+	});
+
+	it("binds the token to the DPoP key presented on the poll", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk: JWK = await exportJWK(publicKey);
+		const { authReqId, url } = await start();
+		await approve(url);
+		const proof = await new SignJWT({
+			jti: crypto.randomUUID(),
+			htm: "POST",
+			htu: `${baseURL}/api/auth/oauth2/token`,
+			iat: Math.floor(Date.now() / 1000),
+		})
+			.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
+			.sign(privateKey);
+		const issued = await poll(authReqId, pollClient, { dpop: proof });
+		expect(issued.body.token_type).toBe("DPoP");
+		const introspection = await customFetchImpl(
+			`${baseURL}/api/auth/oauth2/introspect`,
+			{
+				method: "POST",
+				headers: {
+					authorization: basicAuth(pollClient),
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({ token: issued.body.access_token }),
+			},
+		).then((r) => r.json());
+		expect(introspection.cnf).toEqual({ jkt: await deriveDpopJkt(publicJwk) });
+	});
+
+	it("binds the token to every repeated resource (RFC 8707)", async () => {
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			resource: [resource, secondResource],
+		});
+		await approve(lastNotification!.url);
+		const issued = await poll(res.body.auth_req_id as string);
+		expect(decodeJwt(issued.body.access_token as string).aud).toEqual(
+			expect.arrayContaining([resource, secondResource]),
+		);
+	});
+});
+
+describe("ciba backchannel request validation", () => {
+	it.each([
+		["a scope without openid", { scope: "profile" }, "invalid_scope"],
+		[
+			"a binding_message with control characters",
+			{ binding_message: "line\nbreak" },
+			"invalid_binding_message",
+		],
+		[
+			"a binding_message with a bidirectional override",
+			{ binding_message: "Code ‮1234" },
+			"invalid_binding_message",
+		],
+		[
+			"a binding_message over 64 characters",
+			{ binding_message: "x".repeat(65) },
+			"invalid_binding_message",
+		],
+		[
+			"an unknown user",
+			{ login_hint: "nobody@example.com" },
+			"unknown_user_id",
+		],
+		["two hints", { id_token_hint: "token" }, "invalid_request"],
+		[
+			"a non-positive requested_expiry",
+			{ requested_expiry: "0" },
+			"invalid_request",
+		],
+		["a malformed resource", { resource: "not a uri" }, "invalid_target"],
+		[
+			"an unknown resource",
+			{ resource: "https://other.example" },
+			"invalid_target",
+		],
+	])("rejects %s", async (_, params, error) => {
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			...params,
+		});
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe(error);
+	});
+
+	it("accepts a binding_message in any script", async () => {
+		const res = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			binding_message: "コード 4821",
+		});
+		expect(res.status).toBe(200);
+	});
+
+	it("rejects an unsupported hint type", async () => {
+		const res = await bcAuthorize({ scope: "openid", id_token_hint: "token" });
+		expect(res.body.error).toBe("invalid_request");
+	});
+
+	it("rejects a repeated parameter other than resource", async () => {
+		const res = await bcAuthorize({
+			scope: ["openid", "openid profile"],
+			login_hint: testUser.email,
+		});
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid_request");
+	});
+
+	it("rejects a JSON body (CIBA §7.1)", async () => {
+		const res = await customFetchImpl(
+			`${baseURL}/api/auth/oauth2/bc-authorize`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					authorization: basicAuth(pollClient),
+				},
+				body: JSON.stringify({ scope: "openid", login_hint: testUser.email }),
+			},
+		);
+		expect(res.status).toBe(415);
+	});
+
+	it("rejects an unauthenticated client", async () => {
+		const res = await bcAuthorize(
+			{
+				client_id: pollClient.client_id,
+				scope: "openid",
+				login_hint: testUser.email,
+			},
+			null,
+		);
+		expect(res.body.error).toBe("invalid_client");
+	});
+
+	it.each([
+		["no delivery mode", undefined],
+		["ping delivery", { backchannel_token_delivery_mode: "ping" }],
+	])("rejects a client registered with %s", async (_, metadata) => {
+		const client = await createClient(metadata);
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: testUser.email },
+			client,
+		);
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("unauthorized_client");
+	});
+
+	it("refuses a client from open registration, so it cannot prompt users", async () => {
+		const body = {
+			client_name: "Anyone",
+			grant_types: [CIBA_GRANT_TYPE],
+			token_endpoint_auth_method: "client_secret_basic",
+			// Dropped: only server-side client management sets metadata.
+			metadata: POLL,
+		};
+		const registered = await auth.api.registerOAuthClient({ body });
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: testUser.email },
+			registered,
+		);
+		expect(res.body.error).toBe("unauthorized_client");
+	});
+
+	it("caps requested_expiry at the configured lifetime", async () => {
+		const short = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			requested_expiry: "60",
+		});
+		expect(short.body.expires_in).toBe(60);
+		const long = await bcAuthorize({
+			scope: "openid",
+			login_hint: testUser.email,
+			requested_expiry: "9999",
+		});
+		expect(long.body.expires_in).toBe(300);
+	});
+});
+
+describe("ciba discovery metadata", () => {
+	it("advertises the backchannel endpoint in poll mode", async () => {
+		const metadata = (await auth.api.getOpenIdConfig()) as Record<
+			string,
+			unknown
+		>;
+		expect(metadata).toMatchObject({
+			backchannel_authentication_endpoint: `${baseURL}/api/auth/oauth2/bc-authorize`,
+			backchannel_token_delivery_modes_supported: ["poll"],
+			backchannel_user_code_parameter_supported: false,
+		});
+		expect(metadata.grant_types_supported).toContain(CIBA_GRANT_TYPE);
+	});
+});

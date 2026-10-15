@@ -1123,7 +1123,7 @@ You don't need to handle anything from your side; when a new session is created,
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data.
 
-**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications. Device approvals from `oauthDeviceAuthorization()` always show the consent screen, and their query also carries `user_code`; show it so the user can check that it matches the code on their device.
+**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications. Device approvals from `oauthDeviceAuthorization()` always show the consent screen, and their query also carries `user_code`; show it so the user can check that it matches the code on their device. [CIBA](/docs/plugins/ciba) requests also always show it, and their query carries the client's `binding_message`.
 
 ```ts title="auth.ts"
 oauthProvider({

@@ -1,0 +1,104 @@
+import type { OAuthExtensionGrantHandler } from "@better-auth/oauth-provider";
+import {
+	resolveResourcePolicy,
+	validateClientScopes,
+} from "@better-auth/oauth-provider/internal";
+import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
+import type { CibaRequest } from "./schema";
+
+/**
+ * Token-endpoint handler for the CIBA poll (CIBA §10.1, §11). Polling at the
+ * fixed `interval`, expiry, and denial follow the device authorization grant;
+ * an approved request is claimed once, atomically, before tokens are issued.
+ */
+export const createCibaGrantHandler =
+	(intervalSeconds: number): OAuthExtensionGrantHandler =>
+	async ({ ctx, opts, provider }) => {
+		const authReqId = ctx.body?.auth_req_id;
+		if (typeof authReqId !== "string" || !authReqId) {
+			oauthError("invalid_request", "auth_req_id is required");
+		}
+		// CIBA §10.1: the client authenticates as registered.
+		const { client, clientId, confirmation } =
+			await provider.authenticateClient();
+
+		const { adapter } = ctx.context;
+		const request = await adapter.findOne<CibaRequest>({
+			model: "cibaRequest",
+			where: [
+				{
+					field: "authReqId",
+					value: await provider.hashToken(authReqId, "auth_req_id"),
+				},
+			],
+		});
+		// Another client's auth_req_id looks unknown, so it reveals nothing.
+		if (!request || request.clientId !== clientId) {
+			oauthError("invalid_grant", CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message);
+		}
+		const where = [{ field: "id", value: request.id }];
+
+		// Expiry is terminal, so it takes precedence over slow_down.
+		if (request.expiresAt <= new Date()) {
+			await adapter.delete({ model: "cibaRequest", where });
+			oauthError("expired_token", CIBA_ERROR_CODES.EXPIRED_AUTH_REQ_ID.message);
+		}
+		if (
+			request.lastPolledAt &&
+			Date.now() - request.lastPolledAt.getTime() < intervalSeconds * 1000
+		) {
+			oauthError("slow_down", CIBA_ERROR_CODES.POLLING_TOO_FREQUENTLY.message);
+		}
+		if (request.status === "denied") {
+			await adapter.delete({ model: "cibaRequest", where });
+			oauthError("access_denied", CIBA_ERROR_CODES.ACCESS_DENIED.message);
+		}
+		await adapter.update({
+			model: "cibaRequest",
+			where,
+			update: { lastPolledAt: new Date() },
+		});
+		if (request.status === "pending") {
+			oauthError(
+				"authorization_pending",
+				CIBA_ERROR_CODES.AUTHORIZATION_PENDING.message,
+			);
+		}
+
+		// Everything that can refuse runs before the claim, so a refusal keeps the
+		// approved request for another poll.
+		const scopes = request.scope.split(" ");
+		validateClientScopes(client, scopes);
+		await resolveResourcePolicy(ctx, opts, {
+			resource: request.resources ?? undefined,
+			clientId,
+			requestedScopes: scopes,
+		});
+		const user = await ctx.context.internalAdapter.findUserById(request.userId);
+		if (!user) {
+			oauthError(
+				"server_error",
+				CIBA_ERROR_CODES.USER_NOT_FOUND.message,
+				"INTERNAL_SERVER_ERROR",
+			);
+		}
+		const claimed = await adapter.consumeOne<CibaRequest>({
+			model: "cibaRequest",
+			where: [...where, { field: "status", value: "approved" }],
+		});
+		if (!claimed) {
+			oauthError("invalid_grant", CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message);
+		}
+
+		return provider.issueTokens({
+			client,
+			scopes,
+			user,
+			resources: claimed.resources ?? undefined,
+			referenceId: claimed.referenceId ?? undefined,
+			authTime: claimed.authTime ?? undefined,
+			// A DPoP proof on this poll, or a sender-constraint proved at client
+			// authentication, binds the issued token.
+			confirmation,
+		});
+	};
