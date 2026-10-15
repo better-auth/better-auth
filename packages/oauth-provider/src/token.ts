@@ -449,7 +449,7 @@ async function encodeRefreshToken(
 	return (
 		(opts.prefix?.refreshToken ?? "") +
 		(opts.formatRefreshToken?.encrypt
-			? opts.formatRefreshToken.encrypt(token, sessionId)
+			? await opts.formatRefreshToken.encrypt(token, sessionId)
 			: token)
 	);
 }

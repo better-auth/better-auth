@@ -1653,7 +1653,12 @@ describe("oauth token - refresh_token", async () => {
 			return {
 				reached: reached.promise,
 				release: released.resolve,
-				restore: () => spy.mockRestore(),
+				// Release too, so a test that fails early does not leave the held
+				// request pending.
+				restore: () => {
+					released.resolve();
+					spy.mockRestore();
+				},
 			};
 		}
 

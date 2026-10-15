@@ -41,7 +41,6 @@ async function revokeJwtAccessToken(
 	payload: JwtAccessTokenPayload,
 ) {
 	if (
-		!payload.azp ||
 		!(await isAudienceClaimAllowed(ctx, opts, payload.aud, [
 			userInfoResource(ctx.context.baseURL),
 		]))
@@ -166,14 +165,13 @@ export async function revokeEndpoint(
 	try {
 		const found = await findToken(ctx, opts, token, token_type_hint);
 		if (!found) return null;
-		if (found.type === "jwt") {
-			return await revokeJwtAccessToken(ctx, opts, found.payload);
-		}
 
 		// RFC 7009 §2.1: refuse to revoke a token issued to another client. A
 		// public client gets a silent 200 instead, so it cannot probe which
 		// token values exist.
-		if (found.record.clientId !== client.clientId) {
+		const ownerClientId =
+			found.type === "jwt" ? found.payload.azp : found.record.clientId;
+		if (ownerClientId !== client.clientId) {
 			if (client.tokenEndpointAuthMethod === "none") return null;
 			throw new APIError("BAD_REQUEST", {
 				error_description:
@@ -182,6 +180,9 @@ export async function revokeEndpoint(
 			});
 		}
 
+		if (found.type === "jwt") {
+			return await revokeJwtAccessToken(ctx, opts, found.payload);
+		}
 		if (found.type === "opaque") {
 			await revokeOpaqueAccessToken(ctx, found.record);
 		} else {

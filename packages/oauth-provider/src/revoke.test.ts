@@ -6,6 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { CompactEncrypt, compactDecrypt } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -392,6 +393,26 @@ describe("oauth revoke", async () => {
 			},
 		);
 
+		it("applies the same ownership rule to another client's JWT access_token", async () => {
+			const tokens = await getTokens(undefined, validResource);
+			const jwtAccessToken = tokens.data?.access_token!;
+			expect(jwtAccessToken.split(".")).toHaveLength(3);
+
+			const confidential = await createOtherClient("client_secret_post");
+			expect(
+				(await revoke(jwtAccessToken, undefined, confidential)).error,
+			).toMatchObject({ status: 400, error: "invalid_request" });
+
+			const publicClient = await createOtherClient("none");
+			expect(
+				(
+					await revoke(jwtAccessToken, undefined, {
+						client_id: publicClient.client_id,
+					})
+				).error,
+			).toBe(null);
+		});
+
 		it("refuses another client's revoked refresh_token before replay handling", async () => {
 			const tokens = await getTokens();
 			const refreshToken = tokens.data?.refresh_token!;
@@ -551,6 +572,109 @@ describe("oauth revoke - config", async () => {
 			codeVerifier,
 		};
 	}
+
+	/**
+	 * The JWE refresh-token format from the `formatRefreshToken` docs, on a
+	 * deployment without the JWT plugin.
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+	 */
+	describe("encrypted refresh tokens without the JWT plugin", () => {
+		const key = new Uint8Array(32).fill(7);
+		const formatRefreshToken = {
+			encrypt: async (token: string, sessionId?: string) =>
+				new CompactEncrypt(
+					new TextEncoder().encode(JSON.stringify({ token, sessionId })),
+				)
+					.setProtectedHeader({ alg: "A256KW", enc: "A256GCM" })
+					.encrypt(key),
+			decrypt: async (token: string) => {
+				const { plaintext } = await compactDecrypt(token, key);
+				return JSON.parse(new TextDecoder().decode(plaintext));
+			},
+		};
+
+		async function setup() {
+			const testScopes = ["openid", "offline_access"];
+			const { client, oauthClient } = await createTestInstance({
+				oauthProviderConfig: {
+					disableJwtPlugin: true,
+					formatRefreshToken,
+					scopes: testScopes,
+				},
+			});
+			if (!oauthClient) expect.unreachable();
+			const { url: authUrl, codeVerifier } = await createAuthUrl(oauthClient, {
+				scopes: testScopes,
+			});
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const tokens = await client.$fetch<{
+				access_token: string;
+				refresh_token: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+					code_verifier: codeVerifier,
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret!,
+					redirect_uri: redirectUri,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			});
+			const call = (path: string, body: Record<string, string>) =>
+				client.$fetch<{ active?: boolean }>(path, {
+					method: "POST",
+					body: new URLSearchParams({
+						client_id: oauthClient.client_id,
+						client_secret: oauthClient.client_secret!,
+						...body,
+					}),
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+				});
+			return { tokens: tokens.data!, call };
+		}
+
+		it("revokes the encrypted refresh_token", async () => {
+			const { tokens, call } = await setup();
+			expect(tokens.refresh_token.split(".")).toHaveLength(5);
+			const revoked = await call("/oauth2/revoke", {
+				token: tokens.refresh_token,
+			});
+			expect(revoked.error).toBe(null);
+			const introspection = await call("/oauth2/introspect", {
+				token: tokens.refresh_token,
+			});
+			expect(introspection.data?.active).toBe(false);
+		});
+
+		it("revokes an opaque access_token sent with token_type_hint refresh_token", async () => {
+			const { tokens, call } = await setup();
+			const revoked = await call("/oauth2/revoke", {
+				token: tokens.access_token,
+				token_type_hint: "refresh_token",
+			});
+			expect(revoked.error).toBe(null);
+			const introspection = await call("/oauth2/introspect", {
+				token: tokens.access_token,
+			});
+			expect(introspection.data?.active).toBe(false);
+		});
+
+		it("returns 200 for an unknown token the decoder rejects", async () => {
+			const { call } = await setup();
+			const revoked = await call("/oauth2/revoke", {
+				token: "not-a-jwe",
+				token_type_hint: "refresh_token",
+			});
+			expect(revoked.error).toBe(null);
+		});
+	});
 
 	it("should pass with the correct opaqueAccessTokenPrefix", async () => {
 		const prefix = "hello_";

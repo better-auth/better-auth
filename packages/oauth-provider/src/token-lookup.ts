@@ -2,7 +2,12 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { getJwks } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
+import {
+	createLocalJWKSet,
+	decodeProtectedHeader,
+	errors as joseErrors,
+	jwtVerify,
+} from "jose";
 import type {
 	OAuthOpaqueAccessToken,
 	OAuthOptions,
@@ -11,8 +16,8 @@ import type {
 } from "./types";
 import { getJwtPlugin, getStoredToken } from "./utils";
 
-/** Signature and issuer are verified; audience and client are not. */
-export type JwtAccessTokenPayload = JWTPayload & { azp?: string; sid?: string };
+/** Signature, issuer, and `azp` are verified; audience and client are not. */
+export type JwtAccessTokenPayload = JWTPayload & { azp: string; sid?: string };
 export type OpaqueAccessTokenRecord = OAuthOpaqueAccessToken<Scope[]> & {
 	id?: string;
 };
@@ -35,11 +40,11 @@ const jwksInfrastructureErrorCodes = new Set([
 ]);
 
 /**
- * Verifies the signature and issuer of a JWT access token. Returns `"inactive"`
- * for a JWT this server signed that is expired or fails claim validation, so
- * the lookup can stop: it cannot be another token type. Returns `null` for
- * anything else (an opaque token, a malformed or forged JWT) so the lookup can
- * continue. Key-set failures still throw.
+ * Verifies a JWT access token issued by this server. Returns `"inactive"` for
+ * one that is expired or fails claim validation, so the lookup can stop: it
+ * cannot be another token type. Returns `null` for anything else (an opaque
+ * token, a malformed or forged JWT, a JWT that is not an access token) so the
+ * lookup can continue. Key-set failures still throw.
  */
 async function verifyJwtAccessToken(
 	ctx: GenericEndpointContext,
@@ -47,6 +52,11 @@ async function verifyJwtAccessToken(
 	token: string,
 ): Promise<JwtAccessTokenPayload | "inactive" | null> {
 	if (opts.disableJwtPlugin) return null;
+	try {
+		decodeProtectedHeader(token);
+	} catch {
+		return null;
+	}
 	const jwtPlugin = getJwtPlugin(ctx.context);
 	const jwtPluginOptions = jwtPlugin.options;
 	const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
@@ -56,30 +66,41 @@ async function verifyJwtAccessToken(
 				// @ts-expect-error response is a JSONWebKeySet but within the response field
 				return jwksRes?.response as JSONWebKeySet | undefined;
 			};
+	// The plugin instance is stable across requests, so the key set fetched by
+	// the per-request closure above is cached under it.
+	const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
+	let payload: JWTPayload;
 	try {
-		// The plugin instance is stable across requests, so the key set fetched
-		// by the per-request closure above is cached under it.
-		const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
 		// Do not pass jose's `audience` option: access-token audiences are
 		// resource identifiers, which each endpoint validates itself.
-		const { payload } = await jwtVerify<JwtAccessTokenPayload>(
-			token,
-			createLocalJWKSet(jwks),
-			{ issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL },
-		);
-		return payload;
+		({ payload } = await jwtVerify(token, createLocalJWKSet(jwks), {
+			issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+		}));
 	} catch (error) {
 		// jose checks claims only after the signature verifies.
-		if (error instanceof joseErrors.JWTClaimValidationFailed) return "inactive";
+		if (error instanceof joseErrors.JWTClaimValidationFailed) {
+			return isAccessTokenPayload(error.payload) ? "inactive" : null;
+		}
 		if (
-			error instanceof TypeError ||
-			(error instanceof joseErrors.JOSEError &&
-				!jwksInfrastructureErrorCodes.has(error.code))
+			error instanceof joseErrors.JOSEError &&
+			!jwksInfrastructureErrorCodes.has(error.code)
 		) {
 			return null;
 		}
 		throw error;
 	}
+	return isAccessTokenPayload(payload) ? payload : null;
+}
+
+/**
+ * The OAuth token endpoint stamps `azp` (the client) on every JWT access token.
+ * The JWT plugin signs other JWTs with the same issuer and keys, such as its
+ * `/token` session JWT, so one without `azp` is not an access token.
+ */
+function isAccessTokenPayload(
+	payload: JWTPayload,
+): payload is JwtAccessTokenPayload {
+	return typeof payload.azp === "string" && payload.azp.length > 0;
 }
 
 async function findOpaqueAccessToken(
@@ -123,9 +144,15 @@ export async function findRefreshToken(
 			? await opts.formatRefreshToken.decrypt(value)
 			: { token: value };
 	} catch (error) {
-		// A `decrypt` that rejects the format with a 400 means this is not a
-		// refresh token; any other failure is real.
-		if (error instanceof APIError && error.statusCode === 400) return null;
+		// A `decrypt` that rejects the format, with a 400 or a JOSE error such as
+		// `compactDecrypt` throws, means this is not a refresh token. Any other
+		// failure is real.
+		if (
+			(error instanceof APIError && error.statusCode === 400) ||
+			error instanceof joseErrors.JOSEError
+		) {
+			return null;
+		}
 		throw error;
 	}
 	return ctx.context.adapter.findOne<RefreshTokenRecord>({

@@ -140,19 +140,8 @@ async function validateJwtAccessToken(
 		return { active: false };
 	}
 
-	// An OAuth access token issued by this provider always carries an `azp`
-	// (authorized party = client) claim, stamped by `createJwtAccessToken`. The
-	// JWT plugin shares the same issuer, audience convention, and signing keys, so
-	// a plain session JWT (e.g. from its `/token` endpoint) can otherwise satisfy
-	// the signature/issuer/audience checks above. Such a token was never issued
-	// through the OAuth token endpoint and has no client or consent binding, so
-	// it must not be reported as an active access token. Require `azp` and a
-	// matching, enabled client before considering the token active.
-	if (!jwtPayload.azp) {
-		return {
-			active: false,
-		};
-	}
+	// `findToken` only returns JWTs carrying `azp`; require that client to
+	// exist and be enabled before considering the token active.
 	const client = await getClient(ctx, opts, jwtPayload.azp);
 	if (!client || client?.disabled) {
 		return {
