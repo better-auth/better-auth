@@ -60,8 +60,13 @@ type JwksFetchOptions = {
 
 type ResolvedJwks = {
 	jwks: JSONWebKeySet;
-	fromCache: boolean;
 	kid: string | undefined;
+	/**
+	 * Refetches a cached `jwks` that turned out to lack the token's key, or
+	 * resolves `undefined` inside the refetch cooldown. Absent when `jwks` was
+	 * just fetched.
+	 */
+	refresh?: (() => Promise<JSONWebKeySet | undefined>) | undefined;
 };
 
 /**
@@ -154,12 +159,29 @@ async function loadJwks(
 	}
 }
 
+/**
+ * Refetches a fresh cached set that lacks a token's key, such as a newly
+ * rotated-in `kid`. Joins a fetch in flight; otherwise refetches unless another
+ * refetch started within the cooldown, and resolves `undefined` then. A refetch
+ * consumes the cooldown whether or not it succeeds.
+ */
+async function refreshJwks(
+	entry: JwksCacheEntry,
+	jwksFetch: JwksFetchOptions["jwksFetch"],
+): Promise<JSONWebKeySet | undefined> {
+	const now = Date.now();
+	if (!isFetching(entry, now)) {
+		if (now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) return undefined;
+		entry.refetchedAt = now;
+	}
+	return loadJwks(entry, jwksFetch);
+}
+
 function shouldRefetchCachedJwksWithoutKid(
 	error: unknown,
 	resolved: ResolvedJwks,
 ) {
 	return (
-		resolved.fromCache &&
 		!resolved.kid &&
 		(error instanceof joseErrors.JWKSNoMatchingKey ||
 			error instanceof joseErrors.JWSSignatureVerificationFailed)
@@ -306,21 +328,15 @@ export async function verifyJwsAccessToken(
 				opts.verifyOptions,
 			);
 		} catch (error) {
-			if (shouldRefetchCachedJwksWithoutKid(error, resolved)) {
-				const refreshed = await getJwksForVerification(token, {
-					...opts,
-					forceRefresh: true,
-				});
-				// Within the refetch cooldown the cached set comes back unchanged.
-				if (refreshed.fromCache) throw error;
-				jwt = await jwtVerify<JWTPayload>(
-					token,
-					createLocalJWKSet(refreshed.jwks),
-					opts.verifyOptions,
-				);
-			} else {
-				throw error;
-			}
+			const refreshed = shouldRefetchCachedJwksWithoutKid(error, resolved)
+				? await resolved.refresh?.()
+				: undefined;
+			if (!refreshed) throw error;
+			jwt = await jwtVerify<JWTPayload>(
+				token,
+				createLocalJWKSet(refreshed),
+				opts.verifyOptions,
+			);
 		}
 		// Return the JWT payload in introspection format
 		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
@@ -340,7 +356,7 @@ export async function getJwks(token: string, opts: JwksFetchOptions) {
 
 async function getJwksForVerification(
 	token: string,
-	opts: JwksFetchOptions & { forceRefresh?: boolean },
+	opts: JwksFetchOptions,
 ): Promise<ResolvedJwks> {
 	// Attempt to decode the token and find a matching kid in jwks
 	let jwtHeaders: ProtectedHeaderParameters | undefined;
@@ -356,42 +372,27 @@ async function getJwksForVerification(
 	// The cache is scoped to the source, so a token is only ever matched against
 	// the key set published by its own source. Function sources have no usable
 	// identity of their own (callers pass fresh closures per request), so they
-	// are cached only under a stable caller-provided key object.
+	// are cached only under a stable caller-provided key object; without one,
+	// a throwaway entry still bounds the fetch.
 	const entry =
 		typeof opts.jwksFetch === "string"
 			? getJwksCacheEntry(jwksCache, opts.jwksFetch)
-			: opts.jwksCacheKey &&
-				getJwksCacheEntry(functionJwksCache, opts.jwksCacheKey);
-	if (!entry) {
-		return { jwks: await fetchJwks(opts.jwksFetch), fromCache: false, kid };
-	}
+			: opts.jwksCacheKey
+				? getJwksCacheEntry(functionJwksCache, opts.jwksCacheKey)
+				: { fetchedAt: 0, refetchedAt: 0 };
 
-	const now = Date.now();
 	const cached =
-		entry.jwks && now - entry.fetchedAt < JWKS_CACHE_TTL_MS
-			? entry.jwks
-			: undefined;
-	if (cached) {
-		// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
-		// the header parameter optional.
-		const hasKey = !kid || cached.keys.some((jwk) => jwk.kid === kid);
-		if (hasKey && !opts.forceRefresh) {
-			return { jwks: cached, fromCache: true, kid };
-		}
-		// The set lacks the token's key, such as a newly rotated-in `kid`. Join a
-		// fetch in flight, or refetch unless one started within the cooldown.
-		if (!isFetching(entry, now)) {
-			if (now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) {
-				return { jwks: cached, fromCache: true, kid };
-			}
-			entry.refetchedAt = now;
-		}
+		Date.now() - entry.fetchedAt < JWKS_CACHE_TTL_MS ? entry.jwks : undefined;
+	if (!cached) {
+		return { jwks: await loadJwks(entry, opts.jwksFetch), kid };
 	}
-	return {
-		jwks: await loadJwks(entry, opts.jwksFetch),
-		fromCache: false,
-		kid,
-	};
+	const refresh = () => refreshJwks(entry, opts.jwksFetch);
+	// Without `kid`, key selection is deferred to JOSE because RFC 7515 makes
+	// the header parameter optional.
+	if (!kid || cached.keys.some((jwk) => jwk.kid === kid)) {
+		return { jwks: cached, kid, refresh };
+	}
+	return { jwks: (await refresh()) ?? cached, kid };
 }
 
 async function verifyAccessTokenPayload(
