@@ -1,5 +1,7 @@
 # @better-auth/api-key
 
+## 1.7.9
+
 ## 1.7.8
 
 ### Patch Changes
