@@ -1653,7 +1653,11 @@ describe("oauth token - refresh_token", async () => {
 			return {
 				reached: reached.promise,
 				release: released.resolve,
-				restore: () => spy.mockRestore(),
+				// Also release, so a failed test never leaves the held request paused.
+				restore: () => {
+					spy.mockRestore();
+					released.resolve();
+				},
 			};
 		}
 
@@ -1679,6 +1683,9 @@ describe("oauth token - refresh_token", async () => {
 
 				expect(rotated.error).toBeNull();
 				expect(rotated.data?.refresh_token).toBeDefined();
+				// Known bug: RFC 7009 §2.2 expects 200 for an already-invalid token,
+				// but the endpoint's invalid-token catch never matches. Flip this
+				// to 200 when that is fixed; the family teardown below must stay.
 				expect(revoked.error).toMatchObject({
 					status: 400,
 					error: "invalid_request",
