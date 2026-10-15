@@ -223,9 +223,14 @@ function sanitizeBetterAuthConfig(config: any): any {
 		}
 
 		const normalizedKey = normalizeKey(key);
-		return sensitiveKeys.some((sensitiveKey) =>
-			normalizedKey.includes(normalizeKey(sensitiveKey)),
-		);
+		return sensitiveKeys.some((sensitiveKey) => {
+			const normalizedSensitiveKey = normalizeKey(sensitiveKey);
+			return (
+				normalizedKey === normalizedSensitiveKey ||
+				normalizedKey.endsWith(normalizedSensitiveKey) ||
+				normalizedKey.endsWith(`${normalizedSensitiveKey}s`)
+			);
+		});
 	};
 
 	function redactSensitive(obj: any, parentKey?: string): any {

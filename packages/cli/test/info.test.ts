@@ -240,12 +240,18 @@ describe("info command", () => {
 			export const auth = betterAuth({
 				// @ts-expect-error Regression fixture with a snake_case key.
 				api_key: "api-key-value",
+				// @ts-expect-error Regression fixture with a kebab-case key.
+				"api-key": "kebab-api-key-value",
 				// @ts-expect-error Regression fixture with a snake_case key.
 				secret_key: "secret-key-value",
 				// @ts-expect-error Regression fixture with a bare key suffix.
 				encryptionKey: "encryption-key-value",
 				// @ts-expect-error Regression fixture with a plural key suffix.
 				authTokens: "auth-tokens-value",
+				// @ts-expect-error Regression fixture with a public key header option.
+				apiKeyHeaders: "x-api-key",
+				// @ts-expect-error Regression fixture with a public endpoint option.
+				tokenUrl: "https://example.com/token",
 				baseURL: "https://example.com",
 			})`,
 		);
@@ -258,6 +264,7 @@ describe("info command", () => {
 
 		for (const key of [
 			"api_key",
+			"api-key",
 			"secret_key",
 			"encryptionKey",
 			"authTokens",
@@ -266,6 +273,7 @@ describe("info command", () => {
 		}
 		for (const value of [
 			"api-key-value",
+			"kebab-api-key-value",
 			"secret-key-value",
 			"encryption-key-value",
 			"auth-tokens-value",
@@ -273,6 +281,8 @@ describe("info command", () => {
 			expect(jsonOutput).not.toContain(value);
 			expect(textOutput).not.toContain(value);
 		}
+		expect(output.betterAuth.config.apiKeyHeaders).toBe("x-api-key");
+		expect(output.betterAuth.config.tokenUrl).toBe("https://example.com/token");
 	});
 
 	it("should redact versioned secrets", async () => {
