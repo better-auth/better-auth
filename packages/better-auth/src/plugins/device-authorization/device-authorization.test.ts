@@ -935,6 +935,45 @@ describe("device authorization flow", async () => {
 			});
 			expect(stored?.status).toBe("denied");
 		});
+
+		it("records no decision on a code that expires after it was read", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+
+			const { adapter } = await auth.$context;
+			const findOne = adapter.findOne.bind(adapter);
+			let expired = false;
+			const spy = vi.spyOn(adapter, "findOne").mockImplementation((async (
+				input: Parameters<typeof findOne>[0],
+			) => {
+				const row = await findOne(input);
+				if (!expired && input.model === "deviceCode") {
+					expired = true;
+					await db.update({
+						model: "deviceCode",
+						where: [{ field: "deviceCode", value: device_code }],
+						update: { expiresAt: new Date(Date.now() - 1000) },
+					});
+				}
+				return row;
+			}) as typeof adapter.findOne);
+			try {
+				await expect(
+					auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+				).rejects.toThrow();
+			} finally {
+				spy.mockRestore();
+			}
+
+			const stored = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(stored?.status).toBe("pending");
+		});
 	});
 
 	describe("concurrent token redemption", () => {
