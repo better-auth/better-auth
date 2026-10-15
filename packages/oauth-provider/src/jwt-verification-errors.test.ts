@@ -56,13 +56,13 @@ function tamperSignature(token: string) {
 }
 
 async function setup(
-	jwtPlugin: ReturnType<typeof jwt>,
+	jwtPlugin: ReturnType<typeof jwt> | null,
 	providerOptions?: Partial<OAuthOptions<Scope[]>>,
 ) {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
-			jwtPlugin,
+			...(jwtPlugin ? [jwtPlugin] : []),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
@@ -234,55 +234,110 @@ describe("oauth-provider - JWT access tokens that fail verification", async () =
 		expect(userinfo.data?.sub).toBeDefined();
 	});
 
-	it.each(
-		invalidTokens,
-	)("introspects a JWT with %s as inactive", async (_, getToken) => {
+	it.each(invalidTokens)(
+		"introspects a JWT with %s as inactive",
+		async (_, getToken) => {
+			const introspection = await client.oauth2.introspect(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token: await getToken(),
+					token_type_hint: "access_token",
+				},
+				{ headers: formHeaders },
+			);
+			expect(introspection.error).toBeNull();
+			expect(introspection.data).toEqual({ active: false });
+		},
+	);
+
+	it.each(invalidTokens)(
+		"rejects a JWT with %s at userinfo with invalid_token",
+		async (_, getToken) => {
+			let wwwAuthenticate = "";
+			const userinfo = await client.$fetch("/oauth2/userinfo", {
+				headers: { authorization: `Bearer ${await getToken()}` },
+				onError(context) {
+					wwwAuthenticate =
+						context.response.headers.get("WWW-Authenticate") ?? "";
+				},
+			});
+			expect(userinfo.error?.status).toBe(401);
+			expect(userinfo.error).toMatchObject({ error: "invalid_token" });
+			expect(wwwAuthenticate).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
+		},
+	);
+
+	it.each(invalidTokens)(
+		"answers a JWT with %s at revocation as for any unknown token",
+		async (_, getToken) => {
+			const revoke = async (token: string) =>
+				(
+					await client.oauth2.revoke(
+						{
+							client_id: oauthClient?.client_id,
+							client_secret: oauthClient?.client_secret,
+							token,
+						},
+						{ headers: formHeaders },
+					)
+				).error;
+			const error = await revoke(await getToken());
+			expect(error?.status).not.toBe(500);
+			expect(error).toEqual(await revoke("unknown-opaque-token"));
+		},
+	);
+});
+
+describe("oauth-provider - JWT-shaped tokens with disableJwtPlugin", async () => {
+	const { auth, headers, client } = await setup(null, {
+		disableJwtPlugin: true,
+	});
+
+	let oauthClient: OAuthClient | null = null;
+
+	beforeAll(async () => {
+		oauthClient = await createClient(auth, headers);
+	});
+
+	it.each([
+		["alg:none", async () => ALG_NONE_TOKEN],
+		["EdDSA signature", () => signWithUnknownKey("any-kid")],
+	])("answers a JWT with %s as an unknown token", async (_, getToken) => {
+		const token = await getToken();
 		const introspection = await client.oauth2.introspect(
 			{
 				client_id: oauthClient?.client_id,
 				client_secret: oauthClient?.client_secret,
-				token: await getToken(),
+				token,
 				token_type_hint: "access_token",
 			},
 			{ headers: formHeaders },
 		);
-		expect(introspection.error).toBeNull();
-		expect(introspection.data).toEqual({ active: false });
-	});
+		expect(introspection.data, "introspection").toEqual({ active: false });
 
-	it.each(
-		invalidTokens,
-	)("rejects a JWT with %s at userinfo with invalid_token", async (_, getToken) => {
-		let wwwAuthenticate = "";
 		const userinfo = await client.$fetch("/oauth2/userinfo", {
-			headers: { authorization: `Bearer ${await getToken()}` },
-			onError(context) {
-				wwwAuthenticate =
-					context.response.headers.get("WWW-Authenticate") ?? "";
-			},
+			headers: { authorization: `Bearer ${token}` },
 		});
-		expect(userinfo.error?.status).toBe(401);
-		expect(userinfo.error).toMatchObject({ error: "invalid_token" });
-		expect(wwwAuthenticate).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
-	});
+		expect(userinfo.error, "userinfo").toMatchObject({
+			status: 401,
+			error: "invalid_token",
+		});
 
-	it.each(
-		invalidTokens,
-	)("answers a JWT with %s at revocation as for any unknown token", async (_, getToken) => {
-		const revoke = async (token: string) =>
+		const revoke = async (value: string) =>
 			(
 				await client.oauth2.revoke(
 					{
 						client_id: oauthClient?.client_id,
 						client_secret: oauthClient?.client_secret,
-						token,
+						token: value,
 					},
 					{ headers: formHeaders },
 				)
 			).error;
-		const error = await revoke(await getToken());
-		expect(error?.status).not.toBe(500);
-		expect(error).toEqual(await revoke("unknown-opaque-token"));
+		expect(await revoke(token), "revocation").toEqual(
+			await revoke("unknown-opaque-token"),
+		);
 	});
 });
 

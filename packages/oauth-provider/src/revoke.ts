@@ -49,10 +49,15 @@ async function revokeJwtAccessToken(
 	opts: OAuthOptions<Scope[]>,
 	token: string,
 ) {
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin?.options;
+	// Without the JWT plugin, this server issues only opaque access tokens.
+	if (opts.disableJwtPlugin) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "JWT access tokens are disabled",
+			error: "invalid_request",
+		});
+	}
+	const jwtPlugin = getJwtPlugin(ctx.context);
+	const jwtPluginOptions = jwtPlugin.options;
 
 	// Verify signature + issuer first, then validate `aud` against the OAuth
 	// resource model. Do not pass jose's `audience` option here: access-token
@@ -62,7 +67,7 @@ async function revokeJwtAccessToken(
 		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
 			? jwtPluginOptions.jwks.remoteUrl
 			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+					const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
 					// @ts-expect-error response is a JSONWebKeySet but within the response field
 					return jwksRes?.response as JSONWebKeySet | undefined;
 				};
