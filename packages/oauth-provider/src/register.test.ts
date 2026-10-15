@@ -21,6 +21,7 @@ import type { OAuthClient } from "./types/oauth";
 describe("oauth register", async () => {
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
+	const fcBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [
@@ -697,6 +698,110 @@ describe("oauth register", async () => {
 			expect(response.error?.status).toBe(400);
 		}
 	});
+
+	it("round-trips frontchannel_logout_uri and frontchannel_logout_session_required", async () => {
+		const frontchannelUri = `${fcBaseUrl}/logout/frontchannel`;
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: frontchannelUri,
+			frontchannel_logout_session_required: true,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.frontchannel_logout_uri).toBe(frontchannelUri);
+		expect(response.data?.frontchannel_logout_session_required).toBe(true);
+	});
+
+	it("rejects frontchannel_logout_uri with a fragment", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel#section`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects frontchannel_logout_uri ending with a bare fragment delimiter", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel#`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects credentials in frontchannel_logout_uri", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri:
+				"https://user:password@rp.example.com/logout/frontchannel",
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	it("rejects frontchannel_logout_uri outside every registered redirect_uri origin", async () => {
+		const targets = [
+			"https://other.example.com/logout/frontchannel",
+			"http://rp.example.com/logout/frontchannel",
+			"https://rp.example.com:8443/logout/frontchannel",
+		];
+		for (const frontchannel_logout_uri of targets) {
+			const response = await serverClient.oauth2.register({
+				redirect_uris: [redirectUri],
+				frontchannel_logout_uri,
+			});
+			expect(response.error?.status).toBe(400);
+		}
+	});
+
+	it("allows a loopback frontchannel_logout_uri that matches a loopback redirect_uri", async () => {
+		// The browser loads this URI, not the OP, so the back-channel SSRF guard
+		// does not apply; local development works like it does for redirects.
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+		});
+		expect(response.data?.frontchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/frontchannel`,
+		);
+	});
+
+	it("rejects a loopback frontchannel_logout_uri on a port no redirect_uri uses", async () => {
+		// Both values are fixed at registration, so the runtime port variance
+		// RFC 8252 §7.3 allows for loopback redirects does not apply here.
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			frontchannel_logout_uri: "http://localhost:6000/logout/frontchannel",
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects a redirect_uris update that leaves frontchannel_logout_uri without a matching origin", async () => {
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel`,
+			},
+		});
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: created.client_id,
+					update: {
+						redirect_uris: ["https://other.example.com/callback"],
+					},
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+	});
 });
 
 describe("oauth register - disableJwtPlugin", async () => {
@@ -726,6 +831,22 @@ describe("oauth register - disableJwtPlugin", async () => {
 			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
 		});
 		expect(response.error?.status).toBe(400);
+	});
+
+	it("allows frontchannel_logout_uri when jwt plugin is disabled", async () => {
+		// Unlike back-channel logout, front-channel logout involves no signed
+		// Logout Token, so it has no dependency on the jwt plugin.
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			// http loopback redirects are native-only; web clients need https.
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.frontchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/frontchannel`,
+		);
 	});
 });
 

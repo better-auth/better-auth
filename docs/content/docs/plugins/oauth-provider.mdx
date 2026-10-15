@@ -264,12 +264,23 @@ To update an oauth client tied to a specific user or organization, use the `/oau
      */
     client_id: string,
     /**
-     * The fields to update
+     * The client fields to update, as described in the create section. Omitted fields keep their current values.
      */
-    update: OAuthClient,
+    update: {
+        /**
+         * Back-channel logout URI. `null` removes it and `backchannel_logout_session_required`.
+         */
+        backchannel_logout_uri?: string | null
+        /**
+         * Front-channel logout URI. `null` removes it and `frontchannel_logout_session_required`.
+         */
+        frontchannel_logout_uri?: string | null
+    },
   }
   ```
 </APIMethod>
+
+Omitted fields keep their current values. To remove a logout URI, send `null` for `backchannel_logout_uri` or `frontchannel_logout_uri`; the matching `*_session_required` flag is cleared too, and the client stops receiving those logout notifications.
 
 Restrictions on this endpoint:
 
@@ -546,7 +557,7 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
-Token endpoint errors follow the OAuth taxonomy: missing required request fields return `invalid_request`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
 
 #### DPoP sender-constrained tokens
 
@@ -703,7 +714,7 @@ The cached response is stored encrypted on the consumed refresh-token row and in
 
 #### Device code grant
 
-The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and RFC 8707 resource fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding, RFC 8707 resource, consent reference, authentication time, and authentication context (`acr`, `amr`) fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them through `/oauth2/authorize?user_code=…` and the same sign-in, account selection, post-login, and consent pages as an authorization request, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
 
 At `/device/code`, confidential clients authenticate with their registered method. A client using `client_secret_basic` may send an `Authorization: Basic ...` header and omit the body `client_id`; a client using `client_secret_post` sends `client_id` and `client_secret`; and a public client using `none` sends `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication parameters are treated as omitted regardless of order. Repeated non-empty client identification, base request, or authentication parameters and multiple authentication methods return `invalid_request`, while repeated `resource` parameters remain supported.
 
@@ -759,7 +770,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 ### Introspect Endpoint
 
-[RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
+[RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
@@ -784,7 +795,7 @@ The two formats differ in one way. An opaque token is recomputed on each call, s
 
 ### Revoke Endpoint
 
-[RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
+[RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
 What the endpoint does depends on the token type:
 
@@ -820,7 +831,7 @@ await auth.api.adminCreateOAuthClient({
 });
 ```
 
-Better Auth protects confirmation with origin and CSRF checks plus a short-lived, signed cookie. When a current session exists, the cookie is tied to it. Successful browser logout returns a logged-out page. Session deletion continues through the normal hooks, including Back-Channel Logout delivery to registered relying parties.
+Better Auth protects confirmation with origin and CSRF checks plus a short-lived, signed cookie. When a current session exists, the cookie is tied to it. Successful browser logout returns a logged-out page, or the [Front-Channel Logout](#front-channel-logout) page when registered relying parties must be notified in the browser. Session deletion continues through the normal hooks, including Back-Channel Logout delivery to registered relying parties.
 
 ### Back-Channel Logout
 
@@ -861,6 +872,55 @@ The Logout Token carries the §2.4 claims (`iss`, `aud`, `iat`, `exp`, `jti`, `e
 
 <Callout type="info">
   The OP advertises `backchannel_logout_supported: true` and `backchannel_logout_session_supported: true` on both `.well-known/openid-configuration` and `.well-known/oauth-authorization-server`. RPs use these fields during dynamic client registration to decide whether to register a `backchannel_logout_uri`.
+</Callout>
+
+### Front-Channel Logout
+
+[Front-Channel Logout](https://openid.net/specs/openid-connect-frontchannel-1_0.html) notifies Relying Parties through the user's browser. When a user logs out at `/oauth2/end-session`, the OP renders a page with one hidden iframe per Relying Party that holds tokens on the session. Each iframe loads that RP's `frontchannel_logout_uri`, so the RP can clear its own session cookies.
+
+<Callout type="warn">
+  The iframes are third-party content. Safari blocks third-party cookies, Firefox partitions them by default, and Chrome blocks them in Incognito and for users who turn them off, so an RP on a different site often cannot see its session cookie inside the iframe. Front-channel logout is reliable only when the OP and its Relying Parties share a registrable domain, such as `auth.example.com` and `app.example.com`. Use [Back-Channel Logout](#back-channel-logout) when RPs run on other sites or when logout must not depend on the browser.
+</Callout>
+
+To opt a client in, register a `frontchannel_logout_uri` on the same scheme, host, and port as one of its `redirect_uris`:
+
+```ts title="admin-create-oauth.ts"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/api/auth/callback"],
+    enable_end_session: true,
+    frontchannel_logout_uri: "https://app.example.com/logout/frontchannel", // [!code highlight]
+  }
+});
+```
+
+The OP loads the URI with `iss` and `sid` query parameters added to any query it already has, replacing a registered `iss` or `sid`. `sid` matches the `sid` claim in the ID Tokens issued to that client, so the RP can ignore requests that don't match its current session. The RP endpoint should clear its session state and respond with `Cache-Control: no-store`. Setting `frontchannel_logout_session_required: true` is accepted and stored, but changes nothing, because the OP always sends both parameters.
+
+The `frontchannel_logout_uri` is validated at registration and on every client update:
+
+* It must be an absolute `http` or `https` URL with no fragment and no credentials.
+* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback or private-network redirect URI is accepted, because the browser loads it, not the OP.
+* It does not require the `jwt` plugin, because nothing is signed.
+
+A URI that fails validation is rejected with `invalid_client_metadata`.
+
+#### When the iframes are rendered
+
+The page is rendered only when the session actually ends during a browser navigation to `/oauth2/end-session`, either with a verified `id_token_hint` or after the user confirms logout. If a `session.delete.before` hook vetoes the deletion, no Relying Party is notified. When no front-channel client holds tokens on the session, the endpoint redirects or shows the logged-out page as before.
+
+Front-channel logout does not run for:
+
+* `/sign-out` or admin session revocation, because no logout page is shown in the user's browser.
+* Fetch-style calls such as `authClient.oauth2.endSession()`, which keep the JSON response.
+* Session expiry, which does not delete the session when it happens.
+
+Back-Channel Logout still fires for the first two, because they delete the session. A client that registers both URIs receives both notifications, so make RP logout handlers idempotent.
+
+After the iframes load, or after 3 seconds if an RP doesn't respond, the page redirects to the verified `post_logout_redirect_uri`, or shows the logged-out message when there is none. Without JavaScript, the iframes still load and a meta refresh performs the redirect. The page keeps the same Content Security Policy as the other logout pages, extended only with `frame-src` for the RP origins and its own script, and sends `Referrer-Policy: no-referrer` so the `id_token_hint` in the URL never reaches an RP.
+
+<Callout type="info">
+  The OP advertises `frontchannel_logout_supported: true` and `frontchannel_logout_session_supported: true` on both `.well-known/openid-configuration` and `.well-known/oauth-authorization-server`, whether or not the `jwt` plugin is enabled.
 </Callout>
 
 ### UserInfo Endpoint
@@ -1105,7 +1165,7 @@ You don't need to handle anything from your side; when a new session is created,
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data.
 
-**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
+**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications. Device approvals from `oauthDeviceAuthorization()` always show the consent screen, and their query also carries `user_code`; show it so the user can check that it matches the code on their device.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1254,7 +1314,7 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`.
+The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`. Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
 
 `shouldRedirect` runs again on continuation with `isContinuation: true`. Use this value to check the selected organization without asking multi-organization users to select again. It is not proof of selection: check the current session and organization membership before returning `false`. Each new authorization request starts with `isContinuation: false`.
 
@@ -1511,6 +1571,72 @@ oauthProvider({
 
 The callback receives the grant type, user (undefined for `client_credentials`), scopes, parsed client metadata, and the verification value (only for `authorization_code` grants). It is called before any tokens are created, so throwing an error will not leave partially-applied state.
 
+### Authentication Context
+
+ID tokens carry `acr: "0"` (OIDC level 0) and no `amr` by default. To assert a stronger authentication class or the methods the user signed in with, set `authenticationContext` with both fields:
+
+* `acrValuesSupported` lists the `acr` values the provider may issue. Discovery advertises it as `acr_values_supported`. Include `"0"` if `resolve` can return no `acr`.
+* `resolve` returns the `acr` and `amr` the current session established. It runs once, when the user approves an authorization request or a device code with the `openid` scope, and receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`).
+
+Return only what the session proved. Better Auth does not record how a session signed in, so track it yourself. The example below marks sessions created by a completed two-factor challenge. Sessions created through a trusted device skip that challenge and stay unmarked.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt, twoFactor } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
+
+const MFA = "urn:example:acr:mfa";
+
+export const auth = betterAuth({
+  session: {
+    additionalFields: {
+      twoFactorVerified: { type: "boolean", defaultValue: false, input: false },
+    },
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        // Two-factor verification endpoints create the session only after the
+        // second factor succeeds.
+        before: async (session, ctx) => ({
+          data: {
+            ...session,
+            twoFactorVerified:
+              ctx?.path?.startsWith("/two-factor/verify-") ?? false,
+          },
+        }),
+      },
+    },
+  },
+  plugins: [
+    twoFactor(),
+    jwt(),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      authenticationContext: {
+        acrValuesSupported: ["0", MFA],
+        // Assert only what the session proved: the two-factor step, not how the
+        // first factor was done.
+        resolve: ({ session }) =>
+          session.twoFactorVerified === true
+            ? { acr: MFA, amr: ["mfa"] }
+            : { acr: "0" },
+      },
+    }),
+  ],
+});
+```
+
+How a request for a class is handled depends on whether it is essential:
+
+* An essential request (`claims={"id_token":{"acr":{"essential":true,"value":"…"}}}`) the session does not satisfy fails with `access_denied` at the client's redirect URI. If no value in `acrValuesSupported` could satisfy it, the request fails before sign-in.
+* A voluntary request (`acr_values`, or an `acr` claim without `essential`) never fails. The ID token reports the session's current `acr`.
+
+`resolve` must return an `acr` from `acrValuesSupported` (or omit it to use `"0"`), and `amr` must be an array of strings. Any other result fails the authorization with `server_error`. To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`; the client receives that error and its `error_description`. For a device code, the user sees the error on your verification page instead, and the code stays pending so the user can retry.
+
+The `acr` and `amr` are stored with the authorization code or device code and the refresh token, so ID tokens from later refreshes keep the values of the original authentication ([OIDC Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse)). They change only when the user authorizes again.
+
 ### Expirations
 
 Each token type and grant type can independently can set a default expiration.
@@ -1704,7 +1830,7 @@ Some clients (notably MCP clients) need to connect to your authorization server 
 
 ### Provider extensions
 
-OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, client registration metadata, client-id discovery sources, and interaction requests. An interaction request runs through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages, and is approved when the user accepts consent instead of issuing an authorization code; `oauthDeviceAuthorization()` uses one keyed by `user_code`. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
 
 ```ts title="custom-oauth-extension.ts"
 import type { BetterAuthPlugin } from "better-auth";
@@ -1745,9 +1871,35 @@ Extension contributions follow two disciplines:
 
 A claims contributor can add new claim names but never replaces an identity, authentication-context, reserved RFC 9068, or other provider-owned claim. To advertise the claim names an extension emits, set `advertisedMetadata.claims_supported`: the provider owns `claims_supported` and does not infer it from contributors.
 
+#### Client registration metadata
+
+An extension that defines its own client registration fields, such as CIBA's `backchannel_token_delivery_mode`, declares them in `clientMetadata`. The fields are stored in the client's `metadata`, and `validate` runs whenever a client is registered through `/oauth2/register` or a client metadata document, or created or updated by an admin, so a bad value is rejected with `invalid_client_metadata` at registration rather than when the client first uses it.
+
+```ts
+extendOAuthProvider(ctx, {
+  clientMetadata: {
+    fields: ["example_mode"],
+    validate: ({ metadata }) => {
+      if (metadata.example_mode !== undefined && metadata.example_mode !== "ok") {
+        throw new APIError("BAD_REQUEST", {
+          error: "invalid_client_metadata",
+          error_description: "example_mode must be ok",
+        });
+      }
+    },
+  },
+});
+```
+
+Dynamic registration ignores top-level fields it does not recognize (RFC 7591 §2). Fields an extension declares are the exception: a registrant sends them as top-level fields and the provider stores them in `metadata`. A registrant cannot set any other `metadata` key. An admin sets the same fields inside `metadata`. An extension cannot declare a core client field such as `redirect_uris` or a server-owned field such as `disabled`, `reference_id`, or `client_credentials_scopes`; the provider rejects these at setup. `validate` receives the core registration metadata after defaults (`client`) and the client's `metadata`; read extension fields from `metadata`.
+
+A [client metadata document](/docs/plugins/cimd) carries declared fields the same way, as top-level members of the document. The document owns those fields: each refresh replaces them in `metadata`, removing any it no longer declares, and keeps other `metadata` keys, such as ones an admin set.
+
 #### Provider capabilities outside a grant
 
 A grant handler receives a `provider` capability surface (`getClient`, `authenticateClient`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). A plugin that needs those from its own endpoints (a back-channel authorization endpoint, a polling endpoint) obtains the same object with `getOAuthProviderApi(ctx, opts, grantType?)`, so it can resolve a client or verify a token without reaching into provider internals. Use `validateAccessToken` for introspection-style flows that can handle inactive payloads, and `requireActiveAccessToken` for protected-resource endpoints that should reject inactive or unknown tokens with an OAuth bearer challenge. Pass the grant type to mint tokens away from the token endpoint; omit it for read-only use, in which case `issueTokens` throws rather than mint an unlabeled grant.
+
+When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to enforce that client credentials are not repeated or combined across authentication methods, so the endpoint must preserve a readable request after parsing the form.
 
 To sender-constrain an issued token (RFC 7800 `cnf`), pass `confirmation` to `issueTokens`, or return it from a `clientAuthentication` strategy. The provider stamps it as the access token's `cnf` and marks the response `token_type` accordingly. `cnf` is authorization-server-owned and cannot be set through a claim contributor.
 
@@ -1973,7 +2125,7 @@ The metadata endpoint can be customized so that the publicized scopes and claims
 
 All scopes inside the advertisedMetadata section MUST be listed in `scopes` otherwise initialization will fail.
 
-Better Auth advertises `acr_values_supported: ["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. Custom ACR policies are not currently supported. Because `acr_values` is voluntary, requests for other classes continue and the ID token reports `acr: "0"`. In an OpenID Connect request, an essential `claims.id_token.acr` request fails when its `value` or `values` does not include `"0"`.
+Better Auth advertises `acr_values_supported` from `authenticationContext.acrValuesSupported`, which defaults to `["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. See [Authentication Context](#authentication-context) to assert other classes.
 
 #### Scopes
 
@@ -2046,11 +2198,18 @@ const response = await auth.api.createOAuthClient({
 
 #### How It Works
 
-Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** (the host of the client's first redirect URI) and the user ID, keyed with `pairwiseSecret`. This means:
+Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** and the user ID, keyed with `pairwiseSecret`. Better Auth assigns the sector when the client is created:
 
-* Two clients with different redirect URI hosts always receive different `sub` values for the same user
-* Two clients sharing the same redirect URI host receive the **same** pairwise `sub` (per OIDC Core Section 8.1)
+* A client whose redirect URIs all use `https` gets the host of its first redirect URI, including any port. Clients on the same `https` host share a sector and receive the **same** pairwise `sub` (per OIDC Core Section 8.1).
+* Any other client, such as one with an authority-free private-use (`com.example.app:/callback`) or loopback (`http://localhost:8787/callback`) redirect URI, gets a sector of its own. Any app can register a custom scheme, and any local process can listen on a loopback port, so those redirect URIs do not identify the client.
+
+This means:
+
+* Two clients with different sectors always receive different `sub` values for the same user
 * The same client always receives the same `sub` for the same user (deterministic)
+* Changing a client's redirect URIs recomputes its sector, so moving to another host changes the `sub` its users receive
+
+Clients created before Better Auth stored sectors keep the sector of their first redirect URI host, so their users' `sub` does not change. Unrelated custom-scheme or loopback clients created before then can share a sector.
 
 Pairwise `sub` appears in:
 
@@ -2132,6 +2291,13 @@ export const oauthClientTableFields = [
     type: "string",
     description:
       'Subject identifier type for this client. Set to "pairwise" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.',
+    isOptional: true,
+  },
+  {
+    name: "sectorIdentifier",
+    type: "string",
+    description:
+      "Pairwise sector assigned by the server when the client is created. Empty for clients created before sectors were stored, which use the host of their first redirect URI.",
     isOptional: true,
   },
   {
@@ -2254,6 +2420,20 @@ export const oauthClientTableFields = [
     type: "boolean",
     description:
       "When true, the RP requires a `sid` claim in every Logout Token and user-scoped logouts are skipped",
+    isOptional: true,
+  },
+  {
+    name: "frontchannelLogoutUri",
+    type: "string",
+    description:
+      "RP URL rendered in a hidden iframe on the OP's logout page when the user's session ends (OIDC Front-Channel Logout 1.0)",
+    isOptional: true,
+  },
+  {
+    name: "frontchannelLogoutSessionRequired",
+    type: "boolean",
+    description:
+      "Whether the RP requires `iss` and `sid` on its front-channel logout URI. The OP always sends both, so this is stored for registration round-trips.",
     isOptional: true,
   },
   {
@@ -2407,6 +2587,20 @@ export const oauthRefreshTokenTableFields = [
     type: "Date",
     description:
       "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
+    isOptional: true,
+  },
+  {
+    name: "acr",
+    type: "string",
+    description:
+      "Authentication Context Class Reference asserted at authorization. Preserved across token rotation for refreshed ID tokens.",
+    isOptional: true,
+  },
+  {
+    name: "amr",
+    type: "string[]",
+    description:
+      "Authentication Methods References asserted at authorization. Preserved across token rotation for refreshed ID tokens.",
     isOptional: true,
   },
   {

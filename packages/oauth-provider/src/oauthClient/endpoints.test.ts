@@ -93,6 +93,50 @@ describe("oauthClient", async () => {
 		});
 	});
 
+	it("clears a logout URI and its session flag when an update sends null", async () => {
+		const created = await authClient.oauth2.createClient({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
+			backchannel_logout_session_required: true,
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+			frontchannel_logout_session_required: true,
+		});
+		expect(created.error).toBeNull();
+		const clientId = created.data!.client_id;
+
+		const clearedFrontchannel = await authClient.oauth2.updateClient({
+			client_id: clientId,
+			update: { frontchannel_logout_uri: null },
+		});
+		expect(clearedFrontchannel.error).toBeNull();
+		expect(clearedFrontchannel.data?.frontchannel_logout_uri).toBeUndefined();
+		expect(
+			clearedFrontchannel.data?.frontchannel_logout_session_required,
+		).toBeUndefined();
+		expect(clearedFrontchannel.data?.backchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/backchannel`,
+		);
+
+		const clearedBackchannel = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: clientId,
+				update: { backchannel_logout_uri: null },
+			},
+		});
+		expect(clearedBackchannel.backchannel_logout_uri).toBeUndefined();
+		expect(
+			clearedBackchannel.backchannel_logout_session_required,
+		).toBeUndefined();
+
+		const stored = await authClient.oauth2.getClient({
+			query: { client_id: clientId },
+		});
+		expect(stored.data?.backchannel_logout_uri).toBeUndefined();
+		expect(stored.data?.frontchannel_logout_uri).toBeUndefined();
+		await authClient.oauth2.deleteClient({ client_id: clientId });
+	});
+
 	it("round-trips application_type through admin create and update", async () => {
 		const created = await auth.api.adminCreateOAuthClient({
 			headers,

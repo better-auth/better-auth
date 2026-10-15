@@ -2,10 +2,16 @@ import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
+import {
+	isReservedOAuthClientMetadataField,
+	stripReservedOAuthClientMetadataExtensions,
+} from "./client-metadata";
 import type {
 	ClientDiscovery,
 	OAuthClaimExtensionInput,
 	OAuthClientAuthenticationStrategy,
+	OAuthClientMetadataExtensionInput,
+	OAuthClientRegistrationMetadata,
 	OAuthMetadataExtensionInput,
 	OAuthOptions,
 	OAuthProviderExtension,
@@ -87,6 +93,7 @@ interface ExtensionKeys {
 	authMethods: string[];
 	assertionTypes: string[];
 	clientDiscoveryIds: string[];
+	interactionRequestParameters: string[];
 }
 
 /**
@@ -129,7 +136,23 @@ function collectExtensionKeys(
 	for (const clientDiscoveryId of clientDiscoveryIds) {
 		assertNonEmptyExtensionValue("client discovery id", clientDiscoveryId);
 	}
-	return { grantTypes, authMethods, assertionTypes, clientDiscoveryIds };
+	for (const field of extension.clientMetadata?.fields ?? []) {
+		assertNonEmptyExtensionValue("client metadata field", field);
+		if (isReservedOAuthClientMetadataField(field)) {
+			throw new BetterAuthError(
+				`OAuth Provider extension client metadata field is reserved: ${field}`,
+			);
+		}
+	}
+	return {
+		grantTypes,
+		authMethods,
+		assertionTypes,
+		clientDiscoveryIds,
+		interactionRequestParameters: Object.keys(
+			extension.interactionRequests ?? {},
+		),
+	};
 }
 
 function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
@@ -170,6 +193,10 @@ export function validateOAuthProviderExtensions(
 	assertNoDuplicateAcrossExtensions(
 		"client discovery id",
 		keys.flatMap((k) => k.clientDiscoveryIds),
+	);
+	assertNoDuplicateAcrossExtensions(
+		"interaction request parameter",
+		keys.flatMap((k) => k.interactionRequestParameters),
 	);
 }
 
@@ -251,6 +278,35 @@ export function getSupportedGrantTypes(
 			...getExtensionGrantTypes(opts),
 		]),
 	);
+}
+
+/**
+ * Finds the interaction request a query identifies, such as a device approval
+ * keyed by `user_code`. Authorization requests, which carry `response_type` or
+ * a pushed `request_uri`, never match.
+ */
+export function getExtensionInteractionRequest(
+	opts: OAuthOptions<Scope[]>,
+	query: object,
+) {
+	const parameters = query as Record<string, unknown>;
+	if (
+		parameters.response_type !== undefined ||
+		parameters.request_uri !== undefined
+	) {
+		return undefined;
+	}
+	for (const extension of getOAuthProviderExtensions(opts)) {
+		for (const [parameter, handler] of Object.entries(
+			extension.interactionRequests ?? {},
+		)) {
+			const value = parameters[parameter];
+			if (typeof value === "string" && value) {
+				return { parameter, handler, value };
+			}
+		}
+	}
+	return undefined;
 }
 
 export function getExtensionGrantHandler(
@@ -397,6 +453,52 @@ export function collectExtensionUserInfoClaims(
 	return collectClaims(opts, (extension) =>
 		extension.claims?.userInfo?.(input),
 	);
+}
+
+/** Whether any extension declares client metadata fields or a validator. */
+export function hasExtensionClientMetadata(
+	opts: OAuthOptions<Scope[]>,
+): boolean {
+	return getOAuthProviderExtensions(opts).some(
+		(extension) => extension.clientMetadata,
+	);
+}
+
+/** Registration fields that extensions define, stored in the client's `metadata`. */
+export function getExtensionClientMetadataFields(
+	opts: OAuthOptions<Scope[]>,
+): Set<string> {
+	return new Set(
+		getOAuthProviderExtensions(opts).flatMap(
+			(extension) => extension.clientMetadata?.fields ?? [],
+		),
+	);
+}
+
+/**
+ * Runs every extension's client metadata validator, in registration order.
+ * Extensions read their fields from `metadata` only, so `metadata` and
+ * declared fields are removed from the client they receive; a metadata
+ * document carries declared fields at its top level.
+ */
+export async function validateExtensionClientMetadata(
+	opts: OAuthOptions<Scope[]>,
+	client: OAuthClientRegistrationMetadata,
+	metadata: Record<string, unknown> | undefined,
+): Promise<void> {
+	const { metadata: _metadata, ...coreClient } = client;
+	const extensionFields = getExtensionClientMetadataFields(opts);
+	const input: OAuthClientMetadataExtensionInput = {
+		client: Object.fromEntries(
+			Object.entries(coreClient).filter(
+				([field]) => !extensionFields.has(field),
+			),
+		) as Omit<OAuthClientRegistrationMetadata, "metadata">,
+		metadata: stripReservedOAuthClientMetadataExtensions(metadata) ?? {},
+	};
+	for (const extension of getOAuthProviderExtensions(opts)) {
+		await extension.clientMetadata?.validate?.(input);
+	}
 }
 
 /**

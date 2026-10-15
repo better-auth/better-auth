@@ -3,12 +3,17 @@ import {
 	signPrivateKeyJwtClientAssertion,
 } from "@better-auth/core/oauth2";
 import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
-import { oauthProvider } from "@better-auth/oauth-provider";
+import {
+	extendOAuthProvider,
+	oauthProvider,
+} from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
 import { toNodeHandler } from "better-auth/node";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { BetterAuthPlugin } from "better-auth/types";
+import { APIError } from "better-call";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import {
@@ -855,6 +860,7 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 				disabled: true,
 				skipConsent: true,
 				enableEndSession: true,
+				metadata: JSON.stringify({ note: "admin" }),
 			},
 		});
 
@@ -887,6 +893,13 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			enableEndSession: true,
 			clientCredentialsScopes: ["service:read"],
 		});
+		// Without extension fields, a refresh leaves metadata as the admin set it.
+		const refreshedMetadata: unknown = afterRefresh?.metadata;
+		expect(
+			typeof refreshedMetadata === "string"
+				? JSON.parse(refreshedMetadata)
+				: refreshedMetadata,
+		).toEqual({ note: "admin" });
 		expect(onClientRefreshed).toHaveBeenCalledWith(
 			expect.objectContaining({
 				client: expect.objectContaining({
@@ -904,6 +917,46 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 				context: expect.any(Object),
 			}),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11649
+	 */
+	it("keeps the pairwise sector a client was stored with across a refresh", async () => {
+		const sectorClientUrl =
+			"https://mcp-client-refresh.example.com/sector-client.json";
+		stubMetadataFetch(sectorClientUrl, {
+			...metadataDocument,
+			client_id: sectorClientUrl,
+		});
+		const { headers } = await signInWithTestUser();
+		const ctx = await authorizationServer.$context;
+		const authorize = () =>
+			customFetchImpl(
+				buildAuthorizeUrl(authServerBaseUrl, sectorClientUrl, redirectUri),
+				{ headers },
+			);
+		const sectorOf = async () =>
+			(
+				await ctx.adapter.findOne<SchemaClient<Scope[]>>({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: sectorClientUrl }],
+				})
+			)?.sectorIdentifier ?? null;
+
+		await authorize();
+		expect(await sectorOf()).toBe(`client/${sectorClientUrl}`);
+		await authorize();
+		expect(await sectorOf()).toBe(`client/${sectorClientUrl}`);
+
+		// A client stored before sectors were recorded keeps the host rule.
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: sectorClientUrl }],
+			update: { sectorIdentifier: null },
+		});
+		await authorize();
+		expect(await sectorOf()).toBeNull();
 	});
 });
 
@@ -1026,5 +1079,283 @@ describe("CIMD - metadata document URL policy", async () => {
 			},
 		);
 		expect(redirect).toContain("/consent");
+	});
+});
+
+describe("CIMD - extension client metadata", async () => {
+	const authServerBaseUrl = "http://localhost:3104";
+	const clientMetadataUrl =
+		"https://mcp-client-extension.example.com/client-metadata.json";
+	const redirectUri = "http://localhost:5104/callback";
+	const metadataDocument = {
+		client_id: clientMetadataUrl,
+		client_name: "Extension Metadata Client",
+		redirect_uris: [redirectUri],
+		token_endpoint_auth_method: "none",
+		application_type: "native",
+		grant_types: ["authorization_code"],
+		response_types: ["code"],
+	};
+
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			cimd({
+				metadataRevalidationInterval: 0,
+				metadataFetchPolicy: { minimumFetchInterval: 0 },
+				fetchClientMetadataResource: (input, init) =>
+					globalThis.fetch(input, init),
+			}),
+			{
+				id: "client-metadata-extension",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientMetadata: {
+							fields: ["example_mode"],
+							validate: ({ metadata }) => {
+								const mode = metadata.example_mode;
+								if (mode !== undefined && mode !== "ok" && mode !== "alt") {
+									throw new APIError("BAD_REQUEST", {
+										error: "invalid_client_metadata",
+										error_description: "example_mode must be ok or alt",
+									});
+								}
+								// An admin-owned key the declared field must agree with.
+								const allowed = metadata.allowed_modes;
+								if (
+									Array.isArray(allowed) &&
+									mode !== undefined &&
+									!allowed.includes(mode)
+								) {
+									throw new APIError("BAD_REQUEST", {
+										error: "invalid_client_metadata",
+										error_description: "example_mode is not in allowed_modes",
+									});
+								}
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	async function authorize(): Promise<string> {
+		let redirect = "";
+		await authedClient.$fetch(
+			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
+			{
+				method: "GET",
+				onError(ctx) {
+					redirect = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		return redirect;
+	}
+
+	async function storedMetadata() {
+		const ctx = await authorizationServer.$context;
+		const client = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientMetadataUrl }],
+		});
+		const metadata: unknown = client?.metadata;
+		return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+	}
+
+	it("stores declared fields from the document and replaces them on refresh", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "ok",
+			unknown_field: "ignored",
+		});
+		expect(await authorize()).toContain("/consent");
+		expect(await storedMetadata()).toEqual({ example_mode: "ok" });
+
+		// An admin-set key survives a refresh; the document owns example_mode.
+		const ctx = await authorizationServer.$context;
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientMetadataUrl }],
+			update: {
+				metadata: JSON.stringify({ example_mode: "ok", note: "admin" }),
+			},
+		});
+		vi.unstubAllGlobals();
+		stubMetadataFetch(clientMetadataUrl, metadataDocument);
+		expect(await authorize()).toContain("/consent");
+		expect(await storedMetadata()).toEqual({ note: "admin" });
+	});
+
+	it("keeps an admin change made while the refresh fetch is in flight", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "ok",
+		});
+		expect(await authorize()).toContain("/consent");
+
+		// The refresh reads the client before fetching; an admin writes during
+		// the fetch, and the refresh must not restore the value it read earlier.
+		const ctx = await authorizationServer.$context;
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested !== clientMetadataUrl) return originalFetch(input, init);
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientMetadataUrl }],
+					update: {
+						metadata: JSON.stringify({
+							example_mode: "ok",
+							note: "during fetch",
+						}),
+					},
+				});
+				return new Response(JSON.stringify(metadataDocument), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
+			}),
+		);
+		expect(await authorize()).toContain("/consent");
+		expect(await storedMetadata()).toEqual({ note: "during fetch" });
+	});
+
+	it("accepts a refresh that only the current row makes valid", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "ok",
+		});
+		expect(await authorize()).toContain("/consent");
+		const ctx = await authorizationServer.$context;
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientMetadataUrl }],
+			update: {
+				metadata: JSON.stringify({ example_mode: "ok", allowed_modes: ["ok"] }),
+			},
+		});
+
+		// During the fetch an admin widens allowed_modes while the document
+		// switches to "alt". The row read before the fetch would reject "alt".
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested !== clientMetadataUrl) return originalFetch(input, init);
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientMetadataUrl }],
+					update: {
+						metadata: JSON.stringify({
+							example_mode: "ok",
+							allowed_modes: ["ok", "alt"],
+						}),
+					},
+				});
+				return new Response(
+					JSON.stringify({ ...metadataDocument, example_mode: "alt" }),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				);
+			}),
+		);
+		expect(await authorize()).toContain("/consent");
+		expect(await storedMetadata()).toEqual({
+			example_mode: "alt",
+			allowed_modes: ["ok", "alt"],
+		});
+	});
+
+	it("validates the merged metadata a refresh saves, not the earlier read", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "ok",
+		});
+		expect(await authorize()).toContain("/consent");
+
+		// During the fetch an admin narrows allowed_modes while the document
+		// switches to "alt". Each change is valid alone; together they are not.
+		const ctx = await authorizationServer.$context;
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested !== clientMetadataUrl) return originalFetch(input, init);
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientMetadataUrl }],
+					update: {
+						metadata: JSON.stringify({
+							example_mode: "ok",
+							allowed_modes: ["ok"],
+						}),
+					},
+				});
+				return new Response(
+					JSON.stringify({ ...metadataDocument, example_mode: "alt" }),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				);
+			}),
+		);
+		const response = await authedClient.$fetch(
+			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
+			{ method: "GET" },
+		);
+		expect(JSON.stringify(response)).toContain("invalid_client_metadata");
+		expect(await storedMetadata()).toEqual({
+			example_mode: "ok",
+			allowed_modes: ["ok"],
+		});
+	});
+
+	it("rejects a document with an invalid declared field", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "bad",
+		});
+		const response = await authedClient.$fetch<{ error?: string }>(
+			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
+			{ method: "GET" },
+		);
+		expect(JSON.stringify(response)).toContain("invalid_client_metadata");
 	});
 });

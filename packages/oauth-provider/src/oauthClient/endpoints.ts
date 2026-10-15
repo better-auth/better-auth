@@ -13,7 +13,13 @@ import type {
 	Scope,
 } from "../types";
 import type { GrantType } from "../types/oauth";
-import { assertNotTrustedClient, getClient, storeClientSecret } from "../utils";
+import {
+	assertNotTrustedClient,
+	deriveSectorIdentifier,
+	getClient,
+	parseClientMetadata,
+	storeClientSecret,
+} from "../utils";
 import { verifyClientAssertion } from "../utils/client-assertion";
 import {
 	normalizeClientCredentialsScopes,
@@ -23,10 +29,18 @@ import { assertClientPrivileges } from "./privileges";
 
 type OAuthClientUpdate = Omit<
 	OAuthClientRegistrationMetadata,
-	"application_type" | "client_id" | "resources"
+	| "application_type"
+	| "client_id"
+	| "resources"
+	| "backchannel_logout_uri"
+	| "frontchannel_logout_uri"
 > & {
 	application_type?: "web" | "native";
 	client_credentials_scopes?: string[];
+	/** `null` removes the URI and `backchannel_logout_session_required`. */
+	backchannel_logout_uri?: string | null;
+	/** `null` removes the URI and `frontchannel_logout_session_required`. */
+	frontchannel_logout_uri?: string | null;
 };
 
 export async function getClientEndpoint(
@@ -239,8 +253,27 @@ export async function updateClientEndpoint(
 		});
 	}
 
-	const { client_credentials_scopes: rawClientCredentialsScopes, ...updates } =
-		ctx.body.update;
+	const {
+		client_credentials_scopes: rawClientCredentialsScopes,
+		backchannel_logout_uri: backchannelLogoutUri,
+		frontchannel_logout_uri: frontchannelLogoutUri,
+		...otherUpdates
+	} = ctx.body.update;
+	const clearsBackchannelLogout = backchannelLogoutUri === null;
+	const clearsFrontchannelLogout = frontchannelLogoutUri === null;
+	const updates = {
+		...otherUpdates,
+		...(backchannelLogoutUri != null
+			? { backchannel_logout_uri: backchannelLogoutUri }
+			: {}),
+		...(frontchannelLogoutUri != null
+			? { frontchannel_logout_uri: frontchannelLogoutUri }
+			: {}),
+	};
+	const hasUpdates =
+		Object.keys(updates).length > 0 ||
+		clearsBackchannelLogout ||
+		clearsFrontchannelLogout;
 	const ownsClient = client.userId
 		? client.userId === session.user.id
 		: client.referenceId && opts.clientReference
@@ -250,7 +283,7 @@ export async function updateClientEndpoint(
 		!ownsClient &&
 		settings?.admin &&
 		rawClientCredentialsScopes !== undefined &&
-		Object.keys(updates).length === 0;
+		!hasUpdates;
 	if (!ownsClient && !isCrossOwnerScopeConfiguration) {
 		throw new APIError("UNAUTHORIZED");
 	}
@@ -264,10 +297,7 @@ export async function updateClientEndpoint(
 		);
 	}
 
-	if (
-		Object.keys(updates).length === 0 &&
-		rawClientCredentialsScopes === undefined
-	) {
+	if (!hasUpdates && rawClientCredentialsScopes === undefined) {
 		// Never return @internal client_secret
 		const res = schemaToOAuth(client);
 		res.client_secret = undefined;
@@ -307,16 +337,25 @@ export async function updateClientEndpoint(
 		}
 	}
 
-	await checkOAuthClient(
-		{
-			...schemaToOAuth(client),
-			...updates,
-		},
-		opts,
-		{
-			ctx,
-		},
-	);
+	const updatedMetadata = {
+		// Converted without its metadata, which schemaToOAuth would spread onto
+		// the client; the effective metadata is passed explicitly below.
+		...schemaToOAuth({ ...client, metadata: undefined }),
+		...updates,
+		// An update's `metadata` replaces the stored object.
+		metadata: updates.metadata ?? parseClientMetadata(client.metadata),
+	};
+	if (clearsBackchannelLogout) {
+		updatedMetadata.backchannel_logout_uri = undefined;
+		updatedMetadata.backchannel_logout_session_required = undefined;
+	}
+	if (clearsFrontchannelLogout) {
+		updatedMetadata.frontchannel_logout_uri = undefined;
+		updatedMetadata.frontchannel_logout_session_required = undefined;
+	}
+	await checkOAuthClient(updatedMetadata, opts, {
+		ctx,
+	});
 
 	// Clear obsolete auth material when switching auth methods
 	const schemaUpdates: Record<string, unknown> = {
@@ -324,6 +363,27 @@ export async function updateClientEndpoint(
 	};
 	// 0 means the secret never expires, so clear any stored expiry
 	if (updates.client_secret_expires_at === 0) schemaUpdates.expiresAt = null;
+	// A client created before sectors were stored keeps deriving its sector
+	// from its redirect URI host, so only recompute a stored sector.
+	if (updates.redirect_uris && client.sectorIdentifier) {
+		schemaUpdates.sectorIdentifier = deriveSectorIdentifier(
+			client.clientId,
+			updates.redirect_uris,
+		);
+	}
+	if (clearsBackchannelLogout) {
+		schemaUpdates.backchannelLogoutUri = null;
+		schemaUpdates.backchannelLogoutSessionRequired = null;
+	}
+	if (clearsFrontchannelLogout) {
+		schemaUpdates.frontchannelLogoutUri = null;
+		schemaUpdates.frontchannelLogoutSessionRequired = null;
+	}
+	// oauthToSchema drops a replacement that is empty after stripping reserved
+	// keys; clear the column so storage matches what was validated.
+	if (updates.metadata !== undefined && schemaUpdates.metadata === undefined) {
+		schemaUpdates.metadata = null;
+	}
 	if (
 		!finalGrantTypes.includes("client_credentials") ||
 		finalTokenEndpointAuthMethod === "none"

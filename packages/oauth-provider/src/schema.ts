@@ -35,6 +35,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			sectorIdentifier: {
+				type: "string",
+				required: false,
+			},
 			scopes: {
 				type: "string[]",
 				required: false,
@@ -118,6 +122,14 @@ export const schema = {
 				required: false,
 			},
 			backchannelLogoutSessionRequired: {
+				type: "boolean",
+				required: false,
+			},
+			frontchannelLogoutUri: {
+				type: "string",
+				required: false,
+			},
+			frontchannelLogoutSessionRequired: {
 				type: "boolean",
 				required: false,
 			},
@@ -385,6 +397,14 @@ export const schema = {
 			},
 			authTime: {
 				type: "date",
+				required: false,
+			},
+			acr: {
+				type: "string",
+				required: false,
+			},
+			amr: {
+				type: "string[]",
 				required: false,
 			},
 			// RFC 7800 `cnf` confirmation that sender-constrains this refresh-token

@@ -239,6 +239,27 @@ export interface AuthServerMetadata {
 	 * @see https://datatracker.ietf.org/doc/html/rfc9449
 	 */
 	dpop_signing_alg_values_supported?: JWSAlgorithms[];
+	/**
+	 * Boolean value specifying whether the OP supports HTTP-based (front-channel)
+	 * logout, with true indicating support.
+	 *
+	 * Registered in the "OAuth Authorization Server Metadata" IANA registry
+	 * under OpenID Connect Front-Channel Logout 1.0, so this may appear at both
+	 * `.well-known/oauth-authorization-server` and `.well-known/openid-configuration`.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout
+	 */
+	frontchannel_logout_supported?: boolean;
+	/**
+	 * Boolean value specifying whether the OP can pass `iss` (issuer) and `sid`
+	 * (session ID) query parameters to identify the RP session with the OP when
+	 * the `frontchannel_logout_uri` is used.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#OPLogout
+	 */
+	frontchannel_logout_session_supported?: boolean;
 }
 
 /**
@@ -383,6 +404,25 @@ export interface OAuthClient {
 	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#RPMetadata
 	 */
 	backchannel_logout_session_required?: boolean;
+	/**
+	 * RP URL that the OP renders in a hidden iframe on its logout page so the
+	 * RP can log itself out when the end-user's OP session ends at
+	 * `/oauth2/end-session`. Must share the scheme, host, and port of one of
+	 * the client's `redirect_uris`.
+	 *
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	frontchannel_logout_uri?: string;
+	/**
+	 * When true, the RP requires `iss` and `sid` query parameters on its
+	 * `frontchannel_logout_uri`. The OP includes both whenever it notifies a
+	 * front-channel client, so this flag is stored but does not change
+	 * delivery.
+	 *
+	 * @default false
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	frontchannel_logout_session_required?: boolean;
 	token_endpoint_auth_method?: TokenEndpointAuthMethod;
 	grant_types?: GrantType[];
 	response_types?: "code"[];

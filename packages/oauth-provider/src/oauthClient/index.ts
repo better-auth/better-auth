@@ -42,6 +42,8 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				backchannel_logout_uri: SafeUrlSchema.optional(),
 				backchannel_logout_session_required: z.boolean().optional(),
+				frontchannel_logout_uri: SafeUrlSchema.optional(),
+				frontchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
 				application_type: z.enum(["web", "native"]).optional(),
 				jwks: clientJwksSchema.optional(),
@@ -248,6 +250,8 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				backchannel_logout_uri: SafeUrlSchema.optional(),
 				backchannel_logout_session_required: z.boolean().optional(),
+				frontchannel_logout_uri: SafeUrlSchema.optional(),
+				frontchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
 				application_type: z.enum(["web", "native"]).optional(),
 				jwks: clientJwksSchema.optional(),
@@ -510,8 +514,11 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-					backchannel_logout_uri: SafeUrlSchema.optional(),
+					// `null` removes the URI and its session_required flag.
+					backchannel_logout_uri: SafeUrlSchema.nullable().optional(),
 					backchannel_logout_session_required: z.boolean().optional(),
+					frontchannel_logout_uri: SafeUrlSchema.nullable().optional(),
+					frontchannel_logout_session_required: z.boolean().optional(),
 					// token_endpoint_auth_method is immutable because changing the
 					// registered authentication method also changes credential handling.
 					application_type: z.enum(["web", "native"]).optional(),
@@ -565,8 +572,11 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-					backchannel_logout_uri: SafeUrlSchema.optional(),
+					// `null` removes the URI and its session_required flag.
+					backchannel_logout_uri: SafeUrlSchema.nullable().optional(),
 					backchannel_logout_session_required: z.boolean().optional(),
+					frontchannel_logout_uri: SafeUrlSchema.nullable().optional(),
+					frontchannel_logout_session_required: z.boolean().optional(),
 					// token_endpoint_auth_method is immutable because changing the
 					// registered authentication method also changes credential handling.
 					application_type: z.enum(["web", "native"]).optional(),

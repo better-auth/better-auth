@@ -1032,3 +1032,37 @@ describe("validateCimdMetadata", () => {
 		expect(result.error).toContain("logo_uri");
 	});
 });
+
+describe("validateCimdMetadata extension fields", () => {
+	const url = "https://client.example.com/metadata.json";
+	const field = "backchannel_client_notification_endpoint";
+	const options = {
+		extensionFields: new Set([field]),
+		originBoundFields: [field],
+	};
+
+	it("keeps a declared field and ignores other unknown members", () => {
+		const result = validateCimdMetadata(
+			url,
+			validMetadata(url, {
+				[field]: "https://client.example.com/ciba",
+				unknown_field: "ignored",
+			}),
+			options,
+		);
+		expect(result.valid).toBe(true);
+		expect(result.valid && result.metadata).toMatchObject({
+			[field]: "https://client.example.com/ciba",
+		});
+		expect(result.valid && "unknown_field" in result.metadata).toBe(false);
+	});
+
+	it("applies origin-bound rules to a declared field", () => {
+		const result = validateCimdMetadata(
+			url,
+			validMetadata(url, { [field]: "https://attacker.example.net/ciba" }),
+			options,
+		);
+		expect(result.valid).toBe(false);
+	});
+});
