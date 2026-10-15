@@ -265,6 +265,51 @@ describe("prisma-adapter", () => {
 		});
 	});
 
+	it("escapes regex characters in values the MongoDB connector matches as regex", async () => {
+		const findMany = vi.fn().mockResolvedValue([]);
+		const createAdapter = (provider: "mongodb" | "postgresql") =>
+			prismaAdapter({ $transaction: vi.fn(), user: { findMany } } as never, {
+				provider,
+			})({} as BetterAuthOptions);
+		const where = [
+			{ field: "name", value: ".*", operator: "contains" as const },
+			{ field: "name", value: "a.c", operator: "starts_with" as const },
+			{ field: "name", value: "(x)", operator: "ends_with" as const },
+			{ field: "email", value: "a.c@x.io", mode: "insensitive" as const },
+			{
+				field: "email",
+				value: ["a+b@x.io"],
+				operator: "in" as const,
+				mode: "insensitive" as const,
+			},
+			{ field: "email", value: "a.c@x.io" },
+		];
+
+		await createAdapter("mongodb").findMany({ model: "user", where });
+		expect(findMany.mock.calls[0]![0].where).toEqual({
+			AND: [
+				{ name: { contains: "\\.\\*" } },
+				{ name: { startsWith: "a\\.c" } },
+				{ name: { endsWith: "\\(x\\)" } },
+				{ email: { equals: "a\\.c@x\\.io", mode: "insensitive" } },
+				{ email: { in: ["a\\+b@x\\.io"], mode: "insensitive" } },
+				{ email: { equals: "a.c@x.io" } },
+			],
+		});
+
+		await createAdapter("postgresql").findMany({ model: "user", where });
+		expect(findMany.mock.calls[1]![0].where).toEqual({
+			AND: [
+				{ name: { contains: ".*" } },
+				{ name: { startsWith: "a.c" } },
+				{ name: { endsWith: "(x)" } },
+				{ email: { equals: "a.c@x.io", mode: "insensitive" } },
+				{ email: { in: ["a+b@x.io"], mode: "insensitive" } },
+				{ email: { equals: "a.c@x.io" } },
+			],
+		});
+	});
+
 	it("should use update (not updateMany) for insensitive mode on unsupported providers", async () => {
 		const update = vi.fn().mockResolvedValue({
 			id: "user-id",

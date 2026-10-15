@@ -278,6 +278,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					const prismaMode =
 						isInsensitive && providerSupportsMode ? "insensitive" : undefined;
 					const modeFilter = prismaMode ? { mode: prismaMode } : {};
+					// Prisma's MongoDB connector builds `$regexMatch` patterns from these values unescaped.
+					const usesRegex =
+						config.provider === "mongodb" &&
+						(prismaMode !== undefined ||
+							w.operator === "contains" ||
+							w.operator === "starts_with" ||
+							w.operator === "ends_with");
+					const toPrismaValue = (v: unknown) =>
+						usesRegex && typeof v === "string"
+							? v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+							: v;
 
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
 					if (w.operator === "ne" && w.value === null) {
@@ -306,20 +317,32 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							}
 						}
 						const prismaOp = operatorToPrismaOperator(w.operator);
-						return { [fieldName]: { [prismaOp]: filtered, ...modeFilter } };
+						return {
+							[fieldName]: {
+								[prismaOp]: filtered.map(toPrismaValue),
+								...modeFilter,
+							},
+						};
 					}
 					if (w.operator === "eq" || !w.operator) {
-						return { [fieldName]: { equals: w.value, ...modeFilter } };
+						return {
+							[fieldName]: { equals: toPrismaValue(w.value), ...modeFilter },
+						};
 					}
 
 					if (w.operator === "ne") {
 						return {
-							[fieldName]: { not: { equals: w.value }, ...modeFilter },
+							[fieldName]: {
+								not: { equals: toPrismaValue(w.value) },
+								...modeFilter,
+							},
 						};
 					}
 
 					const prismaOp = operatorToPrismaOperator(w.operator);
-					return { [fieldName]: { [prismaOp]: w.value, ...modeFilter } };
+					return {
+						[fieldName]: { [prismaOp]: toPrismaValue(w.value), ...modeFilter },
+					};
 				};
 
 				// Special handling for update actions: extract AND conditions with eq operator to root level
