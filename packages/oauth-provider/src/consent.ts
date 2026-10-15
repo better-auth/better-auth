@@ -93,7 +93,16 @@ export async function consentEndpoint<Result>(
 				redirect: true,
 				url: await interaction.handler
 					.deny({ ctx, value: interaction.value, userId: session?.user.id! })
-					.catch((error) => getAPIErrorURL(ctx, error)),
+					.catch((error) =>
+						getAPIErrorURL(
+							ctx,
+							error,
+							interaction.handler.errorPage?.({
+								ctx,
+								value: interaction.value,
+							}),
+						),
+					),
 			};
 		}
 		return {

@@ -246,9 +246,11 @@ window.location.href = `${authBaseURL}/oauth2/authorize?user_code=${encodeURICom
 
 The provider reads only `user_code` from this request and takes the client, scopes, and resources from the stored device code. It then:
 
-1. Sends the user to `loginPage` when they are not signed in, then runs `selectAccount` and `postLogin` as it does for an authorization request.
-2. Always shows `consentPage`, even for a client with `skip_consent` or an existing consent, because the user must confirm the device ([RFC 8628 §5.4](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)). The consent page receives `user_code` in its query. Show it so the user can check that it matches the code on their device.
+1. Sends the user to `loginPage` when they are not signed in, before it reads the code, then runs `selectAccount` and `postLogin` as it does for an authorization request.
+2. Always shows `consentPage`, even for a client with `skip_consent` or an existing consent, because the user must confirm the device ([RFC 8628 §5.4](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)). The consent page receives `user_code` in its query. Show it next to the client, the scopes, and the organization the device will act for, so the user can check that it matches the code on their device.
 3. Binds the device code to the signed-in user, records the consent, and sends the user to your verification page with `user_code` and `status=approved`, or `status=denied` when they deny on the consent page.
+
+When the code is unknown, expired, or already used, the user returns to your verification page with `user_code`, `error`, and `error_description` instead, so the page can show the problem and keep the code in the input for correction.
 
 `/device`, `/device/approve`, and `/device/deny` refuse OAuth device codes with `invalid_request`, and the description names the `/oauth2/authorize` URL to use. Standalone device codes keep using those endpoints.
 

@@ -2080,7 +2080,7 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		expect(consent.searchParams.get("user_code")).toBe(user_code);
 	});
 
-	it("sends a deny on an already approved code to the error page", async () => {
+	it("returns a deny on an already approved code to the device page", async () => {
 		resolveReference = () => "org_1";
 		const { user_code, headers } = await startDevice();
 		const consent = await openDeviceConsent(client, user_code, headers);
@@ -2095,6 +2095,8 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			headers,
 			body: { accept: false, oauth_query: consent.toString() },
 		});
+		expect(new URL(denied).pathname).toBe("/device");
+		expect(new URL(denied).searchParams.get("user_code")).toBe(user_code);
 		expect(new URL(denied).searchParams.get("error")).toBe("invalid_request");
 	});
 
@@ -2152,8 +2154,11 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		const { user_code, headers } = await startDevice();
 		vi.useFakeTimers({ toFake: ["Date"] });
 		try {
-			const landing = await answerDeviceConsent(client, user_code, headers);
-			expect(new URL(landing).searchParams.get("error")).toBe("expired_token");
+			const landing = new URL(
+				await answerDeviceConsent(client, user_code, headers),
+			);
+			expect(landing.pathname).toBe("/device");
+			expect(landing.searchParams.get("error")).toBe("expired_token");
 		} finally {
 			vi.useRealTimers();
 		}

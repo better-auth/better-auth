@@ -223,15 +223,17 @@ function deviceApprovalRequest(
 		}
 		return { ...deviceCode, oauthClientId: deviceCode.oauthClientId };
 	}
-	// Sends the user back to the device verification page with the outcome.
+	// The device verification page, which also reports the outcome or error.
+	const verificationPage = (ctx: GenericEndpointContext, userCode: string) =>
+		buildVerificationUris(verificationUri, ctx.context.baseURL, userCode)
+			.verificationUriComplete;
 	const completionURL = (
 		ctx: GenericEndpointContext,
 		userCode: string,
 		status: "approved" | "denied",
 	) =>
 		appendQueryParams(
-			buildVerificationUris(verificationUri, ctx.context.baseURL, userCode)
-				.verificationUriComplete,
+			verificationPage(ctx, userCode),
 			new URLSearchParams({ status }),
 		);
 
@@ -283,6 +285,7 @@ function deviceApprovalRequest(
 			});
 			return completionURL(ctx, deviceCode.userCode, "denied");
 		},
+		errorPage: ({ ctx, value }) => verificationPage(ctx, value),
 	};
 }
 

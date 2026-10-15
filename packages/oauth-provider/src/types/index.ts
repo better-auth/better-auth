@@ -552,6 +552,12 @@ export interface OAuthInteractionRequestHandler {
 		value: string;
 		userId: string;
 	}) => Promise<string>;
+	/**
+	 * Where to send the user when the request cannot be loaded, approved, or
+	 * denied, such as a page where they can correct it. The provider appends
+	 * `error` and `error_description`. Defaults to the provider error page.
+	 */
+	errorPage?: (input: { ctx: GenericEndpointContext; value: string }) => string;
 }
 
 /**

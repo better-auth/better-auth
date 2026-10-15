@@ -183,18 +183,23 @@ function redirectWithPromptNoneError(
 }
 
 /**
- * Returns the provider error page URL for an `APIError`; rethrows anything else.
+ * Returns the URL that reports an `APIError`: `errorPage` when given, otherwise
+ * the provider error page. Rethrows anything else.
  */
-export function getAPIErrorURL(ctx: GenericEndpointContext, error: unknown) {
+export function getAPIErrorURL(
+	ctx: GenericEndpointContext,
+	error: unknown,
+	errorPage?: string,
+) {
 	if (!(error instanceof APIError)) throw error;
 	const body = error.body as
 		| { error?: OAuthErrorCode; error_description?: string }
 		| undefined;
-	return getErrorURL(
-		ctx,
-		body?.error ?? "invalid_request",
-		body?.error_description ?? "invalid request",
-	);
+	const code = body?.error ?? "invalid_request";
+	const description = body?.error_description ?? "invalid request";
+	return errorPage
+		? formatErrorURL(errorPage, code, description)
+		: getErrorURL(ctx, code, description);
 }
 
 /**
@@ -478,7 +483,12 @@ export async function authorizeEndpoint(
 			ctx.query = { [interaction.parameter]: interaction.value };
 			return redirectWithPromptCode(ctx, opts, "login");
 		}
-		const toErrorURL = (error: unknown) => getAPIErrorURL(ctx, error);
+		const errorPage = interaction.handler.errorPage?.({
+			ctx,
+			value: interaction.value,
+		});
+		const toErrorURL = (error: unknown) =>
+			getAPIErrorURL(ctx, error, errorPage);
 		let interactionRequest: OAuthInteractionRequest;
 		try {
 			interactionRequest = await interaction.handler.load({
