@@ -1025,7 +1025,18 @@ describe("verifyBearerToken", () => {
 			}
 			await expect(withoutKid).resolves.toMatchObject({ sub: "user-123" });
 			replacementFetch.resolve({ keys: [rotated.publicJWK] });
-			await settled;
+			const [firstResult, secondResult] = await settled;
+			// The first verification joined the late fetch, so it fails when that
+			// set lacks its key; the second joined the replacement.
+			expect(firstResult).toMatchObject(
+				lateHasKey
+					? { status: "fulfilled" }
+					: {
+							status: "rejected",
+							reason: { code: "ERR_JWKS_NO_MATCHING_KEY" },
+						},
+			);
+			expect(secondResult).toMatchObject({ status: "fulfilled" });
 		},
 		10_000,
 	);
