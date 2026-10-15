@@ -10,24 +10,25 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
+/** Profile data from a Cognito ID token or userinfo response. */
 export interface CognitoProfile {
 	sub: string;
-	email: string;
-	email_verified: boolean;
-	name: string;
+	email?: string | undefined;
+	email_verified?: boolean | "true" | "false" | undefined;
+	name?: string | undefined;
 	given_name?: string | undefined;
 	family_name?: string | undefined;
 	picture?: string | undefined;
 	username?: string | undefined;
 	locale?: string | undefined;
 	phone_number?: string | undefined;
-	phone_number_verified?: boolean | undefined;
-	aud: string;
-	iss: string;
-	exp: number;
-	iat: number;
+	phone_number_verified?: boolean | "true" | "false" | undefined;
+	aud?: string | undefined;
+	iss?: string | undefined;
+	exp?: number | undefined;
+	iat?: number | undefined;
 	// Custom attributes from Cognito can be added here
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
@@ -188,7 +189,9 @@ export const cognito = (options: CognitoOptions) => {
 							name: enrichedProfile.name,
 							email: profile.email,
 							image: profile.picture,
-							emailVerified: profile.email_verified,
+							emailVerified:
+								profile.email_verified === true ||
+								profile.email_verified === "true",
 							...userMap,
 						},
 						data: enrichedProfile,
@@ -220,7 +223,9 @@ export const cognito = (options: CognitoOptions) => {
 									"",
 								email: userInfo.email,
 								image: userInfo.picture,
-								emailVerified: userInfo.email_verified,
+								emailVerified:
+									userInfo.email_verified === true ||
+									userInfo.email_verified === "true",
 								...userMap,
 							},
 							data: userInfo,
