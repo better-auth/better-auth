@@ -849,7 +849,6 @@ describe("oneTapClient plugin-level options", async () => {
 						clientId: "test-client",
 						autoSelect: true,
 						cancelOnTapOutside: false,
-						uxMode: "redirect",
 					}),
 				],
 			},
@@ -878,7 +877,6 @@ describe("oneTapClient plugin-level options", async () => {
 				expect.objectContaining({
 					auto_select: true,
 					cancel_on_tap_outside: false,
-					ux_mode: "redirect",
 				}),
 			);
 		},
@@ -892,7 +890,6 @@ describe("oneTapClient plugin-level options", async () => {
 				...flow,
 				autoSelect: false,
 				cancelOnTapOutside: true,
-				uxMode: "popup",
 				fetchOptions: {},
 			});
 
@@ -900,7 +897,6 @@ describe("oneTapClient plugin-level options", async () => {
 				expect.objectContaining({
 					auto_select: false,
 					cancel_on_tap_outside: true,
-					ux_mode: "popup",
 				}),
 			);
 		},

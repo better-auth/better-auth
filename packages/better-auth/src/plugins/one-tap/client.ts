@@ -282,7 +282,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						const cancelOnTapOutside =
 							opts?.cancelOnTapOutside ?? options.cancelOnTapOutside;
 						const contextValue = opts?.context ?? options.context ?? "signin";
-						const uxMode = opts?.uxMode ?? options.uxMode ?? "popup";
 
 						const useFedCM = options.promptOptions?.fedCM !== false;
 						window.google?.accounts.id.initialize({
@@ -297,7 +296,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							auto_select: autoSelect,
 							cancel_on_tap_outside: cancelOnTapOutside,
 							context: contextValue,
-							ux_mode: uxMode,
+							ux_mode: opts?.uxMode || "popup",
 							nonce: opts?.nonce,
 							itp_support: true,
 							use_fedcm_for_prompt: useFedCM,
@@ -340,7 +339,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					const cancelOnTapOutside =
 						opts?.cancelOnTapOutside ?? options.cancelOnTapOutside;
 					const contextValue = opts?.context ?? options.context ?? "signin";
-					const uxMode = opts?.uxMode ?? options.uxMode ?? "popup";
 					isRequestInProgress = true;
 
 					try {
@@ -366,7 +364,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								auto_select: autoSelect,
 								cancel_on_tap_outside: cancelOnTapOutside,
 								context: contextValue,
-								ux_mode: uxMode,
+								ux_mode: opts?.uxMode || "popup",
 								nonce: opts?.nonce,
 								/**
 								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
