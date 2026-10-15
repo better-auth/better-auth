@@ -35,6 +35,7 @@ import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import type {
 	Confirmation,
 	OAuthAuthenticatedClient,
+	OAuthAuthenticationContext,
 	OAuthClientAuthenticationRequest,
 	OAuthOptions,
 	OAuthProviderApi,
@@ -333,7 +334,7 @@ async function createIdToken(
 	authTime?: Date,
 	accessToken?: string,
 	extraClaims?: Record<string, unknown>,
-	authenticationContext?: { acr?: string; amr?: string[] },
+	authenticationContext?: OAuthAuthenticationContext,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -608,7 +609,7 @@ async function createRefreshToken(
 	resources?: string[],
 	confirmation?: Confirmation,
 	requestedUserInfoClaims?: string[],
-	authenticationContext?: { acr?: string; amr?: string[] },
+	authenticationContext?: OAuthAuthenticationContext,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -1115,9 +1116,11 @@ async function createUserTokens(
 		nonce,
 		refreshToken: existingRefreshToken,
 		authTime,
+		acr,
+		amr,
 		verificationValue,
 	} = params;
-	const authenticationContext = { acr: params.acr, amr: params.amr };
+	const authenticationContext = { acr, amr };
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user

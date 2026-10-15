@@ -6,6 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import { APIError } from "better-call";
 import { decodeJwt } from "jose";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
@@ -98,30 +99,43 @@ describe("oauth-provider authenticationContext", async () => {
 		return { callback: new URL(location), codeVerifier };
 	}
 
-	async function exchange(code: string, codeVerifier: string) {
-		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
-			code,
-			codeVerifier,
-			redirectURI: redirectUri,
-			options: clientOptions(),
-		});
+	async function requestTokens(request: {
+		body: URLSearchParams;
+		headers: Record<string, string>;
+	}) {
 		const tokens = await client.$fetch<{
 			id_token: string;
 			refresh_token: string;
-		}>("/oauth2/token", { method: "POST", body, headers: tokenHeaders });
+		}>("/oauth2/token", { method: "POST", ...request });
 		return tokens.data!;
 	}
 
+	async function authorizeAndExchange(params: Parameters<typeof authorize>[0]) {
+		const { callback, codeVerifier } = await authorize(params);
+		return requestTokens(
+			await authorizationCodeRequest({
+				code: callback.searchParams.get("code")!,
+				codeVerifier,
+				redirectURI: redirectUri,
+				options: clientOptions(),
+			}),
+		);
+	}
+
 	async function refresh(refreshToken: string) {
-		const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
-			refreshToken,
-			options: clientOptions(),
-		});
-		const tokens = await client.$fetch<{
-			id_token: string;
-			refresh_token: string;
-		}>("/oauth2/token", { method: "POST", body, headers: tokenHeaders });
-		return tokens.data!;
+		return requestTokens(
+			await refreshAccessTokenRequest({
+				refreshToken,
+				options: clientOptions(),
+			}),
+		);
+	}
+
+	function expectErrorRedirect(callback: URL, error: string) {
+		expect(callback.origin + callback.pathname).toBe(redirectUri);
+		expect(callback.searchParams.get("error")).toBe(error);
+		expect(callback.searchParams.get("state")).toBe("acr-state");
+		expect(callback.searchParams.get("code")).toBeNull();
 	}
 
 	function essentialAcr(value: string) {
@@ -150,13 +164,9 @@ describe("oauth-provider authenticationContext", async () => {
 	});
 
 	it("persists acr and amr across code exchange and refresh rotation", async () => {
-		const { callback, codeVerifier } = await authorize({
+		const tokens = await authorizeAndExchange({
 			claims: essentialAcr(MFA_ACR),
 		});
-		const tokens = await exchange(
-			callback.searchParams.get("code")!,
-			codeVerifier,
-		);
 		const idToken = decodeJwt(tokens.id_token);
 		expect(idToken.acr).toBe(MFA_ACR);
 		expect(idToken.amr).toEqual(["pwd", "otp"]);
@@ -178,10 +188,13 @@ describe("oauth-provider authenticationContext", async () => {
 	it("rejects an essential acr the session does not satisfy", async () => {
 		resolve.mockResolvedValue({ acr: "0", amr: ["pwd"] });
 		const { callback } = await authorize({ claims: essentialAcr(MFA_ACR) });
-		expect(callback.origin + callback.pathname).toBe(redirectUri);
-		expect(callback.searchParams.get("error")).toBe("access_denied");
-		expect(callback.searchParams.get("state")).toBe("acr-state");
-		expect(callback.searchParams.get("code")).toBeNull();
+		expectErrorRedirect(callback, "access_denied");
+	});
+
+	it("does not resolve requests without the openid scope", async () => {
+		const { callback } = await authorize({ scopes: ["offline_access"] });
+		expect(callback.searchParams.get("code")).toEqual(expect.any(String));
+		expect(resolve).not.toHaveBeenCalled();
 	});
 
 	it("rejects an essential acr outside acrValuesSupported before resolving", async () => {
@@ -202,11 +215,7 @@ describe("oauth-provider authenticationContext", async () => {
 		"issues the session's current acr for %s it does not satisfy",
 		async (_, request) => {
 			resolve.mockResolvedValue({ acr: "0" });
-			const { callback, codeVerifier } = await authorize(request);
-			const tokens = await exchange(
-				callback.searchParams.get("code")!,
-				codeVerifier,
-			);
+			const tokens = await authorizeAndExchange(request);
 			const idToken = decodeJwt(tokens.id_token);
 			expect(idToken.acr).toBe("0");
 			expect(idToken.amr).toBeUndefined();
@@ -221,9 +230,35 @@ describe("oauth-provider authenticationContext", async () => {
 	])("returns server_error when the resolver returns %s", async (_, result) => {
 		resolve.mockResolvedValue(result as Awaited<ReturnType<Resolve>>);
 		const { callback } = await authorize({});
-		expect(callback.origin + callback.pathname).toBe(redirectUri);
-		expect(callback.searchParams.get("error")).toBe("server_error");
-		expect(callback.searchParams.get("state")).toBe("acr-state");
-		expect(callback.searchParams.get("code")).toBeNull();
+		expectErrorRedirect(callback, "server_error");
+	});
+
+	it("returns the OAuth error a resolver throws", async () => {
+		resolve.mockRejectedValue(
+			new APIError("FORBIDDEN", {
+				error: "access_denied",
+				error_description: "account locked",
+			}),
+		);
+		const { callback } = await authorize({});
+		expectErrorRedirect(callback, "access_denied");
+		expect(callback.searchParams.get("error_description")).toBe(
+			"account locked",
+		);
+	});
+});
+
+describe("oauth-provider authenticationContext setup", () => {
+	it("rejects an empty acrValuesSupported", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				authenticationContext: {
+					acrValuesSupported: [],
+					resolve: () => undefined,
+				},
+			}),
+		).toThrow("acrValuesSupported must list at least one acr value");
 	});
 });

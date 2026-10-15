@@ -1,8 +1,10 @@
 import { logger } from "@better-auth/core/env";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
+import { getRequestedAcrValues } from "./claims-request";
 import type {
 	OAuthAuthenticationContext,
+	OAuthInteractionQuery,
 	OAuthOptions,
 	SchemaClient,
 	Scope,
@@ -31,9 +33,10 @@ function invalidAuthenticationContext(description: string): never {
 }
 
 /**
- * Runs the configured `authenticationContext.resolve` and validates its
- * result. Invalid results throw an `APIError` with `server_error`, which the
- * authorization endpoint returns to the client as an OAuth error.
+ * Runs the configured `authenticationContext.resolve` for an approval and
+ * validates its result. Returns an empty context, which ID tokens report as
+ * `acr: "0"`, when no resolver is configured or no ID token can be issued.
+ * Invalid results throw an `APIError` with `server_error`.
  */
 export async function resolveAuthenticationContext(
 	opts: OAuthOptions<Scope[]>,
@@ -43,11 +46,17 @@ export async function resolveAuthenticationContext(
 		client: SchemaClient<Scope[]>;
 		scopes: string[];
 		headers: Headers;
-		requestedAcrValues: string[];
+		query: Pick<OAuthInteractionQuery, "claims" | "acr_values">;
 	},
-): Promise<{ acr: string; amr?: string[] }> {
-	const resolved: OAuthAuthenticationContext | undefined =
-		await opts.authenticationContext?.resolve?.(info);
+): Promise<OAuthAuthenticationContext> {
+	const resolve = opts.authenticationContext?.resolve;
+	// acr and amr only reach ID tokens, which need the openid scope.
+	if (!resolve || !info.scopes.includes("openid")) return {};
+	const { query, ...resolveInfo } = info;
+	const resolved = await resolve({
+		...resolveInfo,
+		requestedAcrValues: getRequestedAcrValues(query.claims, query.acr_values),
+	});
 	// The resolver is user code; check the runtime shape, not just the types.
 	const acr: unknown = resolved?.acr ?? LEVEL_0_ACR;
 	const amr: unknown = resolved?.amr;
@@ -59,13 +68,14 @@ export async function resolveAuthenticationContext(
 			`returned acr "${acr}", which is not in acrValuesSupported`,
 		);
 	}
+	if (amr === undefined) return { acr };
 	if (
-		amr !== undefined &&
-		(!Array.isArray(amr) || !amr.every((value) => typeof value === "string"))
+		!Array.isArray(amr) ||
+		!amr.every((value): value is string => typeof value === "string")
 	) {
 		invalidAuthenticationContext("returned an amr that is not a string array");
 	}
-	return { acr, amr: amr?.length ? amr : undefined };
+	return { acr, amr: amr.length ? amr : undefined };
 }
 
 const RESERVED_ID_TOKEN_CLAIMS = new Set([

@@ -164,6 +164,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			}
 		}
 	}
+	if (options.authenticationContext?.acrValuesSupported.length === 0) {
+		throw new BetterAuthError(
+			"authenticationContext.acrValuesSupported must list at least one acr value",
+		);
+	}
 	for (const sc of options.advertisedMetadata?.scopes_supported ?? []) {
 		if (!scopes?.has(sc)) {
 			throw new BetterAuthError(

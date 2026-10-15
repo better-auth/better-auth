@@ -8,11 +8,11 @@ import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import {
 	getAcrValuesSupported,
+	LEVEL_0_ACR,
 	resolveAuthenticationContext,
 } from "./authentication-context";
 import {
 	canSatisfyEssentialAcrRequest,
-	getRequestedAcrValues,
 	getRequestedUserInfoClaims,
 	isValidOidcClaimsRequest,
 } from "./claims-request";
@@ -29,6 +29,7 @@ import {
 } from "./signed-query";
 import { getSupportedClaims } from "./standard-claims";
 import type {
+	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
 	OAuthConsent,
 	OAuthInteractionQuery,
@@ -165,7 +166,8 @@ export const handleRedirect = (
 	}
 };
 
-function redirectWithPromptNoneError(
+/** Sends an OAuth error to the client's redirect URI, or to the error page without one. */
+function redirectWithAuthorizationError(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	query: OAuthInteractionQuery,
@@ -907,7 +909,7 @@ async function runAuthorizationInteraction(
 		promptSet?.has("create")
 	) {
 		if (promptNone) {
-			return redirectWithPromptNoneError(
+			return redirectWithAuthorizationError(
 				ctx,
 				opts,
 				query,
@@ -944,7 +946,7 @@ async function runAuthorizationInteraction(
 		});
 		if (selectedAccountRedirect) {
 			if (promptNone) {
-				return redirectWithPromptNoneError(
+				return redirectWithAuthorizationError(
 					ctx,
 					opts,
 					query,
@@ -966,7 +968,7 @@ async function runAuthorizationInteraction(
 		});
 		if (signupRedirect) {
 			if (promptNone) {
-				return redirectWithPromptNoneError(
+				return redirectWithAuthorizationError(
 					ctx,
 					opts,
 					query,
@@ -990,7 +992,7 @@ async function runAuthorizationInteraction(
 		});
 		if (postLoginRedirect) {
 			if (promptNone) {
-				return redirectWithPromptNoneError(
+				return redirectWithAuthorizationError(
 					ctx,
 					opts,
 					query,
@@ -1019,9 +1021,7 @@ async function runAuthorizationInteraction(
 		scopes,
 	});
 	const approve = async () => {
-		let authenticationContext: Awaited<
-			ReturnType<typeof resolveAuthenticationContext>
-		>;
+		let authenticationContext: OAuthAuthenticationContext;
 		try {
 			authenticationContext = await resolveAuthenticationContext(opts, {
 				user: session.user,
@@ -1029,27 +1029,29 @@ async function runAuthorizationInteraction(
 				client,
 				scopes,
 				headers,
-				requestedAcrValues: getRequestedAcrValues(
-					query.claims,
-					query.acr_values,
-				),
+				query,
 			});
 		} catch (error) {
 			if (!(error instanceof APIError)) throw error;
-			const body = error.body as { error_description?: string } | undefined;
-			return redirectWithPromptNoneError(
+			const body = error.body as
+				| { error?: OAuthErrorCode; error_description?: string }
+				| undefined;
+			return redirectWithAuthorizationError(
 				ctx,
 				opts,
 				query,
-				"server_error",
+				body?.error ?? "server_error",
 				body?.error_description ?? "authentication context unavailable",
 			);
 		}
 		// OIDC Core §5.5.1.1: an unmet essential acr is a failed authentication.
 		if (
-			!canSatisfyEssentialAcrRequest(query.claims, authenticationContext.acr)
+			!canSatisfyEssentialAcrRequest(
+				query.claims,
+				authenticationContext.acr ?? LEVEL_0_ACR,
+			)
 		) {
-			return redirectWithPromptNoneError(
+			return redirectWithAuthorizationError(
 				ctx,
 				opts,
 				query,
@@ -1104,7 +1106,7 @@ async function runAuthorizationInteraction(
 		)
 	) {
 		if (promptNone) {
-			return redirectWithPromptNoneError(
+			return redirectWithAuthorizationError(
 				ctx,
 				opts,
 				query,
@@ -1125,7 +1127,7 @@ async function runAuthorizationInteraction(
 		)
 	) {
 		if (promptNone) {
-			return redirectWithPromptNoneError(
+			return redirectWithAuthorizationError(
 				ctx,
 				opts,
 				query,
@@ -1168,7 +1170,7 @@ async function createAuthorizationCodeURL(
 		userId: string;
 		sessionId: string;
 		authTime: number;
-		acr: string;
+		acr?: string;
 		amr?: string[];
 		referenceId?: string;
 		resource?: string[];

@@ -1531,10 +1531,10 @@ The callback receives the grant type, user (undefined for `client_credentials`),
 
 ### Authentication Context
 
-ID tokens carry `acr: "0"` (OIDC level 0) and no `amr` by default. To assert a stronger authentication class or the methods the user signed in with, set `authenticationContext`:
+ID tokens carry `acr: "0"` (OIDC level 0) and no `amr` by default. To assert a stronger authentication class or the methods the user signed in with, set `authenticationContext` with both fields:
 
-* `acrValuesSupported` lists the `acr` values the provider may issue. Discovery advertises it as `acr_values_supported`. Defaults to `["0"]`.
-* `resolve` returns the `acr` and `amr` the current session established. It runs once, when the user approves an authorization request, and receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`).
+* `acrValuesSupported` lists the `acr` values the provider may issue. Discovery advertises it as `acr_values_supported`. Include `"0"` if `resolve` can return no `acr`.
+* `resolve` returns the `acr` and `amr` the current session established. It runs once, when the user approves an authorization request with the `openid` scope, and receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`).
 
 Return only what the session proved. Better Auth does not record how a session signed in, so track it yourself. The example below marks sessions created by a completed two-factor challenge. Sessions created through a trusted device skip that challenge and stay unmarked.
 
@@ -1589,7 +1589,7 @@ How a request for a class is handled depends on whether it is essential:
 * An essential request (`claims={"id_token":{"acr":{"essential":true,"value":"…"}}}`) the session does not satisfy fails with `access_denied` at the client's redirect URI. If no value in `acrValuesSupported` could satisfy it, the request fails before sign-in.
 * A voluntary request (`acr_values`, or an `acr` claim without `essential`) never fails. The ID token reports the session's current `acr`.
 
-`resolve` must return an `acr` from `acrValuesSupported` (or omit it to use `"0"`), and `amr` must be an array of strings. Any other result fails the authorization with `server_error`.
+`resolve` must return an `acr` from `acrValuesSupported` (or omit it to use `"0"`), and `amr` must be an array of strings. Any other result fails the authorization with `server_error`. To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`; the client receives that error and its `error_description`.
 
 The `acr` and `amr` are stored with the authorization code and the refresh token, so ID tokens from later refreshes keep the values of the original authentication ([OIDC Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse)). They change only when the user authorizes again.
 
