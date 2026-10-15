@@ -314,44 +314,69 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					// cspell:ignore hotp
 					const candidateCode = await otp.hotp(candidateStep);
 					if (constantTimeEqual(candidateCode, ctx.body.code)) {
-						matchedStep ??= candidateStep;
+						matchedStep = candidateStep;
 					}
 				}
+				const shouldReserve =
+					isSignIn ||
+					twoFactor.verified === true ||
+					(user.twoFactorEnabled && twoFactor.verified !== false);
+
 				if (matchedStep === null) {
 					status = false;
-				} else if (twoFactor.verified === true) {
+				} else if (shouldReserve) {
 					const expiresAt = new Date((matchedStep + 2) * opts.period * 1000);
 					const replayId = `totp-used:${twoFactor.id}:${ctx.body.code}`;
 					if (
 						ctx.context.secondaryStorage &&
 						!ctx.context.options.verification?.storeInDatabase
 					) {
-						const existing = await ctx.context.secondaryStorage.get(replayId);
-						if (existing) {
-							status = false;
-						} else {
-							const ttlSeconds = Math.max(
-								1,
-								Math.ceil((expiresAt.getTime() - Date.now()) / 1000),
-							);
-							await ctx.context.secondaryStorage.set(
-								replayId,
-								"used",
-								ttlSeconds,
-							);
+						const ttlSeconds = Math.max(
+							1,
+							Math.ceil((expiresAt.getTime() - Date.now()) / 1000),
+						);
+						const count = await ctx.context.secondaryStorage.increment(
+							replayId,
+							ttlSeconds,
+						);
+						if (count === 1) {
 							status = true;
 							replayIdToClean = replayId;
+						} else {
+							status = false;
 						}
 					} else {
-						const reservation =
-							await ctx.context.internalAdapter.reserveVerificationValue({
-								identifier: replayId,
-								value: "used",
-								expiresAt,
-							});
-						status = !!reservation;
-						if (status) {
-							replayIdToClean = replayId;
+						try {
+							const existing =
+								await ctx.context.internalAdapter.findVerificationValue(
+									replayId,
+								);
+							if (existing) {
+								if (new Date(existing.expiresAt) <= new Date()) {
+									await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+										replayId,
+									);
+								} else {
+									status = false;
+								}
+							}
+							if (status !== false) {
+								const reservation =
+									await ctx.context.internalAdapter.reserveVerificationValue({
+										identifier: replayId,
+										value: "used",
+										expiresAt,
+									});
+								status = !!reservation;
+								if (status) {
+									replayIdToClean = replayId;
+								}
+							}
+						} catch (error) {
+							await ctx.context.internalAdapter
+								.deleteVerificationByIdentifier(replayId)
+								.catch(() => {});
+							throw error;
 						}
 					}
 				} else {
@@ -413,6 +438,10 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						where: [{ field: "id", value: twoFactor.id }],
 					});
 				}
+				// Once session issuance begins, do not remove the replay marker
+				// if a downstream failure occurs (e.g. during trusted device creation).
+				// The session may already be issued and cookies attached to the context.
+				replayIdToClean = null;
 				return await valid(ctx);
 			} catch (error) {
 				if (replayIdToClean) {

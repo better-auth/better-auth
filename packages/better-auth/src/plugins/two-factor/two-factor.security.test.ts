@@ -1023,4 +1023,273 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 			vi.useRealTimers();
 		}
 	});
+
+	it("should remove expired stale reservations and accept valid occurrences of the same code", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 350000));
+			const code = await createOTP(secret).totp();
+
+			const internalAdapter = (await auth.$context).internalAdapter;
+			const dbUser = await db.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			const row = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: dbUser!.id }],
+			});
+			const replayId = `totp-used:${row!.id}:${code}`;
+
+			// Manually seed an expired reservation in the verification table (e.g. from an earlier cycle)
+			await internalAdapter.createVerificationValue({
+				identifier: replayId,
+				value: "used",
+				expiresAt: new Date(Date.now() - 60000), // 1 minute in the past
+			});
+
+			// Stale reservation must be removed and valid code accepted
+			const res = await auth.api.verifyTOTP({
+				body: { code },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(res.status).toBe(200);
+
+			// Immediately replaying the same code within the current window must still be rejected
+			const replayRes = await auth.api.verifyTOTP({
+				body: { code },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(replayRes.status).toBe(401);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("should enforce replay protection on sign-in for legacy twoFactor rows where verified is null", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 400000));
+			const code = await createOTP(secret).totp();
+
+			const dbUser = await db.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			const row = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: dbUser!.id }],
+			});
+
+			// Set verified to null (simulating a legacy pre-migration row)
+			await db.update({
+				model: "twoFactor",
+				where: [{ field: "id", value: row!.id }],
+				update: { verified: null },
+			});
+
+			const challengeA = await startChallenge();
+			const challengeB = await startChallenge();
+
+			const resA = await auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeA,
+				asResponse: true,
+			});
+			expect(resA.status).toBe(200);
+
+			const resB = await auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeB,
+				asResponse: true,
+			});
+			expect(resB.status).toBe(401);
+			const jsonB = (await resB.json()) as { message: string };
+			expect(jsonB.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+		} finally {
+			// Restore verified
+			const dbUser = await db.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			await db.update({
+				model: "twoFactor",
+				where: [{ field: "userId", value: dbUser!.id }],
+				update: { verified: true },
+			});
+			vi.useRealTimers();
+		}
+	});
+
+	it("should not roll back the replay marker if downstream operations fail after session creation", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 450000));
+			const code = await createOTP(secret).totp();
+
+			const internalAdapter = (await auth.$context).internalAdapter;
+			const origCreateVerificationValue =
+				internalAdapter.createVerificationValue.bind(internalAdapter);
+			let failedOnce = false;
+			const createSpy = vi
+				.spyOn(internalAdapter, "createVerificationValue")
+				.mockImplementation(async (data) => {
+					// Simulate failure when creating trust-device record inside valid(ctx)
+					if (data.identifier.startsWith("trust-device-")) {
+						failedOnce = true;
+						throw new Error("Simulated trust device creation failure");
+					}
+					return origCreateVerificationValue(data);
+				});
+
+			const challengeA = await startChallenge();
+			try {
+				await expect(
+					auth.api.verifyTOTP({
+						body: { code, trustDevice: true },
+						headers: challengeA,
+					}),
+				).rejects.toThrow("Simulated trust device creation failure");
+			} finally {
+				createSpy.mockRestore();
+			}
+
+			expect(failedOnce).toBe(true);
+
+			// The code has already been issued, so a fresh challenge must NOT be able to reuse it
+			const challengeB = await startChallenge();
+			const resB = await auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeB,
+				asResponse: true,
+			});
+			expect(resB.status).toBe(401);
+			const jsonB = (await resB.json()) as { message: string };
+			expect(jsonB.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});
+
+describe("two-factor security: TOTP replay prevention with secondaryStorage", async () => {
+	const store = new Map<string, { value: string; expiresAt: number }>();
+	const secondaryStorage: SecondaryStorage = {
+		async get(key: string) {
+			const entry = store.get(key);
+			if (!entry) return null;
+			if (entry.expiresAt < Date.now()) {
+				store.delete(key);
+				return null;
+			}
+			return entry.value;
+		},
+		async getAndDelete(key: string) {
+			const entry = store.get(key);
+			store.delete(key);
+			if (!entry || entry.expiresAt < Date.now()) return null;
+			return entry.value;
+		},
+		async increment(key: string, ttl: number) {
+			const entry = store.get(key);
+			if (entry && entry.expiresAt < Date.now()) {
+				store.delete(key);
+			}
+			const current = store.get(key);
+			const count = Number(current?.value ?? 0) + 1;
+			store.set(key, {
+				value: String(count),
+				expiresAt: current ? current.expiresAt : Date.now() + ttl * 1000,
+			});
+			return count;
+		},
+		async set(key: string, value: string, ttl?: number) {
+			store.set(key, {
+				value,
+				expiresAt: Date.now() + (ttl ?? 60) * 1000,
+			});
+		},
+		async delete(key: string) {
+			store.delete(key);
+		},
+	};
+
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		secondaryStorage,
+		plugins: [twoFactor()],
+	});
+
+	const { headers: initialHeaders } = await signInWithTestUser();
+	const dbUser = await db.findOne<User>({
+		model: "user",
+		where: [{ field: "email", value: testUser.email }],
+	});
+	const userId = dbUser!.id;
+
+	const enrollment = await auth.api.enableTwoFactor({
+		body: { password: testUser.password },
+		headers: initialHeaders,
+	});
+	if (enrollment.method !== "totp") {
+		throw new Error("expected totp enrollment");
+	}
+	const row = await db.findOne<TwoFactorTable>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: userId }],
+	});
+	const secret = await symmetricDecrypt({
+		key: DEFAULT_SECRET,
+		data: row!.secret,
+	});
+	const enrollCode = await createOTP(secret).totp();
+	const verifyEnrollRes = await auth.api.verifyTOTP({
+		body: { code: enrollCode },
+		headers: initialHeaders,
+		asResponse: true,
+	});
+	expect(verifyEnrollRes.status).toBe(200);
+
+	async function startChallenge(): Promise<Headers> {
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+		return convertSetCookieToCookie(res.headers);
+	}
+
+	it("should reject concurrent replay attempts with secondaryStorage across separate challenges", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 60000));
+			const code = await createOTP(secret).totp();
+
+			const challenges = await Promise.all([
+				startChallenge(),
+				startChallenge(),
+				startChallenge(),
+				startChallenge(),
+				startChallenge(),
+			]);
+
+			const responses = await Promise.all(
+				challenges.map((headers) =>
+					auth.api.verifyTOTP({
+						body: { code },
+						headers,
+						asResponse: true,
+					}),
+				),
+			);
+
+			const statuses = responses.map((r) => r.status).sort();
+			// Exactly one succeeds, remaining 4 are rejected
+			expect(statuses).toEqual([200, 401, 401, 401, 401]);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });
