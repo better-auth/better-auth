@@ -557,11 +557,14 @@ describe("stored pairwise sector", async () => {
 			"http://localhost:8787/callback",
 			"http://localhost:8787/callback",
 		],
-	])("gives new %s native clients a sector of their own", async (_, uriA, uriB) => {
-		const a = await createPairwise([uriA]);
-		const b = await createPairwise([uriB]);
-		expect(await sub(a)).not.toBe(await sub(b));
-	});
+	])(
+		"gives new %s native clients a sector of their own",
+		async (_, uriA, uriB) => {
+			const a = await createPairwise([uriA]);
+			const b = await createPairwise([uriB]);
+			expect(await sub(a)).not.toBe(await sub(b));
+		},
+	);
 
 	it("keeps a shared sector for new HTTPS clients on the same host", async () => {
 		const a = await createPairwise(["https://rp.example.com/a"], "web");
