@@ -17,7 +17,7 @@ export interface DropboxProfile {
 	};
 	email: string;
 	email_verified: boolean;
-	profile_photo_url: string;
+	profile_photo_url?: string;
 }
 
 export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
