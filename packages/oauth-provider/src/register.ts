@@ -925,12 +925,11 @@ async function persistOAuthClientRegistration(
 		user_id: owner?.referenceId ? undefined : owner?.userId,
 		reference_id: owner?.referenceId,
 	});
+	// A discovery refresh leaves the stored ceiling alone (see the update below).
 	schema.clientCredentialsScopes =
-		input.registrationSource === "clientMetadataDocument"
-			? (input.existingClient?.clientCredentialsScopes ?? [])
-			: input.registrationSource === "managed"
-				? (input.clientCredentialsScopes ?? [])
-				: [];
+		input.registrationSource === "managed"
+			? (input.clientCredentialsScopes ?? [])
+			: [];
 	schema.clientDiscoveryId =
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
@@ -971,6 +970,10 @@ async function persistOAuthClientRegistration(
 			let storedClient: SchemaClient<Scope[]>;
 			let created = false;
 			if (existingClient) {
+				// Server-owned fields (disabled, consent and logout settings, the
+				// ceiling) can change while this refresh fetches metadata, so the
+				// refresh never writes them.
+				const { clientCredentialsScopes: _ceiling, ...refreshed } = schema;
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -981,10 +984,7 @@ async function persistOAuthClientRegistration(
 						},
 					],
 					update: {
-						...schema,
-						disabled: existingClient.disabled,
-						skipConsent: existingClient.skipConsent,
-						enableEndSession: existingClient.enableEndSession,
+						...refreshed,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},
