@@ -322,6 +322,8 @@ export async function updateClientEndpoint(
 	const schemaUpdates: Record<string, unknown> = {
 		...oauthToSchema(updates),
 	};
+	// 0 means the secret never expires, so clear any stored expiry
+	if (updates.client_secret_expires_at === 0) schemaUpdates.expiresAt = null;
 	if (
 		!finalGrantTypes.includes("client_credentials") ||
 		finalTokenEndpointAuthMethod === "none"

@@ -62,6 +62,10 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			expiresAt: {
+				type: "date",
+				required: false,
+			},
 			// UI Metadata
 			name: {
 				type: "string",

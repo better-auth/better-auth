@@ -1808,7 +1808,11 @@ export interface SchemaClient<
 	createdAt?: Date;
 	/** Last updated time */
 	updatedAt?: Date;
-	/** Expires time */
+	/**
+	 * When the client secret expires (`client_secret_expires_at`).
+	 *
+	 * Unset means the secret never expires.
+	 */
 	expiresAt?: Date;
 	//---- UI Metadata ----//
 	/** The name of the client. */

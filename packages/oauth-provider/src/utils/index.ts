@@ -806,6 +806,14 @@ export async function validateClientCredentials(
 		) {
 			throwInvalidClient("invalid client_secret", { method: authMethod });
 		}
+
+		if (
+			clientSecret &&
+			client.expiresAt &&
+			new Date(client.expiresAt) <= new Date()
+		) {
+			throwInvalidClient("client secret has expired", { method: authMethod });
+		}
 	}
 
 	validateClientScopes(client, scopes);
