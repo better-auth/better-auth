@@ -466,6 +466,8 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
+Dynamic registration keeps only the requested `grant_types` this server supports, and the registration response lists the grants that were registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). For example, Claude's MCP connector requests `urn:ietf:params:oauth:grant-type:jwt-bearer` alongside `authorization_code` and `refresh_token`, and registers with the last two. When `authorization_code` is dropped, so is the `code` response type. A registration that shares no grant with the server is rejected with `invalid_client_metadata`. Clients created with `createOAuthClient` or `adminCreateOAuthClient` are not narrowed: an unsupported grant is rejected.
+
 `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use any of these redirect URI forms:
 
 * A claimed `https` URI on a non-loopback host.
@@ -479,15 +481,15 @@ Application type is independent of client authentication. For example, a native 
 
 The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
 
-Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, so the `web` default rejects the registration. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
+Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, and older Claude Code releases register a single `http://127.0.0.1:<port>/callback`, so the `web` default rejects both registrations. Current Claude Code releases send `application_type: "native"` and register without this option. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
 
-| Value             | Omitted `application_type` becomes                                        |
-| ----------------- | ------------------------------------------------------------------------- |
-| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                  |
-| `"native"`        | `native`                                                                  |
-| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme, otherwise `web` |
+| Value             | Omitted `application_type` becomes                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                                                                    |
+| `"native"`        | `native`                                                                                                                    |
+| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme or `http` on `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web` |
 
-Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme becomes `native`, so its `http` URIs must still be loopback. A client that lists only `http` and `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
+Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme or an `http` loopback URI becomes `native`, so its other `http` URIs must still be loopback. A client that lists only `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -557,7 +559,7 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
-Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge. For the built-in `authorization_code`, `refresh_token`, `client_credentials`, and device code grants, the client is authenticated before the grant is looked up, so an unknown `client_id` returns `invalid_client` rather than `invalid_grant`. An extension grant handler (see [Provider extensions](#provider-extensions)) gets the same result by calling `provider.authenticateClient()` before it looks up its grant.
 
 #### DPoP sender-constrained tokens
 
@@ -1317,6 +1319,8 @@ oauthProvider({
   }
 })
 ```
+
+Consent is stored per reference. An authorization reuses only the consent the user gave for the same `consentReferenceId` value, and returning `undefined` or an empty string uses only the consent given without a reference.
 
 The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`. Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
 

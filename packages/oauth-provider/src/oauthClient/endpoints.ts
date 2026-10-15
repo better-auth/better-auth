@@ -3,6 +3,7 @@ import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { ClientJwks } from "../client-jwks";
 import { assertValidClientJwks } from "../client-jwks";
+import { getEndpointUrl } from "../dpop";
 import type { OAuthClientRegistrationMetadata } from "../register";
 import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
 import type {
@@ -556,7 +557,12 @@ export async function rotateClientKeysEndpoint(
 		body.client_assertion,
 		body.client_assertion_type,
 		undefined,
-		`${ctx.context.baseURL}/oauth2/client/rotate-keys`,
+		// Without the request, so the audience stays the fixed endpoint path; this
+		// still drops a trailing slash from `baseURL`.
+		getEndpointUrl(
+			{ context: ctx.context, request: undefined },
+			"/oauth2/client/rotate-keys",
+		),
 		{
 			endpointAudienceOnly: true,
 			assertClient: (candidate) => assertRotatable(opts, candidate),

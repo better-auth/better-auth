@@ -80,8 +80,12 @@ async function verifyJwtAccessToken(
 			issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		}));
 	} catch (error) {
-		// jose checks claims only after the signature verifies.
-		if (error instanceof joseErrors.JWTClaimValidationFailed) {
+		// jose checks claims only after the signature verifies. `JWTExpired` is
+		// not a subclass of `JWTClaimValidationFailed`, so both are listed.
+		if (
+			error instanceof joseErrors.JWTExpired ||
+			error instanceof joseErrors.JWTClaimValidationFailed
+		) {
 			return isAccessTokenPayload(error.payload) ? "inactive" : null;
 		}
 		if (

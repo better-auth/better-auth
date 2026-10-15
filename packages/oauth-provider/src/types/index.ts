@@ -1064,14 +1064,16 @@ export interface OAuthOptions<
 	 * field.
 	 *
 	 * - `"web"`: the OIDC Registration §2 default. Omitted `application_type` is
-	 *   treated as `web`, so custom-scheme redirect URIs are rejected.
+	 *   treated as `web`, so custom-scheme and loopback redirect URIs are
+	 *   rejected.
 	 * - `"native"`: omitted `application_type` is treated as `native`.
 	 * - `"infer"`: omitted `application_type` is treated as `native` when any
-	 *   `redirect_uris` entry uses a non-http(s) scheme; otherwise `web`. Every
-	 *   redirect URI is then validated against the native rules. Lets native MCP
-	 *   clients that omit `application_type` (for example Cursor, which also
-	 *   registers https and loopback callbacks) register without loosening
-	 *   web-client redirect policy.
+	 *   `redirect_uris` entry uses a non-http(s) scheme or is `http` on
+	 *   `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web`. Every redirect URI
+	 *   of an inferred native client is then validated against the native rules.
+	 *   Lets native MCP clients that omit `application_type` (for example Cursor,
+	 *   or older Claude Code releases with an `http://127.0.0.1` callback)
+	 *   register without loosening web-client redirect policy.
 	 *
 	 * An `application_type` the client actually sends is never overridden.
 	 * Applies only to dynamic client registration; managed clients and Client ID
@@ -1263,7 +1265,8 @@ export interface OAuthOptions<
 		 */
 		page: string;
 		/**
-		 * A value to tie to the consent reference_id.
+		 * A value to tie to the consent reference_id. Consent is stored
+		 * per reference; `undefined` or `""` uses consent given without one.
 		 *
 		 * Note that YOU must fail in this function if the requested
 		 * scope doesn't have a reference id and it should.
