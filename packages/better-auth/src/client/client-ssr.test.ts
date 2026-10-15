@@ -70,22 +70,25 @@ it.each([
 			string,
 		][],
 	],
-])("preserves %s for a Nuxt session fetch", (_name, headers, expectedHeaders) => {
-	const pendingFetch = new Promise<never>(() => undefined);
-	const useFetch = vi.fn(() => pendingFetch);
-	const client = createVueClient({
-		baseURL: "http://localhost:3000",
-		fetchOptions: { headers },
-	});
+])(
+	"preserves %s for a Nuxt session fetch",
+	(_name, headers, expectedHeaders) => {
+		const pendingFetch = new Promise<never>(() => undefined);
+		const useFetch = vi.fn(() => pendingFetch);
+		const client = createVueClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { headers },
+		});
 
-	void client.useSession(useFetch);
+		void client.useSession(useFetch);
 
-	expect(useFetch).toHaveBeenCalledWith(
-		"http://localhost:3000/api/auth/get-session",
-		{
-			headers: expectedHeaders,
-			key: "better-auth:session:http://localhost:3000:/api/auth",
-			watch: [expect.anything()],
-		},
-	);
-});
+		expect(useFetch).toHaveBeenCalledWith(
+			"http://localhost:3000/api/auth/get-session",
+			{
+				headers: expectedHeaders,
+				key: "better-auth:session:http://localhost:3000:/api/auth",
+				watch: [expect.anything()],
+			},
+		);
+	},
+);

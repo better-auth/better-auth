@@ -166,29 +166,26 @@ describe("verifyBearerToken", () => {
 		);
 	});
 
-	it.each([
-		"",
-		'bad "quote"',
-		"bad\\slash",
-		"bad\r\ncontrol",
-		"café",
-	])("should reject an invalid insufficient-scope error_description at construction: %s", (description) => {
-		expect(() =>
-			createInsufficientScopeError(["files:write"], description),
-		).toThrow(new TypeError("invalid error_description"));
-	});
+	it.each(["", 'bad "quote"', "bad\\slash", "bad\r\ncontrol", "café"])(
+		"should reject an invalid insufficient-scope error_description at construction: %s",
+		(description) => {
+			expect(() =>
+				createInsufficientScopeError(["files:write"], description),
+			).toThrow(new TypeError("invalid error_description"));
+		},
+	);
 
-	it.each([
-		42,
-		null,
-	])("should reject a non-string insufficient-scope error_description at construction: %j", (description) => {
-		expect(() =>
-			Reflect.apply(createInsufficientScopeError, undefined, [
-				["files:write"],
-				description,
-			]),
-		).toThrow(new TypeError("invalid error_description"));
-	});
+	it.each([42, null])(
+		"should reject a non-string insufficient-scope error_description at construction: %j",
+		(description) => {
+			expect(() =>
+				Reflect.apply(createInsufficientScopeError, undefined, [
+					["files:write"],
+					description,
+				]),
+			).toThrow(new TypeError("invalid error_description"));
+		},
+	);
 
 	it("should accept every error_description boundary character", () => {
 		const description = " !#[]~";
@@ -244,26 +241,24 @@ describe("verifyBearerToken", () => {
 		expect(mockedFetch).not.toHaveBeenCalled();
 	});
 
-	it.each([
-		null,
-		[],
-		{ read: true },
-		42,
-	])("should reject a malformed scope claim as an invalid token: %j", async (scope) => {
-		const { publicJWK, privateKey, kid } = await createTestJWKS();
-		const token = await createSignedToken(privateKey, kid, { scope });
-		mockJWKSResponse(publicJWK);
+	it.each([null, [], { read: true }, 42])(
+		"should reject a malformed scope claim as an invalid token: %j",
+		async (scope) => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid, { scope });
+			mockJWKSResponse(publicJWK);
 
-		await expect(
-			verifyBearerToken(token, {
-				jwksUrl,
-				verifyOptions: { issuer, audience },
-			}),
-		).rejects.toMatchObject({
-			status: "UNAUTHORIZED",
-			body: { error: "invalid_token" },
-		});
-	});
+			await expect(
+				verifyBearerToken(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).rejects.toMatchObject({
+				status: "UNAUTHORIZED",
+				body: { error: "invalid_token" },
+			});
+		},
+	);
 
 	it("should treat an absent scope claim as an empty granted-scope set", async () => {
 		const { publicJWK, privateKey, kid } = await createTestJWKS();

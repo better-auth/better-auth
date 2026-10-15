@@ -1,3 +1,4 @@
+import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import { openAPI } from "better-auth/plugins";
@@ -12,6 +13,7 @@ import {
 	oauthDeviceAuthorization,
 } from "./device-code";
 import { oauthProvider } from "./oauth";
+import type { OAuthAuthenticationContext } from "./types";
 
 const FORM_HEADERS = { "content-type": "application/x-www-form-urlencoded" };
 
@@ -19,6 +21,63 @@ interface TokenErrorBody {
 	status?: number;
 	error?: string;
 	error_description?: string;
+}
+
+/** Accepts any instance's test client, whose types depend on its options. */
+interface TestClient {
+	$fetch: (path: never, options: never) => Promise<unknown>;
+}
+
+/** Sends a browser-style request and returns the URL the provider redirects to. */
+async function fetchRedirect(
+	client: TestClient,
+	path: string,
+	init: { headers: Headers; method?: "POST"; body?: Record<string, unknown> },
+) {
+	const fetchJSON = client.$fetch as (
+		path: string,
+		options: typeof init,
+	) => Promise<{
+		data: { url: string } | null;
+		error: TokenErrorBody | null;
+	}>;
+	const headers = new Headers(init.headers);
+	headers.set("accept", "application/json");
+	const { data, error } = await fetchJSON(path, { ...init, headers });
+	if (error || !data) throw error;
+	return data.url;
+}
+
+/**
+ * Opens `/oauth2/authorize?user_code=…` as a device verification page does and
+ * returns the signed query of the page it redirects to.
+ */
+async function openDeviceConsent(
+	client: TestClient,
+	userCode: string,
+	headers: Headers,
+) {
+	const url = await fetchRedirect(
+		client,
+		`/oauth2/authorize?user_code=${encodeURIComponent(userCode)}`,
+		{ headers },
+	);
+	return new URL(url, "http://localhost").searchParams;
+}
+
+/** Answers a device's consent page and returns where the user is sent. */
+async function answerDeviceConsent(
+	client: TestClient,
+	userCode: string,
+	headers: Headers,
+	answer: { accept: boolean; scope?: string } = { accept: true },
+) {
+	const consent = await openDeviceConsent(client, userCode, headers);
+	return fetchRedirect(client, "/oauth2/consent", {
+		method: "POST",
+		headers,
+		body: { ...answer, oauth_query: consent.toString() },
+	});
 }
 
 describe("oauth-provider device-code composition", () => {
@@ -304,14 +363,11 @@ describe("oauth-provider device-code grant", async () => {
 		const { device_code, user_code } = await auth.api.deviceCode({
 			body: { client_id: clientId, scope, resource: requestedResource },
 		});
-		const verification = await auth.api.deviceVerify({
-			query: { user_code },
-			headers,
-		});
 		if (requestedResource !== undefined) {
-			expect(verification.resource).toEqual(requestedResource);
+			const consent = await openDeviceConsent(client, user_code, headers);
+			expect(consent.getAll("resource")).toEqual([requestedResource].flat());
 		}
-		await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+		await answerDeviceConsent(client, user_code, headers);
 		return device_code;
 	}
 
@@ -354,11 +410,12 @@ describe("oauth-provider device-code grant", async () => {
 		expect(response.error).toBeNull();
 		expect(response.data?.device_code).toEqual(expect.any(String));
 		expect(response.data?.user_code).toEqual(expect.any(String));
-		const verification = await auth.api.deviceVerify({
-			query: { user_code: response.data?.user_code as string },
+		const consent = await openDeviceConsent(
+			client,
+			response.data?.user_code as string,
 			headers,
-		});
-		expect(verification.client_id).toBe(created.client_id);
+		);
+		expect(consent.get("client_id")).toBe(created.client_id);
 	});
 
 	it("accepts a confidential client authenticated with client_secret_post", async () => {
@@ -393,11 +450,12 @@ describe("oauth-provider device-code grant", async () => {
 		expect(response.error).toBeNull();
 		expect(response.data?.device_code).toEqual(expect.any(String));
 		expect(response.data?.user_code).toEqual(expect.any(String));
-		const verification = await auth.api.deviceVerify({
-			query: { user_code: response.data?.user_code as string },
+		const consent = await openDeviceConsent(
+			client,
+			response.data?.user_code as string,
 			headers,
-		});
-		expect(verification.client_id).toBe(created.client_id);
+		);
+		expect(consent.get("client_id")).toBe(created.client_id);
 	});
 
 	it("accepts client_secret_post through the in-process API contract", async () => {
@@ -495,11 +553,12 @@ describe("oauth-provider device-code grant", async () => {
 		);
 
 		expect(response.error).toBeNull();
-		const verification = await assertionAuth.api.deviceVerify({
-			query: { user_code: response.data?.user_code as string },
+		const consent = await openDeviceConsent(
+			assertionClient,
+			response.data?.user_code as string,
 			headers,
-		});
-		expect(verification.client_id).toBe(assertionClientId);
+		);
+		expect(consent.get("client_id")).toBe(assertionClientId);
 	});
 
 	it("rejects multiple client authentication methods and repeated authentication parameters", async () => {
@@ -1128,15 +1187,10 @@ describe("oauth-provider device-code grant", async () => {
 
 		expect(response.error).toBeNull();
 		const { headers } = await signInWithTestUser();
-		const verification = await auth.api.deviceVerify({
-			query: { user_code: response.data!.user_code as string },
-			headers,
-		});
-		expect(verification.resource).toBeUndefined();
-		await auth.api.deviceApprove({
-			body: { userCode: response.data!.user_code as string },
-			headers,
-		});
+		const userCode = response.data!.user_code as string;
+		const consent = await openDeviceConsent(client, userCode, headers);
+		expect(consent.getAll("resource")).toEqual([]);
+		await answerDeviceConsent(client, userCode, headers);
 
 		const token = await pollToken({
 			grant_type: DEVICE_CODE_GRANT_TYPE,
@@ -1167,19 +1221,22 @@ describe("oauth-provider device-code grant", async () => {
 		["dangerous-scheme", "javascript:alert(1)"],
 		["wrong-type", 42],
 		["array-item", [resource, "/api"]],
-	])("returns invalid_target for %s RFC 8707 resource indicators at the HTTP boundary", async (_label, invalidResource) => {
-		const clientId = await createDeviceClient();
-		const response = await client.$fetch<Record<string, unknown>>(
-			"/device/code",
-			{
-				method: "POST",
-				body: { client_id: clientId, resource: invalidResource },
-			},
-		);
+	])(
+		"returns invalid_target for %s RFC 8707 resource indicators at the HTTP boundary",
+		async (_label, invalidResource) => {
+			const clientId = await createDeviceClient();
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/device/code",
+				{
+					method: "POST",
+					body: { client_id: clientId, resource: invalidResource },
+				},
+			);
 
-		expect(response.error?.status).toBe(400);
-		expect((response.error as TokenErrorBody)?.error).toBe("invalid_target");
-	});
+			expect(response.error?.status).toBe(400);
+			expect((response.error as TokenErrorBody)?.error).toBe("invalid_target");
+		},
+	);
 
 	it("binds repeated form-encoded resources at the device endpoint", async () => {
 		const clientId = await createDeviceClient();
@@ -1201,11 +1258,12 @@ describe("oauth-provider device-code grant", async () => {
 		expect(response.error).toBeNull();
 
 		const { headers } = await signInWithTestUser();
-		const verification = await auth.api.deviceVerify({
-			query: { user_code: response.data!.user_code as string },
+		const consent = await openDeviceConsent(
+			client,
+			response.data!.user_code as string,
 			headers,
-		});
-		expect(verification.resource).toEqual([resource, secondResource]);
+		);
+		expect(consent.getAll("resource")).toEqual([resource, secondResource]);
 	});
 
 	it("validates every repeated form-encoded resource", async () => {
@@ -1343,8 +1401,7 @@ describe("oauth-provider device-code grant", async () => {
 		const { device_code, user_code } = await auth.api.deviceCode({
 			body: { client_id: clientId, scope: "openid" },
 		});
-		await auth.api.deviceVerify({ query: { user_code }, headers });
-		await auth.api.deviceDeny({ body: { userCode: user_code }, headers });
+		await answerDeviceConsent(client, user_code, headers, { accept: false });
 
 		const res = await pollToken({
 			grant_type: DEVICE_CODE_GRANT_TYPE,
@@ -1708,14 +1765,8 @@ describe("oauth-provider device-code grant reuse", async () => {
 	});
 
 	it("keeps each auth instance bound to its own provider options", async () => {
-		const { headers } = await first.signInWithTestUser();
-		const { device_code, user_code } = await first.auth.api.deviceCode({
+		const { device_code } = await first.auth.api.deviceCode({
 			body: { client_id: discoveredClientId, scope: "openid" },
-		});
-		await first.auth.api.deviceVerify({ query: { user_code }, headers });
-		await first.auth.api.deviceApprove({
-			body: { userCode: user_code },
-			headers,
 		});
 
 		const res = await first.client.$fetch<Record<string, unknown>>(
@@ -1732,5 +1783,487 @@ describe("oauth-provider device-code grant reuse", async () => {
 
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+	});
+});
+
+describe("oauth-provider device approval through the consent flow", async () => {
+	const baseURL = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const referenceClaim = "https://example.com/reference";
+	const firstPartyClientId = "first-party-cli";
+	const requireReference = (): string => {
+		throw new APIError("BAD_REQUEST", { error: "reference_required" });
+	};
+	let resolveReference: () => string | undefined = requireReference;
+	let needsSelection = false;
+	const consentReferenceId = vi.fn(() => resolveReference());
+	const mfaAcr = "urn:example:acr:mfa";
+	const resolveAuthenticationContext =
+		vi.fn<() => OAuthAuthenticationContext | undefined>();
+	const { auth, client, db, signInWithTestUser, signInWithUser } =
+		await getTestInstance({
+			baseURL,
+			plugins: [
+				jwt({ jwt: { issuer: baseURL } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [resource],
+					enforcePerClientResources: false,
+					scopes: ["openid", "offline_access"],
+					postLogin: {
+						page: "/select-organization",
+						shouldRedirect: () => needsSelection,
+						consentReferenceId,
+					},
+					customAccessTokenClaims: ({ referenceId }) => ({
+						[referenceClaim]: referenceId,
+					}),
+					authenticationContext: {
+						acrValuesSupported: ["0", mfaAcr],
+						resolve: resolveAuthenticationContext,
+					},
+				}),
+				oauthDeviceAuthorization({
+					interval: "1s",
+					validateClient: (clientId) => clientId === firstPartyClientId,
+				}),
+			],
+		});
+
+	async function startDevice(clientBody: Record<string, unknown> = {}) {
+		const { headers, user } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				grant_types: [DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+				scope: "openid offline_access",
+				...clientBody,
+			},
+		});
+		const clientId = created!.client_id;
+		const { device_code, user_code } = await auth.api.deviceCode({
+			body: { client_id: clientId, scope: "openid offline_access", resource },
+		});
+		consentReferenceId.mockClear();
+		const poll = (body: Record<string, string>) =>
+			client.$fetch<{
+				access_token: string;
+				refresh_token?: string;
+				id_token?: string;
+				scope: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({ client_id: clientId, resource, ...body }),
+				headers: FORM_HEADERS,
+			});
+		return { clientId, device_code, user_code, headers, user, poll };
+	}
+
+	it("binds device tokens and their refreshes to the selected reference", async () => {
+		resolveReference = () => "org_1";
+		const { clientId, device_code, user_code, headers, user, poll } =
+			await startDevice();
+
+		const landing = await answerDeviceConsent(client, user_code, headers);
+		expect(landing).toBe(
+			`${baseURL}/device?user_code=${user_code}&status=approved`,
+		);
+		expect(consentReferenceId).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ id: user.id }),
+				scopes: ["openid", "offline_access"],
+			}),
+		);
+		const consent = await db.findOne<{ referenceId?: string }>({
+			model: "oauthConsent",
+			where: [
+				{ field: "clientId", value: clientId },
+				{ field: "userId", value: user.id },
+			],
+		});
+		expect(consent?.referenceId).toBe("org_1");
+
+		const tokens = await poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code,
+		});
+		expect(tokens.error).toBeNull();
+		expect(decodeJwt(tokens.data!.access_token)[referenceClaim]).toBe("org_1");
+		expect(decodeJwt(tokens.data!.id_token!).auth_time).toEqual(
+			expect.any(Number),
+		);
+
+		resolveReference = () => "org_2";
+		const refreshed = await poll({
+			grant_type: "refresh_token",
+			refresh_token: tokens.data!.refresh_token!,
+		});
+		expect(refreshed.error).toBeNull();
+		expect(decodeJwt(refreshed.data!.access_token)[referenceClaim]).toBe(
+			"org_1",
+		);
+	});
+
+	it("carries the resolved acr and amr into device ID tokens and their refreshes", async () => {
+		resolveReference = () => "org_1";
+		resolveAuthenticationContext.mockReturnValueOnce({
+			acr: mfaAcr,
+			amr: ["pwd", "otp"],
+		});
+		const { device_code, user_code, headers, poll } = await startDevice();
+		await answerDeviceConsent(client, user_code, headers);
+
+		const tokens = await poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code,
+		});
+		expect(tokens.error).toBeNull();
+		const idToken = decodeJwt(tokens.data!.id_token!);
+		expect(idToken.acr).toBe(mfaAcr);
+		expect(idToken.amr).toEqual(["pwd", "otp"]);
+
+		const refreshed = await poll({
+			grant_type: "refresh_token",
+			refresh_token: tokens.data!.refresh_token!,
+		});
+		expect(refreshed.error).toBeNull();
+		const refreshedIdToken = decodeJwt(refreshed.data!.id_token!);
+		expect(refreshedIdToken.acr).toBe(mfaAcr);
+		expect(refreshedIdToken.amr).toEqual(["pwd", "otp"]);
+	});
+
+	it("runs post-login selection before consent", async () => {
+		resolveReference = () => "org_1";
+		needsSelection = true;
+		try {
+			const { user_code, headers } = await startDevice();
+			const selection = await fetchRedirect(
+				client,
+				`/oauth2/authorize?user_code=${user_code}`,
+				{ headers },
+			);
+			expect(new URL(selection, baseURL).pathname).toBe("/select-organization");
+
+			needsSelection = false;
+			const consentPage = await fetchRedirect(client, "/oauth2/continue", {
+				method: "POST",
+				headers,
+				body: {
+					postLogin: true,
+					oauth_query: new URL(selection, baseURL).search.slice(1),
+				},
+			});
+			expect(new URL(consentPage, baseURL).pathname).toBe("/consent");
+		} finally {
+			needsSelection = false;
+		}
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-5.4
+	 */
+	it("shows consent for a skip-consent client that already has consent", async () => {
+		resolveReference = () => "org_1";
+		const first = await startDevice({ skip_consent: true });
+		await answerDeviceConsent(client, first.user_code, first.headers);
+
+		const { device_code, user_code } = await auth.api.deviceCode({
+			body: {
+				client_id: first.clientId,
+				scope: "openid offline_access",
+				resource,
+			},
+		});
+		const consent = await fetchRedirect(
+			client,
+			`/oauth2/authorize?user_code=${user_code}`,
+			{ headers: first.headers },
+		);
+		expect(new URL(consent, baseURL).pathname).toBe("/consent");
+		expect(new URL(consent, baseURL).searchParams.get("user_code")).toBe(
+			user_code,
+		);
+		const pending = await first.poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code,
+		});
+		expect((pending.error as TokenErrorBody | null)?.error).toBe(
+			"authorization_pending",
+		);
+	});
+
+	it("records no empty scope for a device code requested without scopes", async () => {
+		resolveReference = () => "org_1";
+		const { headers, user } = await signInWithTestUser();
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				application_type: "native",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid offline_access",
+			},
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: created!.client_id, resource },
+		});
+
+		await answerDeviceConsent(client, user_code, headers);
+		const stored = await db.findOne<{ scopes: string[] }>({
+			model: "oauthConsent",
+			where: [
+				{ field: "clientId", value: created!.client_id },
+				{ field: "userId", value: user.id },
+			],
+		});
+		expect(stored?.scopes).toEqual([]);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8628#section-5.4
+	 */
+	it("does not let another user approve through a query signed after consent", async () => {
+		resolveReference = () => "org_1";
+		const attacker = await startDevice({ skip_consent: true });
+		const consent = await openDeviceConsent(
+			client,
+			attacker.user_code,
+			attacker.headers,
+		);
+
+		// Accepting from a second session whose post-login selection is pending
+		// yields a selection page signed without the consent prompt.
+		const { headers: secondSession } = await signInWithTestUser();
+		needsSelection = true;
+		let selection: URL;
+		try {
+			selection = new URL(
+				await fetchRedirect(client, "/oauth2/consent", {
+					method: "POST",
+					headers: secondSession,
+					body: { accept: true, oauth_query: consent.toString() },
+				}),
+				baseURL,
+			);
+		} finally {
+			needsSelection = false;
+		}
+		expect(selection.pathname).toBe("/select-organization");
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "device-victim@example.com",
+				password: "device-victim-password",
+				name: "Victim",
+			},
+		});
+		const { headers: victim } = await signInWithUser(
+			"device-victim@example.com",
+			"device-victim-password",
+		);
+		const next = await fetchRedirect(client, "/oauth2/continue", {
+			method: "POST",
+			headers: victim,
+			body: { postLogin: true, oauth_query: selection.search.slice(1) },
+		});
+		expect(new URL(next, baseURL).pathname).toBe("/consent");
+		const pending = await attacker.poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: attacker.device_code,
+		});
+		expect((pending.error as TokenErrorBody | null)?.error).toBe(
+			"authorization_pending",
+		);
+	});
+
+	it("signs a signed-out user in before revealing anything about the code", async () => {
+		resolveReference = () => "org_1";
+		const { user_code } = await startDevice();
+		for (const code of [user_code, "NOT-A-CODE"]) {
+			const login = new URL(
+				await fetchRedirect(
+					client,
+					`/oauth2/authorize?user_code=${encodeURIComponent(code)}`,
+					{ headers: new Headers() },
+				),
+				baseURL,
+			);
+			expect(login.pathname).toBe("/login");
+			expect(login.searchParams.get("user_code")).toBe(code);
+			expect(login.searchParams.has("client_id")).toBe(false);
+		}
+
+		// Signing in on that page resumes into the device's consent page.
+		const login = new URL(
+			await fetchRedirect(client, `/oauth2/authorize?user_code=${user_code}`, {
+				headers: new Headers(),
+			}),
+			baseURL,
+		);
+		const consent = new URL(
+			await fetchRedirect(client, "/sign-in/email", {
+				method: "POST",
+				headers: new Headers(),
+				body: {
+					email: "test@test.com",
+					password: "test123456",
+					oauth_query: login.search.slice(1),
+				},
+			}),
+			baseURL,
+		);
+		expect(consent.pathname).toBe("/consent");
+		expect(consent.searchParams.get("user_code")).toBe(user_code);
+	});
+
+	it("returns a deny on an already approved code to the device page", async () => {
+		resolveReference = () => "org_1";
+		const { user_code, headers } = await startDevice();
+		const consent = await openDeviceConsent(client, user_code, headers);
+		await fetchRedirect(client, "/oauth2/consent", {
+			method: "POST",
+			headers,
+			body: { accept: true, oauth_query: consent.toString() },
+		});
+
+		const denied = await fetchRedirect(client, "/oauth2/consent", {
+			method: "POST",
+			headers,
+			body: { accept: false, oauth_query: consent.toString() },
+		});
+		expect(new URL(denied).pathname).toBe("/device");
+		expect(new URL(denied).searchParams.get("user_code")).toBe(user_code);
+		expect(new URL(denied).searchParams.get("error")).toBe("invalid_request");
+	});
+
+	it("denies the device from the consent page", async () => {
+		const { device_code, user_code, headers, poll } = await startDevice();
+
+		const landing = await answerDeviceConsent(client, user_code, headers, {
+			accept: false,
+		});
+		expect(landing).toBe(
+			`${baseURL}/device?user_code=${user_code}&status=denied`,
+		);
+		const res = await poll({ grant_type: DEVICE_CODE_GRANT_TYPE, device_code });
+		expect((res.error as TokenErrorBody | null)?.error).toBe("access_denied");
+	});
+
+	it("sends a device approval for a client disabled mid-flow to the verification page", async () => {
+		resolveReference = () => "org_1";
+		const { clientId, device_code, user_code, headers } = await startDevice();
+		const consent = await openDeviceConsent(client, user_code, headers);
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: clientId, update: { disabled: true } },
+		});
+
+		const landing = new URL(
+			await fetchRedirect(client, "/oauth2/consent", {
+				method: "POST",
+				headers,
+				body: { accept: true, oauth_query: consent.toString() },
+			}),
+		);
+		expect(landing.pathname).toBe("/device");
+		expect(landing.searchParams.get("user_code")).toBe(user_code);
+		expect(landing.searchParams.get("error")).toBe("client_disabled");
+		const stored = await db.findOne<{ status: string }>({
+			model: "deviceCode",
+			where: [{ field: "deviceCode", value: device_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
+
+	it("applies scopes narrowed on the consent page", async () => {
+		resolveReference = () => "org_1";
+		const { device_code, user_code, headers, poll } = await startDevice();
+
+		await answerDeviceConsent(client, user_code, headers, {
+			accept: true,
+			scope: "openid",
+		});
+		const tokens = await poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code,
+		});
+		expect(tokens.data?.scope).toBe("openid");
+		expect(tokens.data?.refresh_token).toBeUndefined();
+	});
+
+	it("leaves the code pending when the reference cannot be resolved", async () => {
+		resolveReference = requireReference;
+		const { device_code, user_code, headers, poll } = await startDevice();
+
+		await expect(
+			answerDeviceConsent(client, user_code, headers),
+		).rejects.toMatchObject({ error: "reference_required" });
+		const res = await poll({ grant_type: DEVICE_CODE_GRANT_TYPE, device_code });
+		expect((res.error as TokenErrorBody | null)?.error).toBe(
+			"authorization_pending",
+		);
+	});
+
+	it("rejects an approval when the code expires before the final step", async () => {
+		let calls = 0;
+		resolveReference = () => {
+			// The consent endpoint resolves the reference first; expire the code
+			// before the second resolution, which precedes the approval.
+			calls += 1;
+			if (calls === 2) vi.setSystemTime(Date.now() + 31 * 60 * 1000);
+			return "org_1";
+		};
+		const { user_code, headers } = await startDevice();
+		vi.useFakeTimers({ toFake: ["Date"] });
+		try {
+			const landing = new URL(
+				await answerDeviceConsent(client, user_code, headers),
+			);
+			expect(landing.pathname).toBe("/device");
+			expect(landing.searchParams.get("error")).toBe("expired_token");
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("refuses the standalone approval endpoints for OAuth device codes", async () => {
+		const { user_code, headers } = await startDevice();
+		const hint = expect.stringContaining(
+			`/oauth2/authorize?user_code=${user_code}`,
+		);
+
+		await expect(
+			auth.api.deviceVerify({ query: { user_code }, headers }),
+		).rejects.toMatchObject({ body: { error_description: hint } });
+		await expect(
+			auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ body: { error_description: hint } });
+		await expect(
+			auth.api.deviceDeny({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ body: { error_description: hint } });
+	});
+
+	it("keeps first-party device codes on the standalone approval endpoints", async () => {
+		resolveReference = requireReference;
+		const { headers } = await signInWithTestUser();
+		const { device_code, user_code } = await auth.api.deviceCode({
+			body: { client_id: firstPartyClientId, scope: "openid" },
+		});
+		consentReferenceId.mockClear();
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		await auth.api.deviceApprove({ body: { userCode: user_code }, headers });
+		expect(consentReferenceId).not.toHaveBeenCalled();
+
+		const tokens = await auth.api.deviceToken({
+			body: {
+				grant_type: DEVICE_CODE_GRANT_TYPE,
+				device_code,
+				client_id: firstPartyClientId,
+			},
+		});
+		expect(tokens.access_token).toEqual(expect.any(String));
 	});
 });

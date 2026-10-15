@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.7.9
+
+### Patch Changes
+
+- [#11766](https://github.com/better-auth/better-auth/pull/11766) [`6edaa61`](https://github.com/better-auth/better-auth/commit/6edaa61e629625909a97d191809473030f24a2b6) Thanks [@bytaesu](https://github.com/bytaesu)! - An `onAPIError.onError` handler that throws or rejects no longer fails the request or causes an unhandled promise rejection. The error is logged and the original error response is returned. Async handlers now finish before the response is sent.
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.9
+  - @better-auth/drizzle-adapter@1.7.9
+  - @better-auth/kysely-adapter@1.7.9
+  - @better-auth/memory-adapter@1.7.9
+  - @better-auth/mongo-adapter@1.7.9
+  - @better-auth/prisma-adapter@1.7.9
+  - @better-auth/telemetry@1.7.9
+
 ## 1.7.8
 
 ### Patch Changes

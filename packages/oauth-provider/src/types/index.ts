@@ -37,6 +37,61 @@ export type StoreTokenType =
 	| "authorization_code"
 	| (string & {});
 
+/**
+ * The authentication context the provider asserts in ID tokens
+ * (OIDC Core 1.0 §2).
+ */
+export interface OAuthAuthenticationContext {
+	/**
+	 * Authentication Context Class Reference the session satisfies. Must be one
+	 * of `acrValuesSupported`. Defaults to `"0"`.
+	 */
+	acr?: string;
+	/**
+	 * Authentication Methods References used for the session, such as
+	 * `["pwd", "otp"]` (RFC 8176).
+	 */
+	amr?: string[];
+}
+
+export interface OAuthAuthenticationContextOptions<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/**
+	 * ACR values this provider can assert, advertised as
+	 * `acr_values_supported` in discovery. Include `"0"` when `resolve` can
+	 * return no `acr`.
+	 */
+	acrValuesSupported: string[];
+	/**
+	 * Returns the `acr` and `amr` the current session establishes. Called when
+	 * the user approves an authorization request or a device code. Return only
+	 * what the session actually proved; do not raise `acr` to match
+	 * `requestedAcrValues`.
+	 *
+	 * An essential `acr` request (`claims.id_token.acr.essential`) that the
+	 * returned `acr` does not satisfy fails with `access_denied`. A voluntary
+	 * request (`acr_values` or a non-essential `acr` claim) never fails.
+	 *
+	 * Not called for requests without the `openid` scope, which issue no ID
+	 * token.
+	 */
+	resolve: (info: {
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		client: SchemaClient<Scopes>;
+		/** Scopes being approved */
+		scopes: string[];
+		/** Headers of the request approving the authorization */
+		headers: Headers;
+		/**
+		 * ACR values the client requested, from `claims.id_token.acr` and
+		 * `acr_values`, in order of preference.
+		 */
+		requestedAcrValues: string[];
+	}) => Awaitable<OAuthAuthenticationContext | undefined>;
+}
+
 type InternallySupportedScopes =
 	| "openid"
 	| "profile"
@@ -171,6 +226,10 @@ export interface OAuthTokenIssueParams {
 	nonce?: string;
 	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	authTime?: Date;
+	/** The `acr` ID token claim. Defaults to `"0"`. */
+	acr?: string;
+	/** The `amr` ID token claim. */
+	amr?: string[];
 	verificationValue?: VerificationValue;
 	resources?: string[];
 	/** Full original authorized resources for the grant, used to seed refresh tokens. */
@@ -415,7 +474,7 @@ export interface OAuthUserInfoExtensionInput {
  * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
  * option).
  *
- * All five kinds live on one object so a single protocol plugin (for example
+ * All seven kinds live on one object so a single protocol plugin (for example
  * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
  * claims) registers atomically and the host validates the combined surface in
  * one place. Every field is independently optional, so a single-concern plugin
@@ -423,10 +482,11 @@ export interface OAuthUserInfoExtensionInput {
  * just the one it needs. This is the shape every future OAuth RFC plugin copies.
  *
  * Two contribution disciplines:
- * - Dispatched kinds (`grants`, `clientAuthentication`) must be disjoint across
- *   extensions: registering a grant type, auth method, or assertion type that
- *   another extension already registered is rejected at setup, since the second
- *   would otherwise be silently unreachable.
+ * - Dispatched kinds (`grants`, `clientAuthentication`, `interactionRequests`)
+ *   must be disjoint across extensions: registering a grant type, auth method,
+ *   assertion type, or interaction parameter that another extension already
+ *   registered is rejected at setup, since the second would otherwise be
+ *   silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
  *   core; a key already owned by the provider is kept, and a key two extensions
  *   both contribute resolves to the first-registered extension.
@@ -504,6 +564,86 @@ export interface OAuthProviderExtension {
 		 */
 		validate?: (input: OAuthClientMetadataExtensionInput) => Awaitable<void>;
 	};
+	/**
+	 * Requests other than an authorization request that users approve through
+	 * the `/oauth2/authorize` sign-in, account selection, post-login, and
+	 * consent pages, keyed by the query parameter that identifies one, such as
+	 * `user_code`. Every interaction page resumes them through
+	 * `/oauth2/authorize`.
+	 */
+	interactionRequests?: Record<string, OAuthInteractionRequestHandler>;
+}
+
+/**
+ * Parameters signed into each interaction page. An authorization request
+ * carries its `redirect_uri`; other interaction requests have none and add
+ * their own identifying parameter, such as `user_code`.
+ */
+export type OAuthInteractionQuery = Omit<
+	OAuthAuthorizationQuery,
+	"redirect_uri"
+> & {
+	redirect_uri?: string | undefined;
+};
+
+/**
+ * A request the user reviews through the `/oauth2/authorize` sign-in,
+ * account selection, signup, post-login, and consent pages.
+ */
+export interface OAuthInteractionRequest {
+	/** Signed into each interaction page; carries `prompt` and `max_age`. */
+	query: OAuthInteractionQuery;
+	/** The provider sends the user to the error page when this client is disabled. */
+	client: SchemaClient<Scope[]>;
+	/**
+	 * Show the consent page even when consent is stored or the client skips
+	 * it, and approve only in the request where the user accepts on that page.
+	 */
+	requireConsent?: boolean | undefined;
+	/**
+	 * Records the approval once every interaction is complete and returns the
+	 * URL to send the user to.
+	 */
+	approve: (approval: {
+		query: OAuthInteractionQuery;
+		userId: string;
+		sessionId: string;
+		authTime: number;
+		acr?: string;
+		amr?: string[];
+		referenceId?: string;
+	}) => Promise<string>;
+}
+
+/** Loads and denies one kind of {@link OAuthInteractionRequest}. */
+export interface OAuthInteractionRequestHandler {
+	/**
+	 * Loads the request identified by `value`. On a direct `/oauth2/authorize`
+	 * request only `value` comes from the caller; when resuming after an
+	 * interaction page, `signedQuery` is the query this server signed into it.
+	 * Throw an `APIError` when the request can no longer be approved.
+	 */
+	load: (input: {
+		ctx: GenericEndpointContext;
+		opts: OAuthOptions<Scope[]>;
+		value: string;
+		signedQuery?: OAuthInteractionQuery | undefined;
+	}) => Promise<OAuthInteractionRequest>;
+	/**
+	 * Records a denial from the consent page and returns the URL to send the
+	 * user to.
+	 */
+	deny: (input: {
+		ctx: GenericEndpointContext;
+		value: string;
+		userId: string;
+	}) => Promise<string>;
+	/**
+	 * Where to send the user when the request cannot be loaded, approved, or
+	 * denied, such as a page where they can correct it. The provider appends
+	 * `error` and `error_description`. Defaults to the provider error page.
+	 */
+	errorPage?: (input: { ctx: GenericEndpointContext; value: string }) => string;
 }
 
 export interface OAuthClientMetadataExtensionInput {
@@ -1124,7 +1264,8 @@ export interface OAuthOptions<
 		 * For example, allow selection of an organization or team.
 		 *
 		 * Upon selection of a specific account, use `/oauth2/continue`
-		 * with `postLogin: true` to continue the login flow.
+		 * with `postLogin: true` to continue the login flow. The continue
+		 * request runs `shouldRedirect` again with `isContinuation: true`.
 		 *
 		 * @returns
 		 * - `true`: account is not selected and needs selection
@@ -1135,6 +1276,12 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * `true` when the user returns from `page` through `/oauth2/continue`.
+			 * The client chooses to send that request, so it does not prove a
+			 * selection was made: validate the session before returning `false`.
+			 */
+			isContinuation: boolean;
 		}) => Awaitable<boolean>;
 	};
 	/**
@@ -1235,6 +1382,14 @@ export interface OAuthOptions<
 		 */
 		requestedClaims: string[];
 	}) => Awaitable<Record<string, any>>;
+	/**
+	 * Asserts the `acr` and `amr` ID token claims for each approved
+	 * authorization request.
+	 *
+	 * Without this option, ID tokens carry `acr: "0"` (OIDC level 0) and no
+	 * `amr`.
+	 */
+	authenticationContext?: OAuthAuthenticationContextOptions<Scopes>;
 	/**
 	 * Custom claims attached to OIDC id tokens.
 	 *
@@ -1766,6 +1921,8 @@ export interface VerificationValue {
 	resource?: string[];
 	referenceId?: string;
 	authTime?: number;
+	acr?: string;
+	amr?: string[];
 }
 
 /**
@@ -2050,6 +2207,10 @@ export interface OAuthRefreshToken<
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
 	 */
 	authTime?: Date;
+	/** The `acr` asserted at authorization, carried forward on rotation. */
+	acr?: string;
+	/** The `amr` asserted at authorization, carried forward on rotation. */
+	amr?: string[];
 	/**
 	 * Scopes granted for this refresh token.
 	 *

@@ -209,27 +209,30 @@ describe("verifyProviderIdToken", () => {
 			["iat", 35, false],
 			["exp", -25, true],
 			["exp", -35, false],
-		] as const)("%s %is from now verifies: %s", async (claim, offset, valid) => {
-			const { jwks, privateKey } = await makeKeyset();
-			const now = Math.floor(Date.now() / 1000);
-			const times = { iat: now - 60, exp: now + 3600, [claim]: now + offset };
-			const token = await new SignJWT(
-				claim === "nbf" ? { sub: "u1", nbf: times.nbf } : { sub: "u1" },
-			)
-				.setProtectedHeader({ alg: "RS256", kid: "test-key" })
-				.setIssuer(ISSUER)
-				.setAudience(AUDIENCE)
-				.setIssuedAt(times.iat)
-				.setExpirationTime(times.exp)
-				.sign(privateKey);
-			const provider = providerWith({
-				jwks,
-				issuer: ISSUER,
-				audience: AUDIENCE,
-				maxTokenAge: "1h",
-			});
-			expect(await verifyProviderIdToken(provider, token)).toBe(valid);
-		});
+		] as const)(
+			"%s %is from now verifies: %s",
+			async (claim, offset, valid) => {
+				const { jwks, privateKey } = await makeKeyset();
+				const now = Math.floor(Date.now() / 1000);
+				const times = { iat: now - 60, exp: now + 3600, [claim]: now + offset };
+				const token = await new SignJWT(
+					claim === "nbf" ? { sub: "u1", nbf: times.nbf } : { sub: "u1" },
+				)
+					.setProtectedHeader({ alg: "RS256", kid: "test-key" })
+					.setIssuer(ISSUER)
+					.setAudience(AUDIENCE)
+					.setIssuedAt(times.iat)
+					.setExpirationTime(times.exp)
+					.sign(privateKey);
+				const provider = providerWith({
+					jwks,
+					issuer: ISSUER,
+					audience: AUDIENCE,
+					maxTokenAge: "1h",
+				});
+				expect(await verifyProviderIdToken(provider, token)).toBe(valid);
+			},
+		);
 	});
 
 	describe("provider regressions", () => {

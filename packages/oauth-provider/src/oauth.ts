@@ -164,6 +164,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			}
 		}
 	}
+	const acrValuesSupported = options.authenticationContext?.acrValuesSupported;
+	if (
+		acrValuesSupported &&
+		(acrValuesSupported.length === 0 || acrValuesSupported.includes(""))
+	) {
+		throw new BetterAuthError(
+			"authenticationContext.acrValuesSupported must list at least one non-empty acr value",
+		);
+	}
 	for (const sc of options.advertisedMetadata?.scopes_supported ?? []) {
 		if (!scopes?.has(sc)) {
 			throw new BetterAuthError(
@@ -372,11 +381,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "OAuth 2.1 response type (e.g., 'code')",
 						},
 						{
+							name: "user_code",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description:
+								"Device user code to approve instead of an authorization request (requires oauthDeviceAuthorization())",
+						},
+						{
 							name: "client_id",
 							in: "query",
-							required: true,
+							required: false,
 							schema: { type: "string" },
-							description: "OAuth 2.1 client ID",
+							description:
+								"OAuth 2.1 client ID, required for authorization requests (not for user_code)",
 						},
 						{
 							name: "redirect_uri",
@@ -840,7 +858,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Confirms an account was registered",
 						}),
 						postLogin: z.boolean().optional().meta({
-							description: "Confirms organization and/or team selection.",
+							description:
+								"Resumes after the post login page. postLogin.shouldRedirect runs again with isContinuation: true.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",

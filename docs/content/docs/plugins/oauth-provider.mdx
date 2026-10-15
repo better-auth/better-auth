@@ -562,6 +562,7 @@ Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC
 When a token is DPoP-bound:
 
 * The token endpoint requires a valid `DPoP` proof JWT.
+* The proof's `htu` must be the endpoint's public URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`. This holds even when a proxy or dev server rewrites the request host.
 * The token response returns `token_type: "DPoP"`.
 * JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
 * Refresh token rotation requires a DPoP proof from the same key.
@@ -671,7 +672,7 @@ The cached response is stored encrypted on the consumed refresh-token row and in
 
 #### Device code grant
 
-The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and RFC 8707 resource fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding, RFC 8707 resource, consent reference, authentication time, and authentication context (`acr`, `amr`) fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them through `/oauth2/authorize?user_code=…` and the same sign-in, account selection, post-login, and consent pages as an authorization request, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
 
 At `/device/code`, confidential clients authenticate with their registered method. A client using `client_secret_basic` may send an `Authorization: Basic ...` header and omit the body `client_id`; a client using `client_secret_post` sends `client_id` and `client_secret`; and a public client using `none` sends `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication parameters are treated as omitted regardless of order. Repeated non-empty client identification, base request, or authentication parameters and multiple authentication methods return `invalid_request`, while repeated `resource` parameters remain supported.
 
@@ -718,7 +719,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
      */
     created?: boolean,
     /**
-     * Confirms completion of post login activity
+     * Resumes after the post login page. `postLogin.shouldRedirect` runs again with `isContinuation: true`.
      */
     postLogin?: boolean,
   }
@@ -1122,7 +1123,7 @@ You don't need to handle anything from your side; when a new session is created,
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data.
 
-**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
+**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications. Device approvals from `oauthDeviceAuthorization()` always show the consent screen, and their query also carries `user_code`; show it so the user can check that it matches the code on their device.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1233,20 +1234,25 @@ The following example uses the organization plugin to automatically redirect to 
 
 ```ts title="auth.ts"
 oauthProvider({
-  scopes: ["openid", "profile", "email", "read:organization"]
+  scopes: ["openid", "profile", "email", "read:organization"],
   postLogin: {
     page: "/select-organization", // [!code highlight]
-    shouldRedirect: async ({ session, scopes, headers }) => { // [!code highlight]
+    shouldRedirect: async ({ session, scopes, headers, isContinuation }) => { // [!code highlight]
       const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
       if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
         return false;
       }
+      if (!session.activeOrganizationId) {
+        return true;
+      }
       const organizations = await auth.api.listOrganizations({
         headers,
       });
-      return organizations.length > 1 || !(
-        organizations.length === 1 && organizations.at(0)?.id === session.activeOrganizationId
-      )
+      if (!organizations.some((org) => org.id === session.activeOrganizationId)) {
+        return true;
+      }
+      // Ask on every new authorization; accept the selection on continuation
+      return !isContinuation && organizations.length > 1;
     },
     consentReferenceId: ({ session, scopes }) => { // [!code highlight]
       if (scopes.includes("read:organization")) {
@@ -1266,7 +1272,9 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, you should call `oauth2Continue`.
+The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`. Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
+
+`shouldRedirect` runs again on continuation with `isContinuation: true`. Use this value to check the selected organization without asking multi-organization users to select again. It is not proof of selection: check the current session and organization membership before returning `false`. Each new authorization request starts with `isContinuation: false`.
 
 ```ts title="select-organization.ts"
 import { authClient } from "@/lib/auth-client"
@@ -1274,7 +1282,7 @@ import { authClient } from "@/lib/auth-client"
 await authClient.organization.setActive({
   organizationId,
 });
-await client.oauth2.oauth2Continue({
+await authClient.oauth2.continue({
   postLogin: true,
 });
 ```
@@ -1521,6 +1529,72 @@ oauthProvider({
 
 The callback receives the grant type, user (undefined for `client_credentials`), scopes, parsed client metadata, and the verification value (only for `authorization_code` grants). It is called before any tokens are created, so throwing an error will not leave partially-applied state.
 
+### Authentication Context
+
+ID tokens carry `acr: "0"` (OIDC level 0) and no `amr` by default. To assert a stronger authentication class or the methods the user signed in with, set `authenticationContext` with both fields:
+
+* `acrValuesSupported` lists the `acr` values the provider may issue. Discovery advertises it as `acr_values_supported`. Include `"0"` if `resolve` can return no `acr`.
+* `resolve` returns the `acr` and `amr` the current session established. It runs once, when the user approves an authorization request or a device code with the `openid` scope, and receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`).
+
+Return only what the session proved. Better Auth does not record how a session signed in, so track it yourself. The example below marks sessions created by a completed two-factor challenge. Sessions created through a trusted device skip that challenge and stay unmarked.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt, twoFactor } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
+
+const MFA = "urn:example:acr:mfa";
+
+export const auth = betterAuth({
+  session: {
+    additionalFields: {
+      twoFactorVerified: { type: "boolean", defaultValue: false, input: false },
+    },
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        // Two-factor verification endpoints create the session only after the
+        // second factor succeeds.
+        before: async (session, ctx) => ({
+          data: {
+            ...session,
+            twoFactorVerified:
+              ctx?.path?.startsWith("/two-factor/verify-") ?? false,
+          },
+        }),
+      },
+    },
+  },
+  plugins: [
+    twoFactor(),
+    jwt(),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      authenticationContext: {
+        acrValuesSupported: ["0", MFA],
+        // Assert only what the session proved: the two-factor step, not how the
+        // first factor was done.
+        resolve: ({ session }) =>
+          session.twoFactorVerified === true
+            ? { acr: MFA, amr: ["mfa"] }
+            : { acr: "0" },
+      },
+    }),
+  ],
+});
+```
+
+How a request for a class is handled depends on whether it is essential:
+
+* An essential request (`claims={"id_token":{"acr":{"essential":true,"value":"…"}}}`) the session does not satisfy fails with `access_denied` at the client's redirect URI. If no value in `acrValuesSupported` could satisfy it, the request fails before sign-in.
+* A voluntary request (`acr_values`, or an `acr` claim without `essential`) never fails. The ID token reports the session's current `acr`.
+
+`resolve` must return an `acr` from `acrValuesSupported` (or omit it to use `"0"`), and `amr` must be an array of strings. Any other result fails the authorization with `server_error`. To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`; the client receives that error and its `error_description`. For a device code, the user sees the error on your verification page instead, and the code stays pending so the user can retry.
+
+The `acr` and `amr` are stored with the authorization code or device code and the refresh token, so ID tokens from later refreshes keep the values of the original authentication ([OIDC Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse)). They change only when the user authorizes again.
+
 ### Expirations
 
 Each token type and grant type can independently can set a default expiration.
@@ -1712,7 +1786,7 @@ Some clients (notably MCP clients) need to connect to your authorization server 
 
 ### Provider extensions
 
-OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, client registration metadata, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, client registration metadata, client-id discovery sources, and interaction requests. An interaction request runs through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages, and is approved when the user accepts consent instead of issuing an authorization code; `oauthDeviceAuthorization()` uses one keyed by `user_code`. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
 
 ```ts title="custom-oauth-extension.ts"
 import type { BetterAuthPlugin } from "better-auth";
@@ -2005,7 +2079,7 @@ The metadata endpoint can be customized so that the publicized scopes and claims
 
 All scopes inside the advertisedMetadata section MUST be listed in `scopes` otherwise initialization will fail.
 
-Better Auth advertises `acr_values_supported: ["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. Custom ACR policies are not currently supported. Because `acr_values` is voluntary, requests for other classes continue and the ID token reports `acr: "0"`. In an OpenID Connect request, an essential `claims.id_token.acr` request fails when its `value` or `values` does not include `"0"`.
+Better Auth advertises `acr_values_supported` from `authenticationContext.acrValuesSupported`, which defaults to `["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. See [Authentication Context](#authentication-context) to assert other classes.
 
 #### Scopes
 
@@ -2446,6 +2520,20 @@ export const oauthRefreshTokenTableFields = [
     type: "Date",
     description:
       "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
+    isOptional: true,
+  },
+  {
+    name: "acr",
+    type: "string",
+    description:
+      "Authentication Context Class Reference asserted at authorization. Preserved across token rotation for refreshed ID tokens.",
+    isOptional: true,
+  },
+  {
+    name: "amr",
+    type: "string[]",
+    description:
+      "Authentication Methods References asserted at authorization. Preserved across token rotation for refreshed ID tokens.",
     isOptional: true,
   },
   {
