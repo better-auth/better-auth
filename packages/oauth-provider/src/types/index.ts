@@ -422,7 +422,7 @@ export interface OAuthUserInfoExtensionInput {
  * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
  * option).
  *
- * All five kinds live on one object so a single protocol plugin (for example
+ * All seven kinds live on one object so a single protocol plugin (for example
  * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
  * claims) registers atomically and the host validates the combined surface in
  * one place. Every field is independently optional, so a single-concern plugin
@@ -430,10 +430,11 @@ export interface OAuthUserInfoExtensionInput {
  * just the one it needs. This is the shape every future OAuth RFC plugin copies.
  *
  * Two contribution disciplines:
- * - Dispatched kinds (`grants`, `clientAuthentication`) must be disjoint across
- *   extensions: registering a grant type, auth method, or assertion type that
- *   another extension already registered is rejected at setup, since the second
- *   would otherwise be silently unreachable.
+ * - Dispatched kinds (`grants`, `clientAuthentication`, `interactionRequests`)
+ *   must be disjoint across extensions: registering a grant type, auth method,
+ *   assertion type, or interaction parameter that another extension already
+ *   registered is rejected at setup, since the second would otherwise be
+ *   silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
  *   core; a key already owned by the provider is kept, and a key two extensions
  *   both contribute resolves to the first-registered extension.
@@ -511,6 +512,84 @@ export interface OAuthProviderExtension {
 		 */
 		validate?: (input: OAuthClientMetadataExtensionInput) => Awaitable<void>;
 	};
+	/**
+	 * Requests other than an authorization request that users approve through
+	 * the `/oauth2/authorize` sign-in, account selection, post-login, and
+	 * consent pages, keyed by the query parameter that identifies one, such as
+	 * `user_code`. Every interaction page resumes them through
+	 * `/oauth2/authorize`.
+	 */
+	interactionRequests?: Record<string, OAuthInteractionRequestHandler>;
+}
+
+/**
+ * Parameters signed into each interaction page. An authorization request
+ * carries its `redirect_uri`; other interaction requests have none and add
+ * their own identifying parameter, such as `user_code`.
+ */
+export type OAuthInteractionQuery = Omit<
+	OAuthAuthorizationQuery,
+	"redirect_uri"
+> & {
+	redirect_uri?: string | undefined;
+};
+
+/**
+ * A request the user reviews through the `/oauth2/authorize` sign-in,
+ * account selection, signup, post-login, and consent pages.
+ */
+export interface OAuthInteractionRequest {
+	/** Signed into each interaction page; carries `prompt` and `max_age`. */
+	query: OAuthInteractionQuery;
+	/** The provider sends the user to the error page when this client is disabled. */
+	client: SchemaClient<Scope[]>;
+	/**
+	 * Show the consent page even when consent is stored or the client skips
+	 * it, and approve only in the request where the user accepts on that page.
+	 */
+	requireConsent?: boolean | undefined;
+	/**
+	 * Records the approval once every interaction is complete and returns the
+	 * URL to send the user to.
+	 */
+	approve: (approval: {
+		query: OAuthInteractionQuery;
+		userId: string;
+		sessionId: string;
+		authTime: number;
+		referenceId?: string;
+	}) => Promise<string>;
+}
+
+/** Loads and denies one kind of {@link OAuthInteractionRequest}. */
+export interface OAuthInteractionRequestHandler {
+	/**
+	 * Loads the request identified by `value`. On a direct `/oauth2/authorize`
+	 * request only `value` comes from the caller; when resuming after an
+	 * interaction page, `signedQuery` is the query this server signed into it.
+	 * Throw an `APIError` when the request can no longer be approved.
+	 */
+	load: (input: {
+		ctx: GenericEndpointContext;
+		opts: OAuthOptions<Scope[]>;
+		value: string;
+		signedQuery?: OAuthInteractionQuery | undefined;
+	}) => Promise<OAuthInteractionRequest>;
+	/**
+	 * Records a denial from the consent page and returns the URL to send the
+	 * user to.
+	 */
+	deny: (input: {
+		ctx: GenericEndpointContext;
+		value: string;
+		userId: string;
+	}) => Promise<string>;
+	/**
+	 * Where to send the user when the request cannot be loaded, approved, or
+	 * denied, such as a page where they can correct it. The provider appends
+	 * `error` and `error_description`. Defaults to the provider error page.
+	 */
+	errorPage?: (input: { ctx: GenericEndpointContext; value: string }) => string;
 }
 
 export interface OAuthClientMetadataExtensionInput {

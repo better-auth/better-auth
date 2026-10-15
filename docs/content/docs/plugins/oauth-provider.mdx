@@ -672,7 +672,7 @@ The cached response is stored encrypted on the consumed refresh-token row and in
 
 #### Device code grant
 
-The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding and RFC 8707 resource fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding, RFC 8707 resource, consent reference, and authentication time fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them through `/oauth2/authorize?user_code=…` and the same sign-in, account selection, post-login, and consent pages as an authorization request, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
 
 At `/device/code`, confidential clients authenticate with their registered method. A client using `client_secret_basic` may send an `Authorization: Basic ...` header and omit the body `client_id`; a client using `client_secret_post` sends `client_id` and `client_secret`; and a public client using `none` sends `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication parameters are treated as omitted regardless of order. Repeated non-empty client identification, base request, or authentication parameters and multiple authentication methods return `invalid_request`, while repeated `resource` parameters remain supported.
 
@@ -1123,7 +1123,7 @@ You don't need to handle anything from your side; when a new session is created,
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data.
 
-**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications.
+**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications. Device approvals from `oauthDeviceAuthorization()` always show the consent screen, and their query also carries `user_code`; show it so the user can check that it matches the code on their device.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1272,7 +1272,7 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`.
+The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`. Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
 
 `shouldRedirect` runs again on continuation with `isContinuation: true`. Use this value to check the selected organization without asking multi-organization users to select again. It is not proof of selection: check the current session and organization membership before returning `false`. Each new authorization request starts with `isContinuation: false`.
 
@@ -1722,7 +1722,7 @@ Some clients (notably MCP clients) need to connect to your authorization server 
 
 ### Provider extensions
 
-OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, client registration metadata, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, client registration metadata, client-id discovery sources, and interaction requests. An interaction request runs through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages, and is approved when the user accepts consent instead of issuing an authorization code; `oauthDeviceAuthorization()` uses one keyed by `user_code`. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
 
 ```ts title="custom-oauth-extension.ts"
 import type { BetterAuthPlugin } from "better-auth";
