@@ -199,11 +199,16 @@ export const createAdapterFactory =
 		 * when no serial id can equal it.
 		 */
 		const parseNumberId = (value: unknown): number | undefined => {
-			// `Number("")` and `Number(" ")` are `0`, which no serial column holds.
-			const parsed =
-				typeof value === "string" && value.trim() === ""
-					? Number.NaN
-					: Number(value);
+			// `Number("")` is `0` and `Number(true)` is `1`, so only numbers and
+			// non-blank strings can name a serial id.
+			if (
+				typeof value !== "number" &&
+				typeof value !== "bigint" &&
+				(typeof value !== "string" || value.trim() === "")
+			) {
+				return undefined;
+			}
+			const parsed = Number(value);
 			return Number.isInteger(parsed) ? parsed : undefined;
 		};
 

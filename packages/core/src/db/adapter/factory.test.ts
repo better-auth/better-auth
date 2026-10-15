@@ -403,6 +403,13 @@ describe("createAdapterFactory where value coercion", () => {
 				where: [{ field: "id", operator: "in", value: ["agent-host-xyz"] }],
 			}),
 		).toEqual([]);
+		// `Number(true)` is `1`, which would target the first row.
+		expect(
+			await adapter.findMany({
+				model: "user",
+				where: [{ field: "id", value: true }],
+			}),
+		).toEqual([]);
 		// An unmatchable AND clause empties the result even beside an OR group.
 		expect(
 			await adapter.findMany({
@@ -453,6 +460,12 @@ describe("createAdapterFactory where value coercion", () => {
 			adapter.create({
 				model: "session",
 				data: { userId: "agent-host-xyz", token: "token" },
+			}),
+		).rejects.toThrow(/numeric id/);
+		await expect(
+			adapter.create({
+				model: "session",
+				data: { userId: true, token: "token" },
 			}),
 		).rejects.toThrow(/numeric id/);
 
