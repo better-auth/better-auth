@@ -57,6 +57,30 @@ export const schema = {
 				type: "string",
 				required: true,
 			},
+			/**
+			 * Ping mode only: the client's registered notification endpoint when the
+			 * request started, which the ping callback calls.
+			 */
+			clientNotificationEndpoint: {
+				type: "string",
+				required: false,
+			},
+			/**
+			 * Bearer token a ping-mode client supplied (CIBA §7.1), sent back on the
+			 * ping callback.
+			 */
+			clientNotificationToken: {
+				type: "string",
+				required: false,
+			},
+			/**
+			 * Ping mode only: the `auth_req_id`, encrypted with the server secret,
+			 * because the ping callback carries the raw value (CIBA §10.2).
+			 */
+			encryptedAuthReqId: {
+				type: "string",
+				required: false,
+			},
 			/** Consent reference the approval recorded, such as an organization. */
 			referenceId: {
 				type: "string",
@@ -93,6 +117,9 @@ export interface CibaRequest {
 	bindingMessage?: string | null;
 	resources?: string[] | null;
 	status: "pending" | "approved" | "denied";
+	clientNotificationEndpoint?: string | null;
+	clientNotificationToken?: string | null;
+	encryptedAuthReqId?: string | null;
 	referenceId?: string | null;
 	authTime?: Date | null;
 	lastPolledAt?: Date | null;

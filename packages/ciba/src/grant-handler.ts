@@ -5,6 +5,7 @@ import {
 } from "@better-auth/oauth-provider/internal";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
+import type { ResolvedCibaOptions } from "./types";
 
 /**
  * Token-endpoint handler for the CIBA poll (CIBA §10.1, §11). Polling at the
@@ -12,7 +13,7 @@ import type { CibaRequest } from "./schema";
  * an approved request is claimed once, atomically, before tokens are issued.
  */
 export const createCibaGrantHandler =
-	(intervalSeconds: number): OAuthExtensionGrantHandler =>
+	(options: ResolvedCibaOptions): OAuthExtensionGrantHandler =>
 	async ({ ctx, opts, provider }) => {
 		const authReqId = ctx.body?.auth_req_id;
 		if (typeof authReqId !== "string" || !authReqId) {
@@ -20,7 +21,9 @@ export const createCibaGrantHandler =
 		}
 		// CIBA §10.1: the client authenticates as registered.
 		const { client, clientId, confirmation } =
-			await provider.authenticateClient();
+			await provider.authenticateClient({
+				requireCredentials: !options.allowPublicClients,
+			});
 
 		const { adapter } = ctx.context;
 		const request = await adapter.findOne<CibaRequest>({
@@ -45,7 +48,7 @@ export const createCibaGrantHandler =
 		}
 		if (
 			request.lastPolledAt &&
-			Date.now() - request.lastPolledAt.getTime() < intervalSeconds * 1000
+			Date.now() - request.lastPolledAt.getTime() < options.interval * 1000
 		) {
 			oauthError("slow_down", CIBA_ERROR_CODES.POLLING_TOO_FREQUENTLY.message);
 		}

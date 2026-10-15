@@ -4,6 +4,7 @@ import type { OAuthInteractionRequestHandler } from "@better-auth/oauth-provider
 import { getOAuthProviderApi } from "@better-auth/oauth-provider";
 import { getSessionFromCtx } from "better-auth/api";
 import { APPROVAL_PARAMETER } from "./constants";
+import { pingClient } from "./delivery";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
 
@@ -13,9 +14,9 @@ const unknownRequest = () =>
 	oauthError("invalid_request", CIBA_ERROR_CODES.UNKNOWN_REQUEST.message);
 
 /**
- * Records `userId`'s decision on a request. The guard binds it to the hinted
- * user and makes it one-way, so a second decision or one that outlasts the
- * request fails.
+ * Records `userId`'s decision on a request, then pings a ping-mode client. The
+ * guard binds it to the hinted user and makes it one-way, so a second decision
+ * or one that outlasts the request fails.
  */
 async function recordDecision(
 	ctx: GenericEndpointContext,
@@ -34,7 +35,8 @@ async function recordDecision(
 		increment: {},
 		set: fields,
 	});
-	if (!decided) unknownRequest();
+	if (!decided) return unknownRequest();
+	await pingClient(ctx, decided);
 }
 
 /**

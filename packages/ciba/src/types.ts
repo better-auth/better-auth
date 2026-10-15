@@ -1,6 +1,10 @@
 import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
+import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
 import type { InferOptionSchema, User } from "better-auth/types";
 import type { schema } from "./schema";
+
+/** CIBA token delivery modes this plugin implements (CIBA §5). */
+export type CibaDeliveryMode = "poll" | "ping";
 
 /**
  * What {@link CibaOptions.sendNotification} receives to reach the user on a
@@ -49,12 +53,34 @@ export interface CibaOptions {
 	/**
 	 * Find the user a `login_hint` identifies. Defaults to an email lookup.
 	 * Return `null` when no user matches, and the client receives
-	 * `unknown_user_id`.
+	 * `unknown_user_id`. Receives the requesting client, so a deployment with
+	 * open client registration can resolve only identifiers that client was
+	 * already given, such as its pairwise `sub`.
 	 */
 	resolveUser?: (
-		loginHint: string,
+		input: { loginHint: string; client: SchemaClient<Scope[]> },
 		ctx: GenericEndpointContext,
 	) => Awaitable<User | null>;
+
+	/**
+	 * Accept clients registered with `token_endpoint_auth_method: "none"`, such
+	 * as agents and CLIs that cannot keep a secret. CIBA §7.1 requires client
+	 * authentication, so enable this only for public clients that bind their
+	 * tokens another way, such as DPoP.
+	 *
+	 * @default false
+	 */
+	allowPublicClients?: boolean;
+
+	/**
+	 * Token delivery modes clients may register for, as
+	 * `backchannel_token_delivery_mode` (CIBA §4). In `ping` mode the server
+	 * also calls the client's `backchannel_client_notification_endpoint` once
+	 * the user decides.
+	 *
+	 * @default ["poll"]
+	 */
+	deliveryModes?: CibaDeliveryMode[];
 
 	/**
 	 * Lifetime of a request, in seconds. A client may ask for less with
@@ -75,3 +101,10 @@ export interface CibaOptions {
 	/** Rename the `cibaRequest` model or its fields. */
 	schema?: InferOptionSchema<typeof schema>;
 }
+
+/** {@link CibaOptions} with defaults applied. */
+export type ResolvedCibaOptions = CibaOptions & {
+	deliveryModes: CibaDeliveryMode[];
+	expiresIn: number;
+	interval: number;
+};

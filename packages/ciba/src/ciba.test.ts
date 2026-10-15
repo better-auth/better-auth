@@ -8,7 +8,7 @@ import { getTestInstance } from "better-auth/test";
 import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeAll, describe, expect, it, vi } from "vitest";
-import type { CibaNotification } from "./index";
+import type { CibaNotification, CibaOptions } from "./index";
 import { CIBA_GRANT_TYPE, ciba } from "./index";
 
 const baseURL = "http://localhost:3000";
@@ -16,6 +16,11 @@ const resource = "https://api.example.com";
 const secondResource = "https://files.example.com";
 const INTERVAL = 1;
 const POLL = { backchannel_token_delivery_mode: "poll" };
+const notificationEndpoint = "https://client.example.com/ciba";
+const PING = {
+	backchannel_token_delivery_mode: "ping",
+	backchannel_client_notification_endpoint: notificationEndpoint,
+};
 
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
@@ -35,7 +40,13 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
 			}),
-			ciba({ resultPage: "/ciba", interval: INTERVAL, sendNotification }),
+			ciba({
+				resultPage: "/ciba",
+				interval: INTERVAL,
+				deliveryModes: ["poll", "ping"],
+				allowPublicClients: true,
+				sendNotification,
+			}),
 		],
 	});
 
@@ -62,8 +73,20 @@ function createClient(metadata?: Record<string, unknown>, extra = {}) {
 	});
 }
 
-function basicAuth(client: OAuthClient): string {
-	return `Basic ${btoa(`${client.client_id}:${client.client_secret}`)}`;
+/** HTTP Basic for a confidential client; `client_id` in the form for a public one. */
+function clientAuthentication(client: OAuthClient | null): {
+	headers: Record<string, string>;
+	params: Record<string, string>;
+} {
+	if (!client) return { headers: {}, params: {} };
+	return client.client_secret
+		? {
+				headers: {
+					authorization: `Basic ${btoa(`${client.client_id}:${client.client_secret}`)}`,
+				},
+				params: {},
+			}
+		: { headers: {}, params: { client_id: client.client_id } };
 }
 
 /** The provider's default token hash, used to reach rows by raw auth_req_id. */
@@ -90,16 +113,18 @@ const waitInterval = () =>
 async function bcAuthorize(
 	params: Record<string, string | string[]>,
 	client: OAuthClient | null = pollClient,
+	fetchImpl = customFetchImpl,
 ) {
-	const body = new URLSearchParams();
+	const authentication = clientAuthentication(client);
+	const body = new URLSearchParams(authentication.params);
 	for (const [key, value] of Object.entries(params)) {
 		for (const v of [value].flat()) body.append(key, v);
 	}
-	const res = await customFetchImpl(`${baseURL}/api/auth/oauth2/bc-authorize`, {
+	const res = await fetchImpl(`${baseURL}/api/auth/oauth2/bc-authorize`, {
 		method: "POST",
 		headers: {
 			"content-type": "application/x-www-form-urlencoded",
-			...(client ? { authorization: basicAuth(client) } : {}),
+			...authentication.headers,
 		},
 		body: body.toString(),
 	});
@@ -124,14 +149,16 @@ async function poll(
 	client: OAuthClient = pollClient,
 	extraHeaders: Record<string, string> = {},
 ) {
+	const authentication = clientAuthentication(client);
 	const res = await customFetchImpl(`${baseURL}/api/auth/oauth2/token`, {
 		method: "POST",
 		headers: {
 			"content-type": "application/x-www-form-urlencoded",
-			authorization: basicAuth(client),
+			...authentication.headers,
 			...extraHeaders,
 		},
 		body: new URLSearchParams({
+			...authentication.params,
 			grant_type: CIBA_GRANT_TYPE,
 			auth_req_id: authReqId,
 		}).toString(),
@@ -383,7 +410,7 @@ describe("ciba poll mode", () => {
 			{
 				method: "POST",
 				headers: {
-					authorization: basicAuth(pollClient),
+					...clientAuthentication(pollClient).headers,
 					"content-type": "application/x-www-form-urlencoded",
 				},
 				body: new URLSearchParams({ token: issued.body.access_token }),
@@ -481,7 +508,7 @@ describe("ciba backchannel request validation", () => {
 				method: "POST",
 				headers: {
 					"content-type": "application/json",
-					authorization: basicAuth(pollClient),
+					...clientAuthentication(pollClient).headers,
 				},
 				body: JSON.stringify({ scope: "openid", login_hint: testUser.email }),
 			},
@@ -503,9 +530,37 @@ describe("ciba backchannel request validation", () => {
 
 	it.each([
 		["no delivery mode", undefined],
-		["ping delivery", { backchannel_token_delivery_mode: "ping" }],
-	])("rejects a client registered with %s", async (_, metadata) => {
-		const client = await createClient(metadata);
+		["push delivery", { backchannel_token_delivery_mode: "push" }],
+		["ping without an endpoint", { backchannel_token_delivery_mode: "ping" }],
+		[
+			"ping to a non-https endpoint",
+			{
+				...PING,
+				backchannel_client_notification_endpoint:
+					"http://client.example.com/ciba",
+			},
+		],
+		[
+			"ping to a private host",
+			{
+				...PING,
+				backchannel_client_notification_endpoint: "https://127.0.0.1/ciba",
+			},
+		],
+	])("refuses to register a CIBA client with %s", async (_, metadata) => {
+		await expect(createClient(metadata)).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+	});
+
+	it("rejects a client whose stored delivery mode is no longer valid", async () => {
+		const client = await createClient(POLL);
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: client.client_id }],
+			update: { metadata: JSON.stringify({}) },
+		});
 		const res = await bcAuthorize(
 			{ scope: "openid", login_hint: testUser.email },
 			client,
@@ -514,20 +569,36 @@ describe("ciba backchannel request validation", () => {
 		expect(res.body.error).toBe("unauthorized_client");
 	});
 
-	it("refuses a client from open registration, so it cannot prompt users", async () => {
+	/**
+	 * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#registration
+	 */
+	it("registers a CIBA client through open registration (CIBA §4)", async () => {
 		const body = {
-			client_name: "Anyone",
+			client_name: "Registered Agent",
 			grant_types: [CIBA_GRANT_TYPE],
 			token_endpoint_auth_method: "client_secret_basic",
-			// Dropped: only server-side client management sets metadata.
-			metadata: POLL,
 		};
-		const registered = await auth.api.registerOAuthClient({ body });
+		const unsupported = { ...body, backchannel_token_delivery_mode: "push" };
+		await expect(
+			auth.api.registerOAuthClient({ body: unsupported }),
+		).rejects.toMatchObject({ body: { error: "invalid_client_metadata" } });
+
+		const poll = { ...body, ...POLL };
+		const registered = await auth.api.registerOAuthClient({ body: poll });
 		const res = await bcAuthorize(
 			{ scope: "openid", login_hint: testUser.email },
 			registered,
 		);
-		expect(res.body.error).toBe("unauthorized_client");
+		expect(res.status).toBe(200);
+	});
+
+	it("lets a public client complete the flow with allowPublicClients", async () => {
+		const publicClient = await createClient(POLL, {
+			token_endpoint_auth_method: "none",
+		});
+		const { authReqId, url } = await start({}, publicClient);
+		await approve(url);
+		expect((await poll(authReqId, publicClient)).status).toBe(200);
 	});
 
 	it("caps requested_expiry at the configured lifetime", async () => {
@@ -547,16 +618,151 @@ describe("ciba backchannel request validation", () => {
 });
 
 describe("ciba discovery metadata", () => {
-	it("advertises the backchannel endpoint in poll mode", async () => {
+	it("advertises the backchannel endpoint and configured delivery modes", async () => {
 		const metadata = (await auth.api.getOpenIdConfig()) as Record<
 			string,
 			unknown
 		>;
 		expect(metadata).toMatchObject({
 			backchannel_authentication_endpoint: `${baseURL}/api/auth/oauth2/bc-authorize`,
-			backchannel_token_delivery_modes_supported: ["poll"],
+			backchannel_token_delivery_modes_supported: ["poll", "ping"],
 			backchannel_user_code_parameter_supported: false,
 		});
 		expect(metadata.grant_types_supported).toContain(CIBA_GRANT_TYPE);
+	});
+});
+
+/**
+ * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.2
+ */
+describe("ciba ping mode", () => {
+	let pingClient: OAuthClient;
+	const token = "client-token.123";
+
+	beforeAll(async () => {
+		pingClient = await createClient(PING);
+	});
+
+	function mockPing(
+		response = async () => new Response(null, { status: 204 }),
+	) {
+		return vi.spyOn(globalThis, "fetch").mockImplementation(response);
+	}
+
+	const startPing = () =>
+		start({ client_notification_token: token }, pingClient);
+
+	it("pings the client's endpoint when the user approves", async () => {
+		const ping = mockPing();
+		const { authReqId, url } = await startPing();
+		expect(ping).not.toHaveBeenCalled();
+		await approve(url);
+
+		expect(ping).toHaveBeenCalledOnce();
+		const [endpoint, init] = ping.mock.calls[0]!;
+		expect(endpoint).toBe(notificationEndpoint);
+		expect(init).toMatchObject({ method: "POST", redirect: "error" });
+		expect(new Headers(init?.headers).get("authorization")).toBe(
+			`Bearer ${token}`,
+		);
+		expect(JSON.parse(init?.body as string)).toEqual({
+			auth_req_id: authReqId,
+		});
+		expect((await poll(authReqId, pingClient)).status).toBe(200);
+	});
+
+	it("pings the client when the user denies", async () => {
+		const ping = mockPing();
+		const { authReqId, url } = await startPing();
+		await answerConsent(await openLink(url), false);
+		expect(ping).toHaveBeenCalledOnce();
+		expect((await poll(authReqId, pingClient)).body.error).toBe(
+			"access_denied",
+		);
+	});
+
+	it("keeps the decision when the ping fails", async () => {
+		mockPing(async () => {
+			throw new TypeError("fetch failed");
+		});
+		const { authReqId, url } = await startPing();
+		await approve(url);
+		expect((await poll(authReqId, pingClient)).status).toBe(200);
+	});
+
+	it.each([
+		["a missing client_notification_token", {}],
+		[
+			"a client_notification_token that is not a bearer token",
+			{ client_notification_token: "has spaces" },
+		],
+		[
+			"a client_notification_token over 1024 characters",
+			{ client_notification_token: "x".repeat(1025) },
+		],
+	])("rejects %s", async (_, params) => {
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: testUser.email, ...params },
+			pingClient,
+		);
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid_request");
+	});
+
+	it("does not ping a poll client", async () => {
+		const ping = mockPing();
+		const { url } = await start({ client_notification_token: token });
+		await approve(url);
+		expect(ping).not.toHaveBeenCalled();
+	});
+});
+
+describe("ciba defaults", async () => {
+	const resolveUser = vi.fn<NonNullable<CibaOptions["resolveUser"]>>(
+		async () => null,
+	);
+	const instance = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			ciba({ resultPage: "/ciba", resolveUser, sendNotification }),
+		],
+	});
+	const { headers: adminHeaders } = await instance.signInWithTestUser();
+	const register = (extra = {}) =>
+		instance.auth.api.adminCreateOAuthClient({
+			headers: adminHeaders,
+			body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL, ...extra },
+		});
+	const request = { scope: "openid", login_hint: "ada@example.com" };
+
+	it("rejects a public client", async () => {
+		const client = await register({ token_endpoint_auth_method: "none" });
+		const res = await bcAuthorize(request, client, instance.customFetchImpl);
+		expect(res.body.error).toBe("invalid_client");
+	});
+
+	it("gives resolveUser the requesting client", async () => {
+		const client = await register();
+		const res = await bcAuthorize(request, client, instance.customFetchImpl);
+		expect(res.body.error).toBe("unknown_user_id");
+		expect(resolveUser).toHaveBeenCalledWith(
+			{
+				loginHint: "ada@example.com",
+				client: expect.objectContaining({ clientId: client.client_id }),
+			},
+			expect.anything(),
+		);
+	});
+
+	it("advertises poll delivery only", async () => {
+		const metadata = (await instance.auth.api.getOpenIdConfig()) as Record<
+			string,
+			unknown
+		>;
+		expect(metadata.backchannel_token_delivery_modes_supported).toEqual([
+			"poll",
+		]);
 	});
 });

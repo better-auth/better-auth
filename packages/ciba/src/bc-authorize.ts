@@ -8,24 +8,24 @@ import {
 	resolveResourcePolicy,
 	toResourceList,
 } from "@better-auth/oauth-provider/internal";
-import { generateRandomString } from "better-auth/crypto";
+import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 import * as z from "zod";
 import {
 	APPROVAL_PARAMETER,
 	BC_AUTHORIZE_PATH,
 	CIBA_GRANT_TYPE,
 } from "./constants";
+import type { CibaDelivery } from "./delivery";
+import { resolveCibaDelivery } from "./delivery";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
 import type { CibaRequest } from "./schema";
-import type { CibaOptions } from "./types";
+import type { ResolvedCibaOptions } from "./types";
 
 // Control and invisible formatting characters, such as bidirectional
 // overrides: a binding message must be plain text (CIBA §7.1).
 const NON_PLAIN_TEXT = /[\p{Cc}\p{Cf}]/u;
 
-export function createBcAuthorize(
-	options: CibaOptions & { expiresIn: number; interval: number },
-) {
+export function createBcAuthorize(options: ResolvedCibaOptions) {
 	return createOAuthEndpoint(
 		BC_AUTHORIZE_PATH,
 		{
@@ -43,6 +43,12 @@ export function createBcAuthorize(
 				id_token_hint: z.string().optional(),
 				login_hint_token: z.string().optional(),
 				binding_message: z.string().max(64).optional(),
+				// CIBA §7.1: an RFC 6750 bearer credential of at most 1024 characters.
+				client_notification_token: z
+					.string()
+					.max(1024)
+					.regex(/^[\w.~+/-]+=*$/)
+					.optional(),
 				requested_expiry: z.coerce.number().int().positive().optional(),
 				resource: z
 					.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])
@@ -89,16 +95,27 @@ export function createBcAuthorize(
 			// validation. The bound grant type requires CIBA in `grant_types`.
 			const { client, clientId } = await provider.authenticateClient({
 				scopes,
+				requireCredentials: !options.allowPublicClients,
 			});
-			// CIBA §4 registration metadata. Only server-side client management can
-			// set `metadata`, so open registration cannot reach users through CIBA.
-			if (
-				parseClientMetadata(client.metadata)
-					?.backchannel_token_delivery_mode !== "poll"
-			) {
-				oauthError(
+			// CIBA §4: registration also validates this; recheck it in case the
+			// stored metadata or the configured modes changed since.
+			let delivery: CibaDelivery;
+			try {
+				delivery = resolveCibaDelivery(
+					parseClientMetadata(client.metadata),
+					options.deliveryModes,
+				);
+			} catch {
+				return oauthError(
 					"unauthorized_client",
 					CIBA_ERROR_CODES.UNSUPPORTED_DELIVERY_MODE.message,
+				);
+			}
+			const notificationToken = ctx.body.client_notification_token;
+			if (delivery.mode === "ping" && !notificationToken) {
+				oauthError(
+					"invalid_request",
+					CIBA_ERROR_CODES.NOTIFICATION_TOKEN_REQUIRED.message,
 				);
 			}
 			if (!scopes.includes("openid")) {
@@ -138,7 +155,7 @@ export function createBcAuthorize(
 			});
 
 			const user = options.resolveUser
-				? await options.resolveUser(loginHint, ctx)
+				? await options.resolveUser({ loginHint, client }, ctx)
 				: ((await ctx.context.internalAdapter.findUserByEmail(loginHint))
 						?.user ?? null);
 			if (!user) {
@@ -163,6 +180,16 @@ export function createBcAuthorize(
 					bindingMessage,
 					resources: resources ?? null,
 					status: "pending",
+					...(delivery.mode === "ping"
+						? {
+								clientNotificationEndpoint: delivery.notificationEndpoint,
+								clientNotificationToken: notificationToken,
+								encryptedAuthReqId: await symmetricEncrypt({
+									key: ctx.context.secretConfig,
+									data: authReqId,
+								}),
+							}
+						: {}),
 					expiresAt,
 					createdAt: new Date(),
 				},

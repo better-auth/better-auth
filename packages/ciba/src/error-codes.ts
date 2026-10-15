@@ -13,7 +13,9 @@ export const CIBA_ERROR_CODES = defineErrorCodes({
 		"Exactly one of login_hint, id_token_hint, or login_hint_token is required",
 	UNSUPPORTED_HINT: "Only login_hint is supported",
 	UNSUPPORTED_DELIVERY_MODE:
-		"The client must be registered for the poll delivery mode",
+		"The client is not registered for a delivery mode this server supports",
+	NOTIFICATION_TOKEN_REQUIRED:
+		"client_notification_token is required for ping delivery",
 	INVALID_AUTH_REQ_ID: "The auth_req_id is invalid or has already been used",
 	EXPIRED_AUTH_REQ_ID: "The auth_req_id has expired",
 	AUTHORIZATION_PENDING: "The user has not yet approved or denied the request",

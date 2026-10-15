@@ -9,10 +9,15 @@ import {
 	BC_AUTHORIZE_PATH,
 	CIBA_GRANT_TYPE,
 } from "./constants";
+import {
+	DELIVERY_MODE_FIELD,
+	NOTIFICATION_ENDPOINT_FIELD,
+	resolveCibaDelivery,
+} from "./delivery";
 import { CIBA_ERROR_CODES } from "./error-codes";
 import { createCibaGrantHandler } from "./grant-handler";
 import { schema } from "./schema";
-import type { CibaOptions } from "./types";
+import type { CibaOptions, ResolvedCibaOptions } from "./types";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -35,21 +40,32 @@ declare module "@better-auth/core" {
  * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html
  */
 export const ciba = (options: CibaOptions) => {
-	const settings = {
+	const resolvedOptions: ResolvedCibaOptions = {
 		...options,
+		deliveryModes: options.deliveryModes ?? ["poll"],
 		expiresIn: options.expiresIn ?? 300,
 		interval: options.interval ?? 5,
 	};
 	const extension: OAuthProviderExtension = {
 		grants: {
-			[CIBA_GRANT_TYPE]: createCibaGrantHandler(settings.interval),
+			[CIBA_GRANT_TYPE]: createCibaGrantHandler(resolvedOptions),
 		},
 		interactionRequests: {
 			[APPROVAL_PARAMETER]: cibaApprovalRequest(options.resultPage),
 		},
+		clientMetadata: {
+			// CIBA §4: clients register these through dynamic registration or a
+			// client metadata document too; they are stored in `metadata`.
+			fields: [DELIVERY_MODE_FIELD, NOTIFICATION_ENDPOINT_FIELD],
+			validate: ({ client, metadata }) => {
+				if (client.grant_types?.includes(CIBA_GRANT_TYPE)) {
+					resolveCibaDelivery(metadata, resolvedOptions.deliveryModes);
+				}
+			},
+		},
 		metadata: ({ ctx }) => ({
 			backchannel_authentication_endpoint: `${ctx.context.baseURL}${BC_AUTHORIZE_PATH}`,
-			backchannel_token_delivery_modes_supported: ["poll"],
+			backchannel_token_delivery_modes_supported: resolvedOptions.deliveryModes,
 			backchannel_user_code_parameter_supported: false,
 		}),
 	};
@@ -61,7 +77,7 @@ export const ciba = (options: CibaOptions) => {
 			extendOAuthProvider(ctx, extension);
 		},
 		endpoints: {
-			bcAuthorize: createBcAuthorize(settings),
+			bcAuthorize: createBcAuthorize(resolvedOptions),
 		},
 		// Each request notifies a user, so it gets a tighter limit than the
 		// generic per-IP default.
@@ -78,4 +94,4 @@ export const ciba = (options: CibaOptions) => {
 
 export { CIBA_GRANT_TYPE } from "./constants";
 export { CIBA_ERROR_CODES } from "./error-codes";
-export type { CibaNotification, CibaOptions } from "./types";
+export type { CibaDeliveryMode, CibaNotification, CibaOptions } from "./types";
