@@ -534,6 +534,7 @@ export type OAuthInteractionQuery = Omit<
 export interface OAuthInteractionRequest {
 	/** Signed into each interaction page; carries `prompt` and `max_age`. */
 	query: OAuthInteractionQuery;
+	/** The provider sends the user to the error page when this client is disabled. */
 	client: SchemaClient<Scope[]>;
 	/**
 	 * Show the consent page even when consent is stored or the client skips

@@ -2116,6 +2116,32 @@ describe("oauth-provider device approval through the consent flow", async () => 
 		expect((res.error as TokenErrorBody | null)?.error).toBe("access_denied");
 	});
 
+	it("sends a device approval for a client disabled mid-flow to the verification page", async () => {
+		resolveReference = () => "org_1";
+		const { clientId, device_code, user_code, headers } = await startDevice();
+		const consent = await openDeviceConsent(client, user_code, headers);
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: { client_id: clientId, update: { disabled: true } },
+		});
+
+		const landing = new URL(
+			await fetchRedirect(client, "/oauth2/consent", {
+				method: "POST",
+				headers,
+				body: { accept: true, oauth_query: consent.toString() },
+			}),
+		);
+		expect(landing.pathname).toBe("/device");
+		expect(landing.searchParams.get("user_code")).toBe(user_code);
+		expect(landing.searchParams.get("error")).toBe("client_disabled");
+		const stored = await db.findOne<{ status: string }>({
+			model: "deviceCode",
+			where: [{ field: "deviceCode", value: device_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
+
 	it("applies scopes narrowed on the consent page", async () => {
 		resolveReference = () => "org_1";
 		const { device_code, user_code, headers, poll } = await startDevice();

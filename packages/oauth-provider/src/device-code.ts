@@ -245,9 +245,6 @@ function deviceApprovalRequest(
 			if (!client) {
 				tokenError("BAD_REQUEST", "invalid_client", "client_id is required");
 			}
-			if (client.disabled) {
-				tokenError("BAD_REQUEST", "client_disabled", "client is disabled");
-			}
 			// The consent page may have narrowed the scopes of a signed query.
 			const scopes = parseScopes(signedQuery?.scope ?? deviceCode.scope);
 			const query = {

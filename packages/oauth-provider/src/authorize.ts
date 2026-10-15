@@ -499,6 +499,12 @@ export async function authorizeEndpoint(
 				// Resumed queries were signed by this server; a direct request is not.
 				signedQuery: settings?.isAuthorize === true ? undefined : query,
 			});
+			if (interactionRequest.client.disabled) {
+				throw new APIError("BAD_REQUEST", {
+					error: "client_disabled",
+					error_description: "client is disabled",
+				});
+			}
 		} catch (error) {
 			return handleRedirect(ctx, toErrorURL(error));
 		}
