@@ -570,7 +570,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		}
 
 		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
-		if (inFlightResolution) {
+		if (inFlightResolution !== undefined) {
 			// Join the shared resolution, but bound the wait in *this*
 			// request's context: the originator's own bound may already be
 			// dead (see the sweep above), and no caller may hang past the

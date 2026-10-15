@@ -1913,73 +1913,74 @@ describe("TOTP enrollment verification", async () => {
 	it.for([
 		{ state: "verified", verified: true },
 		{ state: "legacy", verified: null as unknown as boolean },
-	])("rejects re-enrollment while a $state TOTP is active", async ({
-		verified,
-	}) => {
-		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
-			secret: DEFAULT_SECRET,
-			plugins: [twoFactor()],
-		});
-		const signedIn = await signInWithTestUser();
-		let headers = signedIn.headers;
-		const userId = signedIn.user.id;
+	])(
+		"rejects re-enrollment while a $state TOTP is active",
+		async ({ verified }) => {
+			const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+			const signedIn = await signInWithTestUser();
+			let headers = signedIn.headers;
+			const userId = signedIn.user.id;
 
-		await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
-			headers,
-		});
-		const enrollment = await db.findOne<TwoFactorTable>({
-			model: "twoFactor",
-			where: [{ field: "userId", value: userId }],
-		});
-		if (!enrollment) {
-			throw new Error("expected TOTP enrollment");
-		}
-		const decryptedSecret = await symmetricDecrypt({
-			key: DEFAULT_SECRET,
-			data: enrollment.secret,
-		});
-		const code = await createOTP(decryptedSecret).totp();
-		const verification = await auth.api.verifyTOTP({
-			body: { code },
-			headers,
-			asResponse: true,
-		});
-		headers = convertSetCookieToCookie(verification.headers);
-		expect(verification.status).toBe(200);
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+			});
+			const enrollment = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: userId }],
+			});
+			if (!enrollment) {
+				throw new Error("expected TOTP enrollment");
+			}
+			const decryptedSecret = await symmetricDecrypt({
+				key: DEFAULT_SECRET,
+				data: enrollment.secret,
+			});
+			const code = await createOTP(decryptedSecret).totp();
+			const verification = await auth.api.verifyTOTP({
+				body: { code },
+				headers,
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(verification.headers);
+			expect(verification.status).toBe(200);
 
-		await db.update({
-			model: "twoFactor",
-			update: { verified },
-			where: [{ field: "id", value: enrollment.id }],
-		});
-		const activeFactor = await db.findOne<TwoFactorTable>({
-			model: "twoFactor",
-			where: [{ field: "userId", value: userId }],
-		});
-		if (!activeFactor) {
-			throw new Error("expected active TOTP factor");
-		}
-		const response = await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
-			headers,
-			asResponse: true,
-		});
-		expect(response.status).toBe(400);
-		const body = (await response.json()) as { code: string };
-		expect(body.code).toBe(TWO_FACTOR_ERROR_CODES.TOTP_ALREADY_ENABLED.code);
+			await db.update({
+				model: "twoFactor",
+				update: { verified },
+				where: [{ field: "id", value: enrollment.id }],
+			});
+			const activeFactor = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: userId }],
+			});
+			if (!activeFactor) {
+				throw new Error("expected active TOTP factor");
+			}
+			const response = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			expect(response.status).toBe(400);
+			const body = (await response.json()) as { code: string };
+			expect(body.code).toBe(TWO_FACTOR_ERROR_CODES.TOTP_ALREADY_ENABLED.code);
 
-		const unchangedFactor = await db.findOne<TwoFactorTable>({
-			model: "twoFactor",
-			where: [{ field: "userId", value: userId }],
-		});
-		expect(unchangedFactor).toMatchObject({
-			id: activeFactor.id,
-			secret: activeFactor.secret,
-			backupCodes: activeFactor.backupCodes,
-			verified,
-		});
-	});
+			const unchangedFactor = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: userId }],
+			});
+			expect(unchangedFactor).toMatchObject({
+				id: activeFactor.id,
+				secret: activeFactor.secret,
+				backupCodes: activeFactor.backupCodes,
+				verified,
+			});
+		},
+	);
 
 	it("allows restarting an unverified TOTP enrollment", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({

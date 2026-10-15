@@ -424,7 +424,7 @@ describe("updateMemberRole", async () => {
 		expect(updatedMember.data?.role).toBe("admin");
 	});
 
-	it("should not update the member role if the member updating is not a member	", async () => {
+	it("should not update the member role if the member updating is not a member", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const client = createAuthClient({
 			plugins: [organizationClient()],

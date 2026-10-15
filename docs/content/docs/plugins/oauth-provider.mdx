@@ -551,6 +551,7 @@ Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC
 When a token is DPoP-bound:
 
 * The token endpoint requires a valid `DPoP` proof JWT.
+* The proof's `htu` must be the endpoint's public URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`. This holds even when a proxy or dev server rewrites the request host.
 * The token response returns `token_type: "DPoP"`.
 * JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
 * Refresh token rotation requires a DPoP proof from the same key.
@@ -707,7 +708,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
      */
     created?: boolean,
     /**
-     * Confirms completion of post login activity
+     * Resumes after the post login page. `postLogin.shouldRedirect` runs again with `isContinuation: true`.
      */
     postLogin?: boolean,
   }
@@ -729,13 +730,13 @@ The caller must authenticate as a registered client ([RFC 7662 §2.1](https://da
 * it issued the token, or
 * it is a resource server linked to one of the token's resources.
 
-The second case is the common one: a frontend client gets the token, and your API validates it. To set this up, register the API as a resource and link the client to it. Dynamic client registration with a `resources` field creates the link for you; otherwise add a row to the `oauthClientResource` table.
+The second case is the common one: a frontend client gets the token, and your API validates it. To set this up, register the API as a resource and link the client to it. Dynamic registration and server-only `adminCreateOAuthClient` can link resources during registration; use `adminLinkClientResource` for an existing client.
 
 Any other authenticated client gets `{ active: false }`, the same response as an unknown or expired token, so introspection can't be used to fish for valid tokens. Refresh tokens are stricter: only the client that requested one can introspect it.
 
 #### Which claims come back
 
-Opaque and JWT access tokens return the same claims for the same grant: your `customAccessTokenClaims` and any per-resource `customClaims`. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar). If a callback returns one of those, it is dropped rather than allowed to overwrite the server's value.
+Opaque and JWT access tokens return the same claims for the same grant: extension `claims.accessToken` contributors, your `customAccessTokenClaims`, and any per-resource `customClaims`. The server owns the reserved claim names (`iss`, `sub`, `aud`, `scope`, `auth_time`, and similar). If a callback returns one of those, it is dropped rather than allowed to overwrite the server's value.
 
 The two formats differ in one way. An opaque token is recomputed on each call, so introspection shows its current state: change a resource's claims, and the next introspection reflects the change. A JWT carries what was signed at issuance and never changes. Request a JWT (by passing a `resource`) when you want claims frozen at issuance; use an opaque token when you want the current state.
 
@@ -1173,20 +1174,25 @@ The following example uses the organization plugin to automatically redirect to 
 
 ```ts title="auth.ts"
 oauthProvider({
-  scopes: ["openid", "profile", "email", "read:organization"]
+  scopes: ["openid", "profile", "email", "read:organization"],
   postLogin: {
     page: "/select-organization", // [!code highlight]
-    shouldRedirect: async ({ session, scopes, headers }) => { // [!code highlight]
+    shouldRedirect: async ({ session, scopes, headers, isContinuation }) => { // [!code highlight]
       const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
       if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
         return false;
       }
+      if (!session.activeOrganizationId) {
+        return true;
+      }
       const organizations = await auth.api.listOrganizations({
         headers,
       });
-      return organizations.length > 1 || !(
-        organizations.length === 1 && organizations.at(0)?.id === session.activeOrganizationId
-      )
+      if (!organizations.some((org) => org.id === session.activeOrganizationId)) {
+        return true;
+      }
+      // Ask on every new authorization; accept the selection on continuation
+      return !isContinuation && organizations.length > 1;
     },
     consentReferenceId: ({ session, scopes }) => { // [!code highlight]
       if (scopes.includes("read:organization")) {
@@ -1206,7 +1212,9 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, you should call `oauth2Continue`.
+The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`.
+
+`shouldRedirect` runs again on continuation with `isContinuation: true`. Use this value to check the selected organization without asking multi-organization users to select again. It is not proof of selection: check the current session and organization membership before returning `false`. Each new authorization request starts with `isContinuation: false`.
 
 ```ts title="select-organization.ts"
 import { authClient } from "@/lib/auth-client"
@@ -1214,7 +1222,7 @@ import { authClient } from "@/lib/auth-client"
 await authClient.organization.setActive({
   organizationId,
 });
-await client.oauth2.oauth2Continue({
+await authClient.oauth2.continue({
   postLogin: true,
 });
 ```
@@ -1252,6 +1260,23 @@ oauthProvider({
 
 Use the admin resource endpoints when resource policy needs to change at runtime.
 
+Configured resources are written to the `oauthResource` table when the auth instance starts. `resourceSeedMode` decides what happens to a row that already exists. If the write fails because the database is unreachable or the table has not been migrated yet, the error is logged and the write is retried on the first request that needs a resource. Requests that do not use resources, such as sign-in and session checks, are not affected.
+
+<Callout type="warn">
+  With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. Requests that use any configured resource fail until you declare `allowedScopes` for that resource, listing every scope clients may request for it. This includes the resource `mcp()` adds; declare it in `resources` with the same identifier:
+
+  ```ts title="auth.ts"
+  mcp({
+    loginPage: "/sign-in",
+    consentPage: "/consent",
+    resource: "https://api.example.com/mcp",
+    resources: [
+      { identifier: "https://api.example.com/mcp", allowedScopes: ["openid", "profile", "offline_access"] },
+    ],
+  })
+  ```
+</Callout>
+
 Dynamic registration can attach protected resources to the new client in the same transaction as the client row. `clientRegistrationDefaultResources` adds server-owned defaults to every registration. `clientRegistrationAllowedResources` lists additional resources a client may request; the effective allowlist is the union of the default and allowed lists. Defaults appear first, duplicates are removed, and every configured value must also be present in `resources`.
 
 ```ts title="auth.ts"
@@ -1269,7 +1294,27 @@ oauthProvider({
 })
 ```
 
-Explicit resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
+Dynamic-registration resource requests are closed by default: when both registration-resource options are omitted, no resource may be requested. A requested resource outside the effective allowlist is rejected with `invalid_target`; missing and disabled resources are rejected too. Registrations with resolved resources return the final `resources` list and create the corresponding `oauthClientResource` links atomically.
+
+To link resources to a client your server registers, pass `resources` to the server-only `adminCreateOAuthClient` call. The dynamic-registration allowlist does not apply here. Instead, `resourcePrivileges` is called with the `link` action for each requested resource before the client is created. `clientRegistrationDefaultResources` are still added, without a privilege check.
+
+```ts
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    resources: ["https://api.example.com/default"],
+  },
+});
+```
+
+The call creates nothing when a resource is rejected:
+
+* A resource that is not an absolute URI, contains a fragment, or uses a `javascript:`, `data:`, or `vbscript:` scheme fails request validation with `VALIDATION_ERROR`.
+* A resource that does not exist or is disabled returns `400` with `invalid_target`.
+* A `resourcePrivileges` denial returns `401`.
+
+The client and its resource links are written in one transaction when the database adapter supports transactions. On an adapter without them, such as standalone MongoDB, a failed link can leave the client registered without its links. To link a resource to an existing client, use `adminLinkClientResource`.
 
 ### Scopes
 
@@ -1377,6 +1422,34 @@ oauthProvider({
   },
 })
 ```
+
+#### Client-Specific Access Token Claims
+
+Use an `extensions[].claims.accessToken` contributor when a claim depends on the client a token is issued to. `customAccessTokenClaims` receives only the client's `metadata`, while a contributor receives the full `client` record, including its `clientId` and `referenceId`.
+
+This example adds the client's organization to tokens for one API. It assumes [`clientReference`](#organizations) assigns each client to an organization, and that clients are linked to the API resource, for example with `resources` on [`adminCreateOAuthClient`](#resources):
+
+```ts title="auth.ts"
+const apiResource = "https://api.example.com";
+
+oauthProvider({
+  resources: [apiResource],
+  extensions: [{
+    claims: {
+      accessToken: ({ client, resources }) => {
+        if (!resources?.includes(apiResource) || !client.referenceId) return {};
+        return { "https://example.com/org": client.referenceId };
+      },
+    },
+  }],
+})
+```
+
+`client.referenceId` is the client's owner, set at registration by `clientReference` or by an [initial access token](#dynamic-client-registration) during protected dynamic registration. It is not the top-level `referenceId` that both callbacks also receive, which is the consent reference from `postLogin.consentReferenceId`.
+
+Opaque-token introspection re-derives contributor claims without `grantType` or `sessionId`, so base any claim needed at introspection on the client, scopes, and resources. `customAccessTokenClaims` and per-resource `customClaims` override a contributor claim with the same name; see [Claim precedence](#claim-precedence).
+
+An organization claim does not prove that the client is still connected. A JWT keeps its claims until it expires, so a resource server that must react to a disabled client right away should introspect the token, which reports tokens of disabled clients as inactive.
 
 #### Custom Token Response Fields
 
@@ -1686,6 +1759,8 @@ To set user-specific permissions and roles on tokens see [Claims](#claims).
 
 To determine whether a logged in user has the ability to perform specific actions in client creation, you can utilize the `clientPrivileges` configuration setting. By default, CRUD actions are allowed for users with matching `userId` or `clientReference`.
 
+The callback can only deny an action. Client CRUD still checks ownership after the callback, so returning `true` cannot give a user access to a client owned by another user or another `clientReference`. The one exception is scope configuration on another owner's client through `adminUpdateOAuthClient`: when the update changes only `client_credentials_scopes`, the callback's `update` and `configure-client-credentials-scopes` decisions authorize it without an ownership check.
+
 The following is a basic example that allows all OAuth Client CRUD actions for organization owners assuming ordinary users cannot create clients:
 
 ```ts title="auth.ts"
@@ -1696,6 +1771,28 @@ oauthProvider({
       headers,
     });
     return member.role === 'owner';
+  },
+})
+```
+
+For actions on an existing client (`read`, `update`, `delete`, `rotate`, and `configure-client-credentials-scopes`), the callback also receives `clientId`. It is absent for `create`, `list`, and scope configuration during creation. `clientId` is the `client_id` from the request, so the client may not exist and the value proves nothing about ownership.
+
+Use `clientId` to restrict individual clients among users who share a `clientReference`, such as the members of an organization. In this example, every member can create, list, and read the organization's clients, but only a client's maintainers can change it or configure its scopes. `getClientMaintainers` stands for your own lookup:
+
+```ts title="auth.ts"
+oauthProvider({
+  clientReference: ({ session }) => {
+    return (session?.activeOrganizationId as string | undefined) ?? undefined;
+  },
+  clientPrivileges: async ({ action, user, clientId }) => {
+    if (!user) return false;
+    if (action === "create" || action === "list" || action === "read") {
+      return true;
+    }
+    // Scope configuration during creation has no client ID, so deny it here.
+    if (!clientId) return false;
+    const maintainers = await getClientMaintainers(clientId);
+    return maintainers.includes(user.id);
   },
 })
 ```

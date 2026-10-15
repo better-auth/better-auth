@@ -1,5 +1,19 @@
 # @better-auth/scim
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11644](https://github.com/better-auth/better-auth/pull/11644) [`f556970`](https://github.com/better-auth/better-auth/commit/f556970135281ea6d2827b0b09154c5011c5d0e3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If your SCIM provider sends attribute names with different letter case than the SCIM schema, such as `Active` or `Emails`, Better Auth now applies them. Previously these keys were ignored while the request still succeeded, so a `PUT` with `Active: false` left the User active. A request that sends the same attribute twice with different letter case now returns `400 Bad Request`. Providers that send the standard attribute names are unaffected.
+
+- [#11638](https://github.com/better-auth/better-auth/pull/11638) [`39f0980`](https://github.com/better-auth/better-auth/commit/39f09800b7cf62d1e01b0461a35bb79fcd90f3e0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM User and Group requests now accept JSON `null` attribute values, such as the unpopulated attributes Microsoft Entra ID sends, instead of returning `400 Bad Request`. In `POST` and `PUT` bodies a `null` attribute is treated as omitted, and in PATCH a `null` value removes the attribute. `active: null` is still rejected, and `null` on a read-only attribute is ignored.
+
+- [#11167](https://github.com/better-auth/better-auth/pull/11167) [`666e1de`](https://github.com/better-auth/better-auth/commit/666e1def9796bcdd2f0646f4b7223798a947fd2d) Thanks [@jonathansamines](https://github.com/jonathansamines)! - Fix `POST /scim/v2/Users` rejecting a reprovisioned user with a uniqueness conflict when an inactive SCIM User already has the same `externalId`, such as when Okta reassigns a deactivated user. The inactive SCIM User is now reprovisioned in place and keeps its ID and linked Better Auth User.
+
+- [#11669](https://github.com/better-auth/better-auth/pull/11669) [`8409fb2`](https://github.com/better-auth/better-auth/commit/8409fb250d30fdd54585a3593ef86fb5e59f065b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SCIM directories that send concurrent updates now get a `409` uniqueness error when a User `PATCH`, Group `PUT`, or Group `PATCH` claims a `userName`, `displayName`, `externalId`, or managed email that another request saved first. Previously the losing request failed with a `500` server error. Requests that don't race are unaffected.
+
 ## 1.7.7
 
 ## 1.7.6

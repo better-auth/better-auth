@@ -943,6 +943,16 @@ export interface OAuthOptions<
 			| "configure-client-credentials-scopes";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
+		/**
+		 * The `client_id` from the request, for actions on an existing client.
+		 * Absent for `create`, `list`, and scope configuration during creation.
+		 * The client may not exist, and this value does not establish ownership.
+		 * Client CRUD enforces ownership except when `adminUpdateOAuthClient`
+		 * changes only `client_credentials_scopes`: the `update` and
+		 * `configure-client-credentials-scopes` decisions can authorize access
+		 * to another owner's client.
+		 */
+		clientId?: string;
 	}) => Awaitable<boolean | undefined>;
 	/**
 	 * Grant types supported by the token endpoint
@@ -1074,7 +1084,8 @@ export interface OAuthOptions<
 		 * For example, allow selection of an organization or team.
 		 *
 		 * Upon selection of a specific account, use `/oauth2/continue`
-		 * with `postLogin: true` to continue the login flow.
+		 * with `postLogin: true` to continue the login flow. The continue
+		 * request runs `shouldRedirect` again with `isContinuation: true`.
 		 *
 		 * @returns
 		 * - `true`: account is not selected and needs selection
@@ -1085,6 +1096,12 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * `true` when the user returns from `page` through `/oauth2/continue`.
+			 * The client chooses to send that request, so it does not prove a
+			 * selection was made: validate the session before returning `false`.
+			 */
+			isContinuation: boolean;
 		}) => Awaitable<boolean>;
 	};
 	/**
