@@ -283,6 +283,12 @@ describe("prisma-adapter", () => {
 				mode: "insensitive" as const,
 			},
 			{ field: "email", value: "a.c@x.io" },
+			{
+				field: "name",
+				value: "a.c",
+				operator: "gte" as const,
+				mode: "insensitive" as const,
+			},
 		];
 
 		await createAdapter("mongodb").findMany({ model: "user", where });
@@ -294,6 +300,7 @@ describe("prisma-adapter", () => {
 				{ email: { equals: "a\\.c@x\\.io", mode: "insensitive" } },
 				{ email: { in: ["a\\+b@x\\.io"], mode: "insensitive" } },
 				{ email: { equals: "a.c@x.io" } },
+				{ name: { gte: "a.c", mode: "insensitive" } },
 			],
 		});
 
@@ -306,6 +313,7 @@ describe("prisma-adapter", () => {
 				{ email: { equals: "a.c@x.io", mode: "insensitive" } },
 				{ email: { in: ["a+b@x.io"], mode: "insensitive" } },
 				{ email: { equals: "a.c@x.io" } },
+				{ name: { gte: "a.c", mode: "insensitive" } },
 			],
 		});
 	});

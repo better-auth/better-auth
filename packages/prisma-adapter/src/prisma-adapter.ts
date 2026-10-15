@@ -279,12 +279,18 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						isInsensitive && providerSupportsMode ? "insensitive" : undefined;
 					const modeFilter = prismaMode ? { mode: prismaMode } : {};
 					// Prisma's MongoDB connector builds `$regexMatch` patterns from these values unescaped.
+					// Range operators compare string order instead.
 					const usesRegex =
 						config.provider === "mongodb" &&
-						(prismaMode !== undefined ||
-							w.operator === "contains" ||
+						(w.operator === "contains" ||
 							w.operator === "starts_with" ||
-							w.operator === "ends_with");
+							w.operator === "ends_with" ||
+							(prismaMode !== undefined &&
+								(!w.operator ||
+									w.operator === "eq" ||
+									w.operator === "ne" ||
+									w.operator === "in" ||
+									w.operator === "not_in")));
 					const toPrismaValue = (v: unknown) =>
 						usesRegex && typeof v === "string"
 							? v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
