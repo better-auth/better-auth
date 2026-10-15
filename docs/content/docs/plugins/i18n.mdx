@@ -202,7 +202,9 @@ The plugin automatically parses the `Accept-Language` header, including quality 
 Accept-Language: fr-CA, fr;q=0.9, en;q=0.8
 ```
 
-This would first try `fr-CA` (mapped to `fr`), then `fr`, then `en`.
+For each language in quality order, the plugin first tries the full locale tag, then its base language. This example selects `fr-CA` if that translation is configured, otherwise falls back to `fr`, then `en`.
+
+You can provide regional translations such as `zh-TW` or `pt-BR` as keys in `translations`. A matching full tag takes priority over its base-language translation; the base language is still used when the regional translation is unavailable.
 
 ### Cookie-Based Detection
 

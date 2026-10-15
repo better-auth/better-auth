@@ -32,13 +32,19 @@ function parseAcceptLanguage(header: string | null): string[] {
 		.map((part) => {
 			const [localeStr, quality = "q=1"] = part.trim().split(";");
 			const q = Number.parseFloat(quality.replace("q=", ""));
-			// Get base locale (e.g., "en" from "en-US")
-			const locale = localeStr?.trim().split("-")[0] ?? "";
-			return { locale, q };
+			const full = localeStr?.trim() ?? "";
+			const base = full.split("-")[0];
+			return { full, base, q };
 		})
-		.filter((item) => item.locale.length > 0)
+		.filter((item) => item.full.length > 0)
 		.sort((a, b) => b.q - a.q)
-		.map((item) => item.locale);
+		.reduce<string[]>((result, item) => {
+			result.push(item.full);
+			if (item.base && item.base !== item.full) {
+				result.push(item.base);
+			}
+			return result;
+		}, []);
 }
 
 /**
