@@ -22,6 +22,7 @@ import type {
 	ClientDiscovery,
 	Confirmation,
 	GrantType,
+	OAuthConsent,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
@@ -1053,6 +1054,37 @@ export async function resolveSubjectIdentifier(
 		return computePairwiseSub(userId, client, opts.pairwiseSecret);
 	}
 	return userId;
+}
+
+/**
+ * Finds the consent stored for exactly this reference. Without a reference,
+ * only consent stored without one (missing, null, or empty) matches.
+ *
+ * @internal
+ */
+export async function findConsent(
+	ctx: GenericEndpointContext,
+	clientId: string,
+	userId: string,
+	referenceId: string | undefined,
+): Promise<OAuthConsent<Scope[]> | null> {
+	const where = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+	];
+	if (referenceId) {
+		return ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [...where, { field: "referenceId", value: referenceId }],
+		});
+	}
+	// Matched in code: Prisma on MongoDB leaves an omitted referenceId unset, and `eq null` skips unset fields.
+	// shortcut: reads up to the default findMany limit per client and user, add a limit if one user can consent under more references.
+	const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+		model: "oauthConsent",
+		where,
+	});
+	return consents.find((consent) => !consent.referenceId) ?? null;
 }
 
 /**

@@ -25,7 +25,6 @@ import {
 import { getSupportedClaims } from "./standard-claims";
 import type {
 	OAuthAuthorizationQuery,
-	OAuthConsent,
 	OAuthOptions,
 	Scope,
 	VerificationValue,
@@ -34,6 +33,7 @@ import { authorizationQuerySchema, SafeUrlSchema } from "./types/zod";
 
 import {
 	clientAllowsGrant,
+	findConsent,
 	getClient,
 	getJwtPlugin,
 	isPKCERequired,
@@ -926,24 +926,12 @@ export async function authorizeEndpoint(
 			resource: requestedResources,
 		});
 	}
-	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
-		model: "oauthConsent",
-		where: [
-			{
-				field: "clientId",
-				value: client.clientId,
-			},
-			{
-				field: "userId",
-				value: session.user.id,
-			},
-			// No reference matches only the no-reference row, never another reference's consent.
-			{
-				field: "referenceId",
-				value: referenceId ?? null,
-			},
-		],
-	});
+	const consent = await findConsent(
+		ctx,
+		client.clientId,
+		session.user.id,
+		referenceId,
+	);
 
 	if (
 		!consent ||

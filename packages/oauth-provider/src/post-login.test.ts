@@ -191,17 +191,20 @@ describe.each([
 			body: { redirect_uris: [redirectURI] },
 		});
 		const { adapter } = await auth.$context;
-		await adapter.create({
-			model: "oauthConsent",
-			data: {
-				clientId: oauthClient.client_id,
-				userId: user.id,
-				referenceId: "org_1",
-				scopes: ["read"],
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
-		});
+		async function storeConsent(referenceId: string, scopes: string[]) {
+			await adapter.create({
+				model: "oauthConsent",
+				data: {
+					clientId: oauthClient.client_id,
+					userId: user.id,
+					referenceId,
+					scopes,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		}
+		await storeConsent("org_1", ["read"]);
 
 		async function authorize(scope: string) {
 			const query = new URLSearchParams({
@@ -231,7 +234,7 @@ describe.each([
 			});
 		}
 
-		return { ...instance, headers, authorize, findConsents };
+		return { ...instance, headers, authorize, findConsents, storeConsent };
 	}
 
 	it("asks for consent instead of reusing another reference's consent", async () => {
@@ -240,6 +243,15 @@ describe.each([
 
 		expect(redirect.pathname).toBe("/consent");
 		expect(redirect.searchParams.get("code")).toBeNull();
+	});
+
+	it("reuses consent saved with an empty reference", async () => {
+		const { authorize, storeConsent } = await createNoReferenceTestInstance();
+		await storeConsent("", ["read"]);
+		const redirect = await authorize("read");
+
+		expect(redirect.origin + redirect.pathname).toBe(redirectURI);
+		expect(redirect.searchParams.get("code")).toBeTruthy();
 	});
 
 	it("stores the approval without changing another reference's consent", async () => {
