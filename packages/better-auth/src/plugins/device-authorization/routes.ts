@@ -133,8 +133,9 @@ function assertDeviceCodePending(deviceCode: DeviceCode) {
 
 /**
  * Records the signed-in owner's approval or denial of a pending device code.
- * The write is guarded on the pending status and owner, so a decision that
- * loses a race with another approve or deny fails instead of overwriting it.
+ * The write is guarded on the pending status, owner, and expiry, so a decision
+ * that loses a race with another approve or deny, or outlasts the code, fails
+ * instead of overwriting it.
  */
 async function recordDeviceCodeDecision(
 	ctx: GenericEndpointContext,
@@ -182,12 +183,15 @@ async function recordDeviceCodeDecision(
 			{ field: "id", value: deviceCodeRecord.id },
 			{ field: "status", value: "pending" },
 			{ field: "userId", value: session.user.id },
+			{ field: "expiresAt", operator: "gt", value: new Date() },
 		],
 		increment: {},
 		set: { status: decision },
 	});
 	if (!decided) {
-		throw deviceCodeAlreadyProcessed();
+		throw deviceCodeRecord.expiresAt < new Date()
+			? expiredUserCode()
+			: deviceCodeAlreadyProcessed();
 	}
 }
 
