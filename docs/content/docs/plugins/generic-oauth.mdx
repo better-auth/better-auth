@@ -515,9 +515,10 @@ genericOAuth({
           // Forward the provider's expiry when present; when omitted,
           // accessTokenExpiresIn applies as a fallback so automatic
           // refresh keeps working.
-          accessTokenExpiresAt: data.expires_in
-            ? new Date(Date.now() + data.expires_in * 1000)
-            : undefined,
+          accessTokenExpiresAt:
+            data.expires_in != null
+              ? new Date(Date.now() + data.expires_in * 1000)
+              : undefined,
         };
       },
     },
