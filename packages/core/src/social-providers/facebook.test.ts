@@ -138,7 +138,7 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 });
 
 /**
- * @see https://github.com/facebook/facebook-ios-sdk/blob/main/FBSDKCoreKit/FBSDKCoreKit/AuthenticationTokenClaims.swift
+ * @see https://github.com/facebook/facebook-ios-sdk/blob/9a682148e9d5be7930c8c90bb982b6b57bf228e1/FBSDKCoreKit/FBSDKCoreKit/AuthenticationTokenClaims.swift#L62-L85
  */
 it("accepts Facebook Limited Login without optional profile claims", async () => {
 	const profile = { sub: "fb-user" };
