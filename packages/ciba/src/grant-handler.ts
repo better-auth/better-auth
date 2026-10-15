@@ -141,6 +141,8 @@ export const createCibaGrantHandler =
 				: undefined,
 			referenceId: claimed.referenceId ?? undefined,
 			authTime: claimed.authTime ?? undefined,
+			acr: claimed.acr ?? undefined,
+			amr: claimed.amr ?? undefined,
 			// A DPoP proof on this poll, or a sender-constraint proved at client
 			// authentication, binds the issued token.
 			confirmation,

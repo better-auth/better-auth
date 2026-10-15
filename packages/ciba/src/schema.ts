@@ -91,6 +91,16 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			/** The approving session's `acr`, from `authenticationContext.resolve`. */
+			acr: {
+				type: "string",
+				required: false,
+			},
+			/** The approving session's `amr`, from `authenticationContext.resolve`. */
+			amr: {
+				type: "string[]",
+				required: false,
+			},
 			lastPolledAt: {
 				type: "date",
 				required: false,
@@ -123,6 +133,8 @@ export interface CibaRequest {
 	encryptedAuthReqId?: string | null;
 	referenceId?: string | null;
 	authTime?: Date | null;
+	acr?: string | null;
+	amr?: string[] | null;
 	lastPolledAt?: Date | null;
 	expiresAt: Date;
 	createdAt: Date;

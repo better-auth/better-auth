@@ -190,7 +190,7 @@ The link points to `/oauth2/authorize?ciba_request_id=<id>`, so the request runs
 3. `consentPage` always opens, even for a client with `skip_consent` or a stored consent, because the user must confirm each request. The user can narrow the scopes there.
 4. The decision is recorded only for the user the `login_hint` named. Anyone else who opens the link, signed in as another account, lands on `resultPage` with an error, and the request stays pending for the right user.
 
-A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session.
+A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what the provider's [`authenticationContext.resolve`](/docs/plugins/oauth-provider) returned for that session.
 
 ## Endpoints
 
@@ -306,6 +306,8 @@ The plugin adds one model, `cibaRequest`:
 | `encryptedAuthReqId`               | string    | Ping mode only: the `auth_req_id`, encrypted with the server secret, because the callback carries the raw value.                                                         |
 | `referenceId`                      | string    | The consent reference recorded on approval, such as an organization.                                                                                                     |
 | `authTime`                         | date      | Creation time of the approving session, issued as `auth_time`.                                                                                                           |
+| `acr`                              | string    | The approving session's `acr`, issued in the ID token.                                                                                                                   |
+| `amr`                              | string\[] | The approving session's `amr`, issued in the ID token.                                                                                                                   |
 | `lastPolledAt`                     | date      | When the client last polled.                                                                                                                                             |
 | `expiresAt`                        | date      | When the request expires.                                                                                                                                                |
 | `createdAt`                        | date      | When the request was created.                                                                                                                                            |

@@ -1,4 +1,7 @@
-import type { OAuthClient } from "@better-auth/oauth-provider";
+import type {
+	OAuthAuthenticationContext,
+	OAuthClient,
+} from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -24,6 +27,10 @@ const PING = {
 	backchannel_client_notification_endpoint: notificationEndpoint,
 };
 
+const mfaAcr = "urn:example:acr:mfa";
+const resolveAuthenticationContext =
+	vi.fn<() => OAuthAuthenticationContext | undefined>();
+
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
 	lastNotification = notification;
@@ -45,6 +52,10 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
+				authenticationContext: {
+					acrValuesSupported: ["0", mfaAcr],
+					resolve: resolveAuthenticationContext,
+				},
 			}),
 			ciba({
 				resultPage: "/ciba",
@@ -425,6 +436,19 @@ describe("ciba poll mode", () => {
 		expect(decodeJwt(issued.body.id_token as string).auth_time).toBe(
 			Math.floor(new Date(session!.session.createdAt).getTime() / 1000),
 		);
+	});
+
+	it("carries the approving session's acr and amr into the ID token", async () => {
+		resolveAuthenticationContext.mockReturnValueOnce({
+			acr: mfaAcr,
+			amr: ["pwd", "otp"],
+		});
+		const { authReqId, url } = await start();
+		await approve(url);
+		const issued = await poll(authReqId);
+		const idToken = decodeJwt(issued.body.id_token as string);
+		expect(idToken.acr).toBe(mfaAcr);
+		expect(idToken.amr).toEqual(["pwd", "otp"]);
 	});
 
 	it("binds the token to the DPoP key presented on the poll", async () => {
