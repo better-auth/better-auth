@@ -752,6 +752,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 
+			let activeTeamId: string | null = null;
 			const member = await runWithTransaction(ctx.context.adapter, async () => {
 				if (
 					ctx.context.orgOptions.teams &&
@@ -813,17 +814,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					}
 
 					if (onlyOne) {
-						const teamId = teamIds[0]!;
-						const updatedSession = await adapter.setActiveTeam(
-							session.session.token,
-							teamId,
-							ctx,
-						);
-
-						await setSessionCookie(ctx, {
-							session: updatedSession,
-							user: session.user,
-						});
+						activeTeamId = teamIds[0]!;
 					}
 				}
 
@@ -834,11 +825,24 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					createdAt: new Date(),
 				});
 
-				await adapter.setActiveOrganization(
+				let updatedSession = await adapter.setActiveOrganization(
 					session.session.token,
 					acceptedI.organizationId,
 					ctx,
 				);
+
+				if (activeTeamId) {
+					updatedSession = await adapter.setActiveTeam(
+						session.session.token,
+						activeTeamId,
+						ctx,
+					);
+				}
+
+				await setSessionCookie(ctx, {
+					session: updatedSession,
+					user: session.user,
+				});
 
 				return createdMember;
 			}).catch(async (error) => {
