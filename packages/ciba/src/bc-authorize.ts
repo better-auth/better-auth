@@ -225,6 +225,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				(async () =>
 					options.sendNotification(
 						{
+							requestId: request.id,
 							user,
 							clientId,
 							clientName: client.name ?? undefined,

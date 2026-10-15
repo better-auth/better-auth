@@ -86,9 +86,22 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
-			/** Creation time of the approving session, issued as `auth_time`. */
+			/**
+			 * Creation time of the approving session, or the time server-side
+			 * completion states, issued as `auth_time`.
+			 */
 			authTime: {
 				type: "date",
+				required: false,
+			},
+			/** The `acr` the approval established, issued in the ID token. */
+			acr: {
+				type: "string",
+				required: false,
+			},
+			/** The `amr` the approval established, issued in the ID token. */
+			amr: {
+				type: "string[]",
 				required: false,
 			},
 			lastPolledAt: {
@@ -123,6 +136,8 @@ export interface CibaRequest {
 	encryptedAuthReqId?: string | null;
 	referenceId?: string | null;
 	authTime?: Date | null;
+	acr?: string | null;
+	amr?: string[] | null;
 	lastPolledAt?: Date | null;
 	expiresAt: Date;
 	createdAt: Date;

@@ -190,7 +190,49 @@ The link points to `/oauth2/authorize?ciba_request_id=<id>`, so the request runs
 3. `consentPage` always opens, even for a client with `skip_consent` or a stored consent, because the user must confirm each request. The user can narrow the scopes there.
 4. The decision is recorded only for the user the `login_hint` named. Anyone else who opens the link, signed in as another account, lands on `resultPage` with an error, and the request stays pending for the right user.
 
-A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session.
+A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what [`authenticationContext`](/docs/plugins/oauth-provider#authentication-context) returns for that session.
+
+## Decide from your own app
+
+When your own app can reach the user, such as a mobile app that shows a push notification with Approve and Deny buttons, record the decision from your server with `auth.api.completeCibaRequest` instead of sending the user to the link. `sendNotification` receives the `requestId` to send to the app:
+
+```ts title="auth.ts"
+ciba({
+  resultPage: "/ciba",
+  sendNotification: async ({ requestId, user, clientName, scopes, bindingMessage }) => {
+    await push.send(user.id, { requestId, clientName, scopes, bindingMessage });
+  },
+});
+```
+
+When the app reports the user's answer, your server states who decided and how they proved it:
+
+```ts title="push-decision.ts"
+await auth.api.completeCibaRequest({
+  body: {
+    requestId,
+    userId: appUser.id, // the user your app authenticated
+    decision: approved ? "approved" : "denied",
+    // Approval only. Each is optional.
+    scopes: ["openid", "profile"], // a subset of the requested scopes
+    authTime: new Date(), // issued as auth_time
+    acr: "urn:example:acr:biometric", // must be in acrValuesSupported
+    amr: ["face"],
+  },
+});
+```
+
+The provider records the decision only when `userId` is the user the `login_hint` named and the request is still pending. The approved scopes must be among the requested ones and include `openid`. A ping client is called back as it is after a decision from the link. This call skips the provider's sign-in, post-login, and consent pages, so your app is responsible for:
+
+* authenticating the user before it reports a decision, and
+* showing the client, the scopes, and the binding message before the user approves.
+
+The ID token carries only the `auth_time`, `acr`, and `amr` you pass; without `acr` it reports `"0"`.
+
+| Error             | Meaning                                                                                                         |
+| ----------------- | --------------------------------------------------------------------------------------------------------------- |
+| `invalid_request` | The request is unknown, already decided, expired, or for another user, or `acr` is not in `acrValuesSupported`. |
+| `invalid_scope`   | `scopes` includes a scope the client did not request, or leaves out `openid`. The request stays pending.        |
 
 ## Endpoints
 
@@ -217,7 +259,7 @@ export const cibaOptionsType = {
 	sendNotification: {
 		type: "(notification, ctx) => void | Promise<void>",
 		description:
-			"Send the user the link. Receives `{ user, clientId, clientName, scopes, bindingMessage, url, expiresAt }`. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
+			"Send the user the link. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, url, expiresAt }`; pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
 	},
 	resultPage: {
 		type: "string",
@@ -305,14 +347,16 @@ The plugin adds one model, `cibaRequest`:
 | `encryptedClientNotificationToken` | string    | Ping mode only: the client's `client_notification_token`, encrypted with the server secret.                                                                              |
 | `encryptedAuthReqId`               | string    | Ping mode only: the `auth_req_id`, encrypted with the server secret, because the callback carries the raw value.                                                         |
 | `referenceId`                      | string    | The consent reference recorded on approval, such as an organization.                                                                                                     |
-| `authTime`                         | date      | Creation time of the approving session, issued as `auth_time`.                                                                                                           |
+| `authTime`                         | date      | Creation time of the approving session, or the `authTime` passed to `completeCibaRequest`, issued as `auth_time`.                                                        |
+| `acr`                              | string    | The `acr` the approval established, issued in the ID token.                                                                                                              |
+| `amr`                              | string\[] | The `amr` the approval established, issued in the ID token.                                                                                                              |
 | `lastPolledAt`                     | date      | When the client last polled.                                                                                                                                             |
 | `expiresAt`                        | date      | When the request expires.                                                                                                                                                |
 | `createdAt`                        | date      | When the request was created.                                                                                                                                            |
 
 ## Security
 
-* **Consent is always shown, and only the named user can decide.** A user who receives a request they did not expect can deny it, and someone else who gets hold of the link cannot approve or deny it.
+* **Consent is always shown, and only the named user can decide.** A user who receives a request they did not expect can deny it, and someone else who gets hold of the link cannot approve or deny it. `completeCibaRequest` also refuses a decision for any other user, but it trusts your server to have authenticated that user and shown them the request.
 * **Limit who a client can name.** Each request notifies a person, and `unknown_user_id` tells the client whether a hint matched a user, as CIBA §13 specifies. Each IP address can start 10 requests per minute. When anyone can register a client, resolve `login_hint` only to users the client already knows, as shown in [Register a client](#register-a-client).
 * **The binding message ties the two devices together.** Ask clients to send a short, random `binding_message` and to display it, so the user can tell their request apart from one someone else started at the same moment. Render it as text.
 * **The ping callback only reaches safe endpoints.** Registration and each request check that the notification endpoint is absolute `https` on a public host, with no credentials or fragment, the same rules as `backchannel_logout_uri`. The check does not resolve DNS, so restrict outbound network access where you can.
@@ -323,5 +367,5 @@ The plugin adds one model, `cibaRequest`:
 * Push delivery is not supported.
 * Only `login_hint` is supported; `id_token_hint` and `login_hint_token` are rejected with `invalid_request`.
 * `user_code`, signed authentication requests, `acr_values`, and `authorization_details` are not supported. `acr_values` are ignored.
-* Requests are decided only from the link. There is no API to approve or deny from a push notification or an in-app list, or from server code.
+* There is no API that lists a user's pending requests. To show them in your app, keep the `requestId`s that `sendNotification` receives.
 * There is no per-user limit on requests; the limit applies per IP address.

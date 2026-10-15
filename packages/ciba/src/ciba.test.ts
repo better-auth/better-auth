@@ -23,6 +23,9 @@ const PING = {
 	backchannel_token_delivery_mode: "ping",
 	backchannel_client_notification_endpoint: notificationEndpoint,
 };
+// What the approving session establishes, and what an app's push approval proves.
+const SESSION_ACR = "urn:example:acr:session";
+const PUSH_ACR = "urn:example:acr:push";
 
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
@@ -45,6 +48,10 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
+				authenticationContext: {
+					acrValuesSupported: ["0", SESSION_ACR, PUSH_ACR],
+					resolve: () => ({ acr: SESSION_ACR, amr: ["pwd"] }),
+				},
 			}),
 			ciba({
 				resultPage: "/ciba",
@@ -270,6 +277,7 @@ describe("ciba poll mode", () => {
 	it("sends the user a link to the provider with the request details", async () => {
 		const { url } = await start({ binding_message: "Code 77" });
 		expect(lastNotification).toMatchObject({
+			requestId: expect.any(String),
 			user: { email: testUser.email },
 			clientId: pollClient.client_id,
 			clientName: "Support Agent",
@@ -277,8 +285,8 @@ describe("ciba poll mode", () => {
 			bindingMessage: "Code 77",
 			expiresAt: expect.any(Date),
 		});
-		expect(url).toMatch(
-			new RegExp(`^${baseURL}/api/auth/oauth2/authorize\\?ciba_request_id=`),
+		expect(url).toBe(
+			`${baseURL}/api/auth/oauth2/authorize?ciba_request_id=${lastNotification!.requestId}`,
 		);
 	});
 
@@ -425,6 +433,16 @@ describe("ciba poll mode", () => {
 		expect(decodeJwt(issued.body.id_token as string).auth_time).toBe(
 			Math.floor(new Date(session!.session.createdAt).getTime() / 1000),
 		);
+	});
+
+	it("issues the acr and amr the approving session established", async () => {
+		const { authReqId, url } = await start();
+		await approve(url);
+		const issued = await poll(authReqId);
+		expect(decodeJwt(issued.body.id_token as string)).toMatchObject({
+			acr: SESSION_ACR,
+			amr: ["pwd"],
+		});
 	});
 
 	it("binds the token to the DPoP key presented on the poll", async () => {
@@ -757,6 +775,136 @@ describe("ciba discovery metadata", () => {
 /**
  * @see https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#rfc.section.10.2
  */
+describe("ciba server-side completion", () => {
+	/** Starts a request and returns what `sendNotification` gave the deployment. */
+	async function startRequest() {
+		const { authReqId } = await start();
+		const { requestId, user } = lastNotification!;
+		return { authReqId, requestId, userId: user.id };
+	}
+
+	it("issues tokens with the acr, amr, and auth_time the server states", async () => {
+		const { authReqId, requestId, userId } = await startRequest();
+		const authTime = new Date(Date.now() - 60_000);
+		await auth.api.completeCibaRequest({
+			body: {
+				requestId,
+				userId,
+				decision: "approved",
+				authTime,
+				acr: PUSH_ACR,
+				amr: ["hwk", "face"],
+			},
+		});
+		const issued = await poll(authReqId);
+		expect(issued.status).toBe(200);
+		expect(decodeJwt(issued.body.id_token as string)).toMatchObject({
+			sub: userId,
+			acr: PUSH_ACR,
+			amr: ["hwk", "face"],
+			auth_time: Math.floor(authTime.getTime() / 1000),
+		});
+	});
+
+	it("claims no authentication context the server did not state", async () => {
+		const { authReqId, requestId, userId } = await startRequest();
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId, decision: "approved" },
+		});
+		const claims = decodeJwt((await poll(authReqId)).body.id_token as string);
+		expect(claims.acr).toBe("0");
+		expect(claims.amr).toBeUndefined();
+		expect(claims.auth_time).toBeUndefined();
+	});
+
+	it("ends the client's poll when the server denies", async () => {
+		const { authReqId, requestId, userId } = await startRequest();
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId, decision: "denied" },
+		});
+		expect((await poll(authReqId)).body.error).toBe("access_denied");
+	});
+
+	it("refuses a decision for another user without consuming the request", async () => {
+		const { authReqId, requestId, userId } = await startRequest();
+		const other = await auth.api.getSession({ headers: secondUserHeaders });
+		for (const decision of ["approved", "denied"] as const) {
+			await expect(
+				auth.api.completeCibaRequest({
+					body: { requestId, userId: other!.user.id, decision },
+				}),
+			).rejects.toMatchObject({ body: { error: "invalid_request" } });
+		}
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId, decision: "approved" },
+		});
+		await waitInterval();
+		expect((await poll(authReqId)).status).toBe(200);
+	});
+
+	it("narrows the token to the scopes the server approves", async () => {
+		const { authReqId, requestId, userId } = await startRequest();
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId, decision: "approved", scopes: ["openid"] },
+		});
+		expect((await poll(authReqId)).body.scope).toBe("openid");
+	});
+
+	it.each([
+		["a scope the client did not request", ["openid", "profile", "email"]],
+		["scopes without openid", ["profile"]],
+	])("refuses %s and keeps the request pending", async (_, scopes) => {
+		const { authReqId, requestId, userId } = await startRequest();
+		await expect(
+			auth.api.completeCibaRequest({
+				body: { requestId, userId, decision: "approved", scopes },
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_scope" } });
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+	});
+
+	it("refuses an acr outside acrValuesSupported", async () => {
+		const { authReqId, requestId, userId } = await startRequest();
+		await expect(
+			auth.api.completeCibaRequest({
+				body: {
+					requestId,
+					userId,
+					decision: "approved",
+					acr: "urn:example:acr:unknown",
+				},
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_request" } });
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
+	});
+
+	it("refuses a second decision and an expired request", async () => {
+		const { requestId, userId } = await startRequest();
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId, decision: "denied" },
+		});
+		await expect(
+			auth.api.completeCibaRequest({
+				body: { requestId, userId, decision: "approved" },
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_request" } });
+
+		const expired = await startRequest();
+		await expireRequest(expired.authReqId);
+		await expect(
+			auth.api.completeCibaRequest({
+				body: {
+					requestId: expired.requestId,
+					userId: expired.userId,
+					decision: "approved",
+				},
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_request" } });
+	});
+});
+
 describe("ciba ping mode", () => {
 	let pingClient: OAuthClient;
 	const token = "client-token.123";
@@ -812,6 +960,20 @@ describe("ciba ping mode", () => {
 		expect((await poll(authReqId, pingClient)).body.error).toBe(
 			"access_denied",
 		);
+	});
+
+	it("pings the client when server code completes the request", async () => {
+		const ping = mockPing();
+		const { authReqId } = await startPing();
+		const { requestId, user } = lastNotification!;
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId: user.id, decision: "approved" },
+		});
+		expect(ping).toHaveBeenCalledOnce();
+		expect(JSON.parse(ping.mock.calls[0]![1]?.body as string)).toEqual({
+			auth_req_id: authReqId,
+		});
+		expect((await poll(authReqId, pingClient)).status).toBe(200);
 	});
 
 	it("keeps the decision when the ping fails", async () => {

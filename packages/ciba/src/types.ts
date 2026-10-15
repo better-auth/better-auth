@@ -11,6 +11,11 @@ export type CibaDeliveryMode = "poll" | "ping";
  * separate device.
  */
 export interface CibaNotification {
+	/**
+	 * Identifies the request to `auth.api.completeCibaRequest`, for a deployment
+	 * that lets the user decide in its own app instead of following `url`.
+	 */
+	requestId: string;
 	/** The user the client's `login_hint` identified. */
 	user: User;
 	clientId: string;
