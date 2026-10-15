@@ -432,4 +432,64 @@ describe("CIMD in-flight resolution liveness", () => {
 		expect(wedgedResult.status).toBe(429);
 		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
 	});
+
+	it("does not re-arm failed-fetch backoff when a superseded attempt settles late", async () => {
+		const harness = await createInFlightHarness({
+			minimumFetchInterval: 60,
+			maximumFetchesPerMinute: 1_000,
+			maximumFetchesPerOriginPerMinute: 1_000,
+		});
+		const clientId = "https://backoff.example/client.json";
+		const wedged = deferred<Response>();
+		let wedgedOnce = false;
+		harness.responders.set(clientId, () => {
+			if (!wedgedOnce) {
+				wedgedOnce = true;
+				return wedged.promise;
+			}
+			return Response.json(metadata(clientId), {
+				headers: { "cache-control": "no-store" },
+			});
+		});
+
+		// Attempt A starts and parks inside its transport fetch, holding the
+		// failed-fetch marker armed at its fetch start. Freeze the clock at
+		// the wedge point: its originator's wait bound is still pending, so
+		// the attempt is live from its caller's point of view.
+		let now = Date.now();
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const wedgedRequest = harness.authorize(clientId);
+		void wedgedRequest.catch(() => {});
+		await vi.waitFor(() =>
+			expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(1),
+		);
+
+		// Jump the clock past both the in-flight sweep age and the per-client
+		// minimum interval (60s). The next request sweeps the wedged attempt
+		// and runs a replacement, which fetches a no-store document
+		// successfully: the client recovers and the replacement clears the
+		// failed-fetch marker on its way out.
+		now += IN_FLIGHT_RESOLUTION_MAX_AGE_MS + 60_000;
+		const replacement = await harness.authorize(clientId);
+		expect(replacement.status).toBeLessThan(400);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+
+		// The wedged attempt settles late: the sweep superseded it, so its
+		// resolution rejects and its still-parked originator fails. That
+		// late failure must not re-arm the per-client interval the
+		// replacement cleared when it recovered the client.
+		wedged.resolve(
+			Response.json(metadata(clientId), {
+				headers: { "cache-control": "no-store" },
+			}),
+		);
+		const wedgedResult = await wedgedRequest;
+		expect(wedgedResult.status).toBe(429);
+
+		// The client recovered, so the next request must be allowed a fresh
+		// fetch instead of 429ing on a backoff the dead attempt re-armed.
+		const recovered = await harness.authorize(clientId);
+		expect(recovered.status).toBeLessThan(400);
+		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(3);
+	});
 });

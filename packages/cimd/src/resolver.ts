@@ -358,7 +358,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			 * settlement may no longer publish, because a replacement
 			 * attempt may already be persisting a fresher document.
 			 */
-			attempt: { isCurrent: boolean };
+			attempt: { isCurrent: boolean; superseded: boolean };
 		}
 	>();
 	const lastFetchStartAtMsByClientId = new Map<string, number>();
@@ -565,6 +565,11 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 				// meantime. Publishing it would overwrite the replacement's
 				// client row and cache entry with stale metadata.
 				staleResolution.attempt.isCurrent = false;
+				// Mark the sweep distinctly from the entry's own cleanup: a
+				// replacement attempt now governs this client's fetch state, so
+				// the swept attempt must not re-arm failed-fetch pacing when
+				// its own failure settles later.
+				staleResolution.attempt.superseded = true;
 				staleResolution.releaseMetadataFetchPermit();
 			}
 		}
@@ -586,7 +591,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		// settlement cannot publish over a replacement attempt. A map
 		// lookup would be unsafe here: a replacement attempt may already
 		// have registered a fresh entry for the same client.
-		const attempt = { isCurrent: true };
+		const attempt = { isCurrent: true, superseded: false };
 		const resolution = (async () => {
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
@@ -686,8 +691,17 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		try {
 			return await boundInFlightResolution(resolution);
 		} catch (error) {
-			lastFetchStartAtMsByClientId.delete(clientId);
-			lastFetchStartAtMsByClientId.set(clientId, Date.now());
+			// Pacing starts when the failure settles, not when the fetch
+			// started (the permit already armed that), but only while this
+			// attempt still governs the client. The expiry sweep marks a
+			// deregistered live attempt as superseded, because a replacement
+			// attempt may already have recovered and cleared the marker (or be
+			// managing the client's fetch state itself); the swept attempt's
+			// late failure must not re-arm pacing over that.
+			if (!attempt.superseded) {
+				lastFetchStartAtMsByClientId.delete(clientId);
+				lastFetchStartAtMsByClientId.set(clientId, Date.now());
+			}
 			throw error;
 		} finally {
 			cleanupInFlightEntry();
