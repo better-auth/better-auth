@@ -6,7 +6,7 @@ import { memoryAdapter } from "@better-auth/memory-adapter";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair } from "jose";
+import { exportJWK, generateKeyPair, importJWK, SignJWT } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "../oauth";
 
@@ -42,11 +42,14 @@ function sign(clientId: string, key: TestKey, audience = rotateURL) {
 	});
 }
 
-async function setup(testWith: "sqlite" | "postgres" = "sqlite") {
+async function setup(
+	testWith: "sqlite" | "postgres" = "sqlite",
+	authBaseURL = baseURL,
+) {
 	const trustedClients = new Set<string>();
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
 		{
-			baseURL,
+			baseURL: authBaseURL,
 			trustedOrigins: ["https://trusted.example.com"],
 			plugins: [
 				jwt(),
@@ -238,6 +241,37 @@ describe("client key rotation", async () => {
 		expect(await authenticate(clientId, oldKey)).toBe(200);
 	});
 
+	it("accepts an audience list only when it names the rotation endpoint", async () => {
+		const oldKey = await createKey("old");
+		const clientId = await createClient([oldKey]);
+		const signFor = async (audience: string[]) =>
+			new SignJWT({})
+				.setProtectedHeader({ alg: "ES256", kid: oldKey.kid })
+				.setIssuer(clientId)
+				.setSubject(clientId)
+				.setAudience(audience)
+				.setIssuedAt()
+				.setExpirationTime("1m")
+				.setJti(crypto.randomUUID())
+				.sign(await importJWK(oldKey.privateJwk, "ES256"));
+
+		const elsewhere = await rotate({
+			clientId,
+			signer: oldKey,
+			next: [await createKey("new")],
+			assertion: await signFor([apiURL, baseURL, `${apiURL}/oauth2/token`]),
+		});
+		const addressed = await rotate({
+			clientId,
+			signer: oldKey,
+			next: [await createKey("new")],
+			assertion: await signFor([apiURL, rotateURL]),
+		});
+
+		expect(elsewhere.status).toBe(401);
+		expect(addressed.status).toBe(200);
+	});
+
 	it("rejects a malformed or unsafe replacement key set before touching the client", async () => {
 		const oldKey = await createKey("old");
 		const clientId = await createClient([oldKey]);
@@ -317,6 +351,26 @@ describe("client key rotation", async () => {
 			assertion,
 		});
 		expect(accepted.status).toBe(200);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10800
+ */
+describe("client key rotation with a trailing-slash baseURL", async () => {
+	const { createClient, rotate } = await setup("sqlite", `${apiURL}/`);
+
+	it("accepts an assertion addressed to the URL the client calls", async () => {
+		const oldKey = await createKey("old");
+		const clientId = await createClient([oldKey]);
+
+		const response = await rotate({
+			clientId,
+			signer: oldKey,
+			next: [await createKey("new")],
+		});
+
+		expect(response.status).toBe(200);
 	});
 });
 
