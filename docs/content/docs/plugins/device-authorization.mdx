@@ -121,7 +121,12 @@ Device authorization can finish with two different token types. Choose the token
 | Sign your own device into the same Better Auth application                       | Better Auth session token | `deviceAuthorization()`                                      | `/device/token` |
 | Let a registered CLI, TV app, or other public client call an OAuth-protected API | Scoped OAuth access token | `jwt()`, `oauthProvider()`, and `oauthDeviceAuthorization()` | `/oauth2/token` |
 
-A command-line application commonly needs the second path. The CLI cannot safely keep a client secret, and it may not have a reliable redirect listener, but it still needs a user-authorized token for your API. The device grant lets the user approve the request in a browser while the CLI receives an audience-bound OAuth access token.
+A command-line application commonly needs the second path: it cannot keep a client secret, but it needs a user-authorized token for your API. Choose the grant by where the CLI runs:
+
+* **The user has a browser on the same machine**, such as a developer laptop: use the authorization code grant with PKCE and a [loopback redirect](https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3). The CLI listens on `http://127.0.0.1` on any free port, opens the browser at `/oauth2/authorize`, and receives the code on that listener. The user signs in and consents with no code to type or compare. Register the CLI as a `native` client with a loopback redirect URI; [the port may vary](/docs/plugins/oauth-provider#custom-redirect-uri-validation).
+* **The CLI cannot open a browser or listen locally**, such as over SSH, in a container, or on a TV: use the device grant below. The user approves in a browser on any device while the CLI polls for an audience-bound OAuth access token.
+
+A CLI can try the loopback flow first and fall back to the device grant when it cannot open a browser.
 
 ### Authorize a CLI to call an API
 
@@ -202,8 +207,9 @@ const { data } = await authClient.device.code({
 
 if (!data) throw new Error("Could not start device authorization");
 
-console.log(`Open ${data.verification_uri}`);
-console.log(`Enter code ${data.user_code}`);
+// Show the link (or a QR code of it) and the code the user should see on the consent page.
+console.log(`Open ${data.verification_uri_complete}`);
+console.log(`Then check that the page shows the code ${data.user_code}`);
 ```
 
 While the user signs in and approves the request, repeat the following request every `data.interval` seconds. Add 5 seconds to the interval each time the response is `slow_down`, as [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628#section-3.5) requires.
@@ -238,11 +244,22 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
 
 #### Approve the device
 
-The user approves an OAuth device code on the same sign-in, account selection, post-login, and consent pages as an authorization request. Your verification page collects the user code and sends the browser to `/oauth2/authorize` with it:
+The user approves an OAuth device code on the same sign-in, account selection, post-login, and consent pages as an authorization request. Your verification page sends the browser to `/oauth2/authorize` with the user code. A user who opens `verification_uri_complete` already has the code in the URL, so the page can continue without a click:
 
 ```ts title="app/device/page.tsx"
-window.location.href = `${authBaseURL}/oauth2/authorize?user_code=${encodeURIComponent(userCode)}`;
+const params = new URLSearchParams(location.search);
+const userCode = params.get("user_code");
+
+// Continue at once; the consent page still shows the code for the user to compare.
+// Stay on the page when the provider sent the user back with `status` or `error`.
+if (userCode && !params.has("status") && !params.has("error")) {
+  location.replace(
+    `${authBaseURL}/oauth2/authorize?user_code=${encodeURIComponent(userCode)}`,
+  );
+}
 ```
+
+Otherwise the page collects the code in a form and navigates to the same URL.
 
 The provider reads only `user_code` from this request and takes the client, scopes, and resources from the stored device code. It then:
 

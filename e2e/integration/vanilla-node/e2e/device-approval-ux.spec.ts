@@ -80,6 +80,11 @@ const PAGES: Record<string, string> = {
 				approved: "Device connected. You can return to your device.",
 				denied: "Device request denied.",
 			};
+			const continueURL = (code) =>
+				"/api/auth/oauth2/authorize?user_code=" + encodeURIComponent(code);
+			if (params.has("user_code") && !params.has("status") && !params.has("error")) {
+				location.replace(continueURL(params.get("user_code")));
+			}
 			form.user_code.value = params.get("user_code") ?? "";
 			if (messages[params.get("status")]) {
 				document.getElementById("status").textContent = messages[params.get("status")];
@@ -89,7 +94,7 @@ const PAGES: Record<string, string> = {
 			}
 			form.addEventListener("submit", (event) => {
 				event.preventDefault();
-				location.href = "/api/auth/oauth2/authorize?user_code=" + encodeURIComponent(form.user_code.value);
+				location.href = continueURL(form.user_code.value);
 			});
 		</script>`,
 	"/login": `
@@ -382,12 +387,9 @@ test.describe("OAuth device approval in the browser", () => {
 		const device = await startDevice(provider);
 		const pages = trackPages(page);
 
-		// The person scans the device's QR code, so the code is already filled in.
+		// The person scans the device's QR code: the code is in the link, so the
+		// verification page continues without asking them to type or confirm it.
 		await page.goto(device.verification_uri_complete);
-		await expect(page.getByLabel("Code shown on your device")).toHaveValue(
-			device.user_code,
-		);
-		await page.getByRole("button", { name: "Continue" }).click();
 
 		await page.waitForURL(/\/login\?/);
 		await page.getByLabel("Email").fill(USER.email);
@@ -465,7 +467,6 @@ test.describe("OAuth device approval in the browser", () => {
 	}) => {
 		const first = await startDevice(provider);
 		await page.goto(first.verification_uri_complete);
-		await page.getByRole("button", { name: "Continue" }).click();
 		await page.getByLabel("Email").fill(USER.email);
 		await page.getByLabel("Password").fill(USER.password);
 		await page.getByRole("button", { name: "Sign in" }).click();
@@ -479,7 +480,6 @@ test.describe("OAuth device approval in the browser", () => {
 		const second = await startDevice(provider);
 		const pages = trackPages(page);
 		await page.goto(second.verification_uri_complete);
-		await page.getByRole("button", { name: "Continue" }).click();
 		await page.waitForURL(/\/consent\?/);
 		await expect(page.getByRole("heading")).toHaveText(
 			"Allow Acme CLI to access Acme?",
