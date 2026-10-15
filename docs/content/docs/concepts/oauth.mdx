@@ -588,6 +588,41 @@ export const auth = betterAuth({
 });
 ```
 
+### requireIssuedIdTokenNonce
+
+Binds each ID token a client submits to one request. When enabled, `signIn.social` and `linkSocial` with an `idToken` require a nonce from `POST /id-token/nonce`. Each nonce works once and expires after five minutes. The token's `nonce` claim must match it. Without it, the server has no record of the nonces a client uses, so it cannot tell a fresh token from a reused one.
+
+Enable it only when every client that submits ID tokens for this provider can pass a nonce to the provider's SDK. Clients that send no nonce, or one the server did not issue, get `400 INVALID_ID_TOKEN_NONCE`.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      requireIssuedIdTokenNonce: true,
+    },
+  },
+});
+```
+
+Fetch a nonce before you start the provider's sign-in, pass it to the provider's SDK, then send it with the ID token:
+
+```ts title="client.ts"
+const { data } = await authClient.idToken.nonce({ provider: "google" });
+
+// Pass data.nonce to the provider's SDK, e.g. Google's `nonce` option,
+// then submit the ID token it returns.
+await authClient.signIn.social({
+  provider: "google",
+  idToken: { token: idTokenFromProvider, nonce: data.nonce },
+});
+```
+
+* **Apple:** Apple recommends passing the SHA-256 hex digest of the nonce to Apple, and sending the raw nonce to Better Auth. Both the raw value and its digest are accepted in the claim.
+* **Facebook:** only Limited Login ID tokens carry a nonce. Opaque Graph access tokens are rejected when a nonce is expected.
+* **Custom `verifyIdToken`:** Better Auth consumes the issued nonce and passes it to your function, so your function must still compare it to the token's `nonce` claim.
+
 ### overrideUserInfoOnSignIn
 
 A boolean value that determines whether to override the user information in the database when signing in. By default, it is set to `false`, meaning that the user information will not be overridden during sign-in. If you want to update the user information every time they sign in, set this to `true`.
