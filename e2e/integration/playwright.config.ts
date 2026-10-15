@@ -15,14 +15,6 @@ export default defineConfig({
 		{
 			name: "chromium",
 			use: { ...devices["Desktop Chrome"] },
-			testIgnore: "nextjs-demo/**",
-		},
-		{
-			name: "nextjs-demo",
-			use: { ...devices["Desktop Chrome"] },
-			testMatch: "nextjs-demo/e2e/**/*.spec.ts",
-			// Each spec runs `next dev` in demo/nextjs, which allows one dev server.
-			workers: 1,
 		},
 		// Front-channel logout depends on each browser's third-party cookie
 		// rules. CI sets PLAYWRIGHT_CROSS_BROWSER only when that code changes.
