@@ -7,7 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-
+import { createHMAC } from "@better-auth/utils/hmac";
 import * as z from "zod";
 import { hasServerSessionStore } from "../../context/store-capabilities";
 import {
@@ -16,6 +16,7 @@ import {
 	deleteSessionCookie,
 	expireCookie,
 	getChunkedCookie,
+	parseCookies,
 	setCookieCache,
 	setSessionCookie,
 } from "../../cookies";
@@ -671,6 +672,95 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 	);
 
 /**
+ * The session-token cookie the *original* request carried, with its signature
+ * verified - or `null` when the request holds none.
+ *
+ * `ctx.headers` (and therefore `ctx.getSignedCookie`) reflects the effective
+ * session, which the bearer plugin can swap for the Authorization token while
+ * the browser is holding an unrelated session's cookie. `ctx.request` keeps
+ * the request as the client sent it, so it is the source of truth for which
+ * cookies the response would actually expire.
+ *
+ * When there is no `Request` (server-side `auth.api.*` calls), plugins *can*
+ * still have rewritten `ctx.headers` in flight, so the source of truth there
+ * is `originalCookieHeader` (captured by `dispatchAuthEndpoint` before any
+ * before-hook ran), not `ctx.headers`.
+ *
+ * Returns `null` when the original request carries no session-token cookie
+ * (bearer-only clients) so non-browser callers get a clean `Set-Cookie`-free
+ * response rather than expiry headers for cookies they never held.
+ */
+async function requestSessionCookieToken(
+	/**
+	 * The endpoint context. On a server-side `auth.api.*` dispatch the context
+	 * additionally carries `originalCookieHeader` (see dispatchAuthEndpoint):
+	 * the cookie header as the caller sent it, captured before any before-hook
+	 * could rewrite it. The intersection keeps the helper usable from plain
+	 * request contexts too, where `ctx.request` holds the untouched cookies.
+	 */
+	ctx: GenericEndpointContext & { originalCookieHeader?: string | undefined },
+): Promise<string | null> {
+	let cookieHeader: string | null = null;
+	if (ctx.request) {
+		// original request cookies; plugin before-hooks may have rewritten
+		// ctx.headers, but ctx.request stays as the client sent it
+		cookieHeader = ctx.request.headers.get("cookie");
+	} else if (typeof ctx.originalCookieHeader === "string") {
+		// server-side auth.api call: the dispatch captured the cookie header
+		// before any before-hook ran, so a bearer token that was swapped into
+		// ctx.headers in flight cannot make an unrelated session's cookie look
+		// like the revoked one (or hide the revoked one).
+		cookieHeader = ctx.originalCookieHeader;
+	}
+	if (!cookieHeader) {
+		// bearer-only clients hold no session cookie
+		return null;
+	}
+	const signedValue = parseCookies(cookieHeader).get(
+		ctx.context.authCookies.sessionToken.name,
+	);
+	if (!signedValue) {
+		return null;
+	}
+	// the cookie holds `token.signature`; the signature is appended after the
+	// last dot (session tokens are alphanumeric, see generateId)
+	const dotIndex = signedValue.lastIndexOf(".");
+	const cookieToken = dotIndex > 0 ? signedValue.substring(0, dotIndex) : "";
+	if (!cookieToken) {
+		return null;
+	}
+	// verify the signature so a cookie cannot claim a session the caller does
+	// not hold by pairing a foreign token with a valid signature of a
+	// different value
+	const signature = signedValue.substring(dotIndex + 1);
+	try {
+		const isValid = await createHMAC("SHA-256", "base64urlnopad").verify(
+			ctx.context.secret,
+			cookieToken,
+			signature,
+		);
+		return isValid ? cookieToken : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Whether the session-token cookie the *original* request carried matches the
+ * revoked session's token.
+ *
+ * Returns `false` when the original request carries no session-token cookie
+ * (bearer-only clients) so non-browser callers get a clean `Set-Cookie`-free
+ * response rather than expiry headers for cookies they never held.
+ */
+async function revokedSessionOwnsRequestCookies(
+	ctx: GenericEndpointContext & { originalCookieHeader?: string | undefined },
+	revokedToken: string,
+): Promise<boolean> {
+	return (await requestSessionCookieToken(ctx)) === revokedToken;
+}
+
+/**
  * revoke a single session
  */
 export const revokeSession = createAuthEndpoint(
@@ -733,6 +823,12 @@ export const revokeSession = createAuthEndpoint(
 		if (session?.session.userId === ctx.context.session.user.id) {
 			try {
 				await ctx.context.internalAdapter.deleteSession(token);
+				if (await revokedSessionOwnsRequestCookies(ctx, token)) {
+					// the caller's cookies hold the revoked session, so
+					// expire the session (and cookie cache) cookies in the
+					// response, matching what sign-out does
+					deleteSessionCookie(ctx);
+				}
 			} catch (error) {
 				ctx.context.logger.error(
 					error && typeof error === "object" && "name" in error
@@ -788,9 +884,38 @@ export const revokeSessions = createAuthEndpoint(
 	},
 	async (ctx) => {
 		try {
+			// Every session of the caller is about to be revoked, so the
+			// session the original request's cookie holds - read from the
+			// original header, because a bearer token may have been swapped
+			// into ctx.headers in flight - decides whether the response
+			// expires the session (and cookie cache) cookies, matching what
+			// sign-out does. Only a cookie session that belongs to the
+			// caller may be expired: with an Authorization token for one
+			// user and a cookie jar holding a different user's session,
+			// deleteUserSessions removes only the bearer user's sessions,
+			// and a bearer-only caller holds no cookies to expire at all.
+			// When the cookie holds the very session this request
+			// authenticated with, that already-validated session decides
+			// ownership directly: revocations can overlap, and a second
+			// store lookup that runs after another request removed the row
+			// would find nothing and skip the expiry, leaving the revoked
+			// session's cookies - and the cookie cache still vouching for
+			// it - alive. A cookie holding another session still needs the
+			// lookup, done BEFORE the delete because the delete removes
+			// the caller's sessions, not necessarily that one.
+			const cookieSessionToken = await requestSessionCookieToken(ctx);
+			const cookieSession =
+				cookieSessionToken === ctx.context.session.session.token
+					? ctx.context.session
+					: cookieSessionToken
+						? await ctx.context.internalAdapter.findSession(cookieSessionToken)
+						: null;
 			await ctx.context.internalAdapter.deleteUserSessions(
 				ctx.context.session.user.id,
 			);
+			if (cookieSession?.session.userId === ctx.context.session.user.id) {
+				deleteSessionCookie(ctx);
+			}
 		} catch (error) {
 			ctx.context.logger.error(
 				error && typeof error === "object" && "name" in error
