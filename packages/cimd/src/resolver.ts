@@ -6,6 +6,7 @@ import type {
 	SchemaClient,
 	Scope,
 } from "@better-auth/oauth-provider";
+import { getExtensionClientMetadataFields } from "@better-auth/oauth-provider/internal";
 import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
@@ -505,6 +506,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 							lastModified: cachedEntry.lastModified,
 						}
 					: undefined,
+				getExtensionClientMetadataFields(oauthOptions),
 			);
 
 			if (fetched.status === "not-modified" && !cachedEntry) {

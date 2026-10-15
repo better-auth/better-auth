@@ -144,6 +144,10 @@ export function isForbiddenCimdClientMetadataField(field: string): boolean {
 	return CIMD_FORBIDDEN_SERVER_FIELD_NAMES.has(field);
 }
 
+export function isReservedOAuthClientMetadataField(field: string): boolean {
+	return OPAQUE_METADATA_RESERVED_FIELDS.has(field);
+}
+
 export function stripReservedOAuthClientMetadataExtensions(
 	metadata: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {

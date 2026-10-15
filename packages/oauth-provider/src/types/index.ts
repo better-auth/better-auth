@@ -2,6 +2,7 @@ import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
+import type { OAuthClientRegistrationMetadata } from "../register";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
 import type {
@@ -28,6 +29,7 @@ export type {
 	TokenType,
 } from "./oauth";
 export type { ClientRegistrationRequest } from "./zod";
+export type { OAuthClientRegistrationMetadata };
 
 export type StoreTokenType =
 	| "access_token"
@@ -480,6 +482,41 @@ export interface OAuthProviderExtension {
 	 * registry, an attestation header) contributes it here.
 	 */
 	clientDiscovery?: ClientDiscovery | ClientDiscovery[];
+	/**
+	 * Client registration metadata the extension defines, such as CIBA's
+	 * `backchannel_token_delivery_mode`. Extension fields live in the client's
+	 * `metadata`.
+	 */
+	clientMetadata?: {
+		/**
+		 * Top-level registration fields the extension defines. Dynamic client
+		 * registration (RFC 7591 §2) and client metadata documents (CIMD) both
+		 * ignore unrecognized fields; they keep these and store them in the
+		 * client's `metadata`, where admin-created clients put them too. Core
+		 * and server-owned client fields cannot be claimed.
+		 */
+		fields?: string[];
+		/**
+		 * Validates the extension's fields when a client is registered through
+		 * dynamic registration or a client metadata document, or created or
+		 * updated by an admin. Throw an `APIError` with `invalid_client_metadata`
+		 * to reject the client.
+		 */
+		validate?: (input: OAuthClientMetadataExtensionInput) => Awaitable<void>;
+	};
+}
+
+export interface OAuthClientMetadataExtensionInput {
+	/**
+	 * The client's core registration metadata after provider defaults. Read
+	 * extension fields from `metadata`, not from here.
+	 */
+	client: Omit<OAuthClientRegistrationMetadata, "metadata">;
+	/**
+	 * The client's `metadata` as it will be stored, with reserved client field
+	 * names removed. Extension fields are read from here.
+	 */
+	metadata: Record<string, unknown>;
 }
 
 /**
