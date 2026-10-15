@@ -874,6 +874,33 @@ describe("ciba server-side completion", () => {
 		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
 	});
 
+	it("refuses a decided request as unknown, before checking its scopes", async () => {
+		const { requestId, userId } = await startRequest();
+		await auth.api.completeCibaRequest({
+			body: { requestId, userId, decision: "approved", scopes: ["openid"] },
+		});
+		await expect(
+			auth.api.completeCibaRequest({
+				body: {
+					requestId,
+					userId,
+					decision: "approved",
+					scopes: ["openid", "profile"],
+				},
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_request" } });
+	});
+
+	it("refuses an expired request as unknown, before checking its scopes", async () => {
+		const { authReqId, requestId, userId } = await startRequest();
+		await expireRequest(authReqId);
+		await expect(
+			auth.api.completeCibaRequest({
+				body: { requestId, userId, decision: "approved", scopes: ["profile"] },
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_request" } });
+	});
+
 	it("refuses an acr outside acrValuesSupported", async () => {
 		const { authReqId, requestId, userId } = await startRequest();
 		await expect(
@@ -1030,6 +1057,49 @@ it("keeps one instance's schema overrides out of another", () => {
 	expect(
 		ciba({ resultPage: "/ciba", sendNotification }).schema.cibaRequest,
 	).not.toHaveProperty("modelName");
+});
+
+describe("ciba completion when acrValuesSupported omits 0", async () => {
+	const instance = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				authenticationContext: {
+					acrValuesSupported: [PUSH_ACR],
+					resolve: () => undefined,
+				},
+			}),
+			ciba({ resultPage: "/ciba", sendNotification }),
+		],
+	});
+	const { headers: adminHeaders } = await instance.signInWithTestUser();
+
+	it("requires the server to state a supported acr", async () => {
+		const client = await instance.auth.api.adminCreateOAuthClient({
+			headers: adminHeaders,
+			body: { grant_types: [CIBA_GRANT_TYPE], metadata: POLL },
+		});
+		const res = await bcAuthorize(
+			{ scope: "openid", login_hint: instance.testUser.email },
+			client,
+			instance.customFetchImpl,
+		);
+		expect(res.status).toBe(200);
+		const { requestId, user } = lastNotification!;
+		const body = { requestId, userId: user.id, decision: "approved" as const };
+		// Without an acr the ID token would claim "0", which this server does not support.
+		await expect(
+			instance.auth.api.completeCibaRequest({ body }),
+		).rejects.toMatchObject({ body: { error: "invalid_request" } });
+		await expect(
+			instance.auth.api.completeCibaRequest({
+				body: { ...body, acr: PUSH_ACR },
+			}),
+		).resolves.toEqual({ status: true });
+	});
 });
 
 describe("ciba defaults", async () => {

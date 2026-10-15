@@ -151,8 +151,16 @@ export const completeCibaRequest = createAuthEndpoint.serverOnly(
 			model: "cibaRequest",
 			where: [{ field: "id", value: requestId }],
 		});
-		// Another user's request fails as an unknown one, before its scopes are read.
-		if (!request || request.userId !== userId) return unknownRequest();
+		// Another user's, a decided, or an expired request fails as an unknown one,
+		// before its scopes are read. recordDecision still guards the write.
+		if (
+			!request ||
+			request.userId !== userId ||
+			request.status !== "pending" ||
+			request.expiresAt <= new Date()
+		) {
+			return unknownRequest();
+		}
 		const requested = request.scope.split(" ");
 		const scopes = ctx.body.scopes ?? requested;
 		if (scopes.some((scope) => !requested.includes(scope))) {
@@ -162,10 +170,8 @@ export const completeCibaRequest = createAuthEndpoint.serverOnly(
 			oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
 		}
 		const oauthOptions = ctx.context.getPlugin("oauth-provider")!.options;
-		if (
-			acr !== undefined &&
-			!getAcrValuesSupported(oauthOptions).includes(acr)
-		) {
+		// Without an acr the ID token claims "0", which must be supported too.
+		if (!getAcrValuesSupported(oauthOptions).includes(acr ?? "0")) {
 			oauthError("invalid_request", CIBA_ERROR_CODES.UNSUPPORTED_ACR.message);
 		}
 		await recordDecision(ctx, requestId, userId, {

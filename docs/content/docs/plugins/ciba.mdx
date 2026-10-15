@@ -199,8 +199,9 @@ When your own app can reach the user, such as a mobile app that shows a push not
 ```ts title="auth.ts"
 ciba({
   resultPage: "/ciba",
-  sendNotification: async ({ requestId, user, clientName, scopes, bindingMessage }) => {
-    await push.send(user.id, { requestId, clientName, scopes, bindingMessage });
+  sendNotification: async ({ requestId, user, clientId, clientName, scopes, bindingMessage }) => {
+    // Always show who is asking; not every client has a name.
+    await push.send(user.id, { requestId, client: clientName ?? clientId, scopes, bindingMessage });
   },
 });
 ```
@@ -222,7 +223,7 @@ await auth.api.completeCibaRequest({
 });
 ```
 
-The provider records the decision only when `userId` is the user the `login_hint` named and the request is still pending. The approved scopes must be among the requested ones and include `openid`. A ping client is called back as it is after a decision from the link. This call skips the provider's sign-in, post-login, and consent pages, so your app is responsible for:
+The provider records the decision only when `userId` is the user the `login_hint` named and the request is still pending; otherwise it returns `invalid_request` and changes nothing. Without `acr`, the ID token claims `"0"`, so state an `acr` when `"0"` is not in `acrValuesSupported`. The approved scopes must be among the requested ones and include `openid`. A ping client is called back as it is after a decision from the link. This call skips the provider's sign-in, post-login, and consent pages, so your app is responsible for:
 
 * authenticating the user before it reports a decision, and
 * showing the client, the scopes, and the binding message before the user approves.
@@ -259,7 +260,7 @@ export const cibaOptionsType = {
 	sendNotification: {
 		type: "(notification, ctx) => void | Promise<void>",
 		description:
-			"Send the user the link. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, url, expiresAt }`; pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
+			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, url, expiresAt }`; pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
 	},
 	resultPage: {
 		type: "string",
@@ -356,7 +357,7 @@ The plugin adds one model, `cibaRequest`:
 
 ## Security
 
-* **Consent is always shown, and only the named user can decide.** A user who receives a request they did not expect can deny it, and someone else who gets hold of the link cannot approve or deny it. `completeCibaRequest` also refuses a decision for any other user, but it trusts your server to have authenticated that user and shown them the request.
+* **Only the named user can decide.** Approval from the link always shows consent, so a user who receives a request they did not expect can deny it, and someone else who gets hold of the link cannot approve or deny it. `completeCibaRequest` also refuses a decision for any other user, but it skips consent: it trusts your server to have authenticated that user and shown them the request.
 * **Limit who a client can name.** Each request notifies a person, and `unknown_user_id` tells the client whether a hint matched a user, as CIBA §13 specifies. Each IP address can start 10 requests per minute. When anyone can register a client, resolve `login_hint` only to users the client already knows, as shown in [Register a client](#register-a-client).
 * **The binding message ties the two devices together.** Ask clients to send a short, random `binding_message` and to display it, so the user can tell their request apart from one someone else started at the same moment. Render it as text.
 * **The ping callback only reaches safe endpoints.** Registration and each request check that the notification endpoint is absolute `https` on a public host, with no credentials or fragment, the same rules as `backchannel_logout_uri`. The check does not resolve DNS, so restrict outbound network access where you can.

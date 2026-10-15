@@ -29,7 +29,8 @@ export const CIBA_ERROR_CODES = defineErrorCodes({
 	UNKNOWN_REQUEST:
 		"This sign-in request is invalid, has expired, or was sent to another account",
 	SCOPE_NOT_REQUESTED: "The approved scopes must be among the requested scopes",
-	UNSUPPORTED_ACR: "The acr is not in the provider's acrValuesSupported",
+	UNSUPPORTED_ACR:
+		'The acr, or "0" when none is stated, is not in the provider\'s acrValuesSupported',
 });
 
 /** Throws an OAuth error response (`error` and `error_description`). */
