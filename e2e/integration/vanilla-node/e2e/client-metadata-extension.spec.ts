@@ -129,7 +129,11 @@ test.describe("extension client metadata over HTTP", () => {
 				],
 			},
 			{ disableTestUser: true },
-		);
+		).catch(async (error: unknown) => {
+			// The finally below only covers a started auth server.
+			await clientApp.stop();
+			throw error;
+		});
 		const authBaseURL = `http://127.0.0.1:${port}/api/auth`;
 		const readMode = async (clientId: string) => {
 			const response = await fetch(
