@@ -542,12 +542,6 @@ export async function verifyClientAssertion(
 			error: "invalid_client",
 		});
 	}
-	if (client.pending) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "client is pending approval",
-			error: "invalid_client",
-		});
-	}
 	if (client.tokenEndpointAuthMethod !== "private_key_jwt") {
 		throw new APIError("BAD_REQUEST", {
 			error_description:

@@ -79,10 +79,11 @@ export async function storeClientApproval(
 ): Promise<void> {
 	const approved = await adapter.updateMany({
 		model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+		// Pending clients come only from anonymous registration, so `userId` is
+		// never set; filtering it on null would break serial ids.
 		where: [
 			{ field: "clientId", value: clientId },
 			{ field: "pending", value: true },
-			{ field: "userId", value: null },
 			{ field: "referenceId", value: null },
 		],
 		update: {

@@ -1176,7 +1176,9 @@ async function persistOAuthClientRegistration(
 						model: clientModel,
 						data: {
 							...schema,
-							...(startsPending ? { pending: true } : {}),
+							// Store the missing owner as null: Prisma on MongoDB
+							// skips unset fields when the approval filters on null.
+							...(startsPending ? { pending: true, referenceId: null } : {}),
 							createdAt: new Date(iat * 1000),
 							updatedAt: new Date(iat * 1000),
 						},

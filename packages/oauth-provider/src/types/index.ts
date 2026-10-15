@@ -727,9 +727,9 @@ export interface PendingClientApprovalContext<
 export interface PendingClientApproval {
 	/**
 	 * Owner of the approved client, stored as its `reference_id`, such as the
-	 * organization the consenting user administers. Use the value
-	 * {@link OAuthOptions.clientReference} returns for that owner, so the
-	 * owner can manage the client afterwards.
+	 * organization the consenting user administers. Use the same kind of
+	 * identifier {@link OAuthOptions.clientReference} returns, such as an
+	 * organization ID, so the owner's members can manage the client.
 	 */
 	clientReference: string;
 }
@@ -2215,7 +2215,7 @@ export interface SchemaClient<
 	 */
 	sectorIdentifier?: string | null;
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
-	referenceId?: string;
+	referenceId?: string | null;
 	/**
 	 * Additional metadata about the client.
 	 */

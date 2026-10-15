@@ -53,6 +53,7 @@ const adapters = (process.env.OAUTH_PROVIDER_TEST_ADAPTERS ?? "sqlite").split(
 async function createInstance(
 	testWith: (typeof adapters)[number],
 	options: Partial<Options>,
+	advanced?: { database: { generateId: "serial" } },
 ) {
 	const {
 		auth,
@@ -63,6 +64,7 @@ async function createInstance(
 	} = await getTestInstance(
 		{
 			baseURL: baseUrl,
+			advanced,
 			plugins: [
 				jwt({ jwt: { issuer: baseUrl } }),
 				oauthProvider({
@@ -384,6 +386,22 @@ describe.each(adapters)("approvePendingClient on %s", (testWith) => {
 		expect(await t.consents(clientId)).toHaveLength(0);
 	});
 
+	it("approves a client when ids are serial", async () => {
+		const t = await createInstance(
+			testWith,
+			{ approvePendingClient: () => ({ clientReference: "business_1" }) },
+			{ database: { generateId: "serial" } },
+		);
+		const { clientId } = await t.registerPending();
+		const { headers } = await t.signInWithTestUser();
+		const { location } = await t.authorize(clientId, headers);
+		const result = await t.consent(location, headers);
+		expect(result.status).toBe(200);
+		const stored = await t.row(clientId);
+		expect(stored?.pending).toBe(false);
+		expect(stored?.referenceId).toBe("business_1");
+	});
+
 	it("redirects a refusal to the client with access_denied and stores nothing", async () => {
 		const t = await createInstance(testWith, {
 			approvePendingClient: () => false,
@@ -526,17 +544,13 @@ describe.each(adapters)("approvePendingClient on %s", (testWith) => {
 
 	it("keeps a pending client unusable when the callback is no longer configured", async () => {
 		const t = await createInstance(testWith, {});
-		const { clientId, clientSecret } = await t
-			.registerPending()
-			.catch(async () => {
-				const registered = await t.register({
-					grant_types: ["authorization_code"],
-				});
-				return {
-					clientId: registered.body.client_id,
-					clientSecret: registered.body.client_secret!,
-				};
-			});
+		// Without the callback, open registration cannot request client_credentials.
+		const registered = await t.register({
+			grant_types: ["authorization_code"],
+		});
+		expect(registered.status).toBe(201);
+		const clientId = registered.body.client_id;
+		const clientSecret = registered.body.client_secret!;
 		await t.context.adapter.update({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientId }],
