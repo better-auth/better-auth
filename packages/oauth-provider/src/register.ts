@@ -973,7 +973,13 @@ async function persistOAuthClientRegistration(
 				// Server-owned fields (disabled, consent and logout settings, the
 				// ceiling) can change while this refresh fetches metadata, so the
 				// refresh never writes them.
-				const { clientCredentialsScopes: _ceiling, ...refreshed } = schema;
+				const {
+					clientCredentialsScopes: _ceiling,
+					disabled: _disabled,
+					skipConsent: _skipConsent,
+					enableEndSession: _enableEndSession,
+					...refreshed
+				} = schema;
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
