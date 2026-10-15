@@ -695,6 +695,9 @@ importers:
 
   e2e/integration:
     dependencies:
+      '@better-auth/ciba':
+        specifier: workspace:*
+        version: link:../../packages/ciba
       '@better-auth/cimd':
         specifier: workspace:*
         version: link:../../packages/cimd
@@ -735,6 +738,9 @@ importers:
       jose:
         specifier: ^6.2.3
         version: 6.2.3
+      undici:
+        specifier: ^7.29.0
+        version: 7.30.0
 
   e2e/integration/nuxt:
     dependencies:
@@ -16016,7 +16022,7 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       '@workflow/serde': 4.1.0
       eventsource-parser: 3.1.0
-      undici: 7.29.0
+      undici: 7.30.0
       zod: 4.5.4
 
   '@ai-sdk/provider@3.0.10':
@@ -18070,7 +18076,7 @@ snapshots:
       semver: 7.8.4
       sumchecker: 3.0.1
     optionalDependencies:
-      undici: 7.29.0
+      undici: 7.30.0
     transitivePeerDependencies:
       - supports-color
 

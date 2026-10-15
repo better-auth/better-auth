@@ -5,6 +5,7 @@
     "e2e:integration": "pnpm --dir nuxt exec nuxt prepare && playwright test"
   },
   "dependencies": {
+    "@better-auth/ciba": "workspace:*",
     "@better-auth/cimd": "workspace:*",
     "@better-auth/electron": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@better-auth-test/test-utils": "workspace:*",
     "@playwright/test": "~1.58.2",
-    "jose": "^6.2.3"
+    "jose": "^6.2.3",
+    "undici": "^7.29.0"
   }
 }
