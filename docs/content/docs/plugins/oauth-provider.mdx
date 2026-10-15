@@ -1739,99 +1739,37 @@ Approval creates a credential that acts for the whole organization and outlives 
 * Machines that run untrusted code, such as CI runners, or devices in public places, such as payment terminals.
 * High-value scopes, such as admin or payment access. Have an administrator issue the initial access token from your app instead.
 
-```ts title="auth.ts"
-import { createLocalJWKSet, jwtVerify } from "jose"
+Add `oauthDeviceAuthorization({ expiresIn: "5min" })`, a [post-login page](#post-login-screen) whose `consentReferenceId` returns the chosen organization, and:
 
+```ts title="auth.ts"
 const registrationResource = "https://auth.example.com/connector-registration"
 
-export const auth = betterAuth({
-  plugins: [
-    // Access tokens use this as `iss`; the check below must match it
-    jwt({ jwt: { issuer: "https://auth.example.com" } }),
-    organization(),
-    oauthProvider({
-      loginPage: "/sign-in",
-      consentPage: "/consent",
-      allowDynamicClientRegistration: true,
-      // Deleting a client does not invalidate tokens it already holds
-      m2mAccessTokenExpiresIn: 600,
-      scopes: ["openid", "connector:register", "invoices:write"],
-      // Registration tokens only work here and expire after 5 minutes
-      resources: [{
-        identifier: registrationResource,
-        allowedScopes: ["connector:register", "invoices:write"],
-        accessTokenTtl: 300,
-      }],
-      postLogin: {
-        page: "/select-organization",
-        shouldRedirect: async ({ session, headers }) => {
-          if (!session.activeOrganizationId) return true
-          const organizations = await auth.api.listOrganizations({ headers })
-          return !organizations.some((org) => org.id === session.activeOrganizationId)
-        },
-        consentReferenceId: ({ session }) =>
-          (session?.activeOrganizationId as string | undefined) ?? undefined,
-      },
-      validateInitialAccessToken: async ({ initialAccessToken }) => {
-        const jwks = createLocalJWKSet(await auth.api.getJwks())
-        const { payload } = await jwtVerify(initialAccessToken, jwks, {
-          issuer: "https://auth.example.com",
-          audience: registrationResource,
-        }).catch(() => ({ payload: undefined }))
-        const scopes = String(payload?.scope ?? "").split(" ")
-        const organizationId = payload?.reference_id as string | undefined
-        if (
-          !payload?.jti || !payload.sub || !organizationId ||
-          payload.azp !== process.env.INSTALLER_CLIENT_ID ||
-          !scopes.includes("connector:register")
-        ) return false
-        // Your own storage and lookup: use each token once, recheck the admin
-        if (!(await markRegistrationTokenUsed(payload.jti))) return false
-        if (!(await isOrganizationAdmin(payload.sub, organizationId))) return false
-        return {
-          referenceId: organizationId,
-          // Only machine scopes the administrator approved
-          clientCredentialsScopes: scopes.filter((scope) => scope === "invoices:write"),
-        }
-      },
-    }),
-    oauthDeviceAuthorization({ expiresIn: "5min" }),
-  ],
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  scopes: ["openid", "connector:register", "invoices:write"],
+  // Registration tokens only work here and expire after 5 minutes
+  resources: [{ identifier: registrationResource, accessTokenTtl: 300 }],
+  // Deleting a client does not invalidate tokens it already holds
+  m2mAccessTokenExpiresIn: 600,
+  validateInitialAccessToken: async ({ initialAccessToken }) => {
+    // Your own helpers: verify the token, use it once, recheck the admin
+    const token = await verifyRegistrationToken(initialAccessToken)
+    if (!token || !(await markRegistrationTokenUsed(token.jti))) return false
+    if (!(await isOrganizationAdmin(token.sub, token.reference_id))) return false
+    return {
+      referenceId: token.reference_id,
+      // Only machine scopes the administrator approved
+      clientCredentialsScopes: token.scopes.filter((scope) => scope === "invoices:write"),
+    }
+  },
 })
 ```
+
+`verifyRegistrationToken` verifies the access token as a JWT against `auth.api.getJwks()`, with your JWT plugin's `issuer` and `registrationResource` as audience, and checks that `azp` is the installer client and `scope` includes `connector:register`.
 
 Create one public installer client with [`adminCreateOAuthClient`](#create-client) and share its `client_id` with every install: `token_endpoint_auth_method: "none"`, the `urn:ietf:params:oauth:grant-type:device_code` grant, `scope: "connector:register invoices:write"`, and `resources: [registrationResource]`. Without the resource link, device requests fail with `invalid_target`.
 
-The install then runs:
-
-```ts title="install.ts"
-const device = await post("/api/auth/device/code", {
-  client_id: INSTALLER_CLIENT_ID,
-  // The administrator sees these scopes on the consent screen
-  scope: "connector:register invoices:write",
-  resource: REGISTRATION_RESOURCE,
-})
-show(device.verification_uri_complete, device.user_code)
-
-const { access_token } = await pollToken({
-  grant_type: "urn:ietf:params:oauth:grant-type:device_code",
-  device_code: device.device_code,
-  client_id: INSTALLER_CLIENT_ID,
-  resource: REGISTRATION_RESOURCE,
-})
-
-// Register a public key; the private key never leaves the install
-const { publicKey, privateKey } = await generateKeyPair("RS256", { extractable: true })
-const client = await post("/api/auth/oauth2/register", {
-  client_name: `Connector at ${INSTANCE_URL}`,
-  redirect_uris: [`${INSTANCE_URL}/oauth/callback`],
-  token_endpoint_auth_method: "private_key_jwt",
-  jwks: { keys: [{ ...(await exportJWK(publicKey)), kid: "install-1", alg: "RS256" }] },
-  grant_types: ["client_credentials"],
-  response_types: [],
-}, { authorization: `Bearer ${access_token}` })
-saveCredentials(client.client_id, privateKey)
-```
+The install requests a device code with that `client_id`, `scope: "connector:register invoices:write"` (so the administrator sees the machine scopes), and `resource: registrationResource`, shows the code, and polls the token endpoint. It then registers with the token as `Authorization: Bearer`, `token_endpoint_auth_method: "private_key_jwt"`, its public key in `jwks`, and `grant_types: ["client_credentials"]`. Keep the private key in the platform's key store.
 
 Keep these protections:
 
