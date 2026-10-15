@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { runWithTransaction } from "@better-auth/core/context";
-import type { DBAdapter } from "@better-auth/core/db/adapter";
+import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { Session, User } from "../types";
@@ -770,6 +770,74 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 		]);
 
 		expect(result).toBe(20); // 10 + 10
+	});
+
+	it("deleteManyWithHooks queues delete.after hooks per chunk so successful chunks run hooks when later chunk fails under transaction: false", async () => {
+		const executedHooks: string[] = [];
+		const preloadedEntities = Array.from({ length: 100 }, (_, i) => ({
+			id: `session-${i}`,
+			userId: "u-1",
+		}));
+
+		const mockAdapter: Partial<DBAdapter> = {
+			options: {
+				adapterConfig: {
+					transaction: false,
+				},
+			} as any,
+			transaction: async (cb: any) => cb(mockAdapter),
+			deleteMany: vi
+				.fn()
+				.mockImplementation(async ({ where }: { where: Where[] }) => {
+					const inClause = where.find(
+						(w) => w.field === "id" && w.operator === "in",
+					);
+					const ids = (inClause?.value as string[]) || [];
+					if (ids.includes("session-80")) {
+						throw new Error("Failed deleting second chunk");
+					}
+					return ids.length;
+				}),
+		};
+
+		const withHooks = getWithHooks(mockAdapter as any, {
+			options: {} as any,
+			hooks: [
+				{
+					source: "test",
+					hooks: {
+						session: {
+							delete: {
+								after: async (entity: any) => {
+									executedHooks.push(entity.id);
+								},
+							},
+						},
+					},
+				},
+			],
+		});
+
+		await expect(
+			runWithTransaction(mockAdapter as any, async () => {
+				await withHooks.deleteManyWithHooks(
+					[{ field: "userId", value: "u-1" }],
+					"session",
+					undefined,
+					{
+						preloadedEntities,
+						skipBeforeHooks: true,
+					},
+				);
+			}),
+		).rejects.toThrow("Failed deleting second chunk");
+
+		// Chunk 1 (80 entities: session-0 to session-79) succeeded before chunk 2 threw,
+		// so hooks for session-0..79 must have been queued and executed by runWithTransaction
+		expect(executedHooks).toHaveLength(80);
+		expect(executedHooks).toEqual(
+			preloadedEntities.slice(0, 80).map((e) => e.id),
+		);
 	});
 
 	it("deleteUser passes sortBy { field: 'id', direction: 'asc' } when paginating sessions and accounts", async () => {

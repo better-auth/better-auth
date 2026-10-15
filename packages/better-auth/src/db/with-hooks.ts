@@ -430,6 +430,9 @@ export function getWithHooks(
 					if (typeof count === "number") {
 						totalDeleted += count;
 					}
+					for (const entity of chunk) {
+						await queueDeleteAfterHooks(entity, model);
+					}
 				}
 				deleted = totalDeleted;
 			} else {
@@ -437,11 +440,14 @@ export function getWithHooks(
 					model,
 					where,
 				});
+				for (const entity of entitiesToDelete) {
+					await queueDeleteAfterHooks(entity, model);
+				}
 			}
-		}
-
-		for (const entity of entitiesToDelete) {
-			await queueDeleteAfterHooks(entity, model);
+		} else {
+			for (const entity of entitiesToDelete) {
+				await queueDeleteAfterHooks(entity, model);
+			}
 		}
 
 		return deleted;
