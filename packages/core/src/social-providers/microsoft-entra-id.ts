@@ -33,99 +33,99 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	/** Identifies the issuer, or "authorization server" that constructs and returns the token */
 	iss: string;
 	/** Indicates when the authentication for the token occurred */
-	iat: Date;
+	iat: number;
 	/** Records the identity provider that authenticated the subject of the token */
-	idp: string;
+	idp?: string;
 	/** Identifies the time before which the JWT can't be accepted for processing */
-	nbf: Date;
+	nbf: number;
 	/** Identifies the expiration time on or after which the JWT can't be accepted for processing */
-	exp: Date;
+	exp: number;
 	/** Code hash included in ID tokens when issued with an OAuth 2.0 authorization code */
-	c_hash: string;
+	c_hash?: string;
 	/** Access token hash included in ID tokens when issued with an OAuth 2.0 access token */
-	at_hash: string;
+	at_hash?: string;
 	/** Internal claim used to record data for token reuse */
 	aio: string;
 	/** The primary username that represents the user */
-	preferred_username: string;
+	preferred_username?: string;
 	/** User's email address */
 	email?: string;
 	/** Human-readable value that identifies the subject of the token */
-	name: string;
+	name?: string;
 	/** Matches the parameter included in the original authorize request */
-	nonce: string;
+	nonce?: string;
 	/** User's profile picture */
-	picture: string;
+	picture?: string;
 	/** Immutable identifier for the user account */
 	oid: string;
 	/** Set of roles assigned to the user */
-	roles: string[];
+	roles?: string[];
 	/** Internal claim used to revalidate tokens */
-	rh: string;
+	rh?: string;
 	/** Subject identifier - unique to application ID */
 	sub: string;
 	/** Tenant ID the user is signing in to */
 	tid: string;
 	/** Unique identifier for a session */
-	sid: string;
+	sid?: string;
 	/** Token identifier claim */
-	uti: string;
+	uti?: string;
 	/** Indicates if user is in at least one group */
-	hasgroups: boolean;
+	hasgroups?: boolean;
 	/** User account status in tenant (0 = member, 1 = guest) */
-	acct: 0 | 1;
+	acct?: 0 | 1;
 	/** Auth Context IDs */
-	acrs: string;
+	acrs?: string[];
 	/** Time when the user last authenticated */
-	auth_time: Date;
+	auth_time?: number;
 	/** User's country/region */
-	ctry: string;
+	ctry?: string;
 	/** IP address of requesting client when inside VNET */
-	fwd: string;
+	fwd?: string;
 	/** Group claims */
-	groups: string;
+	groups?: string[];
 	/** Login hint for SSO */
-	login_hint: string;
+	login_hint?: string;
 	/** Resource tenant's country/region */
-	tenant_ctry: string;
+	tenant_ctry?: string;
 	/** Region of the resource tenant */
-	tenant_region_scope: string;
+	tenant_region_scope?: string;
 	/** UserPrincipalName */
-	upn: string;
+	upn?: string;
 	/** User's verified primary email addresses */
-	verified_primary_email: string[];
+	verified_primary_email?: string[];
 	/** User's verified secondary email addresses */
-	verified_secondary_email: string[];
+	verified_secondary_email?: string[];
 	/** Whether the user's email is verified (optional claim, must be configured in app registration) */
 	email_verified?: boolean | undefined;
 	/** VNET specifier information */
-	vnet: string;
+	vnet?: string;
 	/** Client Capabilities */
-	xms_cc: string;
+	xms_cc?: string[];
 	/** Whether user's email domain is verified */
-	xms_edov: boolean;
+	xms_edov?: boolean;
 	/** Preferred data location for Multi-Geo tenants */
-	xms_pdl: string;
+	xms_pdl?: string;
 	/** User preferred language */
-	xms_pl: string;
+	xms_pl?: string;
 	/** Tenant preferred language */
-	xms_tpl: string;
+	xms_tpl?: string;
 	/** Zero-touch Deployment ID */
-	ztdid: string;
+	ztdid?: string;
 	/** IP Address */
-	ipaddr: string;
+	ipaddr?: string;
 	/** On-premises Security Identifier */
-	onprem_sid: string;
+	onprem_sid?: string;
 	/** Password Expiration Time */
-	pwd_exp: number;
+	pwd_exp?: number;
 	/** Change Password URL */
-	pwd_url: string;
+	pwd_url?: string;
 	/** Inside Corporate Network flag */
-	in_corp: string;
+	in_corp?: string;
 	/** User's family name/surname */
-	family_name: string;
+	family_name?: string;
 	/** User's given/first name */
-	given_name: string;
+	given_name?: string;
 }
 
 export interface MicrosoftOptions

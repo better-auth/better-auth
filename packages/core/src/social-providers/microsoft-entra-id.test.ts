@@ -1,6 +1,6 @@
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
+import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -9,6 +9,7 @@ vi.mock("@better-fetch/fetch", () => ({
 import { betterFetch } from "@better-fetch/fetch";
 
 import { verifyProviderIdToken } from "../oauth2";
+import type { MicrosoftEntraIDProfile } from "./microsoft-entra-id";
 import { microsoft } from "./microsoft-entra-id";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -338,4 +339,44 @@ describe("microsoft id_token alg omission", () => {
 		const isValid = await verifyProviderIdToken(provider, token);
 		expect(isValid).toBe(false);
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/3802
+ * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+ * @see https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference
+ */
+it("accepts numeric Microsoft timestamps and configured claim arrays", async () => {
+	const profile = {
+		aud: CLIENT_ID,
+		iss: `${AUTHORITY}/${WORK_TENANT_ID}/v2.0`,
+		iat: 1700000000,
+		nbf: 1700000000,
+		exp: 1700003600,
+		aio: "opaque-value",
+		oid: "ms-stable-oid",
+		sub: "ms-pairwise-sub",
+		tid: WORK_TENANT_ID,
+	};
+	assertType<MicrosoftEntraIDProfile>(profile);
+	const configuredProfile = {
+		...profile,
+		auth_time: 1700000000,
+		groups: ["group-id"],
+		acrs: ["c1"],
+		xms_cc: ["CP1"],
+	};
+	assertType<MicrosoftEntraIDProfile>(configuredProfile);
+	const provider = microsoft({
+		clientId: CLIENT_ID,
+		disableProfilePhoto: true,
+	});
+
+	const result = await provider.getUserInfo({
+		idToken: new UnsecuredJWT(configuredProfile).encode(),
+	});
+
+	expect(result?.data).toMatchObject(configuredProfile);
+	expect(result?.user.image).toBeUndefined();
+	expect(mockedBetterFetch).not.toHaveBeenCalled();
 });
