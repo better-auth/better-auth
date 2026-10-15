@@ -48,7 +48,8 @@ const privateProfile = {
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/11040
- * @see https://docs.github.com/en/rest/users/users#get-the-authenticated-user
+ * @see https://docs.github.com/en/rest/users/users?apiVersion=2022-11-28#get-the-authenticated-user
+ * @see https://github.com/github/rest-api-description/blob/93c8981e7237e38ac78867b85805077ded92ab8b/descriptions/api.github.com/api.github.com.2022-11-28.json#L91129-L91164
  */
 describe("github profile", () => {
 	it("accepts public and private API responses", () => {
