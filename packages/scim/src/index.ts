@@ -446,6 +446,18 @@ function createSCIMPlugin(options: SCIMOptions) {
 			};
 		},
 		hooks: {
+			before: [
+				{
+					matcher: (context) => context.path?.startsWith("/scim/v2") === true,
+					handler: createAuthMiddleware(async (ctx) => {
+						if (supportsNativeSCIMTransactions(ctx.context.adapter)) return;
+						throw createSCIMError("NOT_IMPLEMENTED", {
+							detail:
+								"The scim plugin requires a database adapter with native transaction support.",
+						});
+					}),
+				},
+			],
 			after: [
 				{
 					matcher: (context) => context.path?.startsWith("/scim/v2") === true,
