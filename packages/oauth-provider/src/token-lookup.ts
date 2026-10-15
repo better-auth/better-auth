@@ -52,6 +52,9 @@ async function verifyJwtAccessToken(
 	token: string,
 ): Promise<JwtAccessTokenPayload | "inactive" | null> {
 	if (opts.disableJwtPlugin) return null;
+	// Only a compact JWS (three segments) can be a JWT access token; a JWE such
+	// as an encrypted refresh token has five, and must not wait on the key set.
+	if (token.split(".").length !== 3) return null;
 	try {
 		decodeProtectedHeader(token);
 	} catch {

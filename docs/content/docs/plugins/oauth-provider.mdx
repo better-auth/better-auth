@@ -762,7 +762,7 @@ A client can only revoke tokens issued to it ([RFC7009 §2.1](https://datatracke
 What the endpoint does depends on the token type:
 
 * opaque `access_token`: deleted from the database immediately. A `refresh_token` from the same grant stays valid.
-* `refresh_token`: marks the `refresh_token` revoked and deletes every opaque `access_token` it minted, so it can no longer issue tokens. Revoking a `refresh_token` that was already revoked or rotated is treated as replay: it still returns `200`, and it deletes every `refresh_token` the client holds for that user, along with the opaque `access_token`s minted from them. An `access_token` issued without a `refresh_token`, and any JWT `access_token`, stays valid until it expires.
+* `refresh_token`: marks the `refresh_token` revoked and deletes every opaque `access_token` it minted, so it can no longer issue tokens. Revoking a `refresh_token` that was already revoked or rotated is treated as replay: it still returns `200`, and it deletes the client's `refresh_token`s for that user, along with the opaque `access_token`s minted from them. An `access_token` issued without a `refresh_token`, and any JWT `access_token`, stays valid until it expires.
 * JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. A token that still verifies for this server responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), making clear that no server-side revocation happened. A JWT that is already expired or carries an audience rejected by the OAuth resource model is treated as an invalid token and returns a `200` no-op.
 
 Because a JWT `access_token` cannot be revoked individually, plan for it:
@@ -2041,40 +2041,36 @@ oauthProvider({
 })
 ```
 
-Pseudocode for a token encryption method:
+Example that encrypts the refresh token as a JWE:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { CompactEncrypt, compactDecrypt } from 'jose'
-import { oauthProvider } from "@better-auth/oauth-provider"; 
+import { CompactEncrypt, compactDecrypt } from "jose";
+import { oauthProvider } from "@better-auth/oauth-provider";
 
-const secret = "SOME_SECRET_OR_KEY"
-const alg = "A256KW"
-const enc = "A256GCM"
+// A 256-bit key, loaded from your secret store.
+const key = new Uint8Array(32);
+const alg = "A256KW";
+const enc = "A256GCM";
 
 const auth = betterAuth({
   plugins: [
     oauthProvider({
-    formatRefreshToken: {
-      encrypt: (token, sessionId) {
-        const value = JSON.stringify({
-          sessionId,
-          token,
-        });
-        const jwe = await new CompactEncrypt(Buffer.from(value))
-          .setProtectedHeader({ alg, enc })
-          .encrypt(secret);
-        return jwe;
+      formatRefreshToken: {
+        encrypt: async (token, sessionId) => {
+          const value = JSON.stringify({ sessionId, token });
+          return new CompactEncrypt(new TextEncoder().encode(value))
+            .setProtectedHeader({ alg, enc })
+            .encrypt(key);
+        },
+        decrypt: async (token) => {
+          const { plaintext } = await compactDecrypt(token, key);
+          return JSON.parse(new TextDecoder().decode(plaintext));
+        },
       },
-      decrypt: (token) {
-        const { plaintext } = await compactDecrypt(token, secret);
-        const payload = new TextDecoder().decode(plaintext);
-        return JSON.parse(payload);
-      },
-    }
-  })
-]
-})
+    }),
+  ],
+});
 ```
 
 ### Advertised Metadata
