@@ -2,12 +2,6 @@
 "better-auth": patch
 ---
 
-fix(two-factor): prevent TOTP code replay on verification (RFC 6238 §5.2)
+fix(two-factor): prevent TOTP code reuse within its validity window
 
-TOTP codes were reusable within their ±1-step window. Verification now matches
-the window with constant-time comparison (earliest step wins), then atomically
-reserves a step-keyed `totp-used:<id>:<step>` tombstone via the existing
-verification table (or secondary-storage increment): first writer wins and
-replays fail with INVALID_CODE. Covers step-up and sign-in cross-challenge;
-enrollment verification is exempt and pre-session failures roll back fail-closed.
-Zero schema change.
+TOTP codes can now only be used once: each verified code is atomically recorded in the verification table and replays are rejected with `INVALID_CODE`. Applies to sign-in and step-up verification; failed pre-session verifications release the record so retry is unaffected.
