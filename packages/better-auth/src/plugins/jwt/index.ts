@@ -82,12 +82,6 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 				);
 			}
 
-			if (options.jwt?.sign) {
-				throw new BetterAuthError(
-					"`jwt({ sessionCookieCache: true })` requires locally managed JWT plugin keys and does not support `jwt.sign`.",
-				);
-			}
-
 			const gracePeriod = options.jwks?.gracePeriod;
 			const cookieMaxAge = ctx.options.session.cookieCache.maxAge || 60 * 5;
 			if (gracePeriod !== undefined && cookieMaxAge > gracePeriod) {
