@@ -443,6 +443,18 @@ describe("oauthTokenExchange", () => {
 		}
 	});
 
+	it("reports a key set failure as a server error, not an invalid subject", async () => {
+		const { auth, mcpServer, userTokenForMcp, exchangeAs } =
+			await bootScenario();
+		const subject = await userTokenForMcp();
+		const jwtPlugin = (await auth.$context).getPlugin("jwt")!;
+		vi.spyOn(jwtPlugin.endpoints, "getJwks").mockResolvedValue({
+			response: { keys: "malformed" },
+		} as never);
+		const { error } = await exchangeAs(mcpServer, subject.access_token);
+		expect(error).toMatchObject({ status: 500 });
+	});
+
 	it("refuses to issue when the subject token expires during the exchange", async () => {
 		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario({
 			// Simulates a slow policy check that outlasts the subject token.
@@ -510,20 +522,27 @@ describe("oauthTokenExchange", () => {
 			skip_consent: false,
 		});
 		const subject = await userTokenForMcp();
-		await (await auth.$context).adapter.create({
-			model: "oauthConsent",
-			data: {
-				clientId: untrusted.client_id,
-				userId: decodeJwt(subject.access_token).sub,
-				referenceId: "org_1",
-				scopes: ["read"],
-				resources: [mcp, api],
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			},
-		});
+		const createConsent = async (referenceId: string) =>
+			(await auth.$context).adapter.create({
+				model: "oauthConsent",
+				data: {
+					clientId: untrusted.client_id,
+					userId: decodeJwt(subject.access_token).sub,
+					referenceId,
+					scopes: ["read"],
+					resources: [mcp, api],
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		await createConsent("org_1");
+		const denied = await exchangeAs(untrusted, subject.access_token);
+		expect(denied.error?.error_description).toMatch(/consented/);
+
+		// An empty reference is no reference too.
+		await createConsent("");
 		const { error } = await exchangeAs(untrusted, subject.access_token);
-		expect(error?.error_description).toMatch(/consented/);
+		expect(error).toBeNull();
 	});
 
 	it("treats a blank scope as absent", async () => {
@@ -741,6 +760,45 @@ describe("oauthTokenExchange", () => {
 			error_description: "resource or audience is required",
 		});
 	});
+
+	it("rejects a target that is not a registered resource", async () => {
+		const { auth, mcpServer, userTokenForMcp, exchangeAs } =
+			await bootScenario();
+		const subject = await userTokenForMcp();
+		const userinfo = `${issuer}/api/auth/oauth2/userinfo`;
+		const viaUserinfo = await exchangeAs(mcpServer, subject.access_token, {
+			audience: userinfo,
+		});
+		expect(viaUserinfo.error?.error).toBe("invalid_target");
+		// Like any other target, it is checked only after client authentication.
+		const unauthenticated = await exchangeAs(
+			{ ...mcpServer, client_secret: "wrong" },
+			subject.access_token,
+			{ audience: userinfo },
+		);
+		expect(unauthenticated.error?.error).toBe("invalid_client");
+
+		// Unlike a form body, a server call can pass any value.
+		const exchange = (audience: unknown) =>
+			auth.api.oauth2Token({
+				body: {
+					grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+					client_id: mcpServer.client_id,
+					client_secret: mcpServer.client_secret!,
+					subject_token: subject.access_token,
+					subject_token_type: ACCESS_TOKEN_TYPE,
+					audience,
+				},
+			});
+		for (const audience of ["", [""], [{}]]) {
+			await expect(exchange(audience)).rejects.toMatchObject({
+				body: { error: "invalid_target" },
+			});
+		}
+		await expect(exchange(null)).rejects.toMatchObject({
+			body: { error_description: "resource or audience is required" },
+		});
+	});
 });
 
 /**
@@ -915,6 +973,37 @@ describe("oauthTokenExchange consent reference", () => {
 		expect(decodeJwt(data!.access_token)[orgClaim]).toBe("org_1");
 	});
 
+	it("treats an empty subject reference as none", async () => {
+		const references: (string | undefined)[] = [];
+		const { auth, createClient, userTokenForMcp, exchangeAs } = await boot({
+			allowExchange: ({ referenceId }) => {
+				references.push(referenceId);
+				return true;
+			},
+		});
+		const bff = await createClient({
+			grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+			redirect_uris: [redirectUri],
+			scope: "openid read",
+			skip_consent: true,
+			resources: [api],
+		});
+		const subject = await userTokenForMcp({
+			scope: "openid read",
+			requester: bff,
+			resource: null,
+		});
+		await (await auth.$context).adapter.update({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: bff.client_id }],
+			update: { referenceId: "" },
+		});
+		const { data, error } = await exchangeAs(bff, subject.access_token);
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).reference_id).toBeUndefined();
+		expect(references).toEqual([undefined]);
+	});
+
 	it("checks consent under the subject token's reference", async () => {
 		const { auth, exchanger, userTokenForMcp, exchangeAs } = await boot();
 		const untrusted = await exchanger({
@@ -964,8 +1053,8 @@ describe("oauthTokenExchange consent reference", () => {
 });
 
 /**
- * The consent lookup (including its `referenceId IS NULL` match), the consent
- * array columns, `reference_id` on JWT and opaque tokens, and opaque-token
+ * The consent lookup (including its match for consent stored without a
+ * reference), the consent array columns, `reference_id` on JWT and opaque tokens, and opaque-token
  * revocation all go through the database adapter.
  *
  * @see https://github.com/better-auth/better-auth/issues/8023
@@ -1049,6 +1138,19 @@ describe.each(["postgres", "mongodb"] as const)(
 			await createConsent(auth, { clientId: untrusted.client_id, userId });
 			const { error } = await exchangeAs(untrusted, subject.access_token);
 			expect(error).toBeNull();
+
+			// An empty reference is no reference too.
+			const blank = await exchanger({
+				resources: [mcp, api],
+				skip_consent: false,
+			});
+			await createConsent(auth, {
+				clientId: blank.client_id,
+				userId,
+				referenceId: "",
+			});
+			const blankExchange = await exchangeAs(blank, subject.access_token);
+			expect(blankExchange.error).toBeNull();
 		});
 
 		it("exchanges an opaque subject token and rejects it once revoked", async () => {

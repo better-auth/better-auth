@@ -1107,7 +1107,7 @@ async function createUserTokens(
 	const baseExpiry = user
 		? (opts.accessTokenExpiresIn ?? 3600)
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
-	// Every other expiry is min()-ed against this, so the cap holds for them too.
+	// Every other access token expiry is min()-ed against this, so the cap holds.
 	const defaultExp = Math.min(
 		iat + baseExpiry,
 		params.maxExpiresAt

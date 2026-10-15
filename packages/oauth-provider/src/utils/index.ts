@@ -774,27 +774,6 @@ export function parseScopes(scope: string | null | undefined): string[] {
 }
 
 /**
- * Where clause for a user's stored consents to a client. `referenceId`
- * `undefined` matches any consent reference; `null` matches only consent stored
- * without one.
- *
- * @internal
- */
-export function consentWhere(
-	clientId: string,
-	userId: string,
-	referenceId: string | null | undefined,
-) {
-	return [
-		{ field: "clientId", value: clientId },
-		{ field: "userId", value: userId },
-		...(referenceId !== undefined
-			? [{ field: "referenceId", value: referenceId }]
-			: []),
-	];
-}
-
-/**
  * Whether a stored consent covers every requested scope and resource. Shared by
  * authorization and grants that need prior consent, so the coverage rule cannot
  * drift between them. Each caller still chooses which consent rows to check.

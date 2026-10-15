@@ -2068,7 +2068,7 @@ Scope names are global across resources. A `read` scope on the MCP server and a 
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
 | Missing or invalid subject token, unsupported `subject_token_type`, `actor_token` or `actor_token_type`, unsupported `requested_token_type`, neither `resource` nor `audience`, missing consent, or a policy denial | `400 invalid_request`     |
 | A scope the subject token or the client does not have, or `openid` or `offline_access`                                                                                                                              | `400 invalid_scope`       |
-| An unknown, disabled, or unlinked resource or `audience` value                                                                                                                                                      | `400 invalid_target`      |
+| An unknown, disabled, or unlinked resource or `audience` value, or the userinfo endpoint                                                                                                                            | `400 invalid_target`      |
 | Failed client authentication                                                                                                                                                                                        | `invalid_client`          |
 | A client not registered for the token-exchange grant                                                                                                                                                                | `400 unauthorized_client` |
 
@@ -2096,6 +2096,7 @@ oauthTokenExchange({
 * **Signing out and local JWT verification.** Signing out makes exchanged tokens inactive at introspection. A resource server that verifies JWT access tokens locally against the JWKS keeps accepting them until `exp`, which is never later than the subject token's `exp`.
 * **Subject tokens without a session.** An access token refreshed from an `offline_access` refresh token after the user signed out carries no `sid`, so a token exchanged from it is not tied to a session and lasts until its `exp`. Return `false` from `allowExchange` when `subjectToken.sid` is missing if exchanges must always end with the session.
 * **`may_act` is not evaluated.**
+* **Pairwise subjects.** The exchanged token belongs to the exchanging service, so introspection reports that service's `sub` for the user. A service that exchanges a pairwise client's token can link that client's `sub` to its own.
 * **Registration default resources.** `clientRegistrationDefaultResources` links every dynamically registered client to those resources. Such a client then counts as a resource server for tokens whose audience is one of them, so the audience rule does not tell it apart from your own service. The consent rule still limits it to what the user approved for that client.
 
 ### Organizations

@@ -275,7 +275,8 @@ export interface OAuthTokenIssueParams {
 	 * Latest time the access token may expire. The authorization server issues
 	 * the earlier of this and its configured lifetime, so a grant derived from
 	 * another token (for example RFC 8693 token exchange) cannot outlive it.
-	 * If it is not in the future, issuance fails with `invalid_request`.
+	 * If it is not in the future, issuance fails with `invalid_request`. Refresh
+	 * and ID tokens are not capped, so such a grant should not issue them.
 	 */
 	maxExpiresAt?: Date;
 }

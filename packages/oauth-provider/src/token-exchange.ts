@@ -2,11 +2,9 @@ import type { AuthContext } from "@better-auth/core";
 import { isAPIError } from "better-auth/api";
 import type { User } from "better-auth/types";
 import type { JWTPayload } from "jose";
-import { errors as joseErrors } from "jose";
 import { extendOAuthProvider } from "./extensions";
 import { resolveResourcePolicy } from "./resources";
 import type {
-	OAuthConsent,
 	OAuthExtensionGrantHandlerInput,
 	OAuthTokenResponse,
 	SchemaClient,
@@ -15,10 +13,9 @@ import type {
 import type { Awaitable } from "./types/helpers";
 import {
 	consentCovers,
-	consentWhere,
+	findConsent,
 	parseScopes,
 	tokenError,
-	toResourceList,
 	validateClientScopes,
 } from "./utils";
 
@@ -90,25 +87,38 @@ async function exchangeToken(
 	// RFC 8693 §2.1 names targets by `resource` or by logical `audience`; both
 	// must be registered resource identifiers here. The token route already
 	// collects repeated values of each.
-	const resources = [
-		...new Set([
-			...(toResourceList(body.resource as string | string[]) ?? []),
-			...(toResourceList(body.audience as string | string[]) ?? []),
-		]),
-	];
-	if (resources.length === 0) deny("resource or audience is required");
+	const targets: unknown[] = [body.resource, body.audience]
+		.flat()
+		.filter((target) => target != null);
+	if (targets.length === 0) deny("resource or audience is required");
 
 	// Confidential clients only, and only when registered for this grant.
 	const { client, confirmation } = await provider.authenticateClient();
 
+	// Userinfo is only an implicit audience of OpenID tokens, and exchanged
+	// tokens never carry `openid`.
+	const userInfo = `${ctx.context.baseURL}/oauth2/userinfo`;
+	if (
+		targets.some(
+			(target) => typeof target !== "string" || !target || target === userInfo,
+		)
+	) {
+		tokenError(
+			"BAD_REQUEST",
+			"invalid_target",
+			"each resource or audience must be a registered resource",
+		);
+	}
+	const resources = [...new Set(targets as string[])];
+
 	// The caller must be the token's client or a resource server in its
 	// audience, so a client cannot exchange a token that was never sent to it.
 	// An unknown, malformed, tampered, or foreign token is an invalid subject;
-	// anything else (for example a database failure) is a server fault.
+	// anything else, such as a database or key-set failure, is a server fault.
 	const subject = await Promise.resolve(
 		provider.validateAccessToken(subjectToken, client.clientId),
 	).catch((error: unknown) => {
-		if (isAPIError(error) || error instanceof joseErrors.JOSEError) {
+		if (isAPIError(error)) {
 			return undefined;
 		}
 		throw error;
@@ -147,22 +157,19 @@ async function exchangeToken(
 	});
 	// Keep the reference the user approved, not their current one (RFC 9068 §2.2.1).
 	const referenceId =
-		typeof subject.reference_id === "string" ? subject.reference_id : undefined;
+		(typeof subject.reference_id === "string" && subject.reference_id) ||
+		undefined;
 
 	// Like authorization: a client that does not skip consent needs the user's
 	// consent for these scopes and resources.
 	if (!client.skipConsent) {
-		const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
-			model: "oauthConsent",
-			// Unlike authorization, a subject with no reference only matches consent
-			// stored without one, so consent from another organization never counts.
-			where: consentWhere(client.clientId, user.id, referenceId ?? null),
-		});
-		if (
-			!consents.some((consent) =>
-				consentCovers(consent, effectiveScopes, resources),
-			)
-		) {
+		const consent = await findConsent(
+			ctx,
+			client.clientId,
+			user.id,
+			referenceId,
+		);
+		if (!consent || !consentCovers(consent, effectiveScopes, resources)) {
 			deny("the user has not consented to this client for this exchange");
 		}
 	}
