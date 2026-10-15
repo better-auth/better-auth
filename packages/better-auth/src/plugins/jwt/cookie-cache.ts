@@ -12,7 +12,7 @@ import {
 	SESSION_COOKIE_JWT_ISSUER,
 	SESSION_COOKIE_JWT_TYPE,
 } from "../../cookies/jwt";
-import { getJwksAdapter } from "./adapter";
+import { getJwksAdapter, parsePublicJwk } from "./adapter";
 import { resolveSigningKey } from "./sign";
 import type { JwtOptions } from "./types";
 
@@ -50,8 +50,9 @@ async function importLocalPublicKey(
 		return null;
 	}
 
+	const publicKey = parsePublicJwk(key);
 	const alg =
-		key.alg ??
+		publicKey.alg ??
 		options?.jwks?.keyPairConfig?.alg ??
 		(header.alg as string | undefined);
 	if (!alg) {
@@ -63,7 +64,7 @@ async function importLocalPublicKey(
 
 	return {
 		alg,
-		publicKey: await importJWK(JSON.parse(key.publicKey), alg),
+		publicKey: await importJWK(publicKey, alg),
 	};
 }
 
