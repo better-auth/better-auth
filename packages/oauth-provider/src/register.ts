@@ -593,9 +593,10 @@ export async function checkOAuthClient(
 					"pairwise subject_type requires server pairwiseSecret configuration",
 			});
 		}
-		// The pairwise sector is the redirect URI host. Any app can register a
-		// custom scheme, so the host in `app://rp.example.com/callback` does not
-		// identify the client and would share an HTTPS client's sector.
+		// A client stored without a sector still uses its redirect URI host as
+		// the pairwise sector, and this check cannot tell those clients apart.
+		// Any app can register a custom scheme, so the host in
+		// `app://rp.example.com/callback` does not identify the client.
 		if (
 			clientWithDefaults.subject_type === "pairwise" &&
 			clientWithDefaults.redirect_uris?.some(isCustomSchemeWithHost)
@@ -1017,17 +1018,10 @@ async function persistOAuthClientRegistration(
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
 			: null;
-	// A client created before sectors were stored keeps the sector derived
-	// from its redirect URI host, so refreshing it must not assign one.
-	const existingSectorIdentifier =
-		input.registrationSource === "clientMetadataDocument" &&
-		input.existingClient
-			? (input.existingClient.sectorIdentifier ?? null)
-			: undefined;
-	schema.sectorIdentifier =
-		existingSectorIdentifier === null
-			? null
-			: deriveSectorIdentifier(clientId, body.redirect_uris);
+	schema.sectorIdentifier = deriveSectorIdentifier(
+		clientId,
+		body.redirect_uris,
+	);
 	if (
 		input.registrationSource === "clientMetadataDocument" &&
 		body.application_type === undefined
@@ -1105,6 +1099,10 @@ async function persistOAuthClientRegistration(
 						disabled: existingClient.disabled,
 						skipConsent: existingClient.skipConsent,
 						enableEndSession: existingClient.enableEndSession,
+						// A client stored without a sector keeps the host-derived one.
+						sectorIdentifier: existingClient.sectorIdentifier
+							? schema.sectorIdentifier
+							: null,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},

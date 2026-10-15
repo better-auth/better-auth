@@ -919,6 +919,46 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			}),
 		);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11649
+	 */
+	it("keeps the pairwise sector a client was stored with across a refresh", async () => {
+		const sectorClientUrl =
+			"https://mcp-client-refresh.example.com/sector-client.json";
+		stubMetadataFetch(sectorClientUrl, {
+			...metadataDocument,
+			client_id: sectorClientUrl,
+		});
+		const { headers } = await signInWithTestUser();
+		const ctx = await authorizationServer.$context;
+		const authorize = () =>
+			customFetchImpl(
+				buildAuthorizeUrl(authServerBaseUrl, sectorClientUrl, redirectUri),
+				{ headers },
+			);
+		const sectorOf = async () =>
+			(
+				await ctx.adapter.findOne<SchemaClient<Scope[]>>({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: sectorClientUrl }],
+				})
+			)?.sectorIdentifier ?? null;
+
+		await authorize();
+		expect(await sectorOf()).toBe(`client/${sectorClientUrl}`);
+		await authorize();
+		expect(await sectorOf()).toBe(`client/${sectorClientUrl}`);
+
+		// A client stored before sectors were recorded keeps the host rule.
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: sectorClientUrl }],
+			update: { sectorIdentifier: null },
+		});
+		await authorize();
+		expect(await sectorOf()).toBeNull();
+	});
 });
 
 describe("CIMD - metadata document URL policy", async () => {

@@ -2081,7 +2081,7 @@ const response = await auth.api.createOAuthClient({
 Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** and the user ID, keyed with `pairwiseSecret`. Better Auth assigns the sector when the client is created:
 
 * A client whose redirect URIs all use `https` gets the host of its first redirect URI, including any port. Clients on the same `https` host share a sector and receive the **same** pairwise `sub` (per OIDC Core Section 8.1).
-* Any other client, such as one with a custom-scheme (`com.example.app:/callback`) or loopback (`http://localhost:8787/callback`) redirect URI, gets a sector of its own. Any app can register a custom scheme, and any local process can listen on a loopback port, so those redirect URIs do not identify the client.
+* Any other client, such as one with an authority-free private-use (`com.example.app:/callback`) or loopback (`http://localhost:8787/callback`) redirect URI, gets a sector of its own. Any app can register a custom scheme, and any local process can listen on a loopback port, so those redirect URIs do not identify the client.
 
 This means:
 

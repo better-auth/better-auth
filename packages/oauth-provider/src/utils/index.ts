@@ -1068,20 +1068,12 @@ export function deriveSectorIdentifier(
 	clientId: string,
 	redirectUris: readonly string[] | undefined,
 ): string {
-	const first = redirectUris?.[0];
-	if (
-		first &&
-		redirectUris.every((uri) => {
-			try {
-				return new URL(uri).protocol === "https:";
-			} catch {
-				return false;
-			}
-		})
-	) {
-		return new URL(first).host;
-	}
-	return `client/${clientId}`;
+	// Callers validate every redirect URI first, so parsing cannot throw.
+	const urls = (redirectUris ?? []).map((uri) => new URL(uri));
+	const first = urls[0];
+	return first && urls.every((url) => url.protocol === "https:")
+		? first.host
+		: `client/${clientId}`;
 }
 
 /**
