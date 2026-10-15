@@ -13,6 +13,7 @@ import {
 import {
 	createInsufficientScopeError,
 	isInsufficientScopeError,
+	jwksCache,
 	verifyAccessTokenRequest,
 	verifyBearerToken,
 } from "./verify";
@@ -35,6 +36,9 @@ describe("verifyBearerToken", () => {
 
 	afterEach(() => {
 		mockedFetch.mockReset();
+		// Tests reuse one JWKS URL with new keys; a cached set would put later
+		// tests' kids inside the refetch cooldown.
+		jwksCache.clear();
 	});
 
 	afterAll(() => {
@@ -750,6 +754,145 @@ describe("verifyBearerToken", () => {
 		expect(mockedFetch).toHaveBeenCalledTimes(2);
 		mockedFetch.mockReset();
 		vi.resetModules();
+	});
+
+	describe.each(["url", "function"] as const)(
+		"refetching a cached %s key set for an unknown kid",
+		(sourceType) => {
+			async function setUpSource() {
+				vi.resetModules();
+				const { verifyJwsAccessToken } = await import("./verify");
+				const signingKey = await createTestJWKS();
+				let keys = [signingKey.publicJWK];
+				let fetches = 0;
+				mockedFetch.mockImplementation(() => {
+					fetches++;
+					return Promise.resolve(jwksResponse(...keys));
+				});
+				const jwksCacheKey = {};
+				const verify = (token: string) =>
+					verifyJwsAccessToken(token, {
+						// A fresh closure per call, like per-request callers do.
+						...(sourceType === "url"
+							? { jwksFetch: jwksUrl }
+							: {
+									jwksFetch: async () => {
+										fetches++;
+										return { keys };
+									},
+									jwksCacheKey,
+								}),
+						verifyOptions: { issuer, audience },
+					});
+				await expect(
+					verify(
+						await createSignedToken(signingKey.privateKey, signingKey.kid),
+					),
+				).resolves.toMatchObject({ sub: "user-123" });
+				return {
+					verify,
+					publish: (jwk: JWK) => {
+						keys = [...keys, jwk];
+					},
+					fetches: () => fetches,
+				};
+			}
+
+			afterEach(() => {
+				vi.useRealTimers();
+				vi.resetModules();
+			});
+
+			it("should refetch at most once per cooldown for tokens with made-up kids", async () => {
+				const source = await setUpSource();
+				const forger = await createTestJWKS();
+
+				for (let i = 0; i < 10; i++) {
+					const token = await createSignedToken(
+						forger.privateKey,
+						`made-up-${i}`,
+					);
+					await expect(source.verify(token)).rejects.toMatchObject({
+						code: "ERR_JWKS_NO_MATCHING_KEY",
+					});
+				}
+
+				// One fetch fills the cache, one refetch serves the first unknown kid.
+				expect(source.fetches()).toBe(2);
+			});
+
+			it("should verify a newly published kid once the cooldown passes, before the TTL", async () => {
+				const source = await setUpSource();
+				const forger = await createTestJWKS();
+				await expect(
+					source.verify(await createSignedToken(forger.privateKey, "made-up")),
+				).rejects.toThrow();
+
+				const rotated = await createTestJWKS();
+				source.publish(rotated.publicJWK);
+				const token = await createSignedToken(rotated.privateKey, rotated.kid);
+				await expect(source.verify(token)).rejects.toMatchObject({
+					code: "ERR_JWKS_NO_MATCHING_KEY",
+				});
+
+				vi.useFakeTimers();
+				vi.setSystemTime(Date.now() + 30 * 1000);
+				await expect(source.verify(token)).resolves.toMatchObject({
+					sub: "user-123",
+				});
+				expect(source.fetches()).toBe(3);
+			});
+
+			it("should share one refetch across concurrent tokens signed with a newly published key", async () => {
+				const source = await setUpSource();
+				const rotated = await createTestJWKS();
+				source.publish(rotated.publicJWK);
+				const token = await createSignedToken(rotated.privateKey, rotated.kid);
+
+				const results = await Promise.all(
+					Array.from({ length: 5 }, () => source.verify(token)),
+				);
+
+				expect(results).toHaveLength(5);
+				expect(source.fetches()).toBe(2);
+			});
+		},
+	);
+
+	it("should time out a key set fetch that never settles and start a new one", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const { publicJWK, privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const jwksCacheKey = {};
+		// Cloudflare Workers cancels a request's I/O when the request ends, so a
+		// fetch another request started may never settle.
+		const jwksFetch = vi
+			.fn<() => Promise<{ keys: JWK[] }>>()
+			.mockReturnValueOnce(new Promise(() => {}))
+			.mockResolvedValue({ keys: [publicJWK] });
+		const options = {
+			jwksFetch,
+			jwksCacheKey,
+			verifyOptions: { issuer, audience },
+		};
+
+		vi.useFakeTimers();
+		try {
+			const hung = expect(verify(token, options)).rejects.toMatchObject({
+				code: "ERR_JWKS_TIMEOUT",
+			});
+			await vi.advanceTimersByTimeAsync(5_000);
+			await hung;
+
+			await expect(verify(token, options)).resolves.toMatchObject({
+				sub: "user-123",
+			});
+			expect(jwksFetch).toHaveBeenCalledTimes(2);
+		} finally {
+			vi.useRealTimers();
+			vi.resetModules();
+		}
 	});
 
 	it("should cache a string jwks source across verifications within the TTL", async () => {
