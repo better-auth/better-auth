@@ -702,7 +702,8 @@ export interface InitialAccessTokenAuthorization {
 	 *
 	 * The client must register the `client_credentials` grant with a
 	 * confidential authentication method, and every scope must be one the
-	 * provider offers. Otherwise registration fails.
+	 * provider offers and not a user-delegated scope such as `openid`.
+	 * Otherwise registration fails.
 	 *
 	 * @default []
 	 */

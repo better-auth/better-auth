@@ -1714,7 +1714,7 @@ oauthProvider({
 })
 ```
 
-Return an object with a `referenceId` to attach application ownership metadata to the created client, or return `false` to reject the token. Omitting `referenceId` creates an unowned client. To let the client use the `client_credentials` grant, also return `clientCredentialsScopes`: the client then registers with that scope ceiling, as if an administrator had assigned it. Return only scopes the token's issuer approved, because the token is the only record of that approval. The client must register the `client_credentials` grant with a confidential authentication method, and every scope must be one the provider offers; otherwise registration fails. A `client_credentials_scopes` field in the registration request is still ignored. The `clientMetadata` passed to the callback is the submitted request, self-asserted and not yet fully validated, so treat it as untrusted input.
+Return an object with a `referenceId` to attach application ownership metadata to the created client, or return `false` to reject the token. Omitting `referenceId` creates an unowned client. To let the client use the `client_credentials` grant, also return `clientCredentialsScopes`: the client then registers with that scope ceiling, as if an administrator had assigned it. Return only scopes the token's issuer approved, because the token is the only record of that approval. The client must register the `client_credentials` grant with a confidential authentication method, and every scope must be one the provider offers and not a user-delegated scope (`openid`, `profile`, `email`, `offline_access`); otherwise registration fails. A `client_credentials_scopes` field in the registration request is still ignored. The `clientMetadata` passed to the callback is the submitted request, self-asserted and not yet fully validated, so treat it as untrusted input.
 
 Token issuance, expiration, and revocation stay in your application because RFC 7591 leaves initial access token lifecycle policy to the authorization server. This is separate from RFC 7592 registration management tokens.
 
@@ -1743,9 +1743,12 @@ const registrationResource = "https://auth.example.com/connector-registration"
 
 export const auth = betterAuth({
   plugins: [
-    jwt(),
+    // OAuth access tokens use this as `iss`; the check below must match it
+    jwt({ jwt: { issuer: "https://auth.example.com" } }),
     organization(),
     oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
       allowDynamicClientRegistration: true,
       scopes: ["openid", "connector:register", "invoices:write"],
       resources: [{
@@ -1794,7 +1797,7 @@ export const auth = betterAuth({
 })
 ```
 
-Create the installer client once with [`adminCreateOAuthClient`](#create-client): `token_endpoint_auth_method: "none"`, the `urn:ietf:params:oauth:grant-type:device_code` grant, and `scope: "connector:register invoices:write"`. Every install uses its `client_id`.
+Create the installer client once with [`adminCreateOAuthClient`](#create-client): `token_endpoint_auth_method: "none"`, the `urn:ietf:params:oauth:grant-type:device_code` grant, `scope: "connector:register invoices:write"`, and `resources: [registrationResource]`. The resource link is required: device requests for a resource the client is not linked to fail with `invalid_target`, and if you configure `resourcePrivileges`, it must allow `link`. Every install uses the installer's `client_id`.
 
 The install then runs the flow:
 
