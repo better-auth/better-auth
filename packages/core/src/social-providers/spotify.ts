@@ -6,10 +6,11 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
+/** Profile fields from Spotify's current user endpoint. */
 export interface SpotifyProfile {
 	id: string;
-	display_name: string;
-	email: string;
+	display_name: string | null;
+	email?: string | undefined;
 	images: {
 		url: string;
 	}[];
@@ -87,7 +88,7 @@ export const spotify = (options: SpotifyOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					name: profile.display_name,
+					name: profile.display_name ?? undefined,
 					email: profile.email,
 					image: profile.images[0]?.url,
 					emailVerified: false,
