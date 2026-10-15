@@ -72,12 +72,6 @@ That's all! Now you can copy the Client ID and Client Secret of your app!
   If you get an `email_not_found` error, it is most often because either (a) you created a GitHub App and did not grant the "Email addresses: Read-only" permission, or (b) the user has set their primary email to private, in which case `GET /user` returns `email: null`. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the recommended `mapProfileToUser` fallback; the user's private addresses are also available via [`/user/emails`](https://docs.github.com/en/rest/users/emails).
 </Callout>
 
-### Custom profile data
-
-Custom `getUserInfo` callbacks can return GitHub's [public or private `GET /user` response](https://docs.github.com/en/rest/users/users#get-the-authenticated-user) as `data`. `GithubProfile` uses numeric IDs and counters and allows nullable profile attributes. `twitter_username`, private account details, and `plan` can be omitted.
-
-When reading profile data, use `String(profile.id)` if you need a string ID, `profile.name ?? profile.login` for a name fallback, and `profile.plan?.name` for an optional plan.
-
 ### Why don't I have a refresh token?
 
 Github doesn't issue refresh tokens for OAuth apps. For regular OAuth apps,
