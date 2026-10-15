@@ -1409,6 +1409,7 @@ export interface OAuthOptions<
 	 *   introspect: { window: 60, max: 100 },
 	 *   revoke: { window: 60, max: 30 },
 	 *   register: { window: 60, max: 5 },
+	 *   rotateClientKeys: { window: 60, max: 5 },
 	 *   userinfo: { window: 60, max: 60 },
 	 * }
 	 * ```

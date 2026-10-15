@@ -457,7 +457,7 @@ export async function consumeClientAssertion(
  * mutates the client can guard its write on exactly that snapshot.
  *
  * With `endpointAudienceOnly`, the issuer is not an accepted audience, so only
- * an assertion addressed to `expectedAudience` itself verifies. Endpoints that
+ * an assertion whose `aud` includes `expectedAudience` verifies. Endpoints that
  * change client credentials use it, so an assertion minted for the token
  * endpoint or the issuer cannot be redirected to them.
  *
