@@ -2001,7 +2001,7 @@ export interface SchemaClient<
 	/**
 	 * When the client secret expires (`client_secret_expires_at`).
 	 *
-	 * Unset means the secret never expires.
+	 * Unset or null means the secret never expires.
 	 */
 	expiresAt?: Date | null;
 	//---- UI Metadata ----//
