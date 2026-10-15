@@ -30,13 +30,13 @@ export interface AppleProfile {
 	 * Sign in with Apple at Work & School users, and this claim is "false" or
 	 * false for those users.
 	 */
-	email_verified: true | "true";
+	email_verified: boolean | "true" | "false";
 	/**
 	 * A string or Boolean value that indicates whether the email that the user
 	 * shares is the proxy address. The value can either be a string ("true" or
 	 * "false") or a Boolean (true or false).
 	 */
-	is_private_email: boolean;
+	is_private_email?: boolean | "true" | "false";
 	/**
 	 * An Integer value that indicates whether the user appears to be a real
 	 * person. Use the value of this claim to mitigate fraud. The possible
@@ -45,7 +45,7 @@ export interface AppleProfile {
 	 * in iOS 14 and later, macOS 11 and later, watchOS 7 and later, tvOS 14
 	 * and later. The claim isn’t present or supported for web-based apps.
 	 */
-	real_user_status: number;
+	real_user_status?: number;
 	/**
 	 * The user’s full name in the format provided during the authorization
 	 * process.
@@ -54,7 +54,7 @@ export interface AppleProfile {
 	/**
 	 * The URL to the user's profile picture.
 	 */
-	picture: string;
+	picture?: string;
 	user?: AppleNonConformUser | undefined;
 }
 
