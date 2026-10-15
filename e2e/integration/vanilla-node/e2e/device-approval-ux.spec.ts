@@ -238,9 +238,9 @@ async function startProvider() {
 		headers,
 		body: { name: "Acme", slug: "acme" },
 	});
-	const globex = await auth.api.createOrganization({
+	const research = await auth.api.createOrganization({
 		headers,
-		body: { name: "Globex", slug: "globex" },
+		body: { name: "Research", slug: "research" },
 	});
 	const cli = await auth.api.adminCreateOAuthClient({
 		headers,
@@ -269,7 +269,7 @@ async function startProvider() {
 		origin: http.origin,
 		authBaseURL: `${http.origin}/api/auth`,
 		userId: signIn.response.user.id,
-		organizations: { acme: acme!.id, globex: globex!.id },
+		organizations: { acme: acme!.id, research: research!.id },
 		clientId: cli.client_id,
 		stop: http.stop,
 	};
@@ -395,11 +395,11 @@ test.describe("OAuth device approval in the browser", () => {
 		await page.getByRole("button", { name: "Sign in" }).click();
 
 		await page.waitForURL(/\/select-organization\?/);
-		await page.getByRole("button", { name: "Globex" }).click();
+		await page.getByRole("button", { name: "Research" }).click();
 
 		await page.waitForURL(/\/consent\?/);
 		await expect(page.getByRole("heading")).toHaveText(
-			"Allow Acme CLI to access Globex?",
+			"Allow Acme CLI to access Research?",
 		);
 		await expect(page.locator("#user-code")).toHaveText(device.user_code);
 		await expect(page.locator("#scopes li")).toHaveText(["openid", "api:read"]);
@@ -428,7 +428,7 @@ test.describe("OAuth device approval in the browser", () => {
 		});
 		expect(await me.json()).toEqual({
 			user: provider.userId,
-			organization: provider.organizations.globex,
+			organization: provider.organizations.research,
 		});
 	});
 
