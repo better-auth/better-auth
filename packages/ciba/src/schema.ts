@@ -98,6 +98,7 @@ export const schema = {
 			expiresAt: {
 				type: "date",
 				required: true,
+				index: true,
 			},
 			createdAt: {
 				type: "date",

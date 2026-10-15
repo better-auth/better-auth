@@ -173,6 +173,12 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 				options.expiresIn,
 			);
 			const expiresAt = new Date(Date.now() + expiresIn * 1000);
+			// Clients that stop polling leave their requests behind; clear expired
+			// ones here, as the verification table does on lookup.
+			await ctx.context.adapter.deleteMany({
+				model: "cibaRequest",
+				where: [{ field: "expiresAt", operator: "lt", value: new Date() }],
+			});
 			// CIBA §7.3: at least 128 bits of entropy (32 × log2(62) ≈ 190 bits).
 			const authReqId = generateRandomString(32, "a-z", "A-Z", "0-9");
 			const request = await ctx.context.adapter.create<CibaRequest>({

@@ -278,35 +278,35 @@ The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/open
 
 The token poll returns:
 
-| Error                   | Meaning                                                                       |
-| ----------------------- | ----------------------------------------------------------------------------- |
-| `authorization_pending` | The user has not decided yet. Keep polling.                                   |
-| `slow_down`             | Polling faster than `interval`. Wait at least 5 more seconds between polls.   |
-| `access_denied`         | The user denied the request.                                                  |
-| `expired_token`         | The request expired before the user decided.                                  |
-| `invalid_grant`         | The `auth_req_id` is unknown, belongs to another client, or was already used. |
+| Error                   | Meaning                                                                                                                     |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `authorization_pending` | The user has not decided yet. Keep polling.                                                                                 |
+| `slow_down`             | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                 |
+| `access_denied`         | The user denied the request.                                                                                                |
+| `expired_token`         | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead. |
+| `invalid_grant`         | The `auth_req_id` is unknown, belongs to another client, or was already used.                                               |
 
 ## Schema
 
 The plugin adds one model, `cibaRequest`:
 
-| Field                              | Type      | Description                                                                                                                 |
-| ---------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `authReqId`                        | string    | The `auth_req_id`, hashed like the provider's tokens. The raw value is never stored.                                        |
-| `clientId`                         | string    | The client that started the request.                                                                                        |
-| `userId`                           | string    | The user the `login_hint` named, the only user who can decide.                                                              |
-| `scope`                            | string    | The requested scopes, narrowed to the approved ones on approval.                                                            |
-| `bindingMessage`                   | string    | The optional binding message.                                                                                               |
-| `resources`                        | string\[] | The optional resource indicators.                                                                                           |
-| `status`                           | string    | `pending`, `approved`, or `denied`. A request is deleted when tokens are issued or the client learns of a denial or expiry. |
-| `clientNotificationEndpoint`       | string    | Ping mode only: the client's notification endpoint when the request started.                                                |
-| `encryptedClientNotificationToken` | string    | Ping mode only: the client's `client_notification_token`, encrypted with the server secret.                                 |
-| `encryptedAuthReqId`               | string    | Ping mode only: the `auth_req_id`, encrypted with the server secret, because the callback carries the raw value.            |
-| `referenceId`                      | string    | The consent reference recorded on approval, such as an organization.                                                        |
-| `authTime`                         | date      | Creation time of the approving session, issued as `auth_time`.                                                              |
-| `lastPolledAt`                     | date      | When the client last polled.                                                                                                |
-| `expiresAt`                        | date      | When the request expires.                                                                                                   |
-| `createdAt`                        | date      | When the request was created.                                                                                               |
+| Field                              | Type      | Description                                                                                                                                                              |
+| ---------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `authReqId`                        | string    | The `auth_req_id`, hashed like the provider's tokens. The raw value is never stored.                                                                                     |
+| `clientId`                         | string    | The client that started the request.                                                                                                                                     |
+| `userId`                           | string    | The user the `login_hint` named, the only user who can decide.                                                                                                           |
+| `scope`                            | string    | The requested scopes, narrowed to the approved ones on approval.                                                                                                         |
+| `bindingMessage`                   | string    | The optional binding message.                                                                                                                                            |
+| `resources`                        | string\[] | The optional resource indicators.                                                                                                                                        |
+| `status`                           | string    | `pending`, `approved`, or `denied`. A request is deleted when tokens are issued, when the client learns of a denial or expiry, or when a later request finds it expired. |
+| `clientNotificationEndpoint`       | string    | Ping mode only: the client's notification endpoint when the request started.                                                                                             |
+| `encryptedClientNotificationToken` | string    | Ping mode only: the client's `client_notification_token`, encrypted with the server secret.                                                                              |
+| `encryptedAuthReqId`               | string    | Ping mode only: the `auth_req_id`, encrypted with the server secret, because the callback carries the raw value.                                                         |
+| `referenceId`                      | string    | The consent reference recorded on approval, such as an organization.                                                                                                     |
+| `authTime`                         | date      | Creation time of the approving session, issued as `auth_time`.                                                                                                           |
+| `lastPolledAt`                     | date      | When the client last polled.                                                                                                                                             |
+| `expiresAt`                        | date      | When the request expires.                                                                                                                                                |
+| `createdAt`                        | date      | When the request was created.                                                                                                                                            |
 
 ## Security
 

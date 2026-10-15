@@ -374,6 +374,24 @@ describe("ciba poll mode", () => {
 		expect((await poll(authReqId)).body.error).toBe("expired_token");
 	});
 
+	it("deletes expired requests that were never polled again", async () => {
+		const abandoned = await start();
+		await expireRequest(abandoned.authReqId);
+		await start();
+		const ctx = await auth.$context;
+		expect(
+			await ctx.adapter.findOne({
+				model: "cibaRequest",
+				where: [
+					{
+						field: "authReqId",
+						value: await hashAuthReqId(abandoned.authReqId),
+					},
+				],
+			}),
+		).toBeNull();
+	});
+
 	it("refuses another client's auth_req_id without consuming it", async () => {
 		const { authReqId, url } = await start();
 		await approve(url);
