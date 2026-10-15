@@ -1,4 +1,3 @@
-import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
@@ -7,19 +6,10 @@ import {
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import {
-	afterEach,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
-import type { OAuthClient } from "./types/oauth";
 
 const authServerBaseUrl = "http://localhost:3000";
 const rpBaseUrl = "http://localhost:5000";
@@ -55,51 +45,57 @@ function tamperSignature(token: string) {
 	return `${header}.${payload}.${tampered}`;
 }
 
+/**
+ * Starts an auth server with the oauth provider and registers one
+ * confidential client on it.
+ */
 async function setup(
 	jwtPlugin: ReturnType<typeof jwt> | null,
 	providerOptions?: Partial<OAuthOptions<Scope[]>>,
 ) {
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
-		plugins: [
-			...(jwtPlugin ? [jwtPlugin] : []),
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				resources: [validResource],
-				enforcePerClientResources: false,
-				...providerOptions,
-			}),
-		],
-	});
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			plugins: [
+				...(jwtPlugin ? [jwtPlugin] : []),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [validResource],
+					enforcePerClientResources: false,
+					...providerOptions,
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
 	const { headers } = await signInWithTestUser();
-	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
-		baseURL: authServerBaseUrl,
-		fetchOptions: {
-			customFetchImpl,
-			headers,
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			token_endpoint_auth_method: "client_secret_post",
+			scope: "openid profile email offline_access",
+			skip_consent: true,
 		},
 	});
-	return { auth, headers, client };
+	expect(oauthClient?.client_id).toBeDefined();
+	return { auth, headers, client, oauthClient };
 }
 
+type TestServer = Awaited<ReturnType<typeof setup>>;
+
 async function getAccessToken(
-	{
-		client,
-		headers,
-		oauthClient,
-	}: Pick<Awaited<ReturnType<typeof setup>>, "client" | "headers"> & {
-		oauthClient: OAuthClient | null;
-	},
+	{ client, headers, oauthClient }: TestServer,
 	resource?: string,
 ) {
 	const codeVerifier = generateRandomString(32);
 	const authUrl = await createAuthorizationURL({
 		id: "test",
 		options: {
-			clientId: oauthClient!.client_id!,
-			clientSecret: oauthClient!.client_secret!,
+			clientId: oauthClient.client_id,
+			clientSecret: oauthClient.client_secret!,
 			redirectURI: redirectUri,
 		},
 		redirectURI: "",
@@ -122,8 +118,8 @@ async function getAccessToken(
 		redirectURI: redirectUri,
 		resource,
 		options: {
-			clientId: oauthClient!.client_id!,
-			clientSecret: oauthClient!.client_secret!,
+			clientId: oauthClient.client_id,
+			clientSecret: oauthClient.client_secret!,
 			redirectURI: redirectUri,
 		},
 	});
@@ -134,46 +130,57 @@ async function getAccessToken(
 	return tokens.data!.access_token!;
 }
 
-async function createClient(
-	auth: Awaited<ReturnType<typeof setup>>["auth"],
-	headers: Headers,
-) {
-	const oauthClient = await auth.api.adminCreateOAuthClient({
-		headers,
-		body: {
-			redirect_uris: [redirectUri],
-			application_type: "native",
-			token_endpoint_auth_method: "client_secret_post",
-			scope: "openid profile email offline_access",
-			skip_consent: true,
+function introspect({ client, oauthClient }: TestServer, token: string) {
+	return client.oauth2.introspect(
+		{
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			token,
+			token_type_hint: "access_token",
 		},
+		{ headers: formHeaders },
+	);
+}
+
+function revoke(
+	{ client, oauthClient }: TestServer,
+	token: string,
+	tokenTypeHint?: "access_token",
+) {
+	return client.oauth2.revoke(
+		{
+			client_id: oauthClient.client_id,
+			client_secret: oauthClient.client_secret,
+			token,
+			...(tokenTypeHint ? { token_type_hint: tokenTypeHint } : {}),
+		},
+		{ headers: formHeaders },
+	);
+}
+
+function userinfo<T>(
+	{ client }: TestServer,
+	token: string,
+	onError?: (context: { response: Response }) => void,
+) {
+	return client.$fetch<T>("/oauth2/userinfo", {
+		headers: { authorization: `Bearer ${token}` },
+		onError,
 	});
-	expect(oauthClient?.client_id).toBeDefined();
-	return oauthClient;
 }
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/11595
  */
 describe("oauth-provider - JWT access tokens that fail verification", async () => {
-	const { auth, headers, client } = await setup(
-		jwt({ jwt: { issuer: authServerBaseUrl } }),
-	);
-
-	let oauthClient: OAuthClient | null = null;
-
-	beforeAll(async () => {
-		oauthClient = await createClient(auth, headers);
-	});
-
-	const accessToken = (resource?: string) =>
-		getAccessToken({ client, headers, oauthClient }, resource);
+	const server = await setup(jwt({ jwt: { issuer: authServerBaseUrl } }));
+	const { auth } = server;
 
 	const invalidTokens: [string, () => Promise<string>][] = [
 		["alg:none", async () => ALG_NONE_TOKEN],
 		[
 			"tampered signature",
-			async () => tamperSignature(await accessToken(validResource)),
+			async () => tamperSignature(await getAccessToken(server, validResource)),
 		],
 		["unknown kid", () => signWithUnknownKey("unknown-kid")],
 		[
@@ -195,57 +202,27 @@ describe("oauth-provider - JWT access tokens that fail verification", async () =
 	];
 
 	it("verifies an untampered JWT access token", async () => {
-		const token = await accessToken(validResource);
+		const token = await getAccessToken(server, validResource);
 		expect(token.split(".")).toHaveLength(3);
-		const introspection = await client.oauth2.introspect(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token,
-				token_type_hint: "access_token",
-			},
-			{ headers: formHeaders },
-		);
-		expect(introspection.data?.active).toBe(true);
-		const userinfo = await client.$fetch<{ sub?: string }>("/oauth2/userinfo", {
-			headers: { authorization: `Bearer ${token}` },
-		});
-		expect(userinfo.error).toBeNull();
-		expect(userinfo.data?.sub).toBeDefined();
+		expect((await introspect(server, token)).data?.active).toBe(true);
+		const info = await userinfo<{ sub?: string }>(server, token);
+		expect(info.error).toBeNull();
+		expect(info.data?.sub).toBeDefined();
 	});
 
 	it("still falls through to opaque access token validation", async () => {
-		const token = await accessToken();
+		const token = await getAccessToken(server);
 		expect(token.split(".")).not.toHaveLength(3);
-		const introspection = await client.oauth2.introspect(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token,
-				token_type_hint: "access_token",
-			},
-			{ headers: formHeaders },
-		);
-		expect(introspection.data?.active).toBe(true);
-		const userinfo = await client.$fetch<{ sub?: string }>("/oauth2/userinfo", {
-			headers: { authorization: `Bearer ${token}` },
-		});
-		expect(userinfo.error).toBeNull();
-		expect(userinfo.data?.sub).toBeDefined();
+		expect((await introspect(server, token)).data?.active).toBe(true);
+		const info = await userinfo<{ sub?: string }>(server, token);
+		expect(info.error).toBeNull();
+		expect(info.data?.sub).toBeDefined();
 	});
 
 	it.each(invalidTokens)(
 		"introspects a JWT with %s as inactive",
 		async (_, getToken) => {
-			const introspection = await client.oauth2.introspect(
-				{
-					client_id: oauthClient?.client_id,
-					client_secret: oauthClient?.client_secret,
-					token: await getToken(),
-					token_type_hint: "access_token",
-				},
-				{ headers: formHeaders },
-			);
+			const introspection = await introspect(server, await getToken());
 			expect(introspection.error).toBeNull();
 			expect(introspection.data).toEqual({ active: false });
 		},
@@ -255,15 +232,12 @@ describe("oauth-provider - JWT access tokens that fail verification", async () =
 		"rejects a JWT with %s at userinfo with invalid_token",
 		async (_, getToken) => {
 			let wwwAuthenticate = "";
-			const userinfo = await client.$fetch("/oauth2/userinfo", {
-				headers: { authorization: `Bearer ${await getToken()}` },
-				onError(context) {
-					wwwAuthenticate =
-						context.response.headers.get("WWW-Authenticate") ?? "";
-				},
+			const info = await userinfo(server, await getToken(), (context) => {
+				wwwAuthenticate =
+					context.response.headers.get("WWW-Authenticate") ?? "";
 			});
-			expect(userinfo.error?.status).toBe(401);
-			expect(userinfo.error).toMatchObject({ error: "invalid_token" });
+			expect(info.error?.status).toBe(401);
+			expect(info.error).toMatchObject({ error: "invalid_token" });
 			expect(wwwAuthenticate).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
 		},
 	);
@@ -271,125 +245,65 @@ describe("oauth-provider - JWT access tokens that fail verification", async () =
 	it.each(invalidTokens)(
 		"answers a JWT with %s at revocation as for any unknown token",
 		async (_, getToken) => {
-			const revoke = async (token: string) =>
-				(
-					await client.oauth2.revoke(
-						{
-							client_id: oauthClient?.client_id,
-							client_secret: oauthClient?.client_secret,
-							token,
-						},
-						{ headers: formHeaders },
-					)
-				).error;
-			const error = await revoke(await getToken());
+			const { error } = await revoke(server, await getToken());
 			expect(error?.status).not.toBe(500);
-			expect(error).toEqual(await revoke("unknown-opaque-token"));
+			expect(error).toEqual(
+				(await revoke(server, "unknown-opaque-token")).error,
+			);
 		},
 	);
+
+	it("surfaces a database failure during the revocation audience check", async () => {
+		const token = await getAccessToken(server, validResource);
+		const { adapter } = await auth.$context;
+		const findOne = adapter.findOne.bind(adapter);
+		vi.spyOn(adapter, "findOne").mockImplementation(async (args) => {
+			if (args.model === "oauthResource") throw new TypeError("fetch failed");
+			return findOne(args);
+		});
+		expect((await revoke(server, token)).error?.status).toBe(500);
+	});
 });
 
 describe("oauth-provider - JWT-shaped tokens with disableJwtPlugin", async () => {
-	const { auth, headers, client } = await setup(null, {
-		disableJwtPlugin: true,
-	});
-
-	let oauthClient: OAuthClient | null = null;
-
-	beforeAll(async () => {
-		oauthClient = await createClient(auth, headers);
-	});
+	const server = await setup(null, { disableJwtPlugin: true });
 
 	it.each([
 		["alg:none", async () => ALG_NONE_TOKEN],
 		["EdDSA signature", () => signWithUnknownKey("any-kid")],
 	])("answers a JWT with %s as an unknown token", async (_, getToken) => {
 		const token = await getToken();
-		const introspection = await client.oauth2.introspect(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token,
-				token_type_hint: "access_token",
-			},
-			{ headers: formHeaders },
-		);
-		expect(introspection.data, "introspection").toEqual({ active: false });
-
-		const userinfo = await client.$fetch("/oauth2/userinfo", {
-			headers: { authorization: `Bearer ${token}` },
+		expect((await introspect(server, token)).data, "introspection").toEqual({
+			active: false,
 		});
-		expect(userinfo.error, "userinfo").toMatchObject({
+		expect((await userinfo(server, token)).error, "userinfo").toMatchObject({
 			status: 401,
 			error: "invalid_token",
 		});
-
-		const revoke = async (value: string) =>
-			(
-				await client.oauth2.revoke(
-					{
-						client_id: oauthClient?.client_id,
-						client_secret: oauthClient?.client_secret,
-						token: value,
-					},
-					{ headers: formHeaders },
-				)
-			).error;
-		expect(await revoke(token), "revocation").toEqual(
-			await revoke("unknown-opaque-token"),
+		expect((await revoke(server, token)).error, "revocation").toEqual(
+			(await revoke(server, "unknown-opaque-token")).error,
 		);
 	});
 });
 
 describe("oauth-provider - JWT-shaped opaque access tokens", async () => {
-	const { auth, headers, client } = await setup(
-		jwt({ jwt: { issuer: authServerBaseUrl } }),
-		{
-			// A custom opaque format that is a JWS signed by a key this server's
-			// JWKS does not contain.
-			generateOpaqueAccessToken: () => signWithUnknownKey("custom-opaque"),
-		},
-	);
-
-	let oauthClient: OAuthClient | null = null;
-
-	beforeAll(async () => {
-		oauthClient = await createClient(auth, headers);
+	const server = await setup(jwt({ jwt: { issuer: authServerBaseUrl } }), {
+		// A custom opaque format that is a JWS signed by a key this server's
+		// JWKS does not contain.
+		generateOpaqueAccessToken: () => signWithUnknownKey("custom-opaque"),
 	});
 
-	function introspect(token: string) {
-		return client.oauth2.introspect(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token,
-				token_type_hint: "access_token",
-			},
-			{ headers: formHeaders },
-		);
-	}
-
 	it("validates and revokes them as opaque tokens", async () => {
-		const token = await getAccessToken({ client, headers, oauthClient });
+		const token = await getAccessToken(server);
 		expect(token.split(".")).toHaveLength(3);
 
-		expect((await introspect(token)).data?.active).toBe(true);
-		const userinfo = await client.$fetch<{ sub?: string }>("/oauth2/userinfo", {
-			headers: { authorization: `Bearer ${token}` },
-		});
-		expect(userinfo.data?.sub).toBeDefined();
+		expect((await introspect(server, token)).data?.active).toBe(true);
+		const info = await userinfo<{ sub?: string }>(server, token);
+		expect(info.data?.sub).toBeDefined();
 
-		const revocation = await client.oauth2.revoke(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token,
-				token_type_hint: "access_token",
-			},
-			{ headers: formHeaders },
-		);
+		const revocation = await revoke(server, token, "access_token");
 		expect(revocation.error).toBeNull();
-		expect((await introspect(token)).data?.active).toBe(false);
+		expect((await introspect(server, token)).data?.active).toBe(false);
 	});
 });
 
@@ -400,27 +314,12 @@ describe("oauth-provider - JWKS failures during access token verification", asyn
 		extractable: true,
 	});
 	const publicJwk = { ...(await exportJWK(publicKey)), kid, alg: "EdDSA" };
-	const { auth, headers, client } = await setup(
+	const server = await setup(
 		jwt({
 			jwt: { issuer: authServerBaseUrl },
 			jwks: { remoteUrl: jwksUrl, keyPairConfig: { alg: "EdDSA" } },
 		}),
 	);
-
-	let oauthClient: OAuthClient | null = null;
-
-	beforeAll(async () => {
-		oauthClient = await auth.api.adminCreateOAuthClient({
-			headers,
-			body: {
-				redirect_uris: [redirectUri],
-				application_type: "native",
-				token_endpoint_auth_method: "client_secret_post",
-				skip_consent: true,
-			},
-		});
-		expect(oauthClient?.client_id).toBeDefined();
-	});
 
 	beforeEach(() => {
 		// Two keys share the token's kid, so jose cannot pick one
@@ -447,36 +346,17 @@ describe("oauth-provider - JWKS failures during access token verification", asyn
 	});
 
 	it("surfaces the key set failure at introspection", async () => {
-		const introspection = await client.oauth2.introspect(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: await signAccessToken(privateKey, kid),
-				token_type_hint: "access_token",
-			},
-			{ headers: formHeaders },
-		);
-		expect(introspection.error?.status).toBe(500);
+		const token = await signAccessToken(privateKey, kid);
+		expect((await introspect(server, token)).error?.status).toBe(500);
 	});
 
 	it("surfaces the key set failure at userinfo", async () => {
-		const userinfo = await client.$fetch("/oauth2/userinfo", {
-			headers: {
-				authorization: `Bearer ${await signAccessToken(privateKey, kid)}`,
-			},
-		});
-		expect(userinfo.error?.status).toBe(500);
+		const token = await signAccessToken(privateKey, kid);
+		expect((await userinfo(server, token)).error?.status).toBe(500);
 	});
 
 	it("surfaces the key set failure at revocation", async () => {
-		const revocation = await client.oauth2.revoke(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: await signAccessToken(privateKey, kid),
-			},
-			{ headers: formHeaders },
-		);
-		expect(revocation.error?.status).toBe(500);
+		const token = await signAccessToken(privateKey, kid);
+		expect((await revoke(server, token)).error?.status).toBe(500);
 	});
 });

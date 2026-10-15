@@ -7,7 +7,7 @@ import {
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import {
 	getResourceCustomClaims,
@@ -158,28 +158,27 @@ async function validateJwtAccessToken(
 		);
 		jwtPayload = verified.payload;
 	} catch (error) {
-		if (error instanceof Error) {
-			if (error.name === "JWTExpired") {
-				return {
-					active: false,
-				};
-			} else if (error.name === "JWTInvalid") {
-				// malformed JWT (payload is not a JSON claims set, or unencoded)
-				return {
-					active: false,
-				};
-			} else if (error.name === "TypeError" || isInvalidJwtError(error)) {
-				// likely an opaque token, or a JWT this server cannot verify (bad
-				// signature, unknown key, failed claim checks such as `iss`), which
-				// may still be a stored opaque token (`generateOpaqueAccessToken`)
-				throw new APIError("BAD_REQUEST", {
-					error_description: "invalid JWT signature",
-					error: "invalid_request",
-				});
-			}
-			throw error;
+		// jose raises these only after the signature verifies: an expired token,
+		// or a malformed claims set. Check them before `isInvalidJwtError`, which
+		// also matches them.
+		if (
+			error instanceof joseErrors.JWTExpired ||
+			error instanceof joseErrors.JWTInvalid
+		) {
+			return {
+				active: false,
+			};
 		}
-		throw new Error(error as unknown as string);
+		// likely an opaque token, or a JWT this server cannot verify (bad
+		// signature, unknown key, failed claim checks such as `iss`), which
+		// may still be a stored opaque token (`generateOpaqueAccessToken`)
+		if (error instanceof TypeError || isInvalidJwtError(error)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "invalid JWT signature",
+				error: "invalid_request",
+			});
+		}
+		throw error;
 	}
 
 	// Manual `aud` validation (RFC 7662 §2.2 + RFC 8707 §3). EVERY value in
