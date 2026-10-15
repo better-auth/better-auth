@@ -1,6 +1,7 @@
 import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { Session, User } from "../../types";
 import { createEmailVerificationToken } from "./email-verification";
 
 /**
@@ -1091,6 +1092,7 @@ describe("Email change verification - auto sign-in contract", async () => {
 		signInWithTestUser,
 		signInWithUser,
 		cookieSetter,
+		db,
 	} = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
@@ -1146,6 +1148,20 @@ describe("Email change verification - auto sign-in contract", async () => {
 		});
 		expect(confirmationToken).toBeTruthy();
 
+		// Baseline for the persistence assertions below: the explicit
+		// sign-in above must be the only source of the user's session rows.
+		const dbUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		const changeUserId = dbUser?.id as string;
+		expect(changeUserId).toBeTruthy();
+		const sessionsBefore = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: changeUserId }],
+		});
+		expect(sessionsBefore.length).toBeGreaterThan(0);
+
 		// Click the confirmation link in a separate browser (no session)
 		await client.verifyEmail({
 			query: {
@@ -1174,6 +1190,16 @@ describe("Email change verification - auto sign-in contract", async () => {
 			fetchOptions: { headers: capturedHeaders },
 		});
 		expect(session.data).toBeNull();
+
+		// ...and no session row may be persisted either: getSession alone
+		// cannot tell a minted-but-cookie-less session from no session at all
+		const sessionsAfter = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: changeUserId }],
+		});
+		expect(sessionsAfter.map((row) => row.id).sort()).toEqual(
+			sessionsBefore.map((row) => row.id).sort(),
+		);
 
 		// The account is intact and usable with the new email
 		const signInRes = await client.signIn.email({
@@ -1238,7 +1264,7 @@ describe("Email change verification - auto sign-in contract", async () => {
 });
 
 describe("Legacy change-email verification - auto sign-in contract", async () => {
-	const { client, cookieSetter } = await getTestInstance({
+	const { client, db, cookieSetter } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -1259,6 +1285,18 @@ describe("Legacy change-email verification - auto sign-in contract", async () =>
 			name: legacyUser.name,
 			email: legacyUser.email,
 			password: legacyUser.password,
+		});
+
+		// Baseline: the user's session rows before the legacy click
+		const dbUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: legacyUser.email }],
+		});
+		const legacyUserId = dbUser?.id as string;
+		expect(legacyUserId).toBeTruthy();
+		const sessionsBefore = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: legacyUserId }],
 		});
 
 		// Legacy token shape: updateTo set, no requestType
@@ -1283,6 +1321,15 @@ describe("Legacy change-email verification - auto sign-in contract", async () =>
 		});
 		expect(session.data).toBeNull();
 
+		// Same persistence guard as the two-step flow: no session row either
+		const sessionsAfter = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: legacyUserId }],
+		});
+		expect(sessionsAfter.map((row) => row.id).sort()).toEqual(
+			sessionsBefore.map((row) => row.id).sort(),
+		);
+
 		const signInRes = await client.signIn.email({
 			email: "legacy-new@test.com",
 			password: legacyUser.password,
@@ -1296,7 +1343,7 @@ describe("Legacy change-email verification - auto sign-in contract", async () =>
 describe("Change-email verification auto sign-in opt-in", async () => {
 	let confirmationToken: string;
 	let verificationToken: string;
-	const { client, auth, testUser, signInWithTestUser, cookieSetter } =
+	const { client, auth, testUser, signInWithTestUser, db, cookieSetter } =
 		await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
@@ -1338,6 +1385,18 @@ describe("Change-email verification auto sign-in opt-in", async () => {
 		});
 		const changeVerificationToken = verificationToken;
 
+		// Baseline before the minting click
+		const dbUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		const optInUserId = dbUser?.id as string;
+		expect(optInUserId).toBeTruthy();
+		const sessionsBefore = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: optInUserId }],
+		});
+
 		const capturedHeaders = new Headers();
 		await client.verifyEmail({
 			query: { token: changeVerificationToken },
@@ -1351,5 +1410,17 @@ describe("Change-email verification auto sign-in opt-in", async () => {
 		});
 		expect(session.data?.user.email).toBe("optin-new@email.com");
 		expect(session.data?.user.emailVerified).toBe(true);
+
+		// Control for the negative tests above: the opt-in path must persist
+		// exactly one new session row
+		const sessionsAfter = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: optInUserId }],
+		});
+		expect(sessionsAfter).toHaveLength(sessionsBefore.length + 1);
+		const added = sessionsAfter.filter(
+			(row) => !sessionsBefore.some((before) => before.id === row.id),
+		);
+		expect(added).toHaveLength(1);
 	});
 });
