@@ -8,7 +8,7 @@ import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
-import { validatePublicClientJwks } from "./client-jwks";
+import { assertValidClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
 	getSupportedAuthMethods,
@@ -261,16 +261,6 @@ function validateClientRedirectUri(
 		invalidRedirectUri(
 			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with a host and a path: ${redirectUri}`,
 		);
-	}
-}
-
-function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
-	const result = validatePublicClientJwks(jwks);
-	if (!result.valid) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_client_metadata",
-			error_description: result.error,
-		});
 	}
 }
 
@@ -640,7 +630,7 @@ export async function checkOAuthClient(
 			}
 		}
 		if (clientWithDefaults.jwks) {
-			assertValidRegistrationJwks(clientWithDefaults.jwks);
+			assertValidClientJwks(clientWithDefaults.jwks);
 		}
 	}
 	// private_key_jwt requires key material; other methods may still register

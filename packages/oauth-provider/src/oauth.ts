@@ -520,6 +520,25 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
+			// A replayed rotation assertion would hand over a client's keys, so
+			// rotation needs the jti tombstone to be single-use. The memory adapter
+			// does not enforce primary keys, and "serial" ids replace the derived id.
+			// shortcut: lists the known built-in gaps only; replace with a core check
+			// when the FIXME(serial-derived-ids) in get-id-field.ts is resolved.
+			if (opts.allowClientKeyRotation) {
+				const gap =
+					ctx.adapter.id === "memory"
+						? "the memory adapter"
+						: ctx.options.advanced?.database?.generateId === "serial"
+							? '`advanced.database.generateId: "serial"`'
+							: undefined;
+				if (gap) {
+					throw new BetterAuthError(
+						`\`allowClientKeyRotation\` requires single-use client assertions, which ${gap} does not enforce`,
+					);
+				}
+			}
+
 			// Seed `oauthResource` rows from plugin config. A failure must not
 			// reject init (a failed init is cached and breaks every route);
 			// `getResource` retries the seed on first resource access.
@@ -1695,6 +1714,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
 			rotateClientSecret: oauthClientEndpoints.rotateClientSecret(opts),
+			rotateClientKeys: oauthClientEndpoints.rotateClientKeys(opts),
 			deleteOAuthClient: oauthClientEndpoints.deleteOAuthClient(opts),
 			getOAuthConsent: oauthConsentEndpoints.getOAuthConsent(opts),
 			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
@@ -1766,6 +1786,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							pathMatcher: (path: string) => path === "/oauth2/register",
 							window: opts.rateLimit?.register?.window ?? 60,
 							max: opts.rateLimit?.register?.max ?? 5,
+						},
+					]
+				: []),
+			// Client key rotation - replaces credentials, so keep it tight
+			...(opts.rateLimit?.rotateClientKeys !== false
+				? [
+						{
+							pathMatcher: (path: string) =>
+								path === "/oauth2/client/rotate-keys",
+							window: opts.rateLimit?.rotateClientKeys?.window ?? 60,
+							max: opts.rateLimit?.rotateClientKeys?.max ?? 5,
 						},
 					]
 				: []),
