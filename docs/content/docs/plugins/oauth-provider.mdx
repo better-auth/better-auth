@@ -1775,7 +1775,7 @@ extendOAuthProvider(ctx, {
 
 Dynamic registration ignores top-level fields it does not recognize (RFC 7591 §2). Fields an extension declares are the exception: a registrant sends them as top-level fields and the provider stores them in `metadata`. A registrant cannot set any other `metadata` key. An admin sets the same fields inside `metadata`. An extension cannot declare a core client field such as `redirect_uris` or a server-owned field such as `disabled`, `reference_id`, or `client_credentials_scopes`; the provider rejects these at setup. `validate` receives the core registration metadata after defaults (`client`) and the client's `metadata`; read extension fields from `metadata`.
 
-Client metadata documents ([CIMD](/docs/plugins/cimd)) do not carry declared fields into `metadata` yet. `validate` still runs for those clients and sees the fields as absent, so an extension that requires a field rejects them.
+A [client metadata document](/docs/plugins/cimd) carries declared fields the same way, as top-level members of the document. The document owns those fields: each refresh replaces them in `metadata`, removing any it no longer declares, and keeps other `metadata` keys, such as ones an admin set.
 
 #### Provider capabilities outside a grant
 

@@ -11,6 +11,7 @@ export {
 	validatePublicClientJwks,
 } from "./client-jwks";
 export { isForbiddenCimdClientMetadataField } from "./client-metadata";
+export { getExtensionClientMetadataFields } from "./extensions";
 export {
 	assertPublicRoutableHttpsUri,
 	type OAuthClientRegistrationResult,

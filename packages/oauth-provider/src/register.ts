@@ -323,17 +323,30 @@ function splitRegistrationRequest(
 	body: ClientRegistrationRequest;
 	metadata: Record<string, unknown> | undefined;
 } {
-	const extensionFields = getExtensionClientMetadataFields(opts);
-	const body: Record<string, unknown> = {};
-	const metadata: Record<string, unknown> = {};
-	for (const [field, value] of Object.entries(input)) {
-		if (REGISTRATION_REQUEST_FIELDS.has(field)) body[field] = value;
-		else if (extensionFields.has(field)) metadata[field] = value;
-	}
+	const body = Object.fromEntries(
+		Object.entries(input).filter(([field]) =>
+			REGISTRATION_REQUEST_FIELDS.has(field),
+		),
+	);
 	return {
 		body: body as ClientRegistrationRequest,
-		metadata: Object.keys(metadata).length ? metadata : undefined,
+		metadata: pickExtensionClientMetadata(input, opts),
 	};
+}
+
+/**
+ * The top-level fields of a registration that extensions declare, which are
+ * stored in the client's `metadata`.
+ */
+function pickExtensionClientMetadata(
+	input: object,
+	opts: OAuthOptions<Scope[]>,
+): Record<string, unknown> | undefined {
+	const extensionFields = getExtensionClientMetadataFields(opts);
+	const metadata = Object.fromEntries(
+		Object.entries(input).filter(([field]) => extensionFields.has(field)),
+	);
+	return Object.keys(metadata).length ? metadata : undefined;
 }
 
 export async function registerEndpoint(
@@ -1042,6 +1055,9 @@ async function persistOAuthClientRegistration(
 					],
 					update: {
 						...schema,
+						// Write the merged metadata even when empty, so fields the
+						// document stopped declaring are removed.
+						metadata: schema.metadata ?? null,
 						disabled: existingClient.disabled,
 						skipConsent: existingClient.skipConsent,
 						enableEndSession: existingClient.enableEndSession,
@@ -1193,6 +1209,27 @@ function assertClientDiscoveryOwnership(
 }
 
 /**
+ * The `metadata` a metadata document registration stores. The document owns the
+ * fields extensions declare, so a refresh replaces them, including removing
+ * ones it no longer declares. Other keys, such as ones an admin set, are kept.
+ */
+function mergeDocumentExtensionMetadata(
+	input: RegisterClientMetadataDocumentInput,
+	opts: OAuthOptions<Scope[]>,
+	existingClient: SchemaClient<Scope[]> | undefined,
+): Record<string, unknown> | undefined {
+	const extensionFields = getExtensionClientMetadataFields(opts);
+	const kept = Object.entries(
+		parseClientMetadata(existingClient?.metadata) ?? {},
+	).filter(([field]) => !extensionFields.has(field));
+	const metadata = {
+		...Object.fromEntries(kept),
+		...pickExtensionClientMetadata(input.metadata, opts),
+	};
+	return Object.keys(metadata).length ? metadata : undefined;
+}
+
+/**
  * First-party persistence seam for a validated Client ID Metadata Document.
  *
  * This operation owns both initial creation and atomic replacement. It never
@@ -1228,19 +1265,27 @@ export async function registerClientMetadataDocument(
 				"Client ID Metadata Document clients cannot use a shared secret",
 		});
 	}
-	const registrationInput = {
+	const toRegistrationInput = (
+		existingClient: SchemaClient<Scope[]> | undefined,
+	) => ({
 		...input,
+		existingClient,
 		metadata: {
 			...input.metadata,
+			metadata: mergeDocumentExtensionMetadata(input, opts, existingClient),
 			token_endpoint_auth_method:
 				input.metadata.token_endpoint_auth_method ?? "none",
 			client_secret: undefined,
 			client_secret_expires_at: undefined,
 		},
 		registrationSource: "clientMetadataDocument" as const,
-	};
+	});
 	try {
-		return await persistOAuthClientRegistration(ctx, opts, registrationInput);
+		return await persistOAuthClientRegistration(
+			ctx,
+			opts,
+			toRegistrationInput(input.existingClient),
+		);
 	} catch (error) {
 		if (!isClientRegistrationCollision(error)) throw error;
 		const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
@@ -1270,10 +1315,11 @@ export async function registerClientMetadataDocument(
 			if (!exactLink) throw error.cause;
 		}
 		try {
-			return await persistOAuthClientRegistration(ctx, opts, {
-				...registrationInput,
-				existingClient: currentClient,
-			});
+			return await persistOAuthClientRegistration(
+				ctx,
+				opts,
+				toRegistrationInput(currentClient),
+			);
 		} catch (retryError) {
 			if (isClientRegistrationCollision(retryError)) {
 				throw retryError.cause;

@@ -3,12 +3,17 @@ import {
 	signPrivateKeyJwtClientAssertion,
 } from "@better-auth/core/oauth2";
 import type { SchemaClient, Scope } from "@better-auth/oauth-provider";
-import { oauthProvider } from "@better-auth/oauth-provider";
+import {
+	extendOAuthProvider,
+	oauthProvider,
+} from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { createAuthClient } from "better-auth/client";
 import { toNodeHandler } from "better-auth/node";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { BetterAuthPlugin } from "better-auth/types";
+import { APIError } from "better-call";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import {
@@ -1027,5 +1032,130 @@ describe("CIMD - metadata document URL policy", async () => {
 			},
 		);
 		expect(redirect).toContain("/consent");
+	});
+});
+
+describe("CIMD - extension client metadata", async () => {
+	const authServerBaseUrl = "http://localhost:3104";
+	const clientMetadataUrl =
+		"https://mcp-client-extension.example.com/client-metadata.json";
+	const redirectUri = "http://localhost:5104/callback";
+	const metadataDocument = {
+		client_id: clientMetadataUrl,
+		client_name: "Extension Metadata Client",
+		redirect_uris: [redirectUri],
+		token_endpoint_auth_method: "none",
+		application_type: "native",
+		grant_types: ["authorization_code"],
+		response_types: ["code"],
+	};
+
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			cimd({
+				metadataRevalidationInterval: 0,
+				metadataFetchPolicy: { minimumFetchInterval: 0 },
+				fetchClientMetadataResource: (input, init) =>
+					globalThis.fetch(input, init),
+			}),
+			{
+				id: "client-metadata-extension",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientMetadata: {
+							fields: ["example_mode"],
+							validate: ({ metadata }) => {
+								if (
+									metadata.example_mode !== undefined &&
+									metadata.example_mode !== "ok"
+								) {
+									throw new APIError("BAD_REQUEST", {
+										error: "invalid_client_metadata",
+										error_description: "example_mode must be ok",
+									});
+								}
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	async function authorize(): Promise<string> {
+		let redirect = "";
+		await authedClient.$fetch(
+			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
+			{
+				method: "GET",
+				onError(ctx) {
+					redirect = ctx.response.headers.get("Location") || "";
+				},
+			},
+		);
+		return redirect;
+	}
+
+	async function storedMetadata() {
+		const ctx = await authorizationServer.$context;
+		const client = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientMetadataUrl }],
+		});
+		const metadata: unknown = client?.metadata;
+		return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+	}
+
+	it("stores declared fields from the document and replaces them on refresh", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "ok",
+			unknown_field: "ignored",
+		});
+		expect(await authorize()).toContain("/consent");
+		expect(await storedMetadata()).toEqual({ example_mode: "ok" });
+
+		// An admin-set key survives a refresh; the document owns example_mode.
+		const ctx = await authorizationServer.$context;
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientMetadataUrl }],
+			update: {
+				metadata: JSON.stringify({ example_mode: "ok", note: "admin" }),
+			},
+		});
+		vi.unstubAllGlobals();
+		stubMetadataFetch(clientMetadataUrl, metadataDocument);
+		expect(await authorize()).toContain("/consent");
+		expect(await storedMetadata()).toEqual({ note: "admin" });
+	});
+
+	it("rejects a document with an invalid declared field", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "bad",
+		});
+		const response = await authedClient.$fetch<{ error?: string }>(
+			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
+			{ method: "GET" },
+		);
+		expect(JSON.stringify(response)).toContain("invalid_client_metadata");
 	});
 });

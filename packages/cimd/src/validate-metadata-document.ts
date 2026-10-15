@@ -41,6 +41,13 @@ export type CimdMetadataValidationResult =
 export interface CimdMetadataValidationOptions {
 	originBoundFields?: readonly string[];
 	metadataProfile?: CimdMetadataProfile;
+	/**
+	 * Registration fields that OAuth provider extensions declare, such as
+	 * CIBA's `backchannel_token_delivery_mode`. They are kept in the validated
+	 * metadata instead of being ignored as unknown members; the provider
+	 * validates them when it registers the client.
+	 */
+	extensionFields?: ReadonlySet<string>;
 }
 
 /**
@@ -419,9 +426,15 @@ export function validateCimdMetadata(
 	// §3: SHOULD NOT have a query string
 	warnings.push(...getClientIdUrlWarnings(clientIdUrl));
 
+	const extensionMetadata = Object.fromEntries(
+		Object.entries(raw).filter(([field]) =>
+			options.extensionFields?.has(field),
+		),
+	);
 	return {
 		valid: true,
 		metadata: {
+			...extensionMetadata,
 			...doc,
 			token_endpoint_auth_method: doc.token_endpoint_auth_method ?? "none",
 		},
