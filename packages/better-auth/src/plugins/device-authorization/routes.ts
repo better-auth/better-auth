@@ -189,7 +189,8 @@ async function recordDeviceCodeDecision(
 		set: { status: decision },
 	});
 	if (!decided) {
-		throw deviceCodeRecord.expiresAt < new Date()
+		// The guard treats a code as expired from `expiresAt` on.
+		throw deviceCodeRecord.expiresAt <= new Date()
 			? expiredUserCode()
 			: deviceCodeAlreadyProcessed();
 	}
