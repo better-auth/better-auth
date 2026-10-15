@@ -9,6 +9,7 @@ export const th: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "สร้างเซสชันไม่สำเร็จ",
 	FAILED_TO_UPDATE_USER: "อัปเดตผู้ใช้ไม่สำเร็จ",
 	FAILED_TO_GET_SESSION: "ดึงเซสชันไม่สำเร็จ",
+	FAILED_TO_DELETE_SESSION: "ลบเซสชันไม่สำเร็จ",
 	INVALID_PASSWORD: "รหัสผ่านไม่ถูกต้อง",
 	INVALID_EMAIL: "อีเมลไม่ถูกต้อง",
 	INVALID_EMAIL_OR_PASSWORD: "อีเมลหรือรหัสผ่านไม่ถูกต้อง",

@@ -9,6 +9,7 @@ export const it: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "Impossibile creare la sessione",
 	FAILED_TO_UPDATE_USER: "Impossibile aggiornare l'utente",
 	FAILED_TO_GET_SESSION: "Impossibile ottenere la sessione",
+	FAILED_TO_DELETE_SESSION: "Impossibile eliminare la sessione",
 	INVALID_PASSWORD: "Password non valida",
 	INVALID_EMAIL: "Indirizzo e-mail non valido",
 	INVALID_EMAIL_OR_PASSWORD: "Indirizzo e-mail o password non validi",

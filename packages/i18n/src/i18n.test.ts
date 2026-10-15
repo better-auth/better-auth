@@ -450,6 +450,7 @@ describe("i18n plugin", async () => {
 				"PASSWORD_TOO_LONG",
 				"USER_ALREADY_EXISTS",
 				"SESSION_EXPIRED",
+				"FAILED_TO_DELETE_SESSION",
 				"ACCOUNT_NOT_FOUND",
 			];
 
