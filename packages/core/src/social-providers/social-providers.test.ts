@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -17,6 +17,8 @@ import { socialProviders } from "./index";
 import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
 import { slack } from "./slack";
+import type { SpotifyProfile } from "./spotify";
+import { spotify } from "./spotify";
 import { tiktok } from "./tiktok";
 import { wechat } from "./wechat";
 import { zoom } from "./zoom";
@@ -453,5 +455,69 @@ describe("cognito provider", () => {
 		const provider = cognito(cognitoConfig);
 		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
+	});
+});
+
+/**
+ * @see https://developer.spotify.com/documentation/web-api/reference/get-current-users-profile
+ */
+describe("spotify profile fields", () => {
+	it.each([
+		{ displayName: null, images: [], name: undefined, image: undefined },
+		{
+			displayName: "Spotify User",
+			images: [{ url: "https://example.com/avatar.png" }],
+			name: "Spotify User",
+			image: "https://example.com/avatar.png",
+		},
+	])(
+		"maps the display name $displayName",
+		async ({ displayName, images, name, image }) => {
+			const profile = {
+				id: "spotify-user",
+				display_name: displayName,
+				email: "user@example.com",
+				images,
+			} satisfies SpotifyProfile;
+			mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
+			const mapProfileToUser = vi.fn((claims: SpotifyProfile) => {
+				expectTypeOf(claims.display_name).toEqualTypeOf<string | null>();
+				expectTypeOf(claims.images).toEqualTypeOf<{ url: string }[]>();
+				return {};
+			});
+			const provider = spotify({ ...credentials, mapProfileToUser });
+			const tokens = { accessToken: "spotify-token" };
+			const result = await provider.getUserInfo(tokens);
+
+			expect(result?.user.name).toBe(name);
+			expect(result?.user.image).toBe(image);
+			expect(result?.user.emailVerified).toBe(false);
+			expect(result?.data).toEqual(profile);
+			expect(mapProfileToUser).toHaveBeenCalledWith(profile);
+			expect(provider.accountSubject({ tokens, profile })).toBe("spotify-user");
+		},
+	);
+
+	it("lets profile mapping supply an email without the email scope", async () => {
+		const profile = {
+			id: "spotify-user",
+			display_name: "Spotify User",
+			images: [],
+		} satisfies SpotifyProfile;
+		mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
+		const provider = spotify({
+			...credentials,
+			disableDefaultScope: true,
+			scope: ["user-read-private"],
+			mapProfileToUser(claims) {
+				expectTypeOf(claims.email).toEqualTypeOf<string | undefined>();
+				return { email: claims.email ?? `${claims.id}@example.com` };
+			},
+		});
+		const result = await provider.getUserInfo({ accessToken: "spotify-token" });
+
+		expect(result?.user.email).toBe("spotify-user@example.com");
+		expect(result?.user.emailVerified).toBe(false);
+		expect(result?.data).toEqual(profile);
 	});
 });
