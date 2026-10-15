@@ -135,6 +135,7 @@ export async function fetchClientMetadataDocument(
 	clientIdUrl: string,
 	cimdOptions: CimdOptions,
 	validators?: { etag?: string; lastModified?: string },
+	extensionFields?: ReadonlySet<string>,
 ): Promise<ClientMetadataDocumentResult> {
 	const urlError = validateClientIdUrl(clientIdUrl);
 	if (urlError) throw invalidClient(urlError);
@@ -242,6 +243,7 @@ export async function fetchClientMetadataDocument(
 		const validation = validateCimdMetadata(clientIdUrl, rawMetadata, {
 			originBoundFields: cimdOptions.originBoundFields,
 			metadataProfile: cimdOptions.metadataProfile,
+			extensionFields,
 		});
 		if (!validation.valid) throw invalidClient(validation.error);
 		for (const warning of validation.warnings ?? []) {
