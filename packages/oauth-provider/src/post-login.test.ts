@@ -159,3 +159,112 @@ describe("post-login organization selection", () => {
 		expect(redirect.searchParams.get(postLoginClearedParam)).toBeNull();
 	});
 });
+
+describe.each([
+	["undefined", undefined],
+	["an empty string", ""],
+])("consent without a reference (%s)", (_, noReference) => {
+	async function createNoReferenceTestInstance() {
+		const instance = await getTestInstance(
+			{
+				baseURL,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						scopes: ["openid", "read", "write"],
+						postLogin: {
+							page: "/select-organization",
+							shouldRedirect: () => false,
+							consentReferenceId: () => noReference,
+						},
+					}),
+				],
+			},
+			{ clientOptions: { plugins: [oauthProviderClient()] } },
+		);
+		const { auth, signInWithTestUser } = instance;
+		const { headers, user } = await signInWithTestUser();
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: { redirect_uris: [redirectURI] },
+		});
+		const { adapter } = await auth.$context;
+		await adapter.create({
+			model: "oauthConsent",
+			data: {
+				clientId: oauthClient.client_id,
+				userId: user.id,
+				referenceId: "org_1",
+				scopes: ["read"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		async function authorize(scope: string) {
+			const query = new URLSearchParams({
+				client_id: oauthClient.client_id,
+				redirect_uri: redirectURI,
+				response_type: "code",
+				scope,
+				state: "no-reference",
+				code_challenge: "a".repeat(43),
+				code_challenge_method: "S256",
+			});
+			const response = await auth.handler(
+				new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, {
+					headers,
+				}),
+			);
+			return new URL(response.headers.get("location") ?? "", baseURL);
+		}
+
+		async function findConsents() {
+			return adapter.findMany<{
+				referenceId?: string | null;
+				scopes: string[];
+			}>({
+				model: "oauthConsent",
+				where: [{ field: "clientId", value: oauthClient.client_id }],
+			});
+		}
+
+		return { ...instance, headers, authorize, findConsents };
+	}
+
+	it("asks for consent instead of reusing another reference's consent", async () => {
+		const { authorize } = await createNoReferenceTestInstance();
+		const redirect = await authorize("read");
+
+		expect(redirect.pathname).toBe("/consent");
+		expect(redirect.searchParams.get("code")).toBeNull();
+	});
+
+	it("stores the approval without changing another reference's consent", async () => {
+		const { client, headers, authorize, findConsents } =
+			await createNoReferenceTestInstance();
+		const consentPage = await authorize("read write");
+		expect(consentPage.pathname).toBe("/consent");
+
+		const result = await client.oauth2.consent({
+			accept: true,
+			oauth_query: consentPage.search.slice(1),
+			fetchOptions: { headers, throw: true },
+		});
+		const callback = new URL(result.url);
+		expect(callback.origin + callback.pathname).toBe(redirectURI);
+		expect(callback.searchParams.get("code")).toBeTruthy();
+
+		const consents = await findConsents();
+		expect(consents).toHaveLength(2);
+		expect(consents.find((c) => c.referenceId === "org_1")?.scopes).toEqual([
+			"read",
+		]);
+		expect(consents.find((c) => !c.referenceId)?.scopes).toEqual([
+			"read",
+			"write",
+		]);
+	});
+});

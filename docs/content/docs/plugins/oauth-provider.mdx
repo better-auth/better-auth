@@ -1252,6 +1252,8 @@ oauthProvider({
 
 The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`.
 
+Consent is stored per reference. An authorization reuses only the consent the user gave for the same `consentReferenceId` value, and returning `undefined` or an empty string uses only the consent given without a reference.
+
 `shouldRedirect` runs again on continuation with `isContinuation: true`. Use this value to check the selected organization without asking multi-organization users to select again. It is not proof of selection: check the current session and organization membership before returning `false`. Each new authorization request starts with `isContinuation: false`.
 
 ```ts title="select-organization.ts"

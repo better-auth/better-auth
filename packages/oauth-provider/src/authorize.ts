@@ -907,11 +907,12 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	const referenceId = await opts.postLogin?.consentReferenceId?.({
-		user: session.user,
-		session: session.session,
-		scopes: requestedScopes,
-	});
+	const referenceId =
+		(await opts.postLogin?.consentReferenceId?.({
+			user: session.user,
+			session: session.session,
+			scopes: requestedScopes,
+		})) || undefined;
 
 	// Can skip consent (unless forced by prompt above)
 	if (client.skipConsent) {
@@ -936,14 +937,11 @@ export async function authorizeEndpoint(
 				field: "userId",
 				value: session.user.id,
 			},
-			...(referenceId
-				? [
-						{
-							field: "referenceId",
-							value: referenceId,
-						},
-					]
-				: []),
+			// No reference matches only the no-reference row, never another reference's consent.
+			{
+				field: "referenceId",
+				value: referenceId ?? null,
+			},
 		],
 	});
 

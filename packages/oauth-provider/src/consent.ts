@@ -104,11 +104,12 @@ export async function consentEndpoint<Result>(
 		return await authorize(ctx);
 	}
 
-	const referenceId = await opts.postLogin?.consentReferenceId?.({
-		user: session?.user!,
-		session: session?.session!,
-		scopes: requestedScopes ?? originalRequestedScopes,
-	});
+	const referenceId =
+		(await opts.postLogin?.consentReferenceId?.({
+			user: session?.user!,
+			session: session?.session!,
+			scopes: requestedScopes ?? originalRequestedScopes,
+		})) || undefined;
 	const foundConsent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>(
 		{
 			model: "oauthConsent",
@@ -121,14 +122,11 @@ export async function consentEndpoint<Result>(
 					field: "userId",
 					value: session?.user.id!,
 				},
-				...(referenceId
-					? [
-							{
-								field: "referenceId",
-								value: referenceId,
-							},
-						]
-					: []),
+				// No reference matches only the no-reference row, never another reference's consent.
+				{
+					field: "referenceId",
+					value: referenceId ?? null,
+				},
 			],
 		},
 	);
