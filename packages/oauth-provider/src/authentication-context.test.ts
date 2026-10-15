@@ -6,15 +6,21 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { resolveAuthenticationContext } from "./authentication-context";
 import {
 	DEVICE_CODE_GRANT_TYPE,
 	oauthDeviceAuthorization,
 } from "./device-code";
 import { oauthProvider } from "./oauth";
-import type { OAuthAuthenticationContextOptions, Scope } from "./types";
+import type {
+	OAuthAuthenticationContextOptions,
+	SchemaClient,
+	Scope,
+} from "./types";
 import type { OAuthClient } from "./types/oauth";
 
 type Resolve = NonNullable<
@@ -252,6 +258,31 @@ describe("oauth-provider authenticationContext", async () => {
 		expect(callback.searchParams.get("error_description")).toBe(
 			"account locked",
 		);
+	});
+});
+
+describe("resolveAuthenticationContext", () => {
+	it("rejects the default acr when acrValuesSupported omits it", async () => {
+		await expect(
+			resolveAuthenticationContext(
+				{
+					loginPage: "/login",
+					consentPage: "/consent",
+					authenticationContext: {
+						acrValuesSupported: [MFA_ACR],
+						resolve: () => undefined,
+					},
+				},
+				{
+					user: {} as User,
+					session: {} as Session,
+					client: {} as SchemaClient<Scope[]>,
+					scopes: ["openid"],
+					headers: new Headers(),
+					query: {},
+				},
+			),
+		).rejects.toMatchObject({ body: { error: "server_error" } });
 	});
 });
 

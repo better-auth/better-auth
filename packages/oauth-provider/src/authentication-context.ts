@@ -58,11 +58,17 @@ export async function resolveAuthenticationContext(
 		...resolveInfo,
 		requestedAcrValues: getRequestedAcrValues(query.claims, query.acr_values),
 	});
-	if (resolved === undefined) return { acr: LEVEL_0_ACR };
-	if (typeof resolved !== "object" || resolved === null) {
+	if (
+		resolved !== undefined &&
+		(typeof resolved !== "object" || resolved === null)
+	) {
 		invalidAuthenticationContext("returned a value that is not an object");
 	}
-	const { acr = LEVEL_0_ACR, amr } = resolved as Record<string, unknown>;
+	// The "0" default must also be in acrValuesSupported.
+	const { acr = LEVEL_0_ACR, amr } = (resolved ?? {}) as Record<
+		string,
+		unknown
+	>;
 	if (typeof acr !== "string") {
 		invalidAuthenticationContext("returned a non-string acr");
 	}
