@@ -18,11 +18,11 @@ export interface TwitchProfile {
 	/**
 	 * The preferred username of the user
 	 */
-	preferred_username: string;
+	preferred_username?: string;
 	/**
 	 * The email of the user
 	 */
-	email: string;
+	email: string | null;
 	/**
 	 * Indicate if this user has a verified email.
 	 */
@@ -30,7 +30,7 @@ export interface TwitchProfile {
 	/**
 	 * The picture of the user
 	 */
-	picture: string;
+	picture?: string;
 }
 
 export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
