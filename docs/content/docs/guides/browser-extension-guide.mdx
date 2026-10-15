@@ -259,13 +259,16 @@ This pattern requires a provider that can return an OIDC `id_token` in the URL f
     async function signInWithGoogle() {
         const { idToken, nonce } = await getGoogleIdToken()
 
-        const { data } = await authClient.signIn.social({
+        const { data, error } = await authClient.signIn.social({
             provider: "google",
             idToken: {
                 token: idToken,
                 nonce,
             },
         })
+
+        if (error) throw new Error(error.message)
+        if (!data?.token) throw new Error("No session token returned")
 
         // data: { token: string, user: { id, email, name, ... }, redirect: false }
         return data
@@ -290,7 +293,7 @@ This pattern requires a provider that can return an OIDC `id_token` in the URL f
     async function signInWithGoogle() {
         const { idToken, nonce } = await getGoogleIdToken()
 
-        const { data } = await authClient.signIn.social({
+        const { data, error } = await authClient.signIn.social({
             provider: "google",
             idToken: {
                 token: idToken,
@@ -298,19 +301,20 @@ This pattern requires a provider that can return an OIDC `id_token` in the URL f
             },
         })
 
-        if (data?.token) {
-            // Prevent content scripts from reading the session token.
-            await chrome.storage.local.setAccessLevel({
-                accessLevel: "TRUSTED_CONTEXTS",
-            })
+        if (error) throw new Error(error.message)
+        if (!data?.token) throw new Error("No session token returned")
 
-            await chrome.storage.local.set({
-                session: {
-                    token: data.token,
-                    user: data.user,
-                },
-            })
-        }
+        // Prevent content scripts from reading the session token.
+        await chrome.storage.local.setAccessLevel({
+            accessLevel: "TRUSTED_CONTEXTS",
+        })
+
+        await chrome.storage.local.set({
+            session: {
+                token: data.token,
+                user: data.user,
+            },
+        })
     }
     ```
 
