@@ -360,3 +360,52 @@ describe("oauth-provider - JWKS failures during access token verification", asyn
 		expect((await revoke(server, token)).error?.status).toBe(500);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11611
+ */
+describe("oauth-provider - unreachable remote JWKS", async () => {
+	const jwksUrl = "https://jwks-down.example.com/jwks";
+	const server = await setup(
+		jwt({
+			jwt: { issuer: authServerBaseUrl },
+			jwks: { remoteUrl: jwksUrl, keyPairConfig: { alg: "EdDSA" } },
+		}),
+	);
+
+	beforeEach(() => {
+		// A refused connection: `fetch` rejects with a TypeError.
+		const networkFetch = globalThis.fetch.bind(globalThis);
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+			const requestedUrl =
+				typeof input === "string"
+					? input
+					: input instanceof URL
+						? input.href
+						: input.url;
+			if (requestedUrl === jwksUrl) {
+				return Promise.reject(new TypeError("fetch failed"));
+			}
+			return networkFetch(input, init);
+		});
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("surfaces the outage at introspection", async () => {
+		const token = await signWithUnknownKey("remote-kid");
+		expect((await introspect(server, token)).error?.status).toBe(500);
+	});
+
+	it("surfaces the outage at userinfo", async () => {
+		const token = await signWithUnknownKey("remote-kid");
+		expect((await userinfo(server, token)).error?.status).toBe(500);
+	});
+
+	it("surfaces the outage at revocation", async () => {
+		const token = await signWithUnknownKey("remote-kid");
+		expect((await revoke(server, token)).error?.status).toBe(500);
+	});
+});
