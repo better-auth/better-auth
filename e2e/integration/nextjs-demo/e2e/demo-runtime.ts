@@ -149,13 +149,26 @@ export async function startNextDevServer(
 	port: number,
 	environment: NodeJS.ProcessEnv,
 ): Promise<DemoProcess> {
-	return await startDemoProcess({
-		command: "pnpm",
-		args: ["dev", "--hostname", "127.0.0.1", "--port", String(port)],
-		environment,
-		readyURL: `http://127.0.0.1:${port}/sign-in`,
-		label: "Next.js demo",
-	});
+	// `next dev` allows one server per project directory. When another demo spec
+	// holds it (parallel local workers), wait for that spec to stop its server.
+	const deadline = Date.now() + 180_000;
+	for (;;) {
+		try {
+			return await startDemoProcess({
+				command: "pnpm",
+				args: ["dev", "--hostname", "127.0.0.1", "--port", String(port)],
+				environment,
+				readyURL: `http://127.0.0.1:${port}/sign-in`,
+				label: "Next.js demo",
+			});
+		} catch (error) {
+			const busy =
+				error instanceof Error &&
+				error.message.includes("Another next dev server is already running");
+			if (!busy || Date.now() > deadline) throw error;
+			await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
+		}
+	}
 }
 
 /** Creates an organization as the signed-in user and returns its ID. */
