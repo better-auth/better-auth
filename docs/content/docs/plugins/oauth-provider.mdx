@@ -1812,7 +1812,12 @@ Return the organization from [`postLogin.consentReferenceId`](#post-login-screen
 oauthProvider({
   postLogin: {
     page: "/select-organization",
-    shouldRedirect: async ({ session }) => !session.activeOrganizationId,
+    // The selection outlives membership, so check the user still belongs.
+    shouldRedirect: async ({ session, headers }) => {
+      if (!session.activeOrganizationId) return true
+      const organizations = await auth.api.listOrganizations({ headers })
+      return !organizations.some((org) => org.id === session.activeOrganizationId)
+    },
     consentReferenceId: ({ session }) =>
       (session?.activeOrganizationId as string | undefined) ?? undefined,
   },
