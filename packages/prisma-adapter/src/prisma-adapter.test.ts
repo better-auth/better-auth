@@ -556,56 +556,59 @@ describe("prisma-adapter", () => {
 		expect(txClient.verification.update).toHaveBeenCalledTimes(1);
 	});
 
-	it("incrementOne keeps an insensitive guard case-insensitive on the keyed update", async () => {
-		const target = { id: "row-1", identifier: "Mixed@Example.com" };
-		const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
-		const txClient = {
-			verification: {
-				findFirst: vi.fn().mockResolvedValue(target),
-				update,
-			},
-		};
-		const adapter = prismaAdapter(
-			{
-				$transaction: vi.fn(async (cb) => cb(txClient)),
-				verification: {},
-			} as never,
-			{ provider: "postgresql" },
-		)({
-			verification: {
-				additionalFields: { remaining: { type: "number" } },
-			},
-		} as BetterAuthOptions);
-
-		await adapter.incrementOne({
-			model: "verification",
-			where: [
-				{
-					field: "identifier",
-					value: "mixed@example.com",
-					mode: "insensitive",
+	it.each(["postgresql", "mongodb"] as const)(
+		"incrementOne keeps an insensitive guard case-insensitive on the keyed update (%s)",
+		async (provider) => {
+			const target = { id: "row-1", identifier: "Mixed@Example.com" };
+			const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
+			const txClient = {
+				verification: {
+					findFirst: vi.fn().mockResolvedValue(target),
+					update,
 				},
-			],
-			increment: { remaining: -1 },
-		});
+			};
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(async (cb) => cb(txClient)),
+					verification: {},
+				} as never,
+				{ provider },
+			)({
+				verification: {
+					additionalFields: { remaining: { type: "number" } },
+				},
+			} as BetterAuthOptions);
 
-		expect(txClient.verification.findFirst).toHaveBeenCalledWith({
-			where: {
-				identifier: { equals: "mixed@example.com", mode: "insensitive" },
-			},
-		});
-		expect(update).toHaveBeenCalledWith({
-			where: {
-				id: "row-1",
-				AND: [
+			await adapter.incrementOne({
+				model: "verification",
+				where: [
 					{
-						identifier: { equals: "mixed@example.com", mode: "insensitive" },
+						field: "identifier",
+						value: "mixed@example.com",
+						mode: "insensitive",
 					},
 				],
-			},
-			data: { remaining: { increment: -1 } },
-		});
-	});
+				increment: { remaining: -1 },
+			});
+
+			expect(txClient.verification.findFirst).toHaveBeenCalledWith({
+				where: {
+					identifier: { equals: "mixed@example.com", mode: "insensitive" },
+				},
+			});
+			expect(update).toHaveBeenCalledWith({
+				where: {
+					id: "row-1",
+					AND: [
+						{
+							identifier: { equals: "mixed@example.com", mode: "insensitive" },
+						},
+					],
+				},
+				data: { remaining: { increment: -1 } },
+			});
+		},
+	);
 
 	it("incrementOne resolves an insensitive id before the keyed update", async () => {
 		const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
