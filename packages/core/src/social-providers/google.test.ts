@@ -1,5 +1,5 @@
 import { exportJWK, generateKeyPair, generateSecret, SignJWT } from "jose";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -7,6 +7,7 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import type { GoogleProfile } from "./google";
 import { google, verifyGoogleIdToken } from "./google";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -276,4 +277,74 @@ describe("verifyGoogleIdToken", () => {
 		expect(payload).toBeNull();
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
 	});
+});
+
+/**
+ * @see https://developers.google.com/identity/openid-connect/openid-connect#an-id-tokens-payload
+ * @see https://github.com/googleapis/google-auth-library-nodejs/blob/main/src/auth/loginticket.ts
+ */
+describe("Google optional profile claims", () => {
+	it("defaults missing verification to false and preserves raw claims", async () => {
+		const profile = {
+			aud: CLIENT_ID,
+			iss: "https://accounts.google.com",
+			sub: "google-user-123",
+			iat: 1700000000,
+			exp: 1700003600,
+		} satisfies GoogleProfile;
+		const idToken = await encodeGoogleToken({
+			...profile,
+			email: undefined,
+			email_verified: undefined,
+			name: undefined,
+			picture: undefined,
+		});
+		const provider = google({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+			disableDefaultScope: true,
+			scope: ["openid"],
+			mapProfileToUser(claims) {
+				expectTypeOf(claims.email_verified).toEqualTypeOf<
+					boolean | undefined
+				>();
+				expect(claims).not.toHaveProperty("email_verified");
+				return {
+					name: claims.name ?? "Mapped User",
+					email: claims.email ?? `${claims.sub}@example.com`,
+				};
+			},
+		});
+		const result = await provider.getUserInfo({ idToken });
+
+		expect(result?.user).toMatchObject({
+			name: "Mapped User",
+			email: "google-user-123@example.com",
+			emailVerified: false,
+		});
+		expect(result?.data).not.toHaveProperty("email_verified");
+		expect(provider.accountSubject({ tokens: { idToken }, profile })).toBe(
+			"google-user-123",
+		);
+	});
+
+	it.each([true, false])(
+		"keeps verification %s when name and picture are absent",
+		async (verified) => {
+			const idToken = await encodeGoogleToken({
+				email_verified: verified,
+				name: undefined,
+				picture: undefined,
+			});
+			const result = await google({
+				clientId: CLIENT_ID,
+				clientSecret: CLIENT_SECRET,
+			}).getUserInfo({ idToken });
+
+			expect(result?.user.emailVerified).toBe(verified);
+			expect(result?.user.name).toBeUndefined();
+			expect(result?.user.image).toBeUndefined();
+			expect(result?.data.email_verified).toBe(verified);
+		},
+	);
 });
