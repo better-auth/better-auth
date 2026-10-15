@@ -1,6 +1,12 @@
 import { DatabaseSync } from "node:sqlite";
+import { kyselyAdapter } from "@better-auth/kysely-adapter";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
-import type { Account, DBTransactionAdapter, User } from "better-auth";
+import type {
+	Account,
+	BetterAuthOptions,
+	DBTransactionAdapter,
+	User,
+} from "better-auth";
 import { getHttpTestInstance } from "better-auth/test";
 import { Kysely } from "kysely";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -18,6 +24,31 @@ import { sso } from ".";
 import type { SSOOptions, SSOUserResolutionInput } from "./types";
 
 type CookieJar = Map<string, string>;
+
+type SQLiteAdapter = ReturnType<typeof kyselyAdapter>;
+
+/** An in-memory `secondaryStorage` backed by `store`. */
+function mapSecondaryStorage(store: Map<string, string>) {
+	return {
+		get: async (key: string) => store.get(key) ?? null,
+		getAndDelete: async (key: string) => {
+			const value = store.get(key) ?? null;
+			store.delete(key);
+			return value;
+		},
+		set: async (key: string, value: string) => {
+			store.set(key, value);
+		},
+		increment: async (key: string) => {
+			const value = Number(store.get(key) ?? 0) + 1;
+			store.set(key, String(value));
+			return value;
+		},
+		delete: async (key: string) => {
+			store.delete(key);
+		},
+	};
+}
 
 function storeResponseCookies(response: Response, cookies: CookieJar): void {
 	for (const setCookie of response.headers.getSetCookie()) {
@@ -116,6 +147,7 @@ describe("SSO OIDC user resolution HTTP", () => {
 		registerCleanup: (cleanup: () => Promise<void>) => void,
 		authOptions: Record<string, unknown> = {},
 		providers = [provider()],
+		wrapAdapter?: (adapter: SQLiteAdapter) => SQLiteAdapter,
 	) {
 		const sqlite = new DatabaseSync(":memory:");
 		const db = new Kysely({
@@ -124,17 +156,22 @@ describe("SSO OIDC user resolution HTTP", () => {
 		const instance = await getHttpTestInstance(
 			{
 				...authOptions,
-				database: {
-					db,
-					type: "sqlite",
-					transaction: true,
-				},
+				database: wrapAdapter
+					? wrapAdapter(
+							kyselyAdapter(db, { type: "sqlite", transaction: true }),
+						)
+					: { db, type: "sqlite", transaction: true },
 				plugins: [sso({ ...options, defaultSSO: providers })],
 				trustedOrigins: [identityProvider.issuer.url!],
 			},
 			{ disableTestUser: true, testWith: "sqlite" },
 		);
-		const migrations = await getMigrations(instance.auth.options);
+		// A wrapped adapter hides the Kysely instance the migrations need.
+		const migrations = await getMigrations(
+			wrapAdapter
+				? { ...instance.auth.options, database: { db, type: "sqlite" } }
+				: instance.auth.options,
+		);
 		await migrations.runMigrations();
 		registerCleanup(async () => {
 			await db.destroy();
@@ -537,6 +574,100 @@ describe("SSO OIDC user resolution HTTP", () => {
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 
+	/**
+	 * Signs in through an adapter that aborts the first transaction attempt
+	 * after its callback and runs it again, the way the MongoDB driver retries a
+	 * transaction aborted with a transient error.
+	 */
+	async function signInWithRetriedTransaction(
+		authOptions: Partial<BetterAuthOptions>,
+		registerCleanup: (cleanup: () => Promise<void>) => void,
+	) {
+		const transientAbort = new Error("transient abort");
+		let aborted = false;
+		const instance = await createInstance(
+			{},
+			registerCleanup,
+			authOptions,
+			[provider()],
+			(createAdapter) => (adapterOptions) => {
+				const adapter = createAdapter(adapterOptions);
+				return {
+					...adapter,
+					transaction: async <R>(
+						callback: (trx: DBTransactionAdapter) => Promise<R>,
+					): Promise<R> => {
+						try {
+							return await adapter.transaction(async (trx) => {
+								const result = await callback(trx);
+								if (!aborted) {
+									aborted = true;
+									throw transientAbort;
+								}
+								return result;
+							});
+						} catch (error) {
+							if (error !== transientAbort) throw error;
+							return adapter.transaction(callback);
+						}
+					},
+				};
+			},
+		);
+
+		const signIn = await completeSignIn(instance.baseURL);
+		expect(signIn.callback.headers.get("location")).toBe(
+			`${instance.baseURL}/employee`,
+		);
+		expect(aborted).toBe(true);
+		return instance;
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 */
+	it("sends one verification email when the adapter runs the sign-in transaction again", async ({
+		onTestFinished,
+	}) => {
+		subject = "retried-sign-in";
+		email = "retried-sign-in@example.com";
+		emailVerified = false;
+		const sendVerificationEmail = vi.fn();
+		await signInWithRetriedTransaction(
+			{ emailVerification: { sendOnSignUp: true, sendVerificationEmail } },
+			onTestFinished,
+		);
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 */
+	it("caches one session when the adapter runs the sign-in transaction again", async ({
+		onTestFinished,
+	}) => {
+		subject = "retried-cached-sign-in";
+		email = "retried-cached-sign-in@example.com";
+		const store = new Map<string, string>();
+		const instance = await signInWithRetriedTransaction(
+			{
+				secondaryStorage: mapSecondaryStorage(store),
+				session: { storeSessionInDatabase: true },
+			},
+			onTestFinished,
+		);
+
+		const sessions = await instance.db.findMany<{ token: string }>({
+			model: "session",
+		});
+		expect(sessions).toHaveLength(1);
+		const cachedTokens = [...store.keys()].filter(
+			(key) => !key.startsWith("active-sessions-"),
+		);
+		expect(cachedTokens).toEqual([sessions[0]!.token]);
+	});
+
 	it("keeps case-distinct OIDC subjects as different account keys", async ({
 		onTestFinished,
 	}) => {
@@ -643,21 +774,8 @@ describe("SSO OIDC user resolution HTTP", () => {
 			onTestFinished,
 			{
 				secondaryStorage: {
-					get: async (key: string) => secondaryValues.get(key) ?? null,
-					getAndDelete: async (key: string) => {
-						const value = secondaryValues.get(key) ?? null;
-						secondaryValues.delete(key);
-						return value;
-					},
+					...mapSecondaryStorage(secondaryValues),
 					set: mirrorSet,
-					increment: async (key: string) => {
-						const value = Number(secondaryValues.get(key) ?? 0) + 1;
-						secondaryValues.set(key, String(value));
-						return value;
-					},
-					delete: async (key: string) => {
-						secondaryValues.delete(key);
-					},
 				},
 				session: { storeSessionInDatabase: true },
 			},
