@@ -8,7 +8,7 @@ import { getTestInstance } from "better-auth/test";
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair } from "jose";
 import { describe, expect, it, vi } from "vitest";
-import { oauthProvider } from "./oauth";
+import { oauthProvider } from "../oauth";
 
 const baseURL = "http://localhost:3000";
 const apiURL = `${baseURL}/api/auth`;
@@ -80,7 +80,9 @@ async function setup(testWith: "sqlite" | "postgres" = "sqlite") {
 	async function rotate(input: {
 		clientId: string;
 		signer: TestKey;
-		next: TestKey[] | unknown;
+		next: TestKey[];
+		/** Sent instead of `next`, to exercise malformed key sets. */
+		jwks?: unknown;
 		audience?: string;
 		assertion?: string;
 	}) {
@@ -92,9 +94,7 @@ async function setup(testWith: "sqlite" | "postgres" = "sqlite") {
 				client_assertion:
 					input.assertion ??
 					(await sign(input.clientId, input.signer, input.audience)),
-				jwks: Array.isArray(input.next)
-					? { keys: input.next.map((key: TestKey) => key.publicJwk) }
-					: input.next,
+				jwks: input.jwks ?? { keys: input.next.map((key) => key.publicJwk) },
 			}),
 		});
 		return {
@@ -129,8 +129,11 @@ async function setup(testWith: "sqlite" | "postgres" = "sqlite") {
 }
 
 describe("client key rotation", async () => {
+	const env = await setup();
 	const { auth, headers, trustedClients, createClient, rotate, authenticate } =
-		await setup();
+		env;
+
+	storageCases(env);
 
 	it("is off unless the provider opts in", async () => {
 		const closed = await getTestInstance({
@@ -168,23 +171,6 @@ describe("client key rotation", async () => {
 		expect(await authenticate(clientId, oldKey)).toBe(401);
 	});
 
-	it("is callable in process through auth.api with typed input and output", async () => {
-		const oldKey = await createKey("old");
-		const newKey = await createKey("new");
-		const clientId = await createClient([oldKey]);
-
-		const rotated = await auth.api.rotateClientKeys({
-			body: {
-				client_assertion_type: CLIENT_ASSERTION_TYPE,
-				client_assertion: await sign(clientId, oldKey),
-				jwks: { keys: [newKey.publicJwk] },
-			},
-		});
-
-		expect(rotated.client_id).toBe(clientId);
-		expect(rotated.jwks.keys).toHaveLength(1);
-	});
-
 	it("rolls a key in two steps without breaking the old key in between", async () => {
 		const oldKey = await createKey("old");
 		const newKey = await createKey("new");
@@ -199,28 +185,27 @@ describe("client key rotation", async () => {
 		expect(await authenticate(clientId, oldKey)).toBe(200);
 		expect(await authenticate(clientId, newKey)).toBe(200);
 
-		const dropped = await rotate({ clientId, signer: newKey, next: [newKey] });
-		expect(dropped.status).toBe(200);
+		// In process through auth.api, with typed input and output.
+		const dropped = await auth.api.rotateClientKeys({
+			body: {
+				client_assertion_type: CLIENT_ASSERTION_TYPE,
+				client_assertion: await sign(clientId, newKey),
+				jwks: { keys: [newKey.publicJwk] },
+			},
+		});
+		expect(dropped.jwks.keys).toHaveLength(1);
 		expect(await authenticate(clientId, oldKey)).toBe(401);
 		expect(await authenticate(clientId, newKey)).toBe(200);
-	});
 
-	it("does not let a removed key rotate the client again", async () => {
-		const removedKey = await createKey("removed");
-		const currentKey = await createKey("current");
+		// The removed key can no longer rotate the client to someone else's key.
 		const attackerKey = await createKey("attacker");
-		const clientId = await createClient([removedKey]);
-		await rotate({ clientId, signer: removedKey, next: [currentKey] });
-
 		const takeover = await rotate({
 			clientId,
-			signer: removedKey,
+			signer: oldKey,
 			next: [attackerKey],
 		});
-
 		expect(takeover.status).toBe(401);
 		expect(takeover.body.error).toBe("invalid_client");
-		expect(await authenticate(clientId, currentKey)).toBe(200);
 		expect(await authenticate(clientId, attackerKey)).toBe(401);
 	});
 
@@ -259,7 +244,12 @@ describe("client key rotation", async () => {
 			{ keys: [{ kty: "oct", k: "c2VjcmV0" }] },
 			{ keys: [{ ...oldKey.privateJwk, kid: "leaky", alg: "ES256" }] },
 		]) {
-			const response = await rotate({ clientId, signer: oldKey, next: jwks });
+			const response = await rotate({
+				clientId,
+				signer: oldKey,
+				next: [],
+				jwks,
+			});
 			expect(response.status).toBe(400);
 			expect(response.body.error).toBe("invalid_client_metadata");
 		}
@@ -368,12 +358,9 @@ describe("client key rotation without single-use assertions", () => {
 	});
 });
 
-describe.each([
-	{ name: "sqlite", testWith: "sqlite" as const },
-	{ name: "postgres", testWith: "postgres" as const },
-])("client key rotation storage ($name)", async ({ testWith }) => {
-	const { auth, createClient, rotate, authenticate } = await setup(testWith);
-	const context = await auth.$context;
+/** Cases that depend on how the database enforces keys and guarded writes. */
+function storageCases(env: Awaited<ReturnType<typeof setup>>) {
+	const { auth, createClient, rotate, authenticate } = env;
 
 	it("accepts each assertion once", async () => {
 		const signer = await createKey("signer");
@@ -406,6 +393,7 @@ describe.each([
 		const newKey = await createKey("new");
 		const ownerKey = await createKey("owner");
 		const clientId = await createClient([oldKey]);
+		const context = await auth.$context;
 		const incrementOne = context.adapter.incrementOne;
 		vi.spyOn(context.adapter, "incrementOne").mockImplementationOnce(
 			async (input) => {
@@ -432,4 +420,8 @@ describe.each([
 		expect(await authenticate(clientId, newKey)).toBe(401);
 		expect(await authenticate(clientId, oldKey)).toBe(401);
 	});
+}
+
+describe("client key rotation storage (postgres)", async () => {
+	storageCases(await setup("postgres"));
 });

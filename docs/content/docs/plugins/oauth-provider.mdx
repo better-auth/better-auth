@@ -656,7 +656,7 @@ Content-Type: application/json
 }
 ```
 
-The assertion follows the claims in the table above, with one difference: `aud` must include the URL of the rotation endpoint. The token endpoint and the issuer do not count as audiences here, so an assertion minted only for them cannot be redirected to take over a client's keys. The assertion is also single-use.
+The assertion follows the claims in the table above, with one difference: `aud` must include the URL of the rotation endpoint. The token endpoint and the issuer do not count as audiences here, so an assertion minted only for them cannot be redirected to take over a client's keys.
 
 `jwks` is the client's complete new key set. A key left out of it stops verifying at once, so leaving out a leaked key retires it with that request. The response returns `client_id` and the stored `jwks`.
 

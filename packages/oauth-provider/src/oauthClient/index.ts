@@ -1,6 +1,5 @@
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
-import { rotateClientKeysEndpoint } from "../client-key-rotation";
 import { publicSessionMiddleware } from "../middleware";
 import { createOAuthEndpoint } from "../oauth-endpoint";
 import { createOAuthClientEndpoint } from "../register";
@@ -15,6 +14,7 @@ import {
 	getClientEndpoint,
 	getClientPublicEndpoint,
 	getClientsEndpoint,
+	rotateClientKeysEndpoint,
 	rotateClientSecretEndpoint,
 	updateClientEndpoint,
 } from "./endpoints";
@@ -634,7 +634,7 @@ export const rotateClientKeys = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return ctx.json(await rotateClientKeysEndpoint(ctx, opts));
+			return rotateClientKeysEndpoint(ctx, opts);
 		},
 	);
 
