@@ -834,7 +834,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "string",
 														format: "uri-reference",
 														description:
-															"The URI to redirect to, either with an authorization code or an error. May be absolute or a server-relative page path.",
+															"The absolute or relative URI to redirect to next.",
 													},
 												},
 												required: ["redirect", "url"],
@@ -892,7 +892,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "string",
 														format: "uri-reference",
 														description:
-															"The URI to redirect to, either with an authorization code or an error. May be absolute or a server-relative page path.",
+															"The absolute or relative URI to redirect to next.",
 													},
 												},
 												required: ["redirect", "url"],
