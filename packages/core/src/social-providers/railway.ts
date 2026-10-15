@@ -14,11 +14,11 @@ export interface RailwayProfile {
 	/** The user's unique ID (OAuth `sub` claim). */
 	sub: string;
 	/** The user's email address. */
-	email: string;
+	email?: string;
 	/** The user's display name. */
-	name: string;
+	name?: string;
 	/** URL of the user's profile picture. */
-	picture: string;
+	picture?: string;
 }
 
 export interface RailwayOptions extends ProviderOptions<RailwayProfile> {
