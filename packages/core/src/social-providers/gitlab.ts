@@ -16,9 +16,9 @@ export interface GitlabProfile extends Record<string, any> {
 	web_url: string;
 	created_at: string;
 	bio: string;
-	location?: string | undefined;
-	public_email: string;
-	skype: string;
+	location?: string | null | undefined;
+	public_email: string | null;
+	skype?: string;
 	linkedin: string;
 	twitter: string;
 	website_url: string;
@@ -26,17 +26,17 @@ export interface GitlabProfile extends Record<string, any> {
 	job_title: string;
 	pronouns: string;
 	bot: boolean;
-	work_information?: string | undefined;
-	followers: number;
-	following: number;
-	local_time: string;
-	last_sign_in_at: string;
-	confirmed_at: string;
-	theme_id: number;
-	last_activity_on: string;
+	work_information?: string | null | undefined;
+	followers?: number;
+	following?: number;
+	local_time: string | null;
+	last_sign_in_at: string | null;
+	confirmed_at: string | null;
+	theme_id: number | null;
+	last_activity_on: string | null;
 	color_scheme_id: number;
 	projects_limit: number;
-	current_sign_in_at: string;
+	current_sign_in_at: string | null;
 	identities: Array<{
 		provider: string;
 		extern_uid: string;
@@ -47,8 +47,8 @@ export interface GitlabProfile extends Record<string, any> {
 	external: boolean;
 	private_profile: boolean;
 	commit_email: string;
-	shared_runners_minutes_limit: number;
-	extra_shared_runners_minutes_limit: number;
+	shared_runners_minutes_limit?: number | null;
+	extra_shared_runners_minutes_limit?: number | null;
 	email_verified?: boolean | undefined;
 }
 
