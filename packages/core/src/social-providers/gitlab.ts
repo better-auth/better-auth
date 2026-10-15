@@ -12,7 +12,7 @@ export interface GitlabProfile extends Record<string, any> {
 	email: string;
 	name: string;
 	state: string;
-	avatar_url: string;
+	avatar_url: string | null;
 	web_url: string;
 	created_at: string;
 	bio: string;
@@ -24,7 +24,7 @@ export interface GitlabProfile extends Record<string, any> {
 	website_url: string;
 	organization: string;
 	job_title: string;
-	pronouns: string;
+	pronouns: string | null;
 	bot: boolean;
 	work_information?: string | null | undefined;
 	followers?: number;
@@ -145,7 +145,7 @@ export const gitlab = (options: GitlabOptions) => {
 				user: {
 					name: profile.name ?? profile.username ?? "",
 					email: profile.email,
-					image: profile.avatar_url,
+					image: profile.avatar_url ?? undefined,
 					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
