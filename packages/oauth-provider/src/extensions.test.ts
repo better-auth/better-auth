@@ -1325,7 +1325,11 @@ describe("oauth-provider client metadata extensions", async () => {
 							fields: ["example_mode"],
 							validate: ({ client, metadata }) => {
 								// Extension fields must reach validators only through `metadata`.
-								if ("metadata" in client || "example_mode" in client) {
+								if (
+									"metadata" in client ||
+									"example_mode" in client ||
+									"admin_note" in client
+								) {
 									throw new Error("extension fields leaked into client");
 								}
 								if (
@@ -1392,6 +1396,24 @@ describe("oauth-provider client metadata extensions", async () => {
 				},
 			}),
 		).rejects.toMatchObject(invalid);
+	});
+
+	it("keeps undeclared stored metadata off the client on admin update", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				metadata: { example_mode: "ok", admin_note: "kept" },
+			},
+		});
+		const updated = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: client.client_id,
+				update: { client_name: "Renamed" },
+			},
+		});
+		expect(updated.client_name).toBe("Renamed");
 	});
 
 	it("clears stored metadata when an admin update replaces it with an empty object", async () => {

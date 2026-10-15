@@ -14,6 +14,7 @@ import {
 	getExtensionClientMetadataFields,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
+	hasExtensionClientMetadata,
 	isExtensionTokenEndpointAuthMethod,
 	validateExtensionClientMetadata,
 } from "./extensions";
@@ -446,6 +447,11 @@ export async function checkOAuthClient(
 	settings?: {
 		registrationSource?: "dynamic" | "managed" | "clientMetadataDocument";
 		ctx?: GenericEndpointContext;
+		/**
+		 * Skip extension validators because the caller runs them on the
+		 * metadata it saves, as a metadata document refresh does.
+		 */
+		skipExtensionValidation?: boolean;
 	},
 ) {
 	const isClientMetadataDocument =
@@ -798,11 +804,13 @@ export async function checkOAuthClient(
 		}
 	}
 
-	await validateExtensionClientMetadata(
-		opts,
-		clientWithDefaults,
-		client.metadata,
-	);
+	if (!settings?.skipExtensionValidation) {
+		await validateExtensionClientMetadata(
+			opts,
+			clientWithDefaults,
+			client.metadata,
+		);
+	}
 }
 
 interface CreateOAuthClientRegistrationBaseInput {
@@ -931,6 +939,10 @@ async function persistOAuthClientRegistration(
 	await checkOAuthClient(body, opts, {
 		registrationSource: input.registrationSource,
 		ctx,
+		// A refresh validates the merge with the current row before saving.
+		skipExtensionValidation:
+			input.registrationSource === "clientMetadataDocument" &&
+			Boolean(input.existingClient),
 	});
 
 	// Generate clientId and clientSecret based on its type
@@ -1037,12 +1049,13 @@ async function persistOAuthClientRegistration(
 			let storedClient: SchemaClient<Scope[]>;
 			let created = false;
 			if (existingClient) {
-				// Merge against the row as it is now rather than as read before the
-				// document fetch, so admin changes made meanwhile are kept. Without
-				// declared fields, a refresh leaves metadata alone.
-				const extensionFields = getExtensionClientMetadataFields(opts);
+				// Merge with the row as it is now, inside the transaction, rather
+				// than as read before the document fetch, so admin changes made
+				// meanwhile are kept, and validate the result before saving it.
+				// Without extensions, a refresh leaves metadata alone.
 				let metadata: string | null | undefined;
-				if (extensionFields.size > 0) {
+				if (hasExtensionClientMetadata(opts)) {
+					const extensionFields = getExtensionClientMetadataFields(opts);
 					const currentClient = await adapter.findOne<SchemaClient<Scope[]>>({
 						model: clientModel,
 						where: [{ field: "clientId", value: clientId }],
@@ -1054,13 +1067,13 @@ async function persistOAuthClientRegistration(
 							body.metadata,
 						),
 					);
-					// Validation ran against the client read before the fetch; the
-					// merge may include newer admin keys, so validate what is saved.
 					await validateExtensionClientMetadata(opts, body, merged);
-					metadata =
-						merged && Object.keys(merged).length > 0
-							? JSON.stringify(merged)
-							: null;
+					if (extensionFields.size > 0) {
+						metadata =
+							merged && Object.keys(merged).length > 0
+								? JSON.stringify(merged)
+								: null;
+					}
 				}
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
@@ -1290,11 +1303,9 @@ export async function registerClientMetadataDocument(
 		existingClient,
 		metadata: {
 			...input.metadata,
-			metadata: mergeDocumentExtensionMetadata(
-				getExtensionClientMetadataFields(opts),
-				existingClient?.metadata,
-				pickExtensionClientMetadata(input.metadata, opts),
-			),
+			// Only the declared fields; a refresh merges them with the current
+			// row when it saves.
+			metadata: pickExtensionClientMetadata(input.metadata, opts),
 			token_endpoint_auth_method:
 				input.metadata.token_endpoint_auth_method ?? "none",
 			client_secret: undefined,

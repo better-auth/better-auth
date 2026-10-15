@@ -341,7 +341,9 @@ export async function updateClientEndpoint(
 	}
 
 	const updatedMetadata = {
-		...schemaToOAuth(client),
+		// Converted without its metadata, which schemaToOAuth would spread onto
+		// the client; the effective metadata is passed explicitly below.
+		...schemaToOAuth({ ...client, metadata: undefined }),
 		...updates,
 		// An update's `metadata` replaces the stored object.
 		metadata: updates.metadata ?? parseClientMetadata(client.metadata),

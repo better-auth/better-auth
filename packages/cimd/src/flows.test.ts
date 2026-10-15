@@ -1207,6 +1207,58 @@ describe("CIMD - extension client metadata", async () => {
 		expect(await storedMetadata()).toEqual({ note: "during fetch" });
 	});
 
+	it("accepts a refresh that only the current row makes valid", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "ok",
+		});
+		expect(await authorize()).toContain("/consent");
+		const ctx = await authorizationServer.$context;
+		await ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientMetadataUrl }],
+			update: {
+				metadata: JSON.stringify({ example_mode: "ok", allowed_modes: ["ok"] }),
+			},
+		});
+
+		// During the fetch an admin widens allowed_modes while the document
+		// switches to "alt". The row read before the fetch would reject "alt".
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested !== clientMetadataUrl) return originalFetch(input, init);
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientMetadataUrl }],
+					update: {
+						metadata: JSON.stringify({
+							example_mode: "ok",
+							allowed_modes: ["ok", "alt"],
+						}),
+					},
+				});
+				return new Response(
+					JSON.stringify({ ...metadataDocument, example_mode: "alt" }),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				);
+			}),
+		);
+		expect(await authorize()).toContain("/consent");
+		expect(await storedMetadata()).toEqual({
+			example_mode: "alt",
+			allowed_modes: ["ok", "alt"],
+		});
+	});
+
 	it("validates the merged metadata a refresh saves, not the earlier read", async () => {
 		stubMetadataFetch(clientMetadataUrl, {
 			...metadataDocument,

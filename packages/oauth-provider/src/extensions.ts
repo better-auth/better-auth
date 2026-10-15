@@ -413,6 +413,15 @@ export function collectExtensionUserInfoClaims(
 	);
 }
 
+/** Whether any extension declares client metadata fields or a validator. */
+export function hasExtensionClientMetadata(
+	opts: OAuthOptions<Scope[]>,
+): boolean {
+	return getOAuthProviderExtensions(opts).some(
+		(extension) => extension.clientMetadata,
+	);
+}
+
 /** Registration fields that extensions define, stored in the client's `metadata`. */
 export function getExtensionClientMetadataFields(
 	opts: OAuthOptions<Scope[]>,
@@ -427,8 +436,8 @@ export function getExtensionClientMetadataFields(
 /**
  * Runs every extension's client metadata validator, in registration order.
  * Extensions read their fields from `metadata` only, so `metadata` and
- * declared fields are removed from the client they receive; admin updates
- * spread stored metadata onto the client.
+ * declared fields are removed from the client they receive; a metadata
+ * document carries declared fields at its top level.
  */
 export async function validateExtensionClientMetadata(
 	opts: OAuthOptions<Scope[]>,
