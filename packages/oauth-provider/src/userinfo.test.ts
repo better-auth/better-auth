@@ -240,28 +240,36 @@ describe("oauth userinfo", async () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9949
+	 * @see https://github.com/better-auth/better-auth/issues/11595
 	 */
-	it("should return an invalid_token challenge for an unknown bearer token", async () => {
-		let wwwAuthenticate = "";
-		const userinfo = await client.$fetch<Record<string, string>>(
-			"/oauth2/userinfo",
-			{
-				headers: {
-					authorization: "Bearer this-is-not-a-valid-access-token",
+	it.each([
+		"this-is-not-a-valid-access-token",
+		"eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0.",
+	])(
+		"should return an invalid_token challenge for an unknown bearer token %s",
+		async (token) => {
+			let wwwAuthenticate = "";
+			const userinfo = await client.$fetch<Record<string, string>>(
+				"/oauth2/userinfo",
+				{
+					headers: {
+						authorization: `Bearer ${token}`,
+					},
+					onError(context) {
+						wwwAuthenticate =
+							context.response.headers.get("WWW-Authenticate") ?? "";
+					},
 				},
-				onError(context) {
-					wwwAuthenticate =
-						context.response.headers.get("WWW-Authenticate") ?? "";
-				},
-			},
-		);
+			);
 
-		expect(userinfo.error?.status).toBe(401);
-		expect(
-			(userinfo.error as { error?: string; error_description?: string }).error,
-		).toBe("invalid_token");
-		expect(wwwAuthenticate).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
-	});
+			expect(userinfo.error?.status).toBe(401);
+			expect(
+				(userinfo.error as { error?: string; error_description?: string })
+					.error,
+			).toBe("invalid_token");
+			expect(wwwAuthenticate).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
+		},
+	);
 
 	it("should fail without the openid scope", async () => {
 		const tokens = await getTokens({

@@ -171,6 +171,8 @@ export const verificationValueSchema = z
 		userId: z.string(),
 		referenceId: z.string().optional(),
 		authTime: z.number().optional(),
+		acr: z.string().optional(),
+		amr: z.array(z.string()).optional(),
 		resource: z.array(z.string()).optional(),
 	})
 	.passthrough();

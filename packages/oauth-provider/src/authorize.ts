@@ -6,7 +6,11 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
-import { LEVEL_0_ACR } from "./authentication-context";
+import {
+	getAcrValuesSupported,
+	LEVEL_0_ACR,
+	resolveAuthenticationContext,
+} from "./authentication-context";
 import {
 	canSatisfyEssentialAcrRequest,
 	getRequestedUserInfoClaims,
@@ -25,6 +29,7 @@ import {
 } from "./signed-query";
 import { getSupportedClaims } from "./standard-claims";
 import type {
+	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
 	OAuthConsent,
 	OAuthInteractionQuery,
@@ -161,7 +166,8 @@ export const handleRedirect = (
 	}
 };
 
-function redirectWithPromptNoneError(
+/** Sends an OAuth error to the client's redirect URI, or to the error page without one. */
+function redirectWithAuthorizationError(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	query: OAuthInteractionQuery,
@@ -512,6 +518,7 @@ export async function authorizeEndpoint(
 			...interactionRequest,
 			approve: (approval) =>
 				interactionRequest.approve(approval).catch(toErrorURL),
+			errorURL: toErrorURL,
 		});
 	}
 
@@ -734,9 +741,13 @@ export async function authorizeEndpoint(
 			),
 		);
 	}
+	// Fail before sign-in when no supported ACR can satisfy an essential request;
+	// the session's resolved ACR is checked again at approval.
 	if (
 		openidRequested &&
-		!canSatisfyEssentialAcrRequest(query.claims, LEVEL_0_ACR)
+		!getAcrValuesSupported(opts).some((acr) =>
+			canSatisfyEssentialAcrRequest(query.claims, acr),
+		)
 	) {
 		return handleRedirect(
 			ctx,
@@ -860,7 +871,10 @@ async function runAuthorizationInteraction(
 	opts: OAuthOptions<Scope[]>,
 	headers: Headers,
 	settings: AuthorizeEndpointSettings | undefined,
-	request: OAuthInteractionRequest,
+	request: OAuthInteractionRequest & {
+		/** Where an extension interaction reports errors before approval. */
+		errorURL?: (error: unknown) => string;
+	},
 ): Promise<OAuthRedirectResult> {
 	let { query } = request;
 	const { client } = request;
@@ -899,7 +913,7 @@ async function runAuthorizationInteraction(
 		promptSet?.has("create")
 	) {
 		if (promptNone) {
-			return redirectWithPromptNoneError(
+			return redirectWithAuthorizationError(
 				ctx,
 				opts,
 				query,
@@ -936,7 +950,7 @@ async function runAuthorizationInteraction(
 		});
 		if (selectedAccountRedirect) {
 			if (promptNone) {
-				return redirectWithPromptNoneError(
+				return redirectWithAuthorizationError(
 					ctx,
 					opts,
 					query,
@@ -958,7 +972,7 @@ async function runAuthorizationInteraction(
 		});
 		if (signupRedirect) {
 			if (promptNone) {
-				return redirectWithPromptNoneError(
+				return redirectWithAuthorizationError(
 					ctx,
 					opts,
 					query,
@@ -982,7 +996,7 @@ async function runAuthorizationInteraction(
 		});
 		if (postLoginRedirect) {
 			if (promptNone) {
-				return redirectWithPromptNoneError(
+				return redirectWithAuthorizationError(
 					ctx,
 					opts,
 					query,
@@ -1010,17 +1024,58 @@ async function runAuthorizationInteraction(
 		session: session.session,
 		scopes,
 	});
-	const approve = async () =>
-		handleRedirect(
+	const approve = async () => {
+		let authenticationContext: OAuthAuthenticationContext;
+		try {
+			authenticationContext = await resolveAuthenticationContext(opts, {
+				user: session.user,
+				session: session.session,
+				client,
+				scopes,
+				headers,
+				query,
+			});
+		} catch (error) {
+			if (!(error instanceof APIError)) throw error;
+			if (request.errorURL) return handleRedirect(ctx, request.errorURL(error));
+			const body = error.body as
+				| { error?: OAuthErrorCode; error_description?: string }
+				| undefined;
+			return redirectWithAuthorizationError(
+				ctx,
+				opts,
+				query,
+				body?.error ?? "server_error",
+				body?.error_description ?? "authentication context unavailable",
+			);
+		}
+		// OIDC Core §5.5.1.1: an unmet essential acr is a failed authentication.
+		if (
+			!canSatisfyEssentialAcrRequest(
+				query.claims,
+				authenticationContext.acr ?? LEVEL_0_ACR,
+			)
+		) {
+			return redirectWithAuthorizationError(
+				ctx,
+				opts,
+				query,
+				"access_denied",
+				"essential acr requirement cannot be met",
+			);
+		}
+		return handleRedirect(
 			ctx,
 			await request.approve({
 				query,
 				userId: session.user.id,
 				sessionId: session.session.id,
 				authTime: new Date(session.session.createdAt).getTime(),
+				...authenticationContext,
 				referenceId,
 			}),
 		);
+	};
 
 	// Can skip consent (unless forced by prompt above)
 	if (client.skipConsent) {
@@ -1056,7 +1111,7 @@ async function runAuthorizationInteraction(
 		)
 	) {
 		if (promptNone) {
-			return redirectWithPromptNoneError(
+			return redirectWithAuthorizationError(
 				ctx,
 				opts,
 				query,
@@ -1077,7 +1132,7 @@ async function runAuthorizationInteraction(
 		)
 	) {
 		if (promptNone) {
-			return redirectWithPromptNoneError(
+			return redirectWithAuthorizationError(
 				ctx,
 				opts,
 				query,
@@ -1120,6 +1175,8 @@ async function createAuthorizationCodeURL(
 		userId: string;
 		sessionId: string;
 		authTime: number;
+		acr?: string;
+		amr?: string[];
 		referenceId?: string;
 		resource?: string[];
 	},
@@ -1139,6 +1196,8 @@ async function createAuthorizationCodeURL(
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
 			authTime: verificationValue.authTime,
+			acr: verificationValue.acr,
+			amr: verificationValue.amr,
 			resource: verificationValue.resource,
 		} satisfies VerificationValue),
 	};

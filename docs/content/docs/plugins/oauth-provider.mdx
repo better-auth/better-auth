@@ -672,7 +672,7 @@ The cached response is stored encrypted on the consumed refresh-token row and in
 
 #### Device code grant
 
-The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding, RFC 8707 resource, consent reference, and authentication time fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them through `/oauth2/authorize?user_code=…` and the same sign-in, account selection, post-login, and consent pages as an authorization request, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding, RFC 8707 resource, consent reference, authentication time, and authentication context (`acr`, `amr`) fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them through `/oauth2/authorize?user_code=…` and the same sign-in, account selection, post-login, and consent pages as an authorization request, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
 
 At `/device/code`, confidential clients authenticate with their registered method. A client using `client_secret_basic` may send an `Authorization: Basic ...` header and omit the body `client_id`; a client using `client_secret_post` sends `client_id` and `client_secret`; and a public client using `none` sends `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication parameters are treated as omitted regardless of order. Repeated non-empty client identification, base request, or authentication parameters and multiple authentication methods return `invalid_request`, while repeated `resource` parameters remain supported.
 
@@ -730,7 +730,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
-This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
+This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`. `token_type_hint` only sets which token type is checked first: a token sent with the wrong hint is still found.
 
 Use the `resources` field in `customAccessTokenClaims` to add claims based on the protected resource.
 
@@ -755,10 +755,14 @@ The two formats differ in one way. An opaque token is recomputed on each call, s
 
 [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
+An unknown, expired, or already revoked token returns `200` instead of an error ([RFC7009 §2.2](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2)). `token_type_hint` only sets which token type is checked first: a token sent with the wrong hint is still revoked.
+
+A client can only revoke tokens issued to it ([RFC7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). A confidential client that sends another client's token gets `400 invalid_request`. A public client gets `200` and the token stays valid, so a public client can't use the endpoint to test whether a token exists.
+
 What the endpoint does depends on the token type:
 
 * opaque `access_token`: deleted from the database immediately. A `refresh_token` from the same grant stays valid.
-* `refresh_token`: deletes every `access_token` it minted and removes the `refresh_token`, so it can no longer issue tokens.
+* `refresh_token`: marks the `refresh_token` revoked and deletes every opaque `access_token` it minted, so it can no longer issue tokens. Revoking a `refresh_token` that was already revoked or rotated is treated as replay: it still returns `200`, and it deletes the client's `refresh_token`s for that user, along with the opaque `access_token`s minted from them. An `access_token` issued without a `refresh_token`, and any JWT `access_token`, stays valid until it expires.
 * JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. A token that still verifies for this server responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), making clear that no server-side revocation happened. A JWT that is already expired or carries an audience rejected by the OAuth resource model is treated as an invalid token and returns a `200` no-op.
 
 Because a JWT `access_token` cannot be revoked individually, plan for it:
@@ -1529,6 +1533,72 @@ oauthProvider({
 
 The callback receives the grant type, user (undefined for `client_credentials`), scopes, parsed client metadata, and the verification value (only for `authorization_code` grants). It is called before any tokens are created, so throwing an error will not leave partially-applied state.
 
+### Authentication Context
+
+ID tokens carry `acr: "0"` (OIDC level 0) and no `amr` by default. To assert a stronger authentication class or the methods the user signed in with, set `authenticationContext` with both fields:
+
+* `acrValuesSupported` lists the `acr` values the provider may issue. Discovery advertises it as `acr_values_supported`. Include `"0"` if `resolve` can return no `acr`.
+* `resolve` returns the `acr` and `amr` the current session established. It runs once, when the user approves an authorization request or a device code with the `openid` scope, and receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`).
+
+Return only what the session proved. Better Auth does not record how a session signed in, so track it yourself. The example below marks sessions created by a completed two-factor challenge. Sessions created through a trusted device skip that challenge and stay unmarked.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt, twoFactor } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
+
+const MFA = "urn:example:acr:mfa";
+
+export const auth = betterAuth({
+  session: {
+    additionalFields: {
+      twoFactorVerified: { type: "boolean", defaultValue: false, input: false },
+    },
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        // Two-factor verification endpoints create the session only after the
+        // second factor succeeds.
+        before: async (session, ctx) => ({
+          data: {
+            ...session,
+            twoFactorVerified:
+              ctx?.path?.startsWith("/two-factor/verify-") ?? false,
+          },
+        }),
+      },
+    },
+  },
+  plugins: [
+    twoFactor(),
+    jwt(),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      authenticationContext: {
+        acrValuesSupported: ["0", MFA],
+        // Assert only what the session proved: the two-factor step, not how the
+        // first factor was done.
+        resolve: ({ session }) =>
+          session.twoFactorVerified === true
+            ? { acr: MFA, amr: ["mfa"] }
+            : { acr: "0" },
+      },
+    }),
+  ],
+});
+```
+
+How a request for a class is handled depends on whether it is essential:
+
+* An essential request (`claims={"id_token":{"acr":{"essential":true,"value":"…"}}}`) the session does not satisfy fails with `access_denied` at the client's redirect URI. If no value in `acrValuesSupported` could satisfy it, the request fails before sign-in.
+* A voluntary request (`acr_values`, or an `acr` claim without `essential`) never fails. The ID token reports the session's current `acr`.
+
+`resolve` must return an `acr` from `acrValuesSupported` (or omit it to use `"0"`), and `amr` must be an array of strings. Any other result fails the authorization with `server_error`. To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`; the client receives that error and its `error_description`. For a device code, the user sees the error on your verification page instead, and the code stays pending so the user can retry.
+
+The `acr` and `amr` are stored with the authorization code or device code and the refresh token, so ID tokens from later refreshes keep the values of the original authentication ([OIDC Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse)). They change only when the user authorizes again.
+
 ### Expirations
 
 Each token type and grant type can independently can set a default expiration.
@@ -1971,40 +2041,37 @@ oauthProvider({
 })
 ```
 
-Pseudocode for a token encryption method:
+Example that encrypts the refresh token as a JWE:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { CompactEncrypt, compactDecrypt } from 'jose'
-import { oauthProvider } from "@better-auth/oauth-provider"; 
+import { base64url, CompactEncrypt, compactDecrypt } from "jose";
+import { oauthProvider } from "@better-auth/oauth-provider";
 
-const secret = "SOME_SECRET_OR_KEY"
-const alg = "A256KW"
-const enc = "A256GCM"
+// A random 256-bit key kept in your secret store, base64url-encoded.
+// Generate one with `openssl rand -base64 32 | tr '+/' '-_' | tr -d '='`.
+const key = base64url.decode(process.env.REFRESH_TOKEN_KEY!);
+const alg = "A256KW";
+const enc = "A256GCM";
 
 const auth = betterAuth({
   plugins: [
     oauthProvider({
-    formatRefreshToken: {
-      encrypt: (token, sessionId) {
-        const value = JSON.stringify({
-          sessionId,
-          token,
-        });
-        const jwe = await new CompactEncrypt(Buffer.from(value))
-          .setProtectedHeader({ alg, enc })
-          .encrypt(secret);
-        return jwe;
+      formatRefreshToken: {
+        encrypt: async (token, sessionId) => {
+          const value = JSON.stringify({ sessionId, token });
+          return new CompactEncrypt(new TextEncoder().encode(value))
+            .setProtectedHeader({ alg, enc })
+            .encrypt(key);
+        },
+        decrypt: async (token) => {
+          const { plaintext } = await compactDecrypt(token, key);
+          return JSON.parse(new TextDecoder().decode(plaintext));
+        },
       },
-      decrypt: (token) {
-        const { plaintext } = await compactDecrypt(token, secret);
-        const payload = new TextDecoder().decode(plaintext);
-        return JSON.parse(payload);
-      },
-    }
-  })
-]
-})
+    }),
+  ],
+});
 ```
 
 ### Advertised Metadata
@@ -2013,7 +2080,7 @@ The metadata endpoint can be customized so that the publicized scopes and claims
 
 All scopes inside the advertisedMetadata section MUST be listed in `scopes` otherwise initialization will fail.
 
-Better Auth advertises `acr_values_supported: ["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. Custom ACR policies are not currently supported. Because `acr_values` is voluntary, requests for other classes continue and the ID token reports `acr: "0"`. In an OpenID Connect request, an essential `claims.id_token.acr` request fails when its `value` or `values` does not include `"0"`.
+Better Auth advertises `acr_values_supported` from `authenticationContext.acrValuesSupported`, which defaults to `["0"]`. In OIDC Core, `"0"` means the authentication did not meet ISO/IEC 29115 level 1. See [Authentication Context](#authentication-context) to assert other classes.
 
 #### Scopes
 
@@ -2086,11 +2153,18 @@ const response = await auth.api.createOAuthClient({
 
 #### How It Works
 
-Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** (the host of the client's first redirect URI) and the user ID, keyed with `pairwiseSecret`. This means:
+Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** and the user ID, keyed with `pairwiseSecret`. Better Auth assigns the sector when the client is created:
 
-* Two clients with different redirect URI hosts always receive different `sub` values for the same user
-* Two clients sharing the same redirect URI host receive the **same** pairwise `sub` (per OIDC Core Section 8.1)
+* A client whose redirect URIs all use `https` gets the host of its first redirect URI, including any port. Clients on the same `https` host share a sector and receive the **same** pairwise `sub` (per OIDC Core Section 8.1).
+* Any other client, such as one with an authority-free private-use (`com.example.app:/callback`) or loopback (`http://localhost:8787/callback`) redirect URI, gets a sector of its own. Any app can register a custom scheme, and any local process can listen on a loopback port, so those redirect URIs do not identify the client.
+
+This means:
+
+* Two clients with different sectors always receive different `sub` values for the same user
 * The same client always receives the same `sub` for the same user (deterministic)
+* Changing a client's redirect URIs recomputes its sector, so moving to another host changes the `sub` its users receive
+
+Clients created before Better Auth stored sectors keep the sector of their first redirect URI host, so their users' `sub` does not change. Unrelated custom-scheme or loopback clients created before then can share a sector.
 
 Pairwise `sub` appears in:
 
@@ -2172,6 +2246,13 @@ export const oauthClientTableFields = [
     type: "string",
     description:
       'Subject identifier type for this client. Set to "pairwise" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.',
+    isOptional: true,
+  },
+  {
+    name: "sectorIdentifier",
+    type: "string",
+    description:
+      "Pairwise sector assigned by the server when the client is created. Empty for clients created before sectors were stored, which use the host of their first redirect URI.",
     isOptional: true,
   },
   {
@@ -2440,6 +2521,20 @@ export const oauthRefreshTokenTableFields = [
     type: "Date",
     description:
       "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
+    isOptional: true,
+  },
+  {
+    name: "acr",
+    type: "string",
+    description:
+      "Authentication Context Class Reference asserted at authorization. Preserved across token rotation for refreshed ID tokens.",
+    isOptional: true,
+  },
+  {
+    name: "amr",
+    type: "string[]",
+    description:
+      "Authentication Methods References asserted at authorization. Preserved across token rotation for refreshed ID tokens.",
     isOptional: true,
   },
   {
