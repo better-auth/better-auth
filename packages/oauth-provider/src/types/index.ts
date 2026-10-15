@@ -1085,7 +1085,8 @@ export interface OAuthOptions<
 		 */
 		page: string;
 		/**
-		 * A value to tie to the consent reference_id.
+		 * A value to tie to the consent reference_id. Consent is stored
+		 * per reference; `undefined` or `""` uses consent given without one.
 		 *
 		 * Note that YOU must fail in this function if the requested
 		 * scope doesn't have a reference id and it should.
