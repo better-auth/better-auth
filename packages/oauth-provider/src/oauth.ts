@@ -47,6 +47,7 @@ import {
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
+import { createSessionCodeEndpoints } from "./session-code";
 import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
@@ -1073,6 +1074,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return tokenEndpoint(ctx, opts);
 				},
 			),
+			...createSessionCodeEndpoints(opts),
 			oauth2Introspect: createOAuthEndpoint(
 				"/oauth2/introspect",
 				{
