@@ -169,7 +169,7 @@ export const mongodbAdapter = (
 						]);
 						const existingIndexSetup =
 							indexSetupByDefinition.get(indexDefinition);
-						if (existingIndexSetup) return existingIndexSetup;
+						if (existingIndexSetup !== undefined) return existingIndexSetup;
 
 						const indexFields = Object.fromEntries(
 							physicalFieldNames.map((field) => [field, 1] as const),
@@ -814,8 +814,6 @@ export const mongodbAdapter = (
 							let commitAttempted = false;
 
 							try {
-								session.startTransaction();
-
 								const adapter = createAdapterFactory({
 									config: {
 										...adapterOptions!.config,
@@ -824,26 +822,22 @@ export const mongodbAdapter = (
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);
 
-								const result = await cb(adapter);
-
-								commitAttempted = true;
-								await session.commitTransaction();
-								return result;
+								// `withTransaction` retries a `TransientTransactionError` (such as a
+								// WriteConflict between concurrent transactions) and an unknown
+								// commit result, so `cb` can run more than once.
+								return await session.withTransaction(async () => {
+									commitAttempted = false;
+									const result = await cb(adapter);
+									// `withTransaction` commits as soon as the callback resolves.
+									commitAttempted = true;
+									return result;
+								});
 							} catch (err) {
-								if (session.inTransaction()) {
-									await session.abortTransaction();
-								} else if (commitAttempted) {
-									// A commit that failed in flight leaves the transaction
-									// open on the server, but the driver no longer reports the
-									// session as being in one, so `abortTransaction()` is not
-									// an option. Send the abort as a command on the same
-									// session so the server does not hold the writes until
-									// `transactionLifetimeLimitSeconds`.
-									//
-									// Only a failed commit can leave that state behind: if the
-									// transaction never started, or failed before the commit,
-									// there is nothing open and sending the command would just
-									// produce a second error to log.
+								// `withTransaction` aborts when the callback fails, but not when the
+								// commit fails in flight: the driver then no longer reports the
+								// session as being in a transaction, while the server keeps it open
+								// until `transactionLifetimeLimitSeconds`. Abort it with a command.
+								if (commitAttempted) {
 									await abortTransactionCommand(config.client, session);
 								}
 								throw err;

@@ -6,7 +6,7 @@ import type {
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { getEndpoints } from "./index";
+import { createAuthEndpoint, getEndpoints } from "./index";
 
 describe("getEndpoints", () => {
 	it("should await promise-based context before passing to middleware", async () => {
@@ -288,5 +288,60 @@ describe("base path leading-prefix enforcement", () => {
 			}),
 		);
 		expect(confused.status).toBe(404);
+	});
+});
+
+const failingPlugin = {
+	id: "failing",
+	endpoints: {
+		fail: createAuthEndpoint("/fail", { method: "GET" }, async () => {
+			throw new Error("unexpected failure");
+		}),
+	},
+} satisfies BetterAuthPlugin;
+
+describe("onAPIError.onError", () => {
+	it("waits for an async hook before responding", async () => {
+		let hookFinished = false;
+		const { auth } = await getTestInstance({
+			plugins: [failingPlugin],
+			onAPIError: {
+				async onError() {
+					await new Promise((resolve) => setTimeout(resolve, 10));
+					hookFinished = true;
+				},
+			},
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/fail"),
+		);
+
+		expect(response.status).toBe(500);
+		expect(hookFinished).toBe(true);
+	});
+
+	it("logs a rejected hook and keeps the original error response", async () => {
+		const log = vi.fn();
+		const { auth } = await getTestInstance({
+			plugins: [failingPlugin],
+			logger: { log },
+			onAPIError: {
+				async onError() {
+					throw new Error("reporter unavailable");
+				},
+			},
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/fail"),
+		);
+
+		expect(response.status).toBe(500);
+		expect(log).toHaveBeenCalledWith(
+			"error",
+			expect.stringContaining("onAPIError.onError"),
+			expect.anything(),
+		);
 	});
 });

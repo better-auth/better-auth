@@ -838,7 +838,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Confirms an account was registered",
 						}),
 						postLogin: z.boolean().optional().meta({
-							description: "Confirms organization and/or team selection.",
+							description:
+								"Resumes after the post login page. postLogin.shouldRedirect runs again with isContinuation: true.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
