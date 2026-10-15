@@ -27,6 +27,7 @@
     "---Utility---",
     "bearer",
     "device-authorization",
+    "ciba",
     "captcha",
     "have-i-been-pwned",
     "i18n",

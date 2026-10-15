@@ -19,6 +19,9 @@
       "path": "./packages/cli/tsconfig.json"
     },
     {
+      "path": "./packages/ciba/tsconfig.json"
+    },
+    {
       "path": "./packages/cimd/tsconfig.json"
     },
     {
