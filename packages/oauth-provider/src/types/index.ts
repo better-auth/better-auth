@@ -37,6 +37,61 @@ export type StoreTokenType =
 	| "authorization_code"
 	| (string & {});
 
+/**
+ * The authentication context the provider asserts in ID tokens
+ * (OIDC Core 1.0 §2).
+ */
+export interface OAuthAuthenticationContext {
+	/**
+	 * Authentication Context Class Reference the session satisfies. Must be one
+	 * of `acrValuesSupported`. Defaults to `"0"`.
+	 */
+	acr?: string;
+	/**
+	 * Authentication Methods References used for the session, such as
+	 * `["pwd", "otp"]` (RFC 8176).
+	 */
+	amr?: string[];
+}
+
+export interface OAuthAuthenticationContextOptions<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/**
+	 * ACR values this provider can assert, advertised as
+	 * `acr_values_supported` in discovery. Include `"0"` when `resolve` can
+	 * return no `acr`.
+	 */
+	acrValuesSupported: string[];
+	/**
+	 * Returns the `acr` and `amr` the current session establishes. Called when
+	 * the user approves an authorization request or a device code. Return only
+	 * what the session actually proved; do not raise `acr` to match
+	 * `requestedAcrValues`.
+	 *
+	 * An essential `acr` request (`claims.id_token.acr.essential`) that the
+	 * returned `acr` does not satisfy fails with `access_denied`. A voluntary
+	 * request (`acr_values` or a non-essential `acr` claim) never fails.
+	 *
+	 * Not called for requests without the `openid` scope, which issue no ID
+	 * token.
+	 */
+	resolve: (info: {
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		client: SchemaClient<Scopes>;
+		/** Scopes being approved */
+		scopes: string[];
+		/** Headers of the request approving the authorization */
+		headers: Headers;
+		/**
+		 * ACR values the client requested, from `claims.id_token.acr` and
+		 * `acr_values`, in order of preference.
+		 */
+		requestedAcrValues: string[];
+	}) => Awaitable<OAuthAuthenticationContext | undefined>;
+}
+
 type InternallySupportedScopes =
 	| "openid"
 	| "profile"
@@ -171,6 +226,10 @@ export interface OAuthTokenIssueParams {
 	nonce?: string;
 	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	authTime?: Date;
+	/** The `acr` ID token claim. Defaults to `"0"`. */
+	acr?: string;
+	/** The `amr` ID token claim. */
+	amr?: string[];
 	verificationValue?: VerificationValue;
 	resources?: string[];
 	/** Full original authorized resources for the grant, used to seed refresh tokens. */
@@ -550,6 +609,8 @@ export interface OAuthInteractionRequest {
 		userId: string;
 		sessionId: string;
 		authTime: number;
+		acr?: string;
+		amr?: string[];
 		referenceId?: string;
 	}) => Promise<string>;
 }
@@ -1322,6 +1383,14 @@ export interface OAuthOptions<
 		requestedClaims: string[];
 	}) => Awaitable<Record<string, any>>;
 	/**
+	 * Asserts the `acr` and `amr` ID token claims for each approved
+	 * authorization request.
+	 *
+	 * Without this option, ID tokens carry `acr: "0"` (OIDC level 0) and no
+	 * `amr`.
+	 */
+	authenticationContext?: OAuthAuthenticationContextOptions<Scopes>;
+	/**
 	 * Custom claims attached to OIDC id tokens.
 	 *
 	 * To remain OIDC-compliant, claims should be
@@ -1852,6 +1921,8 @@ export interface VerificationValue {
 	resource?: string[];
 	referenceId?: string;
 	authTime?: number;
+	acr?: string;
+	amr?: string[];
 }
 
 /**
@@ -2008,6 +2079,12 @@ export interface SchemaClient<
 	enableEndSession?: boolean;
 	/** Subject identifier type: "public" (default) or "pairwise" */
 	subjectType?: "public" | "pairwise";
+	/**
+	 * Pairwise sector, set by the server when the client is created. `null`
+	 * for clients created before sectors were stored; those keep the sector
+	 * derived from their first redirect URI host.
+	 */
+	sectorIdentifier?: string | null;
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
 	referenceId?: string;
 	/**
@@ -2130,6 +2207,10 @@ export interface OAuthRefreshToken<
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
 	 */
 	authTime?: Date;
+	/** The `acr` asserted at authorization, carried forward on rotation. */
+	acr?: string;
+	/** The `amr` asserted at authorization, carried forward on rotation. */
+	amr?: string[];
 	/**
 	 * Scopes granted for this refresh token.
 	 *
