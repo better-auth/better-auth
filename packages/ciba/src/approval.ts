@@ -156,7 +156,7 @@ export const completeCibaRequest = createAuthEndpoint.serverOnly(
 		const requested = request.scope.split(" ");
 		const scopes = ctx.body.scopes ?? requested;
 		if (scopes.some((scope) => !requested.includes(scope))) {
-			oauthError("invalid_scope", CIBA_ERROR_CODES.UNREQUESTED_SCOPE.message);
+			oauthError("invalid_scope", CIBA_ERROR_CODES.SCOPE_NOT_REQUESTED.message);
 		}
 		if (!scopes.includes("openid")) {
 			oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
