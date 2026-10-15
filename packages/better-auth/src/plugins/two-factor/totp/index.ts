@@ -358,6 +358,24 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					if (reserved) {
 						replayIdToClean = replayId;
 					}
+					if (reserved && !ctx.context.options.verification?.disableCleanup) {
+						// Best-effort maintenance: a successful reservation keeps its
+						// tombstone until expiry (replay protection), and the step-up
+						// path never reads verification rows, so nothing else sweeps
+						// them. Opportunistically delete expired rows so repeated
+						// step-up use cannot grow the table without bound.
+						// Fire-and-forget: never blocks or fails verification.
+						try {
+							ctx.context.adapter
+								.deleteMany({
+									model: "verification",
+									where: [
+										{ field: "expiresAt", value: new Date(), operator: "lt" },
+									],
+								})
+								.catch(() => {});
+						} catch {}
+					}
 				} else {
 					// Enrollment verification claims no marker (nothing consumed yet);
 					// single-use applies from the next verification on.
