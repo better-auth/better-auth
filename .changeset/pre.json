@@ -1,0 +1,31 @@
+{
+  "mode": "pre",
+  "tag": "rc",
+  "initialVersions": {
+    "docs": "0.1.1",
+    "@better-auth/api-key": "1.7.10",
+    "better-auth": "1.7.10",
+    "@better-auth/cimd": "1.7.10",
+    "auth": "1.7.10",
+    "@better-auth/core": "1.7.10",
+    "@better-auth/drizzle-adapter": "1.7.10",
+    "@better-auth/electron": "1.7.10",
+    "@better-auth/expo": "1.7.10",
+    "@better-auth/i18n": "1.7.10",
+    "@better-auth/kysely-adapter": "1.7.10",
+    "@better-auth/mcp": "1.7.10",
+    "@better-auth/memory-adapter": "1.7.10",
+    "@better-auth/mongo-adapter": "1.7.10",
+    "@better-auth/oauth-provider": "1.7.10",
+    "@better-auth/passkey": "1.7.10",
+    "@better-auth/prisma-adapter": "1.7.10",
+    "@better-auth/redis-storage": "1.7.10",
+    "@better-auth/release-tooling": "0.0.0",
+    "@better-auth/scim": "1.7.10",
+    "@better-auth/sso": "1.7.10",
+    "@better-auth/stripe": "1.7.10",
+    "@better-auth/telemetry": "1.7.10",
+    "@better-auth/test-utils": "1.7.10"
+  },
+  "changesets": []
+}
