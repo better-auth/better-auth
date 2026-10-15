@@ -61,22 +61,23 @@ export async function pingClient(
 ): Promise<void> {
 	const {
 		clientNotificationEndpoint: endpoint,
-		clientNotificationToken: token,
+		encryptedClientNotificationToken,
 		encryptedAuthReqId,
 	} = request;
-	if (!endpoint || !token || !encryptedAuthReqId) return;
+	if (!endpoint || !encryptedClientNotificationToken || !encryptedAuthReqId) {
+		return;
+	}
+	const decrypt = (data: string) =>
+		symmetricDecrypt({ key: ctx.context.secretConfig, data });
 	const ping = (async () => {
 		const response = await fetch(endpoint, {
 			method: "POST",
 			headers: {
-				authorization: `Bearer ${token}`,
+				authorization: `Bearer ${await decrypt(encryptedClientNotificationToken)}`,
 				"content-type": "application/json",
 			},
 			body: JSON.stringify({
-				auth_req_id: await symmetricDecrypt({
-					key: ctx.context.secretConfig,
-					data: encryptedAuthReqId,
-				}),
+				auth_req_id: await decrypt(encryptedAuthReqId),
 			}),
 			signal: AbortSignal.timeout(PING_TIMEOUT_MS),
 			redirect: "error",

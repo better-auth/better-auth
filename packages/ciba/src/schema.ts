@@ -66,10 +66,10 @@ export const schema = {
 				required: false,
 			},
 			/**
-			 * Bearer token a ping-mode client supplied (CIBA §7.1), sent back on the
-			 * ping callback.
+			 * Ping mode only: the client's `client_notification_token` (CIBA §7.1),
+			 * encrypted with the server secret, sent back on the ping callback.
 			 */
-			clientNotificationToken: {
+			encryptedClientNotificationToken: {
 				type: "string",
 				required: false,
 			},
@@ -118,7 +118,7 @@ export interface CibaRequest {
 	resources?: string[] | null;
 	status: "pending" | "approved" | "denied";
 	clientNotificationEndpoint?: string | null;
-	clientNotificationToken?: string | null;
+	encryptedClientNotificationToken?: string | null;
 	encryptedAuthReqId?: string | null;
 	referenceId?: string | null;
 	authTime?: Date | null;

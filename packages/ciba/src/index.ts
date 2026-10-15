@@ -30,10 +30,10 @@ declare module "@better-auth/core" {
 
 /**
  * OpenID Connect Client-Initiated Backchannel Authentication (CIBA) for
- * `oauthProvider()`, in poll mode. A client names a user with `login_hint` at
+ * `oauthProvider()`. A client names a user with `login_hint` at
  * `/oauth2/bc-authorize`, the user approves on their own device through the
- * provider's sign-in and consent pages, and the client polls the token
- * endpoint for tokens.
+ * provider's sign-in and consent pages, and the client collects tokens at the
+ * token endpoint, by polling or after a ping callback (`deliveryModes`).
  *
  * Requires the `oauth-provider` and `jwt` plugins.
  *
@@ -72,7 +72,8 @@ export const ciba = (options: CibaOptions) => {
 	return {
 		id: "ciba",
 		version: PACKAGE_VERSION,
-		schema: mergeSchema(schema, options.schema),
+		// `mergeSchema` applies overrides in place, so merge into a copy.
+		schema: mergeSchema(structuredClone(schema), options.schema),
 		init(ctx) {
 			extendOAuthProvider(ctx, extension);
 		},

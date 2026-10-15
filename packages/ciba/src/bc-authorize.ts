@@ -78,6 +78,7 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 											expires_in: { type: "number" },
 											interval: { type: "number" },
 										},
+										required: ["auth_req_id", "expires_in", "interval"],
 									},
 								},
 							},
@@ -111,12 +112,16 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 					CIBA_ERROR_CODES.UNSUPPORTED_DELIVERY_MODE.message,
 				);
 			}
-			const notificationToken = ctx.body.client_notification_token;
-			if (delivery.mode === "ping" && !notificationToken) {
-				oauthError(
-					"invalid_request",
-					CIBA_ERROR_CODES.NOTIFICATION_TOKEN_REQUIRED.message,
-				);
+			let ping: { endpoint: string; token: string } | undefined;
+			if (delivery.mode === "ping") {
+				const token = ctx.body.client_notification_token;
+				if (!token) {
+					oauthError(
+						"invalid_request",
+						CIBA_ERROR_CODES.NOTIFICATION_TOKEN_REQUIRED.message,
+					);
+				}
+				ping = { endpoint: delivery.notificationEndpoint, token };
 			}
 			if (!scopes.includes("openid")) {
 				oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
@@ -180,10 +185,13 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 					bindingMessage,
 					resources: resources ?? null,
 					status: "pending",
-					...(delivery.mode === "ping"
+					...(ping
 						? {
-								clientNotificationEndpoint: delivery.notificationEndpoint,
-								clientNotificationToken: notificationToken,
+								clientNotificationEndpoint: ping.endpoint,
+								encryptedClientNotificationToken: await symmetricEncrypt({
+									key: ctx.context.secretConfig,
+									data: ping.token,
+								}),
 								encryptedAuthReqId: await symmetricEncrypt({
 									key: ctx.context.secretConfig,
 									data: authReqId,

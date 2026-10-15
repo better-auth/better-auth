@@ -87,9 +87,15 @@ export function cibaApprovalRequest(
 				client,
 				requireConsent: true,
 				approve: async (approval) => {
+					const scope = approval.query.scope ?? request.scope;
+					// CIBA authenticates the user, so the approved scope keeps `openid`;
+					// the request stays pending for another try.
+					if (!scope.split(" ").includes("openid")) {
+						oauthError("invalid_scope", CIBA_ERROR_CODES.INVALID_SCOPE.message);
+					}
 					await recordDecision(ctx, request.id, approval.userId, {
 						status: "approved",
-						scope: approval.query.scope ?? request.scope,
+						scope,
 						referenceId: approval.referenceId ?? null,
 						authTime: new Date(approval.authTime),
 					});

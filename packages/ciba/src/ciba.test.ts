@@ -319,6 +319,7 @@ describe("ciba poll mode", () => {
 
 	it("ends the request when the user denies it", async () => {
 		const { authReqId, url } = await start();
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
 		const consent = await openLink(url);
 		const result = await answerConsent(consent, false);
 		expect(result.toString()).toBe(`${baseURL}/ciba?status=denied`);
@@ -338,6 +339,14 @@ describe("ciba poll mode", () => {
 		await answerConsent(consent, true, headers, "openid");
 		const issued = await poll(authReqId);
 		expect(issued.body.scope).toBe("openid");
+	});
+
+	it("keeps the request pending when the user removes openid on consent", async () => {
+		const { authReqId, url } = await start();
+		const consent = await openLink(url);
+		const refused = await answerConsent(consent, true, headers, "profile");
+		expect(refused.searchParams.get("error")).toBe("invalid_scope");
+		expect((await poll(authReqId)).body.error).toBe("authorization_pending");
 	});
 
 	it("returns slow_down at a fixed interval", async () => {
@@ -671,6 +680,17 @@ describe("ciba ping mode", () => {
 		expect((await poll(authReqId, pingClient)).status).toBe(200);
 	});
 
+	it("stores the client_notification_token encrypted", async () => {
+		const { authReqId } = await startPing();
+		const ctx = await auth.$context;
+		const row = await ctx.adapter.findOne<Record<string, unknown>>({
+			model: "cibaRequest",
+			where: [{ field: "authReqId", value: await hashAuthReqId(authReqId) }],
+		});
+		expect(row?.encryptedClientNotificationToken).toEqual(expect.any(String));
+		expect(row?.encryptedClientNotificationToken).not.toContain(token);
+	});
+
 	it("pings the client when the user denies", async () => {
 		const ping = mockPing();
 		const { authReqId, url } = await startPing();
@@ -715,6 +735,17 @@ describe("ciba ping mode", () => {
 		await approve(url);
 		expect(ping).not.toHaveBeenCalled();
 	});
+});
+
+it("keeps one instance's schema overrides out of another", () => {
+	ciba({
+		resultPage: "/ciba",
+		sendNotification,
+		schema: { cibaRequest: { modelName: "renamedCibaRequest" } },
+	});
+	expect(
+		ciba({ resultPage: "/ciba", sendNotification }).schema.cibaRequest,
+	).not.toHaveProperty("modelName");
 });
 
 describe("ciba defaults", async () => {

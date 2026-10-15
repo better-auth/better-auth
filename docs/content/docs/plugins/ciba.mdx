@@ -113,7 +113,7 @@ const client = await auth.api.adminCreateOAuthClient({
 // Store client.client_id and client.client_secret for the agent.
 ```
 
-The client must authenticate (CIBA §7.1). Agents and CLIs that cannot keep a secret can register with `token_endpoint_auth_method: "none"` when you set `allowPublicClients`; they send `client_id` in the form body instead, and should bind their tokens with DPoP.
+The client must authenticate (CIBA §7.1). Agents and CLIs that cannot keep a secret can register with `token_endpoint_auth_method: "none"` when you set `allowPublicClients`; they send `client_id` in the form body of both `/oauth2/bc-authorize` and `/oauth2/token` instead, and should bind their tokens with DPoP.
 
 If anyone can register a client, any client can name any user. Set `resolveUser` to accept only identifiers the requesting client was already given, such as the `sub` from its earlier ID tokens, so a client cannot prompt or look up users it does not know:
 
@@ -290,23 +290,23 @@ The token poll returns:
 
 The plugin adds one model, `cibaRequest`:
 
-| Field                        | Type      | Description                                                                                                                 |
-| ---------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `authReqId`                  | string    | The `auth_req_id`, hashed like the provider's tokens. The raw value is never stored.                                        |
-| `clientId`                   | string    | The client that started the request.                                                                                        |
-| `userId`                     | string    | The user the `login_hint` named, the only user who can decide.                                                              |
-| `scope`                      | string    | The requested scopes, narrowed to the approved ones on approval.                                                            |
-| `bindingMessage`             | string    | The optional binding message.                                                                                               |
-| `resources`                  | string\[] | The optional resource indicators.                                                                                           |
-| `status`                     | string    | `pending`, `approved`, or `denied`. A request is deleted when tokens are issued or the client learns of a denial or expiry. |
-| `clientNotificationEndpoint` | string    | Ping mode only: the client's notification endpoint when the request started.                                                |
-| `clientNotificationToken`    | string    | Ping mode only: the client's `client_notification_token`.                                                                   |
-| `encryptedAuthReqId`         | string    | Ping mode only: the `auth_req_id`, encrypted with the server secret, because the callback carries the raw value.            |
-| `referenceId`                | string    | The consent reference recorded on approval, such as an organization.                                                        |
-| `authTime`                   | date      | Creation time of the approving session, issued as `auth_time`.                                                              |
-| `lastPolledAt`               | date      | When the client last polled.                                                                                                |
-| `expiresAt`                  | date      | When the request expires.                                                                                                   |
-| `createdAt`                  | date      | When the request was created.                                                                                               |
+| Field                              | Type      | Description                                                                                                                 |
+| ---------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `authReqId`                        | string    | The `auth_req_id`, hashed like the provider's tokens. The raw value is never stored.                                        |
+| `clientId`                         | string    | The client that started the request.                                                                                        |
+| `userId`                           | string    | The user the `login_hint` named, the only user who can decide.                                                              |
+| `scope`                            | string    | The requested scopes, narrowed to the approved ones on approval.                                                            |
+| `bindingMessage`                   | string    | The optional binding message.                                                                                               |
+| `resources`                        | string\[] | The optional resource indicators.                                                                                           |
+| `status`                           | string    | `pending`, `approved`, or `denied`. A request is deleted when tokens are issued or the client learns of a denial or expiry. |
+| `clientNotificationEndpoint`       | string    | Ping mode only: the client's notification endpoint when the request started.                                                |
+| `encryptedClientNotificationToken` | string    | Ping mode only: the client's `client_notification_token`, encrypted with the server secret.                                 |
+| `encryptedAuthReqId`               | string    | Ping mode only: the `auth_req_id`, encrypted with the server secret, because the callback carries the raw value.            |
+| `referenceId`                      | string    | The consent reference recorded on approval, such as an organization.                                                        |
+| `authTime`                         | date      | Creation time of the approving session, issued as `auth_time`.                                                              |
+| `lastPolledAt`                     | date      | When the client last polled.                                                                                                |
+| `expiresAt`                        | date      | When the request expires.                                                                                                   |
+| `createdAt`                        | date      | When the request was created.                                                                                               |
 
 ## Security
 

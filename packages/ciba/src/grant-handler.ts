@@ -41,27 +41,31 @@ export const createCibaGrantHandler =
 		}
 		const where = [{ field: "id", value: request.id }];
 
-		// Expiry is terminal, so it takes precedence over slow_down.
+		// Expiry and denial are terminal and reported at once; only a pending
+		// request is held to the polling interval.
 		if (request.expiresAt <= new Date()) {
 			await adapter.delete({ model: "cibaRequest", where });
 			oauthError("expired_token", CIBA_ERROR_CODES.EXPIRED_AUTH_REQ_ID.message);
-		}
-		if (
-			request.lastPolledAt &&
-			Date.now() - request.lastPolledAt.getTime() < options.interval * 1000
-		) {
-			oauthError("slow_down", CIBA_ERROR_CODES.POLLING_TOO_FREQUENTLY.message);
 		}
 		if (request.status === "denied") {
 			await adapter.delete({ model: "cibaRequest", where });
 			oauthError("access_denied", CIBA_ERROR_CODES.ACCESS_DENIED.message);
 		}
-		await adapter.update({
-			model: "cibaRequest",
-			where,
-			update: { lastPolledAt: new Date() },
-		});
 		if (request.status === "pending") {
+			if (
+				request.lastPolledAt &&
+				Date.now() - request.lastPolledAt.getTime() < options.interval * 1000
+			) {
+				oauthError(
+					"slow_down",
+					CIBA_ERROR_CODES.POLLING_TOO_FREQUENTLY.message,
+				);
+			}
+			await adapter.update({
+				model: "cibaRequest",
+				where,
+				update: { lastPolledAt: new Date() },
+			});
 			oauthError(
 				"authorization_pending",
 				CIBA_ERROR_CODES.AUTHORIZATION_PENDING.message,
@@ -87,9 +91,19 @@ export const createCibaGrantHandler =
 		}
 		const claimed = await adapter.consumeOne<CibaRequest>({
 			model: "cibaRequest",
-			where: [...where, { field: "status", value: "approved" }],
+			where: [
+				...where,
+				{ field: "status", value: "approved" },
+				{ field: "expiresAt", operator: "gt", value: new Date() },
+			],
 		});
 		if (!claimed) {
+			if (request.expiresAt <= new Date()) {
+				oauthError(
+					"expired_token",
+					CIBA_ERROR_CODES.EXPIRED_AUTH_REQ_ID.message,
+				);
+			}
 			oauthError("invalid_grant", CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message);
 		}
 

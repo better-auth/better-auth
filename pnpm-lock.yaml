@@ -1211,7 +1211,7 @@ importers:
         specifier: 'catalog:'
         version: 1.4.2(zod@4.5.4)
       zod:
-        specifier: 4.5.4
+        specifier: 'catalog:'
         version: 4.5.4
     devDependencies:
       '@better-auth/core':
