@@ -619,9 +619,9 @@ await authClient.signIn.social({
 });
 ```
 
-* **Apple:** Apple recommends passing the SHA-256 hex digest of the nonce to Apple, and sending the raw nonce to Better Auth. Both the raw value and its digest are accepted in the claim.
+* **Apple:** Apple recommends passing the SHA-256 hex digest of the nonce to Apple, and sending the raw nonce to Better Auth. Built-in verification accepts either the raw value or its digest in the claim. A custom `verifyIdToken` for Apple must do the same comparison itself.
 * **Facebook:** only Limited Login ID tokens carry a nonce. Opaque Graph access tokens are rejected when a nonce is expected.
-* **Custom `verifyIdToken`:** Better Auth consumes the issued nonce and passes it to your function, so your function must still compare it to the token's `nonce` claim.
+* **Custom `verifyIdToken`:** Better Auth consumes the issued nonce and passes it to your function, so your function must still compare it to the token's `nonce` claim and reject tokens that cannot carry one.
 
 ### overrideUserInfoOnSignIn
 

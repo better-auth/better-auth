@@ -56,6 +56,7 @@ export const issueIdTokenNonce = createAuthEndpoint(
 			provider: SocialProviderListEnum,
 		}),
 		metadata: {
+			noStore: true,
 			openapi: {
 				description:
 					"Issue a single-use nonce to bind a provider ID token to one sign-in or account-linking request",

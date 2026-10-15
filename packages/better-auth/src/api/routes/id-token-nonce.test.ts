@@ -53,8 +53,17 @@ describe("server-issued id_token nonce", async () => {
 		client.idToken.nonce({ provider });
 
 	it("signs in with an issued nonce that matches the token's nonce claim", async () => {
-		const { data } = await issueNonce();
+		let cacheControl: string | null = null;
+		const { data } = await client.idToken.nonce(
+			{ provider: "google" },
+			{
+				onSuccess: (ctx) => {
+					cacheControl = ctx.response.headers.get("cache-control");
+				},
+			},
+		);
 		expect(data?.nonce).toMatch(/^[a-zA-Z0-9]{32}$/);
+		expect(cacheControl).toContain("no-store");
 		const res = await client.signIn.social({
 			provider: "google",
 			idToken: {
