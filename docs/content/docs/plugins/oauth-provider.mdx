@@ -464,15 +464,15 @@ Application type is independent of client authentication. For example, a native 
 
 The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
 
-Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, so the `web` default rejects the registration. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
+Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, and Claude Code registers a single `http://127.0.0.1:<port>/callback`, so the `web` default rejects both registrations. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
 
-| Value             | Omitted `application_type` becomes                                        |
-| ----------------- | ------------------------------------------------------------------------- |
-| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                  |
-| `"native"`        | `native`                                                                  |
-| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme, otherwise `web` |
+| Value             | Omitted `application_type` becomes                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                                                                    |
+| `"native"`        | `native`                                                                                                                    |
+| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme or `http` on `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web` |
 
-Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme becomes `native`, so its `http` URIs must still be loopback. A client that lists only `http` and `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
+Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme or an `http` loopback URI becomes `native`, so its other `http` URIs must still be loopback. A client that lists only `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
 
 ```ts title="auth.ts"
 oauthProvider({
