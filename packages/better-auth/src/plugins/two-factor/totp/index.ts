@@ -424,6 +424,9 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				return result;
 			} catch (error) {
 				if (!validStarted && replayIdToClean) {
+					// Pre-session failure spent no attempt: return the slot so a
+					// transient error does not burn the challenge budget.
+					await attempt?.restore();
 					if (
 						ctx.context.secondaryStorage &&
 						!ctx.context.options.verification?.storeInDatabase
