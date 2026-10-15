@@ -531,26 +531,32 @@ export default function DeviceApprovalPage() {
   
   const handleApprove = async () => {
     setIsProcessing(true);
-    const { error } = await authClient.device.approve({ userCode });
-    setIsProcessing(false);
-    if (error) {
-      alert(`Failed to approve device: ${error.error_description}`);
-      return;
+    try {
+      const { error } = await authClient.device.approve({ userCode });
+      if (error) {
+        alert(`Failed to approve device: ${error.error_description}`);
+        return;
+      }
+      alert("Device approved successfully!");
+      window.location.href = "/";
+    } finally {
+      setIsProcessing(false);
     }
-    alert("Device approved successfully!");
-    window.location.href = "/";
   };
   
   const handleDeny = async () => {
     setIsProcessing(true);
-    const { error } = await authClient.device.deny({ userCode });
-    setIsProcessing(false);
-    if (error) {
-      alert(`Failed to deny device: ${error.error_description}`);
-      return;
+    try {
+      const { error } = await authClient.device.deny({ userCode });
+      if (error) {
+        alert(`Failed to deny device: ${error.error_description}`);
+        return;
+      }
+      alert("Device denied");
+      window.location.href = "/";
+    } finally {
+      setIsProcessing(false);
     }
-    alert("Device denied");
-    window.location.href = "/";
   };
 
   if (!user) {

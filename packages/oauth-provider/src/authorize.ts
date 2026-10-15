@@ -812,7 +812,7 @@ export async function authorizeEndpoint(
 		query,
 		client,
 		approve: (approval) =>
-			redirectWithAuthorizationCode(ctx, opts, {
+			createAuthorizationCodeURL(ctx, opts, {
 				...approval,
 				// An authorization request always carries its validated redirect_uri.
 				query: approval.query as OAuthAuthorizationQuery,
@@ -1076,7 +1076,8 @@ function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
 	return params;
 }
 
-async function redirectWithAuthorizationCode(
+/** Stores a single-use authorization code and returns the client redirect URL carrying it. */
+async function createAuthorizationCodeURL(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	verificationValue: {
