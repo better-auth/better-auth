@@ -2,7 +2,7 @@ import type { OAuthProviderExtension } from "@better-auth/oauth-provider";
 import { extendOAuthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin } from "better-auth";
 import { mergeSchema } from "better-auth/db";
-import { cibaApprovalRequest } from "./approval";
+import { cibaApprovalRequest, completeCibaRequest } from "./approval";
 import { createBcAuthorize } from "./bc-authorize";
 import {
 	APPROVAL_PARAMETER,
@@ -79,6 +79,7 @@ export const ciba = (options: CibaOptions) => {
 		},
 		endpoints: {
 			bcAuthorize: createBcAuthorize(resolvedOptions),
+			completeCibaRequest,
 		},
 		// Each request notifies a user, so it gets a tighter limit than the
 		// generic per-IP default.

@@ -86,17 +86,20 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
-			/** Creation time of the approving session, issued as `auth_time`. */
+			/**
+			 * Creation time of the approving session, or the time server-side
+			 * completion states, issued as `auth_time`.
+			 */
 			authTime: {
 				type: "date",
 				required: false,
 			},
-			/** The approving session's `acr`, from `authenticationContext.resolve`. */
+			/** The `acr` the approval established, issued in the ID token. */
 			acr: {
 				type: "string",
 				required: false,
 			},
-			/** The approving session's `amr`, from `authenticationContext.resolve`. */
+			/** The `amr` the approval established, issued in the ID token. */
 			amr: {
 				type: "string[]",
 				required: false,

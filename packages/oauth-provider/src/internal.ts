@@ -6,6 +6,7 @@
  * use the public endpoints and plugin APIs instead.
  */
 
+export { getAcrValuesSupported } from "./authentication-context";
 export {
 	type PublicClientJwksValidationResult,
 	validatePublicClientJwks,
