@@ -191,10 +191,16 @@ describe.each([
 			body: { redirect_uris: [redirectURI] },
 		});
 		const { adapter } = await auth.$context;
-		async function storeConsent(referenceId: string, scopes: string[]) {
+		async function storeConsent(
+			referenceId: string,
+			scopes: string[],
+			id?: string,
+		) {
 			await adapter.create({
 				model: "oauthConsent",
+				forceAllowId: id !== undefined,
 				data: {
+					...(id ? { id } : {}),
 					clientId: oauthClient.client_id,
 					userId: user.id,
 					referenceId,
@@ -248,6 +254,19 @@ describe.each([
 	it("reuses consent saved with an empty reference", async () => {
 		const { authorize, storeConsent } = await createNoReferenceTestInstance();
 		await storeConsent("", ["read"]);
+		const redirect = await authorize("read");
+
+		expect(redirect.origin + redirect.pathname).toBe(redirectURI);
+		expect(redirect.searchParams.get("code")).toBeTruthy();
+	});
+
+	it("finds consent without a reference past the first page of consents", async () => {
+		const { authorize, storeConsent } = await createNoReferenceTestInstance();
+		for (let i = 0; i < 100; i++) {
+			const index = String(i).padStart(3, "0");
+			await storeConsent(`org_${index}`, ["read"], `consent-${index}`);
+		}
+		await storeConsent("", ["read"], "consent-zzz");
 		const redirect = await authorize("read");
 
 		expect(redirect.origin + redirect.pathname).toBe(redirectURI);

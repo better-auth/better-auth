@@ -1079,12 +1079,18 @@ export async function findConsent(
 		});
 	}
 	// Matched in code: Prisma on MongoDB leaves an omitted referenceId unset, and `eq null` skips unset fields.
-	// shortcut: reads up to the default findMany limit per client and user, add a limit if one user can consent under more references.
-	const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
-		model: "oauthConsent",
-		where,
-	});
-	return consents.find((consent) => !consent.referenceId) ?? null;
+	const pageSize = 100;
+	for (let offset = 0; ; offset += pageSize) {
+		const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where,
+			limit: pageSize,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		const consent = consents.find((row) => !row.referenceId);
+		if (consent || consents.length < pageSize) return consent ?? null;
+	}
 }
 
 /**
