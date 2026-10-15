@@ -14,9 +14,13 @@ import {
 	verifyPhoneNumber,
 } from "./routes";
 import { schema } from "./schema";
-import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
+import type {
+	PhoneNumberOptions,
+	PhoneNumberOTPType,
+	UserWithPhoneNumber,
+} from "./types";
 
-export type { PhoneNumberOptions, UserWithPhoneNumber };
+export type { PhoneNumberOptions, PhoneNumberOTPType, UserWithPhoneNumber };
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
