@@ -191,18 +191,18 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 					["token", ""],
 				],
 			],
-		] as [
-			string,
-			[string, string][],
-		][])("treats an empty value %s a valid one as omitted", async (_label, params) => {
-			const { status, body } = await postWithBasicAuth(
-				"/oauth2/introspect",
-				params,
-			);
+		] as [string, [string, string][]][])(
+			"treats an empty value %s a valid one as omitted",
+			async (_label, params) => {
+				const { status, body } = await postWithBasicAuth(
+					"/oauth2/introspect",
+					params,
+				);
 
-			expect(status).toBe(200);
-			expect(body).toEqual({ active: false });
-		});
+				expect(status).toBe(200);
+				expect(body).toEqual({ active: false });
+			},
+		);
 	});
 
 	describe("oauth2Token (JSON delivery)", () => {

@@ -134,18 +134,18 @@ describe("token endpoint request parameters", async () => {
 				["refresh_token", "another"],
 			],
 		],
-	] as [
-		string,
-		[string, string][],
-	][])("rejects a repeated %s parameter with invalid_request", async (name, params) => {
-		const { response, body } = await postToken(params);
-		expect(response.status).toBe(400);
-		expect(body).toEqual({
-			error: "invalid_request",
-			error_description: `${name} must not be repeated`,
-		});
-		expect(response.headers.get("cache-control")).toBe("no-store");
-	});
+	] as [string, [string, string][]][])(
+		"rejects a repeated %s parameter with invalid_request",
+		async (name, params) => {
+			const { response, body } = await postToken(params);
+			expect(response.status).toBe(400);
+			expect(body).toEqual({
+				error: "invalid_request",
+				error_description: `${name} must not be repeated`,
+			});
+			expect(response.headers.get("cache-control")).toBe("no-store");
+		},
+	);
 
 	it("keeps a parameter a before hook replaced", async () => {
 		const { response, body } = await postToken([
@@ -199,14 +199,14 @@ describe("token endpoint request parameters", async () => {
 				["grant_type", ""],
 			],
 		],
-	] as [
-		string,
-		[string, string][],
-	][])("treats %s as omitted", async (_label, params) => {
-		const { response, body } = await postToken(params);
-		expect(response.status).toBe(200);
-		expect(body.access_token).toBeDefined();
-	});
+	] as [string, [string, string][]][])(
+		"treats %s as omitted",
+		async (_label, params) => {
+			const { response, body } = await postToken(params);
+			expect(response.status).toBe(200);
+			expect(body.access_token).toBeDefined();
+		},
+	);
 
 	/**
 	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
@@ -220,17 +220,17 @@ describe("token endpoint request parameters", async () => {
 				["resource", ""],
 			],
 		],
-	] as [
-		string,
-		[string, string][],
-	][])("treats %s as omitted", async (_label, params) => {
-		const { response, body } = await postToken([
-			["grant_type", "client_credentials"],
-			...params,
-		]);
-		expect(response.status).toBe(200);
-		expect(body.access_token).toBeDefined();
-	});
+	] as [string, [string, string][]][])(
+		"treats %s as omitted",
+		async (_label, params) => {
+			const { response, body } = await postToken([
+				["grant_type", "client_credentials"],
+				...params,
+			]);
+			expect(response.status).toBe(200);
+			expect(body.access_token).toBeDefined();
+		},
+	);
 
 	it.each([
 		["a fragment", [["resource", `${resource}#fragment`]]],
@@ -249,16 +249,16 @@ describe("token endpoint request parameters", async () => {
 				["resource", resource],
 			],
 		],
-	] as [
-		string,
-		[string, string][],
-	][])("rejects a resource with %s as invalid_target", async (_label, params) => {
-		const { response, body } = await postToken([
-			["grant_type", "client_credentials"],
-			...params,
-		]);
-		expect(response.status).toBe(400);
-		expect(body.error).toBe("invalid_target");
-		expect(response.headers.get("cache-control")).toBe("no-store");
-	});
+	] as [string, [string, string][]][])(
+		"rejects a resource with %s as invalid_target",
+		async (_label, params) => {
+			const { response, body } = await postToken([
+				["grant_type", "client_credentials"],
+				...params,
+			]);
+			expect(response.status).toBe(400);
+			expect(body.error).toBe("invalid_target");
+			expect(response.headers.get("cache-control")).toBe("no-store");
+		},
+	);
 });
