@@ -490,10 +490,10 @@ export interface OAuthProviderExtension {
 	clientMetadata?: {
 		/**
 		 * Top-level registration fields the extension defines. Dynamic client
-		 * registration and client metadata documents ignore unrecognized fields
-		 * (RFC 7591 §2); they keep these and store them in the client's
-		 * `metadata`, where admin-created clients put them too. Core and
-		 * server-owned client fields cannot be claimed.
+		 * registration (RFC 7591 §2) and client metadata documents (CIMD) both
+		 * ignore unrecognized fields; they keep these and store them in the
+		 * client's `metadata`, where admin-created clients put them too. Core
+		 * and server-owned client fields cannot be claimed.
 		 */
 		fields?: string[];
 		/**
