@@ -1537,6 +1537,8 @@ export function oauthToSchema(
 			expiresAt = new Date(
 				toExpJWT(_expiresAt, Math.floor(Date.now() / 1000)) * 1000,
 			);
+			// A number too large for a Date yields an invalid date instead of throwing
+			if (Number.isNaN(expiresAt.getTime())) throw new RangeError();
 		} catch {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",

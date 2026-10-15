@@ -126,7 +126,7 @@ describe("oauth client secret expiry", async () => {
 		expect(response.status).toBe(200);
 	});
 
-	it("reads a string client_secret_expires_at as a time span", async () => {
+	it("reads a string client_secret_expires_at as a time span and rejects invalid values", async () => {
 		const before = Math.floor(Date.now() / 1000);
 		const client = await createClient("1h");
 		expect(client.client_secret_expires_at).toBeGreaterThanOrEqual(
@@ -136,11 +136,24 @@ describe("oauth client secret expiry", async () => {
 			Math.floor(Date.now() / 1000) + 3600,
 		);
 
-		for (const invalid of ["soon", ""]) {
-			await expect(createClient(invalid)).rejects.toMatchObject({
-				status: "BAD_REQUEST",
-				body: { error: "invalid_client_metadata" },
-			});
+		const invalidMetadata = {
+			status: "BAD_REQUEST",
+			body: { error: "invalid_client_metadata" },
+		};
+		// 1e20 seconds is past the largest valid Date
+		for (const invalid of ["soon", "", 1e20]) {
+			await expect(createClient(invalid)).rejects.toMatchObject(
+				invalidMetadata,
+			);
+			await expect(
+				auth.api.adminUpdateOAuthClient({
+					headers,
+					body: {
+						client_id: client.client_id,
+						update: { client_secret_expires_at: invalid },
+					},
+				}),
+			).rejects.toMatchObject(invalidMetadata);
 		}
 	});
 });
