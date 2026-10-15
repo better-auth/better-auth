@@ -1167,19 +1167,22 @@ describe("oauth-provider device-code grant", async () => {
 		["dangerous-scheme", "javascript:alert(1)"],
 		["wrong-type", 42],
 		["array-item", [resource, "/api"]],
-	])("returns invalid_target for %s RFC 8707 resource indicators at the HTTP boundary", async (_label, invalidResource) => {
-		const clientId = await createDeviceClient();
-		const response = await client.$fetch<Record<string, unknown>>(
-			"/device/code",
-			{
-				method: "POST",
-				body: { client_id: clientId, resource: invalidResource },
-			},
-		);
+	])(
+		"returns invalid_target for %s RFC 8707 resource indicators at the HTTP boundary",
+		async (_label, invalidResource) => {
+			const clientId = await createDeviceClient();
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/device/code",
+				{
+					method: "POST",
+					body: { client_id: clientId, resource: invalidResource },
+				},
+			);
 
-		expect(response.error?.status).toBe(400);
-		expect((response.error as TokenErrorBody)?.error).toBe("invalid_target");
-	});
+			expect(response.error?.status).toBe(400);
+			expect((response.error as TokenErrorBody)?.error).toBe("invalid_target");
+		},
+	);
 
 	it("binds repeated form-encoded resources at the device endpoint", async () => {
 		const clientId = await createDeviceClient();

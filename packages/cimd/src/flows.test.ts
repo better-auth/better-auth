@@ -583,27 +583,26 @@ describe("CIMD - token exchange flow", async () => {
 		expect(discoveryFetchUrls).toContain(jwksUri);
 	});
 
-	it.each([
-		"redirected",
-		"wrong-mime",
-		"oversized",
-	] as const)("rejects a %s discovery-owned JWKS response", async (responseKind) => {
-		const result = await exchangeWithUnsafeJwksResponse(responseKind);
-		expect(
-			fetchClientMetadataResource.mock.calls.some(([input]) => {
-				const requestedUrl =
-					typeof input === "string"
-						? input
-						: input instanceof URL
-							? input.href
-							: input.url;
-				return requestedUrl === result.jwksUri;
-			}),
-		).toBe(true);
-		expect(result).toMatchObject({
-			status: expect.toSatisfy((status: number) => status >= 400),
-		});
-	});
+	it.each(["redirected", "wrong-mime", "oversized"] as const)(
+		"rejects a %s discovery-owned JWKS response",
+		async (responseKind) => {
+			const result = await exchangeWithUnsafeJwksResponse(responseKind);
+			expect(
+				fetchClientMetadataResource.mock.calls.some(([input]) => {
+					const requestedUrl =
+						typeof input === "string"
+							? input
+							: input instanceof URL
+								? input.href
+								: input.url;
+					return requestedUrl === result.jwksUri;
+				}),
+			).toBe(true);
+			expect(result).toMatchObject({
+				status: expect.toSatisfy((status: number) => status >= 400),
+			});
+		},
+	);
 
 	it("returns user claims from /oauth2/userinfo with a CIMD-issued access token", async () => {
 		stubMetadataFetch(clientMetadataUrl, metadataDocument);

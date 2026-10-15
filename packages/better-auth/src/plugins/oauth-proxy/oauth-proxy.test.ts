@@ -115,29 +115,32 @@ describe("oauth-proxy", async () => {
 		["/oauth-proxy-callback", "state-cookie"],
 		["/callback/google/oauth-proxy", "pre-upgrade"],
 		["/oauth-proxy-callback", "pre-upgrade"],
-	] as const)("rejects profile input on %s encrypted for %s", async (path, source) => {
-		const { auth, client } = await getTestInstance({
-			plugins: [oAuthProxy()],
-		});
-		const { secretConfig } = await auth.$context;
-		const encryptedState = await symmetricEncrypt({
-			key:
-				source === "state-cookie"
-					? derivePurposeKey(secretConfig, "oauth-state-cookie")
-					: secretConfig,
-			data: JSON.stringify({ callbackURL: "/dashboard" }),
-		});
-		let location: string | null = null;
-		await client.$fetch(
-			`${path}?callbackURL=%2Fdashboard&profile=${encodeURIComponent(encryptedState)}`,
-			{
-				onError(context) {
-					location = context.response.headers.get("location");
+	] as const)(
+		"rejects profile input on %s encrypted for %s",
+		async (path, source) => {
+			const { auth, client } = await getTestInstance({
+				plugins: [oAuthProxy()],
+			});
+			const { secretConfig } = await auth.$context;
+			const encryptedState = await symmetricEncrypt({
+				key:
+					source === "state-cookie"
+						? derivePurposeKey(secretConfig, "oauth-state-cookie")
+						: secretConfig,
+				data: JSON.stringify({ callbackURL: "/dashboard" }),
+			});
+			let location: string | null = null;
+			await client.$fetch(
+				`${path}?callbackURL=%2Fdashboard&profile=${encodeURIComponent(encryptedState)}`,
+				{
+					onError(context) {
+						location = context.response.headers.get("location");
+					},
 				},
-			},
-		);
-		expect(location).toContain("error=invalid_profile");
-	});
+			);
+			expect(location).toContain("error=invalid_profile");
+		},
+	);
 	it("redirects when a provider cannot derive a stable account identity", async () => {
 		const provider = {
 			id: "invalid-account-identity",

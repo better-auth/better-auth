@@ -1,5 +1,17 @@
 # @better-auth/oauth-provider
 
+## 1.7.9
+
+### Patch Changes
+
+- [#10799](https://github.com/better-auth/better-auth/pull/10799) [`54a0994`](https://github.com/better-auth/better-auth/commit/54a09948e8a98f9166b650f791b083818c3dab27) Thanks [@bytaesu](https://github.com/bytaesu)! - DPoP token and UserInfo requests now succeed when the server sees a different request URL than the one the client called. This affects deployments behind a proxy that rewrites the host or path, and the Next.js dev server, which reports every request as `localhost`. Before, a client that built the proof's `htu` from the public endpoint URL got `invalid_dpop_proof` for every grant that accepts DPoP.
+
+  The expected `htu` is now the public endpoint URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`, or the URL of a plugin endpoint that issues tokens. Behind a proxy, set `baseURL` to the public URL clients call, not the internal one. A client that sends proofs to a host other than `baseURL` must build `htu` from the public URL instead. Deployments where the request URL already matches `baseURL` are unaffected.
+
+- [#11185](https://github.com/better-auth/better-auth/pull/11185) [`0a1a87e`](https://github.com/better-auth/better-auth/commit/0a1a87e388c0b50c8d18f3c411c6963c205b11f1) Thanks [@johanneskares](https://github.com/johanneskares)! - If you use `postLogin` with the documented organization selector, users who belong to more than one organization can now finish authorization. Since v1.6.16, selecting an organization and calling `oauth2.continue({ postLogin: true })` sent these users back to the selection page every time.
+
+  `postLogin.shouldRedirect` now receives `isContinuation`, which is `true` when the user returns from your post login page. To stop the loop, update your callback to match the [Post Login Screen example](https://www.better-auth.com/docs/plugins/oauth-provider#post-login-screen): on a new authorization, ask users with several organizations to choose; on continuation, return `false` once the session's active organization is one the user belongs to. Callbacks that do not read `isContinuation` behave as before.
+
 ## 1.7.8
 
 ### Patch Changes
