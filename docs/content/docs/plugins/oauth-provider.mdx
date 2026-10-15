@@ -2045,11 +2045,12 @@ Example that encrypts the refresh token as a JWE:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { CompactEncrypt, compactDecrypt } from "jose";
+import { base64url, CompactEncrypt, compactDecrypt } from "jose";
 import { oauthProvider } from "@better-auth/oauth-provider";
 
-// A 256-bit key, loaded from your secret store.
-const key = new Uint8Array(32);
+// A random 256-bit key kept in your secret store, base64url-encoded.
+// Generate one with `openssl rand -base64 32 | tr '+/' '-_' | tr -d '='`.
+const key = base64url.decode(process.env.REFRESH_TOKEN_KEY!);
 const alg = "A256KW";
 const enc = "A256GCM";
 
