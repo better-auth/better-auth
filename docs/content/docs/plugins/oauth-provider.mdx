@@ -668,7 +668,7 @@ To replace a key without breaking instances that still sign with the old one, ro
 If the keys change while a rotation is in flight, the losing request fails with `409`, or with `401` if its signing key was already removed. Sign a fresh assertion with a current key and retry.
 
 <Callout type="info">
-  Only clients that register inline `jwks` can use this endpoint. A client that publishes a `jwks_uri` rotates its keys at that URI, and clients listed in `cachedTrustedClients` cannot be changed through the client management endpoints. `client_secret_*` clients use `/oauth2/client/rotate-secret` instead.
+  Each rotation assertion must be single-use, so the provider refuses to start with `allowClientKeyRotation` on the memory adapter or with `advanced.database.generateId: "serial"`. Only clients that register inline `jwks` can use this endpoint. A client that publishes a `jwks_uri` rotates its keys at that URI, and clients listed in `cachedTrustedClients` cannot be changed through the client management endpoints. `client_secret_*` clients use `/oauth2/client/rotate-secret` instead.
 </Callout>
 
 #### Authorization code grant

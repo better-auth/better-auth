@@ -759,6 +759,10 @@ export interface OAuthOptions<
 	 * Clients that publish their keys at a `jwks_uri` rotate them there, so they
 	 * cannot use this endpoint.
 	 *
+	 * Each rotation assertion must be single-use, so the provider refuses to
+	 * start with this enabled on the memory adapter or with
+	 * `advanced.database.generateId: "serial"`, neither of which enforces it.
+	 *
 	 * @default false
 	 */
 	allowClientKeyRotation?: boolean;

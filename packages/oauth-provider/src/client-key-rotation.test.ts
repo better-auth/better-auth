@@ -42,16 +42,12 @@ function sign(clientId: string, key: TestKey, audience = rotateURL) {
 	});
 }
 
-async function setup(
-	database?: ReturnType<typeof memoryAdapter>,
-	testWith: "sqlite" | "postgres" = "sqlite",
-) {
+async function setup(testWith: "sqlite" | "postgres" = "sqlite") {
 	const trustedClients = new Set<string>();
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
 		{
 			baseURL,
 			trustedOrigins: ["https://trusted.example.com"],
-			...(database ? { database } : {}),
 			plugins: [
 				jwt(),
 				oauthProvider({
@@ -331,98 +327,109 @@ describe("client key rotation", async () => {
 	});
 });
 
-const adapters = [
-	{ name: "sqlite", testWith: "sqlite" as const, database: undefined },
-	{
-		name: "memory adapter",
-		testWith: "sqlite" as const,
-		database: memoryAdapter({
-			account: [],
-			jwks: [],
-			oauthAccessToken: [],
-			oauthClient: [],
-			oauthClientAssertion: [],
-			oauthClientResource: [],
-			oauthConsent: [],
-			oauthRefreshToken: [],
-			oauthResource: [],
-			session: [],
-			user: [],
-			verification: [],
-		}),
-	},
-	{ name: "postgres", testWith: "postgres" as const, database: undefined },
-];
+/**
+ * A rotation assertion must be single-use: replaying a captured one while its
+ * signing key is still current would hand the client's keys to whoever holds
+ * it. The memory adapter does not enforce the primary key the jti tombstone
+ * relies on, and `generateId: "serial"` replaces the tombstone's derived id.
+ */
+describe("client key rotation without single-use assertions", () => {
+	const rotationEnabled = oauthProvider({
+		loginPage: "/login",
+		consentPage: "/consent",
+		allowClientKeyRotation: true,
+	});
 
-describe.each(adapters)(
-	"client key rotation storage ($name)",
-	async ({ name, testWith, database }) => {
-		const { auth, createClient, rotate, authenticate } = await setup(
-			database,
-			testWith,
-		);
-		const context = await auth.$context;
+	it("refuses to start on the memory adapter", async () => {
+		await expect(
+			getTestInstance({
+				baseURL,
+				database: memoryAdapter({
+					account: [],
+					jwks: [],
+					oauthClient: [],
+					session: [],
+					user: [],
+					verification: [],
+				}),
+				plugins: [jwt(), rotationEnabled],
+			}),
+		).rejects.toThrow("single-use");
+	});
 
-		// The memory adapter does not enforce the primary key the jti tombstone relies on.
-		it.skipIf(name === "memory adapter")(
-			"accepts each assertion once",
-			async () => {
-				const signer = await createKey("signer");
-				const clientId = await createClient([signer]);
-				const assertion = await sign(clientId, signer);
-				const added = await createKey("added");
+	it('refuses to start with generateId: "serial"', async () => {
+		await expect(
+			getTestInstance({
+				baseURL,
+				advanced: { database: { generateId: "serial" } },
+				plugins: [jwt(), rotationEnabled],
+			}),
+		).rejects.toThrow("single-use");
+	});
+});
 
-				// The signer stays in the set, so only the jti stops the replay.
-				const first = await rotate({
-					clientId,
-					signer,
-					next: [signer, added],
-					assertion,
+describe.each([
+	{ name: "sqlite", testWith: "sqlite" as const },
+	{ name: "postgres", testWith: "postgres" as const },
+])("client key rotation storage ($name)", async ({ testWith }) => {
+	const { auth, createClient, rotate, authenticate } = await setup(testWith);
+	const context = await auth.$context;
+
+	it("accepts each assertion once", async () => {
+		const signer = await createKey("signer");
+		const clientId = await createClient([signer]);
+		const assertion = await sign(clientId, signer);
+		const added = await createKey("added");
+
+		// The signer stays in the set, so only the jti stops the replay.
+		const first = await rotate({
+			clientId,
+			signer,
+			next: [signer, added],
+			assertion,
+		});
+		const replay = await rotate({
+			clientId,
+			signer,
+			next: [signer, await createKey("attacker")],
+			assertion,
+		});
+
+		expect(first.status).toBe(200);
+		expect(replay.status).toBe(400);
+		expect(replay.body.error_description).toContain("already been used");
+		expect(await authenticate(clientId, added)).toBe(200);
+	});
+
+	it("loses to a change that lands between verification and write", async () => {
+		const oldKey = await createKey("old");
+		const newKey = await createKey("new");
+		const ownerKey = await createKey("owner");
+		const clientId = await createClient([oldKey]);
+		const incrementOne = context.adapter.incrementOne;
+		vi.spyOn(context.adapter, "incrementOne").mockImplementationOnce(
+			async (input) => {
+				// The owner replaces the keys after the assertion was verified.
+				await context.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientId }],
+					update: { jwks: JSON.stringify({ keys: [ownerKey.publicJwk] }) },
 				});
-				const replay = await rotate({
-					clientId,
-					signer,
-					next: [signer, await createKey("attacker")],
-					assertion,
-				});
-
-				expect(first.status).toBe(200);
-				expect(replay.status).toBe(400);
-				expect(replay.body.error_description).toContain("already been used");
-				expect(await authenticate(clientId, added)).toBe(200);
+				return incrementOne(input);
 			},
 		);
 
-		it("loses to a change that lands between verification and write", async () => {
-			const oldKey = await createKey("old");
-			const newKey = await createKey("new");
-			const ownerKey = await createKey("owner");
-			const clientId = await createClient([oldKey]);
-			const incrementOne = context.adapter.incrementOne;
-			vi.spyOn(context.adapter, "incrementOne").mockImplementationOnce(
-				async (input) => {
-					// The owner replaces the keys after the assertion was verified.
-					await context.adapter.update({
-						model: "oauthClient",
-						where: [{ field: "clientId", value: clientId }],
-						update: { jwks: JSON.stringify({ keys: [ownerKey.publicJwk] }) },
-					});
-					return incrementOne(input);
-				},
-			);
-
-			const response = await rotate({
-				clientId,
-				signer: oldKey,
-				next: [newKey],
-			});
-
-			expect(response.status).toBe(409);
-			expect(response.body.error).toBe("invalid_request");
-			expect(response.headers.get("cache-control")).toContain("no-store");
-			expect(await authenticate(clientId, ownerKey)).toBe(200);
-			expect(await authenticate(clientId, newKey)).toBe(401);
-			expect(await authenticate(clientId, oldKey)).toBe(401);
+		const response = await rotate({
+			clientId,
+			signer: oldKey,
+			next: [newKey],
 		});
-	},
-);
+
+		expect(response.status).toBe(409);
+		expect(response.body.error).toBe("invalid_request");
+		expect(response.headers.get("cache-control")).toContain("no-store");
+		expect(await authenticate(clientId, ownerKey)).toBe(200);
+		expect(await authenticate(clientId, newKey)).toBe(401);
+		expect(await authenticate(clientId, oldKey)).toBe(401);
+	});
+});

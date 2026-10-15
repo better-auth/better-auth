@@ -520,6 +520,19 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
+			// A replayed rotation assertion would hand over a client's keys, so
+			// rotation needs the jti tombstone to be single-use. The memory adapter
+			// does not enforce primary keys, and "serial" ids replace the derived id.
+			if (
+				opts.allowClientKeyRotation &&
+				(ctx.adapter.id === "memory" ||
+					ctx.options.advanced?.database?.generateId === "serial")
+			) {
+				throw new BetterAuthError(
+					'`allowClientKeyRotation` needs single-use client assertions, which the memory adapter and `advanced.database.generateId: "serial"` do not enforce',
+				);
+			}
+
 			// Seed `oauthResource` rows from plugin config. A failure must not
 			// reject init (a failed init is cached and breaks every route);
 			// `getResource` retries the seed on first resource access.
