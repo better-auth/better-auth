@@ -335,6 +335,21 @@ export interface OAuthProviderApi {
 	 */
 	issueTokens: (params: OAuthTokenIssueParams) => Awaitable<OAuthTokenResponse>;
 	/**
+	 * Resolves the sender-constraint the tokens for this request will carry: the
+	 * `confirmation` the client proved at authentication, or else the DPoP proof
+	 * on this request, verified and required by the same rules `issueTokens`
+	 * applies. A grant that consumes a one-time credential (a device code, a CIBA
+	 * request) calls this before the claim and passes the result to
+	 * `issueTokens` as `confirmation`, so a rejected proof leaves the credential
+	 * for a retry with a valid one.
+	 */
+	resolveConfirmation: (params: {
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		resources?: string[];
+		confirmation?: Confirmation;
+	}) => Promise<Confirmation | undefined>;
+	/**
 	 * Computes the stored lookup key for a token value (the same hash the
 	 * provider persists), so a caller can find or revoke a previously issued
 	 * opaque token by its value.

@@ -112,6 +112,13 @@ export const createCibaGrantHandler =
 				"INTERNAL_SERVER_ERROR",
 			);
 		}
+		// A rejected DPoP proof also refuses here, before the claim.
+		const binding = await provider.resolveConfirmation({
+			client,
+			scopes,
+			resources,
+			confirmation,
+		});
 		const claimed = await adapter.consumeOne<CibaRequest>({
 			model: "cibaRequest",
 			where: [
@@ -145,6 +152,6 @@ export const createCibaGrantHandler =
 			amr: claimed.amr ?? undefined,
 			// A DPoP proof on this poll, or a sender-constraint proved at client
 			// authentication, binds the issued token.
-			confirmation,
+			confirmation: binding,
 		});
 	};
