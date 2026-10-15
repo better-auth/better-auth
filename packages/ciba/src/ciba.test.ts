@@ -1,4 +1,7 @@
-import type { OAuthClient } from "@better-auth/oauth-provider";
+import type {
+	OAuthAuthenticationContext,
+	OAuthClient,
+} from "@better-auth/oauth-provider";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
@@ -23,9 +26,12 @@ const PING = {
 	backchannel_token_delivery_mode: "ping",
 	backchannel_client_notification_endpoint: notificationEndpoint,
 };
-// What the approving session establishes, and what an app's push approval proves.
-const SESSION_ACR = "urn:example:acr:session";
+// What an app's own push approval proves, stated through completeCibaRequest.
 const PUSH_ACR = "urn:example:acr:push";
+
+const mfaAcr = "urn:example:acr:mfa";
+const resolveAuthenticationContext =
+	vi.fn<() => OAuthAuthenticationContext | undefined>();
 
 let lastNotification: CibaNotification | undefined;
 const sendNotification = vi.fn((notification: CibaNotification) => {
@@ -49,8 +55,8 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
 				authenticationContext: {
-					acrValuesSupported: ["0", SESSION_ACR, PUSH_ACR],
-					resolve: () => ({ acr: SESSION_ACR, amr: ["pwd"] }),
+					acrValuesSupported: ["0", mfaAcr, PUSH_ACR],
+					resolve: resolveAuthenticationContext,
 				},
 			}),
 			ciba({
@@ -435,14 +441,17 @@ describe("ciba poll mode", () => {
 		);
 	});
 
-	it("issues the acr and amr the approving session established", async () => {
+	it("carries the approving session's acr and amr into the ID token", async () => {
+		resolveAuthenticationContext.mockReturnValueOnce({
+			acr: mfaAcr,
+			amr: ["pwd", "otp"],
+		});
 		const { authReqId, url } = await start();
 		await approve(url);
 		const issued = await poll(authReqId);
-		expect(decodeJwt(issued.body.id_token as string)).toMatchObject({
-			acr: SESSION_ACR,
-			amr: ["pwd"],
-		});
+		const idToken = decodeJwt(issued.body.id_token as string);
+		expect(idToken.acr).toBe(mfaAcr);
+		expect(idToken.amr).toEqual(["pwd", "otp"]);
 	});
 
 	it("binds the token to the DPoP key presented on the poll", async () => {

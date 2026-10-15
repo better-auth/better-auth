@@ -190,7 +190,7 @@ The link points to `/oauth2/authorize?ciba_request_id=<id>`, so the request runs
 3. `consentPage` always opens, even for a client with `skip_consent` or a stored consent, because the user must confirm each request. The user can narrow the scopes there.
 4. The decision is recorded only for the user the `login_hint` named. Anyone else who opens the link, signed in as another account, lands on `resultPage` with an error, and the request stays pending for the right user.
 
-A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what [`authenticationContext`](/docs/plugins/oauth-provider#authentication-context) returns for that session.
+A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what the provider's [`authenticationContext.resolve`](/docs/plugins/oauth-provider) returned for that session.
 
 ## Decide from your own app
 
