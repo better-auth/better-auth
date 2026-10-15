@@ -19,6 +19,15 @@ import type {
 	UserWithTwoFactor,
 } from "./types";
 
+/**
+ * Out-param flipped by `valid()` once the session row exists. Lets callers
+ * tell pre-session failures (safe to roll back a replay marker) apart from
+ * post-session failures (marker must stay, fail-closed). No schema involved.
+ */
+export type TwoFactorValidSignal = {
+	sessionIssued?: boolean | undefined;
+};
+
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
 		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
@@ -63,7 +72,10 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			ctx.context.secret,
 		);
 		return {
-			valid: async (ctx: GenericEndpointContext) => {
+			valid: async (
+				ctx: GenericEndpointContext,
+				signal?: TwoFactorValidSignal,
+			) => {
 				// The 2FA challenge is single-use and time-bounded. Burn it
 				// atomically before issuing a session so a stale (expired) replay
 				// or two concurrent verifications of the same cookie cannot each
@@ -89,6 +101,11 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						message: "failed to create session",
 						code: "FAILED_TO_CREATE_SESSION",
 					});
+				}
+				// The session row exists from here: later failures (cookie
+				// write, trust-device) keep the replay marker (fail-closed).
+				if (signal) {
+					signal.sessionIssued = true;
 				}
 				await setSessionCookie(ctx, {
 					session,
@@ -196,7 +213,15 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		};
 	}
 	return {
-		valid: async (ctx: GenericEndpointContext) => {
+		valid: async (
+			ctx: GenericEndpointContext,
+			signal?: TwoFactorValidSignal,
+		) => {
+			// No new session is minted here; the session pre-exists, so any
+			// failure is post-session and keeps the marker (fail-closed).
+			if (signal) {
+				signal.sessionIssued = true;
+			}
 			return ctx.json({
 				token: session.session.token,
 				user: parseUserOutput(ctx.context.options, session.user),

@@ -15,6 +15,7 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
+import type { TwoFactorValidSignal } from "../verify-two-factor";
 import {
 	assertTwoFactorNotLocked,
 	recordTwoFactorFailure,
@@ -375,7 +376,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				return invalid("INVALID_CODE");
 			}
 
-			let validStarted = false;
+			const sessionSignal: TwoFactorValidSignal = {};
 			try {
 				if (isSignIn) {
 					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
@@ -416,16 +417,16 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 						where: [{ field: "id", value: twoFactor.id }],
 					});
 				}
-				// Post-session failures keep the marker (rollback would mint a second
-				// session); pre-session failures roll back via replayIdToClean.
-				validStarted = true;
-				const result = await valid(ctx);
+				// valid() flips sessionSignal once the session row exists.
+				// Pre-session failures roll back below; post-session ones
+				// keep the marker (rollback would mint a second session).
+				const result = await valid(ctx, sessionSignal);
 				replayIdToClean = null;
 				return result;
 			} catch (error) {
-				if (!validStarted && replayIdToClean) {
-					// Pre-session failure spent no attempt: return the slot so a
-					// transient error does not burn the challenge budget.
+				if (replayIdToClean && !sessionSignal.sessionIssued) {
+					// Pre-session failure spent no session: return the slot so
+					// a transient error does not burn the code on retry.
 					await attempt?.restore();
 					if (
 						ctx.context.secondaryStorage &&
