@@ -338,11 +338,18 @@ export async function registerEndpoint(
 
 	// RFC 7591 §3.2.1 lets the server replace requested metadata: register the
 	// supported grants and return them, instead of rejecting the whole request.
+	const grantTypes = body.grant_types?.length
+		? resolveMutuallySupportedGrantTypes(opts, body.grant_types)
+		: body.grant_types;
+	const droppedAuthorizationCode =
+		body.grant_types?.includes("authorization_code") &&
+		!grantTypes?.includes("authorization_code");
 	const metadata = {
 		...body,
-		grant_types: body.grant_types?.length
-			? resolveMutuallySupportedGrantTypes(opts, body.grant_types)
-			: body.grant_types,
+		grant_types: grantTypes,
+		// `code`, the only response type, goes with `authorization_code`; the
+		// defaults derive response_types from the registered grants instead.
+		response_types: droppedAuthorizationCode ? undefined : body.response_types,
 	};
 
 	if (!session && !isTokenAuthorized) {
@@ -470,8 +477,9 @@ export async function checkOAuthClient(
 		// token endpoint refuse the rest.
 		resolveMutuallySupportedGrantTypes(opts, grantTypes);
 	} else {
-		// Dynamic registration drops unsupported grants before this check, so
-		// only managed clients and client updates are rejected here.
+		// Dynamic registration drops unsupported requested grants before this
+		// check, so this rejects managed clients, client updates, and a defaulted
+		// grant the server does not support.
 		const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 		for (const grantType of grantTypes) {
 			if (!supportedGrantTypes.has(grantType)) {

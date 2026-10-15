@@ -451,7 +451,7 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
-Dynamic registration keeps only the requested `grant_types` this server supports, and the registration response lists the grants that were registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). For example, Claude's MCP connector requests `urn:ietf:params:oauth:grant-type:jwt-bearer` alongside `authorization_code` and `refresh_token`, and registers with the last two. A registration that shares no grant with the server is rejected with `invalid_client_metadata`. Clients created with `createOAuthClient` or `adminCreateOAuthClient` are not narrowed: an unsupported grant is rejected.
+Dynamic registration keeps only the requested `grant_types` this server supports, and the registration response lists the grants that were registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). For example, Claude's MCP connector requests `urn:ietf:params:oauth:grant-type:jwt-bearer` alongside `authorization_code` and `refresh_token`, and registers with the last two. When `authorization_code` is dropped, so is the `code` response type. A registration that shares no grant with the server is rejected with `invalid_client_metadata`. Clients created with `createOAuthClient` or `adminCreateOAuthClient` are not narrowed: an unsupported grant is rejected.
 
 `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use any of these redirect URI forms:
 

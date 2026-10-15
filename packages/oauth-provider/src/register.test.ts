@@ -780,20 +780,23 @@ describe("oauth register - dynamic registration grant narrowing", async () => {
 		});
 	});
 
-	it("derives default response_types from the narrowed grants", async () => {
+	it("drops the code response type along with an unsupported authorization_code grant", async () => {
 		const machineServer = await instanceWithGrants(["client_credentials"]);
 		const { headers } = await machineServer.signInWithTestUser();
-		const response = await machineServer.register(
-			{
-				token_endpoint_auth_method: "client_secret_basic",
-				grant_types: ["authorization_code", "client_credentials"],
-			},
-			headers,
-		);
-		const body = (await response.json()) as OAuthClient;
-		expect(response.status, JSON.stringify(body)).toBe(201);
-		expect(body.grant_types).toEqual(["client_credentials"]);
-		expect(body.response_types ?? []).toEqual([]);
+		for (const responseTypes of [undefined, ["code"]]) {
+			const response = await machineServer.register(
+				{
+					token_endpoint_auth_method: "client_secret_basic",
+					grant_types: ["authorization_code", "client_credentials"],
+					response_types: responseTypes,
+				},
+				headers,
+			);
+			const body = (await response.json()) as OAuthClient;
+			expect(response.status, JSON.stringify(body)).toBe(201);
+			expect(body.grant_types).toEqual(["client_credentials"]);
+			expect(body.response_types ?? []).toEqual([]);
+		}
 	});
 });
 
