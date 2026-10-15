@@ -798,18 +798,11 @@ export async function checkOAuthClient(
 		}
 	}
 
-	// Extensions read their fields from `metadata` only. Admin updates also
-	// spread stored metadata onto the client, so drop declared fields here too.
-	const { metadata: _metadata, ...coreClient } = clientWithDefaults;
-	const extensionFields = getExtensionClientMetadataFields(opts);
-	await validateExtensionClientMetadata(opts, {
-		client: Object.fromEntries(
-			Object.entries(coreClient).filter(
-				([field]) => !extensionFields.has(field),
-			),
-		) as Omit<OAuthClientRegistrationMetadata, "metadata">,
-		metadata: stripReservedOAuthClientMetadataExtensions(client.metadata) ?? {},
-	});
+	await validateExtensionClientMetadata(
+		opts,
+		clientWithDefaults,
+		client.metadata,
+	);
 }
 
 interface CreateOAuthClientRegistrationBaseInput {
@@ -1061,6 +1054,9 @@ async function persistOAuthClientRegistration(
 							body.metadata,
 						),
 					);
+					// Validation ran against the client read before the fetch; the
+					// merge may include newer admin keys, so validate what is saved.
+					await validateExtensionClientMetadata(opts, body, merged);
 					metadata =
 						merged && Object.keys(merged).length > 0
 							? JSON.stringify(merged)

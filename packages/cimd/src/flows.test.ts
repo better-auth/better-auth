@@ -1080,13 +1080,23 @@ describe("CIMD - extension client metadata", async () => {
 						clientMetadata: {
 							fields: ["example_mode"],
 							validate: ({ metadata }) => {
+								const mode = metadata.example_mode;
+								if (mode !== undefined && mode !== "ok" && mode !== "alt") {
+									throw new APIError("BAD_REQUEST", {
+										error: "invalid_client_metadata",
+										error_description: "example_mode must be ok or alt",
+									});
+								}
+								// An admin-owned key the declared field must agree with.
+								const allowed = metadata.allowed_modes;
 								if (
-									metadata.example_mode !== undefined &&
-									metadata.example_mode !== "ok"
+									Array.isArray(allowed) &&
+									mode !== undefined &&
+									!allowed.includes(mode)
 								) {
 									throw new APIError("BAD_REQUEST", {
 										error: "invalid_client_metadata",
-										error_description: "example_mode must be ok",
+										error_description: "example_mode is not in allowed_modes",
 									});
 								}
 							},
@@ -1195,6 +1205,55 @@ describe("CIMD - extension client metadata", async () => {
 		);
 		expect(await authorize()).toContain("/consent");
 		expect(await storedMetadata()).toEqual({ note: "during fetch" });
+	});
+
+	it("validates the merged metadata a refresh saves, not the earlier read", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "ok",
+		});
+		expect(await authorize()).toContain("/consent");
+
+		// During the fetch an admin narrows allowed_modes while the document
+		// switches to "alt". Each change is valid alone; together they are not.
+		const ctx = await authorizationServer.$context;
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested !== clientMetadataUrl) return originalFetch(input, init);
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientMetadataUrl }],
+					update: {
+						metadata: JSON.stringify({
+							example_mode: "ok",
+							allowed_modes: ["ok"],
+						}),
+					},
+				});
+				return new Response(
+					JSON.stringify({ ...metadataDocument, example_mode: "alt" }),
+					{ status: 200, headers: { "content-type": "application/json" } },
+				);
+			}),
+		);
+		const response = await authedClient.$fetch(
+			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
+			{ method: "GET" },
+		);
+		expect(JSON.stringify(response)).toContain("invalid_client_metadata");
+		expect(await storedMetadata()).toEqual({
+			example_mode: "ok",
+			allowed_modes: ["ok"],
+		});
 	});
 
 	it("rejects a document with an invalid declared field", async () => {

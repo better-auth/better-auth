@@ -2,12 +2,16 @@ import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
-import { isReservedOAuthClientMetadataField } from "./client-metadata";
+import {
+	isReservedOAuthClientMetadataField,
+	stripReservedOAuthClientMetadataExtensions,
+} from "./client-metadata";
 import type {
 	ClientDiscovery,
 	OAuthClaimExtensionInput,
 	OAuthClientAuthenticationStrategy,
 	OAuthClientMetadataExtensionInput,
+	OAuthClientRegistrationMetadata,
 	OAuthMetadataExtensionInput,
 	OAuthOptions,
 	OAuthProviderExtension,
@@ -420,11 +424,27 @@ export function getExtensionClientMetadataFields(
 	);
 }
 
-/** Runs every extension's client metadata validator, in registration order. */
+/**
+ * Runs every extension's client metadata validator, in registration order.
+ * Extensions read their fields from `metadata` only, so `metadata` and
+ * declared fields are removed from the client they receive; admin updates
+ * spread stored metadata onto the client.
+ */
 export async function validateExtensionClientMetadata(
 	opts: OAuthOptions<Scope[]>,
-	input: OAuthClientMetadataExtensionInput,
+	client: OAuthClientRegistrationMetadata,
+	metadata: Record<string, unknown> | undefined,
 ): Promise<void> {
+	const { metadata: _metadata, ...coreClient } = client;
+	const extensionFields = getExtensionClientMetadataFields(opts);
+	const input: OAuthClientMetadataExtensionInput = {
+		client: Object.fromEntries(
+			Object.entries(coreClient).filter(
+				([field]) => !extensionFields.has(field),
+			),
+		) as Omit<OAuthClientRegistrationMetadata, "metadata">,
+		metadata: stripReservedOAuthClientMetadataExtensions(metadata) ?? {},
+	};
 	for (const extension of getOAuthProviderExtensions(opts)) {
 		await extension.clientMetadata?.validate?.(input);
 	}
