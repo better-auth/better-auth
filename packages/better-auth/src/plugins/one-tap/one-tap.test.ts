@@ -1,6 +1,6 @@
 // cspell:ignore AQAB
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
+import type { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
@@ -827,6 +827,6 @@ describe("oneTapClient types", () => {
  */
 describe("one-tap subpath export", () => {
 	it("should be importable from better-auth/plugins/one-tap", () => {
-		expect(oneTapFromSubpath().id).toBe("one-tap");
+		expectTypeOf<typeof oneTapFromSubpath>().toEqualTypeOf<typeof oneTap>();
 	});
 });

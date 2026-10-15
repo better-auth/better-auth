@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Add the `better-auth/plugins/one-tap` subpath export, so the One Tap plugin can be imported like the other plugins.
+You can now import the One Tap plugin from `better-auth/plugins/one-tap`, as you can for other plugins. Previously this import failed with a "not exported" error. Imports from `better-auth/plugins` and `better-auth/client/plugins` are unchanged.
