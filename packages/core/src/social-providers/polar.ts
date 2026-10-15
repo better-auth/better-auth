@@ -6,28 +6,12 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
+/** Claims returned by Polar's OAuth userinfo endpoint for a user or organization. */
 export interface PolarProfile {
-	id: string;
-	email: string;
-	username: string;
-	avatar_url: string;
-	github_username?: string | undefined;
-	account_id?: string | undefined;
-	public_name?: string | undefined;
-	email_verified?: boolean | undefined;
-	profile_settings?:
-		| {
-				profile_settings_enabled?: boolean;
-				profile_settings_public_name?: string;
-				profile_settings_public_avatar?: string;
-				profile_settings_public_bio?: string;
-				profile_settings_public_location?: string;
-				profile_settings_public_website?: string;
-				profile_settings_public_twitter?: string;
-				profile_settings_public_github?: string;
-				profile_settings_public_email?: string;
-		  }
-		| undefined;
+	sub: string;
+	name?: string | null | undefined;
+	email?: string | null | undefined;
+	email_verified?: boolean | null | undefined;
 }
 
 export interface PolarOptions extends ProviderOptions<PolarProfile> {}
@@ -37,7 +21,7 @@ export const polar = (options: PolarOptions) => {
 	return {
 		id: "polar",
 		name: "Polar",
-		accountSubject: ({ profile }) => profile.id,
+		accountSubject: ({ profile }) => profile.sub,
 		createAuthorizationURL({
 			state,
 			scopes,
@@ -104,9 +88,8 @@ export const polar = (options: PolarOptions) => {
 			// We check for it first, then default to false for security consistency.
 			return {
 				user: {
-					name: profile.public_name || profile.username || "",
+					name: profile.name ?? "",
 					email: profile.email,
-					image: profile.avatar_url,
 					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
