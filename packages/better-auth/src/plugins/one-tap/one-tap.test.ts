@@ -830,3 +830,82 @@ describe("one-tap subpath export", () => {
 		expectTypeOf<typeof oneTapFromSubpath>().toEqualTypeOf<typeof oneTap>();
 	});
 });
+
+/**
+ * With FedCM, Google no longer supports display-moment notifications or
+ * skipped-moment reasons. FedCM is always on for the prompt, so
+ * `fedCM: false` must avoid them too.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10380
+ * @see https://developers.google.com/identity/gsi/web/guides/fedcm-migration
+ */
+describe("one-tap prompt notifications", () => {
+	const notification = (moment: "display" | "skipped") => ({
+		isDisplayMoment: vi.fn(() => moment === "display"),
+		isDisplayed: vi.fn(() => false),
+		isNotDisplayed: vi.fn(() => moment === "display"),
+		getNotDisplayedReason: vi.fn(() => "opt_out_or_no_session"),
+		isSkippedMoment: vi.fn(() => moment === "skipped"),
+		getSkippedReason: vi.fn(() => "auto_cancel"),
+		isDismissedMoment: vi.fn(() => false),
+		getDismissedReason: vi.fn(),
+	});
+
+	const runPrompt = async (
+		moment: ReturnType<typeof notification>,
+		fedCM?: boolean,
+	) => {
+		const { client } = await getTestInstance(
+			{ plugins: [oneTap()] },
+			{
+				clientOptions: {
+					plugins: [
+						oneTapClient({
+							clientId: "test-client",
+							promptOptions: { fedCM, baseDelay: 0 },
+						}),
+					],
+				},
+			},
+		);
+		const prompt = vi.fn((listener: (n: unknown) => void) => listener(moment));
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			google: { accounts: { id: { initialize: vi.fn(), prompt } } },
+		});
+		const onPromptNotification = vi.fn();
+		await client.oneTap({ onPromptNotification });
+		return { prompt, onPromptNotification };
+	};
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it.each([
+		["default", undefined],
+		["fedCM: false", false],
+	])(
+		"ends a skipped prompt without unsupported calls (%s)",
+		async (_, fedCM) => {
+			const skipped = notification("skipped");
+			const { prompt, onPromptNotification } = await runPrompt(skipped, fedCM);
+
+			expect(prompt).toHaveBeenCalledTimes(1);
+			expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(skipped);
+			expect(skipped.getSkippedReason).not.toHaveBeenCalled();
+			expect(skipped.isDisplayMoment).not.toHaveBeenCalled();
+			expect(skipped.isDisplayed).not.toHaveBeenCalled();
+			expect(skipped.isNotDisplayed).not.toHaveBeenCalled();
+			expect(skipped.getNotDisplayedReason).not.toHaveBeenCalled();
+		},
+	);
+
+	it("ends a prompt that a browser without FedCM did not display", async () => {
+		const notDisplayed = notification("display");
+		const { onPromptNotification } = await runPrompt(notDisplayed);
+
+		expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(notDisplayed);
+	});
+});

@@ -160,9 +160,13 @@ await authClient.oneTap({
 
 #### Handling Prompt Dismissals with Exponential Backoff
 
-If the user dismisses or skips the prompt, the plugin will retry showing the One Tap prompt using exponential backoff based on your configured promptOptions.
+If the prompt is dismissed without a sign-in, the plugin will retry showing the One Tap prompt using exponential backoff based on your configured promptOptions. A prompt your app closes with `google.accounts.id.cancel()` is not retried.
 
-If the maximum number of attempts is reached without a successful sign-in, you can use the onPromptNotification callback to be notified—allowing you to render an alternative UI (e.g., a traditional Google Sign-In button) so users can restart the process manually:
+A skipped prompt is not retried. Google doesn't report why the prompt was skipped, and after a user closes it, Google holds the prompt back for a cooldown period that retries can't shorten.
+
+The plugin passes a listener to Google's `prompt()` to track these moments, so Google Identity Services logs a FedCM migration warning about prompt UI status methods. Google logs it for any listener, even one that calls none of those methods. Under FedCM, the plugin only calls the methods that FedCM supports, so you can ignore the warning.
+
+When the prompt is skipped, or the maximum number of attempts is reached without a successful sign-in, you can use the onPromptNotification callback to be notified—allowing you to render an alternative UI (e.g., a traditional Google Sign-In button) so users can restart the process manually:
 
 ```ts
 import { authClient } from "@/lib/auth-client";
