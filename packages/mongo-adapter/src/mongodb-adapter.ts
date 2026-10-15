@@ -169,7 +169,7 @@ export const mongodbAdapter = (
 						]);
 						const existingIndexSetup =
 							indexSetupByDefinition.get(indexDefinition);
-						if (existingIndexSetup) return existingIndexSetup;
+						if (existingIndexSetup !== undefined) return existingIndexSetup;
 
 						const indexFields = Object.fromEntries(
 							physicalFieldNames.map((field) => [field, 1] as const),
@@ -668,9 +668,13 @@ export const mongodbAdapter = (
 					}
 
 					if (sortBy) {
+						const sortField = getFieldName({
+							field: sortBy.field,
+							model: modelKey,
+						});
 						pipeline.push({
 							$sort: {
-								[getFieldName({ field: sortBy.field, model: modelKey })]:
+								[sortField === "id" ? "_id" : sortField]:
 									sortBy.direction === "desc" ? -1 : 1,
 							},
 						});

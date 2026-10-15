@@ -1,5 +1,13 @@
 # @better-auth/mongo-adapter
 
+## 1.7.10
+
+### Patch Changes
+
+- [#11801](https://github.com/better-auth/better-auth/pull/11801) [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you use the MongoDB adapter, `findMany` calls that sort by `id` now return rows in id order. Previously the sort was silently ignored, so paging through results with `limit` and `offset` could repeat or skip rows.
+
+## 1.7.9
+
 ## 1.7.8
 
 ### Patch Changes

@@ -61,10 +61,7 @@ jobs:
         run: pnpm build
 
       - name: Lint
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm lint
+        run: pnpm biome ci --error-on-warnings
 
       - name: Lint Dependencies
         env:

@@ -3244,14 +3244,11 @@ describe("api-key", async () => {
 			const originalSet = fallbackStorage.set;
 			vi.spyOn(fallbackStorage, "set").mockImplementation(
 				async (key, value) => {
-					if (!key.startsWith("api-key:by-id:")) {
-						originalSet(key, value);
-						return;
-					}
+					if (!key.startsWith("api-key:by-id:")) return originalSet(key, value);
 					concurrentSets++;
 					maxConcurrentSets = Math.max(maxConcurrentSets, concurrentSets);
 					await new Promise((r) => setTimeout(r, 20));
-					originalSet(key, value);
+					await originalSet(key, value);
 					concurrentSets--;
 				},
 			);
