@@ -94,7 +94,10 @@ async function setup(testWith: "sqlite" | "postgres" = "sqlite") {
 				client_assertion:
 					input.assertion ??
 					(await sign(input.clientId, input.signer, input.audience)),
-				jwks: input.jwks ?? { keys: input.next.map((key) => key.publicJwk) },
+				jwks:
+					input.jwks !== undefined
+						? input.jwks
+						: { keys: input.next.map((key) => key.publicJwk) },
 			}),
 		});
 		return {
