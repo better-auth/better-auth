@@ -441,4 +441,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/pplytas.png",
 		},
 	},
+	{
+		name: "@myotp/better-auth",
+		url: "https://github.com/brntech/myotp-agentkit/tree/main/better-auth",
+		description:
+			"Deliver phoneNumber() codes over SMS, WhatsApp or Telegram in 190+ countries with one API key and no per-verification fee.",
+		author: {
+			name: "MyOTP.App",
+			github: "brntech",
+			avatar: "https://github.com/brntech.png",
+		},
+	},
 ];
