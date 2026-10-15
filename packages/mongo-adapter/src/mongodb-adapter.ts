@@ -169,7 +169,7 @@ export const mongodbAdapter = (
 						]);
 						const existingIndexSetup =
 							indexSetupByDefinition.get(indexDefinition);
-						if (existingIndexSetup) return existingIndexSetup;
+						if (existingIndexSetup !== undefined) return existingIndexSetup;
 
 						const indexFields = Object.fromEntries(
 							physicalFieldNames.map((field) => [field, 1] as const),

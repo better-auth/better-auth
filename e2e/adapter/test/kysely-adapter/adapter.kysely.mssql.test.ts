@@ -415,7 +415,7 @@ const { execute } = await testAdapter({
 		}),
 	],
 	async onFinish() {
-		kyselyDB.destroy();
+		await kyselyDB.destroy();
 	},
 });
 execute();

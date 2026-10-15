@@ -501,23 +501,23 @@ describe("sign-in with form data", async () => {
 		});
 	});
 
-	it.each([
-		"cross-site",
-		"same-site",
-	])("rejects a null Origin for a %s form submission", async (site) => {
-		const response = await auth.handler(
-			createFormRequest("http://localhost:3000/api/auth/sign-in/email", {
-				origin: "null",
-				"Sec-Fetch-Site": site,
-			}),
-		);
+	it.each(["cross-site", "same-site"])(
+		"rejects a null Origin for a %s form submission",
+		async (site) => {
+			const response = await auth.handler(
+				createFormRequest("http://localhost:3000/api/auth/sign-in/email", {
+					origin: "null",
+					"Sec-Fetch-Site": site,
+				}),
+			);
 
-		expect(response.status).toBe(403);
-		expect(await response.json()).toMatchObject({
-			code: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.code,
-			message: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.message,
-		});
-	});
+			expect(response.status).toBe(403);
+			expect(await response.json()).toMatchObject({
+				code: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.code,
+				message: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN.message,
+			});
+		},
+	);
 
 	it("rejects a null Origin without Fetch Metadata", async () => {
 		const response = await auth.handler(

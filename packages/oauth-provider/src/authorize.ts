@@ -452,6 +452,7 @@ export function authorizeRedirectOnError(
 export type AuthorizeEndpointSettings = {
 	isAuthorize?: boolean;
 	postLogin?: boolean;
+	isPostLoginContinuation?: boolean;
 	/** Set only by the consent endpoint, in the request where the user accepts. */
 	consentAccepted?: boolean;
 };
@@ -971,6 +972,7 @@ async function runAuthorizationInteraction(
 			user: session.user,
 			session: session.session,
 			scopes,
+			isContinuation: settings?.isPostLoginContinuation ?? false,
 		});
 		if (postLoginRedirect) {
 			if (promptNone) {

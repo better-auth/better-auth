@@ -562,6 +562,7 @@ Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC
 When a token is DPoP-bound:
 
 * The token endpoint requires a valid `DPoP` proof JWT.
+* The proof's `htu` must be the endpoint's public URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`. This holds even when a proxy or dev server rewrites the request host.
 * The token response returns `token_type: "DPoP"`.
 * JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
 * Refresh token rotation requires a DPoP proof from the same key.
@@ -718,7 +719,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
      */
     created?: boolean,
     /**
-     * Confirms completion of post login activity
+     * Resumes after the post login page. `postLogin.shouldRedirect` runs again with `isContinuation: true`.
      */
     postLogin?: boolean,
   }
@@ -1233,20 +1234,25 @@ The following example uses the organization plugin to automatically redirect to 
 
 ```ts title="auth.ts"
 oauthProvider({
-  scopes: ["openid", "profile", "email", "read:organization"]
+  scopes: ["openid", "profile", "email", "read:organization"],
   postLogin: {
     page: "/select-organization", // [!code highlight]
-    shouldRedirect: async ({ session, scopes, headers }) => { // [!code highlight]
+    shouldRedirect: async ({ session, scopes, headers, isContinuation }) => { // [!code highlight]
       const userOnlyScopes = ["openid", "profile", "email", "offline_access"];
       if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
         return false;
       }
+      if (!session.activeOrganizationId) {
+        return true;
+      }
       const organizations = await auth.api.listOrganizations({
         headers,
       });
-      return organizations.length > 1 || !(
-        organizations.length === 1 && organizations.at(0)?.id === session.activeOrganizationId
-      )
+      if (!organizations.some((org) => org.id === session.activeOrganizationId)) {
+        return true;
+      }
+      // Ask on every new authorization; accept the selection on continuation
+      return !isContinuation && organizations.length > 1;
     },
     consentReferenceId: ({ session, scopes }) => { // [!code highlight]
       if (scopes.includes("read:organization")) {
@@ -1266,7 +1272,9 @@ oauthProvider({
 })
 ```
 
-The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, you should call `oauth2Continue`. Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
+The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`. Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
+
+`shouldRedirect` runs again on continuation with `isContinuation: true`. Use this value to check the selected organization without asking multi-organization users to select again. It is not proof of selection: check the current session and organization membership before returning `false`. Each new authorization request starts with `isContinuation: false`.
 
 ```ts title="select-organization.ts"
 import { authClient } from "@/lib/auth-client"
@@ -1274,7 +1282,7 @@ import { authClient } from "@/lib/auth-client"
 await authClient.organization.setActive({
   organizationId,
 });
-await client.oauth2.oauth2Continue({
+await authClient.oauth2.continue({
   postLogin: true,
 });
 ```
