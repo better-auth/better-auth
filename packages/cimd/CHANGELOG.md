@@ -1,5 +1,18 @@
 # @better-auth/cimd
 
+## 1.8.0-beta.0
+
+### Minor Changes
+
+- [#11767](https://github.com/better-auth/better-auth/pull/11767) [`2417879`](https://github.com/better-auth/better-auth/commit/2417879cf6b2cb5c97ab679b83df0038760e045d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Metadata documents can now carry registration fields that an OAuth provider extension declares, such as CIBA's `backchannel_token_delivery_mode`. They are stored in the client's `metadata` and validated by the extension. A refresh replaces them, so a field removed from the document is removed from the client. Other unknown members are still ignored. Setups without such an extension are unaffected.
+
+### Patch Changes
+
+- Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`94907fd`](https://github.com/better-auth/better-auth/commit/94907fd5ffc10ad8263b77b49dd7539f5fa72651), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`296133c`](https://github.com/better-auth/better-auth/commit/296133cc414ac24283ed8e33501e2e4e501ab5e0), [`cd404a0`](https://github.com/better-auth/better-auth/commit/cd404a0b46abb929ccaea0129ecdff23fb074a8f), [`ed71a21`](https://github.com/better-auth/better-auth/commit/ed71a211e803f9f336ebfa83c4ef96610e621fd1), [`c750fc5`](https://github.com/better-auth/better-auth/commit/c750fc5ad2cccf42d3bc6de9820c510a8cdb2cd4), [`2417879`](https://github.com/better-auth/better-auth/commit/2417879cf6b2cb5c97ab679b83df0038760e045d), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`c750fc5`](https://github.com/better-auth/better-auth/commit/c750fc5ad2cccf42d3bc6de9820c510a8cdb2cd4), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`9f53222`](https://github.com/better-auth/better-auth/commit/9f532221bee7cd99a5c4e6593313dead87bf8f0d), [`c7c8331`](https://github.com/better-auth/better-auth/commit/c7c83314009540df912fb608b746fad3c02214ee), [`0d4609f`](https://github.com/better-auth/better-auth/commit/0d4609f4a904d919353acae7ef04d2e68ff1be15), [`6e5a88e`](https://github.com/better-auth/better-auth/commit/6e5a88e57b0b5253bc49797cede415ff27a82931)]:
+  - better-auth@1.8.0-beta.0
+  - @better-auth/oauth-provider@1.8.0-beta.0
+  - @better-auth/core@1.8.0-beta.0
+
 ## 1.7.10
 
 ## 1.7.9

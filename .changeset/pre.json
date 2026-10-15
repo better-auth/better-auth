@@ -25,7 +25,30 @@
     "@better-auth/sso": "1.7.10",
     "@better-auth/stripe": "1.7.10",
     "@better-auth/telemetry": "1.7.10",
-    "@better-auth/test-utils": "1.7.10"
+    "@better-auth/test-utils": "1.7.10",
+    "@better-auth/ciba": "1.7.9"
   },
-  "changesets": []
+  "changesets": [
+    "after-commit-sign-up-side-effects",
+    "ciba-plugin",
+    "ciba-server-completion",
+    "cimd-extension-client-metadata",
+    "cimd-grant-intersection",
+    "device-authorization-consent-flow",
+    "device-authorization-decision-race",
+    "device-authorization-expired-polling",
+    "device-authorization-grant-seam",
+    "dpop-before-polled-claim",
+    "oauth-device-authentication-context",
+    "oauth-provider-authentication-context",
+    "oauth-provider-clear-logout-uris",
+    "oauth-provider-client-metadata-extension",
+    "oauth-provider-empty-scope-consent",
+    "oauth-provider-frontchannel-logout",
+    "oauth-provider-interaction-requests",
+    "oauth-revoke-introspect-token-lookup",
+    "oauth-token-exchange",
+    "oauth-token-request-params",
+    "pairwise-stored-sector"
+  ]
 }

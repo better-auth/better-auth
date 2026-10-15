@@ -1,5 +1,36 @@
 # better-auth
 
+## 1.8.0-beta.0
+
+### Minor Changes
+
+- [#11751](https://github.com/better-auth/better-auth/pull/11751) [`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On every database adapter, the verification email for an email sign-up, or for a new social or SSO account, is now sent only after the account is saved, and `onExistingUserSignUp` runs after the sign-up request's database work completes. A sign-up that rolls back, or that MongoDB runs again after a write conflict, no longer sends an extra email or an email for an account that doesn't exist.
+
+  Check your setup for two changes:
+  - If `sendVerificationEmail` or `onExistingUserSignUp` throws during a sign-up, the sign-up now succeeds and the error is logged. Before, a callback that threw synchronously failed the sign-up and rolled it back. To reject a sign-up, use a `databaseHooks.user.create.before` hook.
+  - If a `databaseHooks` `user` or `account` `after` hook throws during a sign-up, the request still fails, but the verification email is no longer sent. The user can request a new one.
+
+  With `secondaryStorage` and `session.storeSessionInDatabase: true`, social, SSO, one-tap and oauth-proxy sign-ins now cache their session after the commit, as email sign-up already did. A failed cache write is logged instead of failing the sign-in. This doesn't apply when `session.preserveSessionInDatabase` is `true`, where a failed cache write still fails the sign-in.
+
+- [#11772](https://github.com/better-auth/better-auth/pull/11772) [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When the same device code is approved and denied at the same time, for example from two open approval pages, only the first decision now takes effect, and the other request fails with `invalid_request` and "Device code already processed". Previously, both requests reported success and the later one replaced the first, so a denied device could still receive tokens.
+
+  The `/device/approve` error type no longer lists `device_code_already_processed`. The server never returned that code; an already decided code has always returned `invalid_request`. TypeScript code that compares against `device_code_already_processed` must check `invalid_request` instead.
+
+- [#11610](https://github.com/better-auth/better-auth/pull/11610) [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you wrote a custom `DeviceAuthorizationGrant`, rename `assertSessionRedemption` to `assertStandaloneUse`. It now also runs for `/device`, `/device/approve`, and `/device/deny`, and receives `use: "redeem"` or `use: "approve"`. `getVerificationContext`, `verificationOpenAPIProperties`, and the interface's second type parameter were removed, because `/device` no longer returns grant details. A grant that approves codes on its own pages can use the newly exported `findDeviceCodeByUserCode`, `assertDeviceCodePending`, `decideDeviceCode`, and `buildVerificationUris`. Apps that use `deviceAuthorization()` or `oauthDeviceAuthorization()` without a custom grant are unaffected.
+
+### Patch Changes
+
+- [#11772](https://github.com/better-auth/better-auth/pull/11772) [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Device clients that poll `/device/token` or `/oauth2/token` too soon after their device code expires now receive `expired_token` right away. Previously they received `slow_down` and learned that the code had expired only on a later poll.
+
+- Updated dependencies []:
+  - @better-auth/core@1.8.0-beta.0
+  - @better-auth/drizzle-adapter@1.8.0-beta.0
+  - @better-auth/kysely-adapter@1.8.0-beta.0
+  - @better-auth/memory-adapter@1.8.0-beta.0
+  - @better-auth/mongo-adapter@1.8.0-beta.0
+  - @better-auth/prisma-adapter@1.8.0-beta.0
+  - @better-auth/telemetry@1.8.0-beta.0
+
 ## 1.7.10
 
 ### Patch Changes

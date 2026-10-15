@@ -1,5 +1,82 @@
 # @better-auth/oauth-provider
 
+## 1.8.0-beta.0
+
+### Minor Changes
+
+- [#11610](https://github.com/better-auth/better-auth/pull/11610) [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you use `oauthDeviceAuthorization()`, users now approve OAuth device codes on the provider's sign-in, account selection, post-login, and consent pages, the same as an authorization request. Your device verification page sends the browser to `/oauth2/authorize?user_code=<code>`. The consent page always opens for a device and receives `user_code` to display, and afterwards the user returns to your verification page with `status=approved` or `status=denied`, or with `error` and `error_description` when the code is unknown, expired, or already used. Device tokens and their refreshes now carry the `referenceId` from `postLogin.consentReferenceId` and the user's authentication time, and each approval records a consent.
+
+  Previously, approval pages called `/device/approve` or `/device/deny` directly, which skipped post-login selection and consent. Those endpoints and `/device` now refuse OAuth device codes with `invalid_request` and name the URL to use, so update your approval page before upgrading. Standalone `deviceAuthorization()` setups are unaffected.
+
+  `oauthDeviceAuthorization()` adds optional `referenceId` and `authTime` columns to the `deviceCode` table. Apply them before deploying: run `npx auth@latest migrate` with the built-in Kysely adapter, or run `npx auth@latest generate` and apply the schema with your ORM.
+
+- [#11826](https://github.com/better-auth/better-auth/pull/11826) [`296133c`](https://github.com/better-auth/better-auth/commit/296133cc414ac24283ed8e33501e2e4e501ab5e0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Device authorization and CIBA clients that poll the token endpoint with a missing or invalid DPoP proof now receive `invalid_dpop_proof` and can poll again with a valid proof. Previously the rejected poll used up the approved device code or CIBA request, so the user had to approve again. Clients that send valid proofs, or no proof when none is required, are unaffected.
+
+  Extension grants that consume a one-time credential can call `provider.resolveConfirmation()` before the claim and pass its result to `issueTokens` as `confirmation` to get the same behavior.
+
+- [#11788](https://github.com/better-auth/better-auth/pull/11788) [`cd404a0`](https://github.com/better-auth/better-auth/commit/cd404a0b46abb929ccaea0129ecdff23fb074a8f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `oauthDeviceAuthorization()` and an `authenticationContext` resolver, ID tokens from the device code grant now carry the `acr` and `amr` that `resolve` returns when the user approves the device code, and refreshed ID tokens keep them. Previously device-issued ID tokens always reported `acr: "0"` and no `amr`. Setups without `oauthDeviceAuthorization()` are unaffected.
+
+  This adds optional `acr` and `amr` columns to the `deviceCode` table when `oauthDeviceAuthorization()` is enabled. Apply them before deploying: run `npx auth@latest migrate` with the built-in Kysely adapter, or run `npx auth@latest generate` and apply the schema with your ORM.
+
+- [#11787](https://github.com/better-auth/better-auth/pull/11787) [`ed71a21`](https://github.com/better-auth/better-auth/commit/ed71a211e803f9f336ebfa83c4ef96610e621fd1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `oauthProvider()` accepts a new `authenticationContext` option that sets the `acr` and `amr` claims in ID tokens. List the classes you issue in `acrValuesSupported`, which discovery advertises as `acr_values_supported`, and return the current session's `acr` and `amr` from `resolve`. Previously every ID token carried `acr: "0"` and no `amr`, and that is still the default.
+
+  With a resolver, a request whose essential `claims.id_token.acr` the session does not satisfy fails with `access_denied`. A voluntary request through `acr_values` continues and the ID token reports the session's current `acr`. A resolver that returns an `acr` outside `acrValuesSupported`, or an `amr` that is not a string array, fails the authorization with `server_error`. ID tokens from refreshed tokens keep the `acr` and `amr` of the original authorization.
+
+  This release adds optional `acr` and `amr` columns to the `oauthRefreshToken` table, which every `oauthProvider()` setup needs. Apply them before deploying: run `npx auth@latest migrate` with the built-in Kysely adapter, or run `npx auth@latest generate` and apply the schema with your ORM.
+
+- [#11767](https://github.com/better-auth/better-auth/pull/11767) [`2417879`](https://github.com/better-auth/better-auth/commit/2417879cf6b2cb5c97ab679b83df0038760e045d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugins that extend `oauthProvider()` with `extendOAuthProvider()` can now define their own client registration fields with `clientMetadata`. A client with invalid values for those fields is rejected with `invalid_client_metadata` when it registers through `/oauth2/register` or a client metadata document, or when an admin creates or updates it, instead of when it first uses them.
+
+  Dynamic registration and client metadata documents now accept the fields an extension declares as top-level fields and store them in the client's `metadata`. They still ignore all other unrecognized fields. Registration in setups without such an extension is unchanged.
+
+  Updating a client with an empty `metadata` object now clears its stored metadata. Previously the update left the old metadata in place.
+
+- [#9923](https://github.com/better-auth/better-auth/pull/9923) [`c750fc5`](https://github.com/better-auth/better-auth/commit/c750fc5ad2cccf42d3bc6de9820c510a8cdb2cd4) Thanks [@shiminshen](https://github.com/shiminshen)! - OAuth providers can now notify relying parties through the browser with OpenID Connect Front-Channel Logout 1.0. Register a `frontchannel_logout_uri` on a client, using the scheme, host, and port of one of its `redirect_uris`. When a user logs out through `/oauth2/end-session` in the browser, the provider loads that URI in a hidden iframe with `iss` and `sid`, then continues to the verified `post_logout_redirect_uri`. Clients with this URI also receive `sid` in their ID tokens.
+
+  Front-channel logout is reliable only when the provider and its relying parties share a registrable domain, because browsers block or partition third-party cookies. Use back-channel logout for relying parties on other sites. Providers with no front-channel clients see no change.
+
+  Run `npx auth@latest migrate`, or `npx auth@latest generate` if you manage the schema yourself, to add the `frontchannelLogoutUri` and `frontchannelLogoutSessionRequired` columns to `oauthClient`.
+
+- [#11610](https://github.com/better-auth/better-auth/pull/11610) [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugins that extend OAuth Provider through `extendOAuthProvider()` can register `interactionRequests`: requests other than an authorization request, keyed by a query parameter, that users approve on the provider's sign-in, account selection, post-login, and consent pages. The provider resumes them through `/oauth2/authorize`, can require consent on every approval, and sends errors to a page the request names. `oauthDeviceAuthorization()` uses one keyed by `user_code`.
+
+- [#11796](https://github.com/better-auth/better-auth/pull/11796) [`9f53222`](https://github.com/better-auth/better-auth/commit/9f532221bee7cd99a5c4e6593313dead87bf8f0d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `/oauth2/revoke` and `/oauth2/introspect` now follow RFC 7009 and RFC 7662 when they look up the presented token. Check your clients and tests for these changes:
+  - `/oauth2/revoke` returns `200` for an unknown or already revoked token. Before, it returned `400 invalid_request`, including for a second revoke of the same refresh token and for a revoke that raced a refresh.
+  - A token sent with the wrong `token_type_hint` is found. Before, `/oauth2/revoke` returned `400` and left the token active, and `/oauth2/introspect` reported `{ "active": false }` for a valid token.
+  - Revoking a token issued to a different client returns `400 invalid_request` when the caller is a confidential client. Before, it returned `200` without revoking anything, or `400 unsupported_token_type` for a JWT access token. A public client gets `200`, and the token stays valid.
+  - A JWT-shaped token that fails verification (for example `alg: none`, a forged signature, or an unknown `kid`) is treated as an invalid token: `200` from revoke, `{ "active": false }` from introspect, and `401 invalid_token` from userinfo. Before, all three returned `500`.
+  - At `/oauth2/token`, a refresh token without the configured `prefix.refreshToken` now gets `400 invalid_grant`, like any other unknown refresh token. Before, it got `400 invalid_token`.
+  - An async `formatRefreshToken.encrypt`, such as the JWE example in the docs, now works. Before, the issued refresh token was the string `[object Promise]`.
+  - In an extension grant handler, `provider.validateAccessToken` returns `{ active: false }` for an unknown token instead of throwing. `provider.requireActiveAccessToken` still throws.
+
+  A valid JWT access token still returns `400 unsupported_token_type` from revoke, and failed client authentication still returns `401`.
+
+- [#11763](https://github.com/better-auth/better-auth/pull/11763) [`c7c8331`](https://github.com/better-auth/better-auth/commit/c7c83314009540df912fb608b746fad3c02214ee) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you set a `reference_id` claim on access tokens yourself, through `customAccessTokenClaims`, an extension, or a resource's `customClaims`, it is now dropped with a warning, because the provider sets this claim itself. Rename your claim to keep sending it. When `postLogin.consentReferenceId` returns a consent reference, such as an organization, JWT access tokens now include it as `reference_id`, and introspection returns it. Setups that use neither see no change to their tokens.
+
+  Services that receive a user's access token, such as an MCP server or a backend for frontend, can now exchange it for an access token to another registered API with OAuth 2.0 Token Exchange (RFC 8693), instead of forwarding the user's token. Add `oauthTokenExchange()` next to `oauthProvider()` and register the service as a confidential client with the `TOKEN_EXCHANGE_GRANT_TYPE` grant. The exchanged token represents the same user and keeps the consent reference, such as the organization, the user approved. It is limited to the subject token's scopes and never outlives the subject token. Delegation (`actor_token`) and refresh tokens for exchanged tokens are not supported yet.
+
+  Extension authors can pass `maxExpiresAt` to `issueTokens` to cap when the access token expires.
+
+- [#11746](https://github.com/better-auth/better-auth/pull/11746) [`0d4609f`](https://github.com/better-auth/better-auth/commit/0d4609f4a904d919353acae7ef04d2e68ff1be15) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The `/oauth2/token`, `/oauth2/introspect`, and `/oauth2/revoke` endpoints now reject form parameters sent more than once with `400 invalid_request`, and the description names the parameter. For example, `code=a&code=b` at the token endpoint, for any grant type, returns "code must not be repeated", and `token=a&token=b` at introspection returns "token must not be repeated". Before, these endpoints used the last value, so the token endpoint could issue tokens and introspection or revocation acted on a token other than the first one sent. At the token endpoint, `resource` and `audience` may still repeat, and extension grants now receive every `audience` value instead of only the last one. A parameter sent without a value counts as omitted wherever it appears, so `scope=read&scope=` is the same as `scope=read`. Clients that send each parameter once and never send an empty value are unaffected.
+
+  A malformed `resource` at the token endpoint, such as one with a fragment or a relative URI, now returns `invalid_target` instead of `invalid_request`. If your client matches on the error code for these requests, update it. An empty `resource` is now treated as omitted, as RFC 6749 §3.2 requires; before, `resource=` returned `invalid_request`.
+
+  Token, introspection, registration, and end-session requests rejected by schema validation, such as a missing `grant_type`, now carry `Cache-Control: no-store`, like every other response from those endpoints.
+
+- [#11650](https://github.com/better-auth/better-auth/pull/11650) [`6e5a88e`](https://github.com/better-auth/better-auth/commit/6e5a88e57b0b5253bc49797cede415ff27a82931) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Pairwise clients with authority-free private-use redirect URIs, such as `com.example.app:/callback`, or loopback redirect URIs, such as `http://localhost:8787/callback`, now each receive a `sub` of their own. Previously, unrelated clients of either kind could receive the same pairwise `sub`. HTTPS clients on the same host still share a `sub`.
+
+  This adds a `sectorIdentifier` column to the `oauthClient` table. Run `npx auth@latest migrate`, or `npx auth@latest generate` for your ORM, before upgrading. Existing clients keep their current `sub`; the new rule applies to clients created after the upgrade.
+
+### Patch Changes
+
+- [#10731](https://github.com/better-auth/better-auth/pull/10731) [`94907fd`](https://github.com/better-auth/better-auth/commit/94907fd5ffc10ad8263b77b49dd7539f5fa72651) Thanks [@erikpr1994](https://github.com/erikpr1994)! - Client ID Metadata Document clients that declare a grant the server does not offer (such as Claude's enterprise `jwt-bearer` grant) can now register. Only documents sharing no grant with the server are refused.
+
+- [#9923](https://github.com/better-auth/better-auth/pull/9923) [`c750fc5`](https://github.com/better-auth/better-auth/commit/c750fc5ad2cccf42d3bc6de9820c510a8cdb2cd4) Thanks [@shiminshen](https://github.com/shiminshen)! - OAuth client updates can now remove a logout URI. Sending `backchannel_logout_uri: null` or `frontchannel_logout_uri: null` to `/oauth2/update-client` or `adminUpdateOAuthClient` clears the URI and its `*_session_required` flag, and the client stops receiving those logout notifications. Before, `null` was rejected and a registered logout URI could only be replaced.
+
+- [#11610](https://github.com/better-auth/better-auth/pull/11610) [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - An authorization request with an empty `scope` parameter no longer stores a consent for a scope named `""`. The consent endpoint now ignores empty entries in both the requested and the accepted scopes.
+
+- Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1)]:
+  - better-auth@1.8.0-beta.0
+  - @better-auth/core@1.8.0-beta.0
+
 ## 1.7.10
 
 ### Patch Changes
