@@ -820,3 +820,74 @@ describe("oneTapClient types", () => {
 		expectTypeOf(client.oneTap).toBeFunction();
 	});
 });
+
+/**
+ * With FedCM, Google no longer supports display-moment notifications or
+ * skipped-moment reasons. FedCM is always on for the prompt, so
+ * `fedCM: false` must avoid them too.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10380
+ * @see https://developers.google.com/identity/gsi/web/guides/fedcm-migration
+ */
+describe("one-tap prompt notifications", () => {
+	const notification = (moment: "display" | "skipped") => ({
+		isDisplayMoment: vi.fn(() => moment === "display"),
+		isDisplayed: vi.fn(() => false),
+		isNotDisplayed: vi.fn(() => moment === "display"),
+		getNotDisplayedReason: vi.fn(() => "opt_out_or_no_session"),
+		isSkippedMoment: vi.fn(() => moment === "skipped"),
+		getSkippedReason: vi.fn(() => "auto_cancel"),
+		isDismissedMoment: vi.fn(() => false),
+		getDismissedReason: vi.fn(),
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it.each([
+		["default", undefined],
+		["fedCM: false", false],
+	])(
+		"ends a skipped prompt without unsupported calls (%s)",
+		async (_, fedCM) => {
+			const { client } = await getTestInstance(
+				{ plugins: [oneTap()] },
+				{
+					clientOptions: {
+						plugins: [
+							oneTapClient({
+								clientId: "test-client",
+								promptOptions: { fedCM, baseDelay: 0 },
+							}),
+						],
+					},
+				},
+			);
+			const notifications = [notification("display"), notification("skipped")];
+			const prompt = vi.fn((listener: (n: unknown) => void) => {
+				for (const n of notifications) listener(n);
+			});
+			vi.stubGlobal("window", {
+				document: {},
+				googleScriptInitialized: true,
+				google: { accounts: { id: { initialize: vi.fn(), prompt } } },
+			});
+			const onPromptNotification = vi.fn();
+
+			await client.oneTap({ onPromptNotification });
+
+			expect(prompt).toHaveBeenCalledTimes(1);
+			expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(
+				notifications[1],
+			);
+			for (const n of notifications) {
+				expect(n.isDisplayMoment).not.toHaveBeenCalled();
+				expect(n.isDisplayed).not.toHaveBeenCalled();
+				expect(n.isNotDisplayed).not.toHaveBeenCalled();
+				expect(n.getNotDisplayedReason).not.toHaveBeenCalled();
+				expect(n.getSkippedReason).not.toHaveBeenCalled();
+			}
+		},
+	);
+});
