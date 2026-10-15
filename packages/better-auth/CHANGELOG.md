@@ -1,5 +1,44 @@
 # better-auth
 
+## 1.7.10
+
+### Patch Changes
+
+- [#11393](https://github.com/better-auth/better-auth/pull/11393) [`eebd47a`](https://github.com/better-auth/better-auth/commit/eebd47a0e7103caae35e4ac46971e293d1579594) Thanks [@breken-ai](https://github.com/breken-ai)! - If you use the `lastLoginMethod` plugin with `oneTap`, signing in through Google One Tap now records `"google"`, the same value as signing in with the Google button. Before, a One Tap sign-in recorded nothing: the `better-auth.last_used_login_method` cookie kept its previous value or stayed unset, and so did `user.lastLoginMethod` with `storeInDatabase`.
+
+  If your `customResolveMethod` includes a `/one-tap/callback` → `"google"` workaround, remove that mapping; keep the resolver if it handles other routes.
+
+- [#11821](https://github.com/better-auth/better-auth/pull/11821) [`09d07e6`](https://github.com/better-auth/better-auth/commit/09d07e6feac8c0173551c9cbaee222d403c31fd9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The Google One Tap prompt (`authClient.oneTap()` without `button`) no longer calls `getSkippedReason()`, which Google's FedCM migration guide says to remove. Before, it called it under any `promptOptions.fedCM` setting.
+
+  A skipped prompt now ends the flow and calls `onPromptNotification` right away instead of retrying. Google doesn't report why a prompt was skipped, and a prompt the user closed stays hidden for Google's cooldown period, so the retries could not bring it back. Dismissed prompts still retry as before.
+
+  Google Identity Services still logs its FedCM migration warning, because it does so whenever `prompt()` receives a listener. The plugin needs the listener to track dismissals and skips, so the warning is expected and safe to ignore.
+
+- [#11819](https://github.com/better-auth/better-auth/pull/11819) [`eaecb72`](https://github.com/better-auth/better-auth/commit/eaecb7229eeef5cfd763477b12f7dd2e44b89e51) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Google One Tap now applies your `socialProviders.google.mapProfileToUser` and custom `getUserInfo`, the same as the standard Google sign-in. Before, One Tap ignored both and always stored the token's `name`, `email`, `email_verified`, and `picture` claims.
+
+  If you configured either one, users created through One Tap now get the fields it returns, including any extra fields such as a first name from `given_name`. Returning users are updated from it on each One Tap sign-in when `socialProviders.google.overrideUserInfoOnSignIn` is on, and so are existing users that One Tap links when `account.accountLinking.updateUserInfoOnLink` is on. Check that your mapper suits One Tap users too.
+
+  If you set `socialProviders.google.overrideUserInfoOnSignIn`, One Tap sign-ins now update returning users' name, image, and email from Google, as the redirect sign-in already does.
+
+  Setups that configure none of these, including `oneTap({ clientId })` with no Google provider, are unaffected.
+
+- [#11820](https://github.com/better-auth/better-auth/pull/11820) [`88c9a37`](https://github.com/better-auth/better-auth/commit/88c9a378562fcb240085bd803a243062e2d28f47) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you set `autoSelect` or `cancelOnTapOutside` on `oneTapClient()`, the One Tap prompt and the Sign in with Google button now use them. Before, only values passed to `authClient.oneTap()` took effect, so with `autoSelect: true` on the plugin, returning users still had to pick an account. Values passed to `oneTap()` still override the plugin's. Apps that set these options only on `oneTap()`, or not at all, are unaffected.
+
+- [#11696](https://github.com/better-auth/better-auth/pull/11696) [`0cf1f7c`](https://github.com/better-auth/better-auth/commit/0cf1f7c6bc7b9870b276fdf7d9f5c38af6dbaa30) Thanks [@drewsephski](https://github.com/drewsephski)! - You can now import the One Tap plugin from `better-auth/plugins/one-tap`, as you can for other plugins. Previously this import failed with a "not exported" error. Imports from `better-auth/plugins` and `better-auth/client/plugins` are unchanged.
+
+- [#11822](https://github.com/better-auth/better-auth/pull/11822) [`414e845`](https://github.com/better-auth/better-auth/commit/414e845f128011369b451a3ffd15d8d314351cdb) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - You can now import the Captcha and OpenAPI plugins from `better-auth/plugins/captcha` and `better-auth/plugins/open-api`, as you can for other plugins. Previously these imports failed with a "not exported" error. Imports from `better-auth/plugins` are unchanged.
+
+  If your TypeScript config uses `"moduleResolution": "node"` (or `node10`), `better-auth/plugins/multi-session` and `better-auth/test` now resolve their types. Previously TypeScript reported that it could not find their declarations. Projects using `bundler`, `node16`, or `nodenext` resolution are unaffected.
+
+- Updated dependencies [[`fedd055`](https://github.com/better-auth/better-auth/commit/fedd05586c5a7ee2eb6b8d16b88b08dfb7e16a89), [`bbd0a19`](https://github.com/better-auth/better-auth/commit/bbd0a19c30fc384213d1e98b9a8a54a903a0b574), [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976)]:
+  - @better-auth/core@1.7.10
+  - @better-auth/mongo-adapter@1.7.10
+  - @better-auth/drizzle-adapter@1.7.10
+  - @better-auth/kysely-adapter@1.7.10
+  - @better-auth/memory-adapter@1.7.10
+  - @better-auth/prisma-adapter@1.7.10
+  - @better-auth/telemetry@1.7.10
+
 ## 1.7.9
 
 ### Patch Changes
