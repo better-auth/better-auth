@@ -32,6 +32,7 @@ import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
+import { findRefreshToken } from "./token-lookup";
 import type {
 	Confirmation,
 	OAuthAuthenticatedClient,
@@ -58,7 +59,6 @@ import {
 	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
-	getStoredToken,
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
@@ -452,31 +452,6 @@ async function encodeRefreshToken(
 			? opts.formatRefreshToken.encrypt(token, sessionId)
 			: token)
 	);
-}
-
-/**
- * Decodes a refresh token for a client
- *
- * @internal
- */
-export async function decodeRefreshToken(
-	opts: OAuthOptions<Scope[]>,
-	token: string,
-) {
-	if (opts.prefix?.refreshToken) {
-		if (token.startsWith(opts.prefix.refreshToken)) {
-			token = token.replace(opts.prefix.refreshToken, "");
-		} else {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "refresh token not found",
-				error: "invalid_token",
-			});
-		}
-	}
-
-	return opts.formatRefreshToken?.decrypt
-		? opts.formatRefreshToken?.decrypt(token)
-		: { token };
 }
 
 async function createOpaqueAccessToken(
@@ -1838,23 +1813,7 @@ async function handleRefreshTokenGrant(
 			error: "invalid_request",
 		});
 	}
-	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
-
-	const refreshToken = await ctx.context.adapter.findOne<
-		OAuthRefreshToken<Scope[]> & { id: string }
-	>({
-		model: "oauthRefreshToken",
-		where: [
-			{
-				field: "token",
-				value: await getStoredToken(
-					opts.storeTokens,
-					decodedRefresh.token,
-					"refresh_token",
-				),
-			},
-		],
-	});
+	const refreshToken = await findRefreshToken(ctx, opts, refresh_token);
 
 	// Check refresh
 	if (!refreshToken) {

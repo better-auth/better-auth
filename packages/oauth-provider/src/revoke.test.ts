@@ -276,11 +276,20 @@ describe("oauth revoke", async () => {
 	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
 	 */
 	describe("RFC 7009 token handling", () => {
-		function revoke(token: string, token_type_hint?: string) {
+		function revoke(
+			token: string,
+			token_type_hint?: string,
+			caller: Pick<
+				OAuthClient,
+				"client_id" | "client_secret"
+			> | null = oauthClient,
+		) {
 			return client.oauth2.revoke(
 				{
-					client_id: oauthClient?.client_id,
-					client_secret: oauthClient?.client_secret,
+					client_id: caller?.client_id,
+					...(caller?.client_secret
+						? { client_secret: caller.client_secret }
+						: {}),
 					token,
 					token_type_hint,
 				},
@@ -337,6 +346,72 @@ describe("oauth revoke", async () => {
 				expect(revocation.error).toBe(null);
 			},
 		);
+
+		function createOtherClient(
+			token_endpoint_auth_method: "client_secret_post" | "none",
+		) {
+			return auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					application_type: "native",
+					token_endpoint_auth_method,
+					skip_consent: true,
+				},
+			});
+		}
+
+		it.each(["access_token", "refresh_token"] as const)(
+			"refuses a confidential client revoking another client's %s",
+			async (type) => {
+				const tokens = await getTokens();
+				const token = tokens.data?.[type]!;
+				const other = await createOtherClient("client_secret_post");
+
+				const revocation = await revoke(token, undefined, other);
+				expect(revocation.error).toMatchObject({
+					status: 400,
+					error: "invalid_request",
+				});
+				expect(await isActive(token)).toBe(true);
+			},
+		);
+
+		it.each(["access_token", "refresh_token"] as const)(
+			"answers a public client revoking another client's %s with 200 and keeps the token",
+			async (type) => {
+				const tokens = await getTokens();
+				const token = tokens.data?.[type]!;
+				const other = await createOtherClient("none");
+
+				const revocation = await revoke(token, undefined, {
+					client_id: other.client_id,
+				});
+				expect(revocation.error).toBe(null);
+				expect(await isActive(token)).toBe(true);
+			},
+		);
+
+		it("refuses another client's revoked refresh_token before replay handling", async () => {
+			const tokens = await getTokens();
+			const refreshToken = tokens.data?.refresh_token!;
+			expect((await revoke(refreshToken)).error).toBe(null);
+
+			const other = await createOtherClient("client_secret_post");
+			const revocation = await revoke(refreshToken, undefined, other);
+			expect(revocation.error).toMatchObject({
+				status: 400,
+				error: "invalid_request",
+			});
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11595
+		 */
+		it("returns 200 for a JWT-shaped token that fails verification", async () => {
+			const revocation = await revoke("eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0.");
+			expect(revocation.error).toBe(null);
+		});
 
 		it("returns 200 when revoking an already revoked refresh_token", async () => {
 			const tokens = await getTokens();
