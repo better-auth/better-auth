@@ -81,6 +81,29 @@ function resolveRegistrationResponseTypes(
 	return grantTypes.includes("authorization_code") ? ["code"] : undefined;
 }
 
+/**
+ * The requested grants this server supports. Clients such as MCP connectors
+ * send one grant union to every server, so a metadata document or a dynamic
+ * registration may list grants this server does not issue. Throws when the
+ * request shares no grant with the server.
+ */
+function resolveMutuallySupportedGrantTypes(
+	opts: OAuthOptions<Scope[]>,
+	grantTypes: GrantType[],
+): GrantType[] {
+	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+	const mutualGrantTypes = grantTypes.filter((grantType) =>
+		supportedGrantTypes.has(grantType),
+	);
+	if (mutualGrantTypes.length === 0) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
+		});
+	}
+	return mutualGrantTypes;
+}
+
 function applyOAuthClientRegistrationDefaults(
 	client: OAuthClientRegistrationMetadata,
 	defaultApplicationType: "web" | "native" | null = "web",
@@ -313,8 +336,17 @@ export async function registerEndpoint(
 		);
 	}
 
+	// RFC 7591 §3.2.1 lets the server replace requested metadata: register the
+	// supported grants and return them, instead of rejecting the whole request.
+	const metadata = {
+		...body,
+		grant_types: body.grant_types?.length
+			? resolveMutuallySupportedGrantTypes(opts, body.grant_types)
+			: body.grant_types,
+	};
+
 	if (!session && !isTokenAuthorized) {
-		if (body.grant_types?.includes("client_credentials")) {
+		if (metadata.grant_types?.includes("client_credentials")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
@@ -342,7 +374,7 @@ export async function registerEndpoint(
 				})
 			: undefined);
 	const response = await createOAuthClientRegistration(ctx, opts, {
-		metadata: body,
+		metadata,
 		registrationSource: "dynamic",
 		userId: referenceId ? undefined : session?.session.userId,
 		referenceId,
@@ -432,18 +464,15 @@ export async function checkOAuthClient(
 	}
 
 	// Validate correlation between grant_types and response_types
-	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 	if (isClientMetadataDocument) {
 		// One metadata document serves every authorization server the client talks
 		// to, so it declares a grant union; require one mutual grant and let the
 		// token endpoint refuse the rest.
-		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
-			});
-		}
+		resolveMutuallySupportedGrantTypes(opts, grantTypes);
 	} else {
+		// Dynamic registration drops unsupported grants before this check, so
+		// only managed clients and client updates are rejected here.
+		const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 		for (const grantType of grantTypes) {
 			if (!supportedGrantTypes.has(grantType)) {
 				throw new APIError("BAD_REQUEST", {
