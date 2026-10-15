@@ -169,7 +169,8 @@ export async function decideDeviceCode(
 		set: { ...input.fields, userId, status: decision },
 	});
 	if (!decided) {
-		throw deviceCode.expiresAt < new Date()
+		// The guard treats a code as expired from `expiresAt` on.
+		throw deviceCode.expiresAt <= new Date()
 			? expiredUserCode()
 			: deviceCodeAlreadyProcessed();
 	}
