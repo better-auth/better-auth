@@ -22,9 +22,11 @@ export function getEndpointUrl(
 	// A loop, not `/\/+$/`, which backtracks quadratically on runs of slashes.
 	while (end > 0 && baseURL[end - 1] === "/") end--;
 	const base = baseURL.slice(0, end);
+	// `baseURL` stays empty when nothing configures it and no request set it.
+	if (!ctx.request || !base) return `${base}${path}`;
 	const basePath = new URL(base).pathname.replace(/\/$/, "");
-	const requestPath = ctx.request && new URL(ctx.request.url).pathname;
-	const endpointPath = requestPath?.startsWith(`${basePath}/`)
+	const requestPath = new URL(ctx.request.url).pathname;
+	const endpointPath = requestPath.startsWith(`${basePath}/`)
 		? requestPath.slice(basePath.length)
 		: path;
 	return `${base}${endpointPath}`;
