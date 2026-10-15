@@ -1065,6 +1065,64 @@ describe("oauth introspect - config", async () => {
 			first_resource: validResource,
 		});
 	});
+
+	/**
+	 * An expired JWT access token cannot be a refresh token, so the lookup must
+	 * stop before a `formatRefreshToken.decrypt` that throws on unknown input.
+	 * @see https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
+	 */
+	it("reports an expired JWT access_token as inactive without token_type_hint", async () => {
+		const testScopes = ["read:profile"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: (token) => `rt.${token}`,
+					decrypt: (token) => {
+						if (!token.startsWith("rt.")) {
+							throw new Error("not a refresh token");
+						}
+						return { token: token.slice(3) };
+					},
+				},
+			},
+		});
+		const headers = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				resource: validResource,
+			},
+			{ headers },
+		);
+		const accessToken = tokens.data?.access_token!;
+		expect(accessToken.split(".")).toHaveLength(3);
+
+		vi.useFakeTimers({
+			toFake: ["Date"],
+			now: Date.now() + 2 * 60 * 60 * 1000,
+		});
+		try {
+			const introspection = await client.oauth2.introspect(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token: accessToken,
+				},
+				{ headers },
+			);
+			expect(introspection.error).toBe(null);
+			expect(introspection.data).toEqual({ active: false });
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });
 
 describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {

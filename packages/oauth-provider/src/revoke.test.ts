@@ -7,7 +7,7 @@ import {
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { CompactEncrypt, compactDecrypt } from "jose";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
@@ -674,6 +674,63 @@ describe("oauth revoke - config", async () => {
 			});
 			expect(revoked.error).toBe(null);
 		});
+	});
+
+	/**
+	 * An expired JWT access token cannot be a refresh token, so the lookup must
+	 * stop before a `formatRefreshToken.decrypt` that throws on unknown input.
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+	 */
+	it("returns 200 for an expired JWT access_token without token_type_hint", async () => {
+		const testScopes = ["read:profile"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: (token) => `rt.${token}`,
+					decrypt: (token) => {
+						if (!token.startsWith("rt.")) {
+							throw new Error("not a refresh token");
+						}
+						return { token: token.slice(3) };
+					},
+				},
+			},
+		});
+		const headers = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				resource: validResource,
+			},
+			{ headers },
+		);
+		const accessToken = tokens.data?.access_token!;
+		expect(accessToken.split(".")).toHaveLength(3);
+
+		vi.useFakeTimers({
+			toFake: ["Date"],
+			now: Date.now() + 2 * 60 * 60 * 1000,
+		});
+		try {
+			const revocation = await client.oauth2.revoke(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token: accessToken,
+				},
+				{ headers },
+			);
+			expect(revocation.error).toBe(null);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("should pass with the correct opaqueAccessTokenPrefix", async () => {
