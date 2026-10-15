@@ -828,6 +828,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "boolean",
 														description:
 															"Always true. Indicates the caller should redirect to `url`.",
+														enum: [true],
 													},
 													url: {
 														type: "string",
@@ -885,6 +886,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														type: "boolean",
 														description:
 															"Always true. Indicates the caller should redirect to `url`.",
+														enum: [true],
 													},
 													url: {
 														type: "string",

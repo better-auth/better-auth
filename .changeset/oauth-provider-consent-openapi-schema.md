@@ -2,4 +2,4 @@
 "@better-auth/oauth-provider": patch
 ---
 
-The OpenAPI schema for the `/oauth2/consent` and `/oauth2/continue` endpoints now documents the response body the endpoints actually return (`redirect` and `url`). It previously advertised a required `redirect_uri` field that never appeared in the response, so clients generated from or validated against the spec read a field that was always missing.
+Corrected the OpenAPI response schemas for `/oauth2/consent` and `/oauth2/continue` to describe `{ redirect: true, url: string }`, so generated clients no longer expect a nonexistent `redirect_uri` field. Runtime responses are unchanged.
