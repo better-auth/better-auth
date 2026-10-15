@@ -566,7 +566,7 @@ export async function authorizeEndpoint(
 	if (!client) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(ctx, "invalid_client", "client_id is required"),
+			getErrorURL(ctx, "invalid_client", "client not found"),
 		);
 	}
 	if (client.disabled) {

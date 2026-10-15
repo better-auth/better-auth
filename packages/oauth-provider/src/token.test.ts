@@ -2313,6 +2313,31 @@ describe("oauth token - client_credentials", async () => {
 		).toContain("registered for client_secret_basic");
 	});
 
+	/**
+	 * @see https://github.com/croffasia/itsaplan/issues/564
+	 */
+	it("reports an unknown client_id as a client that was not found", async () => {
+		const response = await client.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: "no-such-client",
+					client_secret: "no-such-secret",
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+
+		expect(response.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client not found",
+		});
+	});
+
 	it("returns 400 for failed client_secret_post authentication", async () => {
 		const postClient = await auth.api.adminCreateOAuthClient({
 			headers,

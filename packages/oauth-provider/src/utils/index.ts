@@ -749,7 +749,7 @@ export async function validateClientCredentials(
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
-		throwInvalidClient("missing client", { method: authMethod });
+		throwInvalidClient("client not found", { method: authMethod });
 	}
 	if (client.disabled) {
 		throwInvalidClient("client is disabled", { method: authMethod });
