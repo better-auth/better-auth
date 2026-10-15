@@ -280,6 +280,7 @@ describe("oauth-provider device-code grant", async () => {
 	/** Registers a public OAuth client able to use the device-code grant. */
 	async function createDeviceClient(
 		grantTypes: string[] = [DEVICE_CODE_GRANT_TYPE],
+		scope = "openid profile email",
 	) {
 		const { headers } = await signInWithTestUser();
 		const created = await auth.api.adminCreateOAuthClient({
@@ -287,7 +288,7 @@ describe("oauth-provider device-code grant", async () => {
 			body: {
 				token_endpoint_auth_method: "none",
 				grant_types: grantTypes,
-				scope: "openid profile email",
+				scope,
 				application_type: "native",
 			},
 		});
@@ -1254,6 +1255,40 @@ describe("oauth-provider device-code grant", async () => {
 			where: [{ field: "deviceCode", value: deviceCode }],
 		});
 		expect(stored?.deviceCode).toBe(deviceCode);
+	});
+
+	it("keeps every approved resource refreshable after a narrowed exchange", async () => {
+		const scope = "openid offline_access";
+		const clientId = await createDeviceClient(
+			[DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+			scope,
+		);
+		const deviceCode = await approvedDeviceCode(clientId, scope, [
+			resource,
+			secondResource,
+		]);
+
+		const narrowed = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+			resource,
+		});
+		expect(narrowed.error).toBeNull();
+		expect(decodeJwt(narrowed.data!.access_token as string).aud).not.toContain(
+			secondResource,
+		);
+
+		const refreshed = await pollToken({
+			grant_type: "refresh_token",
+			refresh_token: narrowed.data!.refresh_token as string,
+			client_id: clientId,
+			resource: secondResource,
+		});
+		expect(refreshed.error).toBeNull();
+		expect(decodeJwt(refreshed.data!.access_token as string).aud).toContain(
+			secondResource,
+		);
 	});
 
 	it("single-uses the device code (second exchange fails)", async () => {
