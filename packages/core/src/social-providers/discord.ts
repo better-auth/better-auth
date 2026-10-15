@@ -27,52 +27,52 @@ export interface DiscordProfile extends Record<string, any> {
 	 */
 	system?: boolean | undefined;
 	/** whether the user has two factor enabled on their account */
-	mfa_enabled: boolean;
+	mfa_enabled?: boolean;
 	/**
 	 * the user's banner hash:
 	 * https://discord.com/developers/docs/reference#image-formatting
 	 */
-	banner: string | null;
+	banner?: string | null;
 
 	/** the user's banner color encoded as an integer representation of hexadecimal color code */
-	accent_color: number | null;
+	accent_color?: number | null;
 
 	/**
 	 * the user's chosen language option:
 	 * https://discord.com/developers/docs/reference#locales
 	 */
-	locale: string;
+	locale?: string;
 	/** whether the email on this account has been verified */
-	verified: boolean;
+	verified?: boolean;
 	/** the user's email */
 	email?: string | null;
 	/**
 	 * the flags on a user's account:
 	 * https://discord.com/developers/docs/resources/user#user-object-user-flags
 	 */
-	flags: number;
+	flags?: number;
 	/**
 	 * the type of Nitro subscription on a user's account:
 	 * https://discord.com/developers/docs/resources/user#user-object-premium-types
 	 */
-	premium_type: number;
+	premium_type?: number;
 	/**
 	 * the public flags on a user's account:
 	 * https://discord.com/developers/docs/resources/user#user-object-user-flags
 	 */
-	public_flags: number;
+	public_flags?: number;
 	/** undocumented field; corresponds to the user's custom nickname */
-	display_name: string | null;
+	display_name?: string | null;
 	/**
 	 * undocumented field; corresponds to the Discord feature where you can e.g.
 	 * put your avatar inside of an ice cube
 	 */
-	avatar_decoration: string | null;
+	avatar_decoration?: string | null;
 	/**
 	 * undocumented field; corresponds to the premium feature where you can
 	 * select a custom banner color
 	 */
-	banner_color: string | null;
+	banner_color?: string | null;
 	/** undocumented field; the CDN URL of their profile picture */
 	image_url: string;
 }
@@ -162,7 +162,7 @@ export const discord = (options: DiscordOptions) => {
 				user: {
 					name: profile.global_name || profile.username || "",
 					email: profile.email,
-					emailVerified: profile.verified,
+					emailVerified: profile.verified ?? false,
 					image: profile.image_url,
 					...userMap,
 				},
