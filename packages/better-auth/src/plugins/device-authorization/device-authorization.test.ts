@@ -942,14 +942,14 @@ describe("device authorization flow", async () => {
 				body: { client_id: "test-client" },
 			});
 			await auth.api.deviceVerify({ query: { user_code }, headers });
-			const pending = await db.findOne<DeviceCode>({
+			const deviceCodeRecord = await db.findOne<DeviceCode>({
 				model: "deviceCode",
 				where: [{ field: "deviceCode", value: device_code }],
 			});
 
 			// At `expiresAt` the pending check still passes but the write does not.
 			vi.useFakeTimers({ toFake: ["Date"] });
-			vi.setSystemTime(new Date(pending!.expiresAt));
+			vi.setSystemTime(new Date(deviceCodeRecord!.expiresAt));
 			try {
 				await expect(
 					auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
