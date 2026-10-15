@@ -20,8 +20,8 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterAll(() => server.close());
 
 /**
- * @see https://github.com/antiwork/gumroad/blob/main/app/models/concerns/user/as_json.rb
- * @see https://github.com/antiwork/gumroad/blob/main/spec/models/user_spec.rb
+ * @see https://github.com/antiwork/gumroad/blob/23e9dbef16a7620f2853f8f823c89c3381f1e191/app/models/concerns/user/as_json.rb#L6-L15
+ * @see https://github.com/antiwork/gumroad/blob/23e9dbef16a7620f2853f8f823c89c3381f1e191/spec/models/user_spec.rb#L1638-L1642
  */
 it("normalizes a Gumroad profile without a name", async () => {
 	const config = gumroad({
