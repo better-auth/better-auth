@@ -248,6 +248,10 @@ describe("info command", () => {
 				encryptionKey: "encryption-key-value",
 				// @ts-expect-error Regression fixture with a plural key suffix.
 				authTokens: "auth-tokens-value",
+				// @ts-expect-error Regression fixture with a SAML private key passphrase.
+				privateKeyPass: "private-key-passphrase",
+				// @ts-expect-error Regression fixture with an encrypted SAML key passphrase.
+				encPrivateKeyPass: "encrypted-private-key-passphrase",
 				// @ts-expect-error Regression fixture with a public key header option.
 				apiKeyHeaders: "x-api-key",
 				// @ts-expect-error Regression fixture with a public endpoint option.
@@ -268,6 +272,8 @@ describe("info command", () => {
 			"secret_key",
 			"encryptionKey",
 			"authTokens",
+			"privateKeyPass",
+			"encPrivateKeyPass",
 		]) {
 			expect(output.betterAuth.config[key]).toBe("[REDACTED]");
 		}
@@ -277,6 +283,8 @@ describe("info command", () => {
 			"secret-key-value",
 			"encryption-key-value",
 			"auth-tokens-value",
+			"private-key-passphrase",
+			"encrypted-private-key-passphrase",
 		]) {
 			expect(jsonOutput).not.toContain(value);
 			expect(textOutput).not.toContain(value);

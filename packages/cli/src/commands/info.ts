@@ -185,6 +185,8 @@ function sanitizeBetterAuthConfig(config: any): any {
 		"apiKey",
 		"apiSecret",
 		"privateKey",
+		"privateKeyPass",
+		"encPrivateKeyPass",
 		"publicKey",
 		"key",
 		"password",
