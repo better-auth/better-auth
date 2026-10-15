@@ -10,6 +10,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { logger } from "../env";
 import {
 	createInsufficientScopeError,
 	isInsufficientScopeError,
@@ -1021,6 +1022,25 @@ describe("verifyBearerToken", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/11611
 	 */
 	describe("rejected JWKS fetch", () => {
+		it("should report the failure even when the logger throws", async () => {
+			const { privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+			vi.spyOn(logger, "error").mockImplementation(() => {
+				throw new TypeError("logger failed");
+			});
+
+			const error = await verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}).then(
+				() => undefined,
+				(thrown: unknown) => thrown,
+			);
+
+			expect(error).toMatchObject({ message: "JWKS fetch failed" });
+		});
+
 		it("should report a refused connection instead of a bad token", async () => {
 			const { privateKey, kid } = await createTestJWKS();
 			const token = await createSignedToken(privateKey, kid);

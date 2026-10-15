@@ -215,7 +215,11 @@ async function fetchJwks(
 		if (error instanceof TypeError) {
 			// A TypeError from a JWKS source is an infrastructure failure, not an
 			// opaque token. Do not expose runtime-specific details to callers.
-			logger.error("JWKS fetch failed:", error);
+			try {
+				logger.error("JWKS fetch failed:", error);
+			} catch {
+				// A throwing custom logger must not turn this back into a TypeError.
+			}
 			throw new Error("JWKS fetch failed");
 		}
 		throw error;
