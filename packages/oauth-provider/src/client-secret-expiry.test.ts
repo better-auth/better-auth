@@ -94,6 +94,24 @@ describe("oauth client secret expiry", async () => {
 		expect(response.status).toBe(200);
 	});
 
+	it("keeps the expiry when the secret is rotated", async () => {
+		const expiresAt = Math.floor(Date.now() / 1000) + 3600;
+		const client = await createClient(expiresAt);
+
+		const rotated = await auth.api.rotateClientSecret({
+			headers,
+			body: { client_id: client.client_id },
+		});
+		expect(rotated.client_secret).not.toBe(client.client_secret);
+		expect(rotated.client_secret_expires_at).toBe(expiresAt);
+
+		const read = await auth.api.getOAuthClient({
+			headers,
+			query: { client_id: client.client_id },
+		});
+		expect(read.client_secret_expires_at).toBe(expiresAt);
+	});
+
 	it("rejects an expired secret with invalid_client", async () => {
 		const expiresAt = Math.floor(Date.now() / 1000) - 3600;
 		const client = await createClient(expiresAt);

@@ -12,4 +12,4 @@ This adds an optional `expiresAt` column to the `oauthClient` table, which must 
 - With Prisma or Drizzle, run `npx auth@latest generate` and apply the migration to your database before you deploy the regenerated client or schema. If the regenerated client or schema is deployed first, every request that reads an OAuth client fails, even if you never set an expiry.
 - MongoDB needs no migration.
 
-Until the column exists, creating or updating a client with an expiry fails, and so does every dynamic registration when `clientRegistrationClientSecretExpiration` is set.
+Until the column exists, creating or updating a client with an expiry fails, and so does every dynamic registration that issues a client secret when `clientRegistrationClientSecretExpiration` is set.
