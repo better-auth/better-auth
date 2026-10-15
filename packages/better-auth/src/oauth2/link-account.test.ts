@@ -1941,7 +1941,7 @@ describe("oauth2 - ambiguous account identity", () => {
 describe("oauth2 - orphaned account identity", () => {
 	it("does not fall back to email when a matching account has no user", async () => {
 		const database = new DatabaseSync(":memory:");
-		(await getMigrations({ database })).runMigrations();
+		await (await getMigrations({ database })).runMigrations();
 		const { auth, client, cookieSetter } = await getTestInstance({
 			database,
 			socialProviders: {

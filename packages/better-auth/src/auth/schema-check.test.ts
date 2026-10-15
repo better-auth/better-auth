@@ -44,39 +44,41 @@ describe.each([
 		{ validateSchema: undefined, disabled: false, level: "debug" },
 		{ validateSchema: false, disabled: false, level: undefined },
 		{ validateSchema: true, disabled: true, level: undefined },
-	] as const)("reports skipped validation: $validateSchema, logger disabled: $disabled", async ({
-		validateSchema,
-		disabled,
-		level,
-	}) => {
-		const log = vi.fn();
-		const auth = initialize({
-			baseURL: "https://auth.example.com",
-			secret: "schema-validation-test-secret-at-least-32-characters",
-			database: (options) => ({ ...memoryAdapter({})(options), id: "custom" }),
-			advanced: { database: { validateSchema } },
-			logger: { log, level: "debug", disabled },
-		});
+	] as const)(
+		"reports skipped validation: $validateSchema, logger disabled: $disabled",
+		async ({ validateSchema, disabled, level }) => {
+			const log = vi.fn();
+			const auth = initialize({
+				baseURL: "https://auth.example.com",
+				secret: "schema-validation-test-secret-at-least-32-characters",
+				database: (options) => ({
+					...memoryAdapter({})(options),
+					id: "custom",
+				}),
+				advanced: { database: { validateSchema } },
+				logger: { log, level: "debug", disabled },
+			});
 
-		await auth.$context;
-		if (level) {
-			expect(log).toHaveBeenCalledExactlyOnceWith(
-				level,
-				'Schema validation is not available for adapter "custom". Skipping schema validation. Database operations will proceed normally.',
+			await auth.$context;
+			if (level) {
+				expect(log).toHaveBeenCalledExactlyOnceWith(
+					level,
+					'Schema validation is not available for adapter "custom". Skipping schema validation. Database operations will proceed normally.',
+				);
+			} else {
+				expect(log).not.toHaveBeenCalled();
+			}
+			const initialLogCount = log.mock.calls.length;
+			const response = await auth.handler(
+				new Request("https://auth.example.com/api/auth/get-session"),
 			);
-		} else {
-			expect(log).not.toHaveBeenCalled();
-		}
-		const initialLogCount = log.mock.calls.length;
-		const response = await auth.handler(
-			new Request("https://auth.example.com/api/auth/get-session"),
-		);
-		expect(response.status).toBe(200);
-		await expect(
-			auth.api.getSession({ headers: new Headers() }),
-		).resolves.toBeNull();
-		expect(log).toHaveBeenCalledTimes(initialLogCount);
-	});
+			expect(response.status).toBe(200);
+			await expect(
+				auth.api.getSession({ headers: new Headers() }),
+			).resolves.toBeNull();
+			expect(log).toHaveBeenCalledTimes(initialLogCount);
+		},
+	);
 
 	it("starts validation without adding a public readiness API", async () => {
 		const find = vi.fn(async () => []);
