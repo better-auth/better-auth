@@ -56,7 +56,13 @@ async function createDpopProof() {
  */
 async function bootScenario(
 	exchange: OAuthTokenExchangeOptions = {},
-	{ disableJwtPlugin = false } = {},
+	{
+		disableJwtPlugin = false,
+		testWith,
+	}: {
+		disableJwtPlugin?: boolean;
+		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+	} = {},
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {},
 ) {
 	resetSeedStateForTests();
@@ -71,14 +77,23 @@ async function bootScenario(
 		clientPrivileges: () => true,
 		...providerOptions,
 	} as OAuthOptions<Scope[]>;
-	const { auth, client, signInWithTestUser } = await getTestInstance({
-		baseURL: issuer,
-		plugins: [
-			...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
-			oauthProvider(opts),
-			oauthTokenExchange(exchange),
-		],
-	});
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: issuer,
+			plugins: [
+				...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
+				oauthProvider(opts),
+				oauthTokenExchange(exchange),
+			],
+		},
+		// Adapter databases are shared across instances; keep each test user unique.
+		testWith
+			? {
+					testWith,
+					testUser: { email: `${generateRandomString(12)}@test.com` },
+				}
+			: {},
+	);
 	await seedResourcesOnce(
 		(await auth.$context) as unknown as AuthContext,
 		opts,
@@ -947,3 +962,130 @@ describe("oauthTokenExchange consent reference", () => {
 		expect(decodeJwt(subject.access_token).reference_id).toBe("org_1");
 	});
 });
+
+/**
+ * The consent lookup (including its `referenceId IS NULL` match), the consent
+ * array columns, `reference_id` on JWT and opaque tokens, and opaque-token
+ * revocation all go through the database adapter.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/8023
+ */
+describe.each(["postgres", "mongodb"] as const)(
+	"oauthTokenExchange on %s",
+	(testWith) => {
+		const orgClaim = "https://example.com/org";
+		const withReference = {
+			postLogin: {
+				page: "/select-organization",
+				shouldRedirect: () => false,
+				consentReferenceId: () => "org_1",
+			},
+			customAccessTokenClaims: ({ referenceId }) =>
+				referenceId ? { [orgClaim]: referenceId } : {},
+		} satisfies Partial<OAuthOptions<Scope[]>>;
+
+		const createConsent = async (
+			auth: Awaited<ReturnType<typeof bootScenario>>["auth"],
+			data: Record<string, unknown>,
+		) =>
+			(await auth.$context).adapter.create({
+				model: "oauthConsent",
+				data: {
+					scopes: ["read"],
+					resources: [mcp, api],
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					...data,
+				},
+			});
+
+		it("keeps the reference and checks consent under it", async () => {
+			const { auth, exchanger, userTokenForMcp, exchangeAs } =
+				await bootScenario({}, { testWith }, withReference);
+			const untrusted = await exchanger({
+				resources: [mcp, api],
+				skip_consent: false,
+			});
+			const subject = await userTokenForMcp();
+			const userId = decodeJwt(subject.access_token).sub;
+			await createConsent(auth, {
+				clientId: untrusted.client_id,
+				userId,
+				referenceId: "org_2",
+			});
+			const denied = await exchangeAs(untrusted, subject.access_token);
+			expect(denied.error?.error_description).toMatch(/consented/);
+
+			await createConsent(auth, {
+				clientId: untrusted.client_id,
+				userId,
+				referenceId: "org_1",
+			});
+			const { data, error } = await exchangeAs(untrusted, subject.access_token);
+			expect(error).toBeNull();
+			expect(decodeJwt(data!.access_token)).toMatchObject({
+				reference_id: "org_1",
+				[orgClaim]: "org_1",
+			});
+		});
+
+		it("matches only consent stored without a reference for a subject without one", async () => {
+			const { auth, exchanger, userTokenForMcp, exchangeAs } =
+				await bootScenario({}, { testWith });
+			const untrusted = await exchanger({
+				resources: [mcp, api],
+				skip_consent: false,
+			});
+			const subject = await userTokenForMcp();
+			const userId = decodeJwt(subject.access_token).sub;
+			await createConsent(auth, {
+				clientId: untrusted.client_id,
+				userId,
+				referenceId: "org_1",
+			});
+			const denied = await exchangeAs(untrusted, subject.access_token);
+			expect(denied.error?.error_description).toMatch(/consented/);
+
+			await createConsent(auth, { clientId: untrusted.client_id, userId });
+			const { error } = await exchangeAs(untrusted, subject.access_token);
+			expect(error).toBeNull();
+		});
+
+		it("exchanges an opaque subject token and rejects it once revoked", async () => {
+			const {
+				createClient,
+				introspect,
+				postForm,
+				userTokenForMcp,
+				exchangeAs,
+			} = await bootScenario({}, { testWith }, withReference);
+			const bff = await createClient({
+				grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+				redirect_uris: [redirectUri],
+				scope: "openid read",
+				skip_consent: true,
+				resources: [api],
+			});
+			const subject = await userTokenForMcp({
+				scope: "openid read",
+				requester: bff,
+				resource: null,
+			});
+			expect((await introspect(subject.access_token, bff))?.reference_id).toBe(
+				"org_1",
+			);
+			const { data, error } = await exchangeAs(bff, subject.access_token);
+			expect(error).toBeNull();
+			expect(decodeJwt(data!.access_token).reference_id).toBe("org_1");
+
+			await postForm("/oauth2/revoke", {
+				token: subject.access_token,
+				token_type_hint: "access_token",
+				client_id: bff.client_id,
+				client_secret: bff.client_secret!,
+			});
+			const revoked = await exchangeAs(bff, subject.access_token);
+			expect(revoked.error?.error_description).toBe("subject_token is invalid");
+		});
+	},
+);
