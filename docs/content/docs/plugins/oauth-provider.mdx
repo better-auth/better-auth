@@ -732,6 +732,8 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
+`token_type_hint` is optional and never limits the lookup: the endpoint checks both token types, so a token sent with the wrong hint is still found ([RFC7662 §2.1](https://datatracker.ietf.org/doc/html/rfc7662#section-2.1)).
+
 Use the `resources` field in `customAccessTokenClaims` to add claims based on the protected resource.
 
 #### Who can introspect a token

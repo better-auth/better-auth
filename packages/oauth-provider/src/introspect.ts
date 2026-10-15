@@ -660,19 +660,11 @@ export async function introspectEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ) {
-	let { token, token_type_hint } = ctx.body as {
+	// RFC 7662 §2.1: the server may ignore `token_type_hint` and must search
+	// every supported token type, so a mismatched hint still finds the token.
+	let { token } = ctx.body as {
 		token: string;
-		token_type_hint?: string;
 	};
-
-	// RFC 7662 §2.1: unknown hints are ignored and detection falls back to
-	// trying both supported token types.
-	if (
-		token_type_hint !== "access_token" &&
-		token_type_hint !== "refresh_token"
-	) {
-		token_type_hint = undefined;
-	}
 
 	const credentials = await extractClientCredentials(
 		ctx,
@@ -717,55 +709,32 @@ export async function introspectEndpoint(
 	);
 
 	try {
-		if (token_type_hint === undefined || token_type_hint === "access_token") {
-			try {
-				const payload = await validateAccessToken(
-					ctx,
-					opts,
-					token,
-					client.clientId,
-				);
-				return resolveIntrospectionSub(ctx, opts, payload, client);
-			} catch (error) {
-				if (error instanceof APIError) {
-					if (token_type_hint === "access_token") {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
-				}
+		try {
+			const payload = await validateAccessToken(
+				ctx,
+				opts,
+				token,
+				client.clientId,
+			);
+			return resolveIntrospectionSub(ctx, opts, payload, client);
+		} catch (error) {
+			if (error instanceof APIError) {
+				// continue
+			} else if (error instanceof Error) {
+				throw error;
+			} else {
+				throw new Error(error as unknown as string);
 			}
 		}
 
-		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
-			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
-				const payload = await validateRefreshToken(
-					ctx,
-					opts,
-					refreshToken.token,
-					client.clientId,
-				);
-				return resolveIntrospectionSub(ctx, opts, payload, client);
-			} catch (error) {
-				if (error instanceof APIError) {
-					if (token_type_hint === "refresh_token") {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
-				}
-			}
-		}
-
-		throw new APIError("BAD_REQUEST", {
-			error_description: "token not found",
-			error: "invalid_request",
-		});
+		const refreshToken = await decodeRefreshToken(opts, token);
+		const payload = await validateRefreshToken(
+			ctx,
+			opts,
+			refreshToken.token,
+			client.clientId,
+		);
+		return resolveIntrospectionSub(ctx, opts, payload, client);
 	} catch (error) {
 		if (error instanceof APIError) {
 			if (isInactiveTokenError(error)) {
