@@ -460,6 +460,7 @@ describe("cognito provider", () => {
 /**
  * @see https://docs.slack.dev/authentication/sign-in-with-slack/
  * @see https://docs.slack.dev/reference/methods/openid.connect.userInfo/
+ * @see https://github.com/slackapi/node-slack-sdk/blob/571bc3a617d1455e691955527fc01bde20662e7d/packages/web-api/src/types/response/OpenIDConnectUserInfoResponse.ts#L11-L47
  */
 describe("slack optional profile claims", () => {
 	it("keeps identity-only profiles available to profile mapping", async () => {
