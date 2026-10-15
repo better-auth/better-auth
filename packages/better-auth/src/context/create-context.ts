@@ -17,6 +17,7 @@ import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
 import { generateId } from "@better-auth/core/utils/id";
 import { findInvalidTrustedProxies } from "@better-auth/core/utils/ip";
+import { fixedWindow } from "@better-auth/rate-limit";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -357,11 +358,10 @@ Most of the features of Better Auth will not work correctly.`,
 		rateLimit: {
 			...options.rateLimit,
 			enabled: options.rateLimit?.enabled ?? isProduction,
-			window: options.rateLimit?.window || 10,
-			max: options.rateLimit?.max || 100,
-			storage:
-				options.rateLimit?.storage ||
-				(options.secondaryStorage ? "secondary-storage" : "memory"),
+			policy:
+				options.rateLimit?.policy ??
+				fixedWindow({ limit: 100, windowMs: 10_000 }),
+			storage: options.rateLimit?.storage ?? "memory",
 		},
 		authCookies: cookies,
 		logger,

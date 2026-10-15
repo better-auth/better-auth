@@ -1,3 +1,4 @@
+import { fixedWindow } from "@better-auth/rate-limit";
 import * as betterFetchModule from "@better-fetch/fetch";
 import { checkBotId as vercelCheckBotId } from "botid/server";
 import { describe, expect, it, vi } from "vitest";
@@ -132,11 +133,11 @@ describe("captcha", async () => {
 		const { client, testUser } = await getTestInstance({
 			rateLimit: {
 				enabled: true,
-				customRules: {
-					"/sign-in/email": {
-						window: 10,
-						max: 1,
-					},
+				rules: {
+					"/sign-in/email": fixedWindow({
+						limit: 1,
+						windowMs: 10_000,
+					}),
 				},
 			},
 			plugins: [

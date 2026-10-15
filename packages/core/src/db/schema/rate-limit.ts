@@ -11,13 +11,17 @@ export const rateLimitSchema = z.object({
 	 */
 	key: z.string(),
 	/**
-	 * The number of requests made
+	 * Opaque, versioned algorithm state.
 	 */
-	count: z.number(),
+	state: z.string(),
 	/**
-	 * The last request time in milliseconds
+	 * Time after which the state can be discarded.
 	 */
-	lastRequest: z.number(),
+	expiresAt: z.number(),
+	/**
+	 * Monotonic revision used for compare-and-swap updates.
+	 */
+	revision: z.number(),
 });
 
 export type BaseRateLimit = z.infer<typeof rateLimitSchema>;

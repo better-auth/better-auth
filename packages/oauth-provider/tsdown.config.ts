@@ -9,6 +9,9 @@ export default defineConfig({
 		"./src/client-resource.ts",
 		"./src/internal.ts",
 	],
+	deps: {
+		alwaysBundle: ["@better-auth/rate-limit"],
+	},
 	treeshake: true,
 	clean: true,
 });

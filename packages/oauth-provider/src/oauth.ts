@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { defineRequestState } from "@better-auth/core/context";
 import { BetterAuthError } from "@better-auth/core/error";
+import { fixedWindow } from "@better-auth/rate-limit";
 import type { DispatchContext } from "better-auth/api";
 import {
 	APIError,
@@ -1744,8 +1745,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				? [
 						{
 							pathMatcher: (path: string) => path === "/oauth2/token",
-							window: opts.rateLimit?.token?.window ?? 60,
-							max: opts.rateLimit?.token?.max ?? 20,
+							policy: fixedWindow({
+								limit: opts.rateLimit?.token?.max ?? 20,
+								windowMs: (opts.rateLimit?.token?.window ?? 60) * 1_000,
+							}),
 						},
 					]
 				: []),
@@ -1754,8 +1757,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				? [
 						{
 							pathMatcher: (path: string) => path === "/oauth2/authorize",
-							window: opts.rateLimit?.authorize?.window ?? 60,
-							max: opts.rateLimit?.authorize?.max ?? 30,
+							policy: fixedWindow({
+								limit: opts.rateLimit?.authorize?.max ?? 30,
+								windowMs: (opts.rateLimit?.authorize?.window ?? 60) * 1_000,
+							}),
 						},
 					]
 				: []),
@@ -1764,8 +1769,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				? [
 						{
 							pathMatcher: (path: string) => path === "/oauth2/introspect",
-							window: opts.rateLimit?.introspect?.window ?? 60,
-							max: opts.rateLimit?.introspect?.max ?? 100,
+							policy: fixedWindow({
+								limit: opts.rateLimit?.introspect?.max ?? 100,
+								windowMs: (opts.rateLimit?.introspect?.window ?? 60) * 1_000,
+							}),
 						},
 					]
 				: []),
@@ -1774,8 +1781,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				? [
 						{
 							pathMatcher: (path: string) => path === "/oauth2/revoke",
-							window: opts.rateLimit?.revoke?.window ?? 60,
-							max: opts.rateLimit?.revoke?.max ?? 30,
+							policy: fixedWindow({
+								limit: opts.rateLimit?.revoke?.max ?? 30,
+								windowMs: (opts.rateLimit?.revoke?.window ?? 60) * 1_000,
+							}),
 						},
 					]
 				: []),
@@ -1784,8 +1793,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				? [
 						{
 							pathMatcher: (path: string) => path === "/oauth2/register",
-							window: opts.rateLimit?.register?.window ?? 60,
-							max: opts.rateLimit?.register?.max ?? 5,
+							policy: fixedWindow({
+								limit: opts.rateLimit?.register?.max ?? 5,
+								windowMs: (opts.rateLimit?.register?.window ?? 60) * 1_000,
+							}),
 						},
 					]
 				: []),
@@ -1805,8 +1816,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				? [
 						{
 							pathMatcher: (path: string) => path === "/oauth2/userinfo",
-							window: opts.rateLimit?.userinfo?.window ?? 60,
-							max: opts.rateLimit?.userinfo?.max ?? 60,
+							policy: fixedWindow({
+								limit: opts.rateLimit?.userinfo?.max ?? 60,
+								windowMs: (opts.rateLimit?.userinfo?.window ?? 60) * 1_000,
+							}),
 						},
 					]
 				: []),

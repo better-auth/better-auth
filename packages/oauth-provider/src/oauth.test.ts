@@ -3448,8 +3448,8 @@ describe("oauth - rate limiting", () => {
 		const tokenRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/token"),
 		);
-		expect(tokenRule?.window).toBe(60);
-		expect(tokenRule?.max).toBe(20);
+		expect(tokenRule?.policy.windowMs).toBe(60_000);
+		expect(tokenRule?.policy.limit).toBe(20);
 
 		// Credential-replacing endpoints are limited like registration
 		const rotateKeysRule = plugin?.rateLimit?.find((r) =>
@@ -3462,36 +3462,36 @@ describe("oauth - rate limiting", () => {
 		const authorizeRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/authorize"),
 		);
-		expect(authorizeRule?.window).toBe(60);
-		expect(authorizeRule?.max).toBe(30);
+		expect(authorizeRule?.policy.windowMs).toBe(60_000);
+		expect(authorizeRule?.policy.limit).toBe(30);
 
 		// Check introspect endpoint default
 		const introspectRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/introspect"),
 		);
-		expect(introspectRule?.window).toBe(60);
-		expect(introspectRule?.max).toBe(100);
+		expect(introspectRule?.policy.windowMs).toBe(60_000);
+		expect(introspectRule?.policy.limit).toBe(100);
 
 		// Check revoke endpoint default
 		const revokeRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/revoke"),
 		);
-		expect(revokeRule?.window).toBe(60);
-		expect(revokeRule?.max).toBe(30);
+		expect(revokeRule?.policy.windowMs).toBe(60_000);
+		expect(revokeRule?.policy.limit).toBe(30);
 
 		// Check register endpoint default
 		const registerRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/register"),
 		);
-		expect(registerRule?.window).toBe(60);
-		expect(registerRule?.max).toBe(5);
+		expect(registerRule?.policy.windowMs).toBe(60_000);
+		expect(registerRule?.policy.limit).toBe(5);
 
 		// Check userinfo endpoint default
 		const userinfoRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/userinfo"),
 		);
-		expect(userinfoRule?.window).toBe(60);
-		expect(userinfoRule?.max).toBe(60);
+		expect(userinfoRule?.policy.windowMs).toBe(60_000);
+		expect(userinfoRule?.policy.limit).toBe(60);
 	});
 
 	it("should allow custom rate limit values", async () => {
@@ -3515,22 +3515,22 @@ describe("oauth - rate limiting", () => {
 		const tokenRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/token"),
 		);
-		expect(tokenRule?.window).toBe(1);
-		expect(tokenRule?.max).toBe(4);
+		expect(tokenRule?.policy.windowMs).toBe(1_000);
+		expect(tokenRule?.policy.limit).toBe(4);
 
 		// Check custom introspect values
 		const introspectRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/introspect"),
 		);
-		expect(introspectRule?.window).toBe(1);
-		expect(introspectRule?.max).toBe(50);
+		expect(introspectRule?.policy.windowMs).toBe(1_000);
+		expect(introspectRule?.policy.limit).toBe(50);
 
 		// Other endpoints should still have defaults
 		const authorizeRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/authorize"),
 		);
-		expect(authorizeRule?.window).toBe(60);
-		expect(authorizeRule?.max).toBe(30);
+		expect(authorizeRule?.policy.windowMs).toBe(60_000);
+		expect(authorizeRule?.policy.limit).toBe(30);
 	});
 
 	it("should allow disabling rate limit for specific endpoints", async () => {

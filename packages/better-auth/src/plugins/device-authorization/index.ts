@@ -5,6 +5,7 @@ import type {
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
+import { fixedWindow } from "@better-auth/rate-limit";
 import * as z from "zod";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -276,8 +277,10 @@ export const deviceAuthorization = <
 				pathMatcher(path) {
 					return path === "/device";
 				},
-				window: ms(opts.expiresIn) / 1000,
-				max: 5,
+				policy: fixedWindow({
+					limit: 5,
+					windowMs: ms(opts.expiresIn),
+				}),
 			},
 		],
 		$ERROR_CODES: DEVICE_AUTHORIZATION_ERROR_CODES,

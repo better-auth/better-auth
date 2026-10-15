@@ -1851,7 +1851,7 @@ By default all secrets are `hashed` by default on the database. This helps prote
 The OAuth Provider includes built-in rate limiting for all OAuth endpoints to protect against abuse and denial-of-service attacks.
 
 <Callout type="info">
-  Rate limiting is **per-IP per-endpoint**. Each client IP address has its own rate limit counter for each endpoint. Rate limits reset after the window period expires.
+  Rate limiting is **per-IP per-endpoint** by default. A global `rateLimit.key` resolver can replace the IP with another trusted consumer identity. OAuth endpoint policies use fixed windows.
 </Callout>
 
 <Callout type="warn">

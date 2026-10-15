@@ -1,3 +1,4 @@
+import type { RateLimitPolicy } from "@better-auth/rate-limit";
 import type {
 	Endpoint,
 	EndpointContext,
@@ -147,8 +148,7 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	 */
 	rateLimit?:
 		| {
-				window: number;
-				max: number;
+				policy: RateLimitPolicy;
 				pathMatcher: (path: string) => boolean;
 		  }[]
 		| undefined;

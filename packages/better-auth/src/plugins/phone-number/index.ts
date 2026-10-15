@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { fixedWindow } from "@better-auth/rate-limit";
 import { mergeSchema } from "../../db/schema";
 import { PACKAGE_VERSION } from "../../version";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
@@ -105,8 +106,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				pathMatcher(path) {
 					return path.startsWith("/phone-number");
 				},
-				window: 60,
-				max: 10,
+				policy: fixedWindow({ limit: 10, windowMs: 60_000 }),
 			},
 		],
 		options,

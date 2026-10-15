@@ -337,8 +337,8 @@ export interface SecondaryStorage {
 	 * never extend it, so the counter expires a fixed window after it was first
 	 * created.
 	 *
-	 * Required so secondary-storage-backed rate limiting can enforce the limit
-	 * in one distributed-safe operation.
+	 * Required so secondary-storage-backed consumers can enforce counters in one
+	 * distributed-safe operation.
 	 */
 	increment: (key: string, ttl: number) => Awaitable<number>;
 	set: (

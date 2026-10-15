@@ -1,5 +1,9 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
+import type {
+	RateLimitPolicy,
+	RateLimitStorage,
+} from "@better-auth/rate-limit";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -188,44 +192,14 @@ export type DynamicBaseURLConfig = {
  */
 export type BaseURLConfig = string | DynamicBaseURLConfig;
 
-export interface BetterAuthRateLimitStorage {
-	/**
-	 * Atomically records one request against `key` within the rolling `window`
-	 * (in seconds) and reports whether it is allowed.
-	 *
-	 * When `allowed` is true the count was incremented within the active window,
-	 * or the window had elapsed and was reset to start at 1. When `allowed` is
-	 * false the limit was already reached and `retryAfter` is the number of
-	 * seconds until the window frees up.
-	 *
-	 * Performing the check and the increment in a single step closes the
-	 * concurrent-bypass gap of the separate `get`/`set` path: N simultaneous
-	 * requests can no longer all pass a stale read before any increment lands.
-	 *
-	 * Custom storages must implement this operation directly. Better Auth no
-	 * longer accepts separate `get`/`set` rate-limit storage because that shape
-	 * cannot enforce a distributed limit under concurrent requests.
-	 */
-	consume: (
-		key: string,
-		rule: { window: number; max: number },
-	) => Promise<{ allowed: boolean; retryAfter: number | null }>;
-}
-
-export type BetterAuthRateLimitRule = {
-	/**
-	 * Default window to use for rate limiting. The value
-	 * should be in seconds.
-	 *
-	 * @default 10 seconds
-	 */
-	window: number;
-	/**
-	 * The default maximum number of requests allowed within the window.
-	 *
-	 * @default 100 requests
-	 */
-	max: number;
+/** Values available when resolving a request rate-limit consumer key. */
+export type BetterAuthRateLimitKeyContext = {
+	/** Incoming client request. */
+	request: Request;
+	/** Normalized Better Auth endpoint path. */
+	path: string;
+	/** Trusted, normalized client IP when one can be resolved. */
+	ip: string | null;
 };
 
 export type BetterAuthDBOptions<
@@ -248,49 +222,53 @@ export type BetterAuthDBOptions<
 	};
 };
 
-export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> &
-	Omit<
-		BetterAuthDBOptions<"rateLimit", keyof BaseRateLimit>,
-		"additionalFields"
-	> & {
-		/**
-		 * By default, rate limiting is only
-		 * enabled on production.
-		 */
-		enabled?: boolean | undefined;
-		/**
-		 * Custom rate limit rules to apply to
-		 * specific paths.
-		 */
-		customRules?:
-			| {
-					[key: string]:
-						| BetterAuthRateLimitRule
-						| false
-						| ((
-								request: Request,
-								currentRule: BetterAuthRateLimitRule,
-						  ) => Awaitable<false | BetterAuthRateLimitRule>);
-			  }
-			| undefined;
-		/**
-		 * Storage configuration
-		 *
-		 * By default, rate limiting is stored in memory. If you passed a
-		 * secondary storage, rate limiting will be stored in the secondary
-		 * storage.
-		 *
-		 * @default "memory"
-		 */
-		storage?: ("memory" | "database" | "secondary-storage") | undefined;
-		/**
-		 * custom storage configuration.
-		 *
-		 * NOTE: If custom storage is used storage
-		 * is ignored
-		 */
-		customStorage?: BetterAuthRateLimitStorage;
-	};
+export type BetterAuthRateLimitOptions = Omit<
+	BetterAuthDBOptions<"rateLimit", keyof BaseRateLimit>,
+	"additionalFields"
+> & {
+	/**
+	 * By default, rate limiting is only
+	 * enabled on production.
+	 */
+	enabled?: boolean | undefined;
+	/**
+	 * Default policy applied when no endpoint-specific policy matches.
+	 * @default { strategy: "fixed-window", limit: 100, windowMs: 10_000 }
+	 */
+	policy?: RateLimitPolicy | undefined;
+	/**
+	 * Resolves the consumer key. The value must be stable, compact, non-secret,
+	 * and derived from trusted request data.
+	 * @default The trusted client IP
+	 */
+	key?:
+		| ((context: BetterAuthRateLimitKeyContext) => Awaitable<string>)
+		| undefined;
+	/**
+	 * Endpoint-specific policies keyed by normalized path or wildcard.
+	 * Exact paths take precedence over wildcard rules.
+	 */
+	rules?:
+		| {
+				[key: string]:
+					| RateLimitPolicy
+					| false
+					| ((
+							request: Request,
+							currentPolicy: RateLimitPolicy,
+					  ) => Awaitable<false | RateLimitPolicy>);
+		  }
+		| undefined;
+	/**
+	 * Storage configuration
+	 *
+	 * By default, rate limiting is stored in memory.
+	 * @default "memory"
+	 */
+	storage?: ("memory" | "database") | undefined;
+	/** Atomic custom storage. When provided, `storage` is ignored. */
+	customStorage?: RateLimitStorage | undefined;
+};
 
 export type BetterAuthAdvancedOptions = {
 	/**
