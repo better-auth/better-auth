@@ -1,11 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { formatErrorURL, getIssuer } from "./authorize";
+import { formatErrorURL, getAPIErrorURL, getIssuer } from "./authorize";
 import {
 	filterClaimsRequestUserInfoClaims,
 	getRequestedUserInfoClaims,
 } from "./claims-request";
 import type { AuthorizeEndpointCaller } from "./continue";
+import { getExtensionInteractionRequest } from "./extensions";
 import { oAuthState } from "./oauth";
 import { getSupportedClaims } from "./standard-claims";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
@@ -32,7 +33,11 @@ export async function consentEndpoint<Result>(
 		});
 	}
 	const query = new URLSearchParams(_query);
-	const originalRequestedScopes = query.get("scope")?.split(" ") ?? [];
+	const originalRequestedScopes =
+		query
+			.get("scope")
+			?.split(" ")
+			.filter((scope) => scope) ?? [];
 	const supportedClaims = getSupportedClaims(opts);
 	const originalRequestedUserInfoClaims = getRequestedUserInfoClaims(
 		query.get("claims"),
@@ -47,7 +52,9 @@ export async function consentEndpoint<Result>(
 	}
 
 	// Check scopes if received (can only be equal or lesser than originally requested scopes)
-	const requestedScopes = (ctx.body.scope as string | undefined)?.split(" ");
+	const requestedScopes = (ctx.body.scope as string | undefined)
+		?.split(" ")
+		.filter((scope) => scope);
 	if (requestedScopes) {
 		if (!requestedScopes.every((sc) => originalRequestedScopes?.includes(sc))) {
 			throw new APIError("BAD_REQUEST", {
@@ -73,9 +80,31 @@ export async function consentEndpoint<Result>(
 		});
 	}
 
+	const session = await getSessionFromCtx(ctx);
 	// Consent not accepted (ensure it's strictly boolean true)
 	const accepted = ctx.body.accept === true;
 	if (!accepted) {
+		const interaction = getExtensionInteractionRequest(
+			opts,
+			searchParamsToQuery(query),
+		);
+		if (interaction) {
+			return {
+				redirect: true,
+				url: await interaction.handler
+					.deny({ ctx, value: interaction.value, userId: session?.user.id! })
+					.catch((error) =>
+						getAPIErrorURL(
+							ctx,
+							error,
+							interaction.handler.errorPage?.({
+								ctx,
+								value: interaction.value,
+							}),
+						),
+					),
+			};
+		}
 		return {
 			redirect: true,
 			url: formatErrorURL(
@@ -89,7 +118,6 @@ export async function consentEndpoint<Result>(
 	}
 
 	// Consent accepted
-	const session = await getSessionFromCtx(ctx);
 	const promptSet = parsePrompt(query.get("prompt") ?? "");
 	const hasLoginPrompt = promptSet.has("login");
 	const hasSatisfiedLoginPrompt =
@@ -195,5 +223,6 @@ export async function consentEndpoint<Result>(
 		oauthRequest.postLoginClearedForSession === session?.session.id;
 	return await authorize(ctx, {
 		postLogin: postLoginClearedForThisSession,
+		consentAccepted: true,
 	});
 }
