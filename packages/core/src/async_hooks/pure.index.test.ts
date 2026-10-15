@@ -26,18 +26,18 @@ describe("pure getAsyncLocalStorage", () => {
 		{ name: "null", value: null, expectedType: "object" },
 		{ name: "undefined", value: undefined, expectedType: "undefined" },
 		{ name: "object", value: {}, expectedType: "object" },
-	])("reports an invalid runtime constructor ($name) and recovers when it is replaced", async ({
-		value,
-		expectedType,
-	}) => {
-		vi.stubGlobal("AsyncLocalStorage", value);
-		const { getAsyncLocalStorage } = await import("./pure.index");
-		await expect(getAsyncLocalStorage()).rejects.toThrow(
-			`Invalid globalThis.AsyncLocalStorage: expected a function, received ${expectedType}.`,
-		);
-		vi.stubGlobal("AsyncLocalStorage", AsyncLocalStorage);
-		await expect(getAsyncLocalStorage()).resolves.toBe(AsyncLocalStorage);
-	});
+	])(
+		"reports an invalid runtime constructor ($name) and recovers when it is replaced",
+		async ({ value, expectedType }) => {
+			vi.stubGlobal("AsyncLocalStorage", value);
+			const { getAsyncLocalStorage } = await import("./pure.index");
+			await expect(getAsyncLocalStorage()).rejects.toThrow(
+				`Invalid globalThis.AsyncLocalStorage: expected a function, received ${expectedType}.`,
+			);
+			vi.stubGlobal("AsyncLocalStorage", AsyncLocalStorage);
+			await expect(getAsyncLocalStorage()).resolves.toBe(AsyncLocalStorage);
+		},
+	);
 
 	it("provides the polyfill in a browser and restores nested synchronous stores", async () => {
 		vi.stubGlobal("window", {});

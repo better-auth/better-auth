@@ -1131,7 +1131,8 @@ export interface OAuthOptions<
 		 * For example, allow selection of an organization or team.
 		 *
 		 * Upon selection of a specific account, use `/oauth2/continue`
-		 * with `postLogin: true` to continue the login flow.
+		 * with `postLogin: true` to continue the login flow. The continue
+		 * request runs `shouldRedirect` again with `isContinuation: true`.
 		 *
 		 * @returns
 		 * - `true`: account is not selected and needs selection
@@ -1142,6 +1143,12 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * `true` when the user returns from `page` through `/oauth2/continue`.
+			 * The client chooses to send that request, so it does not prove a
+			 * selection was made: validate the session before returning `false`.
+			 */
+			isContinuation: boolean;
 		}) => Awaitable<boolean>;
 	};
 	/**

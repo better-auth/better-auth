@@ -37,11 +37,11 @@ import { resolveSCIMDemoSSOUser } from "./scim-demo-employee.ts";
 import { getSCIMDemoOIDCProvider } from "./scim-demo-oidc.ts";
 import {
 	createTokenExchangeDemoPlugins,
-	getTokenExchangeDemoRegistrationOptions,
 	getTokenExchangeDemoResources,
 } from "./token-exchange-demo.ts";
 
 const DEMO_SQLITE_CONTENTION_TIMEOUT_MS = 5_000;
+const mcpResource = `${process.env.BETTER_AUTH_URL || "https://demo.better-auth.com"}/api/mcp`;
 
 const database = (() => {
 	if (process.env.DEMO_SQLITE_PATH) {
@@ -425,11 +425,11 @@ const authOptions = {
 			],
 			resources: [
 				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
-				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
-					"/api/mcp",
+				mcpResource,
 				...getTokenExchangeDemoResources(),
 			],
-			...getTokenExchangeDemoRegistrationOptions(),
+			// DCR clients omit `resources`; link them to the MCP server like `mcp()` does.
+			clientRegistrationDefaultResources: [mcpResource],
 			selectAccount: {
 				page: "/oauth/select-account",
 				shouldRedirect: async ({ headers }) => {
@@ -449,7 +449,7 @@ const authOptions = {
 			},
 			postLogin: {
 				page: "/oauth/select-organization",
-				async shouldRedirect({ session, scopes, headers }) {
+				async shouldRedirect({ session, scopes, headers, isContinuation }) {
 					const userOnlyScopes = [
 						"openid",
 						"profile",
@@ -459,18 +459,22 @@ const authOptions = {
 					if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
 						return false;
 					}
-					// Check if user has multiple organizations to select from
+					if (!session.activeOrganizationId) {
+						return true;
+					}
 					try {
 						const organizations = (await getAllUserOrganizations(
 							headers,
 						)) as Organization[];
-						return (
-							organizations.length > 1 ||
-							!(
-								organizations.length === 1 &&
-								organizations.at(0)?.id === session.activeOrganizationId
+						if (
+							!organizations.some(
+								(org) => org.id === session.activeOrganizationId,
 							)
-						);
+						) {
+							return true;
+						}
+						// Ask on every new authorization; accept the selection on continuation
+						return !isContinuation && organizations.length > 1;
 					} catch {
 						return true;
 					}

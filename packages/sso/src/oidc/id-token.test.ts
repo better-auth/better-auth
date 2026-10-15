@@ -18,12 +18,15 @@ describe("OIDC authorized party validation", () => {
 			"incorrect azp",
 		],
 		[{ aud: "workforce-client", azp: "another-client" }, "incorrect azp"],
-	])("rejects %s (%s)", (payload: {
-		aud: string | string[];
-		azp?: string;
-	}, _label) => {
-		expect(() =>
-			assertOIDCAuthorizedParty(payload, "workforce-client"),
-		).toThrow("OIDC ID token authorized party does not match the client");
-	});
+	])(
+		"rejects %s (%s)",
+		(payload: {
+			aud: string | string[];
+			azp?: string;
+		}, _label) => {
+			expect(() =>
+				assertOIDCAuthorizedParty(payload, "workforce-client"),
+			).toThrow("OIDC ID token authorized party does not match the client");
+		},
+	);
 });
