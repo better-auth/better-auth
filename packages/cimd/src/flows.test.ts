@@ -861,6 +861,7 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 				disabled: true,
 				skipConsent: true,
 				enableEndSession: true,
+				metadata: JSON.stringify({ note: "admin" }),
 			},
 		});
 
@@ -893,6 +894,13 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 			enableEndSession: true,
 			clientCredentialsScopes: ["service:read"],
 		});
+		// Without extension fields, a refresh leaves metadata as the admin set it.
+		const refreshedMetadata: unknown = afterRefresh?.metadata;
+		expect(
+			typeof refreshedMetadata === "string"
+				? JSON.parse(refreshedMetadata)
+				: refreshedMetadata,
+		).toEqual({ note: "admin" });
 		expect(onClientRefreshed).toHaveBeenCalledWith(
 			expect.objectContaining({
 				client: expect.objectContaining({
@@ -1145,6 +1153,48 @@ describe("CIMD - extension client metadata", async () => {
 		stubMetadataFetch(clientMetadataUrl, metadataDocument);
 		expect(await authorize()).toContain("/consent");
 		expect(await storedMetadata()).toEqual({ note: "admin" });
+	});
+
+	it("keeps an admin change made while the refresh fetch is in flight", async () => {
+		stubMetadataFetch(clientMetadataUrl, {
+			...metadataDocument,
+			example_mode: "ok",
+		});
+		expect(await authorize()).toContain("/consent");
+
+		// The refresh reads the client before fetching; an admin writes during
+		// the fetch, and the refresh must not restore the value it read earlier.
+		const ctx = await authorizationServer.$context;
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested !== clientMetadataUrl) return originalFetch(input, init);
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: clientMetadataUrl }],
+					update: {
+						metadata: JSON.stringify({
+							example_mode: "ok",
+							note: "during fetch",
+						}),
+					},
+				});
+				return new Response(JSON.stringify(metadataDocument), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
+			}),
+		);
+		expect(await authorize()).toContain("/consent");
+		expect(await storedMetadata()).toEqual({ note: "during fetch" });
 	});
 
 	it("rejects a document with an invalid declared field", async () => {

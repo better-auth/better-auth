@@ -191,7 +191,16 @@ export function validateCimdMetadata(
 		};
 	}
 
-	const doc = parsedMetadata.data;
+	// Declared extension fields join the parsed document before the checks
+	// below, so origin-bound rules apply to them too.
+	const doc = {
+		...Object.fromEntries(
+			Object.entries(raw).filter(([field]) =>
+				options.extensionFields?.has(field),
+			),
+		),
+		...parsedMetadata.data,
+	};
 	const warnings: string[] = [];
 
 	// §4.1: client_id MUST equal the fetch URL (simple string comparison)
@@ -426,15 +435,9 @@ export function validateCimdMetadata(
 	// §3: SHOULD NOT have a query string
 	warnings.push(...getClientIdUrlWarnings(clientIdUrl));
 
-	const extensionMetadata = Object.fromEntries(
-		Object.entries(raw).filter(([field]) =>
-			options.extensionFields?.has(field),
-		),
-	);
 	return {
 		valid: true,
 		metadata: {
-			...extensionMetadata,
 			...doc,
 			token_endpoint_auth_method: doc.token_endpoint_auth_method ?? "none",
 		},

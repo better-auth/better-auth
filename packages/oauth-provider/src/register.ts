@@ -1044,6 +1044,28 @@ async function persistOAuthClientRegistration(
 			let storedClient: SchemaClient<Scope[]>;
 			let created = false;
 			if (existingClient) {
+				// Merge against the row as it is now rather than as read before the
+				// document fetch, so admin changes made meanwhile are kept. Without
+				// declared fields, a refresh leaves metadata alone.
+				const extensionFields = getExtensionClientMetadataFields(opts);
+				let metadata: string | null | undefined;
+				if (extensionFields.size > 0) {
+					const currentClient = await adapter.findOne<SchemaClient<Scope[]>>({
+						model: clientModel,
+						where: [{ field: "clientId", value: clientId }],
+					});
+					const merged = stripReservedOAuthClientMetadataExtensions(
+						mergeDocumentExtensionMetadata(
+							extensionFields,
+							currentClient?.metadata,
+							body.metadata,
+						),
+					);
+					metadata =
+						merged && Object.keys(merged).length > 0
+							? JSON.stringify(merged)
+							: null;
+				}
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -1055,9 +1077,7 @@ async function persistOAuthClientRegistration(
 					],
 					update: {
 						...schema,
-						// Write the merged metadata even when empty, so fields the
-						// document stopped declaring are removed.
-						metadata: schema.metadata ?? null,
+						metadata,
 						disabled: existingClient.disabled,
 						skipConsent: existingClient.skipConsent,
 						enableEndSession: existingClient.enableEndSession,
@@ -1211,20 +1231,22 @@ function assertClientDiscoveryOwnership(
 /**
  * The `metadata` a metadata document registration stores. The document owns the
  * fields extensions declare, so a refresh replaces them, including removing
- * ones it no longer declares. Other keys, such as ones an admin set, are kept.
+ * ones it no longer declares. Other stored keys, such as ones an admin set, are
+ * kept.
  */
 function mergeDocumentExtensionMetadata(
-	input: RegisterClientMetadataDocumentInput,
-	opts: OAuthOptions<Scope[]>,
-	existingClient: SchemaClient<Scope[]> | undefined,
+	extensionFields: ReadonlySet<string>,
+	storedMetadata: SchemaClient<Scope[]>["metadata"] | undefined,
+	documentMetadata: Record<string, unknown> | undefined,
 ): Record<string, unknown> | undefined {
-	const extensionFields = getExtensionClientMetadataFields(opts);
-	const kept = Object.entries(
-		parseClientMetadata(existingClient?.metadata) ?? {},
-	).filter(([field]) => !extensionFields.has(field));
+	const owned = ([field]: [string, unknown]) => extensionFields.has(field);
 	const metadata = {
-		...Object.fromEntries(kept),
-		...pickExtensionClientMetadata(input.metadata, opts),
+		...Object.fromEntries(
+			Object.entries(parseClientMetadata(storedMetadata) ?? {}).filter(
+				(entry) => !owned(entry),
+			),
+		),
+		...Object.fromEntries(Object.entries(documentMetadata ?? {}).filter(owned)),
 	};
 	return Object.keys(metadata).length ? metadata : undefined;
 }
@@ -1272,7 +1294,11 @@ export async function registerClientMetadataDocument(
 		existingClient,
 		metadata: {
 			...input.metadata,
-			metadata: mergeDocumentExtensionMetadata(input, opts, existingClient),
+			metadata: mergeDocumentExtensionMetadata(
+				getExtensionClientMetadataFields(opts),
+				existingClient?.metadata,
+				pickExtensionClientMetadata(input.metadata, opts),
+			),
 			token_endpoint_auth_method:
 				input.metadata.token_endpoint_auth_method ?? "none",
 			client_secret: undefined,
