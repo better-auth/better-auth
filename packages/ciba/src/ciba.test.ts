@@ -549,38 +549,38 @@ describe("ciba ping mode", () => {
 			);
 	}
 
-	it.each([
-		"approve",
-		"deny",
-	] as const)("pings the registered endpoint after the user decides (%s)", async (decision) => {
-		const fetchSpy = mockNotificationEndpoint();
-		const authReqId = await start(
-			{ client_notification_token: "client-token" },
-			pingClient,
-		);
-		const body = { auth_req_id: authReqId };
-		if (decision === "approve") {
-			await auth.api.cibaApprove({ headers, body });
-		} else {
-			await auth.api.cibaDeny({ headers, body });
-		}
+	it.each(["approve", "deny"] as const)(
+		"pings the registered endpoint after the user decides (%s)",
+		async (decision) => {
+			const fetchSpy = mockNotificationEndpoint();
+			const authReqId = await start(
+				{ client_notification_token: "client-token" },
+				pingClient,
+			);
+			const body = { auth_req_id: authReqId };
+			if (decision === "approve") {
+				await auth.api.cibaApprove({ headers, body });
+			} else {
+				await auth.api.cibaDeny({ headers, body });
+			}
 
-		const call = fetchSpy.mock.calls.find(
-			([input]) => String(input) === notificationEndpoint,
-		);
-		expect(call?.[1]).toMatchObject({
-			method: "POST",
-			redirect: "error",
-			headers: { authorization: "Bearer client-token" },
-			body: JSON.stringify({ auth_req_id: authReqId }),
-		});
-		const result = await poll(authReqId, pingClient);
-		if (decision === "approve") {
-			expect(result.status).toBe(200);
-		} else {
-			expect(result.body.error).toBe("access_denied");
-		}
-	});
+			const call = fetchSpy.mock.calls.find(
+				([input]) => String(input) === notificationEndpoint,
+			);
+			expect(call?.[1]).toMatchObject({
+				method: "POST",
+				redirect: "error",
+				headers: { authorization: "Bearer client-token" },
+				body: JSON.stringify({ auth_req_id: authReqId }),
+			});
+			const result = await poll(authReqId, pingClient);
+			if (decision === "approve") {
+				expect(result.status).toBe(200);
+			} else {
+				expect(result.body.error).toBe("access_denied");
+			}
+		},
+	);
 
 	it("requires a client_notification_token", async () => {
 		const res = await bcAuthorize(
