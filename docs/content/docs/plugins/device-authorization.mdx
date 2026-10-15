@@ -927,4 +927,4 @@ export const deviceCodeTableFields = [
 
 <DatabaseTable name="deviceCode" fields={deviceCodeTableFields} />
 
-`oauthDeviceAuthorization()` extends this table with optional `oauthClientId`, `resources`, `referenceId`, and `authTime` fields. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.
+`oauthDeviceAuthorization()` extends this table with optional `oauthClientId`, `resources`, `referenceId`, `authTime`, `acr`, and `amr` fields. Standalone Device Authorization installations do not add those fields and do not expose the RFC 8707 `resource` request parameter.

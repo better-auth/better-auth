@@ -65,8 +65,9 @@ export interface OAuthAuthenticationContextOptions<
 	acrValuesSupported: string[];
 	/**
 	 * Returns the `acr` and `amr` the current session establishes. Called when
-	 * the user approves an authorization request. Return only what the session
-	 * actually proved; do not raise `acr` to match `requestedAcrValues`.
+	 * the user approves an authorization request or a device code. Return only
+	 * what the session actually proved; do not raise `acr` to match
+	 * `requestedAcrValues`.
 	 *
 	 * An essential `acr` request (`claims.id_token.acr.essential`) that the
 	 * returned `acr` does not satisfy fails with `access_denied`. A voluntary

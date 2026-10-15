@@ -672,7 +672,7 @@ The cached response is stored encrypted on the consumed refresh-token row and in
 
 #### Device code grant
 
-The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding, RFC 8707 resource, consent reference, and authentication time fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them through `/oauth2/authorize?user_code=…` and the same sign-in, account selection, post-login, and consent pages as an authorization request, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
+The device authorization grant ([RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628)) lets limited-input clients (CLIs, smart TVs, IoT) obtain an OAuth access token. Add `oauthDeviceAuthorization()` alongside `oauthProvider()` to register the `urn:ietf:params:oauth:grant-type:device_code` token grant and advertise `device_authorization_endpoint`. The integration adds the OAuth client binding, RFC 8707 resource, consent reference, authentication time, and authentication context (`acr`, `amr`) fields; standalone Device Authorization installations remain unchanged. The device requests codes at `/device/code`, the user approves them through `/oauth2/authorize?user_code=…` and the same sign-in, account selection, post-login, and consent pages as an authorization request, and the client polls `/oauth2/token` for a first-class OAuth token. See [Authorize a CLI to call an API](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api).
 
 At `/device/code`, confidential clients authenticate with their registered method. A client using `client_secret_basic` may send an `Authorization: Basic ...` header and omit the body `client_id`; a client using `client_secret_post` sends `client_id` and `client_secret`; and a public client using `none` sends `client_id`. Empty `client_id`, `scope`, `user_id`, and authentication parameters are treated as omitted regardless of order. Repeated non-empty client identification, base request, or authentication parameters and multiple authentication methods return `invalid_request`, while repeated `resource` parameters remain supported.
 
@@ -1534,7 +1534,7 @@ The callback receives the grant type, user (undefined for `client_credentials`),
 ID tokens carry `acr: "0"` (OIDC level 0) and no `amr` by default. To assert a stronger authentication class or the methods the user signed in with, set `authenticationContext` with both fields:
 
 * `acrValuesSupported` lists the `acr` values the provider may issue. Discovery advertises it as `acr_values_supported`. Include `"0"` if `resolve` can return no `acr`.
-* `resolve` returns the `acr` and `amr` the current session established. It runs once, when the user approves an authorization request with the `openid` scope, and receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`).
+* `resolve` returns the `acr` and `amr` the current session established. It runs once, when the user approves an authorization request or a device code with the `openid` scope, and receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`).
 
 Return only what the session proved. Better Auth does not record how a session signed in, so track it yourself. The example below marks sessions created by a completed two-factor challenge. Sessions created through a trusted device skip that challenge and stay unmarked.
 
@@ -1593,7 +1593,7 @@ How a request for a class is handled depends on whether it is essential:
 
 `resolve` must return an `acr` from `acrValuesSupported` (or omit it to use `"0"`), and `amr` must be an array of strings. Any other result fails the authorization with `server_error`. To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`; the client receives that error and its `error_description`. For a device code, the user sees the error on your verification page instead, and the code stays pending so the user can retry.
 
-The `acr` and `amr` are stored with the authorization code and the refresh token, so ID tokens from later refreshes keep the values of the original authentication ([OIDC Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse)). They change only when the user authorizes again.
+The `acr` and `amr` are stored with the authorization code or device code and the refresh token, so ID tokens from later refreshes keep the values of the original authentication ([OIDC Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse)). They change only when the user authorizes again.
 
 ### Expirations
 
