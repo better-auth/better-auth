@@ -607,6 +607,41 @@ describe("prisma-adapter", () => {
 		});
 	});
 
+	it("incrementOne resolves an insensitive id before the keyed update", async () => {
+		const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue({ id: "row-1" }),
+				update,
+			},
+		};
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(async (cb) => cb(txClient)),
+				verification: {},
+			} as never,
+			{ provider: "postgresql" },
+		)({
+			verification: {
+				additionalFields: { remaining: { type: "number" } },
+			},
+		} as BetterAuthOptions);
+
+		await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "row-1", mode: "insensitive" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(update).toHaveBeenCalledWith({
+			where: {
+				id: "row-1",
+				AND: [{ id: { equals: "row-1", mode: "insensitive" } }],
+			},
+			data: { remaining: { increment: -1 } },
+		});
+	});
+
 	it("update keeps an insensitive predicate next to a unique key", async () => {
 		const update = vi.fn().mockResolvedValue({ id: "user-id" });
 		const adapter = prismaAdapter(

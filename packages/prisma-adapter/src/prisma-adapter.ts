@@ -746,7 +746,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// transaction and update by id. Either way the original guard stays in
 					// the where, so a racer that invalidated it (e.g. remaining dropped to
 					// 0) yields P2025 and we report no mutation.
-					const hasIdField = where?.some((w) => w.field === "id");
+					// Only a case-sensitive AND eq on id can stay a flat key for update().
+					const hasIdField = where?.some(
+						(w) =>
+							w.field === "id" &&
+							(w.operator === "eq" || !w.operator) &&
+							w.connector !== "OR" &&
+							!isInsensitiveForPrisma(w),
+					);
 					if (hasIdField) {
 						const whereClause = convertWhereClause({
 							model: modelKey,
