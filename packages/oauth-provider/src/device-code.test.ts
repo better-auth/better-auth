@@ -13,6 +13,7 @@ import {
 	oauthDeviceAuthorization,
 } from "./device-code";
 import { oauthProvider } from "./oauth";
+import type { OAuthAuthenticationContext } from "./types";
 
 const FORM_HEADERS = { "content-type": "application/x-www-form-urlencoded" };
 
@@ -1796,6 +1797,9 @@ describe("oauth-provider device approval through the consent flow", async () => 
 	let resolveReference: () => string | undefined = requireReference;
 	let needsSelection = false;
 	const consentReferenceId = vi.fn(() => resolveReference());
+	const mfaAcr = "urn:example:acr:mfa";
+	const resolveAuthenticationContext =
+		vi.fn<() => OAuthAuthenticationContext | undefined>();
 	const { auth, client, db, signInWithTestUser, signInWithUser } =
 		await getTestInstance({
 			baseURL,
@@ -1815,6 +1819,10 @@ describe("oauth-provider device approval through the consent flow", async () => 
 					customAccessTokenClaims: ({ referenceId }) => ({
 						[referenceClaim]: referenceId,
 					}),
+					authenticationContext: {
+						acrValuesSupported: ["0", mfaAcr],
+						resolve: resolveAuthenticationContext,
+					},
 				}),
 				oauthDeviceAuthorization({
 					interval: "1s",
@@ -1901,6 +1909,34 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			[referenceClaim]: "org_1",
 			reference_id: "org_1",
 		});
+	});
+
+	it("carries the resolved acr and amr into device ID tokens and their refreshes", async () => {
+		resolveReference = () => "org_1";
+		resolveAuthenticationContext.mockReturnValueOnce({
+			acr: mfaAcr,
+			amr: ["pwd", "otp"],
+		});
+		const { device_code, user_code, headers, poll } = await startDevice();
+		await answerDeviceConsent(client, user_code, headers);
+
+		const tokens = await poll({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code,
+		});
+		expect(tokens.error).toBeNull();
+		const idToken = decodeJwt(tokens.data!.id_token!);
+		expect(idToken.acr).toBe(mfaAcr);
+		expect(idToken.amr).toEqual(["pwd", "otp"]);
+
+		const refreshed = await poll({
+			grant_type: "refresh_token",
+			refresh_token: tokens.data!.refresh_token!,
+		});
+		expect(refreshed.error).toBeNull();
+		const refreshedIdToken = decodeJwt(refreshed.data!.id_token!);
+		expect(refreshedIdToken.acr).toBe(mfaAcr);
+		expect(refreshedIdToken.amr).toEqual(["pwd", "otp"]);
 	});
 
 	it("runs post-login selection before consent", async () => {

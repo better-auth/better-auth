@@ -35,6 +35,7 @@ import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import type {
 	Confirmation,
 	OAuthAuthenticatedClient,
+	OAuthAuthenticationContext,
 	OAuthClientAuthenticationRequest,
 	OAuthOptions,
 	OAuthProviderApi,
@@ -338,6 +339,7 @@ async function createIdToken(
 	authTime?: Date,
 	accessToken?: string,
 	extraClaims?: Record<string, unknown>,
+	authenticationContext?: OAuthAuthenticationContext,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -381,7 +383,8 @@ async function createIdToken(
 	const payload: JWTPayload = {
 		...ID_TOKEN_SCOPE_CLAIM_GUARDS,
 		auth_time: authTimeSec,
-		acr: LEVEL_0_ACR,
+		acr: authenticationContext?.acr ?? LEVEL_0_ACR,
+		amr: authenticationContext?.amr,
 		...customClaims,
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -611,6 +614,7 @@ async function createRefreshToken(
 	resources?: string[],
 	confirmation?: Confirmation,
 	requestedUserInfoClaims?: string[],
+	authenticationContext?: OAuthAuthenticationContext,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -631,6 +635,8 @@ async function createRefreshToken(
 		referenceId,
 		authorizationCodeId,
 		authTime,
+		acr: authenticationContext?.acr,
+		amr: authenticationContext?.amr,
 		confirmation,
 		requestedUserInfoClaims: requestedUserInfoClaims?.length
 			? requestedUserInfoClaims
@@ -1115,8 +1121,11 @@ async function createUserTokens(
 		nonce,
 		refreshToken: existingRefreshToken,
 		authTime,
+		acr,
+		amr,
 		verificationValue,
 	} = params;
+	const authenticationContext = { acr, amr };
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
@@ -1243,6 +1252,7 @@ async function createUserTokens(
 					refreshResources,
 					confirmation,
 					requestedUserInfoClaims,
+					authenticationContext,
 				)
 			: undefined;
 
@@ -1326,6 +1336,7 @@ async function createUserTokens(
 						refreshResources,
 						confirmation,
 						requestedUserInfoClaims,
+						authenticationContext,
 					)
 				: undefined,
 	]);
@@ -1343,6 +1354,7 @@ async function createUserTokens(
 				authTime,
 				accessToken,
 				additionalIdTokenClaims,
+				authenticationContext,
 			)
 		: undefined;
 
@@ -1702,6 +1714,8 @@ async function handleAuthorizationCodeGrant(
 		sessionId: session.id,
 		nonce: verificationValue.query?.nonce,
 		authTime,
+		acr: verificationValue.acr,
+		amr: verificationValue.amr,
 		verificationValue,
 		authorizationCodeId,
 		requestedUserInfoClaims,
@@ -1977,6 +1991,8 @@ async function handleRefreshTokenGrant(
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
+		acr: refreshToken.acr ?? undefined,
+		amr: refreshToken.amr ?? undefined,
 		requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
 	});
 }

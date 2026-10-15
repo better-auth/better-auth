@@ -84,6 +84,8 @@ type OAuthDeviceCodeFields = {
 	resources?: string[] | null;
 	referenceId?: string | null;
 	authTime?: Date | null;
+	acr?: string | null;
+	amr?: string[] | null;
 };
 
 /**
@@ -182,6 +184,8 @@ async function exchangeOAuthDeviceCode(
 		resources,
 		referenceId: claimedDeviceCode.referenceId ?? undefined,
 		authTime: normalizeTimestampValue(claimedDeviceCode.authTime),
+		acr: claimedDeviceCode.acr ?? undefined,
+		amr: claimedDeviceCode.amr ?? undefined,
 		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});
@@ -252,6 +256,8 @@ function deviceApprovalRequest(
 							scope: approval.query.scope,
 							referenceId: approval.referenceId ?? null,
 							authTime: new Date(approval.authTime),
+							acr: approval.acr ?? null,
+							amr: approval.amr ?? null,
 						},
 					});
 					return completionURL(ctx, deviceCode.userCode, "approved");
@@ -328,6 +334,14 @@ function buildOAuthDeviceGrant(verificationUri: string | undefined) {
 			},
 			authTime: {
 				type: "date",
+				required: false,
+			},
+			acr: {
+				type: "string",
+				required: false,
+			},
+			amr: {
+				type: "string[]",
 				required: false,
 			},
 		},
