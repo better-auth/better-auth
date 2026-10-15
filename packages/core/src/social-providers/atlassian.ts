@@ -34,8 +34,15 @@ export const atlassian = (options: AtlassianOptions) => {
 	return {
 		id: "atlassian",
 		name: "Atlassian",
+		accountSubject: ({ profile }) => profile.account_id,
 
-		async createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
+		async createAuthorizationURL({
+			state,
+			scopes,
+			codeVerifier,
+			redirectURI,
+			additionalParams,
+		}) {
 			if (!options.clientId || !options.clientSecret) {
 				logger.error("Client Id and Secret are required for Atlassian");
 				throw new BetterAuthError("CLIENT_ID_AND_SECRET_REQUIRED");
@@ -59,6 +66,7 @@ export const atlassian = (options: AtlassianOptions) => {
 				codeVerifier,
 				redirectURI,
 				additionalParams: {
+					...(additionalParams ?? {}),
 					audience: "api.atlassian.com",
 				},
 				prompt: options.prompt,
@@ -113,7 +121,6 @@ export const atlassian = (options: AtlassianOptions) => {
 
 				return {
 					user: {
-						id: profile.account_id,
 						name: profile.name,
 						email: profile.email,
 						image: profile.picture,
@@ -123,7 +130,7 @@ export const atlassian = (options: AtlassianOptions) => {
 					data: profile,
 				};
 			} catch (error) {
-				logger.error("Failed to fetch user info from Figma:", error);
+				logger.error("Failed to fetch user info from Atlassian:", error);
 				return null;
 			}
 		},

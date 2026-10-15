@@ -1,4 +1,6 @@
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { beforeEach, describe, expect, it } from "vitest";
 import { admin } from "../plugins/admin/admin";
 import { adminClient } from "../plugins/admin/client";
@@ -6,21 +8,63 @@ import { anonymous } from "../plugins/anonymous";
 import { anonymousClient } from "../plugins/anonymous/client";
 import { getTestInstance } from "../test-utils/test-instance";
 
+function createStringSecondaryStorage(
+	store: Map<string, string>,
+): SecondaryStorage {
+	return {
+		set(key, value) {
+			store.set(key, value);
+		},
+		get(key) {
+			return store.get(key) || null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) || null;
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, String(count));
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
+}
+
+function createParsedSecondaryStorage(
+	store: Map<string, unknown>,
+): SecondaryStorage {
+	return {
+		set(key, value) {
+			store.set(key, safeJSONParse<unknown>(value));
+		},
+		get(key) {
+			return store.get(key) ?? null;
+		},
+		getAndDelete(key) {
+			const value = store.get(key) ?? null;
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, count);
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
+}
+
 describe("secondary storage - get returns JSON string", async () => {
 	const store = new Map<string, string>();
 
 	const { client, signInWithTestUser } = await getTestInstance({
-		secondaryStorage: {
-			set(key, value, ttl) {
-				store.set(key, value);
-			},
-			get(key) {
-				return store.get(key) || null;
-			},
-			delete(key) {
-				store.delete(key);
-			},
-		},
+		secondaryStorage: createStringSecondaryStorage(store),
 		rateLimit: {
 			enabled: false,
 		},
@@ -74,20 +118,10 @@ describe("secondary storage - get returns JSON string", async () => {
 });
 
 describe("secondary storage - get returns already-parsed object", async () => {
-	const store = new Map<string, any>();
+	const store = new Map<string, unknown>();
 
 	const { client, signInWithTestUser } = await getTestInstance({
-		secondaryStorage: {
-			set(key, value, ttl) {
-				store.set(key, safeJSONParse(value));
-			},
-			get(key) {
-				return store.get(key);
-			},
-			delete(key) {
-				store.delete(key);
-			},
-		},
+		secondaryStorage: createParsedSecondaryStorage(store),
 		rateLimit: {
 			enabled: false,
 		},
@@ -106,6 +140,9 @@ describe("secondary storage - get returns already-parsed object", async () => {
 		const userId = s1.data!.session.userId;
 		const activeList = store.get(`active-sessions-${userId}`);
 		expect(Array.isArray(activeList)).toBe(true);
+		if (!Array.isArray(activeList)) {
+			throw new Error("Expected active sessions to be stored as an array");
+		}
 		expect(activeList.length).toBe(1);
 
 		const list = await client.listSessions({ fetchOptions: { headers } });
@@ -125,22 +162,223 @@ describe("secondary storage - get returns already-parsed object", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11713
+ */
+describe("secondary storage - bulk session cache eviction", () => {
+	it.each([
+		{ storeSessionInDatabase: true, preserveSessionInDatabase: false },
+		{ storeSessionInDatabase: true, preserveSessionInDatabase: true },
+		{ storeSessionInDatabase: false, preserveSessionInDatabase: false },
+	])("matches single lookup after eviction with %o", async (sessionOptions) => {
+		const store = new Map<string, string>();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: sessionOptions,
+		});
+		const { user } = await signInWithTestUser();
+		const { internalAdapter } = await auth.$context;
+		const session = await internalAdapter.createSession(user.id);
+		expect(store.has(session.token)).toBe(true);
+		expect(await internalAdapter.findSessions([session.token])).toHaveLength(1);
+
+		store.clear();
+
+		const single = await internalAdapter.findSession(session.token);
+		const fallbackEnabled =
+			sessionOptions.storeSessionInDatabase &&
+			!sessionOptions.preserveSessionInDatabase;
+		if (fallbackEnabled) {
+			expect(single?.session.token).toBe(session.token);
+		} else {
+			expect(single).toBeNull();
+		}
+		expect(
+			(await internalAdapter.findSessions([session.token])).map(
+				(result) => result.session.token,
+			),
+		).toEqual(single ? [single.session.token] : []);
+	});
+
+	it("combines cached and database sessions while respecting expiration", async () => {
+		const store = new Map<string, string>();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+		});
+		const { user } = await signInWithTestUser();
+		const { adapter, internalAdapter } = await auth.$context;
+		const cached = await internalAdapter.createSession(user.id);
+		const evicted = await internalAdapter.createSession(user.id);
+		const expired = await internalAdapter.createSession(user.id);
+		await adapter.update({
+			model: "session",
+			where: [{ field: "token", value: expired.token }],
+			update: { expiresAt: new Date(Date.now() - 60_000) },
+		});
+		store.delete(evicted.token);
+		store.delete(expired.token);
+		const tokens = [cached.token, evicted.token, expired.token, evicted.token];
+
+		const active = await internalAdapter.findSessions(tokens, {
+			onlyActiveSessions: true,
+		});
+		expect(active.map(({ session }) => session.token).sort()).toEqual(
+			[cached.token, evicted.token].sort(),
+		);
+		const all = await internalAdapter.findSessions(tokens);
+		expect(all.map(({ session }) => session.token).sort()).toEqual(
+			[cached.token, evicted.token, expired.token].sort(),
+		);
+	});
+
+	it.each([true, false])(
+		"returns sessions once in input order (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+			});
+			const { user } = await signInWithTestUser();
+			const { internalAdapter } = await auth.$context;
+			const first = await internalAdapter.createSession(user.id);
+			const second = await internalAdapter.createSession(user.id);
+			const third = await internalAdapter.createSession(user.id);
+			store.delete(first.token);
+			store.delete(third.token);
+
+			const sessions = await internalAdapter.findSessions([
+				third.token,
+				second.token,
+				first.token,
+				third.token,
+				"missing-session",
+			]);
+			expect(sessions.map(({ session }) => session.token)).toEqual([
+				third.token,
+				second.token,
+				first.token,
+			]);
+		},
+	);
+
+	it.each([true, false])(
+		"returns every requested session beyond the default query limit (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+				advanced: { database: { defaultFindManyLimit: 1 } },
+			});
+			const { user } = await signInWithTestUser();
+			const { internalAdapter } = await auth.$context;
+			const first = await internalAdapter.createSession(user.id);
+			const second = await internalAdapter.createSession(user.id);
+			store.clear();
+
+			const sessions = await internalAdapter.findSessions([
+				first.token,
+				second.token,
+			]);
+			expect(sessions.map(({ session }) => session.token)).toEqual([
+				first.token,
+				second.token,
+			]);
+		},
+	);
+
+	it("does not replace corrupt or expired cache entries with database sessions", async () => {
+		const store = new Map<string, string>();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+		});
+		const { user } = await signInWithTestUser();
+		const { internalAdapter } = await auth.$context;
+		const corrupt = await internalAdapter.createSession(user.id);
+		const expired = await internalAdapter.createSession(user.id);
+		store.set(corrupt.token, "invalid-json");
+		store.set(
+			expired.token,
+			JSON.stringify({
+				session: { ...expired, expiresAt: new Date(Date.now() - 60_000) },
+				user,
+			}),
+		);
+
+		expect(
+			await internalAdapter.findSessions([corrupt.token, expired.token], {
+				onlyActiveSessions: true,
+			}),
+		).toEqual([]);
+	});
+
+	it.each([true, false])(
+		"keeps valid sessions when a database session has no user (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				database: memoryAdapter({
+					user: [],
+					account: [],
+					session: [],
+					verification: [],
+				}),
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+			});
+			const { user } = await signInWithTestUser();
+			const { adapter, internalAdapter } = await auth.$context;
+			const cached = await internalAdapter.createSession(user.id);
+			const evicted = await internalAdapter.createSession(user.id);
+			const deletedUser = await internalAdapter.createUser(
+				{
+					name: "Deleted user",
+					email: "deleted@test.com",
+				},
+				{ method: "test" },
+			);
+			const orphaned = await internalAdapter.createSession(deletedUser.id);
+			await adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: deletedUser.id }],
+			});
+			store.delete(evicted.token);
+			store.delete(orphaned.token);
+			expect(
+				await adapter.findOne({
+					model: "session",
+					where: [{ field: "token", value: orphaned.token }],
+				}),
+			).not.toBeNull();
+			expect(await internalAdapter.findSession(orphaned.token)).toBeNull();
+
+			const sessions = await internalAdapter.findSessions([
+				cached.token,
+				evicted.token,
+				orphaned.token,
+			]);
+			expect(sessions.map(({ session }) => session.token).sort()).toEqual(
+				[cached.token, evicted.token].sort(),
+			);
+		},
+	);
+});
+
 describe("secondary storage - storeSessionInDatabase", () => {
 	describe("preserveSessionInDatabase: false", async () => {
 		const store = new Map<string, string>();
 
 		const { client, signInWithTestUser } = await getTestInstance({
-			secondaryStorage: {
-				set(key, value, ttl) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(store),
 			session: {
 				storeSessionInDatabase: true,
 				preserveSessionInDatabase: false,
@@ -181,18 +419,8 @@ describe("secondary storage - storeSessionInDatabase", () => {
 	describe("preserveSessionInDatabase: true", async () => {
 		const store = new Map<string, string>();
 
-		const { client, db, signInWithTestUser } = await getTestInstance({
-			secondaryStorage: {
-				set(key, value, ttl) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
 			session: {
 				storeSessionInDatabase: true,
 				preserveSessionInDatabase: true,
@@ -225,45 +453,157 @@ describe("secondary storage - storeSessionInDatabase", () => {
 
 			// Session should be removed from secondary storage
 			expect(store.has(token)).toBe(false);
-			expect(
-				await db.findMany({
-					model: "session",
-					where: [{ field: "token", value: token }],
-				}),
-			).toHaveLength(1);
 
 			// Session should NOT be usable anymore, even though it's preserved in database
 			const after = await client.getSession({ fetchOptions: { headers } });
 			expect(after.data).toBeNull();
 		});
+
+		it("runs the session-delete hook and marks the preserved row ended", async () => {
+			const store = new Map<string, string>();
+			const deletedSessionIds: string[] = [];
+
+			const { auth, client, db, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: createStringSecondaryStorage(store),
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+				databaseHooks: {
+					session: {
+						delete: {
+							before: async (session) => {
+								deletedSessionIds.push(session.id);
+							},
+						},
+					},
+				},
+				rateLimit: { enabled: false },
+			});
+
+			const { headers } = await signInWithTestUser();
+			const token = (await client.getSession({ fetchOptions: { headers } }))
+				.data!.session.token;
+
+			await client.revokeSession({ fetchOptions: { headers }, token });
+
+			// The hook fires even though the row is preserved, so OAuth token
+			// revocation and back-channel logout run on session end.
+			expect(deletedSessionIds).toHaveLength(1);
+
+			// The row is kept for audit but marked ended, so session-row liveness
+			// checks (introspection, /userinfo) treat bound tokens as inactive.
+			const preserved = await db.findOne<{ id: string; expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: token }],
+			});
+			expect(preserved).not.toBeNull();
+			expect(new Date(preserved!.expiresAt).getTime()).toBeLessThanOrEqual(
+				Date.now(),
+			);
+
+			// Ending an already-ended session must not re-fire the hook. The
+			// preserved row outlives the session, so a repeat delete would
+			// otherwise re-dispatch back-channel logout.
+			await (await auth.$context).internalAdapter.deleteSession(token);
+			expect(deletedSessionIds).toHaveLength(1);
+		});
 	});
 });
 
 describe("secondary storage - deleteUser", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10687#discussion_r3716703104
+	 */
+	it("keeps cached sessions when user deletion is vetoed", async () => {
+		const store = new Map<string, string>();
+		const { auth } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			databaseHooks: {
+				user: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Retained User",
+				email: "retained-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		const activeSessionsKey = `active-sessions-${user.id}`;
+
+		await internalAdapter.deleteUser(user.id);
+
+		expect(await internalAdapter.findUserById(user.id)).not.toBeNull();
+		expect(store.has(session.token)).toBe(true);
+		expect(store.has(activeSessionsKey)).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10687#discussion_r3716703104
+	 */
+	it("keeps cached sessions when session deletion is vetoed", async () => {
+		const store = new Map<string, string>();
+		const { auth, db } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: { storeSessionInDatabase: true },
+			databaseHooks: {
+				session: {
+					delete: {
+						before: async () => false,
+					},
+				},
+			},
+			rateLimit: { enabled: false },
+		});
+		const { internalAdapter } = await auth.$context;
+		const user = await internalAdapter.createUser(
+			{
+				name: "Retained Session User",
+				email: "retained-session-user@test.com",
+			},
+			{ method: "test" },
+		);
+		const session = await internalAdapter.createSession(user.id);
+		const activeSessionsKey = `active-sessions-${user.id}`;
+
+		await internalAdapter.deleteUserSessions(user.id);
+
+		expect(
+			await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(1);
+		expect(store.has(session.token)).toBe(true);
+		expect(store.has(activeSessionsKey)).toBe(true);
+	});
+
 	it("deletes user sessions from secondary storage and database", async () => {
 		const store = new Map<string, string>();
 		const { auth, db } = await getTestInstance({
-			secondaryStorage: {
-				set(key, value) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(store),
 			session: {
 				storeSessionInDatabase: true,
 				preserveSessionInDatabase: true,
 			},
+			rateLimit: { enabled: false },
 		});
 		const { internalAdapter } = await auth.$context;
-		const user = await internalAdapter.createUser({
-			name: "Deleted User",
-			email: "deleted-user@test.com",
-		});
+		const user = await internalAdapter.createUser(
+			{
+				name: "Deleted User",
+				email: "deleted-user@test.com",
+			},
+			{ method: "test" },
+		);
 		const session = await internalAdapter.createSession(user.id);
 		const activeSessionsKey = `active-sessions-${user.id}`;
 
@@ -301,17 +641,7 @@ describe("secondary storage - admin removeUser cleans up sessions", async () => 
 
 	const { client, signInWithUser, customFetchImpl } = await getTestInstance({
 		plugins: [admin()],
-		secondaryStorage: {
-			set(key, value, ttl) {
-				store.set(key, value);
-			},
-			get(key) {
-				return store.get(key) || null;
-			},
-			delete(key) {
-				store.delete(key);
-			},
-		},
+		secondaryStorage: createStringSecondaryStorage(store),
 		databaseHooks: {
 			user: {
 				create: {
@@ -392,17 +722,7 @@ describe("secondary storage - /delete-anonymous-user cleans up sessions", async 
 	const { client, auth, sessionSetter } = await getTestInstance(
 		{
 			plugins: [anonymous()],
-			secondaryStorage: {
-				set(key, value, ttl) {
-					store.set(key, value);
-				},
-				get(key) {
-					return store.get(key) || null;
-				},
-				delete(key) {
-					store.delete(key);
-				},
-			},
+			secondaryStorage: createStringSecondaryStorage(store),
 			rateLimit: {
 				enabled: false,
 			},

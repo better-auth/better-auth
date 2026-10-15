@@ -67,3 +67,82 @@ it("build minimal without unexpected imports", async () => {
 		"Built output should not contain 'kysely' imports",
 	);
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10865
+ */
+it("build organization plugin without unused zod locales", async () => {
+	const esbuildDir = join(fixturesDir, "esbuild");
+	const buildProcess = spawn(
+		"pnpm",
+		[
+			"exec",
+			"esbuild",
+			"src/organization.ts",
+			"--bundle",
+			"--outfile=dist/organization.js",
+		],
+		{
+			cwd: esbuildDir,
+			stdio: ["ignore", "inherit", "inherit"],
+		},
+	);
+	await new Promise<void>((resolve, reject) => {
+		buildProcess.once("error", reject);
+		buildProcess.once("close", (code) => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(
+					new Error(`esbuild organization build failed with code ${code}`),
+				);
+			}
+		});
+	});
+	const outputFile = join(esbuildDir, "dist", "organization.js");
+	const outputContent = await readFile(outputFile, "utf-8");
+	const locales = outputContent.match(/zod\/v4\/locales\/[\w-]+\.js/g) ?? [];
+	const unusedLocales = locales.filter(
+		(locale) =>
+			locale !== "zod/v4/locales/en.js" && locale !== "zod/v4/locales/index.js",
+	);
+	assert.deepStrictEqual(
+		unusedLocales,
+		[],
+		"Built output should not contain unused zod locales",
+	);
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10366
+ */
+it("bundles the Kysely adapter with Kysely 0.29", async () => {
+	const esbuildDir = join(fixturesDir, "esbuild");
+	const buildProcess = spawn(
+		"pnpm",
+		[
+			"exec",
+			"esbuild",
+			"src/kysely-adapter.ts",
+			"--bundle",
+			"--platform=node",
+			"--alias:kysely=kysely-029",
+			"--outfile=dist/kysely-adapter.js",
+		],
+		{
+			cwd: esbuildDir,
+			stdio: "pipe",
+		},
+	);
+	await new Promise<void>((resolve, reject) => {
+		buildProcess.on("close", (code) => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(
+					new Error(`esbuild Kysely adapter build failed with code ${code}`),
+				);
+			}
+		});
+	});
+});

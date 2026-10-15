@@ -7,6 +7,9 @@
     },
     {
       "path": "../core/tsconfig.json"
+    },
+    {
+      "path": "../sso/tsconfig.json"
     }
   ]
 }

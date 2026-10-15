@@ -1,0 +1,8 @@
+paths:
+  .github/workflows/release.yml:
+    ignore:
+      # GitHub supports job.workflow_* for reusable workflow identity, but actionlint does not yet recognize these fields.
+      #
+      # GitHub: https://docs.github.com/actions/reference/workflows-and-actions/contexts#job-context
+      # actionlint: https://github.com/rhysd/actionlint/issues/705
+      - 'property "workflow_(repository|sha)" is not defined in object type'

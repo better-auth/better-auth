@@ -5,6 +5,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { createPlaceholderEmail } from "../utils/email";
 
 export interface TwitterProfile {
 	data: {
@@ -108,6 +109,7 @@ export const twitter = (options: TwitterOption) => {
 	return {
 		id: "twitter",
 		name: "Twitter",
+		accountSubject: ({ profile }) => profile.data.id,
 		createAuthorizationURL(data) {
 			const _scopes = options.disableDefaultScope
 				? []
@@ -122,6 +124,7 @@ export const twitter = (options: TwitterOption) => {
 				state: data.state,
 				codeVerifier: data.codeVerifier,
 				redirectURI: data.redirectURI,
+				additionalParams: data.additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
@@ -184,11 +187,15 @@ export const twitter = (options: TwitterOption) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					id: profile.data.id,
 					name: profile.data.name,
-					email: profile.data.email || profile.data.username || null,
+					email:
+						profile.data.email ||
+						createPlaceholderEmail({
+							identifier: profile.data.id,
+							namespace: "twitter",
+						}),
 					image: profile.data.profile_image_url,
-					emailVerified: emailVerified,
+					emailVerified,
 					...userMap,
 				},
 				data: profile,

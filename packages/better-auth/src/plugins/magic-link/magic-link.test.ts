@@ -84,6 +84,69 @@ describe("magic link", async () => {
 		expect(betterAuthCookie).toBeDefined();
 	});
 
+	it("should reject new-user magic link verify when validateUserInfo returns error", async () => {
+		let blockedEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl } = await getTestInstance(
+			{
+				user: {
+					validateUserInfo({ source }) {
+						expect(source.method).toBe("magic-link");
+						return {
+							error: "magic_link_blocked",
+							errorDescription: "Magic link sign-up is not allowed",
+						};
+					},
+				},
+				plugins: [
+					magicLink({
+						async sendMagicLink(data) {
+							blockedEmail = data;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+		const blockedClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await blockedClient.signIn.magicLink({
+			email: "new-magic-link@example.com",
+		});
+		await blockedClient.magicLink.verify(
+			{
+				query: {
+					token: new URL(blockedEmail.url).searchParams.get("token") || "",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("error=magic_link_blocked");
+					expect(location).toContain(
+						"error_description=Magic+link+sign-up+is+not+allowed",
+					);
+				},
+			},
+		);
+	});
+
 	it("shouldn't verify magic link with the same token", async () => {
 		await client.magicLink.verify(
 			{
@@ -304,6 +367,11 @@ describe("magic link", async () => {
 		});
 		const userId = created.user!.id;
 		expect(created.user?.emailVerified).toBe(false);
+		await internalAdapter.createAccount({
+			userId,
+			providerId: "google",
+			accountId: "attacker-google",
+		});
 
 		// Precondition: the password is blocked behind the verification gate.
 		await expect(
@@ -324,11 +392,10 @@ describe("magic link", async () => {
 		const session = await testClient.getSession({ fetchOptions: { headers } });
 		expect(session.data?.user.emailVerified).toBe(true);
 
-		// The credential is gone, so the password no longer works.
+		// Pre-proof account links are gone, so the password no longer works and
+		// an OAuth link cannot survive the email-owner proof.
 		const accounts = await internalAdapter.findAccounts(userId);
-		expect(
-			accounts.find((account) => account.providerId === "credential"),
-		).toBeUndefined();
+		expect(accounts).toHaveLength(0);
 		await expect(
 			auth.api.signInEmail({ body: { email, password: existingPassword } }),
 		).rejects.toThrow();
@@ -564,9 +631,10 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		const hashedToken = await defaultKeyHasher(verificationEmail.token);
-		const storedToken =
-			await internalAdapter.findVerificationValue(hashedToken);
-		expect(storedToken).toBeDefined();
+		const storedToken = await internalAdapter.findVerificationValue(
+			`magic-link:${hashedToken}`,
+		);
+		expect(storedToken).not.toBeNull();
 		const response2 = await auth.api.signInMagicLink({
 			body: {
 				email: testUser.email,
@@ -607,9 +675,10 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		const hashedToken = `${verificationEmail.token}hashed`;
-		const storedToken =
-			await internalAdapter.findVerificationValue(hashedToken);
-		expect(storedToken).toBeDefined();
+		const storedToken = await internalAdapter.findVerificationValue(
+			`magic-link:${hashedToken}`,
+		);
+		expect(storedToken).not.toBeNull();
 		const response2 = await auth.api.signInMagicLink({
 			body: {
 				email: testUser.email,
@@ -856,5 +925,78 @@ describe("magic link send origin/CSRF protection", async () => {
 		const response = await auth.handler(legitimateRequest);
 		expect(response.status).toBe(200);
 		expect(sendMagicLink).toHaveBeenCalledTimes(1);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10916
+ */
+describe("magic link callback URL encoding", async () => {
+	let sent: VerificationEmail = { email: "", token: "", url: "" };
+	const { auth, testUser } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					sent = data;
+				},
+			}),
+		],
+	});
+	const signIn = async (body: Record<string, string>) => {
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/magic-link", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			}),
+		);
+		expect(response.status).toBe(200);
+	};
+	const verifyAndGetLocation = async (url: string) => {
+		const res = await auth.handler(new Request(url));
+		expect(res.status).toBe(302);
+		return new URL(res.headers.get("location")!);
+	};
+
+	it("should preserve the callback URL when signing in an existing user", async () => {
+		const callbackURL =
+			"http://localhost:3000/cb?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2";
+		await signIn({
+			email: testUser.email,
+			callbackURL,
+		});
+		const location = await verifyAndGetLocation(sent.url);
+		expect(location.href).toBe(callbackURL);
+	});
+
+	it("should preserve the welcome URL when signing up a new user", async () => {
+		const newUserCallbackURL =
+			"http://localhost:3000/welcome?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2";
+		await signIn({
+			email: "new-user-10916@email.com",
+			callbackURL: "http://localhost:3000/cb",
+			newUserCallbackURL,
+		});
+		const location = await verifyAndGetLocation(sent.url);
+		expect(location.href).toBe(newUserCallbackURL);
+	});
+
+	it("should preserve error callback query values when verification fails", async () => {
+		await signIn({
+			email: testUser.email,
+			callbackURL: "http://localhost:3000/cb",
+			errorCallbackURL:
+				"http://localhost:3000/error?sig=a%2Bb&returnTo=https%3A%2F%2Fexample.com%2Fresume%3Fstate%3Dabc%26step%3D2",
+		});
+		const url = new URL(sent.url);
+		url.searchParams.set("token", "invalid-token");
+		const location = await verifyAndGetLocation(url.toString());
+		expect(location.origin).toBe("http://localhost:3000");
+		expect(location.pathname).toBe("/error");
+		expect(Object.fromEntries(location.searchParams)).toEqual({
+			sig: "a+b",
+			returnTo: "https://example.com/resume?state=abc&step=2",
+			error: "INVALID_TOKEN",
+		});
 	});
 });
