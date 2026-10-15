@@ -474,6 +474,8 @@ passkey({
 To serve the extension and a website from one server, resolve `rpID` from the request and derive `expectedRPID` from the `rpID` issued with the challenge, so each challenge accepts only its own RP ID:
 
 ```ts title="auth.ts"
+const EXTENSION_ID = "abcdefghijklmnopabcdefghijklmnop";
+
 passkey({
     rpID: ({ ctx }) =>
         ctx.headers?.get("x-passkey-client") === "extension" ? EXTENSION_ID : "example.com",

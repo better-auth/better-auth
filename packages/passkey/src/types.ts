@@ -47,7 +47,9 @@ export type PasskeyExpectedRPIDResolver =
 	| ((args: {
 			ctx: GenericEndpointContext;
 			/**
-			 * The RP ID sent in the options for this challenge.
+			 * The RP ID sent in the options for this challenge. Challenges
+			 * stored before it was recorded resolve it again from the verify
+			 * request.
 			 */
 			rpID: string;
 	  }) => Awaitable<string | string[]>);
