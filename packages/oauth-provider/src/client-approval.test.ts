@@ -386,21 +386,25 @@ describe.each(adapters)("approvePendingClient on %s", (testWith) => {
 		expect(await t.consents(clientId)).toHaveLength(0);
 	});
 
-	it("approves a client when ids are serial", async () => {
-		const t = await createInstance(
-			testWith,
-			{ approvePendingClient: () => ({ clientReference: "business_1" }) },
-			{ database: { generateId: "serial" } },
-		);
-		const { clientId } = await t.registerPending();
-		const { headers } = await t.signInWithTestUser();
-		const { location } = await t.authorize(clientId, headers);
-		const result = await t.consent(location, headers);
-		expect(result.status).toBe(200);
-		const stored = await t.row(clientId);
-		expect(stored?.pending).toBe(false);
-		expect(stored?.referenceId).toBe("business_1");
-	});
+	// MongoDB ids are ObjectIds or UUIDs, never serial.
+	it.skipIf(testWith === "mongodb")(
+		"approves a client when ids are serial",
+		async () => {
+			const t = await createInstance(
+				testWith,
+				{ approvePendingClient: () => ({ clientReference: "business_1" }) },
+				{ database: { generateId: "serial" } },
+			);
+			const { clientId } = await t.registerPending();
+			const { headers } = await t.signInWithTestUser();
+			const { location } = await t.authorize(clientId, headers);
+			const result = await t.consent(location, headers);
+			expect(result.status).toBe(200);
+			const stored = await t.row(clientId);
+			expect(stored?.pending).toBe(false);
+			expect(stored?.referenceId).toBe("business_1");
+		},
+	);
 
 	it("redirects a refusal to the client with access_denied and stores nothing", async () => {
 		const t = await createInstance(testWith, {
