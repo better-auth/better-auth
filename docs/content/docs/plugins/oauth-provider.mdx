@@ -1714,7 +1714,7 @@ oauthProvider({
 })
 ```
 
-Return an object with a `referenceId` to attach application ownership metadata to the created client, or return `false` to reject the token. Omitting `referenceId` creates an unowned client. To let the client use the `client_credentials` grant, also return `clientCredentialsScopes`: the client then registers with that scope ceiling, as if an administrator had assigned it. Return only scopes the token's issuer approved, because the token is the only record of that approval. The client must register the `client_credentials` grant with a confidential authentication method, and every scope must be one the provider offers and not a user-delegated scope (`openid`, `profile`, `email`, `offline_access`); otherwise registration fails. A `client_credentials_scopes` field in the registration request is still ignored. The `clientMetadata` passed to the callback is the submitted request, self-asserted and not yet fully validated, so treat it as untrusted input.
+Return an object with a `referenceId` to set the client's owner, such as an organization ID, or `false` to reject the token. Without `referenceId`, the client has no owner. Return `clientCredentialsScopes` too to let the client use the `client_credentials` grant: it registers with that scope ceiling, as if an administrator had assigned it. Return only scopes the token's issuer approved, since the token is the only record of that approval. Registration fails unless the client registers the `client_credentials` grant with a confidential authentication method and every scope is one the provider offers and not user-delegated (`openid`, `profile`, `email`, `offline_access`). The registration request itself can never set these scopes. Treat `clientMetadata` as untrusted: it is the submitted request, not yet fully validated.
 
 Token issuance, expiration, and revocation stay in your application because RFC 7591 leaves initial access token lifecycle policy to the authorization server. This is separate from RFC 7592 registration management tokens.
 
@@ -1722,19 +1722,16 @@ Token issuance, expiration, and revocation stay in your application because RFC 
   With the [Bearer](/docs/plugins/bearer) plugin enabled, an `Authorization: Bearer` value that resolves to a valid user session is handled as that session, not as an initial access token.
 </Callout>
 
-#### Connecting a Self-Hosted Install
+#### Enrolling Agents and Devices
 
-Software that each customer runs on their own server, such as an ERP plugin or an on-premises sync agent, often needs its own client: it calls your API for the customer's organization on a schedule, long after an administrator set it up. Combine the [device code grant](#device-code-grant) with protected registration so the install registers itself after an administrator approves it in the browser, without anyone copying a secret:
+Use this when software of yours runs outside your service and must call your API for an organization on its own: a sync or monitoring agent on a customer's server, a CI runner, a card reader or kiosk, or a plugin on a self-hosted platform. Each install gets its own client, owned by the organization, and nobody copies a secret:
 
-1. The install starts a device authorization with a shared, public installer client and shows the user code.
-2. An administrator of the organization approves it on your consent page, choosing the organization in your [post-login page](#post-login-screen).
-3. The install receives a short-lived registration token that carries the organization as `reference_id` and the approved scopes.
-4. The install registers its own confidential client with that token as the initial access token. `validateInitialAccessToken` makes the organization the owner and grants the machine scopes the administrator approved.
-5. The install calls your API with `client_credentials`, using its own client. The connection keeps working if the administrator later leaves the organization.
+1. The install starts a [device authorization](#device-code-grant) and shows the user code.
+2. An organization administrator approves it on your consent page, after picking the organization on your [post-login page](#post-login-screen).
+3. The install receives a short-lived registration token and uses it as the initial access token to register its own client.
+4. The client uses `client_credentials` from then on, even if the administrator leaves the organization.
 
-Use this only for software that one organization installs and runs. A tool that each person runs for themselves should use the device code grant directly, and an app that serves several organizations should be registered once.
-
-Configure a registration resource that only issues short-lived tokens, the consent reference that picks the organization, and the device grant:
+For a tool each person runs for themselves, use the device code grant directly instead. For an app that serves several organizations, register one client.
 
 ```ts title="auth.ts"
 import { createLocalJWKSet, jwtVerify } from "jose"
@@ -1743,7 +1740,7 @@ const registrationResource = "https://auth.example.com/connector-registration"
 
 export const auth = betterAuth({
   plugins: [
-    // OAuth access tokens use this as `iss`; the check below must match it
+    // Access tokens use this as `iss`; the check below must match it
     jwt({ jwt: { issuer: "https://auth.example.com" } }),
     organization(),
     oauthProvider({
@@ -1751,6 +1748,7 @@ export const auth = betterAuth({
       consentPage: "/consent",
       allowDynamicClientRegistration: true,
       scopes: ["openid", "connector:register", "invoices:write"],
+      // Registration tokens only work here and expire after 5 minutes
       resources: [{
         identifier: registrationResource,
         allowedScopes: ["connector:register", "invoices:write"],
@@ -1775,19 +1773,16 @@ export const auth = betterAuth({
         const scopes = String(payload?.scope ?? "").split(" ")
         const organizationId = payload?.reference_id as string | undefined
         if (
-          !payload?.jti ||
-          !payload.sub ||
-          !organizationId ||
+          !payload?.jti || !payload.sub || !organizationId ||
           payload.azp !== process.env.INSTALLER_CLIENT_ID ||
           !scopes.includes("connector:register")
-        ) {
-          return false
-        }
-        // `markRegistrationTokenUsed` and `isOrganizationAdmin` stand for your own storage and lookup
+        ) return false
+        // Your own storage and lookup: use each token once, recheck the admin
         if (!(await markRegistrationTokenUsed(payload.jti))) return false
         if (!(await isOrganizationAdmin(payload.sub, organizationId))) return false
         return {
           referenceId: organizationId,
+          // Only machine scopes the administrator approved
           clientCredentialsScopes: scopes.filter((scope) => scope === "invoices:write"),
         }
       },
@@ -1797,21 +1792,19 @@ export const auth = betterAuth({
 })
 ```
 
-Create the installer client once with [`adminCreateOAuthClient`](#create-client): `token_endpoint_auth_method: "none"`, the `urn:ietf:params:oauth:grant-type:device_code` grant, `scope: "connector:register invoices:write"`, and `resources: [registrationResource]`. The resource link is required: device requests for a resource the client is not linked to fail with `invalid_target`, and if you configure `resourcePrivileges`, it must allow `link`. Every install uses the installer's `client_id`.
+Create one public installer client with [`adminCreateOAuthClient`](#create-client) and share its `client_id` with every install: `token_endpoint_auth_method: "none"`, the `urn:ietf:params:oauth:grant-type:device_code` grant, `scope: "connector:register invoices:write"`, and `resources: [registrationResource]`. Without the resource link, device requests fail with `invalid_target`.
 
-The install then runs the flow:
+The install then runs:
 
 ```ts title="install.ts"
-// 1. Ask for the registration scope and the machine scopes it needs, so the
-//    administrator sees them on the consent screen.
 const device = await post("/api/auth/device/code", {
   client_id: INSTALLER_CLIENT_ID,
+  // The administrator sees these scopes on the consent screen
   scope: "connector:register invoices:write",
   resource: REGISTRATION_RESOURCE,
 })
 show(device.verification_uri_complete, device.user_code)
 
-// 2. Poll until the administrator approves.
 const { access_token } = await pollToken({
   grant_type: "urn:ietf:params:oauth:grant-type:device_code",
   device_code: device.device_code,
@@ -1819,7 +1812,6 @@ const { access_token } = await pollToken({
   resource: REGISTRATION_RESOURCE,
 })
 
-// 3. Register this install's own client and keep its credentials.
 const client = await post("/api/auth/oauth2/register", {
   client_name: `Connector at ${INSTANCE_URL}`,
   redirect_uris: [`${INSTANCE_URL}/oauth/callback`],
@@ -1830,13 +1822,13 @@ const client = await post("/api/auth/oauth2/register", {
 saveCredentials(client.client_id, client.client_secret)
 ```
 
-Each of these protections matters for this flow:
+Keep these protections:
 
-* **Grant only what the administrator saw.** Return machine scopes only from the token's `scope`, which lists what the administrator approved on the consent screen. Never take them from the registration request.
-* **Use each registration token once.** Record its `jti` and reject a second registration with it. Keep its lifetime short with `accessTokenTtl` on the registration resource, and accept it only with that resource as its audience.
-* **Check the administrator again.** Their role can change between approval and registration, so `validateInitialAccessToken` checks it again.
-* **Guard against device code phishing.** Every install uses the same installer client, so the consent screen looks the same for any install. Anyone can start a flow and send an administrator its code ([RFC 8628 §5.4](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)). Show the user code on your consent page, tell administrators to approve only a code their own install displays, and keep `expiresIn` short.
-* **Give a copied install its own client.** A copy of the install, such as a staging clone of its database, carries the original client's secret. Have the copy discard the inherited credentials and run the flow again.
+* **Approved scopes only.** Take machine scopes from the token's `scope`, never from the registration request.
+* **Single use.** Reject a registration token whose `jti` was already used.
+* **Recheck the administrator.** Their role can change between approval and registration.
+* **Device code phishing.** Every install shares the installer client, so anyone can start a flow and send an administrator its code ([RFC 8628 §5.4](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)). Show the user code on your consent page and tell administrators to approve only a code their own install displays.
+* **Copied installs.** A copy, such as a staging clone of the install's database, carries the original client's secret. Make the copy discard it and enroll again.
 
 #### Dynamic Client Registration Expiration
 
