@@ -504,6 +504,110 @@ describe("passkey", async () => {
 		expect(options).toHaveProperty("userVerification");
 	});
 
+	it("should respect authenticatorSelection.userVerification for auth options and verifiers", async () => {
+		const {
+			auth: uvAuth,
+			client: uvClient,
+			cookieSetter,
+			signInWithTestUser: uvSignIn,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					authenticatorSelection: {
+						userVerification: "required",
+					},
+				}),
+			],
+		});
+
+		const { headers, user } = await uvSignIn();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		const authOptions = await uvAuth.api.generatePasskeyAuthenticationOptions({
+			headers,
+		});
+		expect(authOptions.userVerification).toBe("required");
+
+		const registerOptions = await uvAuth.api.generatePasskeyRegistrationOptions(
+			{
+				headers,
+			},
+		);
+		expect(registerOptions.authenticatorSelection?.userVerification).toBe(
+			"required",
+		);
+
+		await uvClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		await uvAuth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+			},
+		});
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requireUserVerification: true,
+			}),
+		);
+
+		const context = await uvAuth.$context;
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "bW9ja1B1YmxpY0tleQ==",
+				name: "uv-required",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "uv-required-credential",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "internal",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		await uvClient.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+		serverMocks.verifyAuthenticationResponse.mockResolvedValue({
+			verified: true,
+			authenticationInfo: { newCounter: 1 },
+		});
+		await uvAuth.api.verifyPasskeyAuthentication({
+			headers,
+			body: {
+				response: {
+					id: "uv-required-credential",
+					rawId: "uv-required-credential",
+					response: {
+						clientDataJSON: "mockClientDataJSON",
+						authenticatorData: "mockAuthenticatorData",
+						signature: "mockSignature",
+						userHandle: "mockUserHandle",
+					},
+					type: "public-key",
+					clientExtensionResults: {},
+				},
+			},
+		});
+		expect(serverMocks.verifyAuthenticationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requireUserVerification: true,
+			}),
+		);
+	});
+
 	it("should list user passkeys", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
