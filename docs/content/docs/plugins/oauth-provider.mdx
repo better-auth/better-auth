@@ -462,6 +462,8 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
+Dynamic registration keeps only the requested `grant_types` this server supports, and the registration response lists the grants that were registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). For example, Claude's MCP connector requests `urn:ietf:params:oauth:grant-type:jwt-bearer` alongside `authorization_code` and `refresh_token`, and registers with the last two. When `authorization_code` is dropped, so is the `code` response type. A registration that shares no grant with the server is rejected with `invalid_client_metadata`. Clients created with `createOAuthClient` or `adminCreateOAuthClient` are not narrowed: an unsupported grant is rejected.
+
 `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use any of these redirect URI forms:
 
 * A claimed `https` URI on a non-loopback host.
@@ -553,7 +555,7 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
-Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge. For the built-in `authorization_code`, `refresh_token`, `client_credentials`, and device code grants, the client is authenticated before the grant is looked up, so an unknown `client_id` returns `invalid_client` rather than `invalid_grant`. An extension grant handler (see [Provider extensions](#provider-extensions)) gets the same result by calling `provider.authenticateClient()` before it looks up its grant.
 
 #### DPoP sender-constrained tokens
 

@@ -532,7 +532,7 @@ export async function verifyClientAssertion(
 	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "unknown client",
+			error_description: "client not found",
 			error: "invalid_client",
 		});
 	}
