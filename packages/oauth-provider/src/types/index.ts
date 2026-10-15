@@ -892,8 +892,8 @@ export interface OAuthOptions<
 	 *   `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web`. Every redirect URI
 	 *   of an inferred native client is then validated against the native rules.
 	 *   Lets native MCP clients that omit `application_type` (for example Cursor,
-	 *   or Claude Code with its `http://127.0.0.1` callback) register without
-	 *   loosening web-client redirect policy.
+	 *   or older Claude Code releases with an `http://127.0.0.1` callback)
+	 *   register without loosening web-client redirect policy.
 	 *
 	 * An `application_type` the client actually sends is never overridden.
 	 * Applies only to dynamic client registration; managed clients and Client ID

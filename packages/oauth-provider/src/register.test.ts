@@ -1954,7 +1954,7 @@ describe("oauth register - clientRegistrationDefaultApplicationType", async () =
 		"http://localhost:33418/callback",
 		"http://[::1]:33418/callback",
 	])(
-		"infers native for a loopback redirect URI such as Claude Code's: %s",
+		"infers native for an http loopback redirect URI: %s",
 		async (redirectUri) => {
 			const register = await instanceWithDefault("infer");
 			const response = await register({

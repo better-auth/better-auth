@@ -167,7 +167,7 @@ mcp({
 })
 ```
 
-MCP clients written before the 2026-07-28 spec, such as Claude Code and Cursor, omit `application_type` and register custom-scheme callbacks or `http` callbacks on `localhost`, `127.0.0.1`, or `[::1]`, which the `web` default rejects. `clientRegistrationDefaultApplicationType: "infer"` registers those clients as `native`; see [application type](/docs/plugins/oauth-provider#dynamic-registration-endpoint).
+Some MCP clients, such as Cursor and older Claude Code releases, omit `application_type` and register custom-scheme callbacks or `http` callbacks on `localhost`, `127.0.0.1`, or `[::1]`, which the `web` default rejects. `clientRegistrationDefaultApplicationType: "infer"` registers those clients as `native`; see [application type](/docs/plugins/oauth-provider#dynamic-registration-endpoint).
 
 The registration endpoint is absent from discovery unless DCR is enabled. A DCR request does not need Better Auth's `resources` extension: `mcp()` adds its canonical resource as a server-owned default.
 
