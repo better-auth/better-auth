@@ -166,7 +166,9 @@ const client = await auth.api.adminCreateOAuthClient({
   body: {
     token_endpoint_auth_method: "none",
     application_type: "native",
-    grant_types: [DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+    // Loopback sign-in, with the device grant as the fallback.
+    grant_types: ["authorization_code", DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+    redirect_uris: ["http://127.0.0.1/callback"],
     scope: "openid profile offline_access api:read",
   },
 });
@@ -180,7 +182,7 @@ await auth.api.adminLinkClientResource({
 });
 ```
 
-The provider rejects a `resource` the client is not linked to, because `enforcePerClientResources` defaults to `true`. `adminLinkClientResource` creates that link. To link every newly registered client to the API instead, list it in `clientRegistrationDefaultResources`.
+A CLI that only uses the device grant can leave out `authorization_code` and `redirect_uris`. The provider rejects a `resource` the client is not linked to, because `enforcePerClientResources` defaults to `true`. `adminLinkClientResource` creates that link. To link every newly registered client to the API instead, list it in `clientRegistrationDefaultResources`.
 
 Public clients use `token_endpoint_auth_method: "none"` and must send `client_id`. A confidential client using `client_secret_basic` may authenticate at `/device/code` with an `Authorization: Basic ...` header and omit the body `client_id`; `client_secret_post` sends both values in the form body.
 
