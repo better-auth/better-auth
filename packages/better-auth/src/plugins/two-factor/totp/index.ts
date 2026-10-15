@@ -5,6 +5,7 @@ import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import { symmetricDecrypt } from "../../../crypto";
+import { constantTimeEqual } from "../../../crypto/buffer";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
@@ -296,16 +297,45 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			const attempt = isSignIn
 				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 				: null;
+			let replayIdToClean: string | null = null;
 			let status: boolean;
 			try {
 				const decrypted = await symmetricDecrypt({
 					key: ctx.context.secretConfig,
 					data: twoFactor.secret,
 				});
-				status = await createOTP(decrypted, {
+				const otp = createOTP(decrypted, {
 					period: opts.period,
 					digits: opts.digits,
-				}).verify(ctx.body.code);
+				});
+				let matchedStep: number | null = null;
+				const currentStep = Math.floor(Date.now() / (opts.period * 1000));
+				for (let offset = -1; offset <= 1; offset++) {
+					const candidateStep = currentStep + offset;
+					// cspell:ignore hotp
+					const candidateCode = await otp.hotp(candidateStep);
+					if (constantTimeEqual(candidateCode, ctx.body.code)) {
+						matchedStep ??= candidateStep;
+					}
+				}
+				if (matchedStep === null) {
+					status = false;
+				} else if (twoFactor.verified === true) {
+					const expiresAt = new Date((matchedStep + 2) * opts.period * 1000);
+					const replayId = `totp-used:${twoFactor.id}:${matchedStep}`;
+					const reservation =
+						await ctx.context.internalAdapter.reserveVerificationValue({
+							identifier: replayId,
+							value: "used",
+							expiresAt,
+						});
+					status = !!reservation;
+					if (status) {
+						replayIdToClean = replayId;
+					}
+				} else {
+					status = true;
+				}
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
 				await attempt?.restore();
@@ -358,7 +388,16 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					where: [{ field: "id", value: twoFactor.id }],
 				});
 			}
-			return valid(ctx);
+			try {
+				return await valid(ctx);
+			} catch (error) {
+				if (replayIdToClean) {
+					await ctx.context.internalAdapter
+						.deleteVerificationByIdentifier(replayIdToClean)
+						.catch(() => {});
+				}
+				throw error;
+			}
 		},
 	);
 

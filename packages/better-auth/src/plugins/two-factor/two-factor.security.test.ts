@@ -2,7 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -607,6 +607,7 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
 		secondaryStorage,
+		verification: { storeInDatabase: true },
 		plugins: [
 			twoFactor({
 				otpOptions: {
@@ -727,5 +728,172 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		// the consume and never reach session creation, so at most one 200.
 		const successCount = results.filter((res) => res.status === 200).length;
 		expect(successCount).toBeLessThanOrEqual(1);
+	});
+});
+
+describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2)", async () => {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [twoFactor()],
+	});
+
+	const { headers: initialHeaders } = await signInWithTestUser();
+	const dbUser = await db.findOne<User>({
+		model: "user",
+		where: [{ field: "email", value: testUser.email }],
+	});
+	const userId = dbUser!.id;
+
+	const enrollment = await auth.api.enableTwoFactor({
+		body: { password: testUser.password },
+		headers: initialHeaders,
+	});
+	if (enrollment.method !== "totp") {
+		throw new Error("expected totp enrollment");
+	}
+	const row = await db.findOne<TwoFactorTable>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: userId }],
+	});
+	const secret = await symmetricDecrypt({
+		key: DEFAULT_SECRET,
+		data: row!.secret,
+	});
+	const enrollCode = await createOTP(secret).totp();
+	const verifyEnrollRes = await auth.api.verifyTOTP({
+		body: { code: enrollCode },
+		headers: initialHeaders,
+		asResponse: true,
+	});
+	expect(verifyEnrollRes.status).toBe(200);
+	const activeSessionHeaders = convertSetCookieToCookie(
+		verifyEnrollRes.headers,
+	);
+
+	const verified = await db.findOne<UserWithTwoFactor>({
+		model: "user",
+		where: [{ field: "id", value: userId }],
+	});
+	if (!verified?.twoFactorEnabled) {
+		throw new Error("failed to enable 2FA for test user");
+	}
+
+	async function startChallenge(): Promise<Headers> {
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+		return convertSetCookieToCookie(res.headers);
+	}
+
+	it("should reject reused TOTP code on step-up verification (RFC 6238 §5.2)", async () => {
+		// Advance by 30s to enter a fresh unconsumed step past enrollment
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 31000));
+			const code = await createOTP(secret).totp();
+
+			const firstRes = await auth.api.verifyTOTP({
+				body: { code },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(firstRes.status).toBe(200);
+
+			const secondRes = await auth.api.verifyTOTP({
+				body: { code },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(secondRes.status).toBe(401);
+			const json = (await secondRes.json()) as { message: string };
+			expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("should accept valid code from subsequent time step after consuming previous step", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 65000));
+			const code1 = await createOTP(secret).totp();
+			const firstRes = await auth.api.verifyTOTP({
+				body: { code: code1 },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(firstRes.status).toBe(200);
+
+			// Advance by 30s to subsequent step
+			vi.setSystemTime(new Date(Date.now() + 31000));
+			const code2 = await createOTP(secret).totp();
+			const secondRes = await auth.api.verifyTOTP({
+				body: { code: code2 },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(secondRes.status).toBe(200);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("should reject reusing TOTP code across different sign-in challenges", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 130000));
+			const code = await createOTP(secret).totp();
+
+			const challengeA = await startChallenge();
+			const resA = await auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeA,
+				asResponse: true,
+			});
+			expect(resA.status).toBe(200);
+
+			const challengeB = await startChallenge();
+			const resB = await auth.api.verifyTOTP({
+				body: { code },
+				headers: challengeB,
+				asResponse: true,
+			});
+			expect(resB.status).toBe(401);
+			const json = (await resB.json()) as { message: string };
+			expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("should reject concurrent replay attempts with the same TOTP code", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 195000));
+			const code = await createOTP(secret).totp();
+
+			const challengeA = await startChallenge();
+			const challengeB = await startChallenge();
+
+			const [resA, resB] = await Promise.all([
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: challengeA,
+					asResponse: true,
+				}),
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: challengeB,
+					asResponse: true,
+				}),
+			]);
+
+			const statuses = [resA.status, resB.status].sort();
+			expect(statuses).toEqual([200, 401]);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
