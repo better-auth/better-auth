@@ -230,7 +230,10 @@ describe("oauth introspect", async () => {
 		});
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
+	 */
+	it("finds a refresh_token sent with token_type_hint access_token", async () => {
 		const tokens = await getTokens();
 		const introspection = await client.oauth2.introspect(
 			{
@@ -246,7 +249,11 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data).toEqual({ active: false });
+		expect(introspection.data).toMatchObject({
+			active: true,
+			client_id: oauthClient?.client_id,
+			scope: "openid profile email offline_access",
+		});
 	});
 
 	/**
@@ -268,6 +275,26 @@ describe("oauth introspect", async () => {
 			},
 		);
 
+		expect(introspection.data).toEqual({ active: false });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11595
+	 */
+	it("returns inactive for a JWT-shaped token that fails verification", async () => {
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: "eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0.",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(introspection.data).toEqual({ active: false });
 	});
 
@@ -299,7 +326,10 @@ describe("oauth introspect", async () => {
 		});
 	});
 
-	it("should fail with token_type_hint refresh_token and sent access_token", async () => {
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
+	 */
+	it("finds an opaque access_token sent with token_type_hint refresh_token", async () => {
 		const tokens = await getTokens();
 		const introspection = await client.oauth2.introspect(
 			{
@@ -315,7 +345,10 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data?.active).toBeFalsy();
+		expect(introspection.data).toMatchObject({
+			active: true,
+			client_id: oauthClient?.client_id,
+		});
 	});
 
 	it("should pass without token_type_hint and sent jwt access_token", async () => {
