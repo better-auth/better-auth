@@ -161,8 +161,8 @@ async function loadJwks(
 
 /**
  * Refetches a fresh cached set, `current`, that lacks a token's key, such as a
- * newly rotated-in `kid`. Joins a fetch in flight, or uses a set another
- * request fetched after `current` was read. Otherwise refetches unless another
+ * newly rotated-in `kid`. Uses a set another request fetched after `current`
+ * was read, or joins a fetch in flight. Otherwise refetches unless another
  * refetch started within the cooldown, and resolves `undefined` then. A refetch
  * consumes the cooldown whether or not it succeeds.
  */
@@ -171,9 +171,9 @@ async function refreshJwks(
 	current: JSONWebKeySet,
 	jwksFetch: JwksFetchOptions["jwksFetch"],
 ): Promise<JSONWebKeySet | undefined> {
+	if (entry.jwks !== current) return entry.jwks;
 	const now = Date.now();
 	if (!isFetching(entry, now)) {
-		if (entry.jwks !== current) return entry.jwks;
 		if (now - entry.refetchedAt < JWKS_REFETCH_COOLDOWN_MS) return undefined;
 		entry.refetchedAt = now;
 	}
