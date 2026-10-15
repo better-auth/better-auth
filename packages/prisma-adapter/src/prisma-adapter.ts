@@ -219,7 +219,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return false;
 					}
 
-					if (condition.operator && condition.operator !== "eq") {
+					// A unique selector can't be null in Prisma's `WhereUniqueInput`.
+					if (
+						(condition.operator && condition.operator !== "eq") ||
+						condition.value === null
+					) {
 						return false;
 					}
 

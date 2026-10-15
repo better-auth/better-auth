@@ -300,6 +300,35 @@ describe("prisma-adapter", () => {
 		);
 	});
 
+	it("falls back to updateMany for `eq null` on a unique field", async () => {
+		const update = vi.fn();
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi.fn().mockResolvedValue({ id: "user-id" });
+		const adapter = prismaAdapter(
+			{ $transaction: vi.fn(), user: { findFirst, update, updateMany } },
+			{ provider: "mongodb" },
+		)({
+			user: {
+				additionalFields: {
+					username: { type: "string", unique: true, required: false },
+				},
+			},
+		});
+
+		await adapter.update({
+			model: "user",
+			where: [{ field: "username", operator: "eq", value: null }],
+			update: { name: "Updated" },
+		});
+
+		expect(update).not.toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { OR: [{ username: null }, { username: { isSet: false } }] },
+			}),
+		);
+	});
+
 	it("should use update (not updateMany) for insensitive mode on unsupported providers", async () => {
 		const update = vi.fn().mockResolvedValue({
 			id: "user-id",
