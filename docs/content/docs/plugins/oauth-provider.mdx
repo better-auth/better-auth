@@ -1591,7 +1591,7 @@ How a request for a class is handled depends on whether it is essential:
 * An essential request (`claims={"id_token":{"acr":{"essential":true,"value":"…"}}}`) the session does not satisfy fails with `access_denied` at the client's redirect URI. If no value in `acrValuesSupported` could satisfy it, the request fails before sign-in.
 * A voluntary request (`acr_values`, or an `acr` claim without `essential`) never fails. The ID token reports the session's current `acr`.
 
-`resolve` must return an `acr` from `acrValuesSupported` (or omit it to use `"0"`), and `amr` must be an array of strings. Any other result fails the authorization with `server_error`. To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`; the client receives that error and its `error_description`.
+`resolve` must return an `acr` from `acrValuesSupported` (or omit it to use `"0"`), and `amr` must be an array of strings. Any other result fails the authorization with `server_error`. To refuse an authorization yourself, throw an `APIError` with an OAuth `error` such as `access_denied`; the client receives that error and its `error_description`. For a device code, the user sees the error on your verification page instead, and the code stays pending so the user can retry.
 
 The `acr` and `amr` are stored with the authorization code and the refresh token, so ID tokens from later refreshes keep the values of the original authentication ([OIDC Core §12.2](https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse)). They change only when the user authorizes again.
 
