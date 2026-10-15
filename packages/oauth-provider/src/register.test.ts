@@ -2067,7 +2067,28 @@ describe("oauth register - clientRegistrationDefaultApplicationType", async () =
 		]);
 	});
 
-	it("keeps the web classification under infer when every redirect URI is http(s)", async () => {
+	/**
+	 * @see https://github.com/croffasia/itsaplan/issues/563
+	 */
+	it.each([
+		"http://127.0.0.1:33418/callback",
+		"http://localhost:33418/callback",
+		"http://[::1]:33418/callback",
+	])(
+		"infers native for an http loopback redirect URI: %s",
+		async (redirectUri) => {
+			const register = await instanceWithDefault("infer");
+			const response = await register({
+				token_endpoint_auth_method: "none",
+				redirect_uris: [redirectUri],
+			});
+			expect(response.status).toBe(201);
+			const body = (await response.json()) as OAuthClient;
+			expect(body.application_type).toBe("native");
+		},
+	);
+
+	it("keeps the web classification under infer when every redirect URI is https", async () => {
 		const register = await instanceWithDefault("infer");
 		const https = await register({
 			redirect_uris: ["https://rp.example.com/callback"],
