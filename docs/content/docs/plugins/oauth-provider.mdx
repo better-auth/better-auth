@@ -1748,7 +1748,11 @@ oauthProvider({
   allowDynamicClientRegistration: true,
   scopes: ["openid", "connector:register", "invoices:write"],
   // Registration tokens only work here and expire after 5 minutes
-  resources: [{ identifier: registrationResource, accessTokenTtl: 300 }],
+  resources: [{
+    identifier: registrationResource,
+    allowedScopes: ["connector:register", "invoices:write"],
+    accessTokenTtl: 300,
+  }],
   // Deleting a client does not invalidate tokens it already holds
   m2mAccessTokenExpiresIn: 600,
   validateInitialAccessToken: async ({ initialAccessToken }) => {
