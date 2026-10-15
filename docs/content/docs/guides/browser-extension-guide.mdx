@@ -29,7 +29,7 @@ Browser extensions (Manifest V3) present unique authentication challenges. Exten
   <Step>
     ### Create the auth client
 
-    Create a client instance pointing to your Better Auth server.
+    Create a client instance pointing to your Better Auth server. The popup in this guide is a React component, so it imports the React client. An extension page without React imports `createAuthClient` from `better-auth/client` instead.
 
     ```ts title="src/lib/auth-client.ts"
     import { createAuthClient } from "better-auth/react"
@@ -287,7 +287,7 @@ This pattern requires a provider that can return an OIDC `id_token` in the URL f
   <Step>
     #### Store the session
 
-    The `signIn.social` call with `idToken` returns a `token` (session token) and a `user` object. Store them from the service worker for use in subsequent API calls.
+    The `signIn.social` call with `idToken` returns a `token` (session token) and a `user` object. Store them from the service worker for use in subsequent API calls. This version of `signInWithGoogle` replaces the one from the previous step.
 
     ```ts title="src/background.ts"
     async function signInWithGoogle() {
