@@ -887,6 +887,9 @@ importers:
       msw:
         specifier: ^2.14.6
         version: 2.14.6(@types/node@25.9.4)(typescript@6.0.3)
+      oauth4webapi:
+        specifier: 3.8.8
+        version: 3.8.8
 
   e2e/smoke/test/fixtures/cloudflare:
     dependencies:
@@ -12567,6 +12570,9 @@ packages:
     resolution: {integrity: sha512-fLOtud91LgWzKkx/vQY9DF6C0YPFdQFfPrpUKK4Czl44+BLA8i9bEBQElsFuOItmYKg15cEem1vUiWGBMSXo/g==}
     engines: {node: ^22.12 || ^24 || ^26}
     hasBin: true
+
+  oauth4webapi@3.8.8:
+    resolution: {integrity: sha512-8N28E+a/oxfXWBgOMt+ZP/JUf/XR+IFbvkAEPP3gznXOMv9BpAAwiIj0TFNz3tGTPc0ZQ8zmWBNgN1nAys0gng==}
 
   ob1@0.83.3:
     resolution: {integrity: sha512-egUxXCDwoWG06NGCS5s5AdcpnumHKJlfd3HH06P3m9TEMwwScfcY35wpQxbm9oHof+dM/lVH9Rfyu1elTVelSA==}
@@ -29954,6 +29960,8 @@ snapshots:
       basic-auth: 2.0.1
       is-plain-obj: 4.1.0
       jose: 6.2.3
+
+  oauth4webapi@3.8.8: {}
 
   ob1@0.83.3:
     dependencies:
