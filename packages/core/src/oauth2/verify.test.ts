@@ -967,6 +967,80 @@ describe("verifyBearerToken", () => {
 		},
 	);
 
+	it.each([
+		["has", true],
+		["lacks", false],
+	] as const)(
+		"should verify a token without kid when a late fetch's set %s its key while a replacement is in flight",
+		async (_, lateHasKey) => {
+			vi.resetModules();
+			const { verifyJwsAccessToken: verify } = await import("./verify");
+			const original = await createTestJWKS();
+			const rotated = await createTestJWKS();
+			const lateFetch = Promise.withResolvers<{ keys: JWK[] }>();
+			const replacementFetch = Promise.withResolvers<{ keys: JWK[] }>();
+			const options = {
+				jwksFetch: vi
+					.fn<() => Promise<{ keys: JWK[] }>>()
+					.mockResolvedValueOnce({ keys: [original.publicJWK] })
+					.mockReturnValueOnce(lateFetch.promise)
+					.mockReturnValueOnce(replacementFetch.promise),
+				jwksCacheKey: {},
+				verifyOptions: { issuer, audience },
+			};
+			const originalToken = await createSignedToken(
+				original.privateKey,
+				original.kid,
+			);
+			const withKid = await createSignedToken(rotated.privateKey, rotated.kid);
+			const withoutKidToken = await createSignedToken(
+				rotated.privateKey,
+				undefined,
+			);
+			// Only Date is faked: each fetch's timeout stays real and is cleared once
+			// its fetch settles.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			await verify(originalToken, options);
+
+			// The first refetch outlives its timeout, so after the cooldown another
+			// request replaces it with a fetch that is still in flight.
+			const first = verify(withKid, options);
+			vi.setSystemTime(Date.now() + 31 * 1000);
+			const second = verify(withKid, options);
+			const settled = Promise.allSettled([first, second]);
+
+			// This verification reads the original set, then the late fetch lands a
+			// newer set before it asks for a refresh.
+			const withoutKid = verify(withoutKidToken, options);
+			lateFetch.resolve({
+				keys: [lateHasKey ? rotated.publicJWK : original.publicJWK],
+			});
+
+			// A newer set with the key verifies without waiting for the replacement.
+			// One without it must wait for the replacement, so hold the replacement
+			// until the verification has had time to fail against the late set.
+			if (!lateHasKey) {
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				replacementFetch.resolve({ keys: [rotated.publicJWK] });
+			}
+			await expect(withoutKid).resolves.toMatchObject({ sub: "user-123" });
+			replacementFetch.resolve({ keys: [rotated.publicJWK] });
+			const [firstResult, secondResult] = await settled;
+			// The first verification joined the late fetch, so it fails when that
+			// set lacks its key; the second joined the replacement.
+			expect(firstResult).toMatchObject(
+				lateHasKey
+					? { status: "fulfilled" }
+					: {
+							status: "rejected",
+							reason: { code: "ERR_JWKS_NO_MATCHING_KEY" },
+						},
+			);
+			expect(secondResult).toMatchObject({ status: "fulfilled" });
+		},
+		10_000,
+	);
+
 	it("should cache a string jwks source across verifications within the TTL", async () => {
 		vi.resetModules();
 		const { verifyJwsAccessToken: verify } = await import("./verify");
