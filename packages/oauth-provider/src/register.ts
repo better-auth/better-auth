@@ -117,10 +117,10 @@ function isNonHttpRedirectUri(redirectUri: string): boolean {
 /**
  * Server-owned default for dynamic registrations that omit `application_type`.
  * `"infer"` classifies as native when any redirect URI uses a non-http(s)
- * scheme, because a web client can never register one. Every URI is then
- * validated against the native rules. A sent `application_type` is never
- * overridden because `applyOAuthClientRegistrationDefaults` only fills the
- * absent field.
+ * scheme or http on an exact loopback host, because a web client can never
+ * register either. Every URI is then validated against the native rules. A
+ * sent `application_type` is never overridden because
+ * `applyOAuthClientRegistrationDefaults` only fills the absent field.
  */
 function resolveDynamicRegistrationDefaultApplicationType(
 	opts: OAuthOptions<Scope[]>,
@@ -128,7 +128,9 @@ function resolveDynamicRegistrationDefaultApplicationType(
 ): "web" | "native" {
 	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
 	if (configured !== "infer") return configured;
-	return (client.redirect_uris ?? []).some(isNonHttpRedirectUri)
+	return (client.redirect_uris ?? []).some(
+		(uri) => isNonHttpRedirectUri(uri) || isExactLoopbackHttpRedirectUri(uri),
+	)
 		? "native"
 		: "web";
 }
@@ -151,6 +153,13 @@ function getRawHttpHostname(redirectUri: string): string | null {
 			: hostAndPort.slice(0, bracketEnd + 1).toLowerCase();
 	}
 	return (hostAndPort.split(":")[0] ?? "").toLowerCase();
+}
+
+function isExactLoopbackHttpRedirectUri(redirectUri: string): boolean {
+	const hostname = getRawHttpHostname(redirectUri);
+	return (
+		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+	);
 }
 
 function assertDynamicRegistrationResourcesAllowed(
@@ -225,11 +234,6 @@ function validateClientRedirectUri(
 	}
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
-	const rawHttpHostname = getRawHttpHostname(redirectUri);
-	const isAllowedNativeHttpLoopback =
-		rawHttpHostname === "localhost" ||
-		rawHttpHostname === "127.0.0.1" ||
-		rawHttpHostname === "[::1]";
 
 	if (applicationType === "web") {
 		if (!isHttps || isRedirectLoopback) {
@@ -249,7 +253,7 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isAllowedNativeHttpLoopback) {
+		if (!isExactLoopbackHttpRedirectUri(redirectUri)) {
 			invalidRedirectUri(
 				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
 			);
