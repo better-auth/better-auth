@@ -1,5 +1,9 @@
+import type { BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { betterAuth } from "../../auth/minimal";
 import { admin } from "../../plugins/admin/admin";
 import { getTestInstance } from "../../test-utils/test-instance";
 
@@ -1174,5 +1178,231 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 		expect(secondUser.banned).toBe(false);
 		expect(secondUser.banReason).toBeNull();
 		expect(secondUser.banExpires).toBeNull();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11514
+ */
+describe("sign-up verification email and the transaction", () => {
+	const transientAbort = new Error("transient abort");
+
+	/**
+	 * A memory adapter that aborts the transaction after the callback on the
+	 * first `abortedAttempts` attempts and then runs the callback once more, the
+	 * way the MongoDB driver retries a transaction aborted with a transient error.
+	 */
+	function abortingMemoryAdapter(
+		db: Record<string, Record<string, unknown>[]>,
+		abortedAttempts: 0 | 1 | 2,
+	) {
+		const createAdapter = memoryAdapter(db);
+		return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+			const adapter = createAdapter(options);
+			let abortsLeft = abortedAttempts;
+			const attempt: DBAdapter<BetterAuthOptions>["transaction"] = (callback) =>
+				adapter.transaction(async (trx) => {
+					const result = await callback(trx);
+					if (abortsLeft-- > 0) throw transientAbort;
+					return result;
+				});
+			return {
+				...adapter,
+				transaction: async (callback) => {
+					try {
+						return await attempt(callback);
+					} catch (error) {
+						if (error !== transientAbort) throw error;
+						return attempt(callback);
+					}
+				},
+			};
+		};
+	}
+
+	async function signUpWith(
+		abortedAttempts: 0 | 1 | 2,
+		sendVerificationEmail = vi.fn(),
+	) {
+		const db: Record<string, Record<string, unknown>[]> = {
+			user: [],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
+			database: abortingMemoryAdapter(db, abortedAttempts),
+			emailAndPassword: { enabled: true },
+			emailVerification: { sendOnSignUp: true, sendVerificationEmail },
+		});
+		const signUp = auth.api.signUpEmail({
+			body: {
+				email: "retried-sign-up@test.com",
+				password: "password123",
+				name: "Retried",
+			},
+		});
+		return { db, sendVerificationEmail, signUp };
+	}
+
+	async function duplicateSignUpWith(
+		abortedAttempts: 0 | 1 | 2,
+		onExistingUserSignUp = vi.fn(),
+	) {
+		const now = new Date();
+		const db: Record<string, Record<string, unknown>[]> = {
+			user: [
+				{
+					id: "existing-user",
+					email: "existing@test.com",
+					name: "Existing",
+					emailVerified: true,
+					image: null,
+					createdAt: now,
+					updatedAt: now,
+				},
+			],
+			session: [],
+			account: [],
+			verification: [],
+		};
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
+			database: abortingMemoryAdapter(db, abortedAttempts),
+			// The generic duplicate response is what calls onExistingUserSignUp.
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+				onExistingUserSignUp,
+			},
+		});
+		const signUp = auth.api.signUpEmail({
+			body: {
+				email: "existing@test.com",
+				password: "password123",
+				name: "Someone",
+			},
+		});
+		return { onExistingUserSignUp, signUp };
+	}
+
+	it("calls onExistingUserSignUp once when the adapter runs the callback again after an abort", async () => {
+		const { onExistingUserSignUp, signUp } = await duplicateSignUpWith(1);
+
+		await expect(signUp).resolves.toMatchObject({
+			token: null,
+			user: { email: "existing@test.com" },
+		});
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not call onExistingUserSignUp when the transaction rolls back", async () => {
+		const { onExistingUserSignUp, signUp } = await duplicateSignUpWith(2);
+
+		await expect(signUp).rejects.toThrow("transient abort");
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+	});
+
+	it("returns the generic response when onExistingUserSignUp throws synchronously", async () => {
+		const { onExistingUserSignUp, signUp } = await duplicateSignUpWith(
+			0,
+			vi.fn(() => {
+				throw new Error("mailer down");
+			}),
+		);
+
+		await expect(signUp).resolves.toMatchObject({
+			token: null,
+			user: { email: "existing@test.com" },
+		});
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
+	it("mints the verification token after the commit, so slow after hooks don't expire it", async ({
+		onTestFinished,
+	}) => {
+		// Only Date is faked, so the clock moves only when the hook moves it.
+		vi.useFakeTimers({ toFake: ["Date"] });
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		const expiresIn = 3600;
+		let token = "";
+		const auth = betterAuth({
+			baseURL: "http://localhost:3000",
+			secret: "better-auth-secret-that-is-long-enough-for-validation-test",
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
+			emailAndPassword: { enabled: true },
+			emailVerification: {
+				sendOnSignUp: true,
+				expiresIn,
+				sendVerificationEmail: async (data) => {
+					token = data.token;
+				},
+			},
+			databaseHooks: {
+				user: {
+					create: {
+						// Runs before the queued email and outlasts the token's lifetime.
+						after: async () => {
+							vi.setSystemTime(Date.now() + (expiresIn + 60) * 1000);
+						},
+					},
+				},
+			},
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "slow-hook@test.com",
+				password: "password123",
+				name: "Slow",
+			},
+		});
+
+		await expect(
+			auth.api.verifyEmail({ query: { token } }),
+		).resolves.toMatchObject({ status: true });
+	});
+
+	it("sends the email once when the adapter runs the callback again after an abort", async () => {
+		const { db, sendVerificationEmail, signUp } = await signUpWith(1);
+
+		await expect(signUp).resolves.toMatchObject({
+			user: { email: "retried-sign-up@test.com" },
+		});
+		expect(db.user).toHaveLength(1);
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("does not send the email when the transaction rolls back", async () => {
+		const { db, sendVerificationEmail, signUp } = await signUpWith(2);
+
+		await expect(signUp).rejects.toThrow("transient abort");
+		expect(db.user).toHaveLength(0);
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("keeps the sign-up when the email callback throws synchronously after the commit", async () => {
+		const { db, sendVerificationEmail, signUp } = await signUpWith(
+			0,
+			vi.fn(() => {
+				throw new Error("mailer down");
+			}),
+		);
+
+		await expect(signUp).resolves.toMatchObject({
+			user: { email: "retried-sign-up@test.com" },
+		});
+		expect(db.user).toHaveLength(1);
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 });
