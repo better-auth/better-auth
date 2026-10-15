@@ -776,7 +776,7 @@ export async function authorizeEndpoint(
 		query,
 		client,
 		approve: (approval) =>
-			redirectWithAuthorizationCode(ctx, opts, {
+			createAuthorizationCodeURL(ctx, opts, {
 				...approval,
 				clientId: client.clientId,
 				resource: toResourceList(approval.query.resource) ?? [],
@@ -1059,7 +1059,8 @@ function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
 	return params;
 }
 
-async function redirectWithAuthorizationCode(
+/** Stores a single-use authorization code and returns the client redirect URL carrying it. */
+async function createAuthorizationCodeURL(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	verificationValue: {
