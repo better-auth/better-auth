@@ -41,6 +41,7 @@ import { authorizationQuerySchema, SafeUrlSchema } from "./types/zod";
 
 import {
 	clientAllowsGrant,
+	consentCovers,
 	findConsent,
 	getClient,
 	getConsentReferenceId,
@@ -1089,32 +1090,12 @@ async function runAuthorizationInteraction(
 		referenceId,
 	);
 
+	// Prompt again whenever a requested scope, claim, or resource is not covered.
 	if (
 		!consent ||
-		!scopes.every((val) => consent.scopes.includes(val)) ||
+		!consentCovers(consent, scopes, resources) ||
 		!userInfoClaims.every((claim) =>
 			(consent.requestedUserInfoClaims ?? []).includes(claim),
-		)
-	) {
-		if (promptNone) {
-			return redirectWithAuthorizationError(
-				ctx,
-				opts,
-				query,
-				"consent_required",
-				"End-User consent is required",
-			);
-		}
-		return redirectWithPromptCode(ctx, opts, "consent", {
-			sessionId: session.session.id,
-		});
-	}
-
-	// Prompt again whenever a requested resource is not covered by stored consent.
-	const consentedResources = consent?.resources ?? [];
-	if (
-		resources.some(
-			(requestedResource) => !consentedResources.includes(requestedResource),
 		)
 	) {
 		if (promptNone) {

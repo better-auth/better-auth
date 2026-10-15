@@ -36,6 +36,10 @@ import {
 } from "./scim-demo.ts";
 import { resolveSCIMDemoSSOUser } from "./scim-demo-employee.ts";
 import { getSCIMDemoOIDCProvider } from "./scim-demo-oidc.ts";
+import {
+	createTokenExchangeDemoPlugins,
+	getTokenExchangeDemoResources,
+} from "./token-exchange-demo.ts";
 
 const DEMO_SQLITE_CONTENTION_TIMEOUT_MS = 5_000;
 
@@ -418,7 +422,7 @@ const authOptions = {
 				"offline_access",
 				"read:organization",
 			],
-			resources: [baseURL, mcpResource],
+			resources: [baseURL, mcpResource, ...getTokenExchangeDemoResources()],
 			// DCR clients omit `resources`; link them to the MCP server like `mcp()` does.
 			clientRegistrationDefaultResources: [mcpResource],
 			selectAccount: {
@@ -485,6 +489,7 @@ const authOptions = {
 				},
 			},
 		}),
+		...createTokenExchangeDemoPlugins(),
 		electron(),
 	],
 	trustedOrigins: [

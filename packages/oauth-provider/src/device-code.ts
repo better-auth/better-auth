@@ -1,7 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { APIError } from "better-auth/api";
 import type {
 	DeviceAuthorizationGrant,
 	DeviceAuthorizationPluginOptions,
@@ -31,7 +30,9 @@ import {
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
 	normalizeTimestampValue,
+	parseScopes,
 	readFormParams,
+	tokenError,
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
@@ -86,22 +87,6 @@ type OAuthDeviceCodeFields = {
 	acr?: string | null;
 	amr?: string[] | null;
 };
-
-function tokenError(
-	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
-	error: string,
-	errorDescription: string,
-): never {
-	throw new APIError(status, {
-		error,
-		error_description: errorDescription,
-	});
-}
-
-function parseScopes(scope: string | null | undefined): string[] {
-	const normalized = scope?.trim();
-	return normalized ? normalized.split(/\s+/) : [];
-}
 
 /**
  * Exchanges an approved RFC 8628 device code for an OAuth token set. Unlike the
