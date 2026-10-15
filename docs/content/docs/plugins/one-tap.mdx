@@ -1,4 +1,5 @@
 ---
+icon: pluginsOneTap
 title: One Tap
 description: One Tap plugin for Better Auth
 ---
@@ -159,9 +160,13 @@ await authClient.oneTap({
 
 #### Handling Prompt Dismissals with Exponential Backoff
 
-If the user dismisses or skips the prompt, the plugin will retry showing the One Tap prompt using exponential backoff based on your configured promptOptions.
+If the prompt is dismissed without a sign-in, the plugin will retry showing the One Tap prompt using exponential backoff based on your configured promptOptions. A prompt your app closes with `google.accounts.id.cancel()` is not retried.
 
-If the maximum number of attempts is reached without a successful sign-in, you can use the onPromptNotification callback to be notified—allowing you to render an alternative UI (e.g., a traditional Google Sign-In button) so users can restart the process manually:
+A skipped prompt is not retried. Google doesn't report why the prompt was skipped, and after a user closes it, Google holds the prompt back for a cooldown period that retries can't shorten.
+
+The plugin passes a listener to Google's `prompt()` to track these moments, so Google Identity Services logs a FedCM migration warning about prompt UI status methods. Google logs it for any listener, even one that calls none of those methods. Under FedCM, the plugin only calls the methods that FedCM supports, so you can ignore the warning.
+
+When the prompt is skipped, or the maximum number of attempts is reached without a successful sign-in, you can use the onPromptNotification callback to be notified—allowing you to render an alternative UI (e.g., a traditional Google Sign-In button) so users can restart the process manually:
 
 ```ts
 import { authClient } from "@/lib/auth-client";
@@ -221,6 +226,16 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
   only `oneTap({ clientId })` and no `socialProviders.google`, no
   hosted-domain restriction is applied. To restrict One Tap sign-in to a
   Workspace domain, configure `socialProviders.google` with `hd`.
+</Callout>
+
+<Callout type="info">
+  **Mapping the Google profile to your user**
+
+  When `socialProviders.google` is configured, One Tap builds the user with its `mapProfileToUser` or `getUserInfo`, as the standard Google sign-in does. An extra field you map, such as a first name from `given_name`, is saved only if it is declared in `user.additionalFields` and not marked `input: false`. The account is always keyed by the verified token's `sub`.
+
+  With `overrideUserInfoOnSignIn`, a returning user is updated from the mapped profile on every One Tap sign-in.
+
+  With only `oneTap({ clientId })` and no `socialProviders.google`, One Tap uses the token's `name`, `email`, `email_verified`, and `picture` claims.
 </Callout>
 
 ### Authorized JavaScript origins

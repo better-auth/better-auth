@@ -77,7 +77,7 @@ function createSubjectLockingMemoryAdapter(
 								release = resolve;
 							});
 							subjectLockTails.set(subjectId, currentTail);
-							if (previousTail) onSubjectLockWait();
+							if (previousTail !== undefined) onSubjectLockWait();
 							await previousTail;
 							heldSubjectIds.add(subjectId);
 							releases.push(() => {

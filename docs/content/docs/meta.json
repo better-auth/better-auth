@@ -1,14 +1,22 @@
 {
-  "title": "guide",
+  "title": "Get Started",
+  "icon": "getStarted",
   "root": true,
   "pages": [
     "introduction",
-    "ai-resources",
+    "comparison",
     "installation",
     "basic-usage",
-    "email-password/sign-in-and-sign-up",
-    "email-password/password-reset",
-    "email-password/configuration",
-    "social-sign-on/apple"
+    "concepts",
+    "authentication",
+    "adapters",
+    "integrations",
+    "infrastructure",
+    "plugins",
+    "guides",
+    "ai-resources",
+    "reference",
+    "...",
+    "!examples"
   ]
 }

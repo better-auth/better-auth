@@ -11,6 +11,7 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
+import { errors as joseErrors } from "jose";
 import {
 	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
@@ -22,6 +23,7 @@ import type {
 	ClientDiscovery,
 	Confirmation,
 	GrantType,
+	OAuthConsent,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
@@ -109,6 +111,26 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	}
 	return plugin;
 };
+
+const joseInfrastructureErrorCodes = new Set([
+	joseErrors.JWKSTimeout.code,
+	joseErrors.JWKSInvalid.code,
+	joseErrors.JWKSMultipleMatchingKeys.code,
+]);
+
+/**
+ * Whether a JWT verification error comes from the token itself (malformed,
+ * bad signature, unsupported alg, unknown kid, failed claim checks), as
+ * opposed to a key set failure that should still surface as a server error.
+ *
+ * @internal
+ */
+export function isInvalidJwtError(error: unknown) {
+	return (
+		error instanceof joseErrors.JOSEError &&
+		!joseInfrastructureErrorCodes.has(error.code)
+	);
+}
 
 /**
  * Normalizes timestamp-like values returned by adapters.
@@ -221,6 +243,11 @@ function getTrustedClientCache(
 	return cache;
 }
 
+/**
+ * Verify the signature and expiration of an OAuth query issued by this provider.
+ * Use the provider's current auth secret on the server before displaying a
+ * consent page. A valid signature does not replace client or session checks.
+ */
 export async function verifyOAuthQueryParams(
 	oauth_query: string,
 	secret: string,
@@ -240,6 +267,22 @@ export async function verifyOAuthQueryParams(
 		constantTimeEqual(sig, verifySig) &&
 		new Date(exp * 1000) >= new Date()
 	);
+}
+
+/**
+ * Rejects changes to a client listed in `cachedTrustedClients`. Cached trusted
+ * clients are immutable through the client management endpoints.
+ */
+export function assertNotTrustedClient(
+	opts: OAuthOptions<Scope[]>,
+	clientId: string,
+) {
+	if (opts.cachedTrustedClients?.has(clientId)) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description: "trusted clients must be updated manually",
+		});
+	}
 }
 
 /**
@@ -728,7 +771,7 @@ export async function validateClientCredentials(
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
-		throwInvalidClient("missing client", { method: authMethod });
+		throwInvalidClient("client not found", { method: authMethod });
 	}
 	if (client.disabled) {
 		throwInvalidClient("client is disabled", { method: authMethod });
@@ -1032,6 +1075,57 @@ export async function resolveSubjectIdentifier(
 		return computePairwiseSub(userId, client, opts.pairwiseSecret);
 	}
 	return userId;
+}
+
+/**
+ * Resolves `postLogin.consentReferenceId`, treating an empty value as no reference.
+ *
+ * @internal
+ */
+export async function getConsentReferenceId(
+	opts: OAuthOptions<Scope[]>,
+	context: Parameters<
+		NonNullable<OAuthOptions<Scope[]>["postLogin"]>["consentReferenceId"]
+	>[0],
+): Promise<string | undefined> {
+	return (await opts.postLogin?.consentReferenceId?.(context)) || undefined;
+}
+
+/**
+ * Finds the consent stored for exactly this reference. Without a reference,
+ * only consent stored without one (missing, null, or empty) matches.
+ *
+ * @internal
+ */
+export async function findConsent(
+	ctx: GenericEndpointContext,
+	clientId: string,
+	userId: string,
+	referenceId: string | undefined,
+): Promise<OAuthConsent<Scope[]> | null> {
+	const where = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+	];
+	if (referenceId) {
+		return ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [...where, { field: "referenceId", value: referenceId }],
+		});
+	}
+	// Matched in code: Prisma on MongoDB leaves an omitted referenceId unset, and `eq null` skips unset fields.
+	const pageSize = 100;
+	for (let offset = 0; ; offset += pageSize) {
+		const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where,
+			limit: pageSize,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		const consent = consents.find((row) => !row.referenceId);
+		if (consent || consents.length < pageSize) return consent ?? null;
+	}
 }
 
 /**

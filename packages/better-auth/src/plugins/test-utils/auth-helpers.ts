@@ -1,9 +1,25 @@
 import type { AuthContext } from "@better-auth/core";
+import { sessionSchema } from "@better-auth/core/db";
 import { createCookieHeaders, createTestCookie } from "./cookie-builder";
-import type { LoginResult, TestCookie } from "./types";
+import type { LoginResult, TestAuthOptions, TestCookie } from "./types";
+
+function createSession(ctx: AuthContext, opts: TestAuthOptions) {
+	const additionalFields = Object.fromEntries(
+		Object.entries(opts.session ?? {}).filter(
+			([key]) => !Object.hasOwn(sessionSchema.shape, key),
+		),
+	);
+	// Override additional-field defaults without replacing generated session fields.
+	return ctx.internalAdapter.createSession(
+		opts.userId,
+		false,
+		additionalFields,
+		true,
+	);
+}
 
 export function createLogin(ctx: AuthContext) {
-	return async (opts: { userId: string }): Promise<LoginResult> => {
+	return async (opts: TestAuthOptions): Promise<LoginResult> => {
 		// Find the user first to avoid creating orphaned sessions
 		const user = await ctx.internalAdapter.findUserById(opts.userId);
 		if (!user) {
@@ -11,7 +27,7 @@ export function createLogin(ctx: AuthContext) {
 		}
 
 		// Create a session for the user
-		const session = await ctx.internalAdapter.createSession(opts.userId);
+		const session = await createSession(ctx, opts);
 
 		// Create headers with cookie
 		const headers = await createCookieHeaders(ctx, session.token);
@@ -30,18 +46,17 @@ export function createLogin(ctx: AuthContext) {
 }
 
 export function createGetAuthHeaders(ctx: AuthContext) {
-	return async (opts: { userId: string }): Promise<Headers> => {
-		const session = await ctx.internalAdapter.createSession(opts.userId);
+	return async (opts: TestAuthOptions): Promise<Headers> => {
+		const session = await createSession(ctx, opts);
 		return createCookieHeaders(ctx, session.token);
 	};
 }
 
 export function createGetCookies(ctx: AuthContext) {
-	return async (opts: {
-		userId: string;
-		domain?: string;
-	}): Promise<TestCookie[]> => {
-		const session = await ctx.internalAdapter.createSession(opts.userId);
+	return async (
+		opts: TestAuthOptions & { domain?: string },
+	): Promise<TestCookie[]> => {
+		const session = await createSession(ctx, opts);
 		return createTestCookie(ctx, session.token, opts.domain);
 	};
 }

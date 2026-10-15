@@ -9,7 +9,6 @@ import { coreSchema } from "./shared";
 
 export const accountSchema = coreSchema.extend({
 	providerId: z.string(),
-	issuer: z.string(),
 	accountId: z.string(),
 	userId: z.coerce.string(),
 	accessToken: z.string().nullish(),
@@ -39,27 +38,9 @@ export const accountSchema = coreSchema.extend({
 export type BaseAccount = z.infer<typeof accountSchema>;
 
 /** The stable provider-side key used to recognize an account. */
-export type AccountKey = Readonly<Pick<BaseAccount, "issuer" | "accountId">>;
-
-function encodeAccountIssuerProviderId(providerId: string): string {
-	return encodeURIComponent(providerId);
-}
-
-/**
- * Creates the synthetic issuer used by providers without an issuer of their own.
- */
-export function createLocalAccountIssuer(providerId: string): string {
-	return `local:${encodeAccountIssuerProviderId(providerId)}`;
-}
-
-/**
- * Creates the synthetic issuer used by OAuth providers without an issuer of
- * their own. OAuth identities use a distinct namespace so a provider ID
- * cannot collide with an internal local authentication method.
- */
-export function createOAuthAccountIssuer(providerId: string): string {
-	return `local:oauth:${encodeAccountIssuerProviderId(providerId)}`;
-}
+export type AccountKey = Readonly<
+	Pick<BaseAccount, "providerId" | "accountId">
+>;
 
 /**
  * Account schema type used by better-auth, note that it's possible that account could have additional fields

@@ -21,6 +21,87 @@ function profileResponse(profile: Record<string, unknown>) {
 	>;
 }
 
+function formBody(body: unknown) {
+	if (body instanceof URLSearchParams) return body;
+	if (typeof body === "string") return new URLSearchParams(body);
+	throw new Error("Expected a URL-encoded form body");
+}
+
+/**
+ * @see https://www.rfc-editor.org/rfc/rfc6749#section-2.3.1
+ */
+describe("reddit token requests", () => {
+	beforeEach(() => {
+		mockedBetterFetch.mockReset();
+	});
+
+	it("exchanges an authorization code with Basic authentication", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "access-token",
+				expires_in: 3600,
+				refresh_token: "refresh-token",
+				token_type: "bearer",
+			},
+			error: null,
+		});
+
+		const tokens = await reddit(options).validateAuthorizationCode({
+			code: "authorization-code",
+			redirectURI: "https://app.example.com/api/auth/callback/reddit",
+		});
+
+		expect(tokens?.accessToken).toBe("access-token");
+		const [url, init] = mockedBetterFetch.mock.calls[0] ?? [];
+		expect(url).toBe("https://www.reddit.com/api/v1/access_token");
+		const headers = new Headers(init?.headers as HeadersInit | undefined);
+		expect(headers.get("accept")).toBe("text/plain");
+		expect(headers.get("authorization")).toBe(
+			`Basic ${Buffer.from("reddit-app:reddit-secret").toString("base64")}`,
+		);
+		expect(headers.get("content-type")).toBe(
+			"application/x-www-form-urlencoded",
+		);
+		expect(headers.has("user-agent")).toBe(true);
+		expect(init?.redirect).toBe("manual");
+		expect(Object.fromEntries(formBody(init?.body))).toEqual({
+			code: "authorization-code",
+			grant_type: "authorization_code",
+			redirect_uri: "https://app.example.com/api/auth/callback/reddit",
+		});
+	});
+
+	it("refreshes an access token with Basic authentication", async () => {
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: {
+				access_token: "refreshed-access-token",
+				expires_in: 3600,
+				token_type: "bearer",
+			},
+			error: null,
+		});
+
+		const tokens = await reddit(options).refreshAccessToken("refresh-token");
+
+		expect(tokens.accessToken).toBe("refreshed-access-token");
+		const [url, init] = mockedBetterFetch.mock.calls[0] ?? [];
+		expect(url).toBe("https://www.reddit.com/api/v1/access_token");
+		const headers = new Headers(init?.headers as HeadersInit | undefined);
+		expect(headers.get("accept")).toBe("application/json");
+		expect(headers.get("authorization")).toBe(
+			`Basic ${Buffer.from("reddit-app:reddit-secret").toString("base64")}`,
+		);
+		expect(headers.get("content-type")).toBe(
+			"application/x-www-form-urlencoded",
+		);
+		expect(init?.redirect).toBe("manual");
+		expect(Object.fromEntries(formBody(init?.body))).toEqual({
+			grant_type: "refresh_token",
+			refresh_token: "refresh-token",
+		});
+	});
+});
+
 describe("reddit.getUserInfo (no provider email)", () => {
 	beforeEach(() => {
 		mockedBetterFetch.mockReset();

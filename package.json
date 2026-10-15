@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
-    "@biomejs/biome": "2.5.0",
+    "@biomejs/biome": "2.5.15",
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
     "@types/bun": "^1.3.14",
@@ -49,6 +49,7 @@
     "knip": "^6.17.1",
     "lefthook": "^2.1.9",
     "nyc": "^18.0.0",
+    "pkg-pr-new": "0.0.88",
     "publint": "^0.3.21",
     "turbo": "^2.9.18",
     "typescript": "catalog:",
