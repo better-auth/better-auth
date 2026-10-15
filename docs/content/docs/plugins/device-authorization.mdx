@@ -496,6 +496,8 @@ export default function DeviceApprovalPage() {
       }
       alert("Device approved successfully!");
       window.location.href = "/";
+    } catch {
+      alert("Could not reach the server. Try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -511,6 +513,8 @@ export default function DeviceApprovalPage() {
       }
       alert("Device denied");
       window.location.href = "/";
+    } catch {
+      alert("Could not reach the server. Try again.");
     } finally {
       setIsProcessing(false);
     }
