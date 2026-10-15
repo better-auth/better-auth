@@ -1369,6 +1369,22 @@ describe("oauth-provider device-code grant", async () => {
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11035
+	 */
+	it("returns invalid_client for an unknown client_id before looking up the device code", async () => {
+		const res = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: "does-not-exist",
+			client_id: "unknown-client",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client not found",
+		});
+	});
+
 	it("rejects a device code presented by a different client", async () => {
 		const clientId = await createDeviceClient();
 		const otherClientId = await createDeviceClient();

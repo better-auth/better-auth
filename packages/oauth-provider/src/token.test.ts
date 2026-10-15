@@ -593,14 +593,6 @@ describe("oauth token - authorization_code", async () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/pull/10159
-	 *
-	 * RFC 6749 §4.1.3 binds redirect_uri at the token endpoint only when the
-	 * authorization request carried one. The authorize endpoint always records a
-	 * redirect_uri (it delivers the code through it), so a headless code is
-	 * inserted the way authorize.ts persists one to exercise redemption directly.
-	 */
-	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11035
 	 */
 	it("returns invalid_client for an unknown client_id before checking the code", async () => {
@@ -627,6 +619,14 @@ describe("oauth token - authorization_code", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10159
+	 *
+	 * RFC 6749 §4.1.3 binds redirect_uri at the token endpoint only when the
+	 * authorization request carried one. The authorize endpoint always records a
+	 * redirect_uri (it delivers the code through it), so a headless code is
+	 * inserted the way authorize.ts persists one to exercise redemption directly.
+	 */
 	describe("redirect_uri conditional (RFC 6749 §4.1.3)", () => {
 		const tokenRequestHeaders = {
 			accept: "application/json",
@@ -977,31 +977,56 @@ describe("oauth token - refresh_token", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11035
 	 */
-	it("returns invalid_client for an unknown client_id before looking up the refresh token", async () => {
-		let responseHeaders: Headers | undefined;
-		const response = await client.$fetch<Record<string, unknown>>(
-			"/oauth2/token",
-			{
-				method: "POST",
-				body: new URLSearchParams({
-					grant_type: "refresh_token",
-					refresh_token: "not-a-real-refresh-token",
-				}),
-				headers: {
-					"content-type": "application/x-www-form-urlencoded",
-					authorization: `Basic ${Buffer.from("unknown-client:secret").toString("base64")}`,
+	describe("unknown client_id", () => {
+		it("returns invalid_client to a public client before looking up the refresh token", async () => {
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: new URLSearchParams({
+						grant_type: "refresh_token",
+						refresh_token: "not-a-real-refresh-token",
+						client_id: "unknown-client",
+					}),
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+					},
 				},
-				onError(context) {
-					responseHeaders = context.response.headers;
-				},
-			},
-		);
+			);
 
-		expect(response.error?.status).toBe(401);
-		expect((response.error as { error?: string })?.error).toBe(
-			"invalid_client",
-		);
-		expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+			expect(response.error?.status).toBe(400);
+			expect(response.error).toMatchObject({
+				error: "invalid_client",
+				error_description: "client not found",
+			});
+		});
+
+		it("returns 401 invalid_client to a Basic-authenticated client before looking up the refresh token", async () => {
+			let responseHeaders: Headers | undefined;
+			const response = await client.$fetch<Record<string, unknown>>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: new URLSearchParams({
+						grant_type: "refresh_token",
+						refresh_token: "not-a-real-refresh-token",
+					}),
+					headers: {
+						"content-type": "application/x-www-form-urlencoded",
+						authorization: `Basic ${Buffer.from("unknown-client:secret").toString("base64")}`,
+					},
+					onError(context) {
+						responseHeaders = context.response.headers;
+					},
+				},
+			);
+
+			expect(response.error?.status).toBe(401);
+			expect((response.error as { error?: string })?.error).toBe(
+				"invalid_client",
+			);
+			expect(responseHeaders?.get("WWW-Authenticate")).toBe("Basic");
+		});
 	});
 
 	it("should refresh token with same scopes, opaque access token", async ({
