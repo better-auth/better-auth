@@ -3,7 +3,7 @@ import type { DropboxProfile } from "./dropbox";
 import { dropbox } from "./dropbox";
 
 /**
- * @see https://raw.githubusercontent.com/dropbox/dropbox-api-spec/main/users.stone
+ * @see https://github.com/dropbox/dropbox-api-spec/blob/404afad5c508a45ea9004c9d8c0cd4a56f0fbf22/users.stone#L123-L181
  */
 it("accepts Dropbox accounts without a profile photo", async () => {
 	const profile = {
