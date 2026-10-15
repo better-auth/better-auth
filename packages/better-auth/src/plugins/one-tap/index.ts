@@ -209,6 +209,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						},
 						disableSignUp:
 							options?.disableSignup || googleProvider?.disableSignUp,
+						overrideUserInfo: googleProvider?.overrideUserInfoOnSignIn,
 						source: {
 							method: "oauth",
 							oauth: {

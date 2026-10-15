@@ -803,6 +803,8 @@ describe("one-tap disableSignUp", () => {
  */
 describe("one-tap Google profile mapping", () => {
 	afterEach(() => {
+		// biome-ignore lint/performance/noDelete: drop the claim the mapper test adds
+		delete (verifiedPayload as Record<string, unknown>).given_name;
 		Object.assign(verifiedPayload, defaultVerifiedPayload);
 	});
 
@@ -876,6 +878,31 @@ describe("one-tap Google profile mapping", () => {
 		expect(accounts).toEqual([
 			expect.objectContaining({ accountId: "one-tap-override-sub" }),
 		]);
+	});
+
+	it("refreshes a returning user from the mapper when overrideUserInfoOnSignIn is on", async () => {
+		verifiedPayload.email = "one-tap-override-on-sign-in@example.com";
+		verifiedPayload.sub = "one-tap-override-on-sign-in-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					overrideUserInfoOnSignIn: true,
+					mapProfileToUser: (profile) => ({ name: `Mapped ${profile.name}` }),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		await auth.api.oneTapCallback({ body: { idToken: "stub-id-token" } });
+		verifiedPayload.name = "Renamed";
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.user.name).toBe("Mapped Renamed");
 	});
 
 	it("builds the user from the token claims without a Google provider", async () => {
