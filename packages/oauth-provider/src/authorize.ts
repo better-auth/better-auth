@@ -1021,6 +1021,29 @@ async function runAuthorizationInteraction(
 		});
 	}
 
+	// A pending client always needs a consent that approves it, whatever
+	// `skipConsent` or earlier consents say.
+	if (client.pending) {
+		if (!opts.approvePendingClient) {
+			return handleRedirect(
+				ctx,
+				getErrorURL(ctx, "unauthorized_client", "client is pending approval"),
+			);
+		}
+		if (promptNone) {
+			return redirectWithAuthorizationError(
+				ctx,
+				opts,
+				query,
+				"consent_required",
+				"End-User consent is required",
+			);
+		}
+		return redirectWithPromptCode(ctx, opts, "consent", {
+			sessionId: session.session.id,
+		});
+	}
+
 	const referenceId = await getConsentReferenceId(opts, {
 		user: session.user,
 		session: session.session,

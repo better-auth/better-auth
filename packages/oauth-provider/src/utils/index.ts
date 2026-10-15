@@ -293,7 +293,7 @@ export async function getClient(
 		dbClient = await discovery.resolve(ctx, clientId, dbClient);
 		if (!dbClient) return null;
 	} else if (dbClient) {
-		if (options.cachedTrustedClients?.has(clientId)) {
+		if (options.cachedTrustedClients?.has(clientId) && !dbClient.pending) {
 			trustedClientCache.set(clientId, Object.assign({}, dbClient));
 		}
 		return dbClient;
@@ -860,6 +860,9 @@ export async function validateClientCredentials(
 	}
 	if (client.disabled) {
 		throwInvalidClient("client is disabled", { method: authMethod });
+	}
+	if (client.pending) {
+		throwInvalidClient("client is pending approval", { method: authMethod });
 	}
 
 	const registeredAuthMethod =

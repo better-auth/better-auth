@@ -6,6 +6,8 @@ import type {
 	OAuthClientAdministrativeResponse,
 	OAuthClientRegistrationResponse,
 	OAuthOptions,
+	PendingClientApproval,
+	PendingClientApprovalContext,
 	SchemaClient,
 	Scope,
 	TokenEndpointAuthMethod,
@@ -19,7 +21,28 @@ type ClientPrivilegeContext = Parameters<
 	NonNullable<OAuthOptions["clientPrivileges"]>
 >[0];
 
+type ApprovePendingClient = NonNullable<OAuthOptions["approvePendingClient"]>;
+
 describe("public oauth-provider types", () => {
+	it("types the pending client approval callback", () => {
+		expectTypeOf<
+			Parameters<ApprovePendingClient>[0]
+		>().toEqualTypeOf<PendingClientApprovalContext>();
+		expectTypeOf<
+			PendingClientApprovalContext["client"]
+		>().toEqualTypeOf<OAuthClient>();
+		expectTypeOf<
+			PendingClientApprovalContext["consentReferenceId"]
+		>().toEqualTypeOf<string | undefined>();
+		expectTypeOf<
+			PendingClientApproval["clientReference"]
+		>().toEqualTypeOf<string>();
+		expectTypeOf<ReturnType<ApprovePendingClient>>().toEqualTypeOf<
+			PendingClientApproval | false | Promise<PendingClientApproval | false>
+		>();
+		expectTypeOf<SchemaClient>().toHaveProperty("pending");
+	});
+
 	it("exports the signed-query verifier with a server-side secret", () => {
 		expectTypeOf<
 			typeof import("@better-auth/oauth-provider").verifyOAuthQueryParams

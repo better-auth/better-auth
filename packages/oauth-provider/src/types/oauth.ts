@@ -438,6 +438,12 @@ export interface OAuthClient {
 	application_type?: "web" | "native" | null;
 	//---- Not Part of RFC7591 Spec ----//
 	disabled?: boolean;
+	/**
+	 * Whether the client waits for a user to approve it at consent through
+	 * `approvePendingClient`. A consent page can use it to tell the user that
+	 * accepting also hands the client to an owner.
+	 */
+	pending?: boolean;
 	skip_consent?: boolean;
 	enable_end_session?: boolean;
 	/**

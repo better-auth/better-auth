@@ -23,6 +23,11 @@ export const schema = {
 				defaultValue: false,
 				required: false,
 			},
+			// Waiting for a user to approve it at consent; see `approvePendingClient`.
+			pending: {
+				type: "boolean",
+				required: false,
+			},
 			skipConsent: {
 				type: "boolean",
 				required: false,

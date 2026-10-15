@@ -11,6 +11,7 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 	clientSecret: true,
 	clientDiscoveryId: true,
 	disabled: true,
+	pending: true,
 	scopes: true,
 	clientCredentialsScopes: true,
 	userId: true,
@@ -85,6 +86,7 @@ const OAUTH_CLIENT_WIRE_FIELD_NAMES = [
 	"response_types",
 	"application_type",
 	"disabled",
+	"pending",
 	"skip_consent",
 	"enable_end_session",
 	"require_pkce",
@@ -104,6 +106,7 @@ const OPAQUE_METADATA_RESERVED_FIELDS = new Set<string>([
 
 const CIMD_FORBIDDEN_SERVER_FIELD_NAMES = new Set([
 	"disabled",
+	"pending",
 	"client_secret",
 	"client_secret_expires_at",
 	"client_id_issued_at",

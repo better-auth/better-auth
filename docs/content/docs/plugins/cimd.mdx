@@ -202,6 +202,8 @@ Valid documents follow shared-cache semantics. `s-maxage` takes precedence over 
 
 The metadata fetch governor is independent from HTTP freshness. Fresh-cache hits and concurrent callers joining the same client fetch consume no budget. Every new fetch consumes its concurrency and rolling-window budget when it starts, and excess work is rejected instead of queued. A successful fetch clears its per-client pacing record, so a response that cannot be cached or is immediately stale can be fetched again while origin and global budgets continue to apply. Failed fetches retain the `minimumFetchInterval` backoff. The metadata cache, client pacing records, and origin budget records are each bounded by `maxCacheEntries`. The governor evicts only inactive records; if every record still protects a live interval, rolling window, or fetch, a new client or origin fails closed.
 
+A metadata document proves control of a URL, not of a business or account. When the OAuth Provider defines [`approvePendingClient`](/docs/plugins/oauth-provider#approving-self-registered-clients-at-consent), a newly discovered client is stored as pending and cannot obtain tokens until a user consents and your callback sets its owner. Its document must then list the `authorization_code` grant. Refresh never changes a client's pending state, owner, or scope ceiling, including an approval that commits while a refresh is in progress.
+
 Refresh remains fail closed. A network, validation, or persistence failure preserves the previous database/cache state but rejects the current OAuth request. `onClientRefreshed` receives `previousClient`; operators can compare security-sensitive metadata and choose whether to revoke grants, tokens, or consent.
 
 ## Security boundary

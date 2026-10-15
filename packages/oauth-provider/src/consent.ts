@@ -1,15 +1,20 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { formatErrorURL, getAPIErrorURL, getIssuer } from "./authorize";
 import {
 	filterClaimsRequestUserInfoClaims,
 	getRequestedUserInfoClaims,
 } from "./claims-request";
+import { resolveClientApproval, storeClientApproval } from "./client-approval";
 import type { AuthorizeEndpointCaller } from "./continue";
 import { getExtensionInteractionRequest } from "./extensions";
 import { oAuthState } from "./oauth";
 import { getSupportedClaims } from "./standard-claims";
-import type { OAuthConsent, OAuthOptions, Scope } from "./types";
+import type { OAuthConsent, OAuthOptions, SchemaClient, Scope } from "./types";
 import {
 	findConsent,
 	getConsentReferenceId,
@@ -82,6 +87,17 @@ export async function consentEndpoint<Result>(
 		});
 	}
 
+	const accessDenied = (description: string) => ({
+		redirect: true,
+		url: formatErrorURL(
+			query.get("redirect_uri") ?? "",
+			"access_denied",
+			description,
+			query.get("state") ?? undefined,
+			getIssuer(ctx, opts),
+		),
+	});
+
 	const session = await getSessionFromCtx(ctx);
 	// Consent not accepted (ensure it's strictly boolean true)
 	const accepted = ctx.body.accept === true;
@@ -107,16 +123,7 @@ export async function consentEndpoint<Result>(
 					),
 			};
 		}
-		return {
-			redirect: true,
-			url: formatErrorURL(
-				query.get("redirect_uri") ?? "",
-				"access_denied",
-				"User denied access",
-				query.get("state") ?? undefined,
-				getIssuer(ctx, opts),
-			),
-		};
+		return accessDenied("User denied access");
 	}
 
 	// Consent accepted
@@ -139,6 +146,28 @@ export async function consentEndpoint<Result>(
 		session: session?.session!,
 		scopes: requestedScopes ?? originalRequestedScopes,
 	});
+	const consentScopes = requestedScopes ?? originalRequestedScopes;
+	// Read the stored row: approval state lives there, and resolving a
+	// discovered client could fetch its metadata on every consent.
+	const pendingClient = opts.approvePendingClient
+		? await ctx.context.adapter.findOne<SchemaClient<Scope[]>>({
+				model: opts.schema?.oauthClient?.modelName ?? "oauthClient",
+				where: [{ field: "clientId", value: clientId }],
+			})
+		: null;
+	const clientReference = pendingClient?.pending
+		? await resolveClientApproval(ctx, opts, {
+				client: pendingClient,
+				user: session?.user!,
+				session: session?.session!,
+				scopes: consentScopes,
+				consentReferenceId: referenceId,
+			})
+		: undefined;
+	// A refusal ends the request like a denied consent (RFC 6749 §4.1.2.1).
+	if (clientReference === false) {
+		return accessDenied("client approval was refused");
+	}
 	const foundConsent = await findConsent(
 		ctx,
 		clientId,
@@ -150,36 +179,55 @@ export async function consentEndpoint<Result>(
 	const consent: Omit<OAuthConsent<Scope[]>, "id"> = {
 		clientId: clientId,
 		userId: session?.user.id!,
-		scopes: requestedScopes ?? originalRequestedScopes,
+		scopes: consentScopes,
 		requestedUserInfoClaims: acceptedUserInfoClaims,
 		createdAt: new Date(iat * 1000),
 		updatedAt: new Date(iat * 1000),
 		resources: resource.length ? resource : undefined,
 		referenceId,
 	};
-	foundConsent?.id
-		? await ctx.context.adapter.update({
-				model: "oauthConsent",
-				where: [
-					{
-						field: "id",
-						value: foundConsent.id,
+	const storeConsent = async (
+		adapter: Pick<typeof ctx.context.adapter, "create" | "update">,
+	) => {
+		foundConsent?.id
+			? await adapter.update({
+					model: "oauthConsent",
+					where: [
+						{
+							field: "id",
+							value: foundConsent.id,
+						},
+					],
+					update: {
+						resources: consent.resources,
+						scopes: consent.scopes,
+						requestedUserInfoClaims: consent.requestedUserInfoClaims,
+						updatedAt: new Date(iat * 1000),
 					},
-				],
-				update: {
-					resources: consent.resources,
-					scopes: consent.scopes,
-					requestedUserInfoClaims: consent.requestedUserInfoClaims,
-					updatedAt: new Date(iat * 1000),
-				},
-			})
-		: await ctx.context.adapter.create({
-				model: "oauthConsent",
-				data: {
-					...consent,
-					scopes: consent.scopes,
-				},
-			});
+				})
+			: await adapter.create({
+					model: "oauthConsent",
+					data: {
+						...consent,
+						scopes: consent.scopes,
+					},
+				});
+	};
+	if (clientReference && pendingClient) {
+		// The owner and the consent succeed or fail together.
+		await runWithTransaction(ctx.context.adapter, async () => {
+			const adapter = await getCurrentAdapter(ctx.context.adapter);
+			await storeClientApproval(
+				adapter,
+				opts,
+				pendingClient.clientId,
+				clientReference,
+			);
+			await storeConsent(adapter);
+		});
+	} else {
+		await storeConsent(ctx.context.adapter);
+	}
 
 	// Return authorization code
 	if (requestedScopes) {

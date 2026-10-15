@@ -391,6 +391,7 @@ describe("validateCimdMetadata", () => {
 	it("rejects recognized credential, privilege, and server-control fields", () => {
 		for (const field of [
 			"disabled",
+			"pending",
 			"skip_consent",
 			"enable_end_session",
 			"require_pkce",

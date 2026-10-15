@@ -439,7 +439,11 @@ export async function registerEndpoint(
 		response_types: droppedAuthorizationCode ? undefined : body.response_types,
 	};
 
-	if (!session && !isTokenAuthorized) {
+	// Open registration identifies nobody. With approval configured, the client
+	// waits for a consenting user, so it may also request client_credentials.
+	const awaitsApproval =
+		!session && !isTokenAuthorized && Boolean(opts.approvePendingClient);
+	if (!session && !isTokenAuthorized && !awaitsApproval) {
 		if (registrationMetadata.grant_types?.includes("client_credentials")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
@@ -473,6 +477,7 @@ export async function registerEndpoint(
 		userId: referenceId ? undefined : session?.session.userId,
 		referenceId,
 		requestedResources,
+		pending: awaitsApproval,
 	});
 	ctx.setStatus(201);
 	return ctx.json(response);
@@ -864,6 +869,8 @@ export type CreateOAuthClientRegistrationInput =
 			registrationSource: "dynamic";
 			/** Client-requested DCR resources resolved and linked by the operation. */
 			requestedResources?: string[];
+			/** Stores the client as waiting for approval at consent. */
+			pending?: boolean;
 	  })
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
@@ -1039,12 +1046,11 @@ async function persistOAuthClientRegistration(
 		user_id: owner?.referenceId ? undefined : owner?.userId,
 		reference_id: owner?.referenceId,
 	});
+	// A discovery refresh leaves the stored ceiling alone (see the update below).
 	schema.clientCredentialsScopes =
-		input.registrationSource === "clientMetadataDocument"
-			? (input.existingClient?.clientCredentialsScopes ?? [])
-			: input.registrationSource === "managed"
-				? (input.clientCredentialsScopes ?? [])
-				: [];
+		input.registrationSource === "managed"
+			? (input.clientCredentialsScopes ?? [])
+			: [];
 	schema.clientDiscoveryId =
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
@@ -1053,6 +1059,28 @@ async function persistOAuthClientRegistration(
 		clientId,
 		body.redirect_uris,
 	);
+	// Only open registration and a first discovery create a pending client.
+	// Refreshing a discovered client never changes its approval state.
+	const startsPending =
+		input.registrationSource === "dynamic"
+			? Boolean(input.pending)
+			: input.registrationSource === "clientMetadataDocument" &&
+				!input.existingClient &&
+				Boolean(opts.approvePendingClient);
+	// Approval happens at consent, which only the authorization code flow
+	// reaches. Without it the client could never leave the pending state.
+	if (
+		startsPending &&
+		!(schema.grantTypes ?? ["authorization_code"]).includes(
+			"authorization_code",
+		)
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"a client awaiting approval must register the authorization_code grant",
+		});
+	}
 	if (
 		input.registrationSource === "clientMetadataDocument" &&
 		body.application_type === undefined
@@ -1115,6 +1143,10 @@ async function persistOAuthClientRegistration(
 								: null;
 					}
 				}
+				// Server-owned fields (disabled, consent and logout settings, the
+				// ceiling) can change while this refresh fetches metadata, so the
+				// refresh never writes them.
+				const { clientCredentialsScopes: _ceiling, ...refreshed } = schema;
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -1125,11 +1157,8 @@ async function persistOAuthClientRegistration(
 						},
 					],
 					update: {
-						...schema,
+						...refreshed,
 						metadata,
-						disabled: existingClient.disabled,
-						skipConsent: existingClient.skipConsent,
-						enableEndSession: existingClient.enableEndSession,
 						// A client stored without a sector keeps the host-derived one.
 						sectorIdentifier: existingClient.sectorIdentifier
 							? schema.sectorIdentifier
@@ -1151,6 +1180,7 @@ async function persistOAuthClientRegistration(
 						model: clientModel,
 						data: {
 							...schema,
+							...(startsPending ? { pending: true } : {}),
 							createdAt: new Date(iat * 1000),
 							updatedAt: new Date(iat * 1000),
 						},
@@ -1642,6 +1672,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		clientId,
 		clientSecret,
 		disabled,
+		pending,
 		scopes,
 		// Recommended client data
 		userId,
@@ -1737,6 +1768,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		application_type: applicationType ?? undefined,
 		// Not Part of RFC7591 Spec
 		disabled: disabled ?? undefined,
+		pending: pending ?? undefined,
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
 		require_pkce: requirePKCE ?? undefined,
