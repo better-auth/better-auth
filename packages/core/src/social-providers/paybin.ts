@@ -10,7 +10,7 @@ import {
 
 export interface PaybinProfile {
 	sub: string;
-	email: string;
+	email?: string;
 	email_verified?: boolean | undefined;
 	name?: string | undefined;
 	preferred_username?: string | undefined;
