@@ -3,7 +3,7 @@ import type { VkProfile } from "./vk";
 import { vk } from "./vk";
 
 /**
- * @see https://github.com/VKCOM/vkid-web-sdk/blob/master/src/auth/types.ts
+ * @see https://github.com/VKCOM/vkid-web-sdk/blob/8ff76cfe59ea72e370c4c6c3b40712ecfd43aadd/src/auth/types.ts#L163-L177
  */
 it("accepts VK phone numbers as strings", async () => {
 	const profile = {
