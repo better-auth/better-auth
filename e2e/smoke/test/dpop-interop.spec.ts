@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { DatabaseSync } from "node:sqlite";
+import type { TestContext } from "node:test";
 import { describe, it } from "node:test";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthOptions } from "better-auth";
@@ -52,11 +53,13 @@ const setups: ServerSetup[] = [
 
 const redirectUri = "https://client.example.test/callback";
 
-async function startAuthServer(setup: ServerSetup) {
+async function startAuthServer(setup: ServerSetup, t: TestContext) {
 	// Listen before building auth, which needs the port for `baseURL`.
 	let handler: ReturnType<typeof toNodeHandler> | undefined;
 	const server = createServer((req, res) => handler!(req, res));
 	server.listen(0);
+	// Registered now, so a setup failure below still closes the server.
+	t.after(() => server.close());
 	await once(server, "listening");
 	const port = (server.address() as AddressInfo).port;
 
@@ -90,7 +93,7 @@ async function startAuthServer(setup: ServerSetup) {
 	const proxyFetch = (url: string, init: RequestInit) =>
 		fetch(toServerUrl(url), init);
 
-	return { auth, server, publicOrigin, toServerUrl, proxyFetch };
+	return { auth, publicOrigin, toServerUrl, proxyFetch };
 }
 
 describe("DPoP interop with an independent OAuth client", () => {
@@ -98,9 +101,8 @@ describe("DPoP interop with an independent OAuth client", () => {
 		it(`accepts the client's DPoP proofs at the token and UserInfo endpoints: ${setup.name}`, {
 			todo: setup.todo,
 		}, async (t) => {
-			const { auth, server, publicOrigin, toServerUrl, proxyFetch } =
-				await startAuthServer(setup);
-			t.after(() => server.close());
+			const { auth, publicOrigin, toServerUrl, proxyFetch } =
+				await startAuthServer(setup, t);
 
 			const signUp = await auth.api.signUpEmail({
 				body: {
