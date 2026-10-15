@@ -1679,11 +1679,9 @@ describe("oauth token - refresh_token", async () => {
 
 				expect(rotated.error).toBeNull();
 				expect(rotated.data?.refresh_token).toBeDefined();
-				expect(revoked.error).toMatchObject({
-					status: 400,
-					error: "invalid_request",
-				});
-				// The losing revoke tears down the family, including the new token.
+				// RFC 7009 §2.2: the losing revoke still returns 200 and tears down
+				// the family, including the new token.
+				expect(revoked.error).toBeNull();
 				expect(
 					(await refresh(rotated.data!.refresh_token!)).error,
 				).toMatchObject({ error: "invalid_grant" });

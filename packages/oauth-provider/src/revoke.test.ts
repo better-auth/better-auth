@@ -211,25 +211,6 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
-		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.refresh_token!,
-				token_type_hint: "access_token",
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
-				},
-			},
-		);
-		expect(revocation.error?.status).toBe(400);
-	});
-
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
@@ -248,25 +229,6 @@ describe("oauth revoke", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
-	});
-
-	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
-		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.access_token!,
-				token_type_hint: "refresh_token",
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
-				},
-			},
-		);
-		expect(revocation.error?.status).toBe(400);
 	});
 
 	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
@@ -307,6 +269,82 @@ describe("oauth revoke", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+	 */
+	describe("RFC 7009 token handling", () => {
+		function revoke(token: string, token_type_hint?: string) {
+			return client.oauth2.revoke(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token,
+					token_type_hint,
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+		}
+
+		async function isActive(token: string) {
+			const introspection = await client.oauth2.introspect(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token,
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			return introspection.data?.active;
+		}
+
+		it("revokes a refresh_token sent with token_type_hint access_token", async () => {
+			const tokens = await getTokens();
+			const refreshToken = tokens.data?.refresh_token!;
+			expect(await isActive(refreshToken)).toBe(true);
+
+			const revocation = await revoke(refreshToken, "access_token");
+			expect(revocation.error).toBe(null);
+			expect(await isActive(refreshToken)).toBe(false);
+		});
+
+		it("revokes an opaque access_token sent with token_type_hint refresh_token", async () => {
+			const tokens = await getTokens();
+			const accessToken = tokens.data?.access_token!;
+			expect(await isActive(accessToken)).toBe(true);
+
+			const revocation = await revoke(accessToken, "refresh_token");
+			expect(revocation.error).toBe(null);
+			expect(await isActive(accessToken)).toBe(false);
+		});
+
+		it.each([undefined, "access_token", "refresh_token"])(
+			"returns 200 for an unknown token (token_type_hint %s)",
+			async (hint) => {
+				const revocation = await revoke("unknown-token", hint);
+				expect(revocation.error).toBe(null);
+			},
+		);
+
+		it("returns 200 when revoking an already revoked refresh_token", async () => {
+			const tokens = await getTokens();
+			const refreshToken = tokens.data?.refresh_token!;
+			expect((await revoke(refreshToken, "refresh_token")).error).toBe(null);
+			expect((await revoke(refreshToken, "refresh_token")).error).toBe(null);
+			expect(await isActive(refreshToken)).toBe(false);
+		});
 	});
 
 	it("should pass verification without token_type_hint and sent refresh_token", async () => {
