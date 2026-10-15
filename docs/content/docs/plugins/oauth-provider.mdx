@@ -1724,14 +1724,20 @@ Token issuance, expiration, and revocation stay in your application because RFC 
 
 #### Enrolling Agents and Devices
 
-Use this when software of yours runs outside your service and must call your API for an organization on its own: a sync or monitoring agent on a customer's server, a CI runner, a card reader or kiosk, or a plugin on a self-hosted platform. Each install gets its own client, owned by the organization, and nobody copies a secret:
+Use this when software of yours runs outside your service and must call your API for an organization on its own: a sync or monitoring agent on a customer's server, a plugin on a self-hosted platform, or a signage screen. Each install gets its own client, owned by the organization, and nobody copies a secret:
 
 1. The install starts a [device authorization](#device-code-grant) and shows the user code.
 2. An organization administrator approves it on your consent page, after picking the organization on your [post-login page](#post-login-screen).
 3. The install receives a short-lived registration token and uses it as the initial access token to register its own client.
 4. The client uses `client_credentials` from then on, even if the administrator leaves the organization.
 
-For a tool each person runs for themselves, use the device code grant directly instead. For an app that serves several organizations, register one client.
+Approval creates a credential that acts for the whole organization and outlives the approver, so a phished approval or a stolen key costs more than a stolen user token. Don't use this flow for:
+
+* A tool each person runs for themselves: use the device code grant directly.
+* An app that serves several organizations: register one client.
+* AI agents acting for users: give them each user's own tokens.
+* Machines that run untrusted code, such as CI runners, or devices in public places, such as payment terminals.
+* High-value scopes, such as admin or payment access. Have an administrator issue the initial access token from your app instead.
 
 ```ts title="auth.ts"
 import { createLocalJWKSet, jwtVerify } from "jose"
@@ -1747,6 +1753,8 @@ export const auth = betterAuth({
       loginPage: "/sign-in",
       consentPage: "/consent",
       allowDynamicClientRegistration: true,
+      // Deleting a client does not invalidate tokens it already holds
+      m2mAccessTokenExpiresIn: 600,
       scopes: ["openid", "connector:register", "invoices:write"],
       // Registration tokens only work here and expire after 5 minutes
       resources: [{
@@ -1812,23 +1820,28 @@ const { access_token } = await pollToken({
   resource: REGISTRATION_RESOURCE,
 })
 
+// Register a public key; the private key never leaves the install
+const { publicKey, privateKey } = await generateKeyPair("RS256", { extractable: true })
 const client = await post("/api/auth/oauth2/register", {
   client_name: `Connector at ${INSTANCE_URL}`,
   redirect_uris: [`${INSTANCE_URL}/oauth/callback`],
-  token_endpoint_auth_method: "client_secret_post",
+  token_endpoint_auth_method: "private_key_jwt",
+  jwks: { keys: [{ ...(await exportJWK(publicKey)), kid: "install-1", alg: "RS256" }] },
   grant_types: ["client_credentials"],
   response_types: [],
 }, { authorization: `Bearer ${access_token}` })
-saveCredentials(client.client_id, client.client_secret)
+saveCredentials(client.client_id, privateKey)
 ```
 
 Keep these protections:
 
+* **Say what approval does.** Your consent page must state that approving creates a credential that acts for the organization with the listed scopes and keeps working after the approver leaves.
 * **Approved scopes only.** Take machine scopes from the token's `scope`, never from the registration request.
 * **Single use.** Reject a registration token whose `jti` was already used.
 * **Recheck the administrator.** Their role can change between approval and registration.
+* **Tell the organization.** Notify its administrators of each new enrollment, and record who approved it (the token's `sub`).
 * **Device code phishing.** Every install shares the installer client, so anyone can start a flow and send an administrator its code ([RFC 8628 §5.4](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)). Show the user code on your consent page and tell administrators to approve only a code their own install displays.
-* **Copied installs.** A copy, such as a staging clone of the install's database, carries the original client's secret. Make the copy discard it and enroll again.
+* **Copied installs.** A copy, such as a staging clone of the install's database, carries the original client's key. Make the copy discard it and enroll again.
 
 #### Dynamic Client Registration Expiration
 
