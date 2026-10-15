@@ -582,7 +582,12 @@ export async function normalizeClientAuthenticationParameters(
 		const contentType =
 			request.headers.get("content-type")?.toLowerCase() ?? "";
 		if (contentType.includes("application/x-www-form-urlencoded")) {
-			const params = new URLSearchParams(await request.clone().text());
+			// Decode the raw bytes rather than calling `.text()` so workerd
+			// does not log its "does not appear to be text" warning for
+			// form-urlencoded bodies; TextDecoder produces the same string.
+			const params = new URLSearchParams(
+				new TextDecoder().decode(await request.clone().arrayBuffer()),
+			);
 			const clientIds = params
 				.getAll("client_id")
 				.filter((value) => value.length > 0);
