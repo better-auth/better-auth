@@ -459,7 +459,7 @@ describe("cognito provider", () => {
 });
 
 /**
- * @see https://github.com/linear/linear/blob/master/packages/sdk/src/schema.graphql
+ * @see https://github.com/linear/linear/blob/a983882e6ca94ad3d271d61273a50b1d660d1fdb/packages/sdk/src/schema.graphql#L49313-L49317
  * @see https://linear.app/developers/graphql
  */
 describe("linear viewer avatars", () => {
