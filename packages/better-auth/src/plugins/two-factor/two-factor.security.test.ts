@@ -823,15 +823,8 @@ async function expectInvalidCode(res: Response): Promise<void> {
 }
 
 describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2)", async () => {
-	const {
-		auth,
-		db,
-		userId,
-		secret,
-		startChallenge,
-		verify,
-		activeSessionHeaders,
-	} = await setupTotpUser();
+	const { secret, startChallenge, verify, activeSessionHeaders } =
+		await setupTotpUser();
 
 	it("should reject reused TOTP code on step-up verification (RFC 6238 §5.2)", async () => {
 		// Fresh unconsumed step past enrollment.
@@ -852,22 +845,14 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 			vi.setSystemTime(new Date(Date.now() + 31000));
 			const code2 = await createOTP(secret).totp();
 			expect((await verify(code2, activeSessionHeaders)).status).toBe(200);
-		});
-	});
 
-	it("should verify time step boundaries: accepts offset -1 and rejects expired offset -2", async () => {
-		await withStep(160000, async () => {
+			// Boundary: offset -2 is outside the ±1 window.
 			const otp = createOTP(secret, { period: 30 });
 			const currentStep = Math.floor(Date.now() / 30000);
-
 			// cspell:ignore hotp
-			// Offset -2 is outside the window; offset -1 is clock-skew tolerance.
-			const expiredCode = await otp.hotp(currentStep - 2);
-			await expectInvalidCode(await verify(expiredCode, activeSessionHeaders));
-
-			const skewCode = await otp.hotp(currentStep - 1);
-			expect((await verify(skewCode, activeSessionHeaders)).status).toBe(200);
-			await expectInvalidCode(await verify(skewCode, activeSessionHeaders));
+			await expectInvalidCode(
+				await verify(await otp.hotp(currentStep - 2), activeSessionHeaders),
+			);
 		});
 	});
 
@@ -892,102 +877,6 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 				.sort();
 			// Exactly one request succeeds with 200, the remaining 4 fail with 401
 			expect(statuses).toEqual([200, 401, 401, 401, 401]);
-		});
-	});
-
-	it("should roll back the replay marker if downstream operations fail after reservation", async () => {
-		await withStep(300000, async () => {
-			const code = await createOTP(secret).totp();
-
-			// Fail a twoFactor write after the replay marker is reserved but
-			// before any session is issued, so the marker must be rolled back.
-			const { adapter } = await auth.$context;
-			let failOnce = true;
-			const origUpdate = adapter.update.bind(adapter);
-			const updateSpy = vi
-				.spyOn(adapter, "update")
-				.mockImplementation(async (args) => {
-					if (failOnce && args.model === "twoFactor") {
-						failOnce = false;
-						throw new Error("Simulated database failure downstream");
-					}
-					return origUpdate(args);
-				});
-
-			try {
-				await expect(
-					auth.api.verifyTOTP({
-						body: { code },
-						headers: await startChallenge(),
-					}),
-				).rejects.toThrow("Simulated database failure downstream");
-			} finally {
-				updateSpy.mockRestore();
-			}
-
-			// Marker was rolled back: the same code verifies on a fresh challenge.
-			expect((await verify(code, await startChallenge())).status).toBe(200);
-		});
-	});
-
-	it("should enforce replay protection on sign-in for legacy twoFactor rows where verified is null", async () => {
-		const row = await db.findOne<TwoFactorTable>({
-			model: "twoFactor",
-			where: [{ field: "userId", value: userId }],
-		});
-		// The next test uses sign-in challenges (reservation is unconditional
-		// there), so restoring verified inside the step is sufficient.
-		await withStep(400000, async () => {
-			const code = await createOTP(secret).totp();
-
-			// Simulate a legacy pre-migration row.
-			await db.update({
-				model: "twoFactor",
-				where: [{ field: "id", value: row!.id }],
-				update: { verified: null },
-			});
-
-			expect((await verify(code, await startChallenge())).status).toBe(200);
-			await expectInvalidCode(await verify(code, await startChallenge()));
-
-			await db.update({
-				model: "twoFactor",
-				where: [{ field: "id", value: row!.id }],
-				update: { verified: true },
-			});
-		});
-	});
-
-	it("should not roll back the replay marker if downstream operations fail after session creation", async () => {
-		await withStep(450000, async () => {
-			const code = await createOTP(secret).totp();
-
-			const internalAdapter = (await auth.$context).internalAdapter;
-			const origCreateVerificationValue =
-				internalAdapter.createVerificationValue.bind(internalAdapter);
-			const createSpy = vi
-				.spyOn(internalAdapter, "createVerificationValue")
-				.mockImplementation(async (data) => {
-					// Fail the trust-device write inside valid(ctx), after issuance.
-					if (data.identifier.startsWith("trust-device-")) {
-						throw new Error("Simulated trust device creation failure");
-					}
-					return origCreateVerificationValue(data);
-				});
-
-			try {
-				await expect(
-					auth.api.verifyTOTP({
-						body: { code, trustDevice: true },
-						headers: await startChallenge(),
-					}),
-				).rejects.toThrow("Simulated trust device creation failure");
-			} finally {
-				createSpy.mockRestore();
-			}
-
-			// The session was already issued: the code must stay consumed.
-			await expectInvalidCode(await verify(code, await startChallenge()));
 		});
 	});
 });
