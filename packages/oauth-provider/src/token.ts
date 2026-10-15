@@ -1603,7 +1603,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (pkceUsedInAuth && !pkceUsedInToken) {
 			// PKCE was used in authorization but not in token exchange
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier required because PKCE was used in authorization",
 				error: "invalid_request",
@@ -1612,7 +1612,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (!pkceUsedInAuth && pkceUsedInToken) {
 			// PKCE was not used in authorization but verifier provided
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier provided but PKCE was not used in authorization",
 				error: "invalid_request",
@@ -1626,9 +1626,9 @@ async function handleAuthorizationCodeGrant(
 				: undefined;
 
 		if (challenge !== verificationValue.query?.code_challenge) {
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description: "code verification failed",
-				error: "invalid_request",
+				error: "invalid_grant",
 			});
 		}
 	}
