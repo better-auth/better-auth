@@ -851,6 +851,34 @@ describe("one-tap prompt notifications", () => {
 		getDismissedReason: vi.fn(),
 	});
 
+	const runPrompt = async (
+		moment: ReturnType<typeof notification>,
+		fedCM?: boolean,
+	) => {
+		const { client } = await getTestInstance(
+			{ plugins: [oneTap()] },
+			{
+				clientOptions: {
+					plugins: [
+						oneTapClient({
+							clientId: "test-client",
+							promptOptions: { fedCM, baseDelay: 0 },
+						}),
+					],
+				},
+			},
+		);
+		const prompt = vi.fn((listener: (n: unknown) => void) => listener(moment));
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			google: { accounts: { id: { initialize: vi.fn(), prompt } } },
+		});
+		const onPromptNotification = vi.fn();
+		await client.oneTap({ onPromptNotification });
+		return { prompt, onPromptNotification };
+	};
+
 	afterEach(() => {
 		vi.unstubAllGlobals();
 	});
@@ -861,43 +889,23 @@ describe("one-tap prompt notifications", () => {
 	])(
 		"ends a skipped prompt without unsupported calls (%s)",
 		async (_, fedCM) => {
-			const { client } = await getTestInstance(
-				{ plugins: [oneTap()] },
-				{
-					clientOptions: {
-						plugins: [
-							oneTapClient({
-								clientId: "test-client",
-								promptOptions: { fedCM, baseDelay: 0 },
-							}),
-						],
-					},
-				},
-			);
-			const notifications = [notification("display"), notification("skipped")];
-			const prompt = vi.fn((listener: (n: unknown) => void) => {
-				for (const n of notifications) listener(n);
-			});
-			vi.stubGlobal("window", {
-				document: {},
-				googleScriptInitialized: true,
-				google: { accounts: { id: { initialize: vi.fn(), prompt } } },
-			});
-			const onPromptNotification = vi.fn();
-
-			await client.oneTap({ onPromptNotification });
+			const skipped = notification("skipped");
+			const { prompt, onPromptNotification } = await runPrompt(skipped, fedCM);
 
 			expect(prompt).toHaveBeenCalledTimes(1);
-			expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(
-				notifications[1],
-			);
-			for (const n of notifications) {
-				expect(n.isDisplayMoment).not.toHaveBeenCalled();
-				expect(n.isDisplayed).not.toHaveBeenCalled();
-				expect(n.isNotDisplayed).not.toHaveBeenCalled();
-				expect(n.getNotDisplayedReason).not.toHaveBeenCalled();
-				expect(n.getSkippedReason).not.toHaveBeenCalled();
-			}
+			expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(skipped);
+			expect(skipped.getSkippedReason).not.toHaveBeenCalled();
+			expect(skipped.isDisplayMoment).not.toHaveBeenCalled();
+			expect(skipped.isDisplayed).not.toHaveBeenCalled();
+			expect(skipped.isNotDisplayed).not.toHaveBeenCalled();
+			expect(skipped.getNotDisplayedReason).not.toHaveBeenCalled();
 		},
 	);
+
+	it("ends a prompt that a browser without FedCM did not display", async () => {
+		const notDisplayed = notification("display");
+		const { onPromptNotification } = await runPrompt(notDisplayed);
+
+		expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(notDisplayed);
+	});
 });

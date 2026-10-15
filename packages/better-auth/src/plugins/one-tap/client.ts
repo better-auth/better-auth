@@ -391,6 +391,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 										// FedCM gives no skip reason, and Google's cooldown blocks a retry.
 										opts?.onPromptNotification?.(notification);
 										resolve();
+									} else if (notification.isNotDisplayed?.()) {
+										// Only browsers without FedCM send display moments.
+										opts?.onPromptNotification?.(notification);
+										resolve();
 									}
 								});
 							};
