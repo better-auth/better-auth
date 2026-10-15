@@ -44,31 +44,32 @@ describe("check", () => {
 	it.for([
 		{ command: "check", args: ["check"] },
 		{ command: "check schema", args: ["check", "schema"] },
-	])("$command exits with status 1 when the schema does not match", async ({
-		args,
-	}) => {
-		const result = execute(
-			process.execPath,
-			[
-				cliPath,
-				...args,
-				"--cwd",
-				path.dirname(configPath),
-				"--config",
-				configPath,
-			],
-			{
-				cwd: path.dirname(configPath),
-				env: {
-					...process.env,
-					BETTER_AUTH_TELEMETRY_DISABLED: "true",
+	])(
+		"$command exits with status 1 when the schema does not match",
+		async ({ args }) => {
+			const result = execute(
+				process.execPath,
+				[
+					cliPath,
+					...args,
+					"--cwd",
+					path.dirname(configPath),
+					"--config",
+					configPath,
+				],
+				{
+					cwd: path.dirname(configPath),
+					env: {
+						...process.env,
+						BETTER_AUTH_TELEMETRY_DISABLED: "true",
+					},
 				},
-			},
-		);
+			);
 
-		await expect(result).rejects.toMatchObject({
-			code: 1,
-			stderr: expect.stringContaining("Database schema mismatch"),
-		});
-	});
+			await expect(result).rejects.toMatchObject({
+				code: 1,
+				stderr: expect.stringContaining("Database schema mismatch"),
+			});
+		},
+	);
 });
