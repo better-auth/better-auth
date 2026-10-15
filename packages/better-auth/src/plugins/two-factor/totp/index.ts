@@ -326,10 +326,10 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					status = false;
 				} else if (shouldReserve) {
 					const expiresAt = new Date((matchedStep + 2) * opts.period * 1000);
-					// Key the replay tombstone by time step, not by code: each step
-					// is unique, so expired markers never need pre-reserve cleanup
-					// and adjacent-step code collisions cannot false-block.
+					// Step-keyed tombstone: steps are unique, so no pre-reserve
+					// cleanup is needed and adjacent-step collisions cannot false-block.
 					const replayId = `totp-used:${twoFactor.id}:${matchedStep}`;
+					let reserved = false;
 					if (
 						ctx.context.secondaryStorage &&
 						!ctx.context.options.verification?.storeInDatabase
@@ -338,35 +338,28 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 							1,
 							Math.ceil((expiresAt.getTime() - Date.now()) / 1000),
 						);
-						const count = await ctx.context.secondaryStorage.increment(
-							replayId,
-							ttlSeconds,
-						);
-						if (count === 1) {
-							status = true;
-							replayIdToClean = replayId;
-						}
+						reserved =
+							(await ctx.context.secondaryStorage.increment(
+								replayId,
+								ttlSeconds,
+							)) === 1;
 					} else {
-						// Single atomic first-writer-wins gate (no read-modify-write),
-						// so concurrent same-code requests cannot both succeed. A
-						// `false` return means the step was already consumed (replay).
-						const reserved =
+						// Atomic first-writer-wins gate (no read-modify-write):
+						// losers observe the consumed step as INVALID_CODE.
+						reserved =
 							await ctx.context.internalAdapter.reserveVerificationValue({
 								identifier: replayId,
 								value: "used",
 								expiresAt,
 							});
-						status = reserved;
-						if (reserved) {
-							replayIdToClean = replayId;
-						}
+					}
+					status = reserved;
+					if (reserved) {
+						replayIdToClean = replayId;
 					}
 				} else {
-					// First enrollment verification claims no replay marker: the factor
-					// is not verified yet, so there is no prior consumption to replay
-					// against. Single-use is enforced from the next verification on -
-					// the row is now verified, so any repeat reserves the step tombstone
-					// above and is rejected as INVALID_CODE.
+					// Enrollment verification claims no marker (nothing consumed yet);
+					// single-use applies from the next verification on.
 					status = true;
 				}
 			} catch (error) {
@@ -388,10 +381,8 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
 				}
 
-				// Enrollment mode: TOTP row exists but hasn't been verified yet.
-				// This covers fresh TOTP setup (twoFactorEnabled=false),
-				// adding TOTP to an OTP-only account (twoFactorEnabled=true),
-				// and pre-migration rows where verified is null/undefined.
+				// Enrollment: fresh setup, OTP-only accounts adding TOTP, and
+				// pre-migration rows with verified null/undefined.
 				if (twoFactor.verified !== true) {
 					if (!user.twoFactorEnabled) {
 						// session.session is guaranteed non-null here: the sign-in guard
@@ -417,20 +408,16 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 							activeSession.token,
 						);
 					}
-					// Mark verified only after all session operations succeed.
-					// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
-					// a partial failure cannot leave verified=true with twoFactorEnabled=false.
+					// Mark verified only after session ops succeed: retry-safe, and a
+					// partial failure cannot leave verified=true with twoFactorEnabled=false.
 					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: { verified: true },
 						where: [{ field: "id", value: twoFactor.id }],
 					});
 				}
-				// Once session issuance begins, the replay marker must be kept even
-				// if a downstream failure occurs (e.g. trust-device write after the
-				// session was created): rolling back would let the same code mint a
-				// second session. Rollback stays available for pre-session failures
-				// (enrollment updates above), which cannot have issued a session.
+				// Post-session failures keep the marker (rollback would mint a second
+				// session); pre-session failures roll back via replayIdToClean.
 				validStarted = true;
 				const result = await valid(ctx);
 				replayIdToClean = null;

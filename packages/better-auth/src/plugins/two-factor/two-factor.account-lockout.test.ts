@@ -139,9 +139,6 @@ async function setup(
 		});
 	}
 	function correctTotp(stepOffset = 0) {
-		if (stepOffset === 0) {
-			return createOTP(secret).totp();
-		}
 		const currentStep = Math.floor(Date.now() / 30000);
 		return createOTP(secret).hotp(currentStep + stepOffset);
 	}
