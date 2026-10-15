@@ -473,6 +473,9 @@ genericOAuth({
       clientSecret: process.env.CUSTOM_CLIENT_SECRET,
       authorizationUrl: "https://provider.example.com/oauth/authorize",
       // No tokenUrl: exchange and refresh are both custom.
+      // Fallback expiry for hook results that omit accessTokenExpiresAt,
+      // so getAccessToken keeps tracking expiry and auto-refresh working.
+      accessTokenExpiresIn: 3600,
       getToken: async ({ code, redirectURI }) => {
         // ... custom exchange, see above
       },
@@ -509,7 +512,12 @@ genericOAuth({
         return {
           accessToken: data.access_token,
           refreshToken: data.refresh_token,
-          // May be omitted: accessTokenExpiresIn applies as a fallback.
+          // Forward the provider's expiry when present; when omitted,
+          // accessTokenExpiresIn applies as a fallback so automatic
+          // refresh keeps working.
+          accessTokenExpiresAt: data.expires_in
+            ? new Date(Date.now() + data.expires_in * 1000)
+            : undefined,
         };
       },
     },

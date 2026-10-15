@@ -1075,9 +1075,13 @@ describe("oauth2", async () => {
 								name: "Bad Hook User",
 								emailVerified: true,
 							}),
-							refreshToken: async () => ({
-								refreshToken: "bad-hook-next",
-							}),
+							// Intentionally omits accessToken (cast past the
+							// compile-time requirement) to exercise the runtime
+							// fail-closed guard.
+							refreshToken: async () =>
+								({
+									refreshToken: "bad-hook-next",
+								}) as unknown as { accessToken: string },
 						},
 					],
 				}),

@@ -183,8 +183,10 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * to pair with `getToken`.
 	 *
 	 * Receives the stored refresh token and the optional refresh context, and
-	 * must return the new tokens with a string `accessToken` — anything else
-	 * fails closed. `accessTokenExpiresIn` fallback is applied to the result
+	 * must return the new tokens with a string `accessToken` — the return
+	 * type requires it so omitting it fails at compile time, and anything
+	 * else still fails closed at runtime. `accessTokenExpiresIn` fallback
+	 * is applied to the result
 	 * by the caller, so the hook may omit `accessTokenExpiresAt` when the
 	 * provider gives no expiry signal.
 	 *
@@ -216,7 +218,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 		| ((
 				refreshToken: string,
 				ctx?: OAuthRefreshContext,
-		  ) => Awaitable<OAuth2Tokens>)
+		  ) => Awaitable<OAuth2Tokens & { accessToken: string }>)
 		| undefined;
 	/**
 	 * Custom function to fetch user info.

@@ -487,7 +487,17 @@ export const genericOAuth = <const ID extends string>(
 					refreshCtx?: OAuthRefreshContext,
 				): Promise<OAuth2Tokens> {
 					if (c.refreshToken) {
-						const tokens = await c.refreshToken(refreshToken, refreshCtx);
+						// Strip the endpoint ctx down to the documented
+						// { headers, request } contract before handing it to the
+						// hook, so endpoint internals/secrets can't leak via
+						// serialize/log of the hook argument.
+						const sanitizedCtx: OAuthRefreshContext | undefined = refreshCtx
+							? {
+									headers: refreshCtx.headers,
+									request: refreshCtx.request,
+								}
+							: undefined;
+						const tokens = await c.refreshToken(refreshToken, sanitizedCtx);
 						if (
 							!tokens?.accessToken ||
 							typeof tokens.accessToken !== "string"
