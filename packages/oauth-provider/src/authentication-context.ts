@@ -1,13 +1,92 @@
 import { logger } from "@better-auth/core/env";
+import type { Session, User } from "better-auth/types";
+import { APIError } from "better-call";
+import { getRequestedAcrValues } from "./claims-request";
+import type {
+	OAuthAuthenticationContext,
+	OAuthInteractionQuery,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "./types";
 
 /**
  * OIDC Core Authentication Context Class Reference for authentication that
  * does not meet ISO/IEC 29115 level 1.
  *
- * Better Auth does not currently evaluate a stronger ACR policy, so discovery
- * and ID tokens must not claim an assurance profile such as InCommon bronze.
+ * Better Auth does not evaluate a stronger ACR policy on its own, so without an
+ * `authenticationContext` resolver, discovery and ID tokens must not claim an
+ * assurance profile such as InCommon bronze.
  */
 export const LEVEL_0_ACR = "0";
+
+/** The ACR values the provider may assert, advertised in discovery. */
+export function getAcrValuesSupported(opts: OAuthOptions<Scope[]>) {
+	return opts.authenticationContext?.acrValuesSupported ?? [LEVEL_0_ACR];
+}
+
+function invalidAuthenticationContext(description: string): never {
+	throw new APIError("INTERNAL_SERVER_ERROR", {
+		error: "server_error",
+		error_description: `authenticationContext.resolve ${description}`,
+	});
+}
+
+/**
+ * Runs the configured `authenticationContext.resolve` for an approval and
+ * validates its result. Returns an empty context, which ID tokens report as
+ * `acr: "0"`, when no resolver is configured or no ID token can be issued.
+ * Invalid results throw an `APIError` with `server_error`.
+ */
+export async function resolveAuthenticationContext(
+	opts: OAuthOptions<Scope[]>,
+	info: {
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		headers: Headers;
+		query: Pick<OAuthInteractionQuery, "claims" | "acr_values">;
+	},
+): Promise<OAuthAuthenticationContext> {
+	const resolve = opts.authenticationContext?.resolve;
+	// acr and amr only reach ID tokens, which need the openid scope.
+	if (!resolve || !info.scopes.includes("openid")) return {};
+	const { query, ...resolveInfo } = info;
+	// The resolver is user code; check the runtime shape, not just the types.
+	const resolved: unknown = await resolve({
+		...resolveInfo,
+		requestedAcrValues: getRequestedAcrValues(query.claims, query.acr_values),
+	});
+	if (
+		resolved !== undefined &&
+		(typeof resolved !== "object" || resolved === null)
+	) {
+		invalidAuthenticationContext("returned a value that is not an object");
+	}
+	// The "0" default must also be in acrValuesSupported.
+	const { acr = LEVEL_0_ACR, amr } = (resolved ?? {}) as Record<
+		string,
+		unknown
+	>;
+	if (typeof acr !== "string") {
+		invalidAuthenticationContext("returned a non-string acr");
+	}
+	if (!getAcrValuesSupported(opts).includes(acr)) {
+		invalidAuthenticationContext(
+			`returned acr "${acr}", which is not in acrValuesSupported`,
+		);
+	}
+	if (amr === undefined) return { acr };
+	// Array.from reads holes as undefined, which every() would skip.
+	if (
+		!Array.isArray(amr) ||
+		!Array.from(amr).every((value) => typeof value === "string")
+	) {
+		invalidAuthenticationContext("returned an amr that is not a string array");
+	}
+	return { acr, amr: amr.length ? (amr as string[]) : undefined };
+}
 
 const RESERVED_ID_TOKEN_CLAIMS = new Set([
 	"iss",

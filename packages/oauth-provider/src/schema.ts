@@ -391,6 +391,14 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			acr: {
+				type: "string",
+				required: false,
+			},
+			amr: {
+				type: "string[]",
+				required: false,
+			},
 			// RFC 7800 `cnf` confirmation that sender-constrains this refresh-token
 			// family (for example DPoP `{ jkt }`). Carried forward on rotation.
 			confirmation: {
