@@ -476,6 +476,7 @@ export const createInternalAdapter = (
 							where: [{ field: "userId", value: userId }],
 							limit: batchSize,
 							offset,
+							sortBy: { field: "id", direction: "asc" },
 						});
 						sessions.push(...batch);
 						if (batch.length < batchSize) break;
@@ -493,6 +494,7 @@ export const createInternalAdapter = (
 							where: [{ field: "userId", value: userId }],
 							limit: batchSize,
 							offset,
+							sortBy: { field: "id", direction: "asc" },
 						});
 						accounts.push(...batch);
 						if (batch.length < batchSize) break;

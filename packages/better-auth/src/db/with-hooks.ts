@@ -404,28 +404,41 @@ export function getWithHooks(
 			return customDeleted ?? 0;
 		}
 
-		let targetWhere = where;
-		if (
-			options?.preloadedEntities !== undefined &&
-			entitiesToDelete.every((e: any) => e && "id" in e)
-		) {
-			targetWhere = [
-				...where,
-				{
-					field: "id",
-					operator: "in",
-					value: entitiesToDelete.map((e: any) => e.id),
-				},
-			];
-		}
-
-		const deleted =
-			!customDeleteFn || customDeleteFn.executeMainFn
-				? await (await getCurrentAdapter(adapter)).deleteMany({
+		let deleted: any = customDeleted;
+		if (!customDeleteFn || customDeleteFn.executeMainFn) {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			if (
+				options?.preloadedEntities !== undefined &&
+				entitiesToDelete.every((e: any) => e && "id" in e)
+			) {
+				const CHUNK_SIZE = 80;
+				let totalDeleted = 0;
+				for (let i = 0; i < entitiesToDelete.length; i += CHUNK_SIZE) {
+					const chunk = entitiesToDelete.slice(i, i + CHUNK_SIZE);
+					const chunkWhere: Where[] = [
+						...where,
+						{
+							field: "id",
+							operator: "in",
+							value: chunk.map((e: any) => e.id),
+						},
+					];
+					const count = await currentAdapter.deleteMany({
 						model,
-						where: targetWhere,
-					})
-				: customDeleted;
+						where: chunkWhere,
+					});
+					if (typeof count === "number") {
+						totalDeleted += count;
+					}
+				}
+				deleted = totalDeleted;
+			} else {
+				deleted = await currentAdapter.deleteMany({
+					model,
+					where,
+				});
+			}
+		}
 
 		for (const entity of entitiesToDelete) {
 			await queueDeleteAfterHooks(entity, model);

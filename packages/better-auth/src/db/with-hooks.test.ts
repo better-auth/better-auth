@@ -717,4 +717,119 @@ describe("Issue #11667: deleteUser atomicity and deleteWithHooks error handling"
 		});
 		expect(userInDb).toBeNull();
 	});
+
+	it("deleteManyWithHooks chunks preloaded entity IDs into chunks of 80 to respect parameter limits", async () => {
+		const deleteManySpy = vi.fn().mockResolvedValue(10);
+		const mockAdapter: Partial<DBAdapter> = {
+			deleteMany: deleteManySpy,
+		};
+
+		const withHooks = getWithHooks(mockAdapter as any, {
+			options: {} as any,
+			hooks: [],
+		});
+
+		// 105 entities
+		const preloadedEntities = Array.from({ length: 105 }, (_, i) => ({
+			id: `session-${i}`,
+			userId: "u-1",
+		}));
+
+		const result = await withHooks.deleteManyWithHooks(
+			[{ field: "userId", value: "u-1" }],
+			"session",
+			undefined,
+			{
+				preloadedEntities,
+				skipBeforeHooks: true,
+			},
+		);
+
+		// With CHUNK_SIZE = 80, 105 entities should result in 2 chunks (80 + 25)
+		expect(deleteManySpy).toHaveBeenCalledTimes(2);
+
+		const firstCallWhere = deleteManySpy.mock.calls[0]?.[0]?.where;
+		const secondCallWhere = deleteManySpy.mock.calls[1]?.[0]?.where;
+
+		expect(firstCallWhere).toEqual([
+			{ field: "userId", value: "u-1" },
+			{
+				field: "id",
+				operator: "in",
+				value: preloadedEntities.slice(0, 80).map((e) => e.id),
+			},
+		]);
+
+		expect(secondCallWhere).toEqual([
+			{ field: "userId", value: "u-1" },
+			{
+				field: "id",
+				operator: "in",
+				value: preloadedEntities.slice(80, 105).map((e) => e.id),
+			},
+		]);
+
+		expect(result).toBe(20); // 10 + 10
+	});
+
+	it("deleteUser passes sortBy { field: 'id', direction: 'asc' } when paginating sessions and accounts", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+		});
+
+		const { user } = await signInWithTestUser();
+		const ctx = await auth.$context;
+
+		const findManyCalls: any[] = [];
+		const origTransaction = ctx.adapter.transaction;
+		if (origTransaction) {
+			vi.spyOn(ctx.adapter, "transaction").mockImplementation(
+				async (cb: any) => {
+					return origTransaction(async (trx: any) => {
+						const origTrxFindMany = trx.findMany;
+						vi.spyOn(trx, "findMany").mockImplementation(async (args: any) => {
+							findManyCalls.push(args);
+							return origTrxFindMany(args);
+						});
+						return cb(trx);
+					});
+				},
+			);
+		} else {
+			vi.spyOn(ctx.adapter, "findMany").mockImplementation(
+				async (args: any) => {
+					findManyCalls.push(args);
+					return (ctx.adapter as any).findMany(args);
+				},
+			);
+		}
+
+		await ctx.internalAdapter.deleteUser(user.id);
+
+		// Verify findMany was called with sortBy: { field: "id", direction: "asc" } for session and account
+		const sessionQueries = findManyCalls.filter(
+			(call) => call?.model === "session",
+		);
+		const accountQueries = findManyCalls.filter(
+			(call) => call?.model === "account",
+		);
+
+		expect(sessionQueries.length).toBeGreaterThanOrEqual(1);
+		for (const call of sessionQueries) {
+			expect(call).toMatchObject({
+				sortBy: { field: "id", direction: "asc" },
+			});
+		}
+
+		expect(accountQueries.length).toBeGreaterThanOrEqual(1);
+		for (const call of accountQueries) {
+			expect(call).toMatchObject({
+				sortBy: { field: "id", direction: "asc" },
+			});
+		}
+	});
 });
