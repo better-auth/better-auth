@@ -1839,6 +1839,9 @@ Set the owner when the client is registered. An owned client's `referenceId` is 
 ```ts title="auth.ts"
 oauthProvider({
   allowDynamicClientRegistration: true,
+  // Lets the organization's members find and manage the client
+  clientReference: ({ session }) =>
+    (session?.activeOrganizationId as string | undefined) ?? undefined,
   validateInitialAccessToken: async ({ initialAccessToken }) => {
     // Your lookup of tokens that organization administrators issued
     const token = await findRegistrationToken(initialAccessToken)
