@@ -684,9 +684,7 @@ export async function initAction(opts: any) {
 		const boilerplateCode = `import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-	account: {
-		identityStrategy: "provider-id",
-	},
+	// Configuration will be added here
 });
 `;
 
@@ -1096,7 +1094,7 @@ export const auth = betterAuth({
 				s.start();
 
 				await new Promise<void>((resolve, reject) => {
-					exec(`npx auth migrate apply`, { cwd }, (error, stdout, stderr) => {
+					exec(`npx auth migrate`, { cwd }, (error, stdout, stderr) => {
 						if (error) {
 							s.stop();
 							log.error(`Failed to run migration: ${error.message}`);
@@ -1559,7 +1557,7 @@ export const auth = betterAuth({
 			} else if (isPrisma) {
 				command = "npx prisma migrate dev";
 			} else {
-				command = "npx auth migrate apply";
+				command = "npx auth migrate";
 			}
 			logs.push(`  ${nextStepNum}. Run ${chalk.cyan(command)} to apply schema`);
 			nextStepNum++;

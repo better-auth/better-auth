@@ -1913,73 +1913,74 @@ describe("TOTP enrollment verification", async () => {
 	it.for([
 		{ state: "verified", verified: true },
 		{ state: "legacy", verified: null as unknown as boolean },
-	])("rejects re-enrollment while a $state TOTP is active", async ({
-		verified,
-	}) => {
-		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
-			secret: DEFAULT_SECRET,
-			plugins: [twoFactor()],
-		});
-		const signedIn = await signInWithTestUser();
-		let headers = signedIn.headers;
-		const userId = signedIn.user.id;
+	])(
+		"rejects re-enrollment while a $state TOTP is active",
+		async ({ verified }) => {
+			const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+			const signedIn = await signInWithTestUser();
+			let headers = signedIn.headers;
+			const userId = signedIn.user.id;
 
-		await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
-			headers,
-		});
-		const enrollment = await db.findOne<TwoFactorTable>({
-			model: "twoFactor",
-			where: [{ field: "userId", value: userId }],
-		});
-		if (!enrollment) {
-			throw new Error("expected TOTP enrollment");
-		}
-		const decryptedSecret = await symmetricDecrypt({
-			key: DEFAULT_SECRET,
-			data: enrollment.secret,
-		});
-		const code = await createOTP(decryptedSecret).totp();
-		const verification = await auth.api.verifyTOTP({
-			body: { code },
-			headers,
-			asResponse: true,
-		});
-		headers = convertSetCookieToCookie(verification.headers);
-		expect(verification.status).toBe(200);
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+			});
+			const enrollment = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: userId }],
+			});
+			if (!enrollment) {
+				throw new Error("expected TOTP enrollment");
+			}
+			const decryptedSecret = await symmetricDecrypt({
+				key: DEFAULT_SECRET,
+				data: enrollment.secret,
+			});
+			const code = await createOTP(decryptedSecret).totp();
+			const verification = await auth.api.verifyTOTP({
+				body: { code },
+				headers,
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(verification.headers);
+			expect(verification.status).toBe(200);
 
-		await db.update({
-			model: "twoFactor",
-			update: { verified },
-			where: [{ field: "id", value: enrollment.id }],
-		});
-		const activeFactor = await db.findOne<TwoFactorTable>({
-			model: "twoFactor",
-			where: [{ field: "userId", value: userId }],
-		});
-		if (!activeFactor) {
-			throw new Error("expected active TOTP factor");
-		}
-		const response = await auth.api.enableTwoFactor({
-			body: { password: testUser.password },
-			headers,
-			asResponse: true,
-		});
-		expect(response.status).toBe(400);
-		const body = (await response.json()) as { code: string };
-		expect(body.code).toBe(TWO_FACTOR_ERROR_CODES.TOTP_ALREADY_ENABLED.code);
+			await db.update({
+				model: "twoFactor",
+				update: { verified },
+				where: [{ field: "id", value: enrollment.id }],
+			});
+			const activeFactor = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: userId }],
+			});
+			if (!activeFactor) {
+				throw new Error("expected active TOTP factor");
+			}
+			const response = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			expect(response.status).toBe(400);
+			const body = (await response.json()) as { code: string };
+			expect(body.code).toBe(TWO_FACTOR_ERROR_CODES.TOTP_ALREADY_ENABLED.code);
 
-		const unchangedFactor = await db.findOne<TwoFactorTable>({
-			model: "twoFactor",
-			where: [{ field: "userId", value: userId }],
-		});
-		expect(unchangedFactor).toMatchObject({
-			id: activeFactor.id,
-			secret: activeFactor.secret,
-			backupCodes: activeFactor.backupCodes,
-			verified,
-		});
-	});
+			const unchangedFactor = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: userId }],
+			});
+			expect(unchangedFactor).toMatchObject({
+				id: activeFactor.id,
+				secret: activeFactor.secret,
+				backupCodes: activeFactor.backupCodes,
+				verified,
+			});
+		},
+	);
 
 	it("allows restarting an unverified TOTP enrollment", async () => {
 		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
@@ -2712,4 +2713,85 @@ describe("backup codes storage configurations", () => {
 			);
 		});
 	}
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11323
+ */
+describe("two-factor password length", async () => {
+	const hash = vi.fn(async (password: string) => `hashed:${password}`);
+	const verify = vi.fn(
+		async ({ hash, password }: { hash: string; password: string }) =>
+			hash === `hashed:${password}`,
+	);
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		emailAndPassword: {
+			enabled: true,
+			password: { hash, verify },
+		},
+		plugins: [twoFactor()],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("enable should ignore an overlong optional password for a passwordless user", async () => {
+		const { auth: passwordlessAuth } = await getTestInstance(
+			{
+				secret: DEFAULT_SECRET,
+				plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
+			},
+			{ disableTestUser: true },
+		);
+		const signInRes = await passwordlessAuth.api.signInAnonymous({
+			asResponse: true,
+		});
+
+		const res = await passwordlessAuth.api.enableTwoFactor({
+			body: { password: "x".repeat(129) },
+			headers: convertSetCookieToCookie(signInRes.headers),
+			asResponse: true,
+		});
+
+		expect(res.status).toBe(200);
+	});
+
+	it("enable should reject a password longer than maxPasswordLength before hashing", async () => {
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.enableTwoFactor({
+				body: { password: "x".repeat(129) },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
+
+	it("get-totp-uri should reject a password longer than maxPasswordLength before hashing", async () => {
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+		});
+		hash.mockClear();
+		verify.mockClear();
+
+		await expect(
+			auth.api.getTOTPURI({
+				body: { password: "x".repeat(129) },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "PASSWORD_TOO_LONG" },
+		});
+
+		expect(hash).not.toHaveBeenCalled();
+		expect(verify).not.toHaveBeenCalled();
+	});
 });

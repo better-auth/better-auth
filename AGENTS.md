@@ -31,6 +31,7 @@ This is the Better Auth repository - a comprehensive authentication framework fo
 - Use `import type` for type-only imports
 - Use `node:` protocol for Node.js built-ins (e.g. `node:crypto`)
 - JSDoc comments for public APIs
+- The Better Auth CLI package was renamed from `@better-auth/cli` to `auth`. Use `npx auth@latest` in docs and user-facing messages, while preserving historical references in changelogs and explanations of the rename.
 - Plugins should be as independent as possible. When working on a plugin, prefer modifying the plugin over changing core.
 
 ### URL Composition

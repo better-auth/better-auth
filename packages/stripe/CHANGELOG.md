@@ -1,5 +1,27 @@
 # @better-auth/stripe
 
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#9684](https://github.com/better-auth/better-auth/pull/9684) [`72a6394`](https://github.com/better-auth/better-auth/commit/72a6394e30ced6654ebffe3c5b74dc1b570f6880) Thanks [@nikhilgupta58](https://github.com/nikhilgupta58)! - Stop logging a "Stripe webhook failed" error when a one-time `payment` mode checkout session completes.
+
+## 1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11347](https://github.com/better-auth/better-auth/pull/11347) [`f95d5f1`](https://github.com/better-auth/better-auth/commit/f95d5f1c2ccb7f96b189fdb7bc6cfe8d0044d607) Thanks [@rwieruch](https://github.com/rwieruch)! - Fix automatic seat synchronization after an organization cancels and resubscribes, so member changes update the active or trialing subscription even when canceled subscriptions remain in its history.
+
+## 1.7.5
+
+## 1.7.4
+
+## 1.7.3
+
 ## 1.7.2
 
 ## 1.7.1

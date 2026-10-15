@@ -28,6 +28,7 @@ import {
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
+import { baseURL, mcpResource, organizationClaim } from "./demo-url.ts";
 import {
 	createSCIMDemoPlugin,
 	isSCIMDemoEmployeePortalEnabled,
@@ -37,15 +38,6 @@ import { resolveSCIMDemoSSOUser } from "./scim-demo-employee.ts";
 import { getSCIMDemoOIDCProvider } from "./scim-demo-oidc.ts";
 
 const DEMO_SQLITE_CONTENTION_TIMEOUT_MS = 5_000;
-
-const demoAccountIdentityStrategy = (() => {
-	const strategy = process.env.DEMO_ACCOUNT_IDENTITY_STRATEGY;
-	if (!strategy) return undefined;
-	if (strategy === "issuer" || strategy === "provider-id") return strategy;
-	throw new Error(
-		'DEMO_ACCOUNT_IDENTITY_STRATEGY must be either "issuer" or "provider-id"',
-	);
-})();
 
 const database = (() => {
 	if (process.env.DEMO_SQLITE_PATH) {
@@ -138,9 +130,6 @@ const authOptions = {
 		},
 	},
 	account: {
-		...(demoAccountIdentityStrategy && {
-			identityStrategy: demoAccountIdentityStrategy,
-		}),
 		accountLinking: {
 			trustedProviders: [
 				"email-password",
@@ -224,7 +213,7 @@ const authOptions = {
 						inviteLink:
 							process.env.NODE_ENV === "development"
 								? `http://localhost:3000/accept-invitation/${data.id}`
-								: `${process.env.BETTER_AUTH_URL || "https://demo.better-auth.com"}/accept-invitation/${data.id}`,
+								: `${baseURL}/accept-invitation/${data.id}`,
 					},
 				});
 			},
@@ -252,8 +241,7 @@ const authOptions = {
 		admin(),
 		multiSession(),
 		oAuthProxy({
-			productionURL:
-				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
+			productionURL: baseURL,
 		}),
 		nextCookies(),
 		oneTap(),
@@ -415,7 +403,7 @@ const authOptions = {
 		lastLoginMethod(),
 		jwt({
 			jwt: {
-				issuer: process.env.BETTER_AUTH_URL,
+				issuer: baseURL,
 			},
 		}),
 		oauthProvider({
@@ -430,11 +418,9 @@ const authOptions = {
 				"offline_access",
 				"read:organization",
 			],
-			resources: [
-				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
-				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
-					"/api/mcp",
-			],
+			resources: [baseURL, mcpResource],
+			// DCR clients omit `resources`; link them to the MCP server like `mcp()` does.
+			clientRegistrationDefaultResources: [mcpResource],
 			selectAccount: {
 				page: "/oauth/select-account",
 				shouldRedirect: async ({ headers }) => {
@@ -444,17 +430,15 @@ const authOptions = {
 			},
 			customAccessTokenClaims({ referenceId, scopes }) {
 				if (referenceId && scopes.includes("read:organization")) {
-					const baseUrl =
-						process.env.BETTER_AUTH_URL || "https://demo.better-auth.com";
 					return {
-						[`${baseUrl}/org`]: referenceId,
+						[organizationClaim]: referenceId,
 					};
 				}
 				return {};
 			},
 			postLogin: {
 				page: "/oauth/select-organization",
-				async shouldRedirect({ session, scopes, headers }) {
+				async shouldRedirect({ session, scopes, headers, isContinuation }) {
 					const userOnlyScopes = [
 						"openid",
 						"profile",
@@ -464,18 +448,22 @@ const authOptions = {
 					if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
 						return false;
 					}
-					// Check if user has multiple organizations to select from
+					if (!session.activeOrganizationId) {
+						return true;
+					}
 					try {
 						const organizations = (await getAllUserOrganizations(
 							headers,
 						)) as Organization[];
-						return (
-							organizations.length > 1 ||
-							!(
-								organizations.length === 1 &&
-								organizations.at(0)?.id === session.activeOrganizationId
+						if (
+							!organizations.some(
+								(org) => org.id === session.activeOrganizationId,
 							)
-						);
+						) {
+							return true;
+						}
+						// Ask on every new authorization; accept the selection on continuation
+						return !isContinuation && organizations.length > 1;
 					} catch {
 						return true;
 					}

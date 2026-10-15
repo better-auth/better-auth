@@ -51,6 +51,31 @@ describe("rate-limiter", async () => {
 		},
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11463
+	 */
+	it("should send JSON content type for rate limit responses", async () => {
+		const { auth } = await getTestInstance(
+			{ rateLimit: { enabled: true, window: 10, max: 1 } },
+			{ disableTestUser: true },
+		);
+		const request = () =>
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers: { "x-forwarded-for": "203.0.113.114" },
+			});
+
+		const first = await auth.handler(request());
+		expect(first.status).toBe(200);
+
+		const limited = await auth.handler(request());
+		expect(limited.status).toBe(429);
+		expect(limited.headers.get("content-type")).toBe("application/json");
+		expect(limited.headers.get("x-retry-after")).toBeTruthy();
+		expect(await limited.json()).toEqual({
+			message: "Too many requests. Please try again later.",
+		});
+	});
+
 	it("should return 429 after 3 request for sign-in", async () => {
 		for (let i = 0; i < 5; i++) {
 			const response = await client.signIn.email({
@@ -622,7 +647,6 @@ describe("missing client IP warning", () => {
 		);
 		const log = vi.fn();
 		const { client } = await getTestInstanceReloaded({
-			account: { identityStrategy: "issuer" },
 			rateLimit: {
 				enabled: true,
 				window: 10,

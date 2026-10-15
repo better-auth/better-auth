@@ -1,6 +1,5 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
-import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -28,10 +27,12 @@ import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
+import type { D1Database } from "./database";
 import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
+
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
@@ -471,6 +472,17 @@ export type BetterAuthAdvancedOptions = {
 				 * @default false
 				 */
 				joins?: boolean;
+				/**
+				 * Validate the schema during initialization and report problems
+				 * through the configured logger. Authentication requests await
+				 * the same check and fail when the schema does not match.
+				 * Kysely introspects the database; Drizzle and Prisma inspect
+				 * local schema metadata without opening a connection.
+				 * Set `false` to disable runtime schema validation.
+				 *
+				 * @default true
+				 */
+				validateSchema?: boolean;
 		  }
 		| undefined;
 	/**
@@ -639,6 +651,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 				| {
 						/**
@@ -669,6 +691,16 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * The database schema (namespace) for Better Auth's tables.
+						 * PostgreSQL only. Qualifies every adapter and CLI statement,
+						 * so Better Auth stops depending on the connection's
+						 * `search_path`. `auth migrate` creates the schema first.
+						 *
+						 * @example "auth"
+						 * @default undefined
+						 */
+						schemaName?: string;
 				  }
 		  )
 		| undefined;
@@ -814,8 +846,11 @@ export type BetterAuthOptions = {
 				 */
 				resetPasswordTokenExpiresIn?: number;
 				/**
-				 * A callback function that is triggered
-				 * when a user's password is changed successfully.
+				 * A callback function that is triggered after a user's password
+				 * is reset. It runs after the new password is saved and, when
+				 * `revokeSessionsOnPasswordReset` is enabled, after the user's
+				 * database sessions are revoked and removal from secondary
+				 * storage has been attempted.
 				 */
 				onPasswordReset?: (
 					data: { user: User },
@@ -843,7 +878,11 @@ export type BetterAuthOptions = {
 				 */
 				autoSignIn?: boolean;
 				/**
-				 * Whether to revoke all other sessions when resetting password
+				 * Whether to revoke all of the user's sessions when resetting the
+				 * password. For sessions stored in the database, revocation and
+				 * the password change run in one transaction when transactions are
+				 * enabled for the adapter. Sessions in secondary storage are
+				 * removed after commit, on a best-effort basis.
 				 * @default false
 				 */
 				revokeSessionsOnPasswordReset?: boolean;
@@ -1052,7 +1091,9 @@ export type BetterAuthOptions = {
 				 * Set this to true to store the session in the database
 				 * as well.
 				 *
-				 * Reads are always done from the secondary storage.
+				 * When enabled, session token lookups fall back to the database
+				 * for missing secondary-storage entries, unless
+				 * `preserveSessionInDatabase` is enabled.
 				 *
 				 * @default false
 				 */
@@ -1158,21 +1199,6 @@ export type BetterAuthOptions = {
 		| undefined;
 	account?:
 		| (BetterAuthDBOptions<"account", keyof BaseAccount> & {
-				/**
-				 * Determines which namespace Better Auth pairs with a provider's
-				 * account ID when recognizing an external account.
-				 *
-				 * `"issuer"` uses the authority verified by the provider, or the
-				 * provider's synthetic issuer when it has no issuer of its own.
-				 * `"provider-id"` stores a deterministic provider namespace in the same
-				 * required issuer field, preserving logical v1.6 `(providerId, accountId)`
-				 * recognition. The guided 1.6 migration requires an explicit strategy for
-				 * populated accounts.
-				 *
-				 * @default "issuer" when omitted in v1.7 compatibility mode.
-				 * Generated configurations explicitly use "provider-id".
-				 */
-				identityStrategy?: "issuer" | "provider-id";
 				/**
 				 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 				 * will be updated on sign in with the latest data from the provider.
@@ -1290,7 +1316,7 @@ export type BetterAuthOptions = {
 				 * This poses a security risk if your database is compromised, as attackers could gain access to user accounts
 				 * on external services.
 				 *
-				 * When enabled, tokens are encrypted using AES-256-GCM before storage, providing protection against:
+				 * When enabled, tokens are encrypted using XChaCha20-Poly1305 before storage, providing protection against:
 				 * - Database breaches and unauthorized access to raw token data
 				 * - Internal threats from database administrators or compromised credentials
 				 * - Token exposure in database backups and logs
@@ -1799,6 +1825,26 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				debug?: boolean;
+		  }
+		| undefined;
+	/**
+	 * Experimental features.
+	 */
+	experimental?:
+		| {
+				/**
+				 * OpenTelemetry instrumentation configuration.
+				 */
+				instrumentation?:
+					| {
+							/**
+							 * Enable Better Auth spans. Does not affect usage reporting or application spans.
+							 *
+							 * @default true
+							 */
+							enabled?: boolean | undefined;
+					  }
+					| undefined;
 		  }
 		| undefined;
 };

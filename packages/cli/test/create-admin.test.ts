@@ -48,10 +48,9 @@ describe("create-admin", () => {
 
 		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
 		await migrateAction({
-			approved: true,
 			cwd: process.cwd(),
 			config: "test/auth.ts",
-			mode: "apply",
+			yes: true,
 		});
 
 		return auth;

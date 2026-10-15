@@ -1,5 +1,101 @@
 # @better-auth/core
 
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11592](https://github.com/better-auth/better-auth/pull/11592) [`435645e`](https://github.com/better-auth/better-auth/commit/435645e5eb6fcd0a3a9a2bbd1fd486f47ff4c4cc) Thanks [@drewsephski](https://github.com/drewsephski)! - Fix Atlassian user info errors being logged as coming from Figma.
+
+- [#11625](https://github.com/better-auth/better-auth/pull/11625) [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`. Default id generation is unaffected, and no migration is needed.
+  - On SQLite and MySQL, SAML sign-in, DPoP-bound requests checked against the database replay store, `private_key_jwt` client authentication, and magic link or email OTP sign-ins that adopt an unverified account failed with a `NOT NULL` error on the `id` column. They now work. SIWE sign-in ignored the `email` field and used the wallet-derived address; it now uses the supplied email when no other account has it.
+  - On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
+
+  With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
+
+- [#11749](https://github.com/better-auth/better-auth/pull/11749) [`e78f15a`](https://github.com/better-auth/better-auth/commit/e78f15aa316bedeaf53a654bb07d4a222ca5e578) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - ID token verification now allows 30 seconds of clock difference between your server and the identity provider when checking `exp`, `nbf`, and `iat`. Previously, a provider whose clock ran even slightly ahead (for example, an `nbf` set a fraction of a second in the future) made sign-in fail. This affected generic OAuth providers configured with `discoveryUrl` since 1.7.0, ID token sign-in with the built-in social providers, and Google One Tap. Tokens up to 30 seconds past `exp` are now also accepted. No configuration change is needed. A custom `verifyIdToken` replaces this check and must set its own tolerance, and the SSO plugin's OIDC sign-in is unchanged.
+
+- [#11663](https://github.com/better-auth/better-auth/pull/11663) [`60525e0`](https://github.com/better-auth/better-auth/commit/60525e08fd8f4c10385bcd9f215224a2144ef94a) Thanks [@kaiizer777](https://github.com/kaiizer777)! - Fixed Microsoft Entra ID sign-in with an ID token (`signIn.social` with `idToken`, and linking an account with an ID token) rejecting every token. Microsoft publishes its signing keys without an `alg` field, which made verification fail. Those keys are now treated as RS256, and Microsoft ID tokens signed with any other algorithm are rejected. The redirect sign-in flow was not affected.
+
+- [#11515](https://github.com/better-auth/better-auth/pull/11515) [`916ef5c`](https://github.com/better-auth/better-auth/commit/916ef5c5307103d9bea44446a40da5d31de2b3fe) Thanks [@BilalAtique](https://github.com/BilalAtique)! - If you pass `client` to `mongodbAdapter` on a replica set, concurrent requests that write the same documents no longer fail with a 500. Before, MongoDB aborted all but one of them with a write conflict, so a SCIM directory that provisions several users at once returned 500 for most of them. The adapter now retries such a transaction, as MongoDB requires, for up to 120 seconds or until your `MongoClient`'s `timeoutMS`. Under contention a request can take longer instead of failing.
+
+  A retry runs the work again. `databaseHooks` `before` hooks can run more than once for one request, and `after` hooks still run once, after the commit. Work that the request does outside the database before it commits can also repeat on a retried request. For example, an email sign-up can send its verification email twice. Requests that succeed on the first attempt are unaffected, and so are other adapters.
+
+- [#11718](https://github.com/better-auth/better-auth/pull/11718) [`1d95ebf`](https://github.com/better-auth/better-auth/commit/1d95ebf3fe9a788d9b6566495e0016e60d1fd7fd) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix missing device sessions and failed automatic session switching after cache eviction when `storeSessionInDatabase` is enabled and `preserveSessionInDatabase` is disabled. Automatic switching now follows the order of held sessions, and large lists or sessions whose users no longer exist no longer cause valid sessions to disappear.
+
+- [#10956](https://github.com/better-auth/better-auth/pull/10956) [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78) Thanks [@disbell](https://github.com/disbell)! - Native OAuth clients and Client ID Metadata Documents can now use custom-scheme redirect URIs with a host and a path, such as Cursor's `cursor://anysphere.cursor-mcp/oauth/callback`. Previously, only the authority-free reverse-domain form, such as `com.example.app:/callback`, was accepted, and these registrations failed with `invalid_redirect_uri`.
+
+  Cursor also omits `application_type` when it registers, so the `web` default still rejects it. To accept Cursor, set the new `clientRegistrationDefaultApplicationType` option to `"infer"`. A dynamic registration that omits `application_type` then becomes `native` when any of its redirect URIs uses a custom scheme, and every redirect URI must pass the native rules. Setting `"native"` treats every registration that omits the field as `native`. The default remains `"web"`, and an `application_type` the client sends is never overridden.
+
+  Pairwise clients (`subject_type: "pairwise"`) cannot use these host-bearing custom-scheme redirect URIs. Web clients are unaffected: they still accept only `https` redirect URIs on non-loopback hosts.
+
+- [#11626](https://github.com/better-auth/better-auth/pull/11626) [`67743ed`](https://github.com/better-auth/better-auth/commit/67743ed6e8d873114b723fc5c196aea17a870509) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Password resets and password changes no longer keep the new password when revoking the user's sessions fails. With `revokeSessionsOnPasswordReset` or `revokeOtherSessions`, database sessions are revoked and the password is saved in one transaction when transactions are enabled for the adapter, so a failure leaves the old password and sessions in place. Sessions in secondary storage are still removed after commit, on a best-effort basis. This covers `/reset-password`, the email OTP and phone number reset endpoints, and `/change-password`. `onPasswordReset` now runs after sessions are revoked, so a throwing callback no longer leaves them active, and a callback that lists the user's sessions no longer sees the revoked ones.
+
+- [#11712](https://github.com/better-auth/better-auth/pull/11712) [`c46d2a6`](https://github.com/better-auth/better-auth/commit/c46d2a6ac4442b2b9d2f301619a9f1b9ef400f55) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix misleading errors for invalid runtime-provided AsyncLocalStorage values in the edge and browser fallback, and recognize AsyncLocalStorage initialized after importing Better Auth but before first use.
+
+- [#11643](https://github.com/better-auth/better-auth/pull/11643) [`92dfcea`](https://github.com/better-auth/better-auth/commit/92dfceaa14c287543f7cf62239641f4f7406cfb2) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A sign-up that fails after its session is created no longer leaves that session in secondary storage. With `storeSessionInDatabase` enabled and `preserveSessionInDatabase` off, the secondary-storage copy is written only after the sign-up commits, and listing a user's sessions now reads the database, so a session whose cached copy failed to write is still listed and revoked. With other secondary-storage settings, sign-up, passkey registration and SSO sign-in with `resolveUser` keep the session write inside their transaction, so a storage failure rolls back the new user, passkey or account instead of keeping them without a session. A session revoked by a `session.create.after` database hook also stays revoked.
+
+- [#11645](https://github.com/better-auth/better-auth/pull/11645) [`a9f455d`](https://github.com/better-auth/better-auth/commit/a9f455d586f4124bf8c544345f47130a93580103) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On database adapters without transactions enabled, a request that fails after writing data now still runs the after hooks for those writes, such as `databaseHooks` `after` callbacks and secondary-storage session cleanup. Previously they were skipped even though the writes were kept.
+
+- [#11711](https://github.com/better-auth/better-auth/pull/11711) [`9725f1b`](https://github.com/better-auth/better-auth/commit/9725f1b361a0b5db8a1b519e3c5aacae3ed2fb98) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix subsequent authentication requests hanging after async context initialization is interrupted.
+
+## 1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
+## 1.7.5
+
+### Patch Changes
+
+- [#11203](https://github.com/better-auth/better-auth/pull/11203) [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8) Thanks [@dshukertjr](https://github.com/dshukertjr)! - Add a `database.schemaName` option for direct PostgreSQL connections. When set, the adapter and the CLI qualify every statement with that schema, so `auth generate` writes a schema-qualified migration that creates the schema before its tables instead of relying on the connection's `search_path`.
+
+- [#11290](https://github.com/better-auth/better-auth/pull/11290) [`dae97ed`](https://github.com/better-auth/better-auth/commit/dae97ed932a084a11faa96a2e1abf052fc85d2ea) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore database option type inference for projects that do not use Cloudflare Workers.
+
+## 1.7.4
+
+### Patch Changes
+
+- [#11210](https://github.com/better-auth/better-auth/pull/11210) [`3ff842a`](https://github.com/better-auth/better-auth/commit/3ff842ab7fdf60746b5d7bd8c27becd2d0a79c2e) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent bundlers such as Metro from failing when the optional OpenTelemetry API is not installed.
+
+- [#11224](https://github.com/better-auth/better-auth/pull/11224) [`c1756a2`](https://github.com/better-auth/better-auth/commit/c1756a22745d4580425559b8800acc6e9a70e30f) Thanks [@bytaesu](https://github.com/bytaesu)! - Add `experimental.instrumentation.enabled` to disable Better Auth OpenTelemetry span creation per auth instance. Instrumentation remains enabled by default and independent of usage reporting.
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11179](https://github.com/better-auth/better-auth/pull/11179) [`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate Drizzle schema objects and generated Prisma client models during initialization, including in production, and report mismatches with guidance for fixing them. These checks do not query the database and cannot detect unapplied migrations.
+
+  For Prisma clients whose model metadata omits nullability, `auth generate` reports required fields that Better Auth never writes by reading the existing Prisma schema. Set `advanced.database.validateSchema: false` to disable runtime validation.
+
+- [#9908](https://github.com/better-auth/better-auth/pull/9908) [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6) Thanks [@harshil1712](https://github.com/harshil1712)! - Add Cloudflare as a built-in social provider, with support for client-secret authentication and PKCE clients without a secret.
+
+- [#11101](https://github.com/better-auth/better-auth/pull/11101) [`3e9e197`](https://github.com/better-auth/better-auth/commit/3e9e19746e609004da31bea3356c0059611d9ed4) Thanks [@bytaesu](https://github.com/bytaesu)! - Add a custom token endpoint authentication strategy for providers that require non-standard request parameters.
+
+- [#11068](https://github.com/better-auth/better-auth/pull/11068) [`157ec8d`](https://github.com/better-auth/better-auth/commit/157ec8d8799ddda642f2fe40120fc364660a8864) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve request IP validation performance.
+
+- [#11102](https://github.com/better-auth/better-auth/pull/11102) [`baa08f4`](https://github.com/better-auth/better-auth/commit/baa08f4ee674f5cc39624063847c89f1bea73186) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix TikTok sign-in and token refresh failing when configured with the documented `clientKey` and `clientSecret` options.
+
+- [#11129](https://github.com/better-auth/better-auth/pull/11129) [`9e36635`](https://github.com/better-auth/better-auth/commit/9e36635eb2fbf27d58c70d3361724335ba9a9951) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve PayPal authorization code and refresh token requests, including PKCE parameter handling.
+
+- [#11178](https://github.com/better-auth/better-auth/pull/11178) [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9) Thanks [@bytaesu](https://github.com/bytaesu)! - Report missing tables, missing columns, and required columns Better Auth never writes during initialization, with guidance for fixing them. Kysely checks the live database schema. Authentication requests await the same check and are rejected if the schema does not match.
+
+  Validation is enabled by default, including in production. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` refuses to apply changes when required unwritten columns need manual repair.
+
+- [#11134](https://github.com/better-auth/better-auth/pull/11134) [`a2bae0c`](https://github.com/better-auth/better-auth/commit/a2bae0cad04ccc23c40555c77f86b0da1ba40ebc) Thanks [@bytaesu](https://github.com/bytaesu)! - Improve Reddit token requests with OAuth-compliant Basic authentication and redirect protection.
+
+- [#11189](https://github.com/better-auth/better-auth/pull/11189) [`1a1b7d5`](https://github.com/better-auth/better-auth/commit/1a1b7d56f51cb9ce6b06334b22fcbfa0d52be05a) Thanks [@bytaesu](https://github.com/bytaesu)! - Make `consumeOne` and `incrementOne` optional again for custom database adapters, using guarded fallbacks when native methods are absent. Fallbacks require atomic conditional writes and accurate affected-row counts. Fallback increments can fail when contention exhausts their retries.
+
+- [#11153](https://github.com/better-auth/better-auth/pull/11153) [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore sign-in compatibility with 1.6 databases by identifying accounts with `(providerId, accountId)` and removing the `issuer` requirement introduced in 1.7.0. Upgrading from 1.6 no longer requires an account schema migration. Ambiguous account keys are rejected instead of selecting an arbitrary account.
+
+  If you applied the 1.7.0 through 1.7.2 account schema, remove its issuer unique index before upgrading. For SQL databases, also make `issuer` nullable or remove the column so sign-ups and account linking can succeed. `auth migrate` does not perform this cleanup. Follow the [upgrade guide](https://www.better-auth.com/docs/guides/1-7-upgrade-guide) for database-specific steps.
+
 ## 1.7.2
 
 ### Patch Changes

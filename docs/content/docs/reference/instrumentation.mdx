@@ -20,6 +20,24 @@ For setup instructions, see the official OpenTelemetry documentation:
 
 * **[Node.js getting started](https://opentelemetry.io/docs/languages/js/getting-started/nodejs/)** – Core setup for Node.js apps
 
+## Disable Instrumentation
+
+To prevent Better Auth from creating OpenTelemetry spans, set `experimental.instrumentation.enabled` to `false`:
+
+```ts
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  experimental: {
+    instrumentation: {
+      enabled: false,
+    },
+  },
+});
+```
+
+Instrumentation is enabled by default. Disabling it affects only this auth instance, leaving spans from your application and other libraries unchanged.
+
 ## Supported Spans
 
 The following spans are supported by Better Auth:

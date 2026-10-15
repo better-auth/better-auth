@@ -11,7 +11,11 @@ import { parseConventionalHeader } from "../conventional-header.ts";
 import { gitSucceeds, runGit } from "../git.ts";
 import type { GitHubReader } from "../github.ts";
 import type { PackageReleaseMetadata, ReleaseEntry } from "./schema.ts";
-import { parseSchema, prereleaseStateSchema } from "./schema.ts";
+import {
+	parseSchema,
+	prereleaseStateSchema,
+	releaseTitleMaxLength,
+} from "./schema.ts";
 
 interface PRInfo {
 	author: string;
@@ -207,6 +211,16 @@ interface ChangesetEntry {
 	packageNames: string[];
 }
 
+/** Orphan titles come from a changeset's first line, which can be a paragraph. */
+function toReleaseTitle(line: string): string {
+	if (line.length <= releaseTitleMaxLength) return line;
+	const cut = line.slice(0, releaseTitleMaxLength - 1);
+	const wordEnd = cut.lastIndexOf(" ");
+	const head =
+		wordEnd > 0 ? cut.slice(0, wordEnd) : cut.replace(/[\uD800-\uDBFF]$/, "");
+	return `${head.trimEnd()}…`;
+}
+
 function findChangesetSourcePR(id: string, ref: string): number | null {
 	const subject = runGit([
 		"log",
@@ -354,11 +368,11 @@ function buildChangesetIndex(
 	previousTag: string,
 	version: string,
 ): {
-	byPR: Map<number, ChangesetEntry>;
+	byPR: Map<number, ChangesetEntry[]>;
 	orphans: ChangesetEntry[];
 	byDescription: Map<string, ChangesetEntry>;
 } {
-	const byPR = new Map<number, ChangesetEntry>();
+	const byPR = new Map<number, ChangesetEntry[]>();
 	const orphans: ChangesetEntry[] = [];
 	const byDescription = new Map<string, ChangesetEntry>();
 
@@ -401,17 +415,16 @@ function buildChangesetIndex(
 		};
 
 		const prMatch = id.match(/^pr-(\d+)$/);
-		if (prMatch) {
-			byPR.set(Number(prMatch[1]), entry);
+		const prNumber = prMatch
+			? Number(prMatch[1])
+			: findChangesetSourcePR(id, effectiveRef);
+		if (prNumber) {
+			// A PR can add several changesets; each keeps the PR's title.
+			byPR.set(prNumber, [...(byPR.get(prNumber) ?? []), entry]);
 		} else {
-			const sourcePrNumber = findChangesetSourcePR(id, effectiveRef);
-			if (sourcePrNumber && !byPR.has(sourcePrNumber)) {
-				byPR.set(sourcePrNumber, entry);
-			} else {
-				orphans.push(entry);
-				const firstLine = description.split("\n")[0]!.trim().toLowerCase();
-				if (firstLine) byDescription.set(firstLine, entry);
-			}
+			orphans.push(entry);
+			const firstLine = description.split("\n")[0]!.trim().toLowerCase();
+			if (firstLine) byDescription.set(firstLine, entry);
 		}
 	}
 
@@ -502,8 +515,8 @@ function loadPreviousPrereleaseChangesets(version: string): Set<string> {
 }
 
 /**
- * Collects release entries using git history as the ground truth,
- * enriched with changeset descriptions where available.
+ * Collects release entries from consumed changesets and enriches them with
+ * pull request metadata from git history.
  *
  * Handles the cherry-pick history gap (where the previous tag is not
  * a direct ancestor) using PR-number deduplication.
@@ -630,9 +643,10 @@ export async function collectEntries(
 		orphans: changesetOrphans,
 		byDescription: changesetByDesc,
 	} = buildChangesetIndex(changesetRef, previousTag, version);
-	if (changesetByPR.size > 0 || changesetOrphans.length > 0) {
+	const prChangesetCount = [...changesetByPR.values()].flat().length;
+	if (prChangesetCount > 0 || changesetOrphans.length > 0) {
 		console.log(
-			`  Loaded ${changesetByPR.size} changeset descriptions, ${changesetOrphans.length} orphans`,
+			`  Loaded ${prChangesetCount} changeset descriptions, ${changesetOrphans.length} orphans`,
 		);
 	}
 
@@ -650,67 +664,55 @@ export async function collectEntries(
 
 		if (seenPRs.has(prNumber)) continue;
 
-		// A PR with a changeset should appear even if its type is docs:/chore:/etc.
+		// A consumed changeset is the release intent. Git history only provides
+		// metadata for that entry.
 		const subject = parsed.subject.replace(/\s*\(#\d+\)$/, "").trim();
 		const descMatch = changesetByDesc.get(subject.toLowerCase());
-		const changeset = changesetByPR.get(prNumber) ?? descMatch;
+		const changesets =
+			changesetByPR.get(prNumber) ?? (descMatch ? [descMatch] : []);
 		if (descMatch) consumedOrphans.add(descMatch);
-
-		if (
-			!changeset &&
-			["chore", "docs", "ci", "test", "style", "build"].includes(parsed.type)
-		) {
-			continue;
-		}
+		if (changesets.length === 0) continue;
 
 		seenPRs.add(prNumber);
 
-		let author = "unknown";
-		let title: string;
-		let domain: string;
-		let packageName: string;
-		let breaking = parsed.breaking;
-
-		const changesetDescription = changeset?.description ?? null;
-		if (changeset?.breaking) breaking = true;
-
-		title = subject;
-		domain = resolveDomain(parsed.scope || undefined, []);
-		packageName =
-			changeset?.packageNames.length === 1
-				? changeset.packageNames[0]!
-				: resolvePackage(parsed.scope || undefined, []);
-
 		const prInfo = await fetchPR(github, prNumber);
-		if (prInfo) {
-			author = prInfo.author;
-			title = prInfo.title;
-			domain = classifyEntry(prInfo, parsed.scope || undefined, prInfo.files);
-			packageName =
-				changeset?.packageNames.length === 1
+		const author = prInfo?.author ?? "unknown";
+		const title = prInfo?.title ?? subject;
+		const domain = prInfo
+			? classifyEntry(prInfo, parsed.scope || undefined, prInfo.files)
+			: resolveDomain(parsed.scope || undefined, []);
+
+		for (const [index, changeset] of changesets.entries()) {
+			const breaking =
+				parsed.breaking ||
+				changeset.breaking ||
+				!!prInfo?.labels.includes("breaking");
+			const packageName =
+				changeset.packageNames.length === 1
 					? changeset.packageNames[0]!
-					: resolvePackage(parsed.scope || undefined, prInfo.files);
-			if (prInfo.labels.includes("breaking")) breaking = true;
-		}
+					: resolvePackage(parsed.scope || undefined, prInfo?.files ?? []);
+			const releasePackages =
+				changeset.packageNames.length > 0
+					? [...new Set(changeset.packageNames)]
+					: [packageName];
+			// The first changeset keeps the plain PR key; later ones need their own.
+			const rewriteKey =
+				index === 0 ? `pr-${prNumber}` : `pr-${prNumber}:${changeset.id}`;
 
-		const releasePackages =
-			changeset?.packageNames.length && changeset.packageNames.length > 0
-				? [...new Set(changeset.packageNames)]
-				: [packageName];
-
-		for (const releasePackage of releasePackages) {
-			entries.push({
-				id: `${changeset ? `pr-${prNumber}` : `git-${prNumber}`}:${releasePackage}`,
-				rewriteKey: `pr-${prNumber}`,
-				title,
-				changesetDescription,
-				prNumber,
-				author,
-				domain,
-				packageName: releasePackage,
-				changeType: classifyChangeType(parsed.type, breaking),
-				breaking,
-			});
+			for (const releasePackage of releasePackages) {
+				entries.push({
+					id: `${rewriteKey}:${releasePackage}`,
+					rewriteKey,
+					title,
+					changesetDescription: changeset.description,
+					prNumber,
+					author,
+					domain,
+					packageName: releasePackage,
+					changeType: classifyChangeType(parsed.type, breaking),
+					breaking,
+				});
+			}
 		}
 	}
 
@@ -740,7 +742,7 @@ export async function collectEntries(
 			entries.push({
 				id: `${changeset.id}:${releasePackage}`,
 				rewriteKey: changeset.id,
-				title: changeset.description.split("\n")[0]!,
+				title: toReleaseTitle(changeset.description.split("\n")[0]!),
 				changesetDescription: changeset.description,
 				prNumber: null,
 				author: "unknown",

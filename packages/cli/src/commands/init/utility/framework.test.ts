@@ -350,36 +350,6 @@ describe("Init CLI - framework utility", () => {
 		);
 
 		testWithTmpDir(
-			"should make the generated Remix auth identity strategy explicit",
-			async ({ tmp }) => {
-				const result = await detectFramework(tmp, {
-					dependencies: {
-						"@remix-run/server-runtime": "1.0.0",
-					},
-				});
-
-				expect(result?.routeHandler?.code).toContain(
-					'identityStrategy: "provider-id"',
-				);
-			},
-		);
-
-		testWithTmpDir(
-			"should make the generated React Router auth identity strategy explicit",
-			async ({ tmp }) => {
-				const result = await detectFramework(tmp, {
-					dependencies: {
-						"react-router": "1.0.0",
-					},
-				});
-
-				expect(result?.routeHandler?.code).toContain(
-					'identityStrategy: "provider-id"',
-				);
-			},
-		);
-
-		testWithTmpDir(
 			"should have correct route handler path for SvelteKit",
 			async ({ tmp }) => {
 				const result = await detectFramework(tmp, {
