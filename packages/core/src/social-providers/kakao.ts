@@ -92,7 +92,7 @@ export interface KakaoProfile {
 	/** Custom user properties */
 	properties?: Record<string, any> | undefined;
 	/** Kakao account info */
-	kakao_account: KakaoAccount;
+	kakao_account?: KakaoAccount;
 	/** Partner info */
 	for_partner?: Partner | undefined;
 }
