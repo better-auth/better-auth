@@ -3127,19 +3127,18 @@ describe("oauth2", async () => {
 			);
 		});
 
-		it.each([
-			"common",
-			"organizations",
-			"consumers",
-		])("rejects the multi-tenant %s endpoint because it cannot provide a stable issuer", (tenantId) => {
-			expect(() =>
-				microsoftEntraId({
-					clientId: "ms-client-id",
-					clientSecret: "ms-client-secret",
-					tenantId,
-				}),
-			).toThrow("requires a concrete Microsoft Entra tenant GUID");
-		});
+		it.each(["common", "organizations", "consumers"])(
+			"rejects the multi-tenant %s endpoint because it cannot provide a stable issuer",
+			(tenantId) => {
+				expect(() =>
+					microsoftEntraId({
+						clientId: "ms-client-id",
+						clientSecret: "ms-client-secret",
+						tenantId,
+					}),
+				).toThrow("requires a concrete Microsoft Entra tenant GUID");
+			},
+		);
 
 		it("rejects a missing tenant ID from an untyped runtime configuration", () => {
 			expect(() =>
@@ -3202,43 +3201,46 @@ describe("oauth2", async () => {
 		it.each([
 			["does not match", "different-graph-sub"],
 			["is missing", undefined],
-		])("should ignore Graph userinfo when its subject %s", async (_, graphSub) => {
-			const msConfig = microsoftEntraId({
-				clientId: "ms-client-id",
-				clientSecret: "ms-client-secret",
-				tenantId,
-			});
-			mswServer.use(
-				http.get("https://graph.microsoft.com/oidc/userinfo", () =>
-					HttpResponse.json({
-						sub: graphSub,
-						email: "graph@example.com",
-						name: "Graph User",
-						picture: "https://example.com/graph.png",
-					}),
-				),
-			);
-			const idToken = await createMicrosoftIdToken({
-				sub: "token-pairwise-sub",
-				oid: "token-stable-oid",
-				tid: "token-tenant-id",
-			});
+		])(
+			"should ignore Graph userinfo when its subject %s",
+			async (_, graphSub) => {
+				const msConfig = microsoftEntraId({
+					clientId: "ms-client-id",
+					clientSecret: "ms-client-secret",
+					tenantId,
+				});
+				mswServer.use(
+					http.get("https://graph.microsoft.com/oidc/userinfo", () =>
+						HttpResponse.json({
+							sub: graphSub,
+							email: "graph@example.com",
+							name: "Graph User",
+							picture: "https://example.com/graph.png",
+						}),
+					),
+				);
+				const idToken = await createMicrosoftIdToken({
+					sub: "token-pairwise-sub",
+					oid: "token-stable-oid",
+					tid: "token-tenant-id",
+				});
 
-			const userInfo = await msConfig.getUserInfo!({
-				accessToken: "ms-access-token",
-				idToken,
-			});
+				const userInfo = await msConfig.getUserInfo!({
+					accessToken: "ms-access-token",
+					idToken,
+				});
 
-			expect(userInfo).toMatchObject({
-				sub: "token-pairwise-sub",
-				oid: "token-stable-oid",
-				tid: "token-tenant-id",
-				email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
-				emailVerified: false,
-			});
-			expect(userInfo?.name).toBeUndefined();
-			expect(userInfo?.image).toBeUndefined();
-		});
+				expect(userInfo).toMatchObject({
+					sub: "token-pairwise-sub",
+					oid: "token-stable-oid",
+					tid: "token-tenant-id",
+					email: "token-stable-oid@microsoft-entra-id.placeholder.invalid",
+					emailVerified: false,
+				});
+				expect(userInfo?.name).toBeUndefined();
+				expect(userInfo?.image).toBeUndefined();
+			},
+		);
 
 		it("keeps the placeholder unverified for an unexpected null Graph email claim", async () => {
 			const msConfig = microsoftEntraId({
@@ -4385,32 +4387,32 @@ describe("oauth2", async () => {
 			);
 		});
 
-		it.each([
-			"client_secret_basic",
-			"client_secret_post",
-		] as const)("should reject %s token endpoint auth without clientSecret", async (method) => {
-			await expect(
-				getTestInstance({
-					plugins: [
-						genericOAuth({
-							config: [
-								{
-									providerId: `test-${method}-without-secret`,
-									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
-									clientId,
-									tokenEndpointAuth: {
-										method,
+		it.each(["client_secret_basic", "client_secret_post"] as const)(
+			"should reject %s token endpoint auth without clientSecret",
+			async (method) => {
+				await expect(
+					getTestInstance({
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: `test-${method}-without-secret`,
+										discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+										clientId,
+										tokenEndpointAuth: {
+											method,
+										},
+										pkce: true,
 									},
-									pkce: true,
-								},
-							],
-						}),
-					],
-				}),
-			).rejects.toThrow(
-				`Provider "test-${method}-without-secret": tokenEndpointAuth.method "${method}" requires clientSecret`,
-			);
-		});
+								],
+							}),
+						],
+					}),
+				).rejects.toThrow(
+					`Provider "test-${method}-without-secret": tokenEndpointAuth.method "${method}" requires clientSecret`,
+				);
+			},
+		);
 	});
 
 	it("should use custom name when provided in config", async () => {
@@ -5287,86 +5289,88 @@ describe("oauth2", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10961
 	 */
-	it.each([
-		"authorization",
-		"token",
-		"both",
-	])("skips discovery missing %s endpoints", async (missing) => {
-		const discoveryUrl =
-			"https://incomplete-idp.test/.well-known/openid-configuration";
-		mswServer.use(
-			http.get(discoveryUrl, () =>
-				HttpResponse.json({
-					issuer: "https://incomplete-idp.test",
-					...(missing === "token"
-						? {
-								authorization_endpoint: "https://incomplete-idp.test/authorize",
-							}
-						: {}),
-					...(missing === "authorization"
-						? { token_endpoint: "https://incomplete-idp.test/token" }
-						: {}),
-				}),
-			),
-		);
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "incomplete",
-								clientId,
-								clientSecret,
-								discoveryUrl,
-							},
-						],
+	it.each(["authorization", "token", "both"])(
+		"skips discovery missing %s endpoints",
+		async (missing) => {
+			const discoveryUrl =
+				"https://incomplete-idp.test/.well-known/openid-configuration";
+			mswServer.use(
+				http.get(discoveryUrl, () =>
+					HttpResponse.json({
+						issuer: "https://incomplete-idp.test",
+						...(missing === "token"
+							? {
+									authorization_endpoint:
+										"https://incomplete-idp.test/authorize",
+								}
+							: {}),
+						...(missing === "authorization"
+							? { token_endpoint: "https://incomplete-idp.test/token" }
+							: {}),
 					}),
-				],
-			},
-			{ disableTestUser: true },
-		);
-		expect(
-			(await auth.$context).socialProviders.map((provider) => provider.id),
-		).not.toContain("incomplete");
-	});
+				),
+			);
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "incomplete",
+									clientId,
+									clientSecret,
+									discoveryUrl,
+								},
+							],
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+			expect(
+				(await auth.$context).socialProviders.map((provider) => provider.id),
+			).not.toContain("incomplete");
+		},
+	);
 
-	it.each([
-		false,
-		true,
-	])("keeps explicit token exchange with incomplete discovery (custom=%s)", async (custom) => {
-		const discoveryUrl =
-			"https://incomplete-idp.test/.well-known/openid-configuration";
-		mswServer.use(
-			http.get(discoveryUrl, () =>
-				HttpResponse.json({ issuer: "https://incomplete-idp.test" }),
-			),
-		);
-		const { auth } = await getTestInstance(
-			{
-				plugins: [
-					genericOAuth({
-						config: [
-							{
-								providerId: "explicit",
-								clientId,
-								clientSecret,
-								discoveryUrl,
-								authorizationUrl: "https://incomplete-idp.test/authorize",
-								...(custom
-									? { getToken: async () => ({ accessToken: "custom-token" }) }
-									: { tokenUrl: "https://incomplete-idp.test/token" }),
-							},
-						],
-					}),
-				],
-			},
-			{ disableTestUser: true },
-		);
-		expect(
-			(await auth.$context).socialProviders.map((provider) => provider.id),
-		).toContain("explicit");
-	});
+	it.each([false, true])(
+		"keeps explicit token exchange with incomplete discovery (custom=%s)",
+		async (custom) => {
+			const discoveryUrl =
+				"https://incomplete-idp.test/.well-known/openid-configuration";
+			mswServer.use(
+				http.get(discoveryUrl, () =>
+					HttpResponse.json({ issuer: "https://incomplete-idp.test" }),
+				),
+			);
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "explicit",
+									clientId,
+									clientSecret,
+									discoveryUrl,
+									authorizationUrl: "https://incomplete-idp.test/authorize",
+									...(custom
+										? {
+												getToken: async () => ({ accessToken: "custom-token" }),
+											}
+										: { tokenUrl: "https://incomplete-idp.test/token" }),
+								},
+							],
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+			expect(
+				(await auth.$context).socialProviders.map((provider) => provider.id),
+			).toContain("explicit");
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10961
