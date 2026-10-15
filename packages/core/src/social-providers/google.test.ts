@@ -281,7 +281,7 @@ describe("verifyGoogleIdToken", () => {
 
 /**
  * @see https://developers.google.com/identity/openid-connect/openid-connect#an-id-tokens-payload
- * @see https://github.com/googleapis/google-auth-library-nodejs/blob/main/src/auth/loginticket.ts
+ * @see https://github.com/googleapis/google-auth-library-nodejs/blob/ebf9beda30f251da6adb9ec0bf943019ea0171c5/src/auth/loginticket.ts#L63-L168
  */
 describe("Google optional profile claims", () => {
 	it("defaults missing verification to false and preserves raw claims", async () => {
