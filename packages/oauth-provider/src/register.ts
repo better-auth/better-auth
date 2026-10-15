@@ -8,7 +8,7 @@ import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
-import { validatePublicClientJwks } from "./client-jwks";
+import { assertValidClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
 	getExtensionClientMetadataFields,
@@ -36,7 +36,11 @@ import type {
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
 import { clientRegistrationRequestSchema } from "./types/zod";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import {
+	deriveSectorIdentifier,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
@@ -85,6 +89,29 @@ function resolveRegistrationResponseTypes(
 	return grantTypes.includes("authorization_code") ? ["code"] : undefined;
 }
 
+/**
+ * The requested grants this server supports. Clients such as MCP connectors
+ * send one grant union to every server, so a metadata document or a dynamic
+ * registration may list grants this server does not issue. Throws when the
+ * request shares no grant with the server.
+ */
+function resolveMutuallySupportedGrantTypes(
+	opts: OAuthOptions<Scope[]>,
+	grantTypes: GrantType[],
+): GrantType[] {
+	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+	const mutualGrantTypes = grantTypes.filter((grantType) =>
+		supportedGrantTypes.has(grantType),
+	);
+	if (mutualGrantTypes.length === 0) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
+		});
+	}
+	return mutualGrantTypes;
+}
+
 function applyOAuthClientRegistrationDefaults(
 	client: OAuthClientRegistrationMetadata,
 	defaultApplicationType: "web" | "native" | null = "web",
@@ -121,10 +148,10 @@ function isNonHttpRedirectUri(redirectUri: string): boolean {
 /**
  * Server-owned default for dynamic registrations that omit `application_type`.
  * `"infer"` classifies as native when any redirect URI uses a non-http(s)
- * scheme, because a web client can never register one. Every URI is then
- * validated against the native rules. A sent `application_type` is never
- * overridden because `applyOAuthClientRegistrationDefaults` only fills the
- * absent field.
+ * scheme or http on an exact loopback host, because a web client can never
+ * register either. Every URI is then validated against the native rules. A
+ * sent `application_type` is never overridden because
+ * `applyOAuthClientRegistrationDefaults` only fills the absent field.
  */
 function resolveDynamicRegistrationDefaultApplicationType(
 	opts: OAuthOptions<Scope[]>,
@@ -132,7 +159,9 @@ function resolveDynamicRegistrationDefaultApplicationType(
 ): "web" | "native" {
 	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
 	if (configured !== "infer") return configured;
-	return (client.redirect_uris ?? []).some(isNonHttpRedirectUri)
+	return (client.redirect_uris ?? []).some(
+		(uri) => isNonHttpRedirectUri(uri) || isExactLoopbackHttpRedirectUri(uri),
+	)
 		? "native"
 		: "web";
 }
@@ -155,6 +184,13 @@ function getRawHttpHostname(redirectUri: string): string | null {
 			: hostAndPort.slice(0, bracketEnd + 1).toLowerCase();
 	}
 	return (hostAndPort.split(":")[0] ?? "").toLowerCase();
+}
+
+function isExactLoopbackHttpRedirectUri(redirectUri: string): boolean {
+	const hostname = getRawHttpHostname(redirectUri);
+	return (
+		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+	);
 }
 
 function assertDynamicRegistrationResourcesAllowed(
@@ -229,11 +265,6 @@ function validateClientRedirectUri(
 	}
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
-	const rawHttpHostname = getRawHttpHostname(redirectUri);
-	const isAllowedNativeHttpLoopback =
-		rawHttpHostname === "localhost" ||
-		rawHttpHostname === "127.0.0.1" ||
-		rawHttpHostname === "[::1]";
 
 	if (applicationType === "web") {
 		if (!isHttps || isRedirectLoopback) {
@@ -253,7 +284,7 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isAllowedNativeHttpLoopback) {
+		if (!isExactLoopbackHttpRedirectUri(redirectUri)) {
 			invalidRedirectUri(
 				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
 			);
@@ -265,16 +296,6 @@ function validateClientRedirectUri(
 		invalidRedirectUri(
 			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with a host and a path: ${redirectUri}`,
 		);
-	}
-}
-
-function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
-	const result = validatePublicClientJwks(jwks);
-	if (!result.valid) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_client_metadata",
-			error_description: result.error,
-		});
 	}
 }
 
@@ -402,8 +423,24 @@ export async function registerEndpoint(
 		);
 	}
 
+	// RFC 7591 §3.2.1 lets the server replace requested metadata: register the
+	// supported grants and return them, instead of rejecting the whole request.
+	const grantTypes = body.grant_types?.length
+		? resolveMutuallySupportedGrantTypes(opts, body.grant_types)
+		: body.grant_types;
+	const droppedAuthorizationCode =
+		body.grant_types?.includes("authorization_code") &&
+		!grantTypes?.includes("authorization_code");
+	const registrationMetadata = {
+		...body,
+		grant_types: grantTypes,
+		// `code`, the only response type, goes with `authorization_code`; the
+		// defaults derive response_types from the registered grants instead.
+		response_types: droppedAuthorizationCode ? undefined : body.response_types,
+	};
+
 	if (!session && !isTokenAuthorized) {
-		if (body.grant_types?.includes("client_credentials")) {
+		if (registrationMetadata.grant_types?.includes("client_credentials")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
@@ -431,7 +468,7 @@ export async function registerEndpoint(
 				})
 			: undefined);
 	const response = await createOAuthClientRegistration(ctx, opts, {
-		metadata: { ...body, metadata },
+		metadata: { ...registrationMetadata, metadata },
 		registrationSource: "dynamic",
 		userId: referenceId ? undefined : session?.session.userId,
 		referenceId,
@@ -526,18 +563,16 @@ export async function checkOAuthClient(
 	}
 
 	// Validate correlation between grant_types and response_types
-	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 	if (isClientMetadataDocument) {
 		// One metadata document serves every authorization server the client talks
 		// to, so it declares a grant union; require one mutual grant and let the
 		// token endpoint refuse the rest.
-		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
-			});
-		}
+		resolveMutuallySupportedGrantTypes(opts, grantTypes);
 	} else {
+		// Dynamic registration drops unsupported requested grants before this
+		// check, so this rejects managed clients, client updates, and a defaulted
+		// grant the server does not support.
+		const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 		for (const grantType of grantTypes) {
 			if (!supportedGrantTypes.has(grantType)) {
 				throw new APIError("BAD_REQUEST", {
@@ -589,9 +624,10 @@ export async function checkOAuthClient(
 					"pairwise subject_type requires server pairwiseSecret configuration",
 			});
 		}
-		// The pairwise sector is the redirect URI host. Any app can register a
-		// custom scheme, so the host in `app://rp.example.com/callback` does not
-		// identify the client and would share an HTTPS client's sector.
+		// A client stored without a sector still uses its redirect URI host as
+		// the pairwise sector, and this check cannot tell those clients apart.
+		// Any app can register a custom scheme, so the host in
+		// `app://rp.example.com/callback` does not identify the client.
 		if (
 			clientWithDefaults.subject_type === "pairwise" &&
 			clientWithDefaults.redirect_uris?.some(isCustomSchemeWithHost)
@@ -724,7 +760,7 @@ export async function checkOAuthClient(
 			}
 		}
 		if (clientWithDefaults.jwks) {
-			assertValidRegistrationJwks(clientWithDefaults.jwks);
+			assertValidClientJwks(clientWithDefaults.jwks);
 		}
 	}
 	// private_key_jwt requires key material; other methods may still register
@@ -1013,6 +1049,10 @@ async function persistOAuthClientRegistration(
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
 			: null;
+	schema.sectorIdentifier = deriveSectorIdentifier(
+		clientId,
+		body.redirect_uris,
+	);
 	if (
 		input.registrationSource === "clientMetadataDocument" &&
 		body.application_type === undefined
@@ -1090,6 +1130,10 @@ async function persistOAuthClientRegistration(
 						disabled: existingClient.disabled,
 						skipConsent: existingClient.skipConsent,
 						enableEndSession: existingClient.enableEndSession,
+						// A client stored without a sector keeps the host-derived one.
+						sectorIdentifier: existingClient.sectorIdentifier
+							? schema.sectorIdentifier
+							: null,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},

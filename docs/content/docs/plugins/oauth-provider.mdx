@@ -462,6 +462,8 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
+Dynamic registration keeps only the requested `grant_types` this server supports, and the registration response lists the grants that were registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). For example, Claude's MCP connector requests `urn:ietf:params:oauth:grant-type:jwt-bearer` alongside `authorization_code` and `refresh_token`, and registers with the last two. When `authorization_code` is dropped, so is the `code` response type. A registration that shares no grant with the server is rejected with `invalid_client_metadata`. Clients created with `createOAuthClient` or `adminCreateOAuthClient` are not narrowed: an unsupported grant is rejected.
+
 `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use any of these redirect URI forms:
 
 * A claimed `https` URI on a non-loopback host.
@@ -475,15 +477,15 @@ Application type is independent of client authentication. For example, a native 
 
 The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
 
-Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, so the `web` default rejects the registration. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
+Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, and older Claude Code releases register a single `http://127.0.0.1:<port>/callback`, so the `web` default rejects both registrations. Current Claude Code releases send `application_type: "native"` and register without this option. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
 
-| Value             | Omitted `application_type` becomes                                        |
-| ----------------- | ------------------------------------------------------------------------- |
-| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                  |
-| `"native"`        | `native`                                                                  |
-| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme, otherwise `web` |
+| Value             | Omitted `application_type` becomes                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                                                                    |
+| `"native"`        | `native`                                                                                                                    |
+| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme or `http` on `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web` |
 
-Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme becomes `native`, so its `http` URIs must still be loopback. A client that lists only `http` and `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
+Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme or an `http` loopback URI becomes `native`, so its other `http` URIs must still be loopback. A client that lists only `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -553,7 +555,7 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
-Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge. For the built-in `authorization_code`, `refresh_token`, `client_credentials`, and device code grants, the client is authenticated before the grant is looked up, so an unknown `client_id` returns `invalid_client` rather than `invalid_grant`. An extension grant handler (see [Provider extensions](#provider-extensions)) gets the same result by calling `provider.authenticateClient()` before it looks up its grant.
 
 #### DPoP sender-constrained tokens
 
@@ -562,7 +564,7 @@ Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC
 When a token is DPoP-bound:
 
 * The token endpoint requires a valid `DPoP` proof JWT.
-* The proof's `htu` must be the endpoint's public URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`. This holds even when a proxy or dev server rewrites the request host.
+* The proof's `htu` must be the endpoint's public URL: the origin and base path of `baseURL`, followed by the path the client requested, such as `https://auth.example.com/api/auth/oauth2/token`. Set `baseURL` to the public URL clients call, not an internal one, because the expected `htu` ignores the request host, which a proxy or dev server can rewrite.
 * The token response returns `token_type: "DPoP"`.
 * JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
 * Refresh token rotation requires a DPoP proof from the same key.
@@ -643,6 +645,44 @@ The assertion JWT must contain:
 | `iat` | Optional, but if present must not be older than `assertionMaxLifetime`                                                                                             |
 
 Supported signing algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`.
+
+##### Rotating client keys
+
+A client with inline `jwks` can replace its own keys without a user session. This is how a service rotates its signing key on a schedule. Enable it on the provider:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowClientKeyRotation: true,
+})
+```
+
+The client generates a new key pair, then calls the endpoint with a client assertion signed by one of its current keys:
+
+```
+POST /api/auth/oauth2/client/rotate-keys
+Content-Type: application/json
+
+{
+  "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+  "client_assertion": "eyJhbGciOiJFUzI1NiIs...",
+  "jwks": { "keys": [{ "kty": "EC", "crv": "P-256", "kid": "key-2", "x": "...", "y": "..." }] }
+}
+```
+
+The assertion follows the claims in the table above, with one difference: `aud` must include the URL of the rotation endpoint. The token endpoint and the issuer do not count as audiences here, so an assertion minted only for them cannot be redirected to take over a client's keys.
+
+`jwks` is the client's complete new key set. A key left out of it stops verifying at once, so leaving out a leaked key retires it with that request. The response returns `client_id` and the stored `jwks`.
+
+To replace a key without breaking instances that still sign with the old one, roll it in two steps, the way a client that publishes a `jwks_uri` does:
+
+1. Send both the old and the new key, signed by the old key.
+2. Once every instance signs with the new key, send only the new key, signed by the new key.
+
+If the keys change while a rotation is in flight, the losing request fails with `409`, or with `401` if its signing key was already removed. Sign a fresh assertion with a current key and retry.
+
+<Callout type="info">
+  Each rotation assertion must be single-use, so the provider refuses to start with `allowClientKeyRotation` on the memory adapter or with `advanced.database.generateId: "serial"`. Only clients that register inline `jwks` can use this endpoint. A client that publishes a `jwks_uri` rotates its keys at that URI, and clients listed in `cachedTrustedClients` cannot be changed through the client management endpoints. `client_secret_*` clients use `/oauth2/client/rotate-secret` instead.
+</Callout>
 
 #### Authorization code grant
 
@@ -730,7 +770,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 [RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
-This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
+This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`. `token_type_hint` only sets which token type is checked first: a token sent with the wrong hint is still found.
 
 Use the `resources` field in `customAccessTokenClaims` to add claims based on the protected resource.
 
@@ -755,10 +795,14 @@ The two formats differ in one way. An opaque token is recomputed on each call, s
 
 [RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
+An unknown, expired, or already revoked token returns `200` instead of an error ([RFC7009 §2.2](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2)). `token_type_hint` only sets which token type is checked first: a token sent with the wrong hint is still revoked.
+
+A client can only revoke tokens issued to it ([RFC7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). A confidential client that sends another client's token gets `400 invalid_request`. A public client gets `200` and the token stays valid, so a public client can't use the endpoint to test whether a token exists.
+
 What the endpoint does depends on the token type:
 
 * opaque `access_token`: deleted from the database immediately. A `refresh_token` from the same grant stays valid.
-* `refresh_token`: deletes every `access_token` it minted and removes the `refresh_token`, so it can no longer issue tokens.
+* `refresh_token`: marks the `refresh_token` revoked and deletes every opaque `access_token` it minted, so it can no longer issue tokens. Revoking a `refresh_token` that was already revoked or rotated is treated as replay: it still returns `200`, and it deletes the client's `refresh_token`s for that user, along with the opaque `access_token`s minted from them. An `access_token` issued without a `refresh_token`, and any JWT `access_token`, stays valid until it expires.
 * JWT `access_token`: cannot be revoked server-side. A JWT is self-contained and is never stored, so there is nothing to delete. A token that still verifies for this server responds with `400 unsupported_token_type` ([RFC7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), making clear that no server-side revocation happened. A JWT that is already expired or carries an audience rejected by the OAuth resource model is treated as an invalid token and returns a `200` no-op.
 
 Because a JWT `access_token` cannot be revoked individually, plan for it:
@@ -1271,6 +1315,8 @@ oauthProvider({
   }
 })
 ```
+
+Consent is stored per reference. An authorization reuses only the consent the user gave for the same `consentReferenceId` value, and returning `undefined` or an empty string uses only the consent given without a reference.
 
 The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`. Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
 
@@ -2129,14 +2175,15 @@ The OAuth Provider includes built-in rate limiting for all OAuth endpoints to pr
 
 **Default limits:**
 
-| Endpoint             | Window | Max Requests |
-| -------------------- | ------ | ------------ |
-| `/oauth2/token`      | 60s    | 20           |
-| `/oauth2/authorize`  | 60s    | 30           |
-| `/oauth2/introspect` | 60s    | 100          |
-| `/oauth2/revoke`     | 60s    | 30           |
-| `/oauth2/register`   | 60s    | 5            |
-| `/oauth2/userinfo`   | 60s    | 60           |
+| Endpoint                     | Window | Max Requests |
+| ---------------------------- | ------ | ------------ |
+| `/oauth2/token`              | 60s    | 20           |
+| `/oauth2/authorize`          | 60s    | 30           |
+| `/oauth2/introspect`         | 60s    | 100          |
+| `/oauth2/revoke`             | 60s    | 30           |
+| `/oauth2/register`           | 60s    | 5            |
+| `/oauth2/client/rotate-keys` | 60s    | 5            |
+| `/oauth2/userinfo`           | 60s    | 60           |
 
 You can customize the rate limits for each endpoint:
 
@@ -2148,6 +2195,7 @@ oauthProvider({
     introspect: { window: 60, max: 100 },  // 100 requests per minute
     revoke: { window: 60, max: 30 },       // 30 requests per minute
     register: { window: 60, max: 5 },      // 5 requests per minute
+    rotateClientKeys: { window: 60, max: 5 }, // 5 requests per minute
     userinfo: { window: 60, max: 60 },     // 60 requests per minute
   },
 })
@@ -2196,40 +2244,37 @@ oauthProvider({
 })
 ```
 
-Pseudocode for a token encryption method:
+Example that encrypts the refresh token as a JWE:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
-import { CompactEncrypt, compactDecrypt } from 'jose'
-import { oauthProvider } from "@better-auth/oauth-provider"; 
+import { base64url, CompactEncrypt, compactDecrypt } from "jose";
+import { oauthProvider } from "@better-auth/oauth-provider";
 
-const secret = "SOME_SECRET_OR_KEY"
-const alg = "A256KW"
-const enc = "A256GCM"
+// A random 256-bit key kept in your secret store, base64url-encoded.
+// Generate one with `openssl rand -base64 32 | tr '+/' '-_' | tr -d '='`.
+const key = base64url.decode(process.env.REFRESH_TOKEN_KEY!);
+const alg = "A256KW";
+const enc = "A256GCM";
 
 const auth = betterAuth({
   plugins: [
     oauthProvider({
-    formatRefreshToken: {
-      encrypt: (token, sessionId) {
-        const value = JSON.stringify({
-          sessionId,
-          token,
-        });
-        const jwe = await new CompactEncrypt(Buffer.from(value))
-          .setProtectedHeader({ alg, enc })
-          .encrypt(secret);
-        return jwe;
+      formatRefreshToken: {
+        encrypt: async (token, sessionId) => {
+          const value = JSON.stringify({ sessionId, token });
+          return new CompactEncrypt(new TextEncoder().encode(value))
+            .setProtectedHeader({ alg, enc })
+            .encrypt(key);
+        },
+        decrypt: async (token) => {
+          const { plaintext } = await compactDecrypt(token, key);
+          return JSON.parse(new TextDecoder().decode(plaintext));
+        },
       },
-      decrypt: (token) {
-        const { plaintext } = await compactDecrypt(token, secret);
-        const payload = new TextDecoder().decode(plaintext);
-        return JSON.parse(payload);
-      },
-    }
-  })
-]
-})
+    }),
+  ],
+});
 ```
 
 ### Advertised Metadata
@@ -2311,11 +2356,18 @@ const response = await auth.api.createOAuthClient({
 
 #### How It Works
 
-Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** (the host of the client's first redirect URI) and the user ID, keyed with `pairwiseSecret`. This means:
+Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** and the user ID, keyed with `pairwiseSecret`. Better Auth assigns the sector when the client is created:
 
-* Two clients with different redirect URI hosts always receive different `sub` values for the same user
-* Two clients sharing the same redirect URI host receive the **same** pairwise `sub` (per OIDC Core Section 8.1)
+* A client whose redirect URIs all use `https` gets the host of its first redirect URI, including any port. Clients on the same `https` host share a sector and receive the **same** pairwise `sub` (per OIDC Core Section 8.1).
+* Any other client, such as one with an authority-free private-use (`com.example.app:/callback`) or loopback (`http://localhost:8787/callback`) redirect URI, gets a sector of its own. Any app can register a custom scheme, and any local process can listen on a loopback port, so those redirect URIs do not identify the client.
+
+This means:
+
+* Two clients with different sectors always receive different `sub` values for the same user
 * The same client always receives the same `sub` for the same user (deterministic)
+* Changing a client's redirect URIs recomputes its sector, so moving to another host changes the `sub` its users receive
+
+Clients created before Better Auth stored sectors keep the sector of their first redirect URI host, so their users' `sub` does not change. Unrelated custom-scheme or loopback clients created before then can share a sector.
 
 Pairwise `sub` appears in:
 
@@ -2399,6 +2451,13 @@ export const oauthClientTableFields = [
     type: "string",
     description:
       'Subject identifier type for this client. Set to "pairwise" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.',
+    isOptional: true,
+  },
+  {
+    name: "sectorIdentifier",
+    type: "string",
+    description:
+      "Pairwise sector assigned by the server when the client is created. Empty for clients created before sectors were stored, which use the host of their first redirect URI.",
     isOptional: true,
   },
   {
@@ -2555,6 +2614,20 @@ export const oauthClientTableFields = [
     type: "string",
     description:
       "OIDC application type used to classify redirect URI policy. Supports: ['web', 'native']",
+    isOptional: true,
+  },
+  {
+    name: "jwks",
+    type: "string",
+    description:
+      "The client's public JWK Set as JSON, for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`",
+    isOptional: true,
+  },
+  {
+    name: "jwksUri",
+    type: "string",
+    description:
+      "HTTPS URI of the client's public JWK Set. Mutually exclusive with `jwks`",
     isOptional: true,
   },
   {

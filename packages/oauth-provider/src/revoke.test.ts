@@ -6,7 +6,8 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { CompactEncrypt, compactDecrypt } from "jose";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
@@ -211,25 +212,6 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
-		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.refresh_token!,
-				token_type_hint: "access_token",
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
-				},
-			},
-		);
-		expect(revocation.error?.status).toBe(400);
-	});
-
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
@@ -248,25 +230,6 @@ describe("oauth revoke", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
-	});
-
-	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
-		const tokens = await getTokens();
-		const revocation = await client.oauth2.revoke(
-			{
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				token: tokens.data?.access_token!,
-				token_type_hint: "refresh_token",
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
-				},
-			},
-		);
-		expect(revocation.error?.status).toBe(400);
 	});
 
 	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
@@ -307,6 +270,177 @@ describe("oauth revoke", async () => {
 		);
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+	 */
+	describe("RFC 7009 token handling", () => {
+		function revoke(
+			token: string,
+			token_type_hint?: string,
+			caller: Pick<
+				OAuthClient,
+				"client_id" | "client_secret"
+			> | null = oauthClient,
+		) {
+			return client.oauth2.revoke(
+				{
+					client_id: caller?.client_id,
+					...(caller?.client_secret
+						? { client_secret: caller.client_secret }
+						: {}),
+					token,
+					token_type_hint,
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+		}
+
+		async function isActive(token: string) {
+			const introspection = await client.oauth2.introspect(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token,
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			return introspection.data?.active;
+		}
+
+		it("revokes a refresh_token sent with token_type_hint access_token", async () => {
+			const tokens = await getTokens();
+			const refreshToken = tokens.data?.refresh_token!;
+			expect(await isActive(refreshToken)).toBe(true);
+
+			const revocation = await revoke(refreshToken, "access_token");
+			expect(revocation.error).toBe(null);
+			expect(await isActive(refreshToken)).toBe(false);
+		});
+
+		it("revokes an opaque access_token sent with token_type_hint refresh_token", async () => {
+			const tokens = await getTokens();
+			const accessToken = tokens.data?.access_token!;
+			expect(await isActive(accessToken)).toBe(true);
+
+			const revocation = await revoke(accessToken, "refresh_token");
+			expect(revocation.error).toBe(null);
+			expect(await isActive(accessToken)).toBe(false);
+		});
+
+		it.each([undefined, "access_token", "refresh_token"])(
+			"returns 200 for an unknown token (token_type_hint %s)",
+			async (hint) => {
+				const revocation = await revoke("unknown-token", hint);
+				expect(revocation.error).toBe(null);
+			},
+		);
+
+		function createOtherClient(
+			token_endpoint_auth_method: "client_secret_post" | "none",
+		) {
+			return auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					application_type: "native",
+					token_endpoint_auth_method,
+					skip_consent: true,
+				},
+			});
+		}
+
+		it.each(["access_token", "refresh_token"] as const)(
+			"refuses a confidential client revoking another client's %s",
+			async (type) => {
+				const tokens = await getTokens();
+				const token = tokens.data?.[type]!;
+				const other = await createOtherClient("client_secret_post");
+
+				const revocation = await revoke(token, undefined, other);
+				expect(revocation.error).toMatchObject({
+					status: 400,
+					error: "invalid_request",
+				});
+				expect(await isActive(token)).toBe(true);
+			},
+		);
+
+		it.each(["access_token", "refresh_token"] as const)(
+			"answers a public client revoking another client's %s with 200 and keeps the token",
+			async (type) => {
+				const tokens = await getTokens();
+				const token = tokens.data?.[type]!;
+				const other = await createOtherClient("none");
+
+				const revocation = await revoke(token, undefined, {
+					client_id: other.client_id,
+				});
+				expect(revocation.error).toBe(null);
+				expect(await isActive(token)).toBe(true);
+			},
+		);
+
+		it("applies the same ownership rule to another client's JWT access_token", async () => {
+			const tokens = await getTokens(undefined, validResource);
+			const jwtAccessToken = tokens.data?.access_token!;
+			expect(jwtAccessToken.split(".")).toHaveLength(3);
+
+			const confidential = await createOtherClient("client_secret_post");
+			expect(
+				(await revoke(jwtAccessToken, undefined, confidential)).error,
+			).toMatchObject({ status: 400, error: "invalid_request" });
+
+			const publicClient = await createOtherClient("none");
+			expect(
+				(
+					await revoke(jwtAccessToken, undefined, {
+						client_id: publicClient.client_id,
+					})
+				).error,
+			).toBe(null);
+		});
+
+		it("refuses another client's revoked refresh_token before replay handling", async () => {
+			const tokens = await getTokens();
+			const refreshToken = tokens.data?.refresh_token!;
+			expect((await revoke(refreshToken)).error).toBe(null);
+
+			const other = await createOtherClient("client_secret_post");
+			const revocation = await revoke(refreshToken, undefined, other);
+			expect(revocation.error).toMatchObject({
+				status: 400,
+				error: "invalid_request",
+			});
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11595
+		 */
+		it("returns 200 for a JWT-shaped token that fails verification", async () => {
+			const revocation = await revoke("eyJhbGciOiJub25lIn0.eyJzdWIiOiJ4In0.");
+			expect(revocation.error).toBe(null);
+		});
+
+		it("returns 200 when revoking an already revoked refresh_token", async () => {
+			const tokens = await getTokens();
+			const refreshToken = tokens.data?.refresh_token!;
+			expect((await revoke(refreshToken, "refresh_token")).error).toBe(null);
+			expect((await revoke(refreshToken, "refresh_token")).error).toBe(null);
+			expect(await isActive(refreshToken)).toBe(false);
+		});
 	});
 
 	it("should pass verification without token_type_hint and sent refresh_token", async () => {
@@ -438,6 +572,166 @@ describe("oauth revoke - config", async () => {
 			codeVerifier,
 		};
 	}
+
+	/**
+	 * The JWE refresh-token format from the `formatRefreshToken` docs, on a
+	 * deployment without the JWT plugin.
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+	 */
+	describe("encrypted refresh tokens without the JWT plugin", () => {
+		const key = new Uint8Array(32).fill(7);
+		const formatRefreshToken = {
+			encrypt: async (token: string, sessionId?: string) =>
+				new CompactEncrypt(
+					new TextEncoder().encode(JSON.stringify({ token, sessionId })),
+				)
+					.setProtectedHeader({ alg: "A256KW", enc: "A256GCM" })
+					.encrypt(key),
+			decrypt: async (token: string) => {
+				const { plaintext } = await compactDecrypt(token, key);
+				return JSON.parse(new TextDecoder().decode(plaintext));
+			},
+		};
+
+		async function setup() {
+			const testScopes = ["openid", "offline_access"];
+			const { client, oauthClient } = await createTestInstance({
+				oauthProviderConfig: {
+					disableJwtPlugin: true,
+					formatRefreshToken,
+					scopes: testScopes,
+				},
+			});
+			if (!oauthClient) expect.unreachable();
+			const { url: authUrl, codeVerifier } = await createAuthUrl(oauthClient, {
+				scopes: testScopes,
+			});
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const tokens = await client.$fetch<{
+				access_token: string;
+				refresh_token: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+					code_verifier: codeVerifier,
+					client_id: oauthClient.client_id,
+					client_secret: oauthClient.client_secret!,
+					redirect_uri: redirectUri,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			});
+			const call = (path: string, body: Record<string, string>) =>
+				client.$fetch<{ active?: boolean }>(path, {
+					method: "POST",
+					body: new URLSearchParams({
+						client_id: oauthClient.client_id,
+						client_secret: oauthClient.client_secret!,
+						...body,
+					}),
+					headers: { "content-type": "application/x-www-form-urlencoded" },
+				});
+			return { tokens: tokens.data!, call };
+		}
+
+		it("revokes the encrypted refresh_token", async () => {
+			const { tokens, call } = await setup();
+			expect(tokens.refresh_token.split(".")).toHaveLength(5);
+			const revoked = await call("/oauth2/revoke", {
+				token: tokens.refresh_token,
+			});
+			expect(revoked.error).toBe(null);
+			const introspection = await call("/oauth2/introspect", {
+				token: tokens.refresh_token,
+			});
+			expect(introspection.data?.active).toBe(false);
+		});
+
+		it("revokes an opaque access_token sent with token_type_hint refresh_token", async () => {
+			const { tokens, call } = await setup();
+			const revoked = await call("/oauth2/revoke", {
+				token: tokens.access_token,
+				token_type_hint: "refresh_token",
+			});
+			expect(revoked.error).toBe(null);
+			const introspection = await call("/oauth2/introspect", {
+				token: tokens.access_token,
+			});
+			expect(introspection.data?.active).toBe(false);
+		});
+
+		it("returns 200 for an unknown token the decoder rejects", async () => {
+			const { call } = await setup();
+			const revoked = await call("/oauth2/revoke", {
+				token: "not-a-jwe",
+				token_type_hint: "refresh_token",
+			});
+			expect(revoked.error).toBe(null);
+		});
+	});
+
+	/**
+	 * An expired JWT access token cannot be a refresh token, so the lookup must
+	 * stop before a `formatRefreshToken.decrypt` that throws on unknown input.
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+	 */
+	it("returns 200 for an expired JWT access_token without token_type_hint", async () => {
+		const testScopes = ["read:profile"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: (token) => `rt.${token}`,
+					decrypt: (token) => {
+						if (!token.startsWith("rt.")) {
+							throw new Error("not a refresh token");
+						}
+						return { token: token.slice(3) };
+					},
+				},
+			},
+		});
+		const headers = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+		const tokens = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				scope: testScopes.join(" "),
+				resource: validResource,
+			},
+			{ headers },
+		);
+		const accessToken = tokens.data?.access_token!;
+		expect(accessToken.split(".")).toHaveLength(3);
+
+		vi.useFakeTimers({
+			toFake: ["Date"],
+			now: Date.now() + 2 * 60 * 60 * 1000,
+		});
+		try {
+			const revocation = await client.oauth2.revoke(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token: accessToken,
+				},
+				{ headers },
+			);
+			expect(revocation.error).toBe(null);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 
 	it("should pass with the correct opaqueAccessTokenPrefix", async () => {
 		const prefix = "hello_";

@@ -1,26 +1,28 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
-import {
-	getJwks,
-	stripAccessTokenAuthorizationScheme,
-} from "better-auth/oauth2";
+import { stripAccessTokenAuthorizationScheme } from "better-auth/oauth2";
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
-import type { JSONWebKeySet, JWTPayload } from "jose";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import type { JWTPayload } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import {
 	getResourceCustomClaims,
 	isAudienceClaimAllowed,
 	isClientLinkedToAnyResource,
+	userInfoResource,
 } from "./resources";
-import { confirmationTokenType, decodeRefreshToken } from "./token";
+import { confirmationTokenType } from "./token";
+import type {
+	FoundAccessToken,
+	JwtAccessTokenPayload,
+	OpaqueAccessTokenRecord,
+	RefreshTokenRecord,
+} from "./token-lookup";
+import { findAccessToken, findToken } from "./token-lookup";
 import type {
 	ActiveAccessTokenPayload,
 	Confirmation,
-	OAuthOpaqueAccessToken,
 	OAuthOptions,
-	OAuthRefreshToken,
 	SchemaClient,
 	Scope,
 } from "./types";
@@ -29,7 +31,6 @@ import {
 	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
-	getStoredToken,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
 	toAudienceClaim,
@@ -57,11 +58,11 @@ function inactiveAccessToken(): ValidatedAccessToken {
 }
 
 /**
- * IMPORTANT NOTES:
- * Introspection follows RFC7662
+ * Introspection follows RFC 7662
  * https://datatracker.ietf.org/doc/html/rfc7662
- * - APIError: Continue catches (returnable to client)
- * - Error: Should immediately stop catches (internal error)
+ *
+ * A token this server cannot find, or one the caller may not see, resolves as
+ * `{ active: false }` (§2.2, §4). Only protocol errors surface.
  */
 
 /**
@@ -110,69 +111,17 @@ async function isIntrospectionAuthorized(
 }
 
 /**
- * Validates a JWT access token against the configured JWKs.
+ * Validates a JWT access token whose signature and issuer are verified.
  *
  * @returns RFC7662 introspection format
  */
 async function validateJwtAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	token: string,
+	jwtPayload: JwtAccessTokenPayload,
 	clientId?: string,
 ) {
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin?.options;
-	const baseURL = ctx.context.baseURL ?? "";
-	const userInfoAud = `${baseURL}/oauth2/userinfo`;
-	const expectedIssuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
-	let jwtPayload: JWTPayload & {
-		sid?: string;
-		azp?: string;
-	};
-
-	try {
-		// Do NOT pass `audience` to jose's verifier. Verify signature + issuer
-		// here, then validate `aud` manually against the resource model below.
-		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
-			? jwtPluginOptions.jwks.remoteUrl
-			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
-					// @ts-expect-error response is a JSONWebKeySet but within the response field
-					return jwksRes?.response as JSONWebKeySet | undefined;
-				};
-		const jwks = await getJwks(token, { jwksFetch, jwksCacheKey: jwtPlugin });
-		const verified = await jwtVerify<JWTPayload & { azp?: string }>(
-			token,
-			createLocalJWKSet(jwks),
-			{
-				issuer: expectedIssuer,
-			},
-		);
-		jwtPayload = verified.payload;
-	} catch (error) {
-		if (error instanceof Error) {
-			if (error.name === "TypeError" || error.name === "JWSInvalid") {
-				// likely an opaque token
-				throw new APIError("BAD_REQUEST", {
-					error_description: "invalid JWT signature",
-					error: "invalid_request",
-				});
-			} else if (error.name === "JWTExpired") {
-				return {
-					active: false,
-				};
-			} else if (error.name === "JWTInvalid") {
-				// issuer or other JWT claim validation failure
-				return {
-					active: false,
-				};
-			}
-			throw error;
-		}
-		throw new Error(error as unknown as string);
-	}
+	const userInfoAud = userInfoResource(ctx.context.baseURL ?? "");
 
 	// Manual `aud` validation (RFC 7662 §2.2 + RFC 8707 §3). EVERY value in
 	// the `aud` claim must resolve to a legitimate resource target:
@@ -191,19 +140,8 @@ async function validateJwtAccessToken(
 		return { active: false };
 	}
 
-	// An OAuth access token issued by this provider always carries an `azp`
-	// (authorized party = client) claim, stamped by `createJwtAccessToken`. The
-	// JWT plugin shares the same issuer, audience convention, and signing keys, so
-	// a plain session JWT (e.g. from its `/token` endpoint) can otherwise satisfy
-	// the signature/issuer/audience checks above. Such a token was never issued
-	// through the OAuth token endpoint and has no client or consent binding, so
-	// it must not be reported as an active access token. Require `azp` and a
-	// matching, enabled client before considering the token active.
-	if (!jwtPayload.azp) {
-		return {
-			active: false,
-		};
-	}
+	// `findToken` only returns JWTs carrying `azp`; require that client to
+	// exist and be enabled before considering the token active.
 	const client = await getClient(ctx, opts, jwtPayload.azp);
 	if (!client || client?.disabled) {
 		return {
@@ -249,49 +187,16 @@ async function validateJwtAccessToken(
 }
 
 /**
- * Searches for an opaque access token in the database and validates it
+ * Validates an opaque access token record.
  *
  * @returns RFC7662 introspection format
  */
 async function validateOpaqueAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	token: string,
+	accessToken: OpaqueAccessTokenRecord,
 	clientId?: string,
 ): Promise<ValidatedAccessToken> {
-	let tokenValue = token;
-	if (opts.prefix?.opaqueAccessToken) {
-		if (tokenValue.startsWith(opts.prefix.opaqueAccessToken)) {
-			tokenValue = tokenValue.replace(opts.prefix.opaqueAccessToken, "");
-		} else {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "opaque access token not found",
-				error: "invalid_request",
-			});
-		}
-	}
-	const accessToken = await ctx.context.adapter.findOne<
-		OAuthOpaqueAccessToken<Scope[]>
-	>({
-		model: "oauthAccessToken",
-		where: [
-			{
-				field: "token",
-				value: await getStoredToken(
-					opts.storeTokens,
-					tokenValue,
-					"access_token",
-				),
-			},
-		],
-	});
-	if (!accessToken) {
-		// Pass through, may be other token type
-		throw new APIError("BAD_REQUEST", {
-			error_description: "opaque access token not found",
-			error: "invalid_token",
-		});
-	}
 	if (!accessToken.expiresAt || accessToken.expiresAt < new Date()) {
 		return inactiveAccessToken();
 	}
@@ -424,34 +329,16 @@ async function validateOpaqueAccessToken(
 }
 
 /**
- * Validates a refresh token in the session store.
+ * Validates a refresh token record.
  *
  * @returns payload in RFC7662 introspection format
  */
 async function validateRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	token: string,
+	refreshToken: RefreshTokenRecord,
 	clientId: string,
 ) {
-	const refreshToken = await ctx.context.adapter.findOne<OAuthRefreshToken<
-		Scope[]
-	> | null>({
-		model: "oauthRefreshToken",
-		where: [
-			{
-				field: "token",
-				value: await getStoredToken(opts.storeTokens, token, "refresh_token"),
-			},
-		],
-	});
-	if (!refreshToken) {
-		// Pass through may be other token type
-		throw new APIError("BAD_REQUEST", {
-			error_description: "token not found",
-			error: "invalid_token",
-		});
-	}
 	if (!refreshToken.clientId || refreshToken.clientId !== clientId) {
 		return {
 			active: false,
@@ -526,17 +413,26 @@ function createInvalidAccessTokenError() {
 	);
 }
 
-function isInactiveTokenError(error: APIError) {
-	return (
-		error.status === "BAD_REQUEST" || error.body?.error === "invalid_token"
-	);
+async function validateFoundAccessToken(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	found: FoundAccessToken,
+	clientId?: string,
+): Promise<ValidatedAccessToken> {
+	if (found.type === "opaque") {
+		return validateOpaqueAccessToken(ctx, opts, found.record, clientId);
+	}
+	return {
+		payload: await validateJwtAccessToken(ctx, opts, found.payload, clientId),
+		requestedUserInfoClaims: [],
+	};
 }
 
 /**
- * We don't know the access token format so we try to validate it as a JWT
- * first, then as an opaque token. Returns the RFC 7662 introspection payload
- * alongside the per-issuance UserInfo claims the opaque row persisted (empty for
- * a JWT access token, which resolves UserInfo claims by scope).
+ * Validates an access token (JWT or opaque). Returns the RFC 7662
+ * introspection payload, inactive for an unknown token, alongside the
+ * per-issuance UserInfo claims the opaque row persisted (empty for a JWT access
+ * token, which resolves UserInfo claims by scope).
  */
 async function resolveAccessTokenValidation(
 	ctx: GenericEndpointContext,
@@ -544,30 +440,9 @@ async function resolveAccessTokenValidation(
 	token: string,
 	clientId?: string,
 ): Promise<ValidatedAccessToken> {
-	try {
-		const payload = await validateJwtAccessToken(ctx, opts, token, clientId);
-		return { payload, requestedUserInfoClaims: [] };
-	} catch (err) {
-		if (err instanceof APIError) {
-			// continue
-		} else if (err instanceof Error) {
-			throw err;
-		} else {
-			throw new Error(err as unknown as string);
-		}
-	}
-	try {
-		return await validateOpaqueAccessToken(ctx, opts, token, clientId);
-	} catch (err) {
-		if (err instanceof APIError) {
-			// nothing
-		} else if (err instanceof Error) {
-			throw err;
-		} else {
-			throw new Error("Unknown error validating access token");
-		}
-	}
-	throw createInvalidAccessTokenError();
+	const found = await findAccessToken(ctx, opts, token);
+	if (!found) return inactiveAccessToken();
+	return validateFoundAccessToken(ctx, opts, found, clientId);
 }
 
 /**
@@ -667,15 +542,6 @@ export async function introspectEndpoint(
 		token_type_hint?: string;
 	};
 
-	// RFC 7662 §2.1: unknown hints are ignored and detection falls back to
-	// trying both supported token types.
-	if (
-		token_type_hint !== "access_token" &&
-		token_type_hint !== "refresh_token"
-	) {
-		token_type_hint = undefined;
-	}
-
 	const credentials = await extractClientCredentials(
 		ctx,
 		opts,
@@ -719,69 +585,27 @@ export async function introspectEndpoint(
 	);
 
 	try {
-		if (token_type_hint === undefined || token_type_hint === "access_token") {
-			try {
-				const payload = await validateAccessToken(
-					ctx,
-					opts,
-					token,
-					client.clientId,
-				);
-				return resolveIntrospectionSub(ctx, opts, payload, client);
-			} catch (error) {
-				if (error instanceof APIError) {
-					if (token_type_hint === "access_token") {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
-				}
-			}
+		const found = await findToken(ctx, opts, token, token_type_hint);
+		if (!found) return { active: false };
+		if (found.type === "refresh") {
+			const payload = await validateRefreshToken(
+				ctx,
+				opts,
+				found.record,
+				client.clientId,
+			);
+			return resolveIntrospectionSub(ctx, opts, payload, client);
 		}
-
-		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
-			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
-				const payload = await validateRefreshToken(
-					ctx,
-					opts,
-					refreshToken.token,
-					client.clientId,
-				);
-				return resolveIntrospectionSub(ctx, opts, payload, client);
-			} catch (error) {
-				if (error instanceof APIError) {
-					if (token_type_hint === "refresh_token") {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
-				}
-			}
-		}
-
-		throw new APIError("BAD_REQUEST", {
-			error_description: "token not found",
-			error: "invalid_request",
-		});
+		const { payload } = await validateFoundAccessToken(
+			ctx,
+			opts,
+			found,
+			client.clientId,
+		);
+		return resolveIntrospectionSub(ctx, opts, payload, client);
 	} catch (error) {
-		if (error instanceof APIError) {
-			if (isInactiveTokenError(error)) {
-				return {
-					active: false,
-				};
-			}
-			throw error;
-		} else if (error instanceof Error) {
-			logger.error("Introspection error:", error.message, error.stack);
-			throw new APIError("INTERNAL_SERVER_ERROR");
-		} else {
-			logger.error("Introspection error:", error);
-			throw new APIError("INTERNAL_SERVER_ERROR");
-		}
+		if (error instanceof APIError) throw error;
+		logger.error("Introspection error:", error);
+		throw new APIError("INTERNAL_SERVER_ERROR");
 	}
 }

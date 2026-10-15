@@ -32,6 +32,7 @@ import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
+import { findRefreshToken } from "./token-lookup";
 import type {
 	Confirmation,
 	OAuthAuthenticatedClient,
@@ -58,7 +59,6 @@ import {
 	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
-	getStoredToken,
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
@@ -68,6 +68,7 @@ import {
 	toAudienceClaim,
 	toResourceList,
 	validateClientCredentials,
+	validateClientScopes,
 } from "./utils";
 
 // Seed the ID token with the standard UserInfo claim names set to `undefined`,
@@ -454,34 +455,9 @@ async function encodeRefreshToken(
 	return (
 		(opts.prefix?.refreshToken ?? "") +
 		(opts.formatRefreshToken?.encrypt
-			? opts.formatRefreshToken.encrypt(token, sessionId)
+			? await opts.formatRefreshToken.encrypt(token, sessionId)
 			: token)
 	);
-}
-
-/**
- * Decodes a refresh token for a client
- *
- * @internal
- */
-export async function decodeRefreshToken(
-	opts: OAuthOptions<Scope[]>,
-	token: string,
-) {
-	if (opts.prefix?.refreshToken) {
-		if (token.startsWith(opts.prefix.refreshToken)) {
-			token = token.replace(opts.prefix.refreshToken, "");
-		} else {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "refresh token not found",
-				error: "invalid_token",
-			});
-		}
-	}
-
-	return opts.formatRefreshToken?.decrypt
-		? opts.formatRefreshToken?.decrypt(token)
-		: { token };
 }
 
 async function createOpaqueAccessToken(
@@ -1559,6 +1535,20 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the code lookup can report
+	 * `invalid_grant` and before a one-time code is consumed). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret,
+		undefined,
+		preVerified,
+		"authorization_code",
+		authMethod,
+	);
+
 	/** Get and check Verification Value */
 	const {
 		verificationValue,
@@ -1580,18 +1570,7 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_scope",
 		});
 	}
-
-	/** Verify Client */
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret,
-		scopes,
-		preVerified,
-		"authorization_code",
-		authMethod,
-	);
+	validateClientScopes(client, scopes);
 
 	// Parse scopes from the authorization request
 	const requestedScopes =
@@ -1632,7 +1611,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (pkceUsedInAuth && !pkceUsedInToken) {
 			// PKCE was used in authorization but not in token exchange
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier required because PKCE was used in authorization",
 				error: "invalid_request",
@@ -1641,7 +1620,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (!pkceUsedInAuth && pkceUsedInToken) {
 			// PKCE was not used in authorization but verifier provided
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier provided but PKCE was not used in authorization",
 				error: "invalid_request",
@@ -1655,9 +1634,9 @@ async function handleAuthorizationCodeGrant(
 				: undefined;
 
 		if (challenge !== verificationValue.query?.code_challenge) {
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description: "code verification failed",
-				error: "invalid_request",
+				error: "invalid_grant",
 			});
 		}
 	}
@@ -1857,23 +1836,22 @@ async function handleRefreshTokenGrant(
 			error: "invalid_request",
 		});
 	}
-	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
-	const refreshToken = await ctx.context.adapter.findOne<
-		OAuthRefreshToken<Scope[]> & { id: string }
-	>({
-		model: "oauthRefreshToken",
-		where: [
-			{
-				field: "token",
-				value: await getStoredToken(
-					opts.storeTokens,
-					decodedRefresh.token,
-					"refresh_token",
-				),
-			},
-		],
-	});
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the refresh token lookup can
+	 * report `invalid_grant`). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret, // Optional for refresh_grant but required on confidential clients
+		undefined,
+		preVerified,
+		"refresh_token",
+		authMethod,
+	);
+
+	const refreshToken = await findRefreshToken(ctx, opts, refresh_token);
 
 	// Check refresh
 	if (!refreshToken) {
@@ -1921,16 +1899,7 @@ async function handleRefreshTokenGrant(
 		}
 	}
 
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret, // Optional for refresh_grant but required on confidential clients
-		requestedScopes ?? scopes,
-		preVerified,
-		"refresh_token",
-		authMethod,
-	);
+	validateClientScopes(client, requestedScopes ?? scopes);
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {

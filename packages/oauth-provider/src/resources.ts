@@ -202,7 +202,8 @@ export interface ResolvedResourcePolicy {
  * implicit `aud` value when `openid` is in scope — not looked up against
  * `oauthResource` rows.
  */
-const userInfoResource = (baseURL: string) => `${baseURL}/oauth2/userinfo`;
+export const userInfoResource = (baseURL: string) =>
+	`${baseURL}/oauth2/userinfo`;
 
 /**
  * Normalizes a `resource` parameter into an array. Accepts the RFC 8707

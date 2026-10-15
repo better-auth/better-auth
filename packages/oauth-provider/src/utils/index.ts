@@ -249,6 +249,22 @@ export async function verifyOAuthQueryParams(
 }
 
 /**
+ * Rejects changes to a client listed in `cachedTrustedClients`. Cached trusted
+ * clients are immutable through the client management endpoints.
+ */
+export function assertNotTrustedClient(
+	opts: OAuthOptions<Scope[]>,
+	clientId: string,
+) {
+	if (opts.cachedTrustedClients?.has(clientId)) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description: "trusted clients must be updated manually",
+		});
+	}
+}
+
+/**
  * Get a client by ID, checking trusted clients first, then database
  */
 export async function getClient(
@@ -861,7 +877,7 @@ export async function validateClientCredentials(
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
-		throwInvalidClient("missing client", { method: authMethod });
+		throwInvalidClient("client not found", { method: authMethod });
 	}
 	if (client.disabled) {
 		throwInvalidClient("client is disabled", { method: authMethod });
@@ -1120,12 +1136,40 @@ export function parsePrompt(prompt: string) {
 }
 
 /**
- * Extracts the sector identifier (hostname) from a client's first redirect URI.
+ * Derives the pairwise sector to store for a client.
+ *
+ * Only an `https` host identifies who controls a redirect URI, so clients
+ * whose redirect URIs are all `https` share the sector of that host. Any app
+ * can register a custom scheme, and any local process can listen on a
+ * loopback port, so every other client gets a sector of its own. `/` cannot
+ * appear in a URL host, so a client sector never equals a host sector.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
+ */
+export function deriveSectorIdentifier(
+	clientId: string,
+	redirectUris: readonly string[] | undefined,
+): string {
+	// Callers validate every redirect URI first, so parsing cannot throw.
+	const urls = (redirectUris ?? []).map((uri) => new URL(uri));
+	const first = urls[0];
+	return first && urls.every((url) => url.protocol === "https:")
+		? first.host
+		: `client/${clientId}`;
+}
+
+/**
+ * Returns the client's stored pairwise sector, or for a client created before
+ * sectors were stored, the host of its first redirect URI.
  *
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
 function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+	if (client.sectorIdentifier) {
+		return client.sectorIdentifier;
+	}
 	const uri = client.redirectUris?.[0];
 	if (!uri) {
 		throw new BetterAuthError(
@@ -1165,6 +1209,57 @@ export async function resolveSubjectIdentifier(
 		return computePairwiseSub(userId, client, opts.pairwiseSecret);
 	}
 	return userId;
+}
+
+/**
+ * Resolves `postLogin.consentReferenceId`, treating an empty value as no reference.
+ *
+ * @internal
+ */
+export async function getConsentReferenceId(
+	opts: OAuthOptions<Scope[]>,
+	context: Parameters<
+		NonNullable<OAuthOptions<Scope[]>["postLogin"]>["consentReferenceId"]
+	>[0],
+): Promise<string | undefined> {
+	return (await opts.postLogin?.consentReferenceId?.(context)) || undefined;
+}
+
+/**
+ * Finds the consent stored for exactly this reference. Without a reference,
+ * only consent stored without one (missing, null, or empty) matches.
+ *
+ * @internal
+ */
+export async function findConsent(
+	ctx: GenericEndpointContext,
+	clientId: string,
+	userId: string,
+	referenceId: string | undefined,
+): Promise<OAuthConsent<Scope[]> | null> {
+	const where = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+	];
+	if (referenceId) {
+		return ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [...where, { field: "referenceId", value: referenceId }],
+		});
+	}
+	// Matched in code: Prisma on MongoDB leaves an omitted referenceId unset, and `eq null` skips unset fields.
+	const pageSize = 100;
+	for (let offset = 0; ; offset += pageSize) {
+		const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where,
+			limit: pageSize,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		const consent = consents.find((row) => !row.referenceId);
+		if (consent || consents.length < pageSize) return consent ?? null;
+	}
 }
 
 /**

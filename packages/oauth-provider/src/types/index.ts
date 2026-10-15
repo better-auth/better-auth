@@ -939,6 +939,21 @@ export interface OAuthOptions<
 	 */
 	assertionMaxLifetime?: number;
 	/**
+	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
+	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
+	 * signed with one of its current keys. No user session is involved.
+	 *
+	 * Clients that publish their keys at a `jwks_uri` rotate them there, so they
+	 * cannot use this endpoint.
+	 *
+	 * Each rotation assertion must be single-use, so the provider refuses to
+	 * start with this enabled on the memory adapter or with
+	 * `advanced.database.generateId: "serial"`, neither of which enforces it.
+	 *
+	 * @default false
+	 */
+	allowClientKeyRotation?: boolean;
+	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
 	 */
@@ -1056,14 +1071,16 @@ export interface OAuthOptions<
 	 * field.
 	 *
 	 * - `"web"`: the OIDC Registration §2 default. Omitted `application_type` is
-	 *   treated as `web`, so custom-scheme redirect URIs are rejected.
+	 *   treated as `web`, so custom-scheme and loopback redirect URIs are
+	 *   rejected.
 	 * - `"native"`: omitted `application_type` is treated as `native`.
 	 * - `"infer"`: omitted `application_type` is treated as `native` when any
-	 *   `redirect_uris` entry uses a non-http(s) scheme; otherwise `web`. Every
-	 *   redirect URI is then validated against the native rules. Lets native MCP
-	 *   clients that omit `application_type` (for example Cursor, which also
-	 *   registers https and loopback callbacks) register without loosening
-	 *   web-client redirect policy.
+	 *   `redirect_uris` entry uses a non-http(s) scheme or is `http` on
+	 *   `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web`. Every redirect URI
+	 *   of an inferred native client is then validated against the native rules.
+	 *   Lets native MCP clients that omit `application_type` (for example Cursor,
+	 *   or older Claude Code releases with an `http://127.0.0.1` callback)
+	 *   register without loosening web-client redirect policy.
 	 *
 	 * An `application_type` the client actually sends is never overridden.
 	 * Applies only to dynamic client registration; managed clients and Client ID
@@ -1255,7 +1272,8 @@ export interface OAuthOptions<
 		 */
 		page: string;
 		/**
-		 * A value to tie to the consent reference_id.
+		 * A value to tie to the consent reference_id. Consent is stored
+		 * per reference; `undefined` or `""` uses consent given without one.
 		 *
 		 * Note that YOU must fail in this function if the requested
 		 * scope doesn't have a reference id and it should.
@@ -1593,6 +1611,7 @@ export interface OAuthOptions<
 	 *   introspect: { window: 60, max: 100 },
 	 *   revoke: { window: 60, max: 30 },
 	 *   register: { window: 60, max: 5 },
+	 *   rotateClientKeys: { window: 60, max: 5 },
 	 *   userinfo: { window: 60, max: 60 },
 	 * }
 	 * ```
@@ -1623,6 +1642,11 @@ export interface OAuthOptions<
 		 * @default { window: 60, max: 5 }
 		 */
 		register?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/client/rotate-keys endpoint
+		 * @default { window: 60, max: 5 }
+		 */
+		rotateClientKeys?: { window: number; max: number } | false;
 		/**
 		 * Rate limit for /oauth2/userinfo endpoint
 		 * @default { window: 60, max: 60 }
@@ -2086,6 +2110,12 @@ export interface SchemaClient<
 	enableEndSession?: boolean;
 	/** Subject identifier type: "public" (default) or "pairwise" */
 	subjectType?: "public" | "pairwise";
+	/**
+	 * Pairwise sector, set by the server when the client is created. `null`
+	 * for clients created before sectors were stored; those keep the sector
+	 * derived from their first redirect URI host.
+	 */
+	sectorIdentifier?: string | null;
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
 	referenceId?: string;
 	/**
