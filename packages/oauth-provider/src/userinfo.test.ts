@@ -28,6 +28,7 @@ describe("oauth userinfo", async () => {
 	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: `${authServerBaseUrl}/api/auth/`,
+		advanced: { skipTrailingSlashes: true },
 		plugins: [
 			jwt({
 				jwt: {
@@ -544,6 +545,56 @@ describe("oauth userinfo", async () => {
 			name: user.name,
 			email: user.email,
 		});
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-4.3
+	 */
+	it("keeps the trailing slash of a DPoP userinfo request when skipTrailingSlashes is on", async () => {
+		const dpopKey = await createDpopKey();
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			additionalParams: { dpop_jkt: dpopKey.jkt },
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const tokens = await validateAuthCode(
+			{
+				code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+				codeVerifier,
+				resource: validResource,
+			},
+			{
+				DPoP: await createDpopProof({
+					privateKey: dpopKey.privateKey,
+					publicJwk: dpopKey.publicJwk,
+					method: "POST",
+					url: `${authServerBaseUrl}/api/auth/oauth2/token`,
+					jti: "trailing-slash-token-proof",
+				}),
+			},
+		);
+		const accessToken = tokens.data?.access_token ?? "";
+		const userinfoUrl = `${authServerBaseUrl}/api/auth/oauth2/userinfo/`;
+		const response = await customFetchImpl(userinfoUrl, {
+			headers: {
+				authorization: `DPoP ${accessToken}`,
+				DPoP: await createDpopProof({
+					privateKey: dpopKey.privateKey,
+					publicJwk: dpopKey.publicJwk,
+					method: "GET",
+					url: userinfoUrl,
+					jti: "trailing-slash-userinfo-proof",
+					accessToken,
+				}),
+			},
+		});
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ sub: user.id });
 	});
 
 	it("should pass provide scoped user information - sub only", async () => {

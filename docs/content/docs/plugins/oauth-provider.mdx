@@ -551,7 +551,7 @@ Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC
 When a token is DPoP-bound:
 
 * The token endpoint requires a valid `DPoP` proof JWT.
-* The proof's `htu` must be the endpoint's public URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`. This holds even when a proxy or dev server rewrites the request host.
+* The proof's `htu` must be the endpoint's public URL: the origin and base path of `baseURL`, followed by the path the client requested, such as `https://auth.example.com/api/auth/oauth2/token`. Set `baseURL` to the public URL clients call, not an internal one, because the expected `htu` ignores the request host, which a proxy or dev server can rewrite.
 * The token response returns `token_type: "DPoP"`.
 * JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
 * Refresh token rotation requires a DPoP proof from the same key.

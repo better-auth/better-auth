@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
@@ -4649,28 +4650,36 @@ describe("oauth token - DPoP", async () => {
 	const internalTokenEndpoint =
 		"http://auth-service:3000/api/auth/oauth2/token";
 	const pluginIssueEndpoint = `${authServerBaseUrl}/api/auth/test/dpop-issue`;
-	// A plugin endpoint that issues tokens itself through the public provider API.
+	const pluginTenantIssueEndpoint = `${authServerBaseUrl}/api/auth/test/acme/dpop-issue`;
+	async function issueFromPlugin(ctx: GenericEndpointContext) {
+		const provider = getOAuthProviderApi(
+			ctx,
+			ctx.context.getPlugin("oauth-provider")!.options,
+			"client_credentials",
+		);
+		const { client } = await provider.authenticateClient();
+		return ctx.json(await provider.issueTokens({ client, scopes: [] }));
+	}
+	// Plugin endpoints that issue tokens themselves through the public provider API.
 	const pluginIssuer = {
 		id: "test-dpop-plugin-issuer",
 		endpoints: {
 			testDpopIssue: createAuthEndpoint(
 				"/test/dpop-issue",
 				{ method: "POST" },
-				async (ctx) => {
-					const provider = getOAuthProviderApi(
-						ctx,
-						ctx.context.getPlugin("oauth-provider")!.options,
-						"client_credentials",
-					);
-					const { client } = await provider.authenticateClient();
-					return ctx.json(await provider.issueTokens({ client, scopes: [] }));
-				},
+				issueFromPlugin,
+			),
+			testTenantDpopIssue: createAuthEndpoint(
+				"/test/:tenant/dpop-issue",
+				{ method: "POST" },
+				issueFromPlugin,
 			),
 		},
 	} satisfies BetterAuthPlugin;
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: `${authServerBaseUrl}/api/auth/`,
+		advanced: { skipTrailingSlashes: true },
 		plugins: [
 			pluginIssuer,
 			jwt({ jwt: { issuer: authServerBaseUrl } }),
@@ -4867,6 +4876,81 @@ describe("oauth token - DPoP", async () => {
 
 		expect(tokens).toMatchObject({ token_type: "DPoP" });
 		expect(response.status).toBe(200);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-4.3
+	 */
+	describe("expected htu is the concrete request URL", () => {
+		it("resolves route params of a plugin endpoint that issues tokens", async () => {
+			const issuerClient = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					token_endpoint_auth_method: "client_secret_post",
+					grant_types: ["client_credentials"],
+				},
+			});
+			const dpopKey = await createDpopKey();
+			const proof = await createDpopProof({
+				privateKey: dpopKey.privateKey,
+				publicJwk: dpopKey.publicJwk,
+				method: "POST",
+				url: pluginTenantIssueEndpoint,
+				jti: "plugin-tenant-proof",
+			});
+			const response = await customFetchImpl(pluginTenantIssueEndpoint, {
+				method: "POST",
+				headers: { "content-type": "application/json", DPoP: proof },
+				body: JSON.stringify({
+					client_id: issuerClient.client_id,
+					client_secret: issuerClient.client_secret,
+				}),
+			});
+			const tokens: OAuthTokenResponse = await response.json();
+
+			expect(tokens).toMatchObject({ token_type: "DPoP" });
+			expect(response.status).toBe(200);
+		});
+
+		it("keeps the trailing slash of a token request when skipTrailingSlashes is on", async () => {
+			const dpopKey = await createDpopKey();
+			const { code, codeVerifier } = await authorizeForCode(
+				dpopKey.jkt,
+				jwtResource,
+			);
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
+				code,
+				codeVerifier,
+				redirectURI: redirectUri,
+				resource: jwtResource,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const trailingSlashTokenEndpoint = `${tokenEndpoint}/`;
+			const tokenHeaders = new Headers(requestHeaders);
+			tokenHeaders.set(
+				"DPoP",
+				await createDpopProof({
+					privateKey: dpopKey.privateKey,
+					publicJwk: dpopKey.publicJwk,
+					method: "POST",
+					url: trailingSlashTokenEndpoint,
+					jti: "trailing-slash-proof",
+				}),
+			);
+			const response = await customFetchImpl(trailingSlashTokenEndpoint, {
+				method: "POST",
+				body,
+				headers: tokenHeaders,
+			});
+			const tokens: OAuthTokenResponse = await response.json();
+
+			expect(tokens).toMatchObject({ token_type: "DPoP" });
+			expect(response.status).toBe(200);
+		});
 	});
 
 	it("validates DPoP against the public token endpoint URL", async () => {
