@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Fix the `X-Retry-After` header on database rate limiting when the driver returns `lastRequest` as a string, as node-postgres does for `int8` columns. It was a huge number instead of the seconds left in the window.
+Fix database-backed rate limiting returning an excessively large `X-Retry-After` header instead of the remaining seconds in the rate-limit window.

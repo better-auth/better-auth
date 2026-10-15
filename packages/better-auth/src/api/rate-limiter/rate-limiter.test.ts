@@ -453,7 +453,13 @@ describe("database rate-limit with a string lastRequest", async () => {
 		},
 	});
 
-	it("should respond with a retry-after header within the window", async () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("should respond with the remaining seconds in the retry-after header", async () => {
+		const now = Date.now();
+		const clock = vi.spyOn(Date, "now").mockReturnValue(now);
 		// node-postgres returns `int8` columns as strings by default.
 		const { adapter } = await auth.$context;
 		const findMany = adapter.findMany.bind(adapter);
@@ -466,24 +472,27 @@ describe("database rate-limit with a string lastRequest", async () => {
 			})) as typeof rows;
 		});
 
-		let retryAfter = "";
-		for (let i = 0; i < 2; i++) {
-			await client.signIn.email(
-				{
-					email: testUser.email,
-					password: testUser.password,
-				},
-				{
-					onError(context) {
-						retryAfter = context.response.headers.get("X-Retry-After") ?? "";
-					},
-				},
-			);
-		}
-		vi.restoreAllMocks();
+		const first = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(first.error).toBeNull();
 
-		expect(Number(retryAfter)).toBeGreaterThan(0);
-		expect(Number(retryAfter)).toBeLessThanOrEqual(60);
+		clock.mockReturnValue(now + 1_001);
+		let retryAfter = "";
+		const blocked = await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onError(context) {
+					retryAfter = context.response.headers.get("X-Retry-After") ?? "";
+				},
+			},
+		);
+		expect(blocked.error?.status).toBe(429);
+		expect(retryAfter).toBe("59");
 	});
 });
 

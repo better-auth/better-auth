@@ -125,9 +125,7 @@ function createDatabaseStorageWrapper(
 			where: [{ field: "key", value: key }],
 		});
 		const data = res[0];
-		// Drivers may return `bigint` columns as a BigInt or, like node-postgres
-		// for `int8`, as a string.
-		if (data && typeof data.lastRequest !== "number") {
+		if (data) {
 			data.lastRequest = Number(data.lastRequest);
 		}
 		return data;
