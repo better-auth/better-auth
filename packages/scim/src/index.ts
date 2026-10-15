@@ -49,10 +49,7 @@ import {
 } from "./projection";
 import { createSCIMError } from "./scim-error";
 import { SCIM_MEDIA_TYPE } from "./scim-metadata";
-import {
-	assertNativeSCIMTransactions,
-	supportsNativeSCIMTransactions,
-} from "./transaction";
+import { supportsNativeSCIMTransactions } from "./transaction";
 import { canonicalizeSCIMUserPatchValue } from "./user-patch";
 import {
 	createSCIMUser,
@@ -100,7 +97,7 @@ function isAPIErrorLike(value: unknown): value is APIErrorLike {
 	);
 }
 function createSCIMErrorResponse(
-	status: "BAD_REQUEST" | "UNSUPPORTED_MEDIA_TYPE",
+	status: "BAD_REQUEST" | "UNSUPPORTED_MEDIA_TYPE" | "NOT_IMPLEMENTED",
 	detail: string,
 	scimType?: "invalidSyntax" | "invalidValue",
 ) {
@@ -272,9 +269,17 @@ function createSCIMPlugin(options: SCIMOptions) {
 				"The scim plugin requires a database adapter with native transaction support. SCIM routes will return 501.",
 			);
 		},
-		async onRequest(request) {
+		async onRequest(request, ctx) {
 			const path = new URL(request.url).pathname;
 			if (!path.includes("/scim/v2/")) return;
+			if (!supportsNativeSCIMTransactions(ctx.adapter)) {
+				return {
+					response: createSCIMErrorResponse(
+						"NOT_IMPLEMENTED",
+						"The scim plugin requires a database adapter with native transaction support.",
+					),
+				};
+			}
 			if (request.method === "DELETE") {
 				return {
 					request: new Request(request.url, {
@@ -441,14 +446,6 @@ function createSCIMPlugin(options: SCIMOptions) {
 			};
 		},
 		hooks: {
-			before: [
-				{
-					matcher: (context) => context.path?.startsWith("/scim/v2") === true,
-					handler: createAuthMiddleware(async (ctx) => {
-						assertNativeSCIMTransactions(ctx.context.adapter);
-					}),
-				},
-			],
 			after: [
 				{
 					matcher: (context) => context.path?.startsWith("/scim/v2") === true,

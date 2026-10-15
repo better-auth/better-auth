@@ -729,12 +729,16 @@ describe("SCIM connection provisioning", () => {
 			scimUser: [] as SCIMUserRow[],
 			scimGroupMember: [] as { id: string }[],
 			scimProjectionGrant: [] as { id: string }[],
+			scimManagedConnection: [] as { id: string }[],
 		};
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",
 			database: withoutNativeTransactions(memoryAdapter(data)),
 			plugins: [
 				scim({
+					managedConnections: {
+						credentialHashSecret: "managed-test-secret-at-least-32-characters",
+					},
 					connections: [
 						{
 							id: "workforce",
@@ -759,11 +763,41 @@ describe("SCIM connection provisioning", () => {
 			}),
 		);
 		expect(response.status).toBe(501);
+		expect(response.headers.get("content-type")).toBe("application/scim+json");
+		await expect(response.json()).resolves.toMatchObject({
+			schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+			status: "501",
+		});
+		const malformed = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				method: "POST",
+				headers: {
+					authorization: "Bearer test-scim-token",
+					"content-type": "text/plain",
+				},
+				body: "not json",
+			}),
+		);
+		expect(malformed.status).toBe(501);
+		const created = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				method: "POST",
+				headers: {
+					authorization: "Bearer test-scim-token",
+					"content-type": "application/scim+json",
+				},
+				body: JSON.stringify({
+					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					userName: "ada@example.com",
+				}),
+			}),
+		);
+		expect(created.status).toBe(501);
 		await expect(
 			auth.api.listSCIMManagedConnections({
 				body: { provisioningDomainId: "workforce" },
 			}),
-		).rejects.toThrow("SCIM managed connections are not configured");
+		).resolves.toEqual({ connections: [] });
 		await expect(
 			auth.api.createSCIMManagedConnection({
 				body: {
