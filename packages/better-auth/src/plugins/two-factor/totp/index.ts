@@ -358,59 +358,6 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					if (reserved) {
 						replayIdToClean = replayId;
 					}
-					if (
-						reserved &&
-						!ctx.context.options.verification?.disableCleanup &&
-						(!ctx.context.secondaryStorage ||
-							ctx.context.options.verification?.storeInDatabase)
-					) {
-						// Best-effort maintenance: a successful reservation keeps its
-						// tombstone until expiry (replay protection), and the step-up
-						// path never reads verification rows, so nothing else sweeps
-						// them. Opportunistically delete expired rows so repeated
-						// step-up use cannot grow the table without bound.
-						// Scoped to this plugin's `totp-used:` tombstones and deleted
-						// one row at a time through the hook-aware
-						// `deleteVerificationByIdentifier` path, so
-						// `databaseHooks.verification.delete` before-hooks (including
-						// veto) and after-hooks run exactly as they do for the
-						// `findVerificationValue` GC in `db/internal-adapter.ts`.
-						// (No hook-aware bulk delete is exposed on the internal
-						// adapter — `deleteManyWithHooks` lives inside its closure —
-						// hence the per-row loop. Hashed storeIdentifier configs
-						// never match the plain prefix and are skipped.)
-						// Fire-and-forget: never blocks or fails verification.
-						try {
-							ctx.context.adapter
-								.findMany<{ identifier: string }>({
-									model: "verification",
-									where: [
-										{ field: "expiresAt", value: new Date(), operator: "lt" },
-										{
-											field: "identifier",
-											value: "totp-used:",
-											operator: "starts_with",
-										},
-									],
-									limit: 100,
-								})
-								.then(async (expired) => {
-									for (const row of expired) {
-										const identifier = row.identifier;
-										if (
-											typeof identifier !== "string" ||
-											!identifier.startsWith("totp-used:")
-										) {
-											continue;
-										}
-										await ctx.context.internalAdapter
-											.deleteVerificationByIdentifier(identifier)
-											.catch(() => {});
-									}
-								})
-								.catch(() => {});
-						} catch {}
-					}
 				} else {
 					// Enrollment verification claims no marker (nothing consumed yet);
 					// single-use applies from the next verification on.
