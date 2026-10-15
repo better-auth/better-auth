@@ -1883,7 +1883,10 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			device_code,
 		});
 		expect(tokens.error).toBeNull();
-		expect(decodeJwt(tokens.data!.access_token)[referenceClaim]).toBe("org_1");
+		expect(decodeJwt(tokens.data!.access_token)).toMatchObject({
+			[referenceClaim]: "org_1",
+			reference_id: "org_1",
+		});
 		expect(decodeJwt(tokens.data!.id_token!).auth_time).toEqual(
 			expect.any(Number),
 		);
@@ -1894,9 +1897,10 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			refresh_token: tokens.data!.refresh_token!,
 		});
 		expect(refreshed.error).toBeNull();
-		expect(decodeJwt(refreshed.data!.access_token)[referenceClaim]).toBe(
-			"org_1",
-		);
+		expect(decodeJwt(refreshed.data!.access_token)).toMatchObject({
+			[referenceClaim]: "org_1",
+			reference_id: "org_1",
+		});
 	});
 
 	it("runs post-login selection before consent", async () => {
