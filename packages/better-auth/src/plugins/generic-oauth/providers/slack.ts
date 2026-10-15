@@ -12,9 +12,9 @@ interface SlackProfile {
 	sub: string;
 	"https://slack.com/user_id": string;
 	"https://slack.com/team_id": string;
-	email: string;
-	email_verified: boolean;
-	name: string;
+	email?: string;
+	email_verified?: boolean;
+	name?: string;
 	picture?: string;
 	given_name?: string;
 	family_name?: string;

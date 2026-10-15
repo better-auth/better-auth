@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -16,6 +16,7 @@ import { discord } from "./discord";
 import { socialProviders } from "./index";
 import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
+import type { SlackProfile } from "./slack";
 import { slack } from "./slack";
 import { tiktok } from "./tiktok";
 import { wechat } from "./wechat";
@@ -454,4 +455,72 @@ describe("cognito provider", () => {
 		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
 	});
+});
+
+/**
+ * @see https://docs.slack.dev/authentication/sign-in-with-slack/
+ * @see https://docs.slack.dev/reference/methods/openid.connect.userInfo/
+ */
+describe("slack optional profile claims", () => {
+	it("keeps identity-only profiles available to profile mapping", async () => {
+		const profile = {
+			ok: true,
+			sub: "U123",
+			"https://slack.com/user_id": "U123",
+			"https://slack.com/team_id": "T123",
+		} satisfies SlackProfile;
+		mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
+		const provider = slack({
+			...credentials,
+			disableDefaultScope: true,
+			scope: ["openid"],
+			mapProfileToUser(claims) {
+				expectTypeOf(claims.email_verified).toEqualTypeOf<
+					boolean | undefined
+				>();
+				expectTypeOf(claims.date_email_verified).toEqualTypeOf<
+					number | undefined
+				>();
+				expectTypeOf(
+					claims["https://slack.com/team_image_default"],
+				).toEqualTypeOf<boolean | undefined>();
+				expectTypeOf(claims["custom:attribute"]).toBeUnknown();
+				return { email: `${claims["https://slack.com/user_id"]}@example.com` };
+			},
+		});
+		const tokens = { accessToken: "slack-token" };
+		const result = await provider.getUserInfo(tokens);
+
+		expect(result?.user).toMatchObject({
+			name: "",
+			email: "U123@example.com",
+			emailVerified: false,
+			image: undefined,
+		});
+		expect(result?.data).toEqual(profile);
+		expect(provider.accountSubject({ tokens, profile })).toBe("U123");
+	});
+
+	it.each([true, false])(
+		"keeps supplied verification %s and image fallback",
+		async (verified) => {
+			const profile = {
+				ok: true,
+				sub: "U123",
+				"https://slack.com/user_id": "U123",
+				"https://slack.com/team_id": "T123",
+				email: "user@example.com",
+				email_verified: verified,
+				"https://slack.com/user_image_512": "https://example.com/avatar.png",
+			} satisfies SlackProfile;
+			mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
+			const result = await slack(credentials).getUserInfo({
+				accessToken: "token",
+			});
+
+			expect(result?.user.emailVerified).toBe(verified);
+			expect(result?.user.image).toBe("https://example.com/avatar.png");
+			expect(result?.data).toEqual(profile);
+		},
+	);
 });

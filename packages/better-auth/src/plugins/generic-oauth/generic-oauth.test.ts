@@ -3421,6 +3421,37 @@ describe("oauth2", async () => {
 	});
 
 	describe("Slack Provider Helper", () => {
+		/**
+		 * @see https://docs.slack.dev/authentication/sign-in-with-slack/
+		 */
+		it("handles userinfo without profile or email scopes", async () => {
+			const profile = {
+				ok: true,
+				sub: "U123",
+				"https://slack.com/user_id": "U123",
+				"https://slack.com/team_id": "T123",
+			};
+			mswServer.use(
+				http.get("https://slack.com/api/openid.connect.userInfo", () =>
+					HttpResponse.json(profile),
+				),
+			);
+			const slackConfig = slack({
+				clientId: "slack-client-id",
+				clientSecret: "slack-client-secret",
+				scopes: ["openid"],
+			});
+			const userInfo = await slackConfig.getUserInfo!({ accessToken: "token" });
+
+			expect(userInfo).toMatchObject({
+				sub: "U123",
+				name: undefined,
+				email: undefined,
+				image: undefined,
+				emailVerified: false,
+			});
+		});
+
 		it("should return correct GenericOAuthConfig", () => {
 			const slackConfig = slack({
 				clientId: "slack-client-id",
