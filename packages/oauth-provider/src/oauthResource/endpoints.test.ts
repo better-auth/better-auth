@@ -102,18 +102,21 @@ describe("resource admin CRUD", () => {
 		"javascript:alert(1)",
 		"data:text/plain,hello",
 		"vbscript:msgbox(1)",
-	])("rejects a resource identifier disallowed by the shared URI schema: %s", async (identifier) => {
-		const instance = await boot();
-		const headers = await signedInHeaders(instance);
-		await expect(
-			instance.auth.api.adminCreateOAuthResource({
-				body: { identifier },
-				headers,
-			}),
-		).rejects.toMatchObject({
-			body: expect.objectContaining({ error: "invalid_target" }),
-		});
-	});
+	])(
+		"rejects a resource identifier disallowed by the shared URI schema: %s",
+		async (identifier) => {
+			const instance = await boot();
+			const headers = await signedInHeaders(instance);
+			await expect(
+				instance.auth.api.adminCreateOAuthResource({
+					body: { identifier },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: expect.objectContaining({ error: "invalid_target" }),
+			});
+		},
+	);
 
 	it("rejects duplicate identifiers", async () => {
 		const instance = await boot();
