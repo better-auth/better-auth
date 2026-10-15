@@ -227,16 +227,11 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
 <Callout type="info">
   **Mapping the Google profile to your user**
 
-  When `socialProviders.google` is configured, One Tap builds the user from
-  its `mapProfileToUser` or `getUserInfo`, the same as the standard Google
-  sign-in. Extra fields you map, such as a first name from `given_name`, are
-  written only when they are declared in `user.additionalFields` and not
-  marked `input: false`. With `overrideUserInfoOnSignIn`, a returning user is
-  updated from the mapped profile on each One Tap sign-in. The account is
-  always keyed by the verified token's `sub`.
+  When `socialProviders.google` is configured, One Tap builds the user with its `mapProfileToUser` or `getUserInfo`, as the standard Google sign-in does. An extra field you map, such as a first name from `given_name`, is saved only if it is declared in `user.additionalFields` and not marked `input: false`. The account is always keyed by the verified token's `sub`.
 
-  With only `oneTap({ clientId })` and no `socialProviders.google`, One Tap
-  uses the token's `name`, `email`, `email_verified`, and `picture` claims.
+  With `overrideUserInfoOnSignIn`, a returning user is updated from the mapped profile on every One Tap sign-in.
+
+  With only `oneTap({ clientId })` and no `socialProviders.google`, One Tap uses the token's `name`, `email`, `email_verified`, and `picture` claims.
 </Callout>
 
 ### Authorized JavaScript origins
