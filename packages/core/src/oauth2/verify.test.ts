@@ -614,7 +614,10 @@ describe("verifyBearerToken", () => {
 		expect(error).toBeInstanceOf(Error);
 		expect(error).toMatchObject({ message: "JWKS fetch failed" });
 		expect(error).not.toHaveProperty("cause");
-		expect(loggerError).toHaveBeenCalledWith("JWKS fetch failed:", providerError);
+		expect(loggerError).toHaveBeenCalledWith(
+			"JWKS fetch failed:",
+			providerError,
+		);
 		expect(mockedFetch).not.toHaveBeenCalled();
 		vi.resetModules();
 	});
@@ -1017,30 +1020,53 @@ describe("verifyBearerToken", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11611
 	 */
-	it("should not fall through to opaque verification after a rejected JWKS fetch", async () => {
-		const { privateKey, kid } = await createTestJWKS();
-		const token = await createSignedToken(privateKey, kid);
-		mockedFetch.mockRejectedValueOnce(
-			new TypeError("fetch failed for https://internal.example/private-jwks"),
-		);
+	describe("rejected JWKS fetch", () => {
+		it("should report a refused connection instead of a bad token", async () => {
+			const { privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
 
-		const error = await verifyBearerToken(token, {
-			jwksUrl,
-			verifyOptions: { issuer, audience },
-			remoteVerify: {
-				introspectUrl: `${issuer}/oauth2/introspect`,
-				clientId: "rs-client",
-				clientSecret: "rs-secret",
-			},
-		}).then(
-			() => undefined,
-			(thrown: unknown) => thrown,
-		);
+			const error = await verifyAccessTokenRequest(
+				{
+					authorizationHeader: `Bearer ${token}`,
+					method: "GET",
+					url: audience,
+				},
+				{ jwksUrl, verifyOptions: { issuer, audience } },
+			).then(
+				() => undefined,
+				(thrown: unknown) => thrown,
+			);
 
-		expect(error).toBeInstanceOf(Error);
-		expect(error).toMatchObject({ message: "JWKS fetch failed" });
-		expect(error).not.toHaveProperty("cause");
-		expect(mockedFetch).toHaveBeenCalledOnce();
+			expect(error).not.toBeInstanceOf(APIError);
+			expect(error).toMatchObject({ message: "JWKS fetch failed" });
+		});
+
+		it("should not fall through to opaque verification", async () => {
+			const { privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockRejectedValueOnce(
+				new TypeError("fetch failed for https://internal.example/private-jwks"),
+			);
+
+			const error = await verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+				remoteVerify: {
+					introspectUrl: `${issuer}/oauth2/introspect`,
+					clientId: "rs-client",
+					clientSecret: "rs-secret",
+				},
+			}).then(
+				() => undefined,
+				(thrown: unknown) => thrown,
+			);
+
+			expect(error).toBeInstanceOf(Error);
+			expect(error).toMatchObject({ message: "JWKS fetch failed" });
+			expect(error).not.toHaveProperty("cause");
+			expect(mockedFetch).toHaveBeenCalledOnce();
+		});
 	});
 
 	describe("remote introspection audience validation", () => {
