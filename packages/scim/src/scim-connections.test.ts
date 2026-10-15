@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import type { SCIMDeclaredConnectionVerificationResult } from ".";
-import { scim } from ".";
+import { scim, supportsNativeSCIMTransactions } from ".";
 
 type SCIMUserRow = {
 	id: string;
@@ -751,7 +751,30 @@ describe("SCIM connection provisioning", () => {
 			],
 		});
 
-		await expect(auth.$context).rejects.toThrow("native transaction support");
+		const context = await auth.$context;
+		expect(supportsNativeSCIMTransactions(context.adapter)).toBe(false);
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				headers: { authorization: "Bearer test-scim-token" },
+			}),
+		);
+		expect(response.status).toBe(501);
+		await expect(
+			auth.api.listSCIMManagedConnections({
+				body: { provisioningDomainId: "workforce" },
+			}),
+		).rejects.toThrow("SCIM managed connections are not configured");
+		await expect(
+			auth.api.createSCIMManagedConnection({
+				body: {
+					creationRequestId: "creation-request-01",
+					provisioningDomainId: "workforce",
+					actorId: "actor",
+					scopes: ["scim.users.read"],
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			}),
+		).rejects.toThrow("native transaction support");
 		expect(data.scimConnectionBinding).toEqual([]);
 		expect(data.user).toEqual([]);
 		expect(data.scimSubject).toEqual([]);

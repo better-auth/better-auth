@@ -49,7 +49,10 @@ import {
 } from "./projection";
 import { createSCIMError } from "./scim-error";
 import { SCIM_MEDIA_TYPE } from "./scim-metadata";
-import { assertNativeSCIMTransactions } from "./transaction";
+import {
+	assertNativeSCIMTransactions,
+	supportsNativeSCIMTransactions,
+} from "./transaction";
 import { canonicalizeSCIMUserPatchValue } from "./user-patch";
 import {
 	createSCIMUser,
@@ -264,7 +267,10 @@ function createSCIMPlugin(options: SCIMOptions) {
 		id: "scim",
 		version: PACKAGE_VERSION,
 		init(ctx) {
-			assertNativeSCIMTransactions(ctx.adapter);
+			if (supportsNativeSCIMTransactions(ctx.adapter)) return;
+			ctx.logger.error(
+				"The scim plugin requires a database adapter with native transaction support. SCIM routes will return 501.",
+			);
 		},
 		async onRequest(request) {
 			const path = new URL(request.url).pathname;
@@ -435,6 +441,14 @@ function createSCIMPlugin(options: SCIMOptions) {
 			};
 		},
 		hooks: {
+			before: [
+				{
+					matcher: (context) => context.path?.startsWith("/scim/v2") === true,
+					handler: createAuthMiddleware(async (ctx) => {
+						assertNativeSCIMTransactions(ctx.context.adapter);
+					}),
+				},
+			],
 			after: [
 				{
 					matcher: (context) => context.path?.startsWith("/scim/v2") === true,
@@ -945,4 +959,5 @@ export type {
 	SCIMManagedCredentialStatus,
 } from "./managed-connections";
 export { SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT } from "./managed-connections";
+export { supportsNativeSCIMTransactions } from "./transaction";
 export { acquireActiveSCIMUserLink };
