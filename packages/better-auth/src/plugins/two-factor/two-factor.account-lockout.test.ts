@@ -111,8 +111,9 @@ async function setup(
 		key: DEFAULT_SECRET,
 		data: row!.secret,
 	});
+	const currentStep = Math.floor(Date.now() / 30000);
 	await auth.api.verifyTOTP({
-		body: { code: await createOTP(secret).totp() },
+		body: { code: await createOTP(secret).hotp(currentStep - 1) },
 		headers,
 	});
 

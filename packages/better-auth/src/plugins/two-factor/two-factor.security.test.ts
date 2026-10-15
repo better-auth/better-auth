@@ -488,12 +488,19 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 		});
 
 		const sessionsBefore = await countSessions();
-		const freshCode = await createOTP(secret).totp();
-		const res = await auth.api.verifyTOTP({
-			body: { code: freshCode },
-			headers: challengeHeaders,
-			asResponse: true,
-		});
+		vi.useFakeTimers();
+		let res: Response;
+		try {
+			vi.setSystemTime(new Date(Date.now() + 31000));
+			const freshCode = await createOTP(secret).totp();
+			res = await auth.api.verifyTOTP({
+				body: { code: freshCode },
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+		} finally {
+			vi.useRealTimers();
+		}
 
 		expect(res.status).toBe(401);
 		const json = (await res.json()) as { message: string };
@@ -518,20 +525,28 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 	it("two concurrent verifications of the same challenge yield exactly one session", async () => {
 		const challengeHeaders = await startChallenge();
 		const sessionsBefore = await countSessions();
-		const code = await createOTP(secret).totp();
+		vi.useFakeTimers();
+		let first: Response;
+		let second: Response;
+		try {
+			vi.setSystemTime(new Date(Date.now() + 65000));
+			const code = await createOTP(secret).totp();
 
-		const [first, second] = await Promise.all([
-			auth.api.verifyTOTP({
-				body: { code },
-				headers: challengeHeaders,
-				asResponse: true,
-			}),
-			auth.api.verifyTOTP({
-				body: { code },
-				headers: challengeHeaders,
-				asResponse: true,
-			}),
-		]);
+			[first, second] = await Promise.all([
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: challengeHeaders,
+					asResponse: true,
+				}),
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: challengeHeaders,
+					asResponse: true,
+				}),
+			]);
+		} finally {
+			vi.useRealTimers();
+		}
 
 		const statuses = [first.status, second.status].sort();
 		expect(statuses).toEqual([200, 401]);
@@ -787,6 +802,33 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 		return convertSetCookieToCookie(res.headers);
 	}
 
+	it("should reject reusing the enrollment TOTP code for step-up or sign-in within the same time window", async () => {
+		// Replaying the exact code used to enroll 2FA must fail immediately
+		// even within the same window (RFC 6238 §5.2)
+		const stepUpReplay = await auth.api.verifyTOTP({
+			body: { code: enrollCode },
+			headers: activeSessionHeaders,
+			asResponse: true,
+		});
+		expect(stepUpReplay.status).toBe(401);
+		const stepUpJson = (await stepUpReplay.json()) as { message: string };
+		expect(stepUpJson.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
+		);
+
+		const signInChallenge = await startChallenge();
+		const signInReplay = await auth.api.verifyTOTP({
+			body: { code: enrollCode },
+			headers: signInChallenge,
+			asResponse: true,
+		});
+		expect(signInReplay.status).toBe(401);
+		const signInJson = (await signInReplay.json()) as { message: string };
+		expect(signInJson.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
+		);
+	});
+
 	it("should reject reused TOTP code on step-up verification (RFC 6238 §5.2)", async () => {
 		// Advance by 30s to enter a fresh unconsumed step past enrollment
 		vi.useFakeTimers();
@@ -840,10 +882,48 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 		}
 	});
 
+	it("should verify time step boundaries: accepts offset -1 and rejects expired offset -2", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 160000));
+			const otp = createOTP(secret, { period: 30 });
+			const currentStep = Math.floor(Date.now() / 30000);
+
+			// cspell:ignore hotp
+			// Offset -2 is outside the [-1, 0, 1] window and must be rejected as invalid
+			const expiredCode = await otp.hotp(currentStep - 2);
+			const expiredRes = await auth.api.verifyTOTP({
+				body: { code: expiredCode },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(expiredRes.status).toBe(401);
+
+			// Offset -1 is within the window (clock skew tolerance) and must be accepted
+			const skewCode = await otp.hotp(currentStep - 1);
+			const skewRes = await auth.api.verifyTOTP({
+				body: { code: skewCode },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(skewRes.status).toBe(200);
+
+			// Once consumed, offset -1 cannot be replayed
+			const skewReplayRes = await auth.api.verifyTOTP({
+				body: { code: skewCode },
+				headers: activeSessionHeaders,
+				asResponse: true,
+			});
+			expect(skewReplayRes.status).toBe(401);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("should reject reusing TOTP code across different sign-in challenges", async () => {
 		vi.useFakeTimers();
 		try {
-			vi.setSystemTime(new Date(Date.now() + 130000));
+			vi.setSystemTime(new Date(Date.now() + 195000));
 			const code = await createOTP(secret).totp();
 
 			const challengeA = await startChallenge();
@@ -868,30 +948,33 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 		}
 	});
 
-	it("should reject concurrent replay attempts with the same TOTP code", async () => {
+	it("should reject concurrent replay attempts with the same TOTP code in a 5-request burst", async () => {
 		vi.useFakeTimers();
 		try {
-			vi.setSystemTime(new Date(Date.now() + 195000));
+			vi.setSystemTime(new Date(Date.now() + 260000));
 			const code = await createOTP(secret).totp();
 
-			const challengeA = await startChallenge();
-			const challengeB = await startChallenge();
-
-			const [resA, resB] = await Promise.all([
-				auth.api.verifyTOTP({
-					body: { code },
-					headers: challengeA,
-					asResponse: true,
-				}),
-				auth.api.verifyTOTP({
-					body: { code },
-					headers: challengeB,
-					asResponse: true,
-				}),
+			const challenges = await Promise.all([
+				startChallenge(),
+				startChallenge(),
+				startChallenge(),
+				startChallenge(),
+				startChallenge(),
 			]);
 
-			const statuses = [resA.status, resB.status].sort();
-			expect(statuses).toEqual([200, 401]);
+			const responses = await Promise.all(
+				challenges.map((headers) =>
+					auth.api.verifyTOTP({
+						body: { code },
+						headers,
+						asResponse: true,
+					}),
+				),
+			);
+
+			const statuses = responses.map((r) => r.status).sort();
+			// Exactly one request succeeds with 200, the remaining 4 fail with 401
+			expect(statuses).toEqual([200, 401, 401, 401, 401]);
 		} finally {
 			vi.useRealTimers();
 		}

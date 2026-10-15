@@ -4,8 +4,7 @@ import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import { symmetricDecrypt } from "../../../crypto";
-import { constantTimeEqual } from "../../../crypto/buffer";
+import { constantTimeEqual, symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
@@ -320,7 +319,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				}
 				if (matchedStep === null) {
 					status = false;
-				} else if (twoFactor.verified === true) {
+				} else {
 					const expiresAt = new Date((matchedStep + 2) * opts.period * 1000);
 					const replayId = `totp-used:${twoFactor.id}:${matchedStep}`;
 					const reservation =
@@ -333,8 +332,6 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					if (status) {
 						replayIdToClean = replayId;
 					}
-				} else {
-					status = true;
 				}
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
@@ -348,47 +345,50 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				}
 				return invalid("INVALID_CODE");
 			}
-			if (isSignIn) {
-				await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
-			}
 
-			// Enrollment mode: TOTP row exists but hasn't been verified yet.
-			// This covers fresh TOTP setup (twoFactorEnabled=false),
-			// adding TOTP to an OTP-only account (twoFactorEnabled=true),
-			// and pre-migration rows where verified is null/undefined.
-			if (twoFactor.verified !== true) {
-				if (!user.twoFactorEnabled) {
-					// session.session is guaranteed non-null here: the sign-in guard
-					// above already rejected isSignIn && verified === false.
-					const activeSession = session.session!;
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						user.id,
-						{
-							twoFactorEnabled: true,
-						},
-					);
-					const newSession = await ctx.context.internalAdapter.createSession(
-						user.id,
-						false,
-						activeSession,
-					);
-
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					await ctx.context.internalAdapter.deleteSession(activeSession.token);
-				}
-				// Mark verified only after all session operations succeed.
-				// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
-				// a partial failure cannot leave verified=true with twoFactorEnabled=false.
-				await ctx.context.adapter.update({
-					model: twoFactorTable,
-					update: { verified: true },
-					where: [{ field: "id", value: twoFactor.id }],
-				});
-			}
 			try {
+				if (isSignIn) {
+					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
+				}
+
+				// Enrollment mode: TOTP row exists but hasn't been verified yet.
+				// This covers fresh TOTP setup (twoFactorEnabled=false),
+				// adding TOTP to an OTP-only account (twoFactorEnabled=true),
+				// and pre-migration rows where verified is null/undefined.
+				if (twoFactor.verified !== true) {
+					if (!user.twoFactorEnabled) {
+						// session.session is guaranteed non-null here: the sign-in guard
+						// above already rejected isSignIn && verified === false.
+						const activeSession = session.session!;
+						const updatedUser = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								twoFactorEnabled: true,
+							},
+						);
+						const newSession = await ctx.context.internalAdapter.createSession(
+							user.id,
+							false,
+							activeSession,
+						);
+
+						await setSessionCookie(ctx, {
+							session: newSession,
+							user: updatedUser,
+						});
+						await ctx.context.internalAdapter.deleteSession(
+							activeSession.token,
+						);
+					}
+					// Mark verified only after all session operations succeed.
+					// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
+					// a partial failure cannot leave verified=true with twoFactorEnabled=false.
+					await ctx.context.adapter.update({
+						model: twoFactorTable,
+						update: { verified: true },
+						where: [{ field: "id", value: twoFactor.id }],
+					});
+				}
 				return await valid(ctx);
 			} catch (error) {
 				if (replayIdToClean) {
