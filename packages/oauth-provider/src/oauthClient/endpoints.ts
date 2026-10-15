@@ -11,7 +11,12 @@ import type {
 	Scope,
 } from "../types";
 import type { GrantType } from "../types/oauth";
-import { deriveSectorIdentifier, getClient, storeClientSecret } from "../utils";
+import {
+	deriveSectorIdentifier,
+	getClient,
+	parseClientMetadata,
+	storeClientSecret,
+} from "../utils";
 import {
 	normalizeClientCredentialsScopes,
 	validateClientCredentialsScopes,
@@ -340,7 +345,14 @@ export async function updateClientEndpoint(
 		}
 	}
 
-	const updatedMetadata = { ...schemaToOAuth(client), ...updates };
+	const updatedMetadata = {
+		// Converted without its metadata, which schemaToOAuth would spread onto
+		// the client; the effective metadata is passed explicitly below.
+		...schemaToOAuth({ ...client, metadata: undefined }),
+		...updates,
+		// An update's `metadata` replaces the stored object.
+		metadata: updates.metadata ?? parseClientMetadata(client.metadata),
+	};
 	if (clearsBackchannelLogout) {
 		updatedMetadata.backchannel_logout_uri = undefined;
 		updatedMetadata.backchannel_logout_session_required = undefined;
@@ -372,6 +384,11 @@ export async function updateClientEndpoint(
 	if (clearsFrontchannelLogout) {
 		schemaUpdates.frontchannelLogoutUri = null;
 		schemaUpdates.frontchannelLogoutSessionRequired = null;
+	}
+	// oauthToSchema drops a replacement that is empty after stripping reserved
+	// keys; clear the column so storage matches what was validated.
+	if (updates.metadata !== undefined && schemaUpdates.metadata === undefined) {
+		schemaUpdates.metadata = null;
 	}
 	if (
 		!finalGrantTypes.includes("client_credentials") ||

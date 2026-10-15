@@ -183,7 +183,7 @@ Generic CIMD validation follows draft-02:
 * `client_uri`, `logo_uri`, `tos_uri`, and `policy_uri` must be credential-free public HTTP(S) URLs. Better Auth does not fetch or render remote logos.
 * `backchannel_logout_uri` and `backchannel_logout_session_required` are rejected because they would authorize an OP-side POST outside the injected GET transport.
 * Server-owned fields, including resource links and administrative controls, cannot be supplied by the document.
-* Unknown members are ignored and never persisted. Nonstandard camel-case storage aliases and both spellings of client-credentials scope authority are stripped; recognized credential, privilege, and server-control fields remain fatal.
+* Unknown members are ignored and never persisted, except fields an OAuth provider [extension declares](/docs/plugins/oauth-provider#client-registration-metadata), which are stored in the client's `metadata` and validated by that extension. Nonstandard camel-case storage aliases and both spellings of client-credentials scope authority are stripped; recognized credential, privilege, and server-control fields remain fatal.
 
 ```json title="https://client.example.com/client-metadata.json"
 {

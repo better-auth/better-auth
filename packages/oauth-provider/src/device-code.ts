@@ -11,10 +11,7 @@ import {
 } from "better-auth/plugins/device-authorization";
 import * as z from "zod";
 import { extendOAuthProvider } from "./extensions";
-import {
-	extractRepeatedResourceFromForm,
-	resolveResourcePolicy,
-} from "./resources";
+import { resolveResourcePolicy } from "./resources";
 import { getOAuthProviderApi } from "./token";
 import type {
 	OAuthExtensionGrantHandlerInput,
@@ -26,6 +23,7 @@ import {
 	getClient,
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
+	readFormParams,
 	toAudienceClaim,
 	toResourceList,
 	validateClientScopes,
@@ -257,9 +255,11 @@ function buildOAuthDeviceGrant() {
 					(ctx.body ?? {}) as Record<string, unknown>,
 				);
 			const formResources = ctx.request
-				? await extractRepeatedResourceFromForm(ctx.request)
+				? (await readFormParams(ctx.request))
+						?.getAll("resource")
+						.filter(Boolean)
 				: undefined;
-			if (formResources) {
+			if (formResources?.length) {
 				const parsedResource = deviceCodeResourceSchema.safeParse(
 					formResources.length === 1 ? formResources[0] : formResources,
 				);

@@ -553,7 +553,7 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
-Token endpoint errors follow the OAuth taxonomy: missing required request fields return `invalid_request`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
 
 #### DPoP sender-constrained tokens
 
@@ -727,7 +727,7 @@ Post login must be [configured](#post-login-screen) to perform post login select
 
 ### Introspect Endpoint
 
-[RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection.
+[RFC7662](https://datatracker.ietf.org/doc/html/rfc7662)-compliant Introspection. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
 This endpoint provides details of the provided token. If the token is additionally tied to a session, the endpoint will ensure the session is `active`.
 
@@ -752,7 +752,7 @@ The two formats differ in one way. An opaque token is recomputed on each call, s
 
 ### Revoke Endpoint
 
-[RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation.
+[RFC7009](https://datatracker.ietf.org/doc/html/rfc7009)-compliant Revocation. A request that sends a parameter more than once returns `400 invalid_request`; an empty value counts as omitted.
 
 What the endpoint does depends on the token type:
 
@@ -1712,7 +1712,7 @@ Some clients (notably MCP clients) need to connect to your authorization server 
 
 ### Provider extensions
 
-OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
+OAuth companion plugins can extend the provider without changing OAuth Provider core. Use `extendOAuthProvider()` from a plugin `init()` hook to add token grants, assertion-based client authentication methods, additive discovery metadata, token or UserInfo claims, client registration metadata, and client-id discovery sources. The [`@better-auth/cimd`](/docs/plugins/cimd) plugin uses this same surface to contribute its URL-based client discovery. A discovery source provides a stable, globally unique `id` that is persisted as client provenance and can provide `fetchClientMetadataResource` for resources owned by that discovery, such as a CIMD client's `jwks_uri`. Changing the ID requires migrating owned client rows; removing the matching discovery makes those clients fail closed.
 
 ```ts title="custom-oauth-extension.ts"
 import type { BetterAuthPlugin } from "better-auth";
@@ -1752,6 +1752,30 @@ Extension contributions follow two disciplines:
 * **Additive kinds** (`metadata`, `claims`) never override authorization-server core. A metadata field the provider already owns (`issuer`, `token_endpoint`, `grant_types_supported`, the authentication-method lists, ...) is kept, and a key two extensions both contribute resolves to the first-registered extension.
 
 A claims contributor can add new claim names but never replaces an identity, authentication-context, reserved RFC 9068, or other provider-owned claim. To advertise the claim names an extension emits, set `advertisedMetadata.claims_supported`: the provider owns `claims_supported` and does not infer it from contributors.
+
+#### Client registration metadata
+
+An extension that defines its own client registration fields, such as CIBA's `backchannel_token_delivery_mode`, declares them in `clientMetadata`. The fields are stored in the client's `metadata`, and `validate` runs whenever a client is registered through `/oauth2/register` or a client metadata document, or created or updated by an admin, so a bad value is rejected with `invalid_client_metadata` at registration rather than when the client first uses it.
+
+```ts
+extendOAuthProvider(ctx, {
+  clientMetadata: {
+    fields: ["example_mode"],
+    validate: ({ metadata }) => {
+      if (metadata.example_mode !== undefined && metadata.example_mode !== "ok") {
+        throw new APIError("BAD_REQUEST", {
+          error: "invalid_client_metadata",
+          error_description: "example_mode must be ok",
+        });
+      }
+    },
+  },
+});
+```
+
+Dynamic registration ignores top-level fields it does not recognize (RFC 7591 §2). Fields an extension declares are the exception: a registrant sends them as top-level fields and the provider stores them in `metadata`. A registrant cannot set any other `metadata` key. An admin sets the same fields inside `metadata`. An extension cannot declare a core client field such as `redirect_uris` or a server-owned field such as `disabled`, `reference_id`, or `client_credentials_scopes`; the provider rejects these at setup. `validate` receives the core registration metadata after defaults (`client`) and the client's `metadata`; read extension fields from `metadata`.
+
+A [client metadata document](/docs/plugins/cimd) carries declared fields the same way, as top-level members of the document. The document owns those fields: each refresh replaces them in `metadata`, removing any it no longer declares, and keeps other `metadata` keys, such as ones an admin set.
 
 #### Provider capabilities outside a grant
 

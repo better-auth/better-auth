@@ -137,6 +137,74 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 		expect(body?.error).toBe("invalid_request");
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
+	 */
+	describe("repeated token parameters", () => {
+		function postWithBasicAuth(path: string, params: [string, string][]) {
+			if (!oauthClient?.client_id || !oauthClient.client_secret) {
+				throw new Error("OAuth client was not created");
+			}
+			return captureJsonResponse(path, {
+				method: "POST",
+				body: new URLSearchParams(params),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(
+						`${oauthClient.client_id}:${oauthClient.client_secret}`,
+					).toString("base64")}`,
+				},
+			});
+		}
+
+		it.each([
+			["/oauth2/introspect", "token"],
+			["/oauth2/introspect", "token_type_hint"],
+			["/oauth2/revoke", "token"],
+			["/oauth2/revoke", "token_type_hint"],
+		])("%s rejects a repeated %s parameter", async (path, name) => {
+			const { status, body } = await postWithBasicAuth(path, [
+				["token", "opaque-token"],
+				["token_type_hint", "access_token"],
+				[name, name === "token" ? "other-token" : "refresh_token"],
+			]);
+
+			expect(status).toBe(400);
+			expect(body).toEqual({
+				error: "invalid_request",
+				error_description: `${name} must not be repeated`,
+			});
+		});
+
+		it.each([
+			[
+				"before",
+				[
+					["token", ""],
+					["token", "opaque-token"],
+				],
+			],
+			[
+				"after",
+				[
+					["token", "opaque-token"],
+					["token", ""],
+				],
+			],
+		] as [
+			string,
+			[string, string][],
+		][])("treats an empty value %s a valid one as omitted", async (_label, params) => {
+			const { status, body } = await postWithBasicAuth(
+				"/oauth2/introspect",
+				params,
+			);
+
+			expect(status).toBe(200);
+			expect(body).toEqual({ active: false });
+		});
+	});
+
 	describe("oauth2Token (JSON delivery)", () => {
 		it("missing grant_type → invalid_request", async () => {
 			const { status, body } = await postForm("/oauth2/token", {});
