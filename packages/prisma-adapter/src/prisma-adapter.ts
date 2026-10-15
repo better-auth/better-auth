@@ -206,6 +206,13 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return operator;
 				}
 			}
+			// Only postgresql and mongodb honor Prisma's `mode`, and only on strings.
+			const isInsensitiveForPrisma = (w: Where) =>
+				w.mode === "insensitive" &&
+				(config.provider === "postgresql" || config.provider === "mongodb") &&
+				(typeof w.value === "string" ||
+					(Array.isArray(w.value) &&
+						w.value.every((v) => typeof v === "string")));
 			const hasRootUniqueWhereCondition = (
 				model: string,
 				where?: Where[] | undefined,
@@ -223,16 +230,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return false;
 					}
 
-					if (condition.mode === "insensitive") {
-						const providerSupportsMode =
-							config.provider === "postgresql" || config.provider === "mongodb";
-						const isStringValue =
-							typeof condition.value === "string" ||
-							(Array.isArray(condition.value) &&
-								condition.value.every((v) => typeof v === "string"));
-						if (providerSupportsMode && isStringValue) {
-							return false;
-						}
+					if (isInsensitiveForPrisma(condition)) {
+						return false;
 					}
 
 					if (condition.field === "id") {
@@ -267,17 +266,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				if (!where || !where.length) return {};
 				const buildSingleCondition = (w: Where) => {
 					const fieldName = getFieldName({ model, field: w.field });
-					const mode = w.mode ?? "sensitive";
-					const isInsensitive =
-						mode === "insensitive" &&
-						(typeof w.value === "string" ||
-							(Array.isArray(w.value) &&
-								w.value.every((v) => typeof v === "string")));
-					const providerSupportsMode =
-						config.provider === "postgresql" || config.provider === "mongodb";
-					const prismaMode =
-						isInsensitive && providerSupportsMode ? "insensitive" : undefined;
-					const modeFilter = prismaMode ? { mode: prismaMode } : {};
+					const modeFilter = isInsensitiveForPrisma(w)
+						? { mode: "insensitive" }
+						: {};
 
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
 					if (w.operator === "ne" && w.value === null) {
@@ -331,13 +322,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					);
 					const or = where.filter((w) => w.connector === "OR");
 
-					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND)
-					const andSimple = and.filter(
-						(w) => w.operator === "eq" || !w.operator,
-					);
-					const andComplex = and.filter(
-						(w) => w.operator !== "eq" && w.operator !== undefined,
-					);
+					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND).
+					// A flat value is a case-sensitive match, so insensitive eq stays in AND.
+					const isSimple = (w: Where) =>
+						(w.operator === "eq" || !w.operator) && !isInsensitiveForPrisma(w);
+					const andSimple = and.filter(isSimple);
+					const andComplex = and.filter((w) => !isSimple(w));
 
 					const andComplexClause = andComplex.map((w) =>
 						buildSingleCondition(w),
