@@ -1827,12 +1827,16 @@ Only disable PKCE for confidential clients when absolutely necessary for legacy 
 
 #### Approving Self-Registered Clients at Consent
 
-An open registration, or a client discovered through the [CIMD plugin](/docs/plugins/cimd), proves nothing about who controls the client. Define `approvePendingClient` to keep such clients pending until a signed-in user consents, and to decide then who owns the client.
+With `allowUnauthenticatedClientRegistration`, a client such as a desktop or command-line AI assistant registers itself when someone installs it. Nobody vouches for that registration. The client can obtain tokens as soon as any user consents, and it belongs to no user or organization: it does not appear in anyone's [client list](#oauth-clients), nobody can update or delete it through the client endpoints, and [token claims](#client-specific-access-token-claims) cannot use its owner.
+
+Define `approvePendingClient` to hold these clients until a signed-in user consents, and to give each client an owner at that moment. For example, a member of an organization connects an assistant to your API. The assistant registers, the member signs in and accepts consent, and your callback checks that they administer the organization. The client then belongs to the organization: its members see and manage it, and its tokens can carry the organization.
 
 ```ts title="auth.ts"
 oauthProvider({
   allowDynamicClientRegistration: true,
   allowUnauthenticatedClientRegistration: true,
+  clientReference: ({ session }) =>
+    (session?.activeOrganizationId as string | undefined) ?? undefined,
   approvePendingClient: async ({ user, consentReferenceId }) => { // [!code highlight]
     // The organization the user picked on your post-login page // [!code highlight]
     if (!consentReferenceId) return false // [!code highlight]
@@ -1842,9 +1846,11 @@ oauthProvider({
 })
 ```
 
+Approval fits a client that one organization uses, such as a client each installation registers for itself. An owner can change a client's redirect URIs or delete it, so if one registration serves users from several organizations, such as a hosted web app, the first organization to approve it would control it for everyone. Register those clients yourself with [`adminCreateOAuthClient`](#create-client) instead. For the same reason, clients discovered through the [CIMD plugin](/docs/plugins/cimd) are never pending: one metadata document identifies the software for every user and organization that runs it.
+
 With the callback defined:
 
-* A client created by unauthenticated registration, or discovered through CIMD, is stored as pending. Registrations made by a signed-in user or with an initial access token are not pending. Clients created before you define the callback are unaffected.
+* A client created by unauthenticated registration is stored as pending. Registrations made by a signed-in user or with an initial access token are not pending. Clients created before you define the callback are unaffected.
 * A pending client must register the `authorization_code` grant, because consent is the only way to approve it. Registration without it fails with `invalid_client_metadata`.
 * Unauthenticated registration may also request the `client_credentials` grant. Approval does not enable it: the client cannot use it until an administrator assigns its scopes through [`adminUpdateOAuthClient`](#update-client), as for any other client.
 * A pending client cannot authenticate at the token, introspection, revocation, or device authorization endpoints. The authorization endpoint always sends its users to the consent page, even when `skipConsent` is set, and answers `prompt=none` with `consent_required`.
@@ -2136,7 +2142,7 @@ oauthTokenExchange({
 
 ### Organizations
 
-OAuth Clients are tied to either a user or `reference_id` at registration and is immutable. If you are utilizing the [organization plugin](/docs/plugins/organization), you must ensure that the [`activeOrganizationId`](/docs/plugins/organization#active-organization) is set on your active session when you create new clients.
+OAuth Clients are tied to either a user or `reference_id` at registration, or at approval for [pending clients](#approving-self-registered-clients-at-consent), and the owner is immutable. If you are utilizing the [organization plugin](/docs/plugins/organization), you must ensure that the [`activeOrganizationId`](/docs/plugins/organization#active-organization) is set on your active session when you create new clients.
 
 ```ts title="auth.ts"
 oauthProvider({

@@ -1059,14 +1059,10 @@ async function persistOAuthClientRegistration(
 		clientId,
 		body.redirect_uris,
 	);
-	// Only open registration and a first discovery create a pending client.
-	// Refreshing a discovered client never changes its approval state.
+	// Only open registration creates a pending client. A discovered client is
+	// shared by every user of the software, so no one organization owns it.
 	const startsPending =
-		input.registrationSource === "dynamic"
-			? Boolean(input.pending)
-			: input.registrationSource === "clientMetadataDocument" &&
-				!input.existingClient &&
-				Boolean(opts.approvePendingClient);
+		input.registrationSource === "dynamic" && Boolean(input.pending);
 	// Approval happens at consent, which only the authorization code flow
 	// reaches. Without it the client could never leave the pending state.
 	if (

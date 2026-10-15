@@ -2,10 +2,15 @@
 "@better-auth/oauth-provider": minor
 ---
 
-Apps with open dynamic client registration or CIMD discovery can now hold self-registered clients until a person approves them, by defining `approvePendingClient`. Apps that don't define it see no change. Every app needs to run its migration: this release adds an optional `pending` column to `oauthClient`.
+Every app must run its migration: this release adds an optional `pending` column to `oauthClient`.
 
-- A client registered without a session or initial access token, or discovered through CIMD, is stored as pending. It cannot obtain tokens until a user accepts consent and your callback names its owner (`clientReference`).
-- If the callback returns `false`, the user is redirected to the client with `access_denied`, the same as a denied consent.
-- A pending client must register the `authorization_code` grant. Open registration may also request `client_credentials`, but approval does not enable it: an administrator still assigns its scopes through `adminUpdateOAuthClient`.
+Apps with `allowUnauthenticatedClientRegistration` can now give self-registered clients an owner, by defining `approvePendingClient`. Until now, such a client could obtain tokens as soon as any user consented, and it belonged to no user or organization, so nobody could see, update, or delete it through the client endpoints. With the option:
+
+- A client registered without a session or initial access token waits for approval and cannot obtain tokens. It must register the `authorization_code` grant.
+- When a user accepts consent, your callback decides whether they may approve it and returns its owner (`clientReference`), such as the organization they administer. The owner's members can then manage the client. Returning `false` redirects to the client with `access_denied`, as a denied consent does.
 - Registration responses and the public client endpoints include `pending: true`, so your consent page can tell the user.
-- For all apps, a CIMD metadata refresh no longer undoes a scope ceiling or a disable that was set while the refresh was running.
+- Approval grants no machine access. Open registration may request `client_credentials`, but an administrator still assigns its scopes through `adminUpdateOAuthClient`.
+
+Apps that don't define the option see no change. Clients discovered through CIMD are never pending, since one discovered client serves every organization that uses the software.
+
+For all apps using CIMD, a metadata refresh no longer undoes a scope ceiling or a disable that an administrator set while the refresh was running.

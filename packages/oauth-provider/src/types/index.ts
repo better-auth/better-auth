@@ -1187,12 +1187,13 @@ export interface OAuthOptions<
 	 * application decide who owns them.
 	 *
 	 * When defined, a client created by unauthenticated dynamic registration
-	 * (RFC 7591) or discovered through Client ID Metadata Documents is stored as
-	 * pending. Such a client must register the `authorization_code` grant, since
-	 * consent is the only way to approve it. A pending client cannot
-	 * authenticate at any token-related endpoint, and the authorization endpoint
-	 * always sends its users to the consent page, even when they consented
-	 * before. Open registration may also request the `client_credentials` grant,
+	 * (RFC 7591) is stored as pending. Clients discovered through Client ID
+	 * Metadata Documents are never pending: one discovered client serves every
+	 * user of that software, so no single owner fits it. A pending client must
+	 * register the `authorization_code` grant, since consent is the only way to
+	 * approve it. A pending client cannot authenticate at any token-related
+	 * endpoint, and the authorization endpoint always sends its users to the
+	 * consent page, even when they consented before. Open registration may also request the `client_credentials` grant,
 	 * which stays unusable until an administrator assigns its scopes through
 	 * `adminUpdateOAuthClient`.
 	 *

@@ -590,7 +590,7 @@ describe.each(adapters)("approvePendingClient on %s", (testWith) => {
 		expect(((await response.json()) as OAuthClient).pending).toBe(true);
 	});
 
-	it("keeps an approval, a scope limit, and a disable that commit during a discovery refresh", async () => {
+	it("never holds a discovered client and keeps a scope limit and a disable set during its refresh", async () => {
 		const t = await createInstance(testWith, {
 			approvePendingClient: () => false,
 		});
@@ -619,10 +619,12 @@ describe.each(adapters)("approvePendingClient on %s", (testWith) => {
 			});
 		await discover();
 		const snapshot = (await t.row(clientId)) as SchemaClient<Scope[]>;
-		expect(snapshot.pending).toBe(true);
+		// One discovered client serves every user of the software, so it never
+		// waits for an owner.
+		expect(snapshot.pending ?? false).toBe(false);
+		expect(snapshot.referenceId ?? null).toBeNull();
 
-		// The approval commits while the refresh is fetching metadata.
-		await storeClientApproval(t.context.adapter, opts, clientId, "business_1");
+		// An administrator writes while the refresh is fetching metadata.
 		await t.context.adapter.update({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: clientId }],
@@ -631,8 +633,7 @@ describe.each(adapters)("approvePendingClient on %s", (testWith) => {
 		await discover(snapshot);
 
 		const stored = await t.row(clientId);
-		expect(stored?.pending).toBe(false);
-		expect(stored?.referenceId).toBe("business_1");
+		expect(stored?.pending ?? false).toBe(false);
 		expect(stored?.clientCredentialsScopes).toEqual(["invoices:write"]);
 		expect(stored?.disabled).toBe(true);
 	});

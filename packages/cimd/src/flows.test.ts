@@ -1379,8 +1379,6 @@ describe("CIMD - pending client approval", async () => {
 		clientReference: "business_1",
 	}));
 
-	// metadataRevalidationInterval: 0 makes every request stale, so the second
-	// authorize hit refreshes the stored record.
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -1418,7 +1416,9 @@ describe("CIMD - pending client approval", async () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("keeps a discovered client pending until consent, then keeps its owner across refreshes", async () => {
+	// One discovered client serves every user and organization of that
+	// software, so the first organization to consent must not become its owner.
+	it("never holds a discovered client for approval or gives it an owner", async () => {
 		stubMetadataFetch(clientMetadataUrl, metadataDocument);
 		const { headers } = await signInWithTestUser();
 		const authedClient = createAuthClient({
@@ -1438,61 +1438,11 @@ describe("CIMD - pending client approval", async () => {
 			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
 		);
 		expect(code).toEqual(expect.any(String));
-		expect(approvePendingClient).toHaveBeenCalledTimes(1);
+		expect(approvePendingClient).not.toHaveBeenCalled();
 
-		const approved = await readClient();
-		expect(approved).toMatchObject({
-			pending: false,
-			referenceId: "business_1",
-		});
-		expect(approved?.userId ?? null).toBeNull();
-
-		// A stale refresh rewrites the metadata but never the approval state.
-		await authedClient.$fetch(
-			buildAuthorizeUrl(authServerBaseUrl, clientMetadataUrl, redirectUri),
-			{ method: "GET", onError() {} },
-		);
-		const refreshed = await readClient();
-		expect(refreshed).toMatchObject({
-			pending: false,
-			referenceId: "business_1",
-		});
-		expect(refreshed?.userId ?? null).toBeNull();
-		expect(approvePendingClient).toHaveBeenCalledTimes(1);
-	});
-
-	it("stores a newly discovered client as pending without a code", async () => {
-		const pendingUrl =
-			"https://mcp-client-pending-2.example.com/client-metadata.json";
-		stubMetadataFetch(pendingUrl, {
-			...metadataDocument,
-			client_id: pendingUrl,
-		});
-		const { headers } = await signInWithTestUser();
-		const authedClient = createAuthClient({
-			plugins: [oauthProviderClient()],
-			baseURL: authServerBaseUrl,
-			fetchOptions: { customFetchImpl, headers },
-		});
-		let redirect = "";
-		await authedClient.$fetch(
-			buildAuthorizeUrl(authServerBaseUrl, pendingUrl, redirectUri),
-			{
-				method: "GET",
-				onError(ctx) {
-					redirect = ctx.response.headers.get("Location") || "";
-				},
-			},
-		);
-		expect(redirect).toContain("/consent");
-		expect(tryExtractCodeFromUrl(redirect)).toBeNull();
-		const ctx = await authorizationServer.$context;
-		const stored = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
-			model: "oauthClient",
-			where: [{ field: "clientId", value: pendingUrl }],
-		});
-		expect(stored?.pending).toBe(true);
-		expect(stored?.userId ?? null).toBeNull();
+		const stored = await readClient();
+		expect(stored?.pending ?? false).toBe(false);
 		expect(stored?.referenceId ?? null).toBeNull();
+		expect(stored?.userId ?? null).toBeNull();
 	});
 });
