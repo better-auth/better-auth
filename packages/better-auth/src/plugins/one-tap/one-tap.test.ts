@@ -822,6 +822,87 @@ describe("oneTapClient types", () => {
 	});
 });
 
+describe("oneTapClient plugin-level options", async () => {
+	const initialize = vi.fn();
+	const renderButton = vi.fn();
+	// Report "not displayed" so the prompt flow resolves after one attempt.
+	const prompt = vi.fn((listener: (notification: unknown) => void) =>
+		listener({ isNotDisplayed: () => true }),
+	);
+
+	afterEach(() => {
+		initialize.mockReset();
+		vi.unstubAllGlobals();
+	});
+
+	const { client } = await getTestInstance(
+		{
+			socialProviders: {
+				google: { clientId: "test-client", clientSecret: "test-secret" },
+			},
+			plugins: [oneTap()],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					oneTapClient({
+						clientId: "test-client",
+						autoSelect: true,
+						cancelOnTapOutside: false,
+					}),
+				],
+			},
+		},
+	);
+
+	const stubBrowser = () =>
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			google: { accounts: { id: { initialize, renderButton, prompt } } },
+		});
+
+	const flows = [
+		["prompt", {}],
+		["button", { button: { container: {} as HTMLElement } }],
+	] as const;
+
+	it.each(flows)(
+		"passes plugin-level options to the %s flow",
+		async (_, flow) => {
+			stubBrowser();
+			await client.oneTap({ ...flow, fetchOptions: {} });
+
+			expect(initialize).toHaveBeenCalledWith(
+				expect.objectContaining({
+					auto_select: true,
+					cancel_on_tap_outside: false,
+				}),
+			);
+		},
+	);
+
+	it.each(flows)(
+		"lets action options override the plugin in the %s flow",
+		async (_, flow) => {
+			stubBrowser();
+			await client.oneTap({
+				...flow,
+				autoSelect: false,
+				cancelOnTapOutside: true,
+				fetchOptions: {},
+			});
+
+			expect(initialize).toHaveBeenCalledWith(
+				expect.objectContaining({
+					auto_select: false,
+					cancel_on_tap_outside: true,
+				}),
+			);
+		},
+	);
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/10172
  */

@@ -279,8 +279,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							}
 						}
 
-						const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
-						const contextValue = context ?? options.context ?? "signin";
+						const autoSelect = opts?.autoSelect ?? options.autoSelect;
+						const cancelOnTapOutside =
+							opts?.cancelOnTapOutside ?? options.cancelOnTapOutside;
+						const contextValue = opts?.context ?? options.context ?? "signin";
 
 						window.google?.accounts.id.initialize({
 							client_id: options.clientId,
@@ -332,8 +334,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						}
 					}
 
-					const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
-					const contextValue = context ?? options.context ?? "signin";
+					const autoSelect = opts?.autoSelect ?? options.autoSelect;
+					const cancelOnTapOutside =
+						opts?.cancelOnTapOutside ?? options.cancelOnTapOutside;
+					const contextValue = opts?.context ?? options.context ?? "signin";
 					isRequestInProgress = true;
 
 					try {
