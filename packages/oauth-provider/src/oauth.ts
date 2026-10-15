@@ -164,9 +164,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			}
 		}
 	}
-	if (options.authenticationContext?.acrValuesSupported.length === 0) {
+	const acrValuesSupported = options.authenticationContext?.acrValuesSupported;
+	if (
+		acrValuesSupported &&
+		(acrValuesSupported.length === 0 || acrValuesSupported.includes(""))
+	) {
 		throw new BetterAuthError(
-			"authenticationContext.acrValuesSupported must list at least one acr value",
+			"authenticationContext.acrValuesSupported must list at least one non-empty acr value",
 		);
 	}
 	for (const sc of options.advertisedMetadata?.scopes_supported ?? []) {

@@ -9,6 +9,10 @@ import { getTestInstance } from "better-auth/test";
 import { APIError } from "better-call";
 import { decodeJwt } from "jose";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	DEVICE_CODE_GRANT_TYPE,
+	oauthDeviceAuthorization,
+} from "./device-code";
 import { oauthProvider } from "./oauth";
 import type { OAuthAuthenticationContextOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
@@ -225,8 +229,11 @@ describe("oauth-provider authenticationContext", async () => {
 	it.each<[string, unknown]>([
 		["an acr outside acrValuesSupported", { acr: "urn:example:acr:unknown" }],
 		["a non-string acr", { acr: 2 }],
+		["a null acr", { acr: null }],
+		["null", null],
 		["a non-array amr", { acr: MFA_ACR, amr: "otp" }],
 		["an amr with non-string entries", { acr: MFA_ACR, amr: ["pwd", 1] }],
+		["a sparse amr", { acr: MFA_ACR, amr: new Array<string>(1) }],
 	])("returns server_error when the resolver returns %s", async (_, result) => {
 		resolve.mockResolvedValue(result as Awaited<ReturnType<Resolve>>);
 		const { callback } = await authorize({});
@@ -249,16 +256,78 @@ describe("oauth-provider authenticationContext", async () => {
 });
 
 describe("oauth-provider authenticationContext setup", () => {
-	it("rejects an empty acrValuesSupported", () => {
+	it.each([
+		["an empty acrValuesSupported", []],
+		["an empty acr value", ["0", ""]],
+	])("rejects %s", (_, acrValuesSupported) => {
 		expect(() =>
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
 				authenticationContext: {
-					acrValuesSupported: [],
+					acrValuesSupported,
 					resolve: () => undefined,
 				},
 			}),
-		).toThrow("acrValuesSupported must list at least one acr value");
+		).toThrow("acrValuesSupported must list at least one non-empty acr value");
+	});
+});
+
+describe("oauth-provider authenticationContext device approvals", async () => {
+	const baseURL = "http://localhost:3000";
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				authenticationContext: {
+					acrValuesSupported: ["0"],
+					resolve: () => ({ acr: MFA_ACR }),
+				},
+			}),
+			oauthDeviceAuthorization({ verificationUri: "/device" }),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	async function redirectURL(
+		path: string,
+		init: { method?: "POST"; body?: Record<string, unknown> } = {},
+	) {
+		const requestHeaders = new Headers(headers);
+		requestHeaders.set("accept", "application/json");
+		const { data } = await client.$fetch<{ url: string }>(path, {
+			...init,
+			headers: requestHeaders,
+		});
+		return new URL(data!.url, baseURL);
+	}
+
+	it("reports resolver errors on the device verification page", async () => {
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid",
+				application_type: "native",
+			},
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: created!.client_id, scope: "openid" },
+		});
+		const consent = await redirectURL(
+			`/oauth2/authorize?user_code=${encodeURIComponent(user_code)}`,
+		);
+		const callback = await redirectURL("/oauth2/consent", {
+			method: "POST",
+			body: { accept: true, oauth_query: consent.searchParams.toString() },
+		});
+
+		expect(callback.pathname).toBe("/device");
+		expect(callback.searchParams.get("user_code")).toBe(user_code);
+		expect(callback.searchParams.get("error")).toBe("server_error");
 	});
 });

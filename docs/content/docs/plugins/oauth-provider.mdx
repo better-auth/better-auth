@@ -1574,10 +1574,12 @@ export const auth = betterAuth({
       consentPage: "/consent",
       authenticationContext: {
         acrValuesSupported: ["0", MFA],
+        // Assert only what the session proved: the two-factor step, not how the
+        // first factor was done.
         resolve: ({ session }) =>
           session.twoFactorVerified === true
-            ? { acr: MFA, amr: ["pwd", "mfa"] }
-            : { acr: "0", amr: ["pwd"] },
+            ? { acr: MFA, amr: ["mfa"] }
+            : { acr: "0" },
       },
     }),
   ],

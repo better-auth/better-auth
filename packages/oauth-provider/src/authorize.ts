@@ -518,6 +518,7 @@ export async function authorizeEndpoint(
 			...interactionRequest,
 			approve: (approval) =>
 				interactionRequest.approve(approval).catch(toErrorURL),
+			errorURL: toErrorURL,
 		});
 	}
 
@@ -870,7 +871,10 @@ async function runAuthorizationInteraction(
 	opts: OAuthOptions<Scope[]>,
 	headers: Headers,
 	settings: AuthorizeEndpointSettings | undefined,
-	request: OAuthInteractionRequest,
+	request: OAuthInteractionRequest & {
+		/** Where an extension interaction reports errors before approval. */
+		errorURL?: (error: unknown) => string;
+	},
 ): Promise<OAuthRedirectResult> {
 	let { query } = request;
 	const { client } = request;
@@ -1033,6 +1037,7 @@ async function runAuthorizationInteraction(
 			});
 		} catch (error) {
 			if (!(error instanceof APIError)) throw error;
+			if (request.errorURL) return handleRedirect(ctx, request.errorURL(error));
 			const body = error.body as
 				| { error?: OAuthErrorCode; error_description?: string }
 				| undefined;

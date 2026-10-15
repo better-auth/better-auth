@@ -53,13 +53,16 @@ export async function resolveAuthenticationContext(
 	// acr and amr only reach ID tokens, which need the openid scope.
 	if (!resolve || !info.scopes.includes("openid")) return {};
 	const { query, ...resolveInfo } = info;
-	const resolved = await resolve({
+	// The resolver is user code; check the runtime shape, not just the types.
+	const resolved: unknown = await resolve({
 		...resolveInfo,
 		requestedAcrValues: getRequestedAcrValues(query.claims, query.acr_values),
 	});
-	// The resolver is user code; check the runtime shape, not just the types.
-	const acr: unknown = resolved?.acr ?? LEVEL_0_ACR;
-	const amr: unknown = resolved?.amr;
+	if (resolved === undefined) return { acr: LEVEL_0_ACR };
+	if (typeof resolved !== "object" || resolved === null) {
+		invalidAuthenticationContext("returned a value that is not an object");
+	}
+	const { acr = LEVEL_0_ACR, amr } = resolved as Record<string, unknown>;
 	if (typeof acr !== "string") {
 		invalidAuthenticationContext("returned a non-string acr");
 	}
@@ -69,13 +72,14 @@ export async function resolveAuthenticationContext(
 		);
 	}
 	if (amr === undefined) return { acr };
+	// Array.from reads holes as undefined, which every() would skip.
 	if (
 		!Array.isArray(amr) ||
-		!amr.every((value): value is string => typeof value === "string")
+		!Array.from(amr).every((value) => typeof value === "string")
 	) {
 		invalidAuthenticationContext("returned an amr that is not a string array");
 	}
-	return { acr, amr: amr.length ? amr : undefined };
+	return { acr, amr: amr.length ? (amr as string[]) : undefined };
 }
 
 const RESERVED_ID_TOKEN_CLAIMS = new Set([
