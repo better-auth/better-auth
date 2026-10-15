@@ -20,17 +20,18 @@ If your provider is already built-in, use `socialProviders` in your auth config 
 
 Every aspect of the OAuth flow can be overridden:
 
-| Need                                                           | Config field                                                 |
-| -------------------------------------------------------------- | ------------------------------------------------------------ |
-| Provider uses non-standard token exchange (GET, custom params) | `getToken`                                                   |
-| Provider returns a non-standard user profile                   | `getUserInfo`                                                |
-| You need to map profile fields to your user model              | `mapProfileToUser`                                           |
-| Provider requires extra authorization parameters               | `authorizationUrlParams`                                     |
-| Provider requires extra token parameters                       | `tokenUrlParams`                                             |
-| Provider requires custom HTTP headers                          | `discoveryHeaders`, `authorizationHeaders`                   |
-| Provider does not support OIDC discovery                       | Set `authorizationUrl`, `tokenUrl`, `userInfoUrl` explicitly |
-| Provider uses a non-standard immutable user identifier         | Set `accountSubject`                                         |
-| Provider rejects PKCE                                          | Set `pkce: false`                                            |
+| Need                                                              | Config field                                                 |
+| ----------------------------------------------------------------- | ------------------------------------------------------------ |
+| Provider uses non-standard token exchange (GET, custom params)    | `getToken`                                                   |
+| Provider uses non-standard token refresh (JSON body, custom auth) | `refreshToken`                                               |
+| Provider returns a non-standard user profile                      | `getUserInfo`                                                |
+| You need to map profile fields to your user model                 | `mapProfileToUser`                                           |
+| Provider requires extra authorization parameters                  | `authorizationUrlParams`                                     |
+| Provider requires extra token parameters                          | `tokenUrlParams`                                             |
+| Provider requires custom HTTP headers                             | `discoveryHeaders`, `authorizationHeaders`                   |
+| Provider does not support OIDC discovery                          | Set `authorizationUrl`, `tokenUrl`, `userInfoUrl` explicitly |
+| Provider uses a non-standard immutable user identifier            | Set `accountSubject`                                         |
+| Provider rejects PKCE                                             | Set `pkce: false`                                            |
 
 ## Installation
 
@@ -204,6 +205,7 @@ Each provider configuration object supports the following options:
 import type {
   OAuthAccountKeyContext,
   OAuth2Tokens,
+  OAuthRefreshContext,
   TokenEndpointAuth,
 } from "better-auth/oauth2";
 import type { GenericOAuthUserInfo } from "better-auth/plugins/generic-oauth";
@@ -232,6 +234,10 @@ interface GenericOAuthConfig {
   accessType?: string;
   accessTokenExpiresIn?: number;
   getUserInfo?: (tokens: OAuth2Tokens) => Promise<GenericOAuthUserInfo | null>;
+  refreshToken?: (
+    refreshToken: string,
+    ctx?: OAuthRefreshContext,
+  ) => Promise<OAuth2Tokens>;
 }
 ```
 
@@ -298,6 +304,8 @@ Better Auth builds the standard grant parameters, while `customizeRequest` adds 
 **accessTokenExpiresIn**: (Optional) Fallback access-token lifetime in seconds, used only when the provider's token response omits `expires_in`. Without a known expiry, `getAccessToken` cannot tell the token has expired and never refreshes it. Set this to the token's lifetime so the expiry is tracked and the token is refreshed when needed. Leave unset if the provider returns `expires_in`.
 
 **getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
+
+**refreshToken**: (Optional) A custom function to refresh an access token, used instead of the standard form-encoded `tokenUrl` POST. Receives the stored refresh token and the optional refresh context (`ctx` with the triggering request's headers). The hook must return tokens with a string `accessToken` — anything else fails closed. `accessTokenExpiresIn` is still applied to its result as a fallback when the hook omits an expiry. `refreshTokenParams` and `tokenEndpointAuth` do not apply on this path — the hook owns the whole request. This also means the standard request protections are bypassed: the standard refresh (`packages/core/src/oauth2/refresh-access-token.ts`) drops `BLOCKED_REFRESH_TOKEN_PARAMS` (`grant_type`, `refresh_token`, `__proto__`, `constructor`, `prototype`) from caller-supplied params and sends through `fetchRefusingRedirects` (`packages/core/src/oauth2/reject-redirects.ts`), which never follows redirects — none of that happens for custom `fetch` in the hook. So set `grant_type`/`refresh_token` as constants (never from request-derived keys or values), pin the request URL to the provider's token endpoint and never interpolate request input into it (SSRF), refuse redirects yourself (`redirect: "manual"`, rejecting 3xx/opaque-redirect responses as `noFollowRedirect`/`assertResponseNotRedirect` do), validate any header- or cookie-derived value against the authenticated user's entitlements before using it, and never log the refresh token, returned tokens, `ctx`, or client secrets.
 
 **getUserInfo**: (Optional) A custom function to fetch user info from the provider, given the OAuth tokens. If not provided, a default fetch is used.
 
@@ -445,6 +453,63 @@ genericOAuth({
           email: data.email,
           image: data.avatar_url,
           emailVerified: data.email_verified,
+        };
+      },
+    },
+  ],
+});
+```
+
+### Custom Token Refresh
+
+For providers whose refresh endpoint is non-standard (JSON body instead of form-encoded, custom auth scheme, or no `tokenUrl` at all because exchange goes through `getToken`), provide a custom `refreshToken` function. It runs instead of the standard refresh POST:
+
+```ts
+genericOAuth({
+  config: [
+    {
+      providerId: "custom-provider",
+      clientId: process.env.CUSTOM_CLIENT_ID!,
+      clientSecret: process.env.CUSTOM_CLIENT_SECRET,
+      authorizationUrl: "https://provider.example.com/oauth/authorize",
+      // No tokenUrl: exchange and refresh are both custom.
+      getToken: async ({ code, redirectURI }) => {
+        // ... custom exchange, see above
+      },
+      refreshToken: async (refreshToken, ctx) => {
+        // The ctx headers are attacker-controlled: validate anything you
+        // read from them, and keep the URL pinned to the provider — never
+        // interpolate request input into it (SSRF). Never log refreshToken,
+        // tokens, ctx, or client secrets.
+        // Custom fetch runs outside fetchRefusingRedirects, so redirects are
+        // NOT refused: reject them yourself instead of following.
+        const response = await fetch(
+          "https://provider.example.com/oauth/token",
+          {
+            method: "POST",
+            redirect: "manual",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              // Constants owned by the hook — never from request input.
+              // (The standard path's BLOCKED_REFRESH_TOKEN_PARAMS filter
+              // does not apply here.)
+              grant_type: "refresh_token",
+              refresh_token: refreshToken,
+              client_id: process.env.CUSTOM_CLIENT_ID,
+              client_secret: process.env.CUSTOM_CLIENT_SECRET,
+            }),
+          }
+        );
+        if (response.status >= 300 && response.status < 400 || response.type === "opaqueredirect") {
+          throw new Error("Token endpoint redirected; refusing to follow.");
+        }
+
+        const data = await response.json();
+
+        return {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          // May be omitted: accessTokenExpiresIn applies as a fallback.
         };
       },
     },

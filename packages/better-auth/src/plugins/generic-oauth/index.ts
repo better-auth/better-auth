@@ -486,6 +486,22 @@ export const genericOAuth = <const ID extends string>(
 					refreshToken: string,
 					refreshCtx?: OAuthRefreshContext,
 				): Promise<OAuth2Tokens> {
+					if (c.refreshToken) {
+						const tokens = await c.refreshToken(refreshToken, refreshCtx);
+						if (
+							!tokens?.accessToken ||
+							typeof tokens.accessToken !== "string"
+						) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+							);
+						}
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
+					}
 					if (!tokenUrl) {
 						throw APIError.from(
 							"BAD_REQUEST",

@@ -893,6 +893,210 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * JSON-only IdPs can exchange the authorization code via `getToken`, but the
+	 * standard refresh always POSTs form-encoded to `tokenUrl` — and fails
+	 * closed with `TOKEN_URL_NOT_FOUND` when there is no `tokenUrl`. The
+	 * `refreshToken` override lets such a provider refresh without one: the
+	 * hook runs first, `accessTokenExpiresIn` still applies to its result, and
+	 * the refresh context (headers) is forwarded.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11559
+	 */
+	it("refreshes a getToken-only provider (no tokenUrl) via the refreshToken override", async () => {
+		const seenByHook: { refreshToken: string; tenant: string | null }[] = [];
+		let hookCalls = 0;
+
+		const {
+			auth: hookAuth,
+			customFetchImpl,
+			cookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "json-only-no-hook",
+							clientId,
+							clientSecret,
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							pkce: true,
+							accessTokenExpiresIn: 3600,
+							getToken: async () => ({
+								accessToken: "no-hook-initial",
+								refreshToken: "no-hook-refresh",
+							}),
+							getUserInfo: async () => ({
+								id: "json-only-no-hook-user",
+								email: "json-only-no-hook@test.com",
+								name: "No Hook User",
+								emailVerified: true,
+							}),
+						},
+						{
+							providerId: "json-only-hook",
+							clientId,
+							clientSecret,
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							pkce: true,
+							accessTokenExpiresIn: 3600,
+							getToken: async () => ({
+								accessToken: "hook-initial",
+								refreshToken: "hook-refresh",
+							}),
+							getUserInfo: async () => ({
+								id: "json-only-hook-user",
+								email: "json-only-hook@test.com",
+								name: "Hook User",
+								emailVerified: true,
+							}),
+							refreshToken: async (refreshToken, ctx) => {
+								hookCalls++;
+								seenByHook.push({
+									refreshToken,
+									tenant: ctx?.headers?.get("x-tenant") ?? null,
+								});
+								// Deliberately omit the expiry: the caller must
+								// apply the accessTokenExpiresIn fallback.
+								return {
+									accessToken: "hook-refreshed",
+									refreshToken: "hook-refresh-next",
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		// Pre-fix behavior, preserved for hook-less providers: without a
+		// tokenUrl the refresh fails closed instead of hitting an unknown
+		// endpoint.
+		const hookContext = await hookAuth.$context;
+		const noHookProvider = await getAwaitableValue(
+			hookContext.socialProviders,
+			{ value: "json-only-no-hook" },
+		);
+		assert(noHookProvider, "expected no-hook provider to be registered");
+		await expect(
+			noHookProvider.refreshAccessToken?.("no-hook-refresh"),
+		).rejects.toMatchObject({ body: { code: "TOKEN_URL_NOT_FOUND" } });
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl },
+		});
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "json-only-hook",
+			callbackURL: "http://localhost:3000/dashboard",
+			newUserCallbackURL: "http://localhost:3000/new_user",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+			customFetchImpl,
+		);
+		const accounts = await client.listAccounts({
+			fetchOptions: { headers: postCallbackHeaders },
+		});
+		const accountId = accounts.data?.[0]?.id;
+		expect(accountId).toBeDefined();
+
+		vi.useFakeTimers({ toFake: ["Date"] });
+		try {
+			// Past the getToken-result fallback expiry: the hook refreshes.
+			vi.setSystemTime(new Date(Date.now() + 2 * 60 * 60 * 1000));
+			const headersWithTenant = new Headers(postCallbackHeaders);
+			headersWithTenant.set("x-tenant", "tenant-7");
+			const refreshed = await client.getAccessToken(
+				{ accountId: accountId! },
+				{ headers: headersWithTenant },
+			);
+			expect(refreshed.data?.accessToken).toBe("hook-refreshed");
+			expect(hookCalls).toBe(1);
+			expect(seenByHook[0]).toEqual({
+				refreshToken: "hook-refresh",
+				tenant: "tenant-7",
+			});
+
+			// Inside the hook-result fallback window: served from storage.
+			const cached = await client.getAccessToken(
+				{ accountId: accountId! },
+				{ headers: postCallbackHeaders },
+			);
+			expect(cached.data?.accessToken).toBe("hook-refreshed");
+			expect(hookCalls).toBe(1);
+
+			// Past the hook-result fallback expiry: refreshes again with the
+			// rotated refresh token. Without the fallback on the hook result,
+			// no expiry would be stored and this second refresh never fires.
+			vi.setSystemTime(new Date(Date.now() + 4 * 60 * 60 * 1000));
+			const refreshedAgain = await client.getAccessToken(
+				{ accountId: accountId! },
+				{ headers: postCallbackHeaders },
+			);
+			expect(refreshedAgain.data?.accessToken).toBe("hook-refreshed");
+			expect(hookCalls).toBe(2);
+			expect(seenByHook[1]).toEqual({
+				refreshToken: "hook-refresh-next",
+				tenant: null,
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	/**
+	 * A `refreshToken` hook that returns no string `accessToken` fails closed
+	 * with the same error shape as the standard path instead of persisting an
+	 * unusable token.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11559
+	 */
+	it("fails closed when the refreshToken hook returns no accessToken", async () => {
+		const { auth: badHookAuth } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "bad-hook",
+							clientId,
+							clientSecret,
+							authorizationUrl: `http://localhost:${port}/authorize`,
+							getToken: async () => ({
+								accessToken: "bad-hook-initial",
+								refreshToken: "bad-hook-refresh",
+							}),
+							getUserInfo: async () => ({
+								id: "bad-hook-user",
+								email: "bad-hook@test.com",
+								name: "Bad Hook User",
+								emailVerified: true,
+							}),
+							refreshToken: async () => ({
+								refreshToken: "bad-hook-next",
+							}),
+						},
+					],
+				}),
+			],
+		});
+		const badHookContext = await badHookAuth.$context;
+		const badHookProvider = await getAwaitableValue(
+			badHookContext.socialProviders,
+			{ value: "bad-hook" },
+		);
+		assert(badHookProvider, "expected bad-hook provider to be registered");
+		await expect(
+			badHookProvider.refreshAccessToken?.("bad-hook-refresh"),
+		).rejects.toMatchObject({
+			body: { code: "INVALID_OAUTH_CONFIGURATION" },
+		});
+	});
+
+	/**
 	 * Multi-tenant OIDC providers (Zitadel multi-org, Auth0 with `audience`,
 	 * and providers with tenant selectors) require extra body params on the
 	 * refresh call. `refreshTokenParams` lets a generic-oauth plugin inject
