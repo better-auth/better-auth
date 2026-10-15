@@ -136,10 +136,12 @@ describe("oauth client secret expiry", async () => {
 			Math.floor(Date.now() / 1000) + 3600,
 		);
 
-		await expect(createClient("soon")).rejects.toMatchObject({
-			status: "BAD_REQUEST",
-			body: { error: "invalid_client_metadata" },
-		});
+		for (const invalid of ["soon", ""]) {
+			await expect(createClient(invalid)).rejects.toMatchObject({
+				status: "BAD_REQUEST",
+				body: { error: "invalid_client_metadata" },
+			});
+		}
 	});
 });
 

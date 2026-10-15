@@ -1531,7 +1531,7 @@ export function oauthToSchema(
 
 	// Type conversions
 	let expiresAt: Date | undefined;
-	if (_expiresAt) {
+	if (_expiresAt !== undefined && _expiresAt !== 0) {
 		try {
 			// A number is seconds since the epoch; a string is a span from now ("30d").
 			expiresAt = new Date(
