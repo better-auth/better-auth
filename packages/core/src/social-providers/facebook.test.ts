@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { UnsecuredJWT } from "jose";
+import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -6,6 +7,7 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import type { FacebookLimitedLoginProfile } from "./facebook";
 import { facebook } from "./facebook";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -132,5 +134,24 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 		const res = await provider.getUserInfo({} as any);
 		expect(res).toBeNull();
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/facebook/facebook-ios-sdk/blob/main/FBSDKCoreKit/FBSDKCoreKit/AuthenticationTokenClaims.swift
+ */
+it("accepts Facebook Limited Login without optional profile claims", async () => {
+	const profile = { sub: "fb-user" };
+	assertType<FacebookLimitedLoginProfile>(profile);
+	const result = await facebook(options).getUserInfo({
+		idToken: new UnsecuredJWT(profile).encode(),
+	});
+
+	expect(result?.data).toMatchObject(profile);
+	expect(result?.user).toEqual({
+		name: undefined,
+		email: undefined,
+		image: undefined,
+		emailVerified: false,
 	});
 });
