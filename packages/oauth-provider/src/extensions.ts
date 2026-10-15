@@ -268,21 +268,28 @@ export function getSupportedGrantTypes(
 
 /**
  * Finds the interaction request a query identifies, such as a device approval
- * keyed by `user_code`. Authorization requests (with `response_type`) never
- * match.
+ * keyed by `user_code`. Authorization requests, which carry `response_type` or
+ * a pushed `request_uri`, never match.
  */
 export function getExtensionInteractionRequest(
 	opts: OAuthOptions<Scope[]>,
 	query: object,
 ) {
 	const parameters = query as Record<string, unknown>;
-	if (parameters.response_type !== undefined) return undefined;
+	if (
+		parameters.response_type !== undefined ||
+		parameters.request_uri !== undefined
+	) {
+		return undefined;
+	}
 	for (const extension of getOAuthProviderExtensions(opts)) {
 		for (const [parameter, handler] of Object.entries(
 			extension.interactionRequests ?? {},
 		)) {
 			const value = parameters[parameter];
-			if (typeof value === "string" && value) return { handler, value };
+			if (typeof value === "string" && value) {
+				return { parameter, handler, value };
+			}
 		}
 	}
 	return undefined;

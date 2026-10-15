@@ -421,16 +421,14 @@ export interface OAuthUserInfoExtensionInput {
  * just the one it needs. This is the shape every future OAuth RFC plugin copies.
  *
  * Two contribution disciplines:
- * - Dispatched kinds (`grants`, `clientAuthentication`) must be disjoint across
- *   extensions: registering a grant type, auth method, or assertion type that
- *   another extension already registered is rejected at setup, since the second
- *   would otherwise be silently unreachable.
+ * - Dispatched kinds (`grants`, `clientAuthentication`, `interactionRequests`)
+ *   must be disjoint across extensions: registering a grant type, auth method,
+ *   assertion type, or interaction parameter that another extension already
+ *   registered is rejected at setup, since the second would otherwise be
+ *   silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
  *   core; a key already owned by the provider is kept, and a key two extensions
  *   both contribute resolves to the first-registered extension.
- *
- * `clientDiscovery` sources run in registration order, and `interactionRequests`
- * parameters must also be disjoint across extensions.
  */
 export interface OAuthProviderExtension {
 	/**
@@ -513,6 +511,11 @@ export interface OAuthInteractionRequest {
 	/** Signed into each interaction page; carries `prompt` and `max_age`. */
 	query: OAuthInteractionQuery;
 	client: SchemaClient<Scope[]>;
+	/**
+	 * Show the consent page even when consent is stored or the client skips
+	 * it, and approve only in the request where the user accepts on that page.
+	 */
+	requireConsent?: boolean | undefined;
 	/**
 	 * Records the approval once every interaction is complete and returns the
 	 * URL to send the user to.

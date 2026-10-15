@@ -183,6 +183,21 @@ function redirectWithPromptNoneError(
 }
 
 /**
+ * Returns the provider error page URL for an `APIError`; rethrows anything else.
+ */
+export function getAPIErrorURL(ctx: GenericEndpointContext, error: unknown) {
+	if (!(error instanceof APIError)) throw error;
+	const body = error.body as
+		| { error?: OAuthErrorCode; error_description?: string }
+		| undefined;
+	return getErrorURL(
+		ctx,
+		body?.error ?? "invalid_request",
+		body?.error_description ?? "invalid request",
+	);
+}
+
+/**
  * Validates that the issuer URL
  * - MUST use HTTPS scheme (HTTP allowed for localhost in dev)
  * - MUST NOT contain query components
@@ -432,6 +447,8 @@ export function authorizeRedirectOnError(
 export type AuthorizeEndpointSettings = {
 	isAuthorize?: boolean;
 	postLogin?: boolean;
+	/** Set only by the consent endpoint, in the request where the user accepts. */
+	consentAccepted?: boolean;
 };
 
 export async function authorizeEndpoint(
@@ -456,17 +473,12 @@ export async function authorizeEndpoint(
 
 	const interaction = getExtensionInteractionRequest(opts, query);
 	if (interaction) {
-		const toErrorURL = (error: unknown) => {
-			if (!(error instanceof APIError)) throw error;
-			const body = error.body as
-				| { error?: OAuthErrorCode; error_description?: string }
-				| undefined;
-			return getErrorURL(
-				ctx,
-				body?.error ?? "invalid_request",
-				body?.error_description ?? "invalid request",
-			);
-		};
+		// A direct request learns nothing about the request until sign-in.
+		if (settings?.isAuthorize === true && !(await getSessionFromCtx(ctx))) {
+			ctx.query = { [interaction.parameter]: interaction.value };
+			return redirectWithPromptCode(ctx, opts, "login");
+		}
+		const toErrorURL = (error: unknown) => getAPIErrorURL(ctx, error);
 		let interactionRequest: OAuthInteractionRequest;
 		try {
 			interactionRequest = await interaction.handler.load({
@@ -964,8 +976,12 @@ async function runAuthorizationInteraction(
 		}
 	}
 
-	// Force consent screen
-	if (promptSet?.has("consent")) {
+	// Force consent screen. A request that requires consent is approved only in
+	// the request where the user accepts it, never from a resumed signed query.
+	if (
+		promptSet?.has("consent") ||
+		(request.requireConsent && !settings?.consentAccepted)
+	) {
 		return redirectWithPromptCode(ctx, opts, "consent", {
 			sessionId: session.session.id,
 		});

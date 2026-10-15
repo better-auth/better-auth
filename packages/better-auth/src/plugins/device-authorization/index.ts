@@ -175,9 +175,9 @@ export interface DeviceAuthorizationGrant<
 		| undefined
 		| Promise<DeviceAuthorizationGrantAuthorization | undefined>;
 	/**
-	 * Refuse a standalone endpoint for a code this grant issued, by throwing
-	 * the error that names where to redeem (`/device/token`) or approve
-	 * (`/device`, `/device/approve`, `/device/deny`) it instead.
+	 * Throw when a code this grant issued reaches a standalone endpoint:
+	 * `/device/token` (`redeem`) or `/device`, `/device/approve`, `/device/deny`
+	 * (`approve`). The error should name the endpoint to use instead.
 	 */
 	assertStandaloneUse: (input: {
 		ctx: GenericEndpointContext;

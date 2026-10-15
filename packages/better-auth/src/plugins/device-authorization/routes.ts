@@ -143,7 +143,10 @@ export async function decideDeviceCode(
 		deviceCode: DeviceCode;
 		userId: string;
 		decision: "approved" | "denied";
-		/** Grant-owned fields to persist with the decision. */
+		/**
+		 * Fields to persist with the decision, such as grant-owned fields or a
+		 * scope the user narrowed on a consent page.
+		 */
 		fields?: Record<string, unknown> | undefined;
 	},
 ) {
@@ -172,6 +175,27 @@ export async function decideDeviceCode(
 	}
 }
 
+/**
+ * Finds the code a standalone endpoint (`/device`, `/device/approve`,
+ * `/device/deny`) acts on, refusing codes that a grant approves itself.
+ */
+async function findStandaloneDeviceCode(
+	ctx: GenericEndpointContext,
+	grant: DeviceAuthorizationGrant | undefined,
+	userCode: string,
+) {
+	const deviceCode = await findDeviceCodeByUserCode(ctx, userCode);
+	if (!deviceCode) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description:
+				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+		});
+	}
+	await grant?.assertStandaloneUse({ ctx, deviceCode, use: "approve" });
+	return deviceCode;
+}
+
 /** Handles `/device/approve` and `/device/deny` for a code the user claimed. */
 async function recordDeviceCodeDecision(
 	ctx: GenericEndpointContext,
@@ -188,19 +212,7 @@ async function recordDeviceCodeDecision(
 		});
 	}
 
-	const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, userCode);
-	if (!deviceCodeRecord) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_request",
-			error_description:
-				DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
-		});
-	}
-	await grant?.assertStandaloneUse({
-		ctx,
-		deviceCode: deviceCodeRecord,
-		use: "approve",
-	});
+	const deviceCodeRecord = await findStandaloneDeviceCode(ctx, grant, userCode);
 	assertDeviceCodePending(deviceCodeRecord);
 
 	if (!deviceCodeRecord.userId) {
@@ -935,20 +947,11 @@ export const deviceVerify = (grant: DeviceAuthorizationGrant | undefined) =>
 		},
 		async (ctx) => {
 			const { user_code } = ctx.query;
-			const deviceCodeRecord = await findDeviceCodeByUserCode(ctx, user_code);
-
-			if (!deviceCodeRecord) {
-				throw new APIError("BAD_REQUEST", {
-					error: "invalid_request",
-					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
-				});
-			}
-			await grant?.assertStandaloneUse({
+			const deviceCodeRecord = await findStandaloneDeviceCode(
 				ctx,
-				deviceCode: deviceCodeRecord,
-				use: "approve",
-			});
+				grant,
+				user_code,
+			);
 
 			if (deviceCodeRecord.expiresAt < new Date()) {
 				throw expiredUserCode();
@@ -1059,7 +1062,8 @@ export const deviceDecisionEndpoint = <
 };
 
 /**
- * @internal
+ * Builds the `verification_uri` and `verification_uri_complete` for a user code,
+ * resolving a relative `verificationUri` against the auth base URL.
  */
 export const buildVerificationUris = (
 	verificationUri: string | undefined,

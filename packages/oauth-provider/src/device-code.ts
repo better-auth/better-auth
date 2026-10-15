@@ -30,6 +30,7 @@ import {
 	getClient,
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
+	normalizeTimestampValue,
 	readFormParams,
 	toResourceList,
 	validateClientScopes,
@@ -195,7 +196,7 @@ async function exchangeOAuthDeviceCode(
 		user,
 		resources,
 		referenceId: claimedDeviceCode.referenceId ?? undefined,
-		authTime: claimedDeviceCode.authTime ?? undefined,
+		authTime: normalizeTimestampValue(claimedDeviceCode.authTime),
 		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});
@@ -250,15 +251,14 @@ function deviceApprovalRequest(
 			const query = {
 				user_code: deviceCode.userCode,
 				client_id: client.clientId,
-				scope: scopes.length ? scopes.join(" ") : undefined,
+				scope: scopes.join(" "),
 				resource: deviceCode.resources ?? [],
-				// RFC 8628 section 5.4: always show consent for a device, even when
-				// consent is stored or the client skips it.
-				prompt: signedQuery ? signedQuery.prompt : "consent",
 			};
 			return {
 				query,
 				client,
+				// RFC 8628 section 5.4: the user who approves must see consent.
+				requireConsent: true,
 				approve: async (approval) => {
 					await decideDeviceCode(ctx, {
 						deviceCode,
