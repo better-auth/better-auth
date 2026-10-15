@@ -77,8 +77,22 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 						? url.hostname
 						: undefined,
 				signal,
-				lookup: (_hostname, _options, callback) => {
-					callback(null, pinnedAddress.address, pinnedAddress.family);
+				/**
+				 * Node requests all lookup results when automatic address-family
+				 * selection is enabled. The callback must receive an address array for
+				 * `all: true`, and the legacy address and family arguments otherwise.
+				 * Both forms return only the previously validated address to preserve
+				 * connection pinning.
+				 *
+				 * @see https://nodejs.org/api/net.html#socketconnectoptions-connectlistener
+				 * @see https://nodejs.org/api/dns.html#dnslookuphostname-options-callback
+				 */
+				lookup: (_hostname, options, callback) => {
+					if (options.all) {
+						callback(null, [pinnedAddress]);
+					} else {
+						callback(null, pinnedAddress.address, pinnedAddress.family);
+					}
 				},
 			},
 			(response) => {

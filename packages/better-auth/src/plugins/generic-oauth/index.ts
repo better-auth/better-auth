@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import type {
 	OAuth2Tokens,
@@ -86,13 +87,34 @@ function isClientSecretTokenEndpointAuth(
 	);
 }
 
+/** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
+const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
+
+type PendingDiscovery = Map<
+	string,
+	{ config: GenericOAuthConfig; attempt?: Promise<void> | undefined }
+>;
+
+/**
+ * Providers skipped because startup discovery failed. Init stores them on each auth
+ * instance's context, so one plugin object can serve several instances. It is a context
+ * field rather than a WeakMap because requests see copies of the context, and a later
+ * plugin may replace `socialProviders`.
+ */
+const getPendingDiscovery = (ctx: AuthContext) =>
+	(ctx as AuthContext & { genericOAuthPendingDiscovery?: PendingDiscovery })
+		.genericOAuthPendingDiscovery;
+
 async function fetchDiscovery(
 	url: string,
 	headers?: Record<string, string>,
+	timeout?: number,
 ): Promise<DiscoveryDocument | null> {
 	const result = await betterFetch<DiscoveryDocument>(url, {
 		method: "GET",
 		headers,
+		// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
+		signal: timeout ? AbortSignal.timeout(timeout) : undefined,
 	});
 	if (result.error || !result.data) {
 		return null;
@@ -195,327 +217,357 @@ export const genericOAuth = <const ID extends string>(
 		);
 	}
 
+	const buildProviders = async (
+		configs: GenericOAuthConfig[],
+		ctx: AuthContext,
+		discoveryTimeout?: number,
+	): Promise<OAuthProvider[]> => {
+		const genericProviders: OAuthProvider[] = [];
+		for (const c of configs) {
+			let authorizationUrl = c.authorizationUrl;
+			let tokenUrl = c.tokenUrl;
+			let userInfoUrl = c.userInfoUrl;
+			let endSessionEndpoint = c.endSessionEndpoint;
+
+			let issuer: string | undefined;
+			let isOidc = false;
+			let idTokenConfig: OAuthIdTokenConfig | undefined;
+
+			if (c.discoveryUrl) {
+				const discovered = await fetchDiscovery(
+					c.discoveryUrl,
+					c.discoveryHeaders,
+					discoveryTimeout,
+				).catch((err) => {
+					ctx.logger.error(
+						`Discovery fetch failed for "${c.providerId}": ${err}`,
+					);
+					return null;
+				});
+				if (discovered) {
+					authorizationUrl ??= discovered.authorization_endpoint;
+					tokenUrl ??= discovered.token_endpoint;
+					userInfoUrl ??= discovered.userinfo_endpoint;
+					endSessionEndpoint ??= discovered.end_session_endpoint;
+					issuer = discovered.issuer;
+					const signingAlgs = discovered.id_token_signing_alg_values_supported;
+					isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
+					if (discovered.jwks_uri && discovered.issuer) {
+						let jwksUrl: URL;
+						try {
+							jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
+						} catch {
+							ctx.logger.error(
+								`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document. Provider skipped.`,
+							);
+							continue;
+						}
+						idTokenConfig = {
+							jwks: createRemoteJWKSet(jwksUrl),
+							issuer: discovered.issuer,
+							audience: c.clientId,
+							algorithms: isOidc ? signingAlgs : undefined,
+						};
+					}
+				}
+				if (!authorizationUrl || (!tokenUrl && !c.getToken)) {
+					ctx.logger.error(
+						`Provider "${c.providerId}": discovery left no usable authorization endpoint or token exchange. Provider skipped.`,
+					);
+					continue;
+				}
+			}
+			if (c.requireIdTokenVerification && !idTokenConfig) {
+				if (c.discoveryUrl) {
+					ctx.logger.error(
+						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri. Provider skipped.`,
+					);
+					continue;
+				}
+				throw new Error(
+					`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
+				);
+			}
+
+			const tokenEndpointAuth = c.tokenEndpointAuth;
+			if (c.clientSecret && isSecretlessTokenEndpointAuth(tokenEndpointAuth)) {
+				throw new Error(
+					`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" cannot be combined with clientSecret`,
+				);
+			}
+
+			if (
+				!c.clientSecret &&
+				isClientSecretTokenEndpointAuth(tokenEndpointAuth)
+			) {
+				throw new Error(
+					`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" requires clientSecret`,
+				);
+			}
+
+			if (
+				!c.clientSecret &&
+				!tokenEndpointAuth &&
+				c.authentication === "basic"
+			) {
+				throw new Error(
+					`Provider "${c.providerId}": authentication "basic" requires clientSecret`,
+				);
+			}
+
+			const accountSubject = c.accountSubject;
+			const provider: OAuthProvider = {
+				id: c.providerId,
+				name: c.name ?? c.providerId,
+				issuer,
+				accountSubject: ({ tokens, profile }) => {
+					// AuthContext erases heterogeneous provider profile types. This
+					// provider always emits GenericOAuthUserInfo from getUserInfo below.
+					const genericProfile = profile as GenericOAuthUserInfo;
+					if (accountSubject) {
+						return accountSubject({ tokens, profile: genericProfile });
+					}
+					return isOidc
+						? (genericProfile.sub ?? "")
+						: (genericProfile.id ?? "");
+				},
+				idToken: idTokenConfig,
+				requiresIdTokenNonce:
+					idTokenConfig !== undefined && c.disableIdTokenNonceBinding !== true,
+				allowIdpInitiated: c.allowIdpInitiated,
+				async createEndSessionURL(data: {
+					idToken?: string | null | undefined;
+					postLogoutRedirectURI?: string | undefined;
+					state?: string | undefined;
+				}) {
+					if (c.disableProviderLogout) {
+						return null;
+					}
+					if (!endSessionEndpoint) {
+						return null;
+					}
+					let url: URL;
+					try {
+						url = new URL(endSessionEndpoint);
+					} catch {
+						return null;
+					}
+					if (data.idToken) {
+						url.searchParams.set("id_token_hint", data.idToken);
+					}
+					const configuredRedirectURI =
+						data.postLogoutRedirectURI ?? c.postLogoutRedirectURI;
+					const postLogoutRedirectURI = configuredRedirectURI
+						? new URL(configuredRedirectURI, ctx.baseURL).toString()
+						: undefined;
+					if (postLogoutRedirectURI) {
+						url.searchParams.set(
+							"post_logout_redirect_uri",
+							postLogoutRedirectURI,
+						);
+						url.searchParams.set("client_id", c.clientId);
+						if (data.state) {
+							url.searchParams.set("state", data.state);
+						}
+					} else if (!data.idToken) {
+						url.searchParams.set("client_id", c.clientId);
+					}
+					return url;
+				},
+				createAuthorizationURL(data) {
+					if (!authorizationUrl) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+						);
+					}
+					return createAuthorizationURL({
+						id: c.providerId,
+						options: {
+							clientId: c.clientId,
+							clientSecret: c.clientSecret,
+							redirectURI: c.redirectURI,
+						},
+						authorizationEndpoint: authorizationUrl,
+						state: data.state,
+						codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
+						scopes: (() => {
+							const merged = [...(data.scopes ?? []), ...(c.scopes ?? [])];
+							if (isOidc && !merged.includes("openid")) {
+								merged.unshift("openid");
+							}
+							return merged;
+						})(),
+						redirectURI: data.redirectURI,
+						prompt: c.prompt,
+						accessType: c.accessType,
+						responseType: c.responseType,
+						responseMode: c.responseMode,
+						nonce: data.idTokenNonce,
+						additionalParams: {
+							...(c.authorizationUrlParams ?? {}),
+							...(data.additionalParams ?? {}),
+						},
+						loginHint: data.loginHint,
+					});
+				},
+				async validateAuthorizationCode(data) {
+					if (c.getToken) {
+						return applyDefaultAccessTokenExpiry(
+							await c.getToken(data),
+							c.accessTokenExpiresIn,
+						);
+					}
+					if (!tokenUrl) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
+						);
+					}
+					const tokens = await validateAuthorizationCode({
+						headers: c.authorizationHeaders,
+						code: data.code,
+						codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
+						redirectURI: data.redirectURI,
+						options: {
+							clientId: c.clientId,
+							clientSecret: c.clientSecret,
+							redirectURI: c.redirectURI,
+						},
+						tokenEndpoint: tokenUrl,
+						authentication: c.authentication,
+						tokenEndpointAuth,
+						additionalParams: c.tokenUrlParams,
+					});
+					return applyDefaultAccessTokenExpiry(tokens, c.accessTokenExpiresIn);
+				},
+				async getUserInfo(tokens) {
+					const { expectedIdTokenNonce, ...oauthTokens } = tokens;
+					// Fail closed: when discovery published a JWKS, an id_token
+					// that cannot be verified must not become an identity source.
+					if (oauthTokens.idToken && provider.idToken) {
+						const verified = await verifyProviderIdToken(
+							provider,
+							oauthTokens.idToken,
+							expectedIdTokenNonce,
+						);
+						if (!verified) {
+							ctx.logger.error(
+								`Provider "${c.providerId}": id_token failed verification against the discovery JWKS or expected nonce`,
+							);
+							return null;
+						}
+					}
+					const raw = c.getUserInfo
+						? await c.getUserInfo(oauthTokens)
+						: await fetchUserInfo(oauthTokens, userInfoUrl);
+					if (!raw) {
+						return null;
+					}
+					const mapped = c.mapProfileToUser
+						? await c.mapProfileToUser(raw)
+						: {};
+					const user = {
+						email: raw.email,
+						emailVerified: raw.emailVerified,
+						image: raw.image,
+						name: raw.name,
+						...mapped,
+					};
+					return {
+						user: {
+							...user,
+							image: user.image ?? undefined,
+						},
+						data: raw,
+					};
+				},
+				async refreshAccessToken(
+					refreshToken: string,
+					refreshCtx?: OAuthRefreshContext,
+				): Promise<OAuth2Tokens> {
+					if (!tokenUrl) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
+						);
+					}
+					const resolvedRefreshParams =
+						typeof c.refreshTokenParams === "function"
+							? await c.refreshTokenParams(refreshCtx)
+							: c.refreshTokenParams;
+					const tokens = await refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: c.clientId,
+							clientSecret: c.clientSecret,
+						},
+						authentication: c.authentication,
+						tokenEndpointAuth,
+						tokenEndpoint: tokenUrl,
+						extraParams: resolvedRefreshParams,
+					});
+					return applyDefaultAccessTokenExpiry(tokens, c.accessTokenExpiresIn);
+				},
+				disableImplicitSignUp: c.disableImplicitSignUp,
+				disableSignUp: c.disableSignUp,
+				options: {
+					disableSignUp: c.disableSignUp,
+					overrideUserInfoOnSignIn: c.overrideUserInfo,
+					requireEmailVerification: c.requireEmailVerification,
+				},
+			};
+			genericProviders.push(provider);
+		}
+		return genericProviders;
+	};
+
+	// Concurrent requests share one retry, and a failed retry stays pending.
+	const retryDiscovery = (ctx: AuthContext, providerId: string) => {
+		const pendingDiscovery = getPendingDiscovery(ctx);
+		const pending = pendingDiscovery?.get(providerId);
+		if (!pending) return;
+		pending.attempt ??= buildProviders(
+			[pending.config],
+			ctx,
+			DISCOVERY_RETRY_TIMEOUT_MS,
+		)
+			.then(([provider]) => {
+				if (!provider) return;
+				pendingDiscovery?.delete(providerId);
+				ctx.socialProviders.unshift(provider);
+			})
+			.finally(() => {
+				pending.attempt = undefined;
+			});
+		return pending.attempt;
+	};
+	// shortcut: account routes that look the provider up from a stored account recover
+	// only after a request names it; resolve the account here if that becomes a need.
+	const requestedProviderId = (context: {
+		body?: { provider?: unknown; providerId?: unknown } | undefined;
+		query?: { provider?: unknown } | undefined;
+		params?: { id?: unknown } | undefined;
+	}) => {
+		const id =
+			context.body?.provider ??
+			context.body?.providerId ??
+			context.query?.provider ??
+			context.params?.id;
+		return typeof id === "string" ? id : undefined;
+	};
+
 	return {
 		id: "generic-oauth",
 		version: PACKAGE_VERSION,
 		init: async (ctx: AuthContext) => {
-			const genericProviders: OAuthProvider[] = [];
-
-			for (const c of options.config) {
-				let authorizationUrl = c.authorizationUrl;
-				let tokenUrl = c.tokenUrl;
-				let userInfoUrl = c.userInfoUrl;
-				let endSessionEndpoint = c.endSessionEndpoint;
-
-				let issuer: string | undefined;
-				let isOidc = false;
-				let idTokenConfig: OAuthIdTokenConfig | undefined;
-
-				if (c.discoveryUrl) {
-					const discovered = await fetchDiscovery(
-						c.discoveryUrl,
-						c.discoveryHeaders,
-					).catch((err) => {
-						ctx.logger.error(
-							`Discovery fetch failed for "${c.providerId}": ${err}`,
-						);
-						return null;
-					});
-					if (discovered) {
-						if (!discovered.issuer && !c.accountIssuer) {
-							throw new Error(
-								`Provider "${c.providerId}": discovery did not return an issuer. Configure accountIssuer explicitly to establish a stable account namespace.`,
-							);
-						}
-						authorizationUrl ??= discovered.authorization_endpoint;
-						tokenUrl ??= discovered.token_endpoint;
-						userInfoUrl ??= discovered.userinfo_endpoint;
-						endSessionEndpoint ??= discovered.end_session_endpoint;
-						issuer = discovered.issuer;
-						const signingAlgs =
-							discovered.id_token_signing_alg_values_supported;
-						isOidc = Array.isArray(signingAlgs) && signingAlgs.length > 0;
-						if (discovered.jwks_uri && discovered.issuer) {
-							let jwksUrl: URL;
-							try {
-								jwksUrl = new URL(discovered.jwks_uri, c.discoveryUrl);
-							} catch {
-								throw new Error(
-									`Provider "${c.providerId}": invalid jwks_uri "${discovered.jwks_uri}" in discovery document.`,
-								);
-							}
-							idTokenConfig = {
-								jwks: createRemoteJWKSet(jwksUrl),
-								issuer: discovered.issuer,
-								audience: c.clientId,
-								algorithms: isOidc ? signingAlgs : undefined,
-							};
-						}
-					} else if (!c.accountIssuer) {
-						throw new Error(
-							`Provider "${c.providerId}": discovery returned no valid data. Provider initialization stopped to keep its account issuer stable.`,
-						);
-					} else if (!authorizationUrl || !tokenUrl) {
-						ctx.logger.error(
-							`Provider "${c.providerId}": discovery returned no data and no explicit endpoints configured. OAuth sign-in will fail for this provider.`,
-						);
-					}
-				}
-				if (c.requireIdTokenVerification && !idTokenConfig) {
-					throw new Error(
-						`Provider "${c.providerId}": requires verified ID tokens, but discovery did not provide a usable issuer and jwks_uri.`,
-					);
-				}
-
-				const tokenEndpointAuth = c.tokenEndpointAuth;
-				if (
-					c.clientSecret &&
-					isSecretlessTokenEndpointAuth(tokenEndpointAuth)
-				) {
-					throw new Error(
-						`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" cannot be combined with clientSecret`,
-					);
-				}
-
-				if (
-					!c.clientSecret &&
-					isClientSecretTokenEndpointAuth(tokenEndpointAuth)
-				) {
-					throw new Error(
-						`Provider "${c.providerId}": tokenEndpointAuth.method "${tokenEndpointAuth?.method}" requires clientSecret`,
-					);
-				}
-
-				if (
-					!c.clientSecret &&
-					!tokenEndpointAuth &&
-					c.authentication === "basic"
-				) {
-					throw new Error(
-						`Provider "${c.providerId}": authentication "basic" requires clientSecret`,
-					);
-				}
-
-				const accountSubject = c.accountSubject;
-				const accountIssuer = c.accountIssuer;
-				const provider: OAuthProvider = {
-					id: c.providerId,
-					name: c.name ?? c.providerId,
-					issuer,
-					accountSubject: ({ tokens, profile }) => {
-						// AuthContext erases heterogeneous provider profile types. This
-						// provider always emits GenericOAuthUserInfo from getUserInfo below.
-						const genericProfile = profile as GenericOAuthUserInfo;
-						if (accountSubject) {
-							return accountSubject({ tokens, profile: genericProfile });
-						}
-						return isOidc
-							? (genericProfile.sub ?? "")
-							: (genericProfile.id ?? "");
-					},
-					accountIssuer:
-						typeof accountIssuer === "function"
-							? ({ tokens, profile }) =>
-									accountIssuer({
-										tokens,
-										profile: profile as GenericOAuthUserInfo,
-									})
-							: (accountIssuer ?? issuer),
-					idToken: idTokenConfig,
-					requiresIdTokenNonce:
-						idTokenConfig !== undefined &&
-						c.disableIdTokenNonceBinding !== true,
-					allowIdpInitiated: c.allowIdpInitiated,
-					async createEndSessionURL(data: {
-						idToken?: string | null | undefined;
-						postLogoutRedirectURI?: string | undefined;
-						state?: string | undefined;
-					}) {
-						if (c.disableProviderLogout) {
-							return null;
-						}
-						if (!endSessionEndpoint) {
-							return null;
-						}
-						let url: URL;
-						try {
-							url = new URL(endSessionEndpoint);
-						} catch {
-							return null;
-						}
-						if (data.idToken) {
-							url.searchParams.set("id_token_hint", data.idToken);
-						}
-						const configuredRedirectURI =
-							data.postLogoutRedirectURI ?? c.postLogoutRedirectURI;
-						const postLogoutRedirectURI = configuredRedirectURI
-							? new URL(configuredRedirectURI, ctx.baseURL).toString()
-							: undefined;
-						if (postLogoutRedirectURI) {
-							url.searchParams.set(
-								"post_logout_redirect_uri",
-								postLogoutRedirectURI,
-							);
-							url.searchParams.set("client_id", c.clientId);
-							if (data.state) {
-								url.searchParams.set("state", data.state);
-							}
-						} else if (!data.idToken) {
-							url.searchParams.set("client_id", c.clientId);
-						}
-						return url;
-					},
-					createAuthorizationURL(data) {
-						if (!authorizationUrl) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
-							);
-						}
-						return createAuthorizationURL({
-							id: c.providerId,
-							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
-								redirectURI: c.redirectURI,
-							},
-							authorizationEndpoint: authorizationUrl,
-							state: data.state,
-							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
-							scopes: (() => {
-								const merged = [...(data.scopes ?? []), ...(c.scopes ?? [])];
-								if (isOidc && !merged.includes("openid")) {
-									merged.unshift("openid");
-								}
-								return merged;
-							})(),
-							redirectURI: data.redirectURI,
-							prompt: c.prompt,
-							accessType: c.accessType,
-							responseType: c.responseType,
-							responseMode: c.responseMode,
-							nonce: data.idTokenNonce,
-							additionalParams: {
-								...(c.authorizationUrlParams ?? {}),
-								...(data.additionalParams ?? {}),
-							},
-							loginHint: data.loginHint,
-						});
-					},
-					async validateAuthorizationCode(data) {
-						if (c.getToken) {
-							return applyDefaultAccessTokenExpiry(
-								await c.getToken(data),
-								c.accessTokenExpiresIn,
-							);
-						}
-						if (!tokenUrl) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
-							);
-						}
-						const tokens = await validateAuthorizationCode({
-							headers: c.authorizationHeaders,
-							code: data.code,
-							codeVerifier: (c.pkce ?? true) ? data.codeVerifier : undefined,
-							redirectURI: data.redirectURI,
-							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
-								redirectURI: c.redirectURI,
-							},
-							tokenEndpoint: tokenUrl,
-							authentication: c.authentication,
-							tokenEndpointAuth,
-							additionalParams: c.tokenUrlParams,
-						});
-						return applyDefaultAccessTokenExpiry(
-							tokens,
-							c.accessTokenExpiresIn,
-						);
-					},
-					async getUserInfo(tokens) {
-						const { expectedIdTokenNonce, ...oauthTokens } = tokens;
-						// Fail closed: when discovery published a JWKS, an id_token
-						// that cannot be verified must not become an identity source.
-						if (oauthTokens.idToken && provider.idToken) {
-							const verified = await verifyProviderIdToken(
-								provider,
-								oauthTokens.idToken,
-								expectedIdTokenNonce,
-							);
-							if (!verified) {
-								ctx.logger.error(
-									`Provider "${c.providerId}": id_token failed verification against the discovery JWKS or expected nonce`,
-								);
-								return null;
-							}
-						}
-						const raw = c.getUserInfo
-							? await c.getUserInfo(oauthTokens)
-							: await fetchUserInfo(oauthTokens, userInfoUrl);
-						if (!raw) {
-							return null;
-						}
-						const mapped = c.mapProfileToUser
-							? await c.mapProfileToUser(raw)
-							: {};
-						const user = {
-							email: raw.email,
-							emailVerified: raw.emailVerified,
-							image: raw.image,
-							name: raw.name,
-							...mapped,
-						};
-						return {
-							user: {
-								...user,
-								image: user.image ?? undefined,
-							},
-							data: raw,
-						};
-					},
-					async refreshAccessToken(
-						refreshToken: string,
-						refreshCtx?: OAuthRefreshContext,
-					): Promise<OAuth2Tokens> {
-						if (!tokenUrl) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
-							);
-						}
-						const resolvedRefreshParams =
-							typeof c.refreshTokenParams === "function"
-								? await c.refreshTokenParams(refreshCtx)
-								: c.refreshTokenParams;
-						const tokens = await refreshAccessToken({
-							refreshToken,
-							options: {
-								clientId: c.clientId,
-								clientSecret: c.clientSecret,
-							},
-							authentication: c.authentication,
-							tokenEndpointAuth,
-							tokenEndpoint: tokenUrl,
-							extraParams: resolvedRefreshParams,
-						});
-						return applyDefaultAccessTokenExpiry(
-							tokens,
-							c.accessTokenExpiresIn,
-						);
-					},
-					disableImplicitSignUp: c.disableImplicitSignUp,
-					disableSignUp: c.disableSignUp,
-					options: {
-						disableSignUp: c.disableSignUp,
-						overrideUserInfoOnSignIn: c.overrideUserInfo,
-						requireEmailVerification: c.requireEmailVerification,
-					},
-				};
-				genericProviders.push(provider);
-			}
+			const genericProviders = await buildProviders(options.config, ctx);
+			const built = new Set(genericProviders.map((p) => p.id));
+			const genericOAuthPendingDiscovery: PendingDiscovery = new Map(
+				options.config
+					.filter((c) => !built.has(c.providerId))
+					.map((c) => [c.providerId, { config: c }]),
+			);
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));
 			for (const gp of genericProviders) {
@@ -529,8 +581,22 @@ export const genericOAuth = <const ID extends string>(
 			return {
 				context: {
 					socialProviders: genericProviders.concat(ctx.socialProviders),
+					genericOAuthPendingDiscovery,
 				},
 			};
+		},
+		hooks: {
+			before: [
+				{
+					matcher: (context) =>
+						getPendingDiscovery(context.context)?.has(
+							requestedProviderId(context) ?? "",
+						) === true,
+					handler: createAuthMiddleware(async (ctx) => {
+						await retryDiscovery(ctx.context, requestedProviderId(ctx) ?? "");
+					}),
+				},
+			],
 		},
 		options,
 		$ERROR_CODES: GENERIC_OAUTH_ERROR_CODES,

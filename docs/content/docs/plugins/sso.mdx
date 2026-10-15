@@ -1,4 +1,6 @@
 ---
+icon: pluginsSSO
+sidebarTitle: "SSO"
 title: Single Sign-On (SSO)
 description: Integrate Single Sign-On (SSO) with your application.
 ---
@@ -91,7 +93,9 @@ A redirect URL will be automatically generated using the provider ID. For instan
   When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
 </Callout>
 
-Better Auth identifies an OIDC account by the configured `issuer` and the verified `sub` claim. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject. Provider aliases that return the same issuer and subject resolve to one external identity; this identity deduplication does not create independent grant or provider lifecycle records for each alias.
+Better Auth identifies an OIDC account by the provider ID and the verified `sub` claim. The `mapping` option maps profile fields such as email, name, and image, but it cannot replace the account subject.
+
+When the mapped email claim holds a list of addresses, Better Auth uses the first one. Azure AD B2C user flows send the address only in an `emails` list, so set `mapping: { email: "emails" }` for them. B2C does not send `email_verified`, so these users are created with an unverified email.
 
 #### Example
 
@@ -418,7 +422,7 @@ Database writes made through the transaction adapter during resolution, account 
 
 To register a SAML provider, use the `registerSSOProvider` endpoint with SAML configuration details. The provider will act as a Service Provider (SP) and integrate with your Identity Provider (IdP).
 
-Better Auth identifies a SAML account by the IdP entity ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
+Better Auth identifies a SAML account by the provider ID and the signed `NameID`. The `issuer` field identifies your service provider, while the IdP entity ID comes from `idpMetadata.metadata` or an explicit `idpMetadata.entityID` in a manual configuration. Attribute mappings can populate profile fields, but they cannot replace the signed `NameID` account subject.
 
 Applications that need to pin the IdP authority while storing a SAML connection can derive it through the same metadata parser used by SAML authentication:
 
@@ -1097,6 +1101,8 @@ samlConfig: {
 
 Both `samlConfig.cert` and `samlConfig.idpMetadata.cert` accept either a single PEM string or an array. When both are set, `idpMetadata.cert` wins.
 
+Changing the certificates keeps the accounts already linked to the provider. Whoever holds the corresponding private key for a listed certificate can sign in as any of those users, so if organization admins should not be able to change certificates on their own, reject authentication-boundary changes in `guardProviderMutation`.
+
 If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata` instead and leave `cert` unset. The certificates come from the document and rotation happens when the IdP republishes it. If a config supplies neither `cert` nor `idpMetadata.metadata`, registration fails with `CERT_SOURCE_MISSING`, since samlify has nothing to verify SAML responses against.
 
 Applications can use `guardProviderMutation` to coordinate SSO changes with a paired directory-sync control plane. IdP entity IDs, endpoints, signing certificates, SP entity IDs, NameID formats, POST assertion-consumer URLs, and assertion-signing policy are authentication-boundary changes. If the guard blocks authentication-boundary changes while a directory is paired, unpair the directory, update the IdP trust configuration, and then re-pair it. OIDC client-secret rotation and SAML SP private-key rotation do not change the authentication boundary.
@@ -1562,7 +1568,11 @@ The SAML ACS endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`) handles both *
 * **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
 * **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
 
+When upgrading to purpose-prefixed verification identifiers or purpose-specific state-cookie keys, restart pending SP-initiated SAML sign-ins and upgrade participating servers together. These flows use Better Auth-generated relay state. Unsolicited IdP-initiated flows do not use that state and are not affected by its format change. See the [verification storage upgrade guidance](/docs/reference/options#verification) and [state-cookie upgrade guidance](/docs/reference/options#storestatestrategy).
+
 Better Auth derives the ACS URL automatically from your `baseURL` and `providerId`, so no SP-side configuration is required.
+
+If your IdP already posts to another URL, such as an existing AD FS relying-party trust, list that URL as an HTTP-POST `AssertionConsumerService` in `spMetadata.metadata` and forward its POST requests to `/sso/saml2/sp/acs/:providerId`. Better Auth then accepts responses addressed to that URL. `samlConfig.callbackUrl` is the post-login redirect, not an ACS URL; see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#saml-configuration-is-simplified).
 
 Your IdP must include an `AudienceRestriction` for this SP. The accepted audience is the SP entity ID, or the explicit `audience` value in `samlConfig` when you need to match an IdP-specific SP identifier. Better Auth also checks bearer `Recipient` and response `Destination` values against this provider's ACS endpoints.
 

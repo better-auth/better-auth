@@ -8,18 +8,18 @@ import type {
 } from "@better-auth/core";
 import {
 	getCurrentAdapter,
-	getCurrentAuthContext,
+	getCurrentAuthEndpointContext,
 	queueAfterTransactionHook,
 	runWithTransaction,
+	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
-import { createLocalAccountIssuer } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
@@ -64,6 +64,12 @@ export const createInternalAdapter = (
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
+	// With secondary storage, the database is the authoritative session store
+	// only when sessions are written to it and revoked rows are deleted.
+	const databaseSessionFallbackEnabled =
+		!!secondaryStorage &&
+		options.session?.storeSessionInDatabase === true &&
+		options.session?.preserveSessionInDatabase !== true;
 	const {
 		createWithHooks,
 		updateWithHooks,
@@ -288,7 +294,7 @@ export const createInternalAdapter = (
 				let endpointContext: GenericEndpointContext;
 				try {
 					endpointContext =
-						(await getCurrentAuthContext()) as GenericEndpointContext;
+						getCurrentAuthEndpointContext() as GenericEndpointContext;
 				} catch (error) {
 					logger.error(
 						"Unable to run validateUserInfo: missing endpoint context",
@@ -330,6 +336,23 @@ export const createInternalAdapter = (
 			userId: string,
 			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
 		) => {
+			if (databaseSessionFallbackEnabled) {
+				// The database holds every session, including ones whose cached copy
+				// failed to write, so list from it. Expired rows are skipped, as the
+				// cached list does.
+				const sessions = await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session>({
+					model: "session",
+					where: [
+						{ field: "userId", value: userId },
+						{ field: "expiresAt", value: new Date(), operator: "gt" },
+					],
+				});
+				return sessions.map((session) =>
+					parseSessionOutput(ctx.options, session),
+				);
+			}
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -473,13 +496,16 @@ export const createInternalAdapter = (
 				| undefined,
 		) => {
 			const headers: Headers | undefined = await (async () => {
-				const ctx = await getCurrentAuthContext().catch(() => null);
+				const ctx = tryGetCurrentAuthEndpointContext();
 				return ctx?.headers || ctx?.request?.headers;
 			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
-			const databaseSessionFallbackEnabled =
-				storeInDb === true &&
-				options.session?.preserveSessionInDatabase !== true;
+			// Deferring is only safe when the database can serve the session. When
+			// secondary storage is the session store, its write is the session
+			// itself and must fail inside the caller's transaction.
+			const deferMirror =
+				storageOptions?.deferSecondaryStorageWrites === true &&
+				databaseSessionFallbackEnabled;
 			const {
 				// always ignore override id - new sessions must have new ids
 				id: _,
@@ -568,35 +594,35 @@ export const createInternalAdapter = (
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								return storageOptions?.deferSecondaryStorageWrites
-									? sessionData
-									: mirrorSessionToSecondaryStorage(sessionData as Session);
+								if (!deferMirror) {
+									return mirrorSessionToSecondaryStorage(
+										sessionData as Session,
+									);
+								}
+								// Queued here, before createWithHooks queues the session's
+								// after hooks, so a hook that revokes the session runs after
+								// the cached copy exists and removes it.
+								await queueAfterTransactionHook(
+									async () => {
+										await mirrorSessionToSecondaryStorage(
+											sessionData as Session,
+										);
+									},
+									{
+										onError(error: unknown) {
+											logger.error(
+												"Failed to mirror committed session to secondary storage",
+												error,
+											);
+										},
+									},
+								);
+								return sessionData;
 							},
 							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
-			if (
-				secondaryStorage &&
-				storageOptions?.deferSecondaryStorageWrites &&
-				res
-			) {
-				await queueAfterTransactionHook(
-					async () => {
-						await mirrorSessionToSecondaryStorage(res as Session);
-					},
-					databaseSessionFallbackEnabled
-						? {
-								onError(error: unknown) {
-									logger.error(
-										"Failed to mirror committed session to secondary storage",
-										error,
-									);
-								},
-							}
-						: undefined,
-				);
-			}
 			return res as Session;
 		},
 		findSession: async (
@@ -675,12 +701,14 @@ export const createInternalAdapter = (
 				  }
 				| undefined,
 		) => {
+			const uniqueTokens = [...new Set(sessionTokens)];
+			const sessionsByToken = new Map<
+				string,
+				{ session: Session; user: User }
+			>();
+			const missingTokens: string[] = [];
 			if (secondaryStorage) {
-				const sessions: {
-					session: Session;
-					user: User;
-				}[] = [];
-				for (const sessionToken of sessionTokens) {
+				for (const sessionToken of uniqueTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
 						try {
@@ -711,50 +739,57 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							sessions.push(session);
+							sessionsByToken.set(sessionToken, session);
 						} catch {
 							// Skip invalid/corrupt session data
 							continue;
 						}
+					} else {
+						missingTokens.push(sessionToken);
 					}
 				}
-				return sessions;
 			}
 
-			const sessions = await (await getCurrentAdapter(adapter)).findMany<
-				Session & { user: User | null }
-			>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: sessionTokens,
-						operator: "in",
+			const databaseTokens = secondaryStorage ? missingTokens : uniqueTokens;
+			if (
+				databaseTokens.length > 0 &&
+				(!secondaryStorage || databaseSessionFallbackEnabled)
+			) {
+				const databaseSessions = await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session & { user: User | null }>({
+					model: "session",
+					limit: databaseTokens.length,
+					where: [
+						{
+							field: "token",
+							value: databaseTokens,
+							operator: "in",
+						},
+						...(options?.onlyActiveSessions
+							? [
+									{
+										field: "expiresAt",
+										value: new Date(),
+										operator: "gt",
+									} satisfies Where,
+								]
+							: []),
+					],
+					join: {
+						user: true,
 					},
-					...(options?.onlyActiveSessions
-						? [
-								{
-									field: "expiresAt",
-									value: new Date(),
-									operator: "gt",
-								} satisfies Where,
-							]
-						: []),
-				],
-				join: {
-					user: true,
-				},
-			});
+				});
 
-			if (!sessions.length) return [];
-			if (sessions.some((session) => !session.user)) return [];
-
-			return sessions.map((_session) => {
-				const { user, ...session } = _session;
-				return {
-					session,
-					user: user!,
-				};
+				for (const { user, ...session } of databaseSessions) {
+					if (user) {
+						sessionsByToken.set(session.token, { session, user });
+					}
+				}
+			}
+			return uniqueTokens.flatMap((token) => {
+				const session = sessionsByToken.get(token);
+				return session ? [session] : [];
 			});
 		},
 		updateSession: async (
@@ -999,25 +1034,32 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
-		findAccountOwnerByKey: async ({ issuer, accountId }) => {
-			const accountWithUser = await (await getCurrentAdapter(adapter)).findOne<
-				Account & { user: User | null }
-			>({
+		findAccountOwnerByKey: async ({ providerId, accountId }) => {
+			const accountsWithUsers = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account & { user: User | null }>({
 				model: "account",
 				where: [
 					{
-						field: "issuer",
-						value: issuer,
+						field: "providerId",
+						value: providerId,
 					},
 					{
 						field: "accountId",
 						value: accountId,
 					},
 				],
+				limit: 2,
 				join: {
 					user: true,
 				},
 			});
+			if (accountsWithUsers.length > 1) {
+				throw new BetterAuthError(
+					`Multiple accounts match the same accountId for provider ${JSON.stringify(providerId)}. Resolve duplicate account identities before continuing.`,
+				);
+			}
+			const accountWithUser = accountsWithUsers[0];
 			if (!accountWithUser) return null;
 			const { user, ...account } = accountWithUser;
 			return user
@@ -1150,10 +1192,6 @@ export const createInternalAdapter = (
 						value: "credential",
 					},
 					{
-						field: "issuer",
-						value: createLocalAccountIssuer("credential"),
-					},
-					{
 						field: "accountId",
 						value: userId,
 					},
@@ -1182,31 +1220,33 @@ export const createInternalAdapter = (
 				where: [
 					{ field: "userId", value: userId },
 					{ field: "providerId", value: "credential" },
-					{
-						field: "issuer",
-						value: createLocalAccountIssuer("credential"),
-					},
 					{ field: "accountId", value: userId },
 				],
 			});
 		},
-		findAccountByKey: async ({ issuer, accountId }) => {
-			const account = await (await getCurrentAdapter(adapter)).findOne<Account>(
-				{
-					model: "account",
-					where: [
-						{
-							field: "issuer",
-							value: issuer,
-						},
-						{
-							field: "accountId",
-							value: accountId,
-						},
-					],
-				},
-			);
-			return account;
+		findAccountByKey: async ({ providerId, accountId }) => {
+			const accounts = await (
+				await getCurrentAdapter(adapter)
+			).findMany<Account>({
+				model: "account",
+				limit: 2,
+				where: [
+					{
+						field: "providerId",
+						value: providerId,
+					},
+					{
+						field: "accountId",
+						value: accountId,
+					},
+				],
+			});
+			if (accounts.length > 1) {
+				throw new BetterAuthError(
+					`Multiple accounts match the same accountId for provider ${JSON.stringify(providerId)}. Resolve duplicate account identities before continuing.`,
+				);
+			}
+			return accounts[0] ?? null;
 		},
 		findAccountByUserId: async (userId: string) => {
 			const account = await (
@@ -1509,7 +1549,9 @@ export const createInternalAdapter = (
 		 * already taken.
 		 *
 		 * The `verification.identifier` column is non-unique, so uniqueness comes
-		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`).
+		 * from a deterministic primary key (`SHA-256` of `reserve:<identifier>`,
+		 * encoded by `encodeDeterministicId` so the configured id strategy keeps
+		 * it; see its note on `generateId: "serial"`).
 		 * The database path is atomic: the primary key turns the INSERT into the
 		 * first-writer-wins gate, and a duplicate is detected portably by
 		 * re-reading the row rather than matching adapter-specific errors.
@@ -1527,13 +1569,13 @@ export const createInternalAdapter = (
 			value: string;
 			expiresAt: Date;
 		}): Promise<boolean> => {
-			const reservationId = base64Url.encode(
+			const reservationId = encodeDeterministicId(
 				new Uint8Array(
 					await createHash("SHA-256").digest(
 						new TextEncoder().encode("reserve:" + data.identifier),
 					),
 				),
-				{ padding: false },
+				options,
 			);
 			const storageOption = getStorageOption(
 				data.identifier,

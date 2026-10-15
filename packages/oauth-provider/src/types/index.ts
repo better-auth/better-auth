@@ -514,6 +514,62 @@ export interface OAuthOptions<
 	 */
 	scopes?: Scopes;
 	/**
+	 * Validates an OAuth authorization request's redirect URI. Without this
+	 * option, the URI must match one registered for the client, except that
+	 * a registered native HTTP loopback URI may use a different port.
+	 *
+	 * The callback runs for every client and also controls whether early
+	 * authorization errors may be sent to the requested URI. Returning `true`
+	 * accepts the URI even when `defaultResult` is `false`; returning `false`
+	 * or throwing rejects it. Client registration is unchanged.
+	 *
+	 * The preview example assumes only trusted clients can register its
+	 * production callback URI.
+	 *
+	 * @example
+	 * ```ts
+	 * oauthProvider({
+	 *   validateRedirectUri: (uri, registeredUris, defaultResult) => {
+	 *     if (defaultResult) return true;
+	 *     if (!registeredUris.includes("https://app.example.com/api/auth/callback")) {
+	 *       return false;
+	 *     }
+	 *     if (uri.includes("#")) return false;
+	 *     try {
+	 *       const url = new URL(uri);
+	 *       return (
+	 *         url.protocol === "https:" &&
+	 *         url.username === "" &&
+	 *         url.password === "" &&
+	 *         url.hostname.endsWith(".preview.example.com") &&
+	 *         url.port === "" &&
+	 *         url.pathname === "/api/auth/callback" &&
+	 *         url.search === ""
+	 *       );
+	 *     } catch {
+	 *       return false;
+	 *     }
+	 *   },
+	 * })
+	 * ```
+	 *
+	 * Custom acceptance relaxes the exact matching required by RFC 9700 §2.1.
+	 * Accept only callback hosts you control. For pairwise subject identifiers,
+	 * custom-validated URIs use the sector of the client's first registered URI.
+	 *
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider#custom-redirect-uri-validation
+	 *
+	 * @param redirectUri - The redirect_uri from the authorization request
+	 * @param registeredUris - Registered redirect URIs for the client
+	 * @param defaultResult - Result of built-in redirect URI matching
+	 * @returns `true` to accept the URI, or `false` to reject it
+	 */
+	validateRedirectUri?: (
+		redirectUri: string,
+		registeredUris: readonly string[],
+		defaultResult: boolean,
+	) => Awaitable<boolean>;
+	/**
 	 * Protected resources the AS issues access tokens for. Promotes the
 	 * resource model into a first-class persisted entity with per-resource
 	 * token policy.
@@ -696,6 +752,21 @@ export interface OAuthOptions<
 	 */
 	assertionMaxLifetime?: number;
 	/**
+	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
+	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
+	 * signed with one of its current keys. No user session is involved.
+	 *
+	 * Clients that publish their keys at a `jwks_uri` rotate them there, so they
+	 * cannot use this endpoint.
+	 *
+	 * Each rotation assertion must be single-use, so the provider refuses to
+	 * start with this enabled on the memory adapter or with
+	 * `advanced.database.generateId: "serial"`, neither of which enforces it.
+	 *
+	 * @default false
+	 */
+	allowClientKeyRotation?: boolean;
+	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
 	 */
@@ -809,6 +880,29 @@ export interface OAuthOptions<
 	 */
 	clientRegistrationRequirePKCE?: boolean;
 	/**
+	 * Default `application_type` for dynamic client registrations that omit the
+	 * field.
+	 *
+	 * - `"web"`: the OIDC Registration §2 default. Omitted `application_type` is
+	 *   treated as `web`, so custom-scheme and loopback redirect URIs are
+	 *   rejected.
+	 * - `"native"`: omitted `application_type` is treated as `native`.
+	 * - `"infer"`: omitted `application_type` is treated as `native` when any
+	 *   `redirect_uris` entry uses a non-http(s) scheme or is `http` on
+	 *   `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web`. Every redirect URI
+	 *   of an inferred native client is then validated against the native rules.
+	 *   Lets native MCP clients that omit `application_type` (for example Cursor,
+	 *   or older Claude Code releases with an `http://127.0.0.1` callback)
+	 *   register without loosening web-client redirect policy.
+	 *
+	 * An `application_type` the client actually sends is never overridden.
+	 * Applies only to dynamic client registration; managed clients and Client ID
+	 * Metadata Documents are unaffected.
+	 *
+	 * @default "web"
+	 */
+	clientRegistrationDefaultApplicationType?: "web" | "native" | "infer";
+	/**
 	 * How long a dynamically created confidential client
 	 * should last for.
 	 *
@@ -866,6 +960,16 @@ export interface OAuthOptions<
 			| "configure-client-credentials-scopes";
 		user?: User & Record<string, unknown>;
 		session?: Session & Record<string, unknown>;
+		/**
+		 * The `client_id` from the request, for actions on an existing client.
+		 * Absent for `create`, `list`, and scope configuration during creation.
+		 * The client may not exist, and this value does not establish ownership.
+		 * Client CRUD enforces ownership except when `adminUpdateOAuthClient`
+		 * changes only `client_credentials_scopes`: the `update` and
+		 * `configure-client-credentials-scopes` decisions can authorize access
+		 * to another owner's client.
+		 */
+		clientId?: string;
 	}) => Awaitable<boolean | undefined>;
 	/**
 	 * Grant types supported by the token endpoint
@@ -981,7 +1085,8 @@ export interface OAuthOptions<
 		 */
 		page: string;
 		/**
-		 * A value to tie to the consent reference_id.
+		 * A value to tie to the consent reference_id. Consent is stored
+		 * per reference; `undefined` or `""` uses consent given without one.
 		 *
 		 * Note that YOU must fail in this function if the requested
 		 * scope doesn't have a reference id and it should.
@@ -997,7 +1102,8 @@ export interface OAuthOptions<
 		 * For example, allow selection of an organization or team.
 		 *
 		 * Upon selection of a specific account, use `/oauth2/continue`
-		 * with `postLogin: true` to continue the login flow.
+		 * with `postLogin: true` to continue the login flow. The continue
+		 * request runs `shouldRedirect` again with `isContinuation: true`.
 		 *
 		 * @returns
 		 * - `true`: account is not selected and needs selection
@@ -1008,6 +1114,12 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * `true` when the user returns from `page` through `/oauth2/continue`.
+			 * The client chooses to send that request, so it does not prove a
+			 * selection was made: validate the session before returning `false`.
+			 */
+			isContinuation: boolean;
 		}) => Awaitable<boolean>;
 	};
 	/**
@@ -1189,7 +1301,7 @@ export interface OAuthOptions<
 	}) => Awaitable<Record<string, unknown>>;
 	/**
 	 * Overwrite specific /.well-known/openid-configuration
-	 * values so they are not available publically.
+	 * values so they are not available publicly.
 	 * This may be important if not all clients need specific scopes.
 	 */
 	advertisedMetadata?: {
@@ -1304,6 +1416,7 @@ export interface OAuthOptions<
 	 *   introspect: { window: 60, max: 100 },
 	 *   revoke: { window: 60, max: 30 },
 	 *   register: { window: 60, max: 5 },
+	 *   rotateClientKeys: { window: 60, max: 5 },
 	 *   userinfo: { window: 60, max: 60 },
 	 * }
 	 * ```
@@ -1334,6 +1447,11 @@ export interface OAuthOptions<
 		 * @default { window: 60, max: 5 }
 		 */
 		register?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/client/rotate-keys endpoint
+		 * @default { window: 60, max: 5 }
+		 */
+		rotateClientKeys?: { window: number; max: number } | false;
 		/**
 		 * Rate limit for /oauth2/userinfo endpoint
 		 * @default { window: 60, max: 60 }

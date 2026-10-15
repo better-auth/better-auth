@@ -1,5 +1,106 @@
 # auth
 
+## 1.7.10
+
+### Patch Changes
+
+- Updated dependencies [[`fedd055`](https://github.com/better-auth/better-auth/commit/fedd05586c5a7ee2eb6b8d16b88b08dfb7e16a89), [`eebd47a`](https://github.com/better-auth/better-auth/commit/eebd47a0e7103caae35e4ac46971e293d1579594), [`bbd0a19`](https://github.com/better-auth/better-auth/commit/bbd0a19c30fc384213d1e98b9a8a54a903a0b574), [`09d07e6`](https://github.com/better-auth/better-auth/commit/09d07e6feac8c0173551c9cbaee222d403c31fd9), [`eaecb72`](https://github.com/better-auth/better-auth/commit/eaecb7229eeef5cfd763477b12f7dd2e44b89e51), [`88c9a37`](https://github.com/better-auth/better-auth/commit/88c9a378562fcb240085bd803a243062e2d28f47), [`0cf1f7c`](https://github.com/better-auth/better-auth/commit/0cf1f7c6bc7b9870b276fdf7d9f5c38af6dbaa30), [`414e845`](https://github.com/better-auth/better-auth/commit/414e845f128011369b451a3ffd15d8d314351cdb)]:
+  - @better-auth/core@1.7.10
+  - better-auth@1.7.10
+  - @better-auth/telemetry@1.7.10
+
+## 1.7.9
+
+### Patch Changes
+
+- Updated dependencies [[`6edaa61`](https://github.com/better-auth/better-auth/commit/6edaa61e629625909a97d191809473030f24a2b6)]:
+  - better-auth@1.7.9
+  - @better-auth/core@1.7.9
+  - @better-auth/telemetry@1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- Updated dependencies [[`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a), [`b1cfc1e`](https://github.com/better-auth/better-auth/commit/b1cfc1ec1e006a52654c5441422fa26c240ee123), [`435645e`](https://github.com/better-auth/better-auth/commit/435645e5eb6fcd0a3a9a2bbd1fd486f47ff4c4cc), [`678c555`](https://github.com/better-auth/better-auth/commit/678c555beb533c1416c1411a0d77129de2e97d31), [`193efff`](https://github.com/better-auth/better-auth/commit/193efff3d290740b1fd7c564b4b9b6f18343d05e), [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41), [`352d04c`](https://github.com/better-auth/better-auth/commit/352d04c8eb40c597a54da8667d68e05a1cb69426), [`e9d9921`](https://github.com/better-auth/better-auth/commit/e9d99212174c231559b8f75679fc0464dfd4345f), [`e78f15a`](https://github.com/better-auth/better-auth/commit/e78f15aa316bedeaf53a654bb07d4a222ca5e578), [`1bd5c37`](https://github.com/better-auth/better-auth/commit/1bd5c37884f95766c737e35f4be86dfb46d31d36), [`766cfb3`](https://github.com/better-auth/better-auth/commit/766cfb3f42f08665bd52b25b035d0041f000373d), [`60525e0`](https://github.com/better-auth/better-auth/commit/60525e08fd8f4c10385bcd9f215224a2144ef94a), [`c46992f`](https://github.com/better-auth/better-auth/commit/c46992f6ce548fad0f26f5f07dc8525893e8196c), [`916ef5c`](https://github.com/better-auth/better-auth/commit/916ef5c5307103d9bea44446a40da5d31de2b3fe), [`1d95ebf`](https://github.com/better-auth/better-auth/commit/1d95ebf3fe9a788d9b6566495e0016e60d1fd7fd), [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78), [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9), [`2627237`](https://github.com/better-auth/better-auth/commit/2627237fae3d02c53b3ba68b3812cbc31905a24b), [`3d1f008`](https://github.com/better-auth/better-auth/commit/3d1f008ae381dec01751725b7422985c84c74aae), [`67743ed`](https://github.com/better-auth/better-auth/commit/67743ed6e8d873114b723fc5c196aea17a870509), [`f0ce580`](https://github.com/better-auth/better-auth/commit/f0ce580fbdfd62bba262fb5c3625736197fd0eac), [`c46d2a6`](https://github.com/better-auth/better-auth/commit/c46d2a6ac4442b2b9d2f301619a9f1b9ef400f55), [`07a0938`](https://github.com/better-auth/better-auth/commit/07a09389ef00c0fc322983f2eca463194c642865), [`92dfcea`](https://github.com/better-auth/better-auth/commit/92dfceaa14c287543f7cf62239641f4f7406cfb2), [`e15625f`](https://github.com/better-auth/better-auth/commit/e15625ff382a2dd9ea41e7d142d4098f6a8715a2), [`a9f455d`](https://github.com/better-auth/better-auth/commit/a9f455d586f4124bf8c544345f47130a93580103), [`9725f1b`](https://github.com/better-auth/better-auth/commit/9725f1b361a0b5db8a1b519e3c5aacae3ed2fb98)]:
+  - better-auth@1.7.8
+  - @better-auth/core@1.7.8
+  - @better-auth/telemetry@1.7.8
+
+## 1.7.7
+
+### Patch Changes
+
+- Updated dependencies [[`4186e36`](https://github.com/better-auth/better-auth/commit/4186e36d1505f881585dea03353a4fc4ff864474), [`8620aa9`](https://github.com/better-auth/better-auth/commit/8620aa94fdb9e158824cbba0d0fcf364143c56fe), [`55cb92e`](https://github.com/better-auth/better-auth/commit/55cb92e940e6ac26e746bbb06b92c445050cdb09), [`69defbc`](https://github.com/better-auth/better-auth/commit/69defbcabae430ca48e4ff1088c52a051566905e), [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a), [`ac54bfd`](https://github.com/better-auth/better-auth/commit/ac54bfd67821a7607533af2059858b12bc54e26a)]:
+  - better-auth@1.7.7
+  - @better-auth/core@1.7.7
+  - @better-auth/telemetry@1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11314](https://github.com/better-auth/better-auth/pull/11314) [`dcaa5a7`](https://github.com/better-auth/better-auth/commit/dcaa5a7869d83204a5cdac5ca2092a8fd218f062) Thanks [@bytaesu](https://github.com/bytaesu)! - Add read-only `check` and `check schema` commands to validate the configured adapter schema on demand.
+
+- Updated dependencies [[`af88385`](https://github.com/better-auth/better-auth/commit/af883851ae9c3b55c0d8240fabea3dc797cd5cd0), [`2fa501c`](https://github.com/better-auth/better-auth/commit/2fa501cdf9e022d5f7241fabce1a67f1828d777b), [`d41e2ca`](https://github.com/better-auth/better-auth/commit/d41e2caf1a5bf09afc916087b739e0a5d00ab5c5), [`3d0efa3`](https://github.com/better-auth/better-auth/commit/3d0efa308d575c4aa184d65deaf29f2626add8fd), [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da), [`8853419`](https://github.com/better-auth/better-auth/commit/88534192c1d0fd62b108b568243a134e6df61ab1), [`2ee1545`](https://github.com/better-auth/better-auth/commit/2ee1545f244d87e5edd6a003b48b90a5539f8afa), [`fc45d08`](https://github.com/better-auth/better-auth/commit/fc45d08b26ac8e433fc7899a12be392cc52735ba)]:
+  - better-auth@1.7.6
+  - @better-auth/core@1.7.6
+  - @better-auth/telemetry@1.7.6
+
+## 1.7.5
+
+### Patch Changes
+
+- Updated dependencies [[`e56c45b`](https://github.com/better-auth/better-auth/commit/e56c45bddb8ca859175a47ab345b6c6dcc6da5d7), [`8d37cc3`](https://github.com/better-auth/better-auth/commit/8d37cc3b7732a04908b28d8abb7f010a286d6c43), [`348fc26`](https://github.com/better-auth/better-auth/commit/348fc26c9904d800cd471947ba98abb5e8431b60), [`cb627eb`](https://github.com/better-auth/better-auth/commit/cb627ebeb174d9a35ccc79018110bbc7a50a6fb8), [`dae97ed`](https://github.com/better-auth/better-auth/commit/dae97ed932a084a11faa96a2e1abf052fc85d2ea), [`133f6a2`](https://github.com/better-auth/better-auth/commit/133f6a27175ba21193742564d94aebfc9ec89920)]:
+  - better-auth@1.7.5
+  - @better-auth/core@1.7.5
+  - @better-auth/telemetry@1.7.5
+
+## 1.7.4
+
+### Patch Changes
+
+- Updated dependencies [[`3ff842a`](https://github.com/better-auth/better-auth/commit/3ff842ab7fdf60746b5d7bd8c27becd2d0a79c2e), [`3f890eb`](https://github.com/better-auth/better-auth/commit/3f890eb631e0278045b3b5b40d29b11bd9d4c332), [`c1756a2`](https://github.com/better-auth/better-auth/commit/c1756a22745d4580425559b8800acc6e9a70e30f), [`9b9638e`](https://github.com/better-auth/better-auth/commit/9b9638ec99057ade649280fa1447408238158f1c)]:
+  - @better-auth/core@1.7.4
+  - better-auth@1.7.4
+  - @better-auth/telemetry@1.7.4
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11100](https://github.com/better-auth/better-auth/pull/11100) [`b489373`](https://github.com/better-auth/better-auth/commit/b4893737325a8b1073a40aa25b3111b38d579a16) Thanks [@bytaesu](https://github.com/bytaesu)! - Add Codex as a supported target for configuring the Better Auth documentation MCP server.
+
+- [#11179](https://github.com/better-auth/better-auth/pull/11179) [`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c) Thanks [@bytaesu](https://github.com/bytaesu)! - Validate Drizzle schema objects and generated Prisma client models during initialization, including in production, and report mismatches with guidance for fixing them. These checks do not query the database and cannot detect unapplied migrations.
+
+  For Prisma clients whose model metadata omits nullability, `auth generate` reports required fields that Better Auth never writes by reading the existing Prisma schema. Set `advanced.database.validateSchema: false` to disable runtime validation.
+
+- [#11140](https://github.com/better-auth/better-auth/pull/11140) [`b95b7b3`](https://github.com/better-auth/better-auth/commit/b95b7b31e70a20f644bc5f8ff404b43832a8d019) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow `auth init` to finish when a generated setup has no dependencies in one of its install groups, and preserve useful package-manager output when an installation fails.
+
+- [#9908](https://github.com/better-auth/better-auth/pull/9908) [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6) Thanks [@harshil1712](https://github.com/harshil1712)! - Add Cloudflare as a built-in social provider, with support for client-secret authentication and PKCE clients without a secret.
+
+- [#11178](https://github.com/better-auth/better-auth/pull/11178) [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9) Thanks [@bytaesu](https://github.com/bytaesu)! - Report missing tables, missing columns, and required columns Better Auth never writes during initialization, with guidance for fixing them. Kysely checks the live database schema. Authentication requests await the same check and are rejected if the schema does not match.
+
+  Validation is enabled by default, including in production. Set `advanced.database.validateSchema: false` to disable runtime validation. `auth migrate` refuses to apply changes when required unwritten columns need manual repair.
+
+- [#11126](https://github.com/better-auth/better-auth/pull/11126) [`5024647`](https://github.com/better-auth/better-auth/commit/5024647392141b41cc9a05e1e3112a2bae5fcb15) Thanks [@bytaesu](https://github.com/bytaesu)! - `auth info` now reports installed package versions instead of declared dependency specifiers, including catalog and workspace references.
+
+- [#11127](https://github.com/better-auth/better-auth/pull/11127) [`8bb6847`](https://github.com/better-auth/better-auth/commit/8bb68479f53b14853a086f15402211606968ea72) Thanks [@bytaesu](https://github.com/bytaesu)! - `auth upgrade` now skips non-semver dependency specifiers, including pnpm catalogs, with a clear warning instead of crashing.
+
+- Updated dependencies [[`3660f06`](https://github.com/better-auth/better-auth/commit/3660f062d6e7a9b02e3fc8eee5b99482117ebba0), [`5bd7096`](https://github.com/better-auth/better-auth/commit/5bd709640a14e03972420bbfe778e3c732df80d5), [`352d012`](https://github.com/better-auth/better-auth/commit/352d012bd54e613782bf4af22aae24443541c77c), [`7ec7146`](https://github.com/better-auth/better-auth/commit/7ec71461f1b3dcc0f9852ced5cc1ed7252ded4f2), [`76d311f`](https://github.com/better-auth/better-auth/commit/76d311f4b94799496ddfc0be7d03db1731f4b2a6), [`3e9e197`](https://github.com/better-auth/better-auth/commit/3e9e19746e609004da31bea3356c0059611d9ed4), [`157ec8d`](https://github.com/better-auth/better-auth/commit/157ec8d8799ddda642f2fe40120fc364660a8864), [`c47b765`](https://github.com/better-auth/better-auth/commit/c47b76517d235d7cde07a1b4717f76b8f71a675f), [`2d5c63d`](https://github.com/better-auth/better-auth/commit/2d5c63d512164d4e18c5e67b79a9c7d19b27b669), [`baa08f4`](https://github.com/better-auth/better-auth/commit/baa08f4ee674f5cc39624063847c89f1bea73186), [`a9d8c12`](https://github.com/better-auth/better-auth/commit/a9d8c12d14b99a2df35ae2fba98ad4e4bc512ad5), [`9fc7498`](https://github.com/better-auth/better-auth/commit/9fc749867592536b6e472381581cee8f00f6b59b), [`9e36635`](https://github.com/better-auth/better-auth/commit/9e36635eb2fbf27d58c70d3361724335ba9a9951), [`be0e007`](https://github.com/better-auth/better-auth/commit/be0e007e20ea310aa533acf49edfae34cfc797a9), [`a2bae0c`](https://github.com/better-auth/better-auth/commit/a2bae0cad04ccc23c40555c77f86b0da1ba40ebc), [`1a1b7d5`](https://github.com/better-auth/better-auth/commit/1a1b7d56f51cb9ce6b06334b22fcbfa0d52be05a), [`0bb0dbf`](https://github.com/better-auth/better-auth/commit/0bb0dbf6f38ab53a0c1f2fb639acd7bd602e2a24), [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc), [`5fe5bc2`](https://github.com/better-auth/better-auth/commit/5fe5bc21d1bf699655054192f4f833bcc33d0ba4), [`74a7369`](https://github.com/better-auth/better-auth/commit/74a7369179cc6ab9fc2a9f13a67b33e8c00aa9ac), [`e16b40a`](https://github.com/better-auth/better-auth/commit/e16b40aeadde4203c883f121e7e5f7a2ec04d6b2), [`c0444dc`](https://github.com/better-auth/better-auth/commit/c0444dc97928f46978c42083083d3b8642b89493)]:
+  - better-auth@1.7.3
+  - @better-auth/core@1.7.3
+  - @better-auth/telemetry@1.7.3
+
+## 1.7.2
+
+### Patch Changes
+
+- Updated dependencies [[`557e19b`](https://github.com/better-auth/better-auth/commit/557e19bfad0f2d2842903ddb1e768a0506aceaea), [`64da15b`](https://github.com/better-auth/better-auth/commit/64da15b0b1ca078d80f115ee0a5bd9ad4ca4d64e), [`d5d889b`](https://github.com/better-auth/better-auth/commit/d5d889bfd8708601d8f27526d35fb9568450b51e), [`b4ad5a1`](https://github.com/better-auth/better-auth/commit/b4ad5a110ca4f2e043c0f23a8e5f87e0b31c3fc6), [`c7a5c1a`](https://github.com/better-auth/better-auth/commit/c7a5c1a7ed65a5169e98bd347df91b16bb394692), [`78f0c39`](https://github.com/better-auth/better-auth/commit/78f0c3922c273de29bd0b77213fbc37cc3b5917e), [`ce8a3ab`](https://github.com/better-auth/better-auth/commit/ce8a3ab5442fdd388f3b1346b71292cf617c3146), [`a021eaf`](https://github.com/better-auth/better-auth/commit/a021eafaf235dd08c0835d91ee714aca24c4605e), [`c8dcfa5`](https://github.com/better-auth/better-auth/commit/c8dcfa57e11e22325dbb2a0cc1af6775f41b1315), [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1), [`f6891a2`](https://github.com/better-auth/better-auth/commit/f6891a2d2d4f7ead7e9b13e65316a0cbd88f3fe4), [`e1d4011`](https://github.com/better-auth/better-auth/commit/e1d40116e2b6a797372ac82b9feea39f57285632), [`649818a`](https://github.com/better-auth/better-auth/commit/649818a2969594e58147a2cc08157812ea0b75ef)]:
+  - @better-auth/core@1.7.2
+  - better-auth@1.7.2
+  - @better-auth/telemetry@1.7.2
+
 ## 1.7.1
 
 ### Patch Changes

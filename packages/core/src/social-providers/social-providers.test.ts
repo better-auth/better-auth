@@ -134,32 +134,6 @@ describe("OAuth account identity contract", () => {
 
 		expect(getUserInfo).toBeTypeOf("function");
 	});
-
-	it("uses canonical issuers only for providers with verified OIDC identity", () => {
-		expect(
-			providers
-				.filter((provider) => provider.accountIssuer !== undefined)
-				.map((provider) => provider.id)
-				.sort(),
-		).toEqual([
-			"apple",
-			"cognito",
-			"facebook",
-			"google",
-			"line",
-			"microsoft",
-			"paybin",
-		]);
-	});
-
-	it("uses the configured Paybin issuer as the account namespace", () => {
-		const provider = socialProviders.paybin({
-			...providerOptions,
-			issuer: "https://idp.sandbox.paybin.example",
-		});
-
-		expect(provider.accountIssuer).toBe("https://idp.sandbox.paybin.example");
-	});
 });
 
 describe("microsoft provider", () => {

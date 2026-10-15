@@ -8,8 +8,10 @@ import {
 } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { APIError } from "../../api";
+import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
+import { toOAuthProfileRecord } from "../../oauth2/account-key";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { toBoolean } from "../../utils/boolean";
@@ -146,13 +148,32 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							message: "invalid id token",
 						});
 					}
-					const {
-						email: rawEmail,
-						email_verified,
-						name,
-						picture,
-						sub,
-					} = payload;
+					// Map the verified token the way the redirect and `signIn.social`
+					// flows do, so a configured `mapProfileToUser` or `getUserInfo`
+					// applies to One Tap too.
+					const googleOAuthProvider = await getAwaitableValue(
+						ctx.context.socialProviders,
+						{ value: "google" },
+					);
+					const providerResult = googleOAuthProvider
+						? await googleOAuthProvider.getUserInfo({ idToken })
+						: {
+								user: {
+									name: payload.name,
+									email: payload.email,
+									image: payload.picture,
+									emailVerified: toBoolean(payload.email_verified),
+								},
+								data: payload,
+							};
+					if (!providerResult?.user) {
+						throw new APIError("BAD_REQUEST", {
+							message: "invalid id token",
+						});
+					}
+					const providerUser = providerResult.user;
+					const { sub } = payload;
+					const { email: rawEmail, name, image } = providerUser;
 					if (typeof rawEmail !== "string" || !rawEmail) {
 						throw new APIError("BAD_REQUEST", {
 							message: "Email not available in token",
@@ -165,10 +186,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					}
 					const email = rawEmail.toLowerCase();
 
-					const emailVerified =
-						typeof email_verified === "boolean"
-							? email_verified
-							: toBoolean(email_verified);
+					const emailVerified = toBoolean(providerUser.emailVerified);
 
 					// Resolve identity through the shared OAuth path so One Tap matches
 					// the redirect and `signIn.social` flows: the account that owns the
@@ -176,26 +194,27 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// token's email.
 					const result = await handleOAuthUserInfo(ctx, {
 						userInfo: {
+							...providerUser,
 							id: sub,
 							email,
 							emailVerified,
 							name: typeof name === "string" ? name : "",
-							image: typeof picture === "string" ? picture : undefined,
+							image: typeof image === "string" ? image : undefined,
 						},
 						account: {
 							providerId: "google",
-							issuer: "https://accounts.google.com",
 							accountId: sub,
 							idToken,
 							scope: "openid,profile,email",
 						},
 						disableSignUp:
 							options?.disableSignup || googleProvider?.disableSignUp,
+						overrideUserInfo: googleProvider?.overrideUserInfoOnSignIn,
 						source: {
 							method: "oauth",
 							oauth: {
 								providerId: "google",
-								profile: payload as Record<string, unknown>,
+								profile: toOAuthProfileRecord(providerResult.data),
 							},
 						},
 					});

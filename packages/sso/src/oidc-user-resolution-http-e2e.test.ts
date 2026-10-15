@@ -279,7 +279,6 @@ describe("SSO OIDC user resolution HTTP", () => {
 		});
 		expect(accounts).toHaveLength(1);
 		expect(accounts[0]).toMatchObject({
-			issuer: identityProvider.issuer.url,
 			accountId: subject,
 			providerId: "workforce",
 			userId: selectedUser.id,
@@ -538,34 +537,6 @@ describe("SSO OIDC user resolution HTTP", () => {
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 
-	it("rejects another provider alias for an existing subject even on default resolution", async ({
-		onTestFinished,
-	}) => {
-		subject = "provider-conflict-user";
-		email = "provider-conflict@example.com";
-		const instance = await createInstance(
-			{ resolveUser: () => ({ action: "continue" }) },
-			onTestFinished,
-			{},
-			[provider("workforce"), provider("another-workforce")],
-		);
-		expect(
-			(await completeSignIn(instance.baseURL)).callback.headers.get("location"),
-		).toBe(`${instance.baseURL}/employee`);
-		const conflict = await completeSignIn(
-			instance.baseURL,
-			"another-workforce",
-		);
-		const redirect = new URL(
-			conflict.callback.headers.get("location")!,
-			instance.baseURL,
-		);
-		expect(redirect.searchParams.get("error")).toBe(
-			"account_provider_conflict",
-		);
-		expect(await instance.db.count({ model: "account", where: [] })).toBe(1);
-	});
-
 	it("keeps case-distinct OIDC subjects as different account keys", async ({
 		onTestFinished,
 	}) => {
@@ -773,64 +744,70 @@ describe("SSO OIDC user resolution HTTP", () => {
 	it.each([
 		["account", "account_hook_binding_conflict"],
 		["session", "session_hook_user_conflict"],
-	] as const)("rejects %s hook attempts to rewrite the selected binding", async (hookModel, expectedError) => {
-		subject = `${hookModel}-hook-rewrite-user`;
-		email = `${hookModel}-hook-rewrite@example.com`;
-		let selectedUserId = "";
-		let otherUserId = "";
-		const databaseHooks =
-			hookModel === "account"
-				? {
-						account: {
-							create: {
-								before: () => ({ data: { userId: otherUserId } }),
+	] as const)(
+		"rejects %s hook attempts to rewrite the selected binding",
+		async (hookModel, expectedError) => {
+			subject = `${hookModel}-hook-rewrite-user`;
+			email = `${hookModel}-hook-rewrite@example.com`;
+			let selectedUserId = "";
+			let otherUserId = "";
+			const databaseHooks =
+				hookModel === "account"
+					? {
+							account: {
+								create: {
+									before: () => ({ data: { userId: otherUserId } }),
+								},
 							},
-						},
-					}
-				: {
-						session: {
-							create: {
-								before: () => ({ data: { userId: otherUserId } }),
+						}
+					: {
+							session: {
+								create: {
+									before: () => ({ data: { userId: otherUserId } }),
+								},
 							},
-						},
-					};
-		const instance = await createInstance(
-			{
-				resolveUser: () => ({
-					action: "link",
-					userId: selectedUserId,
-					profile: "preserve",
-				}),
-			},
-			(cleanup) => deferredCleanups.push(cleanup),
-			{ databaseHooks },
-		);
-		const context = await instance.auth.$context;
-		const createUser = (name: string, address: string) =>
-			context.adapter.create<User>({
-				model: "user",
-				data: {
-					email: address,
-					emailVerified: true,
-					name,
-					image: null,
-					createdAt: new Date(),
-					updatedAt: new Date(),
+						};
+			const instance = await createInstance(
+				{
+					resolveUser: () => ({
+						action: "link",
+						userId: selectedUserId,
+						profile: "preserve",
+					}),
 				},
-			});
-		const selected = await createUser("selected-user", "selected@example.com");
-		const other = await createUser("other-user", "other@example.com");
-		selectedUserId = selected.id;
-		otherUserId = other.id;
+				(cleanup) => deferredCleanups.push(cleanup),
+				{ databaseHooks },
+			);
+			const context = await instance.auth.$context;
+			const createUser = (name: string, address: string) =>
+				context.adapter.create<User>({
+					model: "user",
+					data: {
+						email: address,
+						emailVerified: true,
+						name,
+						image: null,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			const selected = await createUser(
+				"selected-user",
+				"selected@example.com",
+			);
+			const other = await createUser("other-user", "other@example.com");
+			selectedUserId = selected.id;
+			otherUserId = other.id;
 
-		const signIn = await completeSignIn(instance.baseURL);
-		expect(
-			new URL(
-				signIn.callback.headers.get("location")!,
-				instance.baseURL,
-			).searchParams.get("error"),
-		).toBe(expectedError);
-		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
-		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
-	});
+			const signIn = await completeSignIn(instance.baseURL);
+			expect(
+				new URL(
+					signIn.callback.headers.get("location")!,
+					instance.baseURL,
+				).searchParams.get("error"),
+			).toBe(expectedError);
+			expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
+			expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+		},
+	);
 });

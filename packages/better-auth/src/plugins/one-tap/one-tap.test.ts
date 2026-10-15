@@ -1,9 +1,12 @@
 // cspell:ignore AQAB
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { lastLoginMethod } from "../last-login-method";
 import { oneTapClient } from "./client";
 import { oneTap } from "./index";
 
@@ -47,6 +50,7 @@ vi.mock("jose", async (importOriginal) => {
 			kid: "test-google-key",
 			alg: "RS256",
 		})),
+		decodeJwt: vi.fn(() => verifiedPayload),
 		importJWK: vi.fn(async () => ({})),
 		jwtVerify: vi.fn(async () => ({
 			payload: verifiedPayload,
@@ -57,6 +61,53 @@ vi.mock("jose", async (importOriginal) => {
 
 afterEach(() => {
 	vi.mocked(jwtVerify).mockClear();
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10995
+ */
+describe("one-tap last login method", () => {
+	it("records Google as the last login method after a one-tap callback", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [oneTap({ clientId: "test-google-client" }), lastLoginMethod()],
+		});
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/one-tap/callback", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ idToken: "stub-id-token" }),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(response.headers.getSetCookie()).toContainEqual(
+			expect.stringContaining("better-auth.last_used_login_method=google"),
+		);
+	});
+
+	it("persists Google as the last login method after a one-tap callback", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				oneTap({ clientId: "test-google-client" }),
+				lastLoginMethod({ storeInDatabase: true }),
+			],
+		});
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/one-tap/callback", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ idToken: "stub-id-token" }),
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const context = await auth.$context;
+		const user = await context.adapter.findOne<{ lastLoginMethod: string }>({
+			model: "user",
+			where: [{ field: "email", value: defaultVerifiedPayload.email }],
+		});
+		expect(user?.lastLoginMethod).toBe("google");
+	});
 });
 
 describe("one-tap implicit linking gate", async () => {
@@ -263,7 +314,6 @@ describe("one-tap implicit linking gate", async () => {
 		await ctx.internalAdapter.createAccount({
 			userId: otherUser.id,
 			providerId: "github",
-			issuer: "local:github",
 			accountId: verifiedPayload.sub,
 		});
 
@@ -286,7 +336,6 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
-				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -331,7 +380,6 @@ describe("one-tap implicit linking gate", async () => {
 			model: "account",
 			where: [
 				{ field: "providerId", value: "google" },
-				{ field: "issuer", value: "https://accounts.google.com" },
 				{ field: "accountId", value: verifiedPayload.sub },
 			],
 		});
@@ -800,6 +848,135 @@ describe("one-tap disableSignUp", () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/9460
+ */
+describe("one-tap Google profile mapping", () => {
+	afterEach(() => {
+		// biome-ignore lint/performance/noDelete: drop the claim the mapper test adds
+		delete (verifiedPayload as Record<string, unknown>).given_name;
+		Object.assign(verifiedPayload, defaultVerifiedPayload);
+	});
+
+	it("applies socialProviders.google.mapProfileToUser", async () => {
+		verifiedPayload.email = "one-tap-mapper@example.com";
+		verifiedPayload.sub = "one-tap-mapper-sub";
+		Object.assign(verifiedPayload, { given_name: "Mary Jane" });
+
+		const { auth } = await getTestInstance({
+			user: {
+				additionalFields: {
+					firstName: { type: "string", required: false },
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					mapProfileToUser: (profile) => ({
+						firstName: profile.given_name,
+						name: "Mapped Name",
+					}),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.user).toMatchObject({
+			email: "one-tap-mapper@example.com",
+			name: "Mapped Name",
+			firstName: "Mary Jane",
+		});
+	});
+
+	it("uses a custom socialProviders.google.getUserInfo, keeping the verified sub as the account id", async () => {
+		verifiedPayload.email = "one-tap-override@example.com";
+		verifiedPayload.sub = "one-tap-override-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					getUserInfo: async () => ({
+						user: {
+							name: "From Override",
+							email: "one-tap-override@example.com",
+							emailVerified: true,
+						},
+						data: { ...verifiedPayload } as GoogleProfile,
+					}),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.user.name).toBe("From Override");
+		const ctx = await auth.$context;
+		const accounts = await ctx.adapter.findMany<{ accountId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: res.user.id }],
+		});
+		expect(accounts).toEqual([
+			expect.objectContaining({ accountId: "one-tap-override-sub" }),
+		]);
+	});
+
+	it("refreshes a returning user from the mapper when overrideUserInfoOnSignIn is on", async () => {
+		verifiedPayload.email = "one-tap-override-on-sign-in@example.com";
+		verifiedPayload.sub = "one-tap-override-on-sign-in-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					overrideUserInfoOnSignIn: true,
+					mapProfileToUser: (profile) => ({ name: `Mapped ${profile.name}` }),
+				},
+			},
+			plugins: [oneTap()],
+		});
+
+		await auth.api.oneTapCallback({ body: { idToken: "stub-id-token" } });
+		verifiedPayload.name = "Renamed";
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.user.name).toBe("Mapped Renamed");
+	});
+
+	it("builds the user from the token claims without a Google provider", async () => {
+		verifiedPayload.email = "One-Tap-No-Provider@Example.com";
+		verifiedPayload.sub = "one-tap-no-provider-sub";
+
+		const { auth } = await getTestInstance({
+			socialProviders: {},
+			plugins: [oneTap({ clientId: "explicit-one-tap-client" })],
+		});
+
+		const res = await auth.api.oneTapCallback({
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.user).toMatchObject({
+			email: "one-tap-no-provider@example.com",
+			emailVerified: true,
+			name: defaultVerifiedPayload.name,
+			image: defaultVerifiedPayload.picture,
+		});
+	});
+});
+
+/**
  * Declaration emit previously left `getActions`'s `$fetch` parameter
  * un-annotated. With no import of `BetterFetch` in the file, emit had no
  * name to reference and inlined `import("@better-fetch/fetch").BetterFetch`
@@ -821,5 +998,174 @@ describe("oneTapClient types", () => {
 			plugins: [oneTapClient({ clientId: "test-client" })],
 		});
 		expectTypeOf(client.oneTap).toBeFunction();
+	});
+});
+
+describe("oneTapClient plugin-level options", async () => {
+	const initialize = vi.fn();
+	const renderButton = vi.fn();
+	// Report "not displayed" so the prompt flow resolves after one attempt.
+	const prompt = vi.fn((listener: (notification: unknown) => void) =>
+		listener({ isNotDisplayed: () => true }),
+	);
+
+	afterEach(() => {
+		initialize.mockReset();
+		vi.unstubAllGlobals();
+	});
+
+	const { client } = await getTestInstance(
+		{
+			socialProviders: {
+				google: { clientId: "test-client", clientSecret: "test-secret" },
+			},
+			plugins: [oneTap()],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					oneTapClient({
+						clientId: "test-client",
+						autoSelect: true,
+						cancelOnTapOutside: false,
+					}),
+				],
+			},
+		},
+	);
+
+	const stubBrowser = () =>
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			google: { accounts: { id: { initialize, renderButton, prompt } } },
+		});
+
+	const flows = [
+		["prompt", {}],
+		["button", { button: { container: {} as HTMLElement } }],
+	] as const;
+
+	it.each(flows)(
+		"passes plugin-level options to the %s flow",
+		async (_, flow) => {
+			stubBrowser();
+			await client.oneTap({ ...flow, fetchOptions: {} });
+
+			expect(initialize).toHaveBeenCalledWith(
+				expect.objectContaining({
+					auto_select: true,
+					cancel_on_tap_outside: false,
+				}),
+			);
+		},
+	);
+
+	it.each(flows)(
+		"lets action options override the plugin in the %s flow",
+		async (_, flow) => {
+			stubBrowser();
+			await client.oneTap({
+				...flow,
+				autoSelect: false,
+				cancelOnTapOutside: true,
+				fetchOptions: {},
+			});
+
+			expect(initialize).toHaveBeenCalledWith(
+				expect.objectContaining({
+					auto_select: false,
+					cancel_on_tap_outside: true,
+				}),
+			);
+		},
+	);
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10172
+ */
+describe("one-tap subpath export", () => {
+	it("should be importable from better-auth/plugins/one-tap", () => {
+		expectTypeOf<typeof oneTapFromSubpath>().toEqualTypeOf<typeof oneTap>();
+	});
+});
+
+/**
+ * With FedCM, Google no longer supports display-moment notifications or
+ * skipped-moment reasons. FedCM is always on for the prompt, so
+ * `fedCM: false` must avoid them too.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10380
+ * @see https://developers.google.com/identity/gsi/web/guides/fedcm-migration
+ */
+describe("one-tap prompt notifications", () => {
+	const notification = (moment: "display" | "skipped") => ({
+		isDisplayMoment: vi.fn(() => moment === "display"),
+		isDisplayed: vi.fn(() => false),
+		isNotDisplayed: vi.fn(() => moment === "display"),
+		getNotDisplayedReason: vi.fn(() => "opt_out_or_no_session"),
+		isSkippedMoment: vi.fn(() => moment === "skipped"),
+		getSkippedReason: vi.fn(() => "auto_cancel"),
+		isDismissedMoment: vi.fn(() => false),
+		getDismissedReason: vi.fn(),
+	});
+
+	const runPrompt = async (
+		moment: ReturnType<typeof notification>,
+		fedCM?: boolean,
+	) => {
+		const { client } = await getTestInstance(
+			{ plugins: [oneTap()] },
+			{
+				clientOptions: {
+					plugins: [
+						oneTapClient({
+							clientId: "test-client",
+							promptOptions: { fedCM, baseDelay: 0 },
+						}),
+					],
+				},
+			},
+		);
+		const prompt = vi.fn((listener: (n: unknown) => void) => listener(moment));
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			google: { accounts: { id: { initialize: vi.fn(), prompt } } },
+		});
+		const onPromptNotification = vi.fn();
+		await client.oneTap({ onPromptNotification });
+		return { prompt, onPromptNotification };
+	};
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it.each([
+		["default", undefined],
+		["fedCM: false", false],
+	])(
+		"ends a skipped prompt without unsupported calls (%s)",
+		async (_, fedCM) => {
+			const skipped = notification("skipped");
+			const { prompt, onPromptNotification } = await runPrompt(skipped, fedCM);
+
+			expect(prompt).toHaveBeenCalledTimes(1);
+			expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(skipped);
+			expect(skipped.getSkippedReason).not.toHaveBeenCalled();
+			expect(skipped.isDisplayMoment).not.toHaveBeenCalled();
+			expect(skipped.isDisplayed).not.toHaveBeenCalled();
+			expect(skipped.isNotDisplayed).not.toHaveBeenCalled();
+			expect(skipped.getNotDisplayedReason).not.toHaveBeenCalled();
+		},
+	);
+
+	it("ends a prompt that a browser without FedCM did not display", async () => {
+		const notDisplayed = notification("display");
+		const { onPromptNotification } = await runPrompt(notDisplayed);
+
+		expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(notDisplayed);
 	});
 });

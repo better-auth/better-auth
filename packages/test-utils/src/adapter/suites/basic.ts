@@ -79,69 +79,6 @@ export const getNormalTestSuiteTests = (
 			expect(res).toHaveProperty("id");
 			expect(typeof res.id).toEqual("string");
 		},
-		"create - should enforce the issuer-scoped account identity key": async ({
-			skip,
-		}: {
-			skip: (note?: string | undefined) => never;
-		}) => {
-			if (adapter.options?.adapterConfig.adapterId === "memory") {
-				skip("The memory adapter does not implement database indexes");
-				return;
-			}
-			const firstUser = await adapter.create<User>({
-				model: "user",
-				data: await generate("user"),
-				forceAllowId: true,
-			});
-			const secondUser = await adapter.create<User>({
-				model: "user",
-				data: await generate("user"),
-				forceAllowId: true,
-			});
-			const firstAccount = {
-				...(await generate("account")),
-				userId: firstUser.id,
-				providerId: "issuer-key-first-alias",
-				issuer: "https://issuer-key.example.com",
-				accountId: "shared-subject",
-			};
-			await adapter.create<Account>({
-				model: "account",
-				data: firstAccount,
-				forceAllowId: true,
-			});
-
-			await expect(
-				adapter.create<Account>({
-					model: "account",
-					data: {
-						...(await generate("account")),
-						userId: secondUser.id,
-						providerId: "issuer-key-second-alias",
-						issuer: firstAccount.issuer,
-						accountId: firstAccount.accountId,
-					},
-					forceAllowId: true,
-				}),
-			).rejects.toThrow();
-
-			await expect(
-				adapter.create<Account>({
-					model: "account",
-					data: {
-						...(await generate("account")),
-						userId: secondUser.id,
-						providerId: "issuer-key-other-issuer",
-						issuer: "https://other-issuer-key.example.com",
-						accountId: firstAccount.accountId,
-					},
-					forceAllowId: true,
-				}),
-			).resolves.toMatchObject({
-				issuer: "https://other-issuer-key.example.com",
-				accountId: "shared-subject",
-			});
-		},
 		"create - should use generateId if provided": async () => {
 			const ID = (await customIdGenerator?.()) || "MOCK-ID";
 			await modifyBetterAuthOptions(
@@ -1910,6 +1847,18 @@ export const getNormalTestSuiteTests = (
 			if (options.advanced?.database?.generateId === "serial") {
 				expect(Number(users[0]!.id)).not.toBeNaN();
 			}
+		},
+		"findMany - should find many models with sortBy id": async () => {
+			await insertRandom("user", 3);
+			const asc = await adapter.findMany<User>({
+				model: "user",
+				sortBy: { field: "id", direction: "asc" },
+			});
+			const desc = await adapter.findMany<User>({
+				model: "user",
+				sortBy: { field: "id", direction: "desc" },
+			});
+			expect(desc.map((x) => x.id)).toEqual(asc.map((x) => x.id).reverse());
 		},
 		"findMany - should find many models with limit": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);

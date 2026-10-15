@@ -1,4 +1,5 @@
 ---
+icon: pluginsMCP
 title: MCP
 description: Turn your Better Auth server into an OAuth provider for MCP clients
 ---
@@ -147,6 +148,8 @@ mcp({
 
 `resource` must be an HTTPS URL with no query, fragment, or credentials; HTTP is accepted only on loopback hosts for local development. A resource whose URL requires a query component cannot use `mcp()`, `requireMcpAuth`, or `createMcpProtectedRequestHandler`. Verify its tokens with `verifyAccessTokenRequest` from `better-auth/oauth2`, and build challenges with `createResourceServerChallenge` from `@better-auth/oauth-provider`.
 
+With Prisma on PostgreSQL, CockroachDB, or MongoDB, also declare this resource in `resources` with explicit `allowedScopes`; see [Resources](/docs/plugins/oauth-provider#resources).
+
 `mcp()` also registers this identifier as a default client-registration resource. A dynamically registered client is linked to the MCP resource even when its registration request omits the non-standard `resources` field. Any `clientRegistrationDefaultResources` you provide are preserved, and the MCP resource is appended once.
 
 ### Optional DCR fallback
@@ -160,8 +163,11 @@ mcp({
   resource: "https://api.example.com/mcp",
   allowDynamicClientRegistration: true,
   allowUnauthenticatedClientRegistration: true,
+  clientRegistrationDefaultApplicationType: "infer",
 })
 ```
+
+Some MCP clients, such as Cursor and older Claude Code releases, omit `application_type` and register custom-scheme callbacks or `http` callbacks on `localhost`, `127.0.0.1`, or `[::1]`, which the `web` default rejects. `clientRegistrationDefaultApplicationType: "infer"` registers those clients as `native`; see [application type](/docs/plugins/oauth-provider#dynamic-registration-endpoint).
 
 The registration endpoint is absent from discovery unless DCR is enabled. A DCR request does not need Better Auth's `resources` extension: `mcp()` adds its canonical resource as a server-owned default.
 

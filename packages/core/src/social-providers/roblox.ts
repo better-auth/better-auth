@@ -5,6 +5,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { createPlaceholderEmail } from "../utils/email";
 
 export interface RobloxProfile extends Record<string, any> {
 	/** the user's id */
@@ -97,13 +98,14 @@ export const roblox = (options: RobloxOptions) => {
 			}
 
 			const userMap = await options.mapProfileToUser?.(profile);
-			// Roblox does not provide email or email_verified claim.
-			// We default to false for security consistency.
 			return {
 				user: {
 					name: profile.nickname || profile.preferred_username || "",
 					image: profile.picture,
-					email: profile.preferred_username || null, // Roblox does not provide email
+					email: createPlaceholderEmail({
+						identifier: profile.sub,
+						namespace: "roblox",
+					}),
 					emailVerified: false,
 					...userMap,
 				},

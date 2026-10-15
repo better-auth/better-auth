@@ -1,5 +1,47 @@
 # @better-auth/sso
 
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11378](https://github.com/better-auth/better-auth/pull/11378) [`6c89bb1`](https://github.com/better-auth/better-auth/commit/6c89bb18f191a9f6cf7ce893b4af1c329cd4104d) Thanks [@bytaesu](https://github.com/bytaesu)! - Updating an SSO provider with a partial `mapping` no longer fails validation. Since v1.7.0, `updateSSOProvider` rejected any OIDC or SAML mapping that left out `email` or `name`, even though both have documented defaults and v1.6 accepted them. `registerSSOProvider` now accepts these mappings too. Omitted fields fall back to the defaults. A mapping that passes `id` is still rejected, as described in the v1.7 upgrade guide.
+
+- [#11438](https://github.com/better-auth/better-auth/pull/11438) [`61f64f4`](https://github.com/better-auth/better-auth/commit/61f64f46adacc1c7c1053aa62e4f6b83619ccb61) Thanks [@Tushar-Khandelwal-2004](https://github.com/Tushar-Khandelwal-2004)! - Reject OIDC SSO provider registration when the configured issuer differs from the discovery document, including trailing slash mismatches, instead of failing later during sign-in. Existing providers with a mismatched issuer are unchanged and must be reconfigured to match the discovery document.
+
+- [#11640](https://github.com/better-auth/better-auth/pull/11640) [`a878f9a`](https://github.com/better-auth/better-auth/commit/a878f9ab47e896a106a449f043f0149b20728851) Thanks [@Sandipxg](https://github.com/Sandipxg)! - OIDC providers that send the email claim as a list of addresses, such as Azure AD B2C's `emails`, can now sign users in. Previously the callback failed with `missing_user_info`, even with `mapping: { email: "emails" }`. Better Auth now uses the first address in the list. Providers that send `emails` instead of `email` need `mapping: { email: "emails" }`.
+
+- [#11743](https://github.com/better-auth/better-auth/pull/11743) [`adbdc06`](https://github.com/better-auth/better-auth/commit/adbdc06e339b8726803f21f9bcb695205d5081c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SAML providers that already have linked accounts can change `samlConfig.callbackUrl`, their post-login redirect, again. Since 1.7.0, that update returned 409 `Cannot change SSO provider identity fields while linked accounts exist`, because the redirect was still treated as the 1.6 Assertion Consumer Service URL. `guardProviderMutation` now reports a `callbackUrl`-only change with `isAuthenticationBoundaryChange: false`.
+
+- [#11687](https://github.com/better-auth/better-auth/pull/11687) [`182e92b`](https://github.com/better-auth/better-auth/commit/182e92bd8a6d101fee6430cf968f823e6cd044bd) Thanks [@kaiizer777](https://github.com/kaiizer777)! - SAML providers that already have linked accounts can rotate their IdP signing certificate again. Since 1.7.0, changing `cert` or `idpMetadata.cert` through `updateSSOProvider` returned 409 `Cannot change SSO provider identity fields while linked accounts exist`, so the only way to rotate was to delete the provider, which also removed its account links and domain verification. `guardProviderMutation` still receives certificate changes as authentication-boundary changes, so a guard that rejects those keeps blocking them.
+
+## 1.7.7
+
+## 1.7.6
+
+## 1.7.5
+
+## 1.7.4
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11153](https://github.com/better-auth/better-auth/pull/11153) [`2220ee7`](https://github.com/better-auth/better-auth/commit/2220ee726934de3aa128d5b4114391be8e9570cc) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore sign-in compatibility with 1.6 databases by identifying accounts with `(providerId, accountId)` and removing the `issuer` requirement introduced in 1.7.0. Upgrading from 1.6 no longer requires an account schema migration. Ambiguous account keys are rejected instead of selecting an arbitrary account.
+
+  If you applied the 1.7.0 through 1.7.2 account schema, remove its issuer unique index before upgrading. For SQL databases, also make `issuer` nullable or remove the column so sign-ups and account linking can succeed. `auth migrate` does not perform this cleanup. Follow the [upgrade guide](https://www.better-auth.com/docs/guides/1-7-upgrade-guide) for database-specific steps.
+
+## 1.7.2
+
+### Patch Changes
+
+- [#10979](https://github.com/better-auth/better-auth/pull/10979) [`fced1a5`](https://github.com/better-auth/better-auth/commit/fced1a5d360c14e6358f88dedc9014ff862873f1) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow relative callback and redirect URLs to use standard path, query, and fragment syntax while preserving open-redirect protections.
+
 ## 1.7.1
 
 ## 1.7.0

@@ -1,4 +1,5 @@
 ---
+icon: conceptsClient
 title: Client
 description: Learn how to set up the Better Auth client for React, Vue, Svelte, and other frameworks, use hooks, configure fetch options, handle errors, and extend with client plugins.
 ---
@@ -499,6 +500,8 @@ export function SessionCard({ initialSession }: Props) {
   * Only the first non-null call to `hydrateSession` takes effect.
   * Passing `null` is safe. It will be ignored and `useSession` will fetch as usual.
 </Callout>
+
+In React, auth query hooks such as `useSession` and `useListOrganizations` return their initial pending state during server rendering and hydration, then update to the current client state. This keeps streamed components consistent with their server HTML even if another component has already fetched or hydrated the query. Keep using the server-fetched session as a fallback, as shown above, to display it during hydration. Custom plugin stores that do not use `useAuthQuery` retain their existing snapshot behavior.
 
 ### Plugins
 

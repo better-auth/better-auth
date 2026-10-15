@@ -1,4 +1,6 @@
 ---
+icon: conceptsSessionManagement
+sidebarTitle: "Sessions"
 title: Session Management
 description: Learn about session management in Better Auth, including session expiration, freshness, cookie caching strategies, secondary storage, stateless sessions, and customizing session responses.
 ---
@@ -207,6 +209,8 @@ await authClient.changePassword({
 })
 ```
 
+For sessions stored in the database, the password change and the session revocation run in one transaction when transactions are enabled for your adapter, and the sessions are revoked first. If revocation fails, the request returns an error and the current password stays in place. Without transactions, a failure while saving the new password leaves the current password in place with the sessions already revoked. With [secondary storage](/docs/concepts/database#secondary-storage), sessions are removed from it after commit. A failure there is logged, the new password is kept, and those sessions can stay valid until they expire.
+
 ## Session Caching
 
 ### Cookie Cache
@@ -346,8 +350,8 @@ betterAuth({
 By default, Better Auth already stores sessions in the database, however if you provide a secondary storage,
 Better Auth will store sessions in the secondary storage instead of the database.
 
-You can choose to store sessions in the database instead of secondary storage by passing
-`storeSessionInDatabase: true` in the session configuration.
+Set `storeSessionInDatabase: true` to store sessions in both the database and secondary storage.
+Session token lookups check secondary storage first, then fall back to the database for missing entries unless `preserveSessionInDatabase` is enabled.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -410,7 +414,7 @@ export const auth = betterAuth({
         cookieCache: {
             enabled: true,
             maxAge: 7 * 24 * 60 * 60, // 7 days cache duration
-            strategy: "jwe", // can be "jwt" or "compact"
+            strategy: "jwe", // can be "jwe", "jwt" or "compact"
             refreshCache: true, // Enable stateless refresh
         },
     },
