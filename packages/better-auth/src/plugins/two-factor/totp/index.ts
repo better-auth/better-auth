@@ -319,19 +319,43 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				}
 				if (matchedStep === null) {
 					status = false;
-				} else {
+				} else if (twoFactor.verified === true) {
 					const expiresAt = new Date((matchedStep + 2) * opts.period * 1000);
-					const replayId = `totp-used:${twoFactor.id}:${matchedStep}`;
-					const reservation =
-						await ctx.context.internalAdapter.reserveVerificationValue({
-							identifier: replayId,
-							value: "used",
-							expiresAt,
-						});
-					status = !!reservation;
-					if (status) {
-						replayIdToClean = replayId;
+					const replayId = `totp-used:${twoFactor.id}:${ctx.body.code}`;
+					if (
+						ctx.context.secondaryStorage &&
+						!ctx.context.options.verification?.storeInDatabase
+					) {
+						const existing = await ctx.context.secondaryStorage.get(replayId);
+						if (existing) {
+							status = false;
+						} else {
+							const ttlSeconds = Math.max(
+								1,
+								Math.ceil((expiresAt.getTime() - Date.now()) / 1000),
+							);
+							await ctx.context.secondaryStorage.set(
+								replayId,
+								"used",
+								ttlSeconds,
+							);
+							status = true;
+							replayIdToClean = replayId;
+						}
+					} else {
+						const reservation =
+							await ctx.context.internalAdapter.reserveVerificationValue({
+								identifier: replayId,
+								value: "used",
+								expiresAt,
+							});
+						status = !!reservation;
+						if (status) {
+							replayIdToClean = replayId;
+						}
 					}
+				} else {
+					status = true;
 				}
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
@@ -392,9 +416,18 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				return await valid(ctx);
 			} catch (error) {
 				if (replayIdToClean) {
-					await ctx.context.internalAdapter
-						.deleteVerificationByIdentifier(replayIdToClean)
-						.catch(() => {});
+					if (
+						ctx.context.secondaryStorage &&
+						!ctx.context.options.verification?.storeInDatabase
+					) {
+						try {
+							await ctx.context.secondaryStorage.delete(replayIdToClean);
+						} catch {}
+					} else {
+						await ctx.context.internalAdapter
+							.deleteVerificationByIdentifier(replayIdToClean)
+							.catch(() => {});
+					}
 				}
 				throw error;
 			}

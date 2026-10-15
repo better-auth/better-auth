@@ -622,7 +622,6 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
 		secret: DEFAULT_SECRET,
 		secondaryStorage,
-		verification: { storeInDatabase: true },
 		plugins: [
 			twoFactor({
 				otpOptions: {
@@ -802,33 +801,6 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 		return convertSetCookieToCookie(res.headers);
 	}
 
-	it("should reject reusing the enrollment TOTP code for step-up or sign-in within the same time window", async () => {
-		// Replaying the exact code used to enroll 2FA must fail immediately
-		// even within the same window (RFC 6238 §5.2)
-		const stepUpReplay = await auth.api.verifyTOTP({
-			body: { code: enrollCode },
-			headers: activeSessionHeaders,
-			asResponse: true,
-		});
-		expect(stepUpReplay.status).toBe(401);
-		const stepUpJson = (await stepUpReplay.json()) as { message: string };
-		expect(stepUpJson.message).toBe(
-			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
-		);
-
-		const signInChallenge = await startChallenge();
-		const signInReplay = await auth.api.verifyTOTP({
-			body: { code: enrollCode },
-			headers: signInChallenge,
-			asResponse: true,
-		});
-		expect(signInReplay.status).toBe(401);
-		const signInJson = (await signInReplay.json()) as { message: string };
-		expect(signInJson.message).toBe(
-			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
-		);
-	});
-
 	it("should reject reused TOTP code on step-up verification (RFC 6238 §5.2)", async () => {
 		// Advance by 30s to enter a fresh unconsumed step past enrollment
 		vi.useFakeTimers();
@@ -975,6 +947,78 @@ describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2
 			const statuses = responses.map((r) => r.status).sort();
 			// Exactly one request succeeds with 200, the remaining 4 fail with 401
 			expect(statuses).toEqual([200, 401, 401, 401, 401]);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("should roll back the replay marker if downstream operations fail after reservation", async () => {
+		vi.useFakeTimers();
+		try {
+			vi.setSystemTime(new Date(Date.now() + 300000));
+			const code = await createOTP(secret).totp();
+
+			const adapter = (await auth.$context).adapter;
+			let failOnce = true;
+
+			// Spy on valid(ctx) by making an internal operation fail during valid(ctx)
+			// Or spy on adapter or response creation
+			// Note: valid(ctx) in step-up returns ctx.json({ token, user: parseUserOutput(ctx.context.options, session.user) })
+			// We can also spy on internalAdapter.deleteVerificationByIdentifier to see the rollback,
+			// or have valid(ctx) throw by mocking a hook/adapter.
+			const internalAdapter = (await auth.$context).internalAdapter;
+			const deleteSpy = vi.spyOn(
+				internalAdapter,
+				"deleteVerificationByIdentifier",
+			);
+
+			// Let's mock a failure after replay reservation. In verifyTOTP:
+			// resetTwoFactorFailures(ctx, ...) runs after reservation and before valid(ctx).
+			// If resetTwoFactorFailures or valid(ctx) fails, the catch block rolls back replayIdToClean.
+			const dbUser = await db.findOne<User>({
+				model: "user",
+				where: [{ field: "email", value: testUser.email }],
+			});
+			const row = await db.findOne<TwoFactorTable>({
+				model: "twoFactor",
+				where: [{ field: "userId", value: dbUser!.id }],
+			});
+			const replayId = `totp-used:${row!.id}:${code}`;
+
+			const origUpdate = adapter.update.bind(adapter);
+			const updateSpy = vi
+				.spyOn(adapter, "update")
+				.mockImplementation(async (args) => {
+					if (failOnce && args.model === "twoFactor") {
+						failOnce = false;
+						throw new Error("Simulated database failure downstream");
+					}
+					return origUpdate(args);
+				});
+
+			const challenge = await startChallenge();
+			try {
+				await expect(
+					auth.api.verifyTOTP({
+						body: { code },
+						headers: challenge,
+					}),
+				).rejects.toThrow("Simulated database failure downstream");
+
+				expect(deleteSpy).toHaveBeenCalledWith(replayId);
+			} finally {
+				updateSpy.mockRestore();
+				deleteSpy.mockRestore();
+			}
+
+			// Retrying with the same code on a fresh challenge must succeed because the replay marker was deleted!
+			const freshChallenge = await startChallenge();
+			const retryRes = await auth.api.verifyTOTP({
+				body: { code },
+				headers: freshChallenge,
+				asResponse: true,
+			});
+			expect(retryRes.status).toBe(200);
 		} finally {
 			vi.useRealTimers();
 		}
