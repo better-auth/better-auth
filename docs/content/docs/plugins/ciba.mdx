@@ -278,15 +278,15 @@ The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/open
 
 The token poll returns:
 
-| Error                   | Meaning                                                                                                                     |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `authorization_pending` | The user has not decided yet. Keep polling.                                                                                 |
-| `slow_down`             | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                 |
-| `access_denied`         | The user denied the request.                                                                                                |
-| `expired_token`         | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead. |
-| `invalid_grant`         | The `auth_req_id` is unknown, belongs to another client, or was already used.                                               |
-| `invalid_target`        | The poll's `resource` was not approved for this request. The request stays approved.                                        |
-| `invalid_scope`         | A requested resource no longer allows `openid`. The request stays approved.                                                 |
+| Error                   | Meaning                                                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `authorization_pending` | The user has not decided yet. Keep polling.                                                                                   |
+| `slow_down`             | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                   |
+| `access_denied`         | The user denied the request.                                                                                                  |
+| `expired_token`         | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead.   |
+| `invalid_grant`         | The `auth_req_id` is unknown, belongs to another client, or was already used.                                                 |
+| `invalid_target`        | The poll's `resource` was not approved for this request. The request stays approved.                                          |
+| `invalid_scope`         | The client no longer allows an approved scope, or a requested resource no longer allows `openid`. The request stays approved. |
 
 ## Schema
 

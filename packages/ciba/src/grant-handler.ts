@@ -135,6 +135,10 @@ export const createCibaGrantHandler =
 			scopes,
 			user,
 			resources,
+			// The refresh token keeps every approved resource, not just this poll's.
+			originalResources: approvedResources.length
+				? approvedResources
+				: undefined,
 			referenceId: claimed.referenceId ?? undefined,
 			authTime: claimed.authTime ?? undefined,
 			// A DPoP proof on this poll, or a sender-constraint proved at client

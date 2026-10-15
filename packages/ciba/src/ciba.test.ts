@@ -489,6 +489,39 @@ describe("ciba poll mode", () => {
 		expect([aud].flat()).not.toContain(resource);
 	});
 
+	it("lets a refresh token reach every approved resource after a narrowed poll", async () => {
+		const client = await createClient(POLL, {
+			grant_types: [CIBA_GRANT_TYPE, "refresh_token"],
+		});
+		const { authReqId, url } = await start(
+			{ scope: "openid offline_access", resource: [resource, secondResource] },
+			client,
+		);
+		await approve(url);
+		const issued = await poll(authReqId, client, {}, [resource]);
+		expect(issued.body.refresh_token).toEqual(expect.any(String));
+
+		const refreshed = await customFetchImpl(
+			`${baseURL}/api/auth/oauth2/token`,
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					...clientAuthentication(client).headers,
+				},
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: issued.body.refresh_token,
+					resource: secondResource,
+				}).toString(),
+			},
+		).then((r) => r.json());
+		expect(refreshed.error).toBeUndefined();
+		expect([decodeJwt(refreshed.access_token).aud].flat()).toContain(
+			secondResource,
+		);
+	});
+
 	it("refuses a resource whose policy drops openid", async () => {
 		const res = await bcAuthorize({
 			scope: "openid profile",
