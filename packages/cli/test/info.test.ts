@@ -218,6 +218,63 @@ describe("info command", () => {
 		expect(output.betterAuth.config.baseURL).toBe("https://example.com");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11738
+	 */
+	it("should redact sensitive config keys regardless of casing or separators", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				version: "1.0.0",
+				dependencies: {
+					"better-auth": "^1.0.0",
+				},
+			}),
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			export const auth = betterAuth({
+				// @ts-expect-error Regression fixture with a snake_case key.
+				api_key: "api-key-value",
+				// @ts-expect-error Regression fixture with a snake_case key.
+				secret_key: "secret-key-value",
+				// @ts-expect-error Regression fixture with a bare key suffix.
+				encryptionKey: "encryption-key-value",
+				// @ts-expect-error Regression fixture with a plural key suffix.
+				authTokens: "auth-tokens-value",
+				baseURL: "https://example.com",
+			})`,
+		);
+
+		const [{ stdout: jsonOutput }, { stdout: textOutput }] = await Promise.all([
+			runInfoCommand(),
+			runInfoTextCommand(),
+		]);
+		const output = JSON.parse(jsonOutput);
+
+		for (const key of [
+			"api_key",
+			"secret_key",
+			"encryptionKey",
+			"authTokens",
+		]) {
+			expect(output.betterAuth.config[key]).toBe("[REDACTED]");
+		}
+		for (const value of [
+			"api-key-value",
+			"secret-key-value",
+			"encryption-key-value",
+			"auth-tokens-value",
+		]) {
+			expect(jsonOutput).not.toContain(value);
+			expect(textOutput).not.toContain(value);
+		}
+	});
+
 	it("should redact versioned secrets", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "package.json"),
