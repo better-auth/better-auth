@@ -33,7 +33,7 @@ export interface HuggingFaceProfile {
 					name: string;
 					role: "admin" | "write" | "contributor" | "read";
 				}[];
-		  }
+		  }[]
 		| undefined;
 }
 
