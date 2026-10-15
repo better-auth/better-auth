@@ -153,11 +153,19 @@ export function createBcAuthorize(options: ResolvedCibaOptions) {
 			}
 
 			const resources = toResourceList(ctx.body.resource);
-			await resolveResourcePolicy(ctx, oauthOptions, {
+			const policy = await resolveResourcePolicy(ctx, oauthOptions, {
 				resource: resources,
 				clientId,
 				requestedScopes: scopes,
 			});
+			// A resource's scope allowlist can drop `openid`, which would issue no ID
+			// token; refuse before the user is asked to approve.
+			if (!policy.effectiveScopes.includes("openid")) {
+				oauthError(
+					"invalid_scope",
+					CIBA_ERROR_CODES.RESOURCE_DROPS_OPENID.message,
+				);
+			}
 
 			const user = options.resolveUser
 				? await options.resolveUser({ loginHint, client }, ctx)

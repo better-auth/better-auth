@@ -14,6 +14,8 @@ import { CIBA_GRANT_TYPE, ciba } from "./index";
 const baseURL = "http://localhost:3000";
 const resource = "https://api.example.com";
 const secondResource = "https://files.example.com";
+// A resource whose policy does not allow `openid`.
+const reportsResource = "https://reports.example.com";
 const INTERVAL = 1;
 const POLL = { backchannel_token_delivery_mode: "poll" };
 const notificationEndpoint = "https://client.example.com/ciba";
@@ -35,7 +37,11 @@ const { auth, signInWithTestUser, signInWithUser, customFetchImpl, testUser } =
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				resources: [resource, secondResource],
+				resources: [
+					resource,
+					secondResource,
+					{ identifier: reportsResource, allowedScopes: ["profile"] },
+				],
 				enforcePerClientResources: false,
 				allowDynamicClientRegistration: true,
 				allowUnauthenticatedClientRegistration: true,
@@ -132,7 +138,10 @@ async function bcAuthorize(
 }
 
 /** Starts a request and returns its auth_req_id and the link sent to the user. */
-async function start(params: Record<string, string> = {}, client = pollClient) {
+async function start(
+	params: Record<string, string | string[]> = {},
+	client = pollClient,
+) {
 	const res = await bcAuthorize(
 		{ scope: "openid profile", login_hint: testUser.email, ...params },
 		client,
@@ -148,8 +157,15 @@ async function poll(
 	authReqId: string,
 	client: OAuthClient = pollClient,
 	extraHeaders: Record<string, string> = {},
+	resources: string[] = [],
 ) {
 	const authentication = clientAuthentication(client);
+	const body = new URLSearchParams({
+		...authentication.params,
+		grant_type: CIBA_GRANT_TYPE,
+		auth_req_id: authReqId,
+	});
+	for (const selected of resources) body.append("resource", selected);
 	const res = await customFetchImpl(`${baseURL}/api/auth/oauth2/token`, {
 		method: "POST",
 		headers: {
@@ -157,11 +173,7 @@ async function poll(
 			...authentication.headers,
 			...extraHeaders,
 		},
-		body: new URLSearchParams({
-			...authentication.params,
-			grant_type: CIBA_GRANT_TYPE,
-			auth_req_id: authReqId,
-		}).toString(),
+		body: body.toString(),
 	});
 	return { status: res.status, body: await res.json() };
 }
@@ -457,6 +469,56 @@ describe("ciba poll mode", () => {
 		expect(decodeJwt(issued.body.access_token as string).aud).toEqual(
 			expect.arrayContaining([resource, secondResource]),
 		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8707#section-2.2
+	 */
+	it("narrows the token to the resources the poll selects", async () => {
+		const { authReqId, url } = await start({
+			resource: [resource, secondResource],
+		});
+		await approve(url);
+		const unapproved = await poll(authReqId, pollClient, {}, [reportsResource]);
+		expect(unapproved.body.error).toBe("invalid_target");
+
+		const issued = await poll(authReqId, pollClient, {}, [secondResource]);
+		expect(issued.status).toBe(200);
+		const { aud } = decodeJwt(issued.body.access_token as string);
+		expect([aud].flat()).toContain(secondResource);
+		expect([aud].flat()).not.toContain(resource);
+	});
+
+	it("refuses a resource whose policy drops openid", async () => {
+		const res = await bcAuthorize({
+			scope: "openid profile",
+			login_hint: testUser.email,
+			resource: reportsResource,
+		});
+		expect(res.status).toBe(400);
+		expect(res.body.error).toBe("invalid_scope");
+	});
+
+	it("keeps the approval when the resource policy no longer allows openid", async () => {
+		const { authReqId, url } = await start({ resource });
+		await approve(url);
+		const ctx = await auth.$context;
+		const where = [{ field: "identifier", value: resource }];
+		await ctx.adapter.update({
+			model: "oauthResource",
+			where,
+			update: { allowedScopes: ["profile"] },
+		});
+		try {
+			expect((await poll(authReqId)).body.error).toBe("invalid_scope");
+		} finally {
+			await ctx.adapter.update({
+				model: "oauthResource",
+				where,
+				update: { allowedScopes: null },
+			});
+		}
+		expect((await poll(authReqId)).status).toBe(200);
 	});
 });
 

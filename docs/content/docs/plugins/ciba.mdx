@@ -209,7 +209,7 @@ Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.
 
 ### `POST /oauth2/token`
 
-The provider's token endpoint. With `grant_type=urn:openid:params:grant-type:ciba` and the `auth_req_id`, it returns the tokens once the user approves, or one of the errors below. Each `auth_req_id` issues tokens once.
+The provider's token endpoint. With `grant_type=urn:openid:params:grant-type:ciba` and the `auth_req_id`, it returns the tokens once the user approves, or one of the errors below. Each `auth_req_id` issues tokens once. The poll may send `resource` to narrow the token to some of the approved resources (RFC 8707 §2.2).
 
 ## Options
 
@@ -269,7 +269,7 @@ The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/open
 | Error                     | Meaning                                                                                                                                                    |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `invalid_request`         | A required parameter is missing or malformed, the request uses a hint other than `login_hint`, or a ping client sent no valid `client_notification_token`. |
-| `invalid_scope`           | `scope` does not include `openid`, or the client may not request it.                                                                                       |
+| `invalid_scope`           | `scope` does not include `openid`, the client may not request it, or a requested resource does not allow `openid`.                                         |
 | `invalid_client`          | The client did not authenticate, or is public and `allowPublicClients` is off.                                                                             |
 | `unauthorized_client`     | The client is not registered for the CIBA grant with a delivery mode this server supports.                                                                 |
 | `invalid_binding_message` | The binding message is longer than 64 characters or contains control or invisible formatting characters.                                                   |
@@ -285,6 +285,8 @@ The token poll returns:
 | `access_denied`         | The user denied the request.                                                                                                |
 | `expired_token`         | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead. |
 | `invalid_grant`         | The `auth_req_id` is unknown, belongs to another client, or was already used.                                               |
+| `invalid_target`        | The poll's `resource` was not approved for this request. The request stays approved.                                        |
+| `invalid_scope`         | A requested resource no longer allows `openid`. The request stays approved.                                                 |
 
 ## Schema
 

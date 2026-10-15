@@ -7,6 +7,10 @@ import { APIError } from "better-auth/api";
  */
 export const CIBA_ERROR_CODES = defineErrorCodes({
 	INVALID_SCOPE: "The requested scope must include 'openid'",
+	RESOURCE_DROPS_OPENID:
+		"The requested resources do not allow the 'openid' scope",
+	UNAPPROVED_RESOURCE:
+		"The requested resource was not approved for this request",
 	INVALID_BINDING_MESSAGE: "The binding_message must be plain text",
 	UNKNOWN_USER_ID: "The user identified by the hint could not be found",
 	EXACTLY_ONE_HINT:

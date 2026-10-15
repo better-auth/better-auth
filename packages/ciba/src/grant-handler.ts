@@ -1,6 +1,7 @@
 import type { OAuthExtensionGrantHandler } from "@better-auth/oauth-provider";
 import {
 	resolveResourcePolicy,
+	toResourceList,
 	validateClientScopes,
 } from "@better-auth/oauth-provider/internal";
 import { CIBA_ERROR_CODES, oauthError } from "./error-codes";
@@ -76,11 +77,33 @@ export const createCibaGrantHandler =
 		// approved request for another poll.
 		const scopes = request.scope.split(" ");
 		validateClientScopes(client, scopes);
-		await resolveResourcePolicy(ctx, opts, {
-			resource: request.resources ?? undefined,
+		// RFC 8707 §2.2: the poll may narrow the approved resources.
+		const approvedResources = request.resources ?? [];
+		const selectedResources = toResourceList(ctx.body?.resource);
+		if (
+			selectedResources?.some(
+				(selected) => !approvedResources.includes(selected),
+			)
+		) {
+			oauthError(
+				"invalid_target",
+				CIBA_ERROR_CODES.UNAPPROVED_RESOURCE.message,
+			);
+		}
+		const resources =
+			selectedResources ??
+			(approvedResources.length ? approvedResources : undefined);
+		const policy = await resolveResourcePolicy(ctx, opts, {
+			resource: resources,
 			clientId,
 			requestedScopes: scopes,
 		});
+		if (!policy.effectiveScopes.includes("openid")) {
+			oauthError(
+				"invalid_scope",
+				CIBA_ERROR_CODES.RESOURCE_DROPS_OPENID.message,
+			);
+		}
 		const user = await ctx.context.internalAdapter.findUserById(request.userId);
 		if (!user) {
 			oauthError(
@@ -111,7 +134,7 @@ export const createCibaGrantHandler =
 			client,
 			scopes,
 			user,
-			resources: claimed.resources ?? undefined,
+			resources,
 			referenceId: claimed.referenceId ?? undefined,
 			authTime: claimed.authTime ?? undefined,
 			// A DPoP proof on this poll, or a sender-constraint proved at client
