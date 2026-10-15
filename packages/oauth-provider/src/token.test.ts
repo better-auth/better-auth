@@ -1593,26 +1593,17 @@ describe("oauth token - refresh_token", async () => {
 	});
 
 	/**
-	 * V1 from variants.md: revokeRefreshToken racing against
-	 * handleRefreshTokenGrant on the same parent row. Both paths must run
-	 * through the same CAS so exactly one wins; the loser fails closed and
-	 * the parent stays revoked.
+	 * `revokeRefreshToken` racing `handleRefreshTokenGrant` on the same parent
+	 * row. Both run through the same CAS, so exactly one wins and the loser
+	 * fails closed. Each ordering is forced by holding the first CAS until the
+	 * other request has finished, instead of leaving it to scheduling.
 	 *
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
 	 */
-	it("concurrent revoke + rotate against the same refresh token: exactly one wins", async () => {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
-		const scopes = ["openid", "profile", "offline_access"];
-		const tokens = await authorizeForRefreshToken(scopes);
-		expect(tokens?.refresh_token).toBeDefined();
-		const parentToken = tokens!.refresh_token!;
-
-		const refresh = async () => {
+	describe("concurrent revoke + rotate against the same refresh token", () => {
+		async function refresh(refreshToken: string) {
 			const { body, headers } = await refreshAccessTokenRequest({
-				refreshToken: parentToken,
+				refreshToken,
 				options: {
 					clientId: oauthClient!.client_id,
 					clientSecret: oauthClient!.client_secret!,
@@ -1622,19 +1613,18 @@ describe("oauth token - refresh_token", async () => {
 			return client.$fetch<{
 				access_token?: string;
 				refresh_token?: string;
-				error?: string;
 			}>("/oauth2/token", {
 				method: "POST",
 				body,
 				headers,
 			});
-		};
+		}
 
-		const revoke = () =>
-			client.$fetch("/oauth2/revoke", {
+		function revoke(refreshToken: string) {
+			return client.$fetch("/oauth2/revoke", {
 				method: "POST",
 				body: new URLSearchParams({
-					token: parentToken,
+					token: refreshToken,
 					token_type_hint: "refresh_token",
 					client_id: oauthClient!.client_id,
 					client_secret: oauthClient!.client_secret!,
@@ -1643,29 +1633,87 @@ describe("oauth token - refresh_token", async () => {
 					"content-type": "application/x-www-form-urlencoded",
 				},
 			});
-
-		const [refreshResult, revokeResult] = await Promise.all([
-			refresh(),
-			revoke(),
-		]);
-
-		// /oauth2/revoke is RFC 7009 §2.2 always-200, so the racer outcome is
-		// observable through the refresh result alone:
-		//   - refresh won the CAS  → mints a fresh refresh_token; revoke is a no-op
-		//   - revoke won the CAS  → refresh returns invalid_grant
-		expect(revokeResult.error).toBeNull();
-		if (refreshResult.error === null) {
-			expect(refreshResult.data?.refresh_token).toBeDefined();
-		} else {
-			const errPayload = refreshResult.error as { error?: string } | null;
-			expect(errPayload?.error).toBe("invalid_grant");
 		}
 
-		// In both orderings, replaying the parent must now fail closed
-		// (either revoked by the explicit revoke or rotated out by the refresh).
-		const replay = await refresh();
-		const replayErr = replay.error as { error?: string } | null;
-		expect(replayErr?.error).toBe("invalid_grant");
+		/** Pauses the next refresh-token CAS until `release` is called. */
+		async function holdNextRefreshTokenCas() {
+			const context = await authorizationServer.$context;
+			const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+			const reached = Promise.withResolvers<void>();
+			const released = Promise.withResolvers<void>();
+			const spy = vi.spyOn(context.adapter, "incrementOne");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthRefreshToken") {
+					spy.mockRestore();
+					reached.resolve();
+					await released.promise;
+				}
+				return incrementOne(...args);
+			});
+			return {
+				reached: reached.promise,
+				release: released.resolve,
+				restore: () => spy.mockRestore(),
+			};
+		}
+
+		async function issueParentRefreshToken() {
+			const tokens = await authorizeForRefreshToken([
+				"openid",
+				"profile",
+				"offline_access",
+			]);
+			expect(tokens?.refresh_token).toBeDefined();
+			return tokens!.refresh_token!;
+		}
+
+		it("fails the revoke closed when the rotation wins", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const cas = await holdNextRefreshTokenCas();
+			try {
+				const revoking = revoke(parentToken);
+				await cas.reached;
+				const rotated = await refresh(parentToken);
+				cas.release();
+				const revoked = await revoking;
+
+				expect(rotated.error).toBeNull();
+				expect(rotated.data?.refresh_token).toBeDefined();
+				expect(revoked.error).toMatchObject({
+					status: 400,
+					error: "invalid_request",
+				});
+				// The losing revoke tears down the family, including the new token.
+				expect(
+					(await refresh(rotated.data!.refresh_token!)).error,
+				).toMatchObject({ error: "invalid_grant" });
+				expect((await refresh(parentToken)).error).toMatchObject({
+					error: "invalid_grant",
+				});
+			} finally {
+				cas.restore();
+			}
+		});
+
+		it("fails the rotation with invalid_grant when the revoke wins", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const cas = await holdNextRefreshTokenCas();
+			try {
+				const rotating = refresh(parentToken);
+				await cas.reached;
+				const revoked = await revoke(parentToken);
+				cas.release();
+				const rotated = await rotating;
+
+				expect(revoked.error).toBeNull();
+				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+				expect((await refresh(parentToken)).error).toMatchObject({
+					error: "invalid_grant",
+				});
+			} finally {
+				cas.restore();
+			}
+		});
 	});
 });
 
