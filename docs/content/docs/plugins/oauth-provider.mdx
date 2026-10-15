@@ -26,7 +26,7 @@ The default configuration chooses the safer protocol behavior, including PKCE fo
 * **`client_credentials`:** issues machine-to-machine access tokens.
 * **`device_code`:** adds the optional [Device Authorization](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) flow for CLIs and limited-input clients.
 
-`client_credentials` is fail closed. A client's user-delegated `scope` metadata never authorizes machine access. Administrators must assign a non-empty `client_credentials_scopes` value through the administrative create or update endpoint, and `clientPrivileges` must explicitly approve the `configure-client-credentials-scopes` action. The assigned value is both the maximum requestable scope set and the default when the token request omits `scope`. DCR, CIMD, and user-managed registration can declare the grant but cannot assign this server-owned scope ceiling.
+`client_credentials` is fail closed. A client's user-delegated `scope` metadata never authorizes machine access. Administrators must assign a non-empty `client_credentials_scopes` value through the administrative create or update endpoint, and `clientPrivileges` must explicitly approve the `configure-client-credentials-scopes` action. The assigned value is both the maximum requestable scope set and the default when the token request omits `scope`. The one other way to assign it is protected dynamic registration, where your [`validateInitialAccessToken`](#dynamic-client-registration) callback can return it for the token it accepts. Otherwise DCR, CIMD, and user-managed registration can declare the grant but cannot assign this server-owned scope ceiling.
 
 ## Installation
 
@@ -1714,7 +1714,7 @@ oauthProvider({
 })
 ```
 
-Return an object with a `referenceId` to attach application ownership metadata to the created client, or return `false` to reject the token. Omitting `referenceId` creates an unowned client. The `clientMetadata` passed to the callback is the submitted request, self-asserted and not yet fully validated, so treat it as untrusted input.
+Return an object with a `referenceId` to attach application ownership metadata to the created client, or return `false` to reject the token. Omitting `referenceId` creates an unowned client. To let the client use the `client_credentials` grant, also return `clientCredentialsScopes`: the client then registers with that scope ceiling, as if an administrator had assigned it. Return only scopes the token's issuer approved, because the token is the only record of that approval. The client must register the `client_credentials` grant with a confidential authentication method, and every scope must be one the provider offers; otherwise registration fails. A `client_credentials_scopes` field in the registration request is still ignored. The `clientMetadata` passed to the callback is the submitted request, self-asserted and not yet fully validated, so treat it as untrusted input.
 
 Token issuance, expiration, and revocation stay in your application because RFC 7591 leaves initial access token lifecycle policy to the authorization server. This is separate from RFC 7592 registration management tokens.
 

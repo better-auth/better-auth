@@ -695,6 +695,18 @@ export interface InitialAccessTokenAuthorization {
 	 * client is stored with neither a `user_id` nor a `reference_id`).
 	 */
 	referenceId?: string;
+	/**
+	 * Scope ceiling for the `client_credentials` grant, such as the machine
+	 * scopes an administrator approved when the token was issued. Return only
+	 * scopes that approval covered: the token is the only proof of it.
+	 *
+	 * The client must register the `client_credentials` grant with a
+	 * confidential authentication method, and every scope must be one the
+	 * provider offers. Otherwise registration fails.
+	 *
+	 * @default []
+	 */
+	clientCredentialsScopes?: string[];
 }
 
 export interface OAuthOptions<
