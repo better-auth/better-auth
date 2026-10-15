@@ -135,7 +135,11 @@ import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
   baseURL: {
-    allowedHosts: ["myapp.com", "*.ngrok-free.app"],
+    // List the exact hosts your app is served from. Avoid wildcards on a
+    // shared domain (like `*.ngrok-free.app`), which would trust every other
+    // tenant of that domain as an auth origin. Include the port when your
+    // deployment uses a non-default one, for example `"myapp.com:3000"`.
+    allowedHosts: ["myapp.com", "myapp.ngrok-free.app"],
     protocol: "auto",
   },
   advanced: {
@@ -147,8 +151,10 @@ export const auth = betterAuth({
 ```
 
 <Callout>
-  If SvelteKit itself reports the wrong origin for plain HTTP servers (for
-  example `adapter-node` defaulting to `https`), set `paths.origin` in
-  `svelte.config.js` or the adapter's `PROTOCOL_HEADER` / `HOST_HEADER`
-  options.
+  SvelteKit derives the request origin from the `host` header and defaults the
+  protocol to `https`, so a proxy that forwards plain HTTP has to tell it the
+  real scheme. With `adapter-node`, set
+  `PROTOCOL_HEADER=x-forwarded-proto` and `HOST_HEADER=x-forwarded-host`. On
+  SvelteKit 3+, you can also pin the origin with `paths.origin` in
+  `vite.config.js`.
 </Callout>
