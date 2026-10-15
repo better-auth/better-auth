@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -14,6 +14,8 @@ import { CLIENT_ASSERTION_TYPE } from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { socialProviders } from "./index";
+import type { LinearUser } from "./linear";
+import { linear } from "./linear";
 import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
 import { slack } from "./slack";
@@ -453,5 +455,70 @@ describe("cognito provider", () => {
 		const provider = cognito(cognitoConfig);
 		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
+	});
+});
+
+/**
+ * @see https://github.com/linear/linear/blob/master/packages/sdk/src/schema.graphql
+ * @see https://linear.app/developers/graphql
+ */
+describe("linear viewer avatars", () => {
+	it.each([null, "https://example.com/avatar.png"])(
+		"normalizes the local image for avatar %s",
+		async (avatarUrl) => {
+			const viewer = {
+				id: "linear-user",
+				name: "Linear User",
+				email: "user@example.com",
+				avatarUrl,
+				active: true,
+				createdAt: "2026-01-01T00:00:00.000Z",
+				updatedAt: "2026-01-02T00:00:00.000Z",
+			} satisfies LinearUser;
+			mockedBetterFetch.mockResolvedValueOnce({
+				data: { data: { viewer } },
+				error: null,
+			});
+			const mapProfileToUser = vi.fn((profile: LinearUser) => {
+				expectTypeOf(profile.avatarUrl).toEqualTypeOf<string | null>();
+				expectTypeOf(profile.createdAt).toEqualTypeOf<string>();
+				expectTypeOf(profile.updatedAt).toEqualTypeOf<string>();
+				return {};
+			});
+			const provider = linear({ ...credentials, mapProfileToUser });
+			const tokens = { accessToken: "linear-token" };
+			const result = await provider.getUserInfo(tokens);
+
+			expect(result?.user.image).toBe(avatarUrl ?? undefined);
+			expect(result?.user.emailVerified).toBe(false);
+			expect(result?.data).toEqual(viewer);
+			expect(mapProfileToUser).toHaveBeenCalledWith(viewer);
+			expect(provider.accountSubject({ tokens, profile: viewer })).toBe(
+				"linear-user",
+			);
+		},
+	);
+
+	it("lets profile mapping replace a missing avatar", async () => {
+		const viewer = {
+			id: "linear-user",
+			name: "Linear User",
+			email: "user@example.com",
+			avatarUrl: null,
+			active: true,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			updatedAt: "2026-01-02T00:00:00.000Z",
+		} satisfies LinearUser;
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { data: { viewer } },
+			error: null,
+		});
+		const result = await linear({
+			...credentials,
+			mapProfileToUser: () => ({ image: "https://example.com/mapped.png" }),
+		}).getUserInfo({ accessToken: "linear-token" });
+
+		expect(result?.user.image).toBe("https://example.com/mapped.png");
+		expect(result?.data.avatarUrl).toBeNull();
 	});
 });

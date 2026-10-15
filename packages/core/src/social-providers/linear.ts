@@ -6,11 +6,12 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
+/** Viewer fields selected from Linear's GraphQL API. */
 export interface LinearUser {
 	id: string;
 	name: string;
 	email: string;
-	avatarUrl?: string | undefined;
+	avatarUrl: string | null;
 	active: boolean;
 	createdAt: string;
 	updatedAt: string;
@@ -116,7 +117,7 @@ export const linear = (options: LinearOptions) => {
 				user: {
 					name: profile.data.viewer.name,
 					email: profile.data.viewer.email,
-					image: profile.data.viewer.avatarUrl,
+					image: profile.data.viewer.avatarUrl ?? undefined,
 					emailVerified: false,
 					...userMap,
 				},
