@@ -13,9 +13,8 @@ import { ms } from "../../utils/time";
 import { PACKAGE_VERSION } from "../../version";
 import { DEVICE_AUTHORIZATION_ERROR_CODES } from "./error-codes";
 import {
-	deviceApprove,
 	deviceCode,
-	deviceDeny,
+	deviceDecisionEndpoint,
 	deviceToken,
 	deviceVerify,
 } from "./routes";
@@ -154,7 +153,6 @@ export interface DeviceAuthorizationGrantAuthorization {
  */
 export interface DeviceAuthorizationGrant<
 	RequestFields extends z.ZodRawShape = z.ZodRawShape,
-	VerificationContext extends Record<string, unknown> = Record<string, unknown>,
 > {
 	/** Additional request fields accepted only when this grant is configured. */
 	requestSchemaFields: RequestFields;
@@ -176,17 +174,16 @@ export interface DeviceAuthorizationGrant<
 		| DeviceAuthorizationGrantAuthorization
 		| undefined
 		| Promise<DeviceAuthorizationGrantAuthorization | undefined>;
-	/** Refuse the standalone session-token endpoint for grant-owned codes. */
-	assertSessionRedemption: (input: {
+	/**
+	 * Throw when a code this grant issued reaches a standalone endpoint:
+	 * `/device/token` (`redeem`) or `/device`, `/device/approve`, `/device/deny`
+	 * (`approve`). The error should name the endpoint to use instead.
+	 */
+	assertStandaloneUse: (input: {
 		ctx: GenericEndpointContext;
 		deviceCode: Record<string, unknown>;
+		use: "redeem" | "approve";
 	}) => void | Promise<void>;
-	/** Add grant-owned information to the owner-only verification response. */
-	getVerificationContext: (
-		deviceCode: Record<string, unknown>,
-	) => VerificationContext | undefined;
-	/** OpenAPI properties matching `getVerificationContext()`. */
-	verificationOpenAPIProperties?: Record<string, Record<string, unknown>>;
 }
 
 export type DeviceAuthorizationPluginOptions<
@@ -199,12 +196,6 @@ export type DeviceAuthorizationPluginOptions<
 const deviceAuthorizationRequestFields = new Set([
 	"client_id",
 	"user_id",
-	"scope",
-]);
-const deviceVerificationResponseFields = new Set([
-	"user_code",
-	"status",
-	"client_id",
 	"scope",
 ]);
 
@@ -226,15 +217,6 @@ function assertGrantFieldsAreAdditional(
 	if (conflictingRequestFields.length > 0) {
 		throw new BetterAuthError(
 			`Device authorization grant request fields must be additional and cannot redefine request fields: ${conflictingRequestFields.join(", ")}`,
-		);
-	}
-
-	const conflictingVerificationFields = Object.keys(
-		grant?.verificationOpenAPIProperties ?? {},
-	).filter((field) => deviceVerificationResponseFields.has(field));
-	if (conflictingVerificationFields.length > 0) {
-		throw new BetterAuthError(
-			`Device authorization grant verification fields must be additional and cannot redefine response fields: ${conflictingVerificationFields.join(", ")}`,
 		);
 	}
 }
@@ -268,8 +250,8 @@ export const deviceAuthorization = <
 			deviceCode: deviceCode(opts, grant),
 			deviceToken: deviceToken(opts, grant),
 			deviceVerify: deviceVerify(grant),
-			deviceApprove,
-			deviceDeny,
+			deviceApprove: deviceDecisionEndpoint("/device/approve", grant),
+			deviceDeny: deviceDecisionEndpoint("/device/deny", grant),
 		},
 		rateLimit: [
 			{
@@ -287,8 +269,12 @@ export const deviceAuthorization = <
 
 export type * from "../../utils/time";
 export {
+	assertDeviceCodePending,
+	buildVerificationUris,
 	type DeviceCodeRedemptionAuthorization,
 	type DeviceCodeRedemptionResult,
+	decideDeviceCode,
+	findDeviceCodeByUserCode,
 	type PolledAuthorizationRecord,
 	type PolledAuthorizationRedemptionResult,
 	redeemDeviceCode,

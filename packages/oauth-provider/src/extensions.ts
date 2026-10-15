@@ -93,6 +93,7 @@ interface ExtensionKeys {
 	authMethods: string[];
 	assertionTypes: string[];
 	clientDiscoveryIds: string[];
+	interactionRequestParameters: string[];
 }
 
 /**
@@ -143,7 +144,15 @@ function collectExtensionKeys(
 			);
 		}
 	}
-	return { grantTypes, authMethods, assertionTypes, clientDiscoveryIds };
+	return {
+		grantTypes,
+		authMethods,
+		assertionTypes,
+		clientDiscoveryIds,
+		interactionRequestParameters: Object.keys(
+			extension.interactionRequests ?? {},
+		),
+	};
 }
 
 function assertNoDuplicateAcrossExtensions(label: string, values: string[]) {
@@ -184,6 +193,10 @@ export function validateOAuthProviderExtensions(
 	assertNoDuplicateAcrossExtensions(
 		"client discovery id",
 		keys.flatMap((k) => k.clientDiscoveryIds),
+	);
+	assertNoDuplicateAcrossExtensions(
+		"interaction request parameter",
+		keys.flatMap((k) => k.interactionRequestParameters),
 	);
 }
 
@@ -265,6 +278,35 @@ export function getSupportedGrantTypes(
 			...getExtensionGrantTypes(opts),
 		]),
 	);
+}
+
+/**
+ * Finds the interaction request a query identifies, such as a device approval
+ * keyed by `user_code`. Authorization requests, which carry `response_type` or
+ * a pushed `request_uri`, never match.
+ */
+export function getExtensionInteractionRequest(
+	opts: OAuthOptions<Scope[]>,
+	query: object,
+) {
+	const parameters = query as Record<string, unknown>;
+	if (
+		parameters.response_type !== undefined ||
+		parameters.request_uri !== undefined
+	) {
+		return undefined;
+	}
+	for (const extension of getOAuthProviderExtensions(opts)) {
+		for (const [parameter, handler] of Object.entries(
+			extension.interactionRequests ?? {},
+		)) {
+			const value = parameters[parameter];
+			if (typeof value === "string" && value) {
+				return { parameter, handler, value };
+			}
+		}
+	}
+	return undefined;
 }
 
 export function getExtensionGrantHandler(

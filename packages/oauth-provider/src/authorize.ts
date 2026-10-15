@@ -12,6 +12,7 @@ import {
 	getRequestedUserInfoClaims,
 	isValidOidcClaimsRequest,
 } from "./claims-request";
+import { getExtensionInteractionRequest } from "./extensions";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
@@ -26,8 +27,9 @@ import { getSupportedClaims } from "./standard-claims";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
+	OAuthInteractionQuery,
+	OAuthInteractionRequest,
 	OAuthOptions,
-	SchemaClient,
 	Scope,
 	VerificationValue,
 } from "./types";
@@ -62,9 +64,9 @@ export type OAuthRedirectResult = {
 	url: string;
 };
 
-function removeMaxAgeFromAuthorizationQuery(
-	query: OAuthAuthorizationQuery,
-): OAuthAuthorizationQuery {
+function removeMaxAgeFromAuthorizationQuery<
+	Query extends { max_age?: number | undefined },
+>(query: Query): Omit<Query, "max_age"> {
 	const { max_age: _maxAge, ...queryWithoutMaxAge } = query;
 	return queryWithoutMaxAge;
 }
@@ -162,20 +164,42 @@ export const handleRedirect = (
 function redirectWithPromptNoneError(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	query: OAuthAuthorizationQuery,
+	query: OAuthInteractionQuery,
 	error: OAuthErrorCode,
 	description: string,
 ) {
 	return handleRedirect(
 		ctx,
-		formatErrorURL(
-			query.redirect_uri,
-			error,
-			description,
-			query.state,
-			getIssuer(ctx, opts),
-		),
+		query.redirect_uri
+			? formatErrorURL(
+					query.redirect_uri,
+					error,
+					description,
+					query.state,
+					getIssuer(ctx, opts),
+				)
+			: getErrorURL(ctx, error, description),
 	);
+}
+
+/**
+ * Returns the URL that reports an `APIError`: `errorPage` when given, otherwise
+ * the provider error page. Rethrows anything else.
+ */
+export function getAPIErrorURL(
+	ctx: GenericEndpointContext,
+	error: unknown,
+	errorPage?: string,
+) {
+	if (!(error instanceof APIError)) throw error;
+	const body = error.body as
+		| { error?: OAuthErrorCode; error_description?: string }
+		| undefined;
+	const code = body?.error ?? "invalid_request";
+	const description = body?.error_description ?? "invalid request";
+	return errorPage
+		? formatErrorURL(errorPage, code, description)
+		: getErrorURL(ctx, code, description);
 }
 
 /**
@@ -429,6 +453,8 @@ export type AuthorizeEndpointSettings = {
 	isAuthorize?: boolean;
 	postLogin?: boolean;
 	isPostLoginContinuation?: boolean;
+	/** Set only by the consent endpoint, in the request where the user accepts. */
+	consentAccepted?: boolean;
 };
 
 export async function authorizeEndpoint(
@@ -436,11 +462,6 @@ export async function authorizeEndpoint(
 	opts: OAuthOptions<Scope[]>,
 	settings?: AuthorizeEndpointSettings,
 ): Promise<OAuthRedirectResult> {
-	// Grant type must include authorization_code to use this endpoint
-	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
-		throw new APIError("NOT_FOUND");
-	}
-
 	if (!ctx.request) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "request not found",
@@ -455,6 +476,49 @@ export async function authorizeEndpoint(
 		ctx,
 		settings,
 	);
+
+	const interaction = getExtensionInteractionRequest(opts, query);
+	if (interaction) {
+		// A direct request learns nothing about the request until sign-in.
+		if (settings?.isAuthorize === true && !(await getSessionFromCtx(ctx))) {
+			ctx.query = { [interaction.parameter]: interaction.value };
+			return redirectWithPromptCode(ctx, opts, "login");
+		}
+		const errorPage = interaction.handler.errorPage?.({
+			ctx,
+			value: interaction.value,
+		});
+		const toErrorURL = (error: unknown) =>
+			getAPIErrorURL(ctx, error, errorPage);
+		let interactionRequest: OAuthInteractionRequest;
+		try {
+			interactionRequest = await interaction.handler.load({
+				ctx,
+				opts,
+				value: interaction.value,
+				// Resumed queries were signed by this server; a direct request is not.
+				signedQuery: settings?.isAuthorize === true ? undefined : query,
+			});
+			if (interactionRequest.client.disabled) {
+				throw new APIError("BAD_REQUEST", {
+					error: "client_disabled",
+					error_description: "client is disabled",
+				});
+			}
+		} catch (error) {
+			return handleRedirect(ctx, toErrorURL(error));
+		}
+		return runAuthorizationInteraction(ctx, opts, request.headers, settings, {
+			...interactionRequest,
+			approve: (approval) =>
+				interactionRequest.approve(approval).catch(toErrorURL),
+		});
+	}
+
+	// Grant type must include authorization_code to use this endpoint
+	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
+		throw new APIError("NOT_FOUND");
+	}
 	ctx.query = query;
 	const requestObject = getStringParameter(query.request);
 	const requestUri = getStringParameter(query.request_uri);
@@ -779,31 +843,12 @@ export async function authorizeEndpoint(
 		approve: (approval) =>
 			createAuthorizationCodeURL(ctx, opts, {
 				...approval,
+				// An authorization request always carries its validated redirect_uri.
+				query: approval.query as OAuthAuthorizationQuery,
 				clientId: client.clientId,
 				resource: toResourceList(approval.query.resource) ?? [],
 			}),
 	});
-}
-
-/**
- * The request the user reviews through sign-in, account selection, signup,
- * post-login selection, and consent.
- */
-export interface InteractionRequest {
-	/** Signed into each interaction page; carries `prompt` and `max_age`. */
-	query: OAuthAuthorizationQuery;
-	client: SchemaClient<Scope[]>;
-	/**
-	 * Records the approval once every interaction is complete and returns the
-	 * URL to send the user to.
-	 */
-	approve: (approval: {
-		query: OAuthAuthorizationQuery;
-		userId: string;
-		sessionId: string;
-		authTime: number;
-		referenceId?: string;
-	}) => Promise<string>;
 }
 
 /**
@@ -815,7 +860,7 @@ async function runAuthorizationInteraction(
 	opts: OAuthOptions<Scope[]>,
 	headers: Headers,
 	settings: AuthorizeEndpointSettings | undefined,
-	request: InteractionRequest,
+	request: OAuthInteractionRequest,
 ): Promise<OAuthRedirectResult> {
 	let { query } = request;
 	const { client } = request;
@@ -949,8 +994,12 @@ async function runAuthorizationInteraction(
 		}
 	}
 
-	// Force consent screen
-	if (promptSet?.has("consent")) {
+	// Force consent screen. A request that requires consent is approved only in
+	// the request where the user accepts it, never from a resumed signed query.
+	if (
+		promptSet?.has("consent") ||
+		(request.requireConsent && !settings?.consentAccepted)
+	) {
 		return redirectWithPromptCode(ctx, opts, "consent", {
 			sessionId: session.session.id,
 		});

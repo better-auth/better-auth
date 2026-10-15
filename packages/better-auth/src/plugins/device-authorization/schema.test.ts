@@ -13,8 +13,7 @@ function schemaGrant(
 		requestSchemaFields: {},
 		deviceCodeSchemaFields,
 		authorizeRequest: () => undefined,
-		assertSessionRedemption: () => undefined,
-		getVerificationContext: () => undefined,
+		assertStandaloneUse: () => undefined,
 	};
 }
 
@@ -126,17 +125,6 @@ describe("device authorization schema", () => {
 			}),
 		).toThrow(
 			"Device authorization grant request fields must be additional and cannot redefine request fields: scope",
-		);
-
-		expect(() =>
-			deviceAuthorization({
-				grant: {
-					...schemaGrant({}),
-					verificationOpenAPIProperties: { status: { type: "string" } },
-				},
-			}),
-		).toThrow(
-			"Device authorization grant verification fields must be additional and cannot redefine response fields: status",
 		);
 	});
 
