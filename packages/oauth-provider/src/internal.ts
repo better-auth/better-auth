@@ -12,9 +12,16 @@ export {
 } from "./client-jwks";
 export { isForbiddenCimdClientMetadataField } from "./client-metadata";
 export { getExtensionClientMetadataFields } from "./extensions";
+export { createOAuthEndpoint } from "./oauth-endpoint";
 export {
 	assertPublicRoutableHttpsUri,
 	type OAuthClientRegistrationResult,
 	type RegisterClientMetadataDocumentInput,
 	registerClientMetadataDocument,
 } from "./register";
+export { resolveResourcePolicy } from "./resources";
+export {
+	parseClientMetadata,
+	toResourceList,
+	validateClientScopes,
+} from "./utils";

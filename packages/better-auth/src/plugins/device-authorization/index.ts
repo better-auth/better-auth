@@ -275,6 +275,9 @@ export {
 	type DeviceCodeRedemptionResult,
 	decideDeviceCode,
 	findDeviceCodeByUserCode,
+	type PolledAuthorizationRecord,
+	type PolledAuthorizationRedemptionResult,
 	redeemDeviceCode,
+	redeemPolledAuthorization,
 } from "./routes";
 export type { DeviceCode } from "./schema";
