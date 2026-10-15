@@ -35,9 +35,9 @@ export interface TwitterProfile {
 		entities?:
 			| {
 					/** Contains details about the user's profile website. */
-					url: {
+					url?: {
 						/** Contains details about the user's profile website. */
-						urls: Array<{
+						urls?: Array<{
 							/** The start position (zero-based) of the recognized user's profile website. All start indices are inclusive. */
 							start: number;
 							/** The end position (zero-based) of the recognized user's profile website. This end index is exclusive. */
@@ -45,19 +45,19 @@ export interface TwitterProfile {
 							/** The URL in the format entered by the user. */
 							url: string;
 							/** The fully resolved URL. */
-							expanded_url: string;
+							expanded_url?: string | null;
 							/** The URL as displayed in the user's profile. */
-							display_url: string;
-						}>;
-					};
+							display_url?: string | null;
+						}> | null;
+					} | null;
 					/** Contains details about URLs, Hashtags, Cashtags, or mentions located within a user's description. */
-					description: {
-						hashtags: Array<{
+					description?: {
+						hashtags?: Array<{
 							start: number;
 							end: number;
 							tag: string;
-						}>;
-					};
+						}> | null;
+					} | null;
 			  }
 			| undefined;
 		/**
