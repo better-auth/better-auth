@@ -1502,7 +1502,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: clientRegistrationRequestSchema,
+					// Loose so extension-defined fields reach the handler, which keeps
+					// those and drops every other unrecognized field (RFC 7591 §2).
+					// The declared type stays strict.
+					body: clientRegistrationRequestSchema.loose() as unknown as typeof clientRegistrationRequestSchema,
 					errorCodesByField: {
 						redirect_uris: "invalid_redirect_uri",
 						post_logout_redirect_uris: "invalid_redirect_uri",

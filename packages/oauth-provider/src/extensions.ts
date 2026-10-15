@@ -2,10 +2,16 @@ import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
+import {
+	isReservedOAuthClientMetadataField,
+	stripReservedOAuthClientMetadataExtensions,
+} from "./client-metadata";
 import type {
 	ClientDiscovery,
 	OAuthClaimExtensionInput,
 	OAuthClientAuthenticationStrategy,
+	OAuthClientMetadataExtensionInput,
+	OAuthClientRegistrationMetadata,
 	OAuthMetadataExtensionInput,
 	OAuthOptions,
 	OAuthProviderExtension,
@@ -129,6 +135,14 @@ function collectExtensionKeys(
 	const clientDiscoveryIds = clientDiscoveries.map((discovery) => discovery.id);
 	for (const clientDiscoveryId of clientDiscoveryIds) {
 		assertNonEmptyExtensionValue("client discovery id", clientDiscoveryId);
+	}
+	for (const field of extension.clientMetadata?.fields ?? []) {
+		assertNonEmptyExtensionValue("client metadata field", field);
+		if (isReservedOAuthClientMetadataField(field)) {
+			throw new BetterAuthError(
+				`OAuth Provider extension client metadata field is reserved: ${field}`,
+			);
+		}
 	}
 	return {
 		grantTypes,
@@ -439,6 +453,52 @@ export function collectExtensionUserInfoClaims(
 	return collectClaims(opts, (extension) =>
 		extension.claims?.userInfo?.(input),
 	);
+}
+
+/** Whether any extension declares client metadata fields or a validator. */
+export function hasExtensionClientMetadata(
+	opts: OAuthOptions<Scope[]>,
+): boolean {
+	return getOAuthProviderExtensions(opts).some(
+		(extension) => extension.clientMetadata,
+	);
+}
+
+/** Registration fields that extensions define, stored in the client's `metadata`. */
+export function getExtensionClientMetadataFields(
+	opts: OAuthOptions<Scope[]>,
+): Set<string> {
+	return new Set(
+		getOAuthProviderExtensions(opts).flatMap(
+			(extension) => extension.clientMetadata?.fields ?? [],
+		),
+	);
+}
+
+/**
+ * Runs every extension's client metadata validator, in registration order.
+ * Extensions read their fields from `metadata` only, so `metadata` and
+ * declared fields are removed from the client they receive; a metadata
+ * document carries declared fields at its top level.
+ */
+export async function validateExtensionClientMetadata(
+	opts: OAuthOptions<Scope[]>,
+	client: OAuthClientRegistrationMetadata,
+	metadata: Record<string, unknown> | undefined,
+): Promise<void> {
+	const { metadata: _metadata, ...coreClient } = client;
+	const extensionFields = getExtensionClientMetadataFields(opts);
+	const input: OAuthClientMetadataExtensionInput = {
+		client: Object.fromEntries(
+			Object.entries(coreClient).filter(
+				([field]) => !extensionFields.has(field),
+			),
+		) as Omit<OAuthClientRegistrationMetadata, "metadata">,
+		metadata: stripReservedOAuthClientMetadataExtensions(metadata) ?? {},
+	};
+	for (const extension of getOAuthProviderExtensions(opts)) {
+		await extension.clientMetadata?.validate?.(input);
+	}
 }
 
 /**

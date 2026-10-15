@@ -2,6 +2,7 @@ import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
+import type { OAuthClientRegistrationMetadata } from "../register";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
 import type {
@@ -28,6 +29,7 @@ export type {
 	TokenType,
 } from "./oauth";
 export type { ClientRegistrationRequest } from "./zod";
+export type { OAuthClientRegistrationMetadata };
 
 export type StoreTokenType =
 	| "access_token"
@@ -413,7 +415,7 @@ export interface OAuthUserInfoExtensionInput {
  * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
  * option).
  *
- * All six kinds live on one object so a single protocol plugin (for example
+ * All seven kinds live on one object so a single protocol plugin (for example
  * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
  * claims) registers atomically and the host validates the combined surface in
  * one place. Every field is independently optional, so a single-concern plugin
@@ -481,6 +483,28 @@ export interface OAuthProviderExtension {
 	 * registry, an attestation header) contributes it here.
 	 */
 	clientDiscovery?: ClientDiscovery | ClientDiscovery[];
+	/**
+	 * Client registration metadata the extension defines, such as CIBA's
+	 * `backchannel_token_delivery_mode`. Extension fields live in the client's
+	 * `metadata`.
+	 */
+	clientMetadata?: {
+		/**
+		 * Top-level registration fields the extension defines. Dynamic client
+		 * registration (RFC 7591 §2) and client metadata documents (CIMD) both
+		 * ignore unrecognized fields; they keep these and store them in the
+		 * client's `metadata`, where admin-created clients put them too. Core
+		 * and server-owned client fields cannot be claimed.
+		 */
+		fields?: string[];
+		/**
+		 * Validates the extension's fields when a client is registered through
+		 * dynamic registration or a client metadata document, or created or
+		 * updated by an admin. Throw an `APIError` with `invalid_client_metadata`
+		 * to reject the client.
+		 */
+		validate?: (input: OAuthClientMetadataExtensionInput) => Awaitable<void>;
+	};
 	/**
 	 * Requests other than an authorization request that users approve through
 	 * the `/oauth2/authorize` sign-in, account selection, post-login, and
@@ -558,6 +582,19 @@ export interface OAuthInteractionRequestHandler {
 	 * `error` and `error_description`. Defaults to the provider error page.
 	 */
 	errorPage?: (input: { ctx: GenericEndpointContext; value: string }) => string;
+}
+
+export interface OAuthClientMetadataExtensionInput {
+	/**
+	 * The client's core registration metadata after provider defaults. Read
+	 * extension fields from `metadata`, not from here.
+	 */
+	client: Omit<OAuthClientRegistrationMetadata, "metadata">;
+	/**
+	 * The client's `metadata` as it will be stored, with reserved client field
+	 * names removed. Extension fields are read from here.
+	 */
+	metadata: Record<string, unknown>;
 }
 
 /**
