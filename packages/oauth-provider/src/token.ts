@@ -207,6 +207,20 @@ export function getOAuthProviderApi(
 			}
 			return createUserTokens(ctx, opts, { ...params, grantType });
 		},
+		resolveConfirmation: async (params) => {
+			if (params.confirmation) return params.confirmation;
+			const policy = await resolveResourcePolicy(ctx, opts, {
+				resource: params.resources,
+				clientId: params.client.clientId,
+				requestedScopes: params.scopes,
+			});
+			return resolveDpopTokenBinding(ctx, opts, {
+				client: params.client,
+				grantIssuance: {
+					dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
+				},
+			});
+		},
 		hashToken: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {
@@ -775,7 +789,7 @@ async function resolveDpopTokenBinding(
 	opts: OAuthOptions<Scope[]>,
 	params: {
 		client: SchemaClient<Scope[]>;
-		grantIssuance: ResourceGrantIssuance;
+		grantIssuance: Pick<ResourceGrantIssuance, "dpopBoundAccessTokensRequired">;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},

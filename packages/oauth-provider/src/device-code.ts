@@ -25,6 +25,7 @@ import type {
 	OAuthProviderExtension,
 	OAuthTokenResponse,
 } from "./types";
+import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
 	getClient,
@@ -132,14 +133,14 @@ async function exchangeOAuthDeviceCode(
 		requireCredentials: false,
 	});
 	const {
-		authorizationContext: { client, confirmation, scopes },
+		authorizationContext: { client, scopes },
 		claimedDeviceCode,
-		redemptionContext: resources,
+		redemptionContext: { resources, confirmation },
 		user,
 	} = await redeemDeviceCode<
 		OAuthDeviceCodeFields,
 		ClientAuthorization,
-		string[] | undefined
+		{ resources?: string[]; confirmation?: Confirmation }
 	>({
 		ctx,
 		deviceCode,
@@ -190,7 +191,14 @@ async function exchangeOAuthDeviceCode(
 				clientId: authorization.client.clientId,
 				requestedScopes: authorization.scopes,
 			});
-			return resources;
+			// Same for a rejected DPoP proof: the client can retry with a valid one.
+			const confirmation = await provider.resolveConfirmation({
+				client: authorization.client,
+				scopes: authorization.scopes,
+				resources,
+				confirmation: authorization.confirmation,
+			});
+			return { resources, confirmation };
 		},
 	});
 
@@ -205,7 +213,7 @@ async function exchangeOAuthDeviceCode(
 		amr: claimedDeviceCode.amr ?? undefined,
 		// Seed refresh tokens with every approved resource, not the narrowed poll.
 		originalResources: claimedDeviceCode.resources ?? undefined,
-		// Forward a sender-constraint a confidential client-auth strategy proved.
+		// Resolved before the claim: client-auth proof or the poll's DPoP proof.
 		confirmation,
 	});
 }

@@ -485,6 +485,35 @@ describe("ciba poll mode", () => {
 		expect(introspection.cnf).toEqual({ jkt: await deriveDpopJkt(publicJwk) });
 	});
 
+	it("keeps an approved request when the poll's DPoP proof is rejected", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk: JWK = await exportJWK(publicKey);
+		const proofFor = (htu: string) =>
+			new SignJWT({
+				jti: crypto.randomUUID(),
+				htm: "POST",
+				htu,
+				iat: Math.floor(Date.now() / 1000),
+			})
+				.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
+				.sign(privateKey);
+		const { authReqId, url } = await start();
+		await approve(url);
+
+		const rejected = await poll(authReqId, pollClient, {
+			dpop: await proofFor(`${baseURL}/api/auth/oauth2/introspect`),
+		});
+		expect(rejected.body.error).toBe("invalid_dpop_proof");
+
+		const issued = await poll(authReqId, pollClient, {
+			dpop: await proofFor(`${baseURL}/api/auth/oauth2/token`),
+		});
+		expect(issued.status).toBe(200);
+		expect(issued.body.token_type).toBe("DPoP");
+	});
+
 	it("binds the token to every repeated resource (RFC 8707)", async () => {
 		const res = await bcAuthorize({
 			scope: "openid",
