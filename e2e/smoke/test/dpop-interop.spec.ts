@@ -53,11 +53,12 @@ const setups: ServerSetup[] = [
 const redirectUri = "https://client.example.test/callback";
 
 async function startAuthServer(setup: ServerSetup) {
-	const placeholder = createServer();
-	placeholder.listen(0);
-	await once(placeholder, "listening");
-	const port = (placeholder.address() as AddressInfo).port;
-	placeholder.close();
+	// Listen before building auth, which needs the port for `baseURL`.
+	let handler: ReturnType<typeof toNodeHandler> | undefined;
+	const server = createServer((req, res) => handler!(req, res));
+	server.listen(0);
+	await once(server, "listening");
+	const port = (server.address() as AddressInfo).port;
 
 	const serverOrigin = `http://localhost:${port}`;
 	const publicOrigin = setup.publicOrigin ?? serverOrigin;
@@ -79,9 +80,7 @@ async function startAuthServer(setup: ServerSetup) {
 	const { runMigrations } = await getMigrations(auth.options);
 	await runMigrations();
 
-	const server = createServer(toNodeHandler(auth.handler));
-	server.listen(port);
-	await once(server, "listening");
+	handler = toNodeHandler(auth.handler);
 
 	// The proxy: requests leave for the public URL and reach the local server.
 	const toServerUrl = (url: string) =>
@@ -96,7 +95,7 @@ async function startAuthServer(setup: ServerSetup) {
 
 describe("DPoP interop with an independent OAuth client", () => {
 	for (const setup of setups) {
-		it(`binds tokens and UserInfo to the proof key: ${setup.name}`, {
+		it(`accepts the client's DPoP proofs at the token and UserInfo endpoints: ${setup.name}`, {
 			todo: setup.todo,
 		}, async (t) => {
 			const { auth, server, publicOrigin, toServerUrl, proxyFetch } =
