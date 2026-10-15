@@ -1499,39 +1499,42 @@ describe("expo session cache hydration", async () => {
 		["expired", new Date(Date.now() - 60_000).toISOString()],
 		["missing", undefined],
 		["invalid", "not-a-date"],
-	])("does not hydrate when session.expiresAt is %s", async (_label, expiresAt) => {
-		const storage = new Map<string, string>();
-		storage.set(
-			"better-auth_session_data",
-			JSON.stringify({
-				user: { id: "u1" },
-				session: { id: "s1", expiresAt },
-			}),
-		);
+	])(
+		"does not hydrate when session.expiresAt is %s",
+		async (_label, expiresAt) => {
+			const storage = new Map<string, string>();
+			storage.set(
+				"better-auth_session_data",
+				JSON.stringify({
+					user: { id: "u1" },
+					session: { id: "s1", expiresAt },
+				}),
+			);
 
-		const { client } = await getTestInstance(
-			{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
-			{
-				clientOptions: {
-					plugins: [
-						expoClient({
-							storage: {
-								getItem: (k) => storage.get(k) || null,
-								setItem: (k, v) => storage.set(k, v),
-								getItemAsync: async (k) => storage.get(k) || null,
-								setItemAsync: async (k, v) => {
-									storage.set(k, v);
+			const { client } = await getTestInstance(
+				{ plugins: [expo()], trustedOrigins: ["better-auth://"] },
+				{
+					clientOptions: {
+						plugins: [
+							expoClient({
+								storage: {
+									getItem: (k) => storage.get(k) || null,
+									setItem: (k, v) => storage.set(k, v),
+									getItemAsync: async (k) => storage.get(k) || null,
+									setItemAsync: async (k, v) => {
+										storage.set(k, v);
+									},
 								},
-							},
-						}),
-					],
+							}),
+						],
+					},
 				},
-			},
-		);
+			);
 
-		await client.getSession();
-		expect(client.$store.atoms.session!.get().data).toBeNull();
-	});
+			await client.getSession();
+			expect(client.$store.atoms.session!.get().data).toBeNull();
+		},
+	);
 
 	it("does not hydrate when disableCache is set", async () => {
 		const storage = new Map<string, string>();

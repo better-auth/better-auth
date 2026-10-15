@@ -164,19 +164,26 @@ describe("CIMD metadata fetch governor", () => {
 		["no-store", "no-store"],
 		["no-cache", "no-cache"],
 		["immediately stale", "max-age=0, must-revalidate"],
-	])("does not pace successful %s metadata fetches", async (_, cacheControl) => {
-		const harness = await createGovernorHarness();
-		const clientId = "https://connect.example/client.json";
-		harness.responders.set(clientId, () =>
-			Response.json(metadata(clientId), {
-				headers: { "cache-control": cacheControl },
-			}),
-		);
+	])(
+		"does not pace successful %s metadata fetches",
+		async (_, cacheControl) => {
+			const harness = await createGovernorHarness();
+			const clientId = "https://connect.example/client.json";
+			harness.responders.set(clientId, () =>
+				Response.json(metadata(clientId), {
+					headers: { "cache-control": cacheControl },
+				}),
+			);
 
-		expect((await harness.authorize(clientId)).location).toContain("/consent");
-		expect((await harness.authorize(clientId)).location).toContain("/consent");
-		expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
-	});
+			expect((await harness.authorize(clientId)).location).toContain(
+				"/consent",
+			);
+			expect((await harness.authorize(clientId)).location).toContain(
+				"/consent",
+			);
+			expect(harness.fetchClientMetadataResource).toHaveBeenCalledTimes(2);
+		},
+	);
 
 	it("paces repeated failed metadata fetches", async () => {
 		let now = 1_800_000_000_000;

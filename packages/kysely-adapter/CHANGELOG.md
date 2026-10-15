@@ -1,5 +1,13 @@
 # @better-auth/kysely-adapter
 
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11490](https://github.com/better-auth/better-auth/pull/11490) [`9904b29`](https://github.com/better-auth/better-auth/commit/9904b29ece82ecf10f0bf5aa4b194d77aea2e898) Thanks [@aryan1306](https://github.com/aryan1306)! - Allow concurrent D1 queries on a shared auth instance with Kysely 0.29, avoiding cross-request I/O errors.
+
 ## 1.7.7
 
 ### Patch Changes

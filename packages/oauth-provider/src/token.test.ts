@@ -1,4 +1,5 @@
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
@@ -11,6 +12,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { BetterAuthPlugin } from "better-auth/types";
 import type { JWK } from "jose";
 import {
 	base64url,
@@ -24,7 +26,7 @@ import {
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import { confirmationTokenType } from "./token";
+import { confirmationTokenType, getOAuthProviderApi } from "./token";
 import type {
 	Confirmation,
 	OAuthOptions,
@@ -2800,40 +2802,40 @@ describe("oauth token - config", async () => {
 			testScopes: ["read:profile"],
 			result: 7200, // m2m expiresIn 2hr
 		},
-	])("scopeExpirations - access token expiration $testScopes", async ({
-		testScopes,
-		result,
-	}) => {
-		const { client, oauthClient } = await createTestInstance({
-			oauthProviderConfig: {
-				m2mAccessTokenExpiresIn: 7200,
-				scopeExpirations: {
-					"read:payments": "30m",
-					"write:payments": "5m",
+	])(
+		"scopeExpirations - access token expiration $testScopes",
+		async ({ testScopes, result }) => {
+			const { client, oauthClient } = await createTestInstance({
+				oauthProviderConfig: {
+					m2mAccessTokenExpiresIn: 7200,
+					scopeExpirations: {
+						"read:payments": "30m",
+						"write:payments": "5m",
+					},
 				},
-			},
-		});
-		// Client credentials
-		const tokens = await client.oauth2.token(
-			{
-				resource: validResource,
-				grant_type: "client_credentials",
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				scope: testScopes.join(" "),
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
+			});
+			// Client credentials
+			const tokens = await client.oauth2.token(
+				{
+					resource: validResource,
+					grant_type: "client_credentials",
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					scope: testScopes.join(" "),
 				},
-			},
-		);
-		expect(tokens.data?.expires_in).toBe(result); // 5m lowest
-		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
-		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
-	});
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
+		},
+	);
 
 	// Authorization Code and Refresh Token grants
 	it.for([
@@ -2849,87 +2851,87 @@ describe("oauth token - config", async () => {
 			testScopes: ["profile", "offline_access"],
 			result: 7200, // accessTokenExpiresIn 2hr
 		},
-	])("scopeExpirations - access token expiration $testScopes", async ({
-		testScopes,
-		result,
-	}) => {
-		const { client, oauthClient } = await createTestInstance({
-			oauthProviderConfig: {
-				accessTokenExpiresIn: 7200,
-				scopeExpirations: {
-					"read:payments": "30m",
-					"write:payments": "5m",
+	])(
+		"scopeExpirations - access token expiration $testScopes",
+		async ({ testScopes, result }) => {
+			const { client, oauthClient } = await createTestInstance({
+				oauthProviderConfig: {
+					accessTokenExpiresIn: 7200,
+					scopeExpirations: {
+						"read:payments": "30m",
+						"write:payments": "5m",
+					},
 				},
-			},
-		});
-		const { url: authUrl, codeVerifier } = await createAuthUrl(
-			{
-				clientId: oauthClient?.client_id!,
-				clientSecret: oauthClient?.client_secret,
-			},
-			{
-				scopes: testScopes,
-			},
-		);
-		let callbackRedirectUrl = "";
-		await client.$fetch(authUrl.toString(), {
-			onError(context) {
-				callbackRedirectUrl = context.response.headers.get("Location") || "";
-			},
-		});
-		expect(callbackRedirectUrl).toContain(redirectUri);
-		expect(callbackRedirectUrl).toContain(`code=`);
-		expect(callbackRedirectUrl).toContain(`state=123`);
-		const url = new URL(callbackRedirectUrl);
+			});
+			const { url: authUrl, codeVerifier } = await createAuthUrl(
+				{
+					clientId: oauthClient?.client_id!,
+					clientSecret: oauthClient?.client_secret,
+				},
+				{
+					scopes: testScopes,
+				},
+			);
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			expect(callbackRedirectUrl).toContain(redirectUri);
+			expect(callbackRedirectUrl).toContain(`code=`);
+			expect(callbackRedirectUrl).toContain(`state=123`);
+			const url = new URL(callbackRedirectUrl);
 
-		// Authorization code
-		const tokens = await client.oauth2.token(
-			{
-				code: url.searchParams.get("code")!,
-				code_verifier: codeVerifier,
-				grant_type: "authorization_code",
-				resource: validResource,
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-				redirect_uri: redirectUri,
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
+			// Authorization code
+			const tokens = await client.oauth2.token(
+				{
+					code: url.searchParams.get("code")!,
+					code_verifier: codeVerifier,
+					grant_type: "authorization_code",
+					resource: validResource,
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					redirect_uri: redirectUri,
 				},
-			},
-		);
-		expect(tokens.data?.expires_in).toBe(result); // 5m lowest
-		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-		const accessToken = decodeJwt(tokens.data?.access_token ?? "");
-		expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(tokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const accessToken = decodeJwt(tokens.data?.access_token ?? "");
+			expect((accessToken.exp ?? 0) - (accessToken.iat ?? 0)).toBe(result); // 5m lowest
 
-		// Refresh token
-		const refreshedTokens = await client.oauth2.token(
-			{
-				resource: validResource,
-				refresh_token: tokens.data?.refresh_token,
-				grant_type: "refresh_token",
-				client_id: oauthClient?.client_id,
-				client_secret: oauthClient?.client_secret,
-			},
-			{
-				headers: {
-					accept: "application/json",
-					"content-type": "application/x-www-form-urlencoded",
+			// Refresh token
+			const refreshedTokens = await client.oauth2.token(
+				{
+					resource: validResource,
+					refresh_token: tokens.data?.refresh_token,
+					grant_type: "refresh_token",
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
 				},
-			},
-		);
-		expect(refreshedTokens.data?.expires_in).toBe(result); // 5m lowest
-		// NOTE: verification is done in other tests (we only care about the exp fields in this test)
-		const refreshedAccessToken = decodeJwt(
-			refreshedTokens.data?.access_token ?? "",
-		);
-		expect(
-			(refreshedAccessToken.exp ?? 0) - (refreshedAccessToken.iat ?? 0),
-		).toBe(result); // 5m lowest
-	});
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(refreshedTokens.data?.expires_in).toBe(result); // 5m lowest
+			// NOTE: verification is done in other tests (we only care about the exp fields in this test)
+			const refreshedAccessToken = decodeJwt(
+				refreshedTokens.data?.access_token ?? "",
+			);
+			expect(
+				(refreshedAccessToken.exp ?? 0) - (refreshedAccessToken.iat ?? 0),
+			).toBe(result); // 5m lowest
+		},
+	);
 
 	it("opaqueAccessTokenPrefix - client_credentials", async () => {
 		const prefix = "hello_";
@@ -4644,10 +4646,33 @@ describe("oauth token - DPoP", async () => {
 	const jwtResource = "https://dpop-api.example.com";
 	const dpopRequiredResource = "https://dpop-required.example.com";
 	const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+	const internalTokenEndpoint =
+		"http://auth-service:3000/api/auth/oauth2/token";
+	const pluginIssueEndpoint = `${authServerBaseUrl}/api/auth/test/dpop-issue`;
+	// A plugin endpoint that issues tokens itself through the public provider API.
+	const pluginIssuer = {
+		id: "test-dpop-plugin-issuer",
+		endpoints: {
+			testDpopIssue: createAuthEndpoint(
+				"/test/dpop-issue",
+				{ method: "POST" },
+				async (ctx) => {
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+						"client_credentials",
+					);
+					const { client } = await provider.authenticateClient();
+					return ctx.json(await provider.issueTokens({ client, scopes: [] }));
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
+		baseURL: `${authServerBaseUrl}/api/auth/`,
 		plugins: [
+			pluginIssuer,
 			jwt({ jwt: { issuer: authServerBaseUrl } }),
 			oauthProvider({
 				loginPage: "/login",
@@ -4812,6 +4837,89 @@ describe("oauth token - DPoP", async () => {
 		expect(tokens.data?.token_type).toBe("DPoP");
 		const payload = decodeJwt(tokens.data!.access_token!);
 		expect(payload.cnf).toMatchObject({ jkt: dpopKey.jkt });
+	});
+
+	it("validates DPoP against the plugin endpoint that issues the tokens", async () => {
+		const issuerClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+			},
+		});
+		const dpopKey = await createDpopKey();
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: pluginIssueEndpoint,
+			jti: "plugin-endpoint-proof",
+		});
+		const response = await customFetchImpl(pluginIssueEndpoint, {
+			method: "POST",
+			headers: { "content-type": "application/json", DPoP: proof },
+			body: JSON.stringify({
+				client_id: issuerClient.client_id,
+				client_secret: issuerClient.client_secret,
+			}),
+		});
+		const tokens: OAuthTokenResponse = await response.json();
+
+		expect(tokens).toMatchObject({ token_type: "DPoP" });
+		expect(response.status).toBe(200);
+	});
+
+	it("validates DPoP against the public token endpoint URL", async () => {
+		const dpopKey = await createDpopKey();
+
+		async function requestTokenWithProofUrl(proofUrl: string, jti: string) {
+			const { code, codeVerifier } = await authorizeForCode(
+				dpopKey.jkt,
+				jwtResource,
+			);
+			const proof = await createDpopProof({
+				privateKey: dpopKey.privateKey,
+				publicJwk: dpopKey.publicJwk,
+				method: "POST",
+				url: proofUrl,
+				jti,
+			});
+			const { body, headers: requestHeaders } = await authorizationCodeRequest({
+				code,
+				codeVerifier,
+				redirectURI: redirectUri,
+				resource: jwtResource,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const headers = new Headers(requestHeaders);
+			headers.set("DPoP", proof);
+
+			const response = await customFetchImpl(internalTokenEndpoint, {
+				method: "POST",
+				body,
+				headers,
+			});
+			const tokens: OAuthTokenResponse = await response.json();
+			return { response, tokens };
+		}
+
+		const publicRequest = await requestTokenWithProofUrl(
+			tokenEndpoint,
+			"public-endpoint-proof",
+		);
+		expect(publicRequest.response.status).toBe(200);
+		expect(publicRequest.tokens.token_type).toBe("DPoP");
+
+		const internalRequest = await requestTokenWithProofUrl(
+			internalTokenEndpoint,
+			"internal-endpoint-proof",
+		);
+		expect(internalRequest.response.status).toBe(400);
+		expect(internalRequest.tokens.error).toBe("invalid_dpop_proof");
 	});
 
 	it("rejects a token request without a proof when the resource requires DPoP", async () => {

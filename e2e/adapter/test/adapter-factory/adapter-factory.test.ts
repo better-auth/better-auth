@@ -412,7 +412,7 @@ describe("Create Adapter Helper", async () => {
 							};
 						},
 					});
-					adapter.create({
+					await adapter.create({
 						model: "user",
 						data: { name: "test-name" },
 					});
@@ -438,7 +438,7 @@ describe("Create Adapter Helper", async () => {
 								};
 							},
 						});
-						adapter.create({
+						await adapter.create({
 							model: "user",
 							data: { name: "test-name" },
 						});
@@ -866,7 +866,7 @@ describe("Create Adapter Helper", async () => {
 							};
 						},
 					});
-					adapter.findOne({
+					await adapter.findOne({
 						model: "user",
 						where: [{ field: "id", value: "123" }],
 					});
