@@ -1,13 +1,72 @@
 import { logger } from "@better-auth/core/env";
+import type { Session, User } from "better-auth/types";
+import { APIError } from "better-call";
+import type {
+	OAuthAuthenticationContext,
+	OAuthOptions,
+	SchemaClient,
+	Scope,
+} from "./types";
 
 /**
  * OIDC Core Authentication Context Class Reference for authentication that
  * does not meet ISO/IEC 29115 level 1.
  *
- * Better Auth does not currently evaluate a stronger ACR policy, so discovery
- * and ID tokens must not claim an assurance profile such as InCommon bronze.
+ * Better Auth does not evaluate a stronger ACR policy on its own, so without an
+ * `authenticationContext` resolver, discovery and ID tokens must not claim an
+ * assurance profile such as InCommon bronze.
  */
 export const LEVEL_0_ACR = "0";
+
+/** The ACR values the provider may assert, advertised in discovery. */
+export function getAcrValuesSupported(opts: OAuthOptions<Scope[]>) {
+	return opts.authenticationContext?.acrValuesSupported ?? [LEVEL_0_ACR];
+}
+
+function invalidAuthenticationContext(description: string): never {
+	throw new APIError("INTERNAL_SERVER_ERROR", {
+		error: "server_error",
+		error_description: `authenticationContext.resolve ${description}`,
+	});
+}
+
+/**
+ * Runs the configured `authenticationContext.resolve` and validates its
+ * result. Invalid results throw an `APIError` with `server_error`, which the
+ * authorization endpoint returns to the client as an OAuth error.
+ */
+export async function resolveAuthenticationContext(
+	opts: OAuthOptions<Scope[]>,
+	info: {
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		headers: Headers;
+		requestedAcrValues: string[];
+	},
+): Promise<{ acr: string; amr?: string[] }> {
+	const resolved: OAuthAuthenticationContext | undefined =
+		await opts.authenticationContext?.resolve?.(info);
+	// The resolver is user code; check the runtime shape, not just the types.
+	const acr: unknown = resolved?.acr ?? LEVEL_0_ACR;
+	const amr: unknown = resolved?.amr;
+	if (typeof acr !== "string") {
+		invalidAuthenticationContext("returned a non-string acr");
+	}
+	if (!getAcrValuesSupported(opts).includes(acr)) {
+		invalidAuthenticationContext(
+			`returned acr "${acr}", which is not in acrValuesSupported`,
+		);
+	}
+	if (
+		amr !== undefined &&
+		(!Array.isArray(amr) || !amr.every((value) => typeof value === "string"))
+	) {
+		invalidAuthenticationContext("returned an amr that is not a string array");
+	}
+	return { acr, amr: amr?.length ? amr : undefined };
+}
 
 const RESERVED_ID_TOKEN_CLAIMS = new Set([
 	"iss",
