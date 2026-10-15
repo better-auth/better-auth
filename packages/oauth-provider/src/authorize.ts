@@ -25,7 +25,6 @@ import {
 import { getSupportedClaims } from "./standard-claims";
 import type {
 	OAuthAuthorizationQuery,
-	OAuthConsent,
 	OAuthOptions,
 	Scope,
 	VerificationValue,
@@ -34,7 +33,9 @@ import { authorizationQuerySchema, SafeUrlSchema } from "./types/zod";
 
 import {
 	clientAllowsGrant,
+	findConsent,
 	getClient,
+	getConsentReferenceId,
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
@@ -427,6 +428,7 @@ export function authorizeRedirectOnError(
 export type AuthorizeEndpointSettings = {
 	isAuthorize?: boolean;
 	postLogin?: boolean;
+	isPostLoginContinuation?: boolean;
 };
 
 export async function authorizeEndpoint(
@@ -565,7 +567,7 @@ export async function authorizeEndpoint(
 	if (!client) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(ctx, "invalid_client", "client_id is required"),
+			getErrorURL(ctx, "invalid_client", "client not found"),
 		);
 	}
 	if (client.disabled) {
@@ -883,6 +885,7 @@ export async function authorizeEndpoint(
 			user: session.user,
 			session: session.session,
 			scopes: requestedScopes,
+			isContinuation: settings?.isPostLoginContinuation ?? false,
 		});
 		if (postLoginRedirect) {
 			if (promptNone) {
@@ -905,7 +908,7 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	const referenceId = await opts.postLogin?.consentReferenceId?.({
+	const referenceId = await getConsentReferenceId(opts, {
 		user: session.user,
 		session: session.session,
 		scopes: requestedScopes,
@@ -923,27 +926,12 @@ export async function authorizeEndpoint(
 			resource: requestedResources,
 		});
 	}
-	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
-		model: "oauthConsent",
-		where: [
-			{
-				field: "clientId",
-				value: client.clientId,
-			},
-			{
-				field: "userId",
-				value: session.user.id,
-			},
-			...(referenceId
-				? [
-						{
-							field: "referenceId",
-							value: referenceId,
-						},
-					]
-				: []),
-		],
-	});
+	const consent = await findConsent(
+		ctx,
+		client.clientId,
+		session.user.id,
+		referenceId,
+	);
 
 	if (
 		!consent ||

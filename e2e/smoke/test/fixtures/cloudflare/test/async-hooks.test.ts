@@ -44,63 +44,66 @@ describe("AsyncLocalStorage loading in Workers", () => {
 			compatibilityDate: "2024-09-23",
 			compatibilityFlags: ["nodejs_als"],
 		},
-	])("preserves later request contexts after an early response: $name", async ({
-		conditions,
-		waitUntil,
-		compatibilityDate,
-		compatibilityFlags,
-	}) => {
-		vi.stubEnv("WRANGLER_BUILD_CONDITIONS", conditions);
-		const server = createTestHarness({
-			workers: [
-				{
-					config: {
-						...workerConfig,
-						compatibility_date:
-							compatibilityDate ?? workerConfig.compatibility_date,
-						compatibility_flags:
-							compatibilityFlags ?? workerConfig.compatibility_flags,
+	])(
+		"preserves later request contexts after an early response: $name",
+		async ({
+			conditions,
+			waitUntil,
+			compatibilityDate,
+			compatibilityFlags,
+		}) => {
+			vi.stubEnv("WRANGLER_BUILD_CONDITIONS", conditions);
+			const server = createTestHarness({
+				workers: [
+					{
+						config: {
+							...workerConfig,
+							compatibility_date:
+								compatibilityDate ?? workerConfig.compatibility_date,
+							compatibility_flags:
+								compatibilityFlags ?? workerConfig.compatibility_flags,
+						},
 					},
-				},
-			],
-		});
-		onTestFailed(() => {
-			server.debug();
-		});
-		onTestFinished(async () => {
-			await server.close();
-		});
-		await server.listen();
-		const initial = (await (await server.fetch("/status")).json()) as {
-			instance: string;
-			moduleLoaded: boolean;
-		};
-		expect(initial).toMatchObject({
-			instance: expect.any(String),
-			moduleLoaded: false,
-		});
-		const response = await server.fetch(`/start?waitUntil=${waitUntil}`);
-		expect(response.status).toBe(204);
-
-		await expect
-			.poll(async () => (await server.fetch("/status")).json())
-			.toMatchObject({ moduleLoaded: true });
-
-		const results = await Promise.all(
-			Array.from({ length: 32 }, async (_, id) => {
-				const response = await server.fetch(`/join?id=${id}`);
-				const body: unknown = await response.json();
-				return { status: response.status, body };
-			}),
-		);
-		for (const [id, result] of results.entries()) {
-			expect(result.status).toBe(200);
-			expect(result.body).toEqual({
-				outcome: "completed",
-				instance: initial.instance,
-				id: String(id),
-				store: String(id),
+				],
 			});
-		}
-	});
+			onTestFailed(() => {
+				server.debug();
+			});
+			onTestFinished(async () => {
+				await server.close();
+			});
+			await server.listen();
+			const initial = (await (await server.fetch("/status")).json()) as {
+				instance: string;
+				moduleLoaded: boolean;
+			};
+			expect(initial).toMatchObject({
+				instance: expect.any(String),
+				moduleLoaded: false,
+			});
+			const response = await server.fetch(`/start?waitUntil=${waitUntil}`);
+			expect(response.status).toBe(204);
+
+			await expect
+				.poll(async () => (await server.fetch("/status")).json())
+				.toMatchObject({ moduleLoaded: true });
+
+			const results = await Promise.all(
+				Array.from({ length: 32 }, async (_, id) => {
+					const response = await server.fetch(`/join?id=${id}`);
+					const body: unknown = await response.json();
+					return { status: response.status, body };
+				}),
+			);
+			for (const [id, result] of results.entries()) {
+				expect(result.status).toBe(200);
+				expect(result.body).toEqual({
+					outcome: "completed",
+					instance: initial.instance,
+					id: String(id),
+					store: String(id),
+				});
+			}
+		},
+	);
 });

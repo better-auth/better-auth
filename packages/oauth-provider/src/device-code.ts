@@ -119,6 +119,7 @@ async function exchangeOAuthDeviceCode(
 	> & { scopes: string[] };
 	const {
 		authorizationContext: { client, confirmation, scopes },
+		claimedDeviceCode,
 		redemptionContext: resources,
 		user,
 	} = await redeemDeviceCode<
@@ -187,6 +188,8 @@ async function exchangeOAuthDeviceCode(
 		scopes,
 		user,
 		resources,
+		// Seed refresh tokens with every approved resource, not the narrowed poll.
+		originalResources: claimedDeviceCode.resources ?? undefined,
 		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});
