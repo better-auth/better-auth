@@ -11,8 +11,7 @@ const mockedBetterFetch = vi.mocked(betterFetch);
 const options = { clientId: "polar-client", clientSecret: "polar-secret" };
 
 /**
- * @see https://github.com/polarsource/polar/blob/main/server/polar/oauth2/userinfo.py
- * @see https://github.com/polarsource/polar/blob/main/server/polar/oauth2/schemas.py
+ * @see https://polar.sh/docs/api-reference/oauth2/connect/get-user-info
  */
 describe("Polar userinfo profiles", () => {
 	beforeEach(() => {
