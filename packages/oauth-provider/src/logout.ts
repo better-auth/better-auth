@@ -1,5 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
+import {
+	assertResponseNotRedirect,
+	noFollowRedirect,
+} from "@better-auth/core/oauth2";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
@@ -307,8 +311,9 @@ async function deliverBackchannelLogoutTokens(
 					},
 					body: new URLSearchParams({ logout_token: token }),
 					signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
-					redirect: "error",
+					...noFollowRedirect,
 				});
+				assertResponseNotRedirect(client.backchannelLogoutUri!, response);
 				// Spec §2.8: RP MUST return 200; many frameworks normalize empty 200
 				// bodies to 204, which is commonly accepted.
 				if (response.status !== 200 && response.status !== 204) {
