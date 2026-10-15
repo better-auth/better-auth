@@ -3442,7 +3442,7 @@ describe("oauth - rate limiting", () => {
 
 		const plugin = auth.options.plugins?.find((p) => p.id === "oauth-provider");
 		expect(plugin?.rateLimit).toBeDefined();
-		expect(plugin?.rateLimit?.length).toBe(6);
+		expect(plugin?.rateLimit?.length).toBe(7);
 
 		// Check token endpoint default
 		const tokenRule = plugin?.rateLimit?.find((r) =>
@@ -3450,6 +3450,13 @@ describe("oauth - rate limiting", () => {
 		);
 		expect(tokenRule?.window).toBe(60);
 		expect(tokenRule?.max).toBe(20);
+
+		// Credential-replacing endpoints are limited like registration
+		const rotateKeysRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/client/rotate-keys"),
+		);
+		expect(rotateKeysRule?.window).toBe(60);
+		expect(rotateKeysRule?.max).toBe(5);
 
 		// Check authorize endpoint default
 		const authorizeRule = plugin?.rateLimit?.find((r) =>
@@ -3544,7 +3551,7 @@ describe("oauth - rate limiting", () => {
 		const plugin = auth.options.plugins?.find((p) => p.id === "oauth-provider");
 
 		// Token and introspect should be disabled (not in array)
-		expect(plugin?.rateLimit?.length).toBe(4);
+		expect(plugin?.rateLimit?.length).toBe(5);
 
 		const tokenRule = plugin?.rateLimit?.find((r) =>
 			r.pathMatcher("/oauth2/token"),
