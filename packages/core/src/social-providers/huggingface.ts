@@ -23,7 +23,8 @@ export interface HuggingFaceProfile {
 				name: string;
 				picture: string;
 				preferred_username: string;
-				isEnterprise: boolean | "plus";
+				isEnterprise?: boolean | "plus";
+				plan?: string;
 				canPay?: boolean;
 				roleInOrg?: "admin" | "write" | "contributor" | "read";
 				pendingSSO?: boolean;
