@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -15,6 +15,8 @@ import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { socialProviders } from "./index";
 import { microsoft } from "./microsoft-entra-id";
+import type { NotionProfile } from "./notion";
+import { notion } from "./notion";
 import { roblox } from "./roblox";
 import { slack } from "./slack";
 import { tiktok } from "./tiktok";
@@ -453,5 +455,100 @@ describe("cognito provider", () => {
 		const provider = cognito(cognitoConfig);
 		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
+	});
+});
+
+/**
+ * @see https://github.com/makenotion/notion-sdk-js/blob/v2.2.15/src/api-endpoints.ts
+ * @see https://github.com/makenotion/notion-sdk-js/blob/v2.2.15/src/Client.ts
+ */
+describe("notion owner profiles", () => {
+	it.each([null, "https://example.com/owner.png"])(
+		"normalizes the owner's avatar %s without changing raw claims",
+		async (avatar_url) => {
+			const owner = {
+				object: "user",
+				id: "notion-owner",
+				type: "person",
+				name: null,
+				avatar_url,
+				person: { email: "owner@example.com" },
+			} satisfies NotionProfile;
+			mockedBetterFetch.mockResolvedValueOnce({
+				data: {
+					object: "user",
+					id: "notion-bot",
+					name: "Integration Bot",
+					avatar_url: "https://example.com/bot.png",
+					bot: { owner: { type: "user", user: owner } },
+				},
+				error: null,
+			});
+			const mapProfileToUser = vi.fn((profile: NotionProfile) => {
+				expectTypeOf(profile.name).toEqualTypeOf<string | null | undefined>();
+				expectTypeOf(profile.avatar_url).toEqualTypeOf<
+					string | null | undefined
+				>();
+				return {};
+			});
+			const provider = notion({ ...credentials, mapProfileToUser });
+			const tokens = { accessToken: "notion-token" };
+			const result = await provider.getUserInfo(tokens);
+
+			expect(result?.user).toMatchObject({
+				name: "",
+				email: "owner@example.com",
+				image: avatar_url ?? undefined,
+				emailVerified: false,
+			});
+			expect(result?.data).toEqual(owner);
+			expect(mapProfileToUser).toHaveBeenCalledWith(owner);
+			expect(provider.accountSubject({ tokens, profile: owner })).toBe(
+				"notion-owner",
+			);
+			expect(mockedBetterFetch).toHaveBeenCalledWith(
+				"https://api.notion.com/v1/users/me",
+				expect.objectContaining({
+					headers: expect.objectContaining({ "Notion-Version": "2022-06-28" }),
+				}),
+			);
+		},
+	);
+
+	it("lets profile mapping supply missing fields for a partial owner", async () => {
+		const owner = {
+			object: "user",
+			id: "notion-owner",
+		} satisfies NotionProfile;
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { bot: { owner: { type: "user", user: owner } } },
+			error: null,
+		});
+		const provider = notion({
+			...credentials,
+			mapProfileToUser(profile) {
+				expectTypeOf(profile.type).toEqualTypeOf<
+					"person" | "bot" | undefined
+				>();
+				return {
+					name: profile.name ?? "Mapped Owner",
+					email: profile.person?.email ?? `${profile.id}@example.com`,
+					image: "https://example.com/mapped.png",
+				};
+			},
+		});
+		const tokens = { accessToken: "notion-token" };
+		const result = await provider.getUserInfo(tokens);
+
+		expect(result?.user).toMatchObject({
+			name: "Mapped Owner",
+			email: "notion-owner@example.com",
+			image: "https://example.com/mapped.png",
+			emailVerified: false,
+		});
+		expect(result?.data).toEqual(owner);
+		expect(provider.accountSubject({ tokens, profile: owner })).toBe(
+			"notion-owner",
+		);
 	});
 });
