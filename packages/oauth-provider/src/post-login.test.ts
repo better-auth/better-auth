@@ -262,10 +262,12 @@ describe.each([
 
 	it("finds consent without a reference past the first page of consents", async () => {
 		const { authorize, storeConsent } = await createNoReferenceTestInstance();
-		for (let i = 0; i < 100; i++) {
-			const index = String(i).padStart(3, "0");
-			await storeConsent(`org_${index}`, ["read"], `consent-${index}`);
-		}
+		await Promise.all(
+			Array.from({ length: 100 }, (_, i) => {
+				const index = String(i).padStart(3, "0");
+				return storeConsent(`org_${index}`, ["read"], `consent-${index}`);
+			}),
+		);
 		await storeConsent("", ["read"], "consent-zzz");
 		const redirect = await authorize("read");
 

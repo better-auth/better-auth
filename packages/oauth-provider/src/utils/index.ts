@@ -1057,6 +1057,20 @@ export async function resolveSubjectIdentifier(
 }
 
 /**
+ * Resolves `postLogin.consentReferenceId`, treating an empty value as no reference.
+ *
+ * @internal
+ */
+export async function getConsentReferenceId(
+	opts: OAuthOptions<Scope[]>,
+	context: Parameters<
+		NonNullable<OAuthOptions<Scope[]>["postLogin"]>["consentReferenceId"]
+	>[0],
+): Promise<string | undefined> {
+	return (await opts.postLogin?.consentReferenceId?.(context)) || undefined;
+}
+
+/**
  * Finds the consent stored for exactly this reference. Without a reference,
  * only consent stored without one (missing, null, or empty) matches.
  *

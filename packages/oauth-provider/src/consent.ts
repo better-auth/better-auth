@@ -11,6 +11,7 @@ import { getSupportedClaims } from "./standard-claims";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import {
 	findConsent,
+	getConsentReferenceId,
 	isSessionFreshForSignedQuery,
 	parsePrompt,
 	removeMaxAgeFromQuery,
@@ -105,12 +106,11 @@ export async function consentEndpoint<Result>(
 		return await authorize(ctx);
 	}
 
-	const referenceId =
-		(await opts.postLogin?.consentReferenceId?.({
-			user: session?.user!,
-			session: session?.session!,
-			scopes: requestedScopes ?? originalRequestedScopes,
-		})) || undefined;
+	const referenceId = await getConsentReferenceId(opts, {
+		user: session?.user!,
+		session: session?.session!,
+		scopes: requestedScopes ?? originalRequestedScopes,
+	});
 	const foundConsent = await findConsent(
 		ctx,
 		clientId,

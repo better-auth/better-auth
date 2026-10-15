@@ -35,6 +35,7 @@ import {
 	clientAllowsGrant,
 	findConsent,
 	getClient,
+	getConsentReferenceId,
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
@@ -907,12 +908,11 @@ export async function authorizeEndpoint(
 		});
 	}
 
-	const referenceId =
-		(await opts.postLogin?.consentReferenceId?.({
-			user: session.user,
-			session: session.session,
-			scopes: requestedScopes,
-		})) || undefined;
+	const referenceId = await getConsentReferenceId(opts, {
+		user: session.user,
+		session: session.session,
+		scopes: requestedScopes,
+	});
 
 	// Can skip consent (unless forced by prompt above)
 	if (client.skipConsent) {
