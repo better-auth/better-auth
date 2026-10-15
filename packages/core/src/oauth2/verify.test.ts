@@ -792,8 +792,10 @@ describe("verifyBearerToken", () => {
 				).resolves.toMatchObject({ sub: "user-123" });
 				return {
 					verify,
-					publish: (jwk: JWK) => {
-						keys = [...keys, jwk];
+					// The source replaces its key; a set with two RS256 keys has no
+					// single match for a token without kid.
+					rotate: (jwk: JWK) => {
+						keys = [jwk];
 					},
 					fetches: () => fetches,
 				};
@@ -825,7 +827,7 @@ describe("verifyBearerToken", () => {
 				).rejects.toThrow();
 
 				const rotated = await createTestJWKS();
-				source.publish(rotated.publicJWK);
+				source.rotate(rotated.publicJWK);
 				const token = await createSignedToken(rotated.privateKey, rotated.kid);
 				await expect(source.verify(token)).rejects.toMatchObject({
 					code: "ERR_JWKS_NO_MATCHING_KEY",
@@ -841,13 +843,36 @@ describe("verifyBearerToken", () => {
 			it("should share one refetch across concurrent tokens signed with a newly published key", async () => {
 				const source = await setUpSource();
 				const rotated = await createTestJWKS();
-				source.publish(rotated.publicJWK);
+				source.rotate(rotated.publicJWK);
 				const token = await createSignedToken(rotated.privateKey, rotated.kid);
 
 				await Promise.all(
 					Array.from({ length: 5 }, () => source.verify(token)),
 				);
 
+				expect(source.fetches()).toBe(2);
+			});
+
+			it("should retry a token without kid against a set another request refetched meanwhile", async () => {
+				const source = await setUpSource();
+				const rotated = await createTestJWKS();
+				source.rotate(rotated.publicJWK);
+				const tokenWithoutKid = await createSignedToken(
+					rotated.privateKey,
+					undefined,
+				);
+				const tokenWithKid = await createSignedToken(
+					rotated.privateKey,
+					rotated.kid,
+				);
+
+				// The first verification reads the cached set before the second
+				// refetches it, then fails against that older set.
+				const withoutKid = source.verify(tokenWithoutKid);
+				await expect(source.verify(tokenWithKid)).resolves.toMatchObject({
+					sub: "user-123",
+				});
+				await expect(withoutKid).resolves.toMatchObject({ sub: "user-123" });
 				expect(source.fetches()).toBe(2);
 			});
 		},
