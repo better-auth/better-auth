@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock(import("@better-fetch/fetch"), () => ({
 	betterFetch: vi.fn(),
@@ -6,6 +6,7 @@ vi.mock(import("@better-fetch/fetch"), () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import type { TwitterProfile } from "./twitter";
 import { twitter } from "./twitter";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -54,4 +55,48 @@ describe("twitter.getUserInfo", () => {
 
 		expect(result?.user.email).toBe("user@example.com");
 	});
+});
+
+/**
+ * @see https://api.x.com/2/openapi.json
+ */
+it.each([
+	{},
+	{ url: {} },
+	{ url: null, description: null },
+	{ url: { urls: null }, description: { hashtags: null } },
+	{
+		url: { urls: [{ start: 0, end: 20, url: "https://example.com" }] },
+		description: {},
+	},
+	{
+		url: {
+			urls: [
+				{
+					start: 0,
+					end: 20,
+					url: "https://example.com",
+					expanded_url: null,
+					display_url: null,
+				},
+			],
+		},
+		description: { hashtags: [{ start: 0, end: 4, tag: "tag" }] },
+	},
+])("accepts partial or null Twitter entities: %j", async (entities) => {
+	const profile = {
+		data: { id: "user", name: "User", username: "user", entities },
+	};
+	assertType<TwitterProfile>(profile);
+	const provider = twitter({
+		clientId: "twitter-app",
+		getUserInfo: async () => ({
+			user: { name: profile.data.name, emailVerified: false },
+			data: profile,
+		}),
+	});
+
+	const result = await provider.getUserInfo({ accessToken: "access-token" });
+
+	expect(result?.data.data.entities).toEqual(entities);
 });
