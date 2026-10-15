@@ -1,9 +1,16 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { isPublicRoutableHost } from "@better-auth/core/utils/host";
-import type { OAuthOptions, Scope } from "@better-auth/oauth-provider";
+import type {
+	OAuthClientMetadataExtensionInput,
+	OAuthOptions,
+	Scope,
+} from "@better-auth/oauth-provider";
 import { getOAuthProviderApi } from "@better-auth/oauth-provider";
-import { parseClientMetadata } from "@better-auth/oauth-provider/internal";
+import {
+	assertPublicRoutableHttpsUri,
+	parseClientMetadata,
+} from "@better-auth/oauth-provider/internal";
 import { BetterAuthError } from "better-auth";
+import { APIError } from "better-auth/api";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { CIBA_GRANT_TYPE } from "./constants";
 import type { CibaDeliveryMode, CibaRequest } from "./types";
@@ -91,8 +98,8 @@ export function getCibaClientMetadata(client: {
 	notificationEndpoint: string | undefined;
 } {
 	const metadata = parseClientMetadata(client.metadata ?? undefined);
-	const deliveryMode = metadata?.backchannel_token_delivery_mode;
-	const endpoint = metadata?.backchannel_client_notification_endpoint;
+	const deliveryMode = metadata?.[DELIVERY_MODE_FIELD];
+	const endpoint = metadata?.[NOTIFICATION_ENDPOINT_FIELD];
 	return {
 		deliveryMode: typeof deliveryMode === "string" ? deliveryMode : undefined,
 		notificationEndpoint:
@@ -103,19 +110,49 @@ export function getCibaClientMetadata(client: {
 }
 
 function isSafeNotificationEndpoint(endpoint: string): boolean {
-	let url: URL;
 	try {
-		url = new URL(endpoint);
+		assertPublicRoutableHttpsUri(NOTIFICATION_ENDPOINT_FIELD, endpoint);
+		return true;
 	} catch {
 		return false;
 	}
-	return (
-		url.protocol === "https:" &&
-		!endpoint.includes("#") &&
-		!url.username &&
-		!url.password &&
-		isPublicRoutableHost(url.hostname)
-	);
+}
+
+/** CIBA §4 registration metadata, stored in the client's `metadata`. */
+export const DELIVERY_MODE_FIELD = "backchannel_token_delivery_mode";
+export const NOTIFICATION_ENDPOINT_FIELD =
+	"backchannel_client_notification_endpoint";
+
+/**
+ * Validates a CIBA client's registration metadata (CIBA §4) when it registers
+ * or an admin changes it: a supported delivery mode, and for ping an endpoint
+ * the server may POST to.
+ */
+export function validateCibaClientMetadata(
+	input: OAuthClientMetadataExtensionInput,
+	supported: CibaDeliveryMode[],
+): void {
+	if (!input.client.grant_types?.includes(CIBA_GRANT_TYPE)) return;
+	const reject = (description: string): never => {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: description,
+		});
+	};
+	const mode = input.metadata[DELIVERY_MODE_FIELD];
+	if (typeof mode !== "string" || !isSupportedDeliveryMode(mode, supported)) {
+		reject(`${DELIVERY_MODE_FIELD} must be one of: ${supported.join(", ")}`);
+	}
+	if (mode === "ping") {
+		const endpoint = input.metadata[NOTIFICATION_ENDPOINT_FIELD];
+		if (typeof endpoint !== "string") {
+			reject(`${NOTIFICATION_ENDPOINT_FIELD} is required for ping delivery`);
+		}
+		assertPublicRoutableHttpsUri(
+			NOTIFICATION_ENDPOINT_FIELD,
+			endpoint as string,
+		);
+	}
 }
 
 export function isSupportedDeliveryMode(

@@ -27,6 +27,8 @@ const { auth, signInWithTestUser, customFetchImpl, testUser } =
 			jwt({ jwt: { issuer: baseURL } }),
 			oauthProvider({
 				loginPage: "/login",
+				allowDynamicClientRegistration: true,
+				allowUnauthenticatedClientRegistration: true,
 				consentPage: "/consent",
 				// A resource makes the access token a JWT, which carries per-issuance claims.
 				resources: [resource],
@@ -256,6 +258,42 @@ describe("ciba extension options", () => {
 		expect(metadata.authorization_details_types_supported).toEqual([
 			"payment_initiation",
 		]);
+	});
+});
+
+describe("ciba dynamic client registration", () => {
+	async function register(body: Record<string, unknown>) {
+		const res = await customFetchImpl(`${baseURL}/api/auth/oauth2/register`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				client_name: "Registered Agent",
+				grant_types: [CIBA_GRANT_TYPE],
+				token_endpoint_auth_method: "client_secret_basic",
+				...body,
+			}),
+		});
+		return { status: res.status, body: await res.json() };
+	}
+
+	it("accepts CIBA registration metadata as top-level fields (CIBA §4)", async () => {
+		const registered = await register({
+			backchannel_token_delivery_mode: "ping",
+			backchannel_client_notification_endpoint: notificationEndpoint,
+		});
+		expect(registered.status).toBe(201);
+		const started = await bcAuthorize(registered.body as OAuthClient, {
+			client_notification_token: "client-token",
+		});
+		expect(started.status).toBe(200);
+	});
+
+	it("rejects an unsupported delivery mode at registration", async () => {
+		const registered = await register({
+			backchannel_token_delivery_mode: "push",
+		});
+		expect(registered.status).toBe(400);
+		expect(registered.body.error).toBe("invalid_client_metadata");
 	});
 });
 

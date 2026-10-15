@@ -115,7 +115,9 @@ metadata: {
 },
 ```
 
-The notification endpoint must be an absolute `https` URL on a publicly routable host, with no credentials or fragment. Requests from a client whose endpoint does not meet these rules are rejected.
+The notification endpoint must be an absolute `https` URL on a publicly routable host, with no credentials or fragment.
+
+These fields are checked whenever a CIBA client is registered or an admin changes it: a missing or unsupported delivery mode, or a ping client without a valid endpoint, is rejected with `invalid_client_metadata`. With [dynamic client registration](./oauth-provider), a client sends them as top-level registration fields, as CIBA §4 defines, and they are stored in its `metadata`.
 
 ## The client (agent) side
 
@@ -367,4 +369,3 @@ Fields declared in `schema.cibaRequest.additionalFields` are added to this model
 * Push delivery, `user_code`, and signed authentication requests are not supported.
 * `acr_values` are stored and passed to your hooks, but ID tokens report `acr: "0"` and no `amr`, because the OAuth provider does not yet record the authentication context it achieved.
 * `authorization_details` cannot be changed after the request; the approver approves or denies them as requested.
-* Client registration metadata is read from the client's `metadata` and checked when the client starts a request, not when it registers.

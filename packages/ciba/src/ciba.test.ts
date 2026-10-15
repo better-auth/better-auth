@@ -415,13 +415,10 @@ describe("ciba backchannel request validation", () => {
 	it.each([
 		["no delivery mode", undefined],
 		["push delivery", { backchannel_token_delivery_mode: "push" }],
-	])("rejects a client registered with %s", async (_, metadata) => {
-		const client = await createClient(metadata);
-		const res = await bcAuthorize(
-			{ scope: "openid", login_hint: testUser.email },
-			client,
-		);
-		expect(res.body.error).toBe("invalid_request");
+	])("refuses to register a CIBA client with %s", async (_, metadata) => {
+		await expect(createClient(metadata)).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
 	});
 
 	it("caps requested_expiry at the configured lifetime", async () => {
@@ -597,20 +594,13 @@ describe("ciba ping mode", () => {
 		["a non-https endpoint", "http://client.example.com/ciba"],
 		["a private host", "https://127.0.0.1/ciba"],
 		["no endpoint", undefined],
-	])("rejects a ping client registered with %s", async (_, endpoint) => {
-		const client = await createClient({
-			backchannel_token_delivery_mode: "ping",
-			backchannel_client_notification_endpoint: endpoint,
-		});
-		const res = await bcAuthorize(
-			{
-				scope: "openid",
-				login_hint: testUser.email,
-				client_notification_token: "client-token",
-			},
-			client,
-		);
-		expect(res.body.error).toBe("invalid_request");
+	])("refuses to register a ping client with %s", async (_, endpoint) => {
+		await expect(
+			createClient({
+				backchannel_token_delivery_mode: "ping",
+				backchannel_client_notification_endpoint: endpoint,
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_client_metadata" } });
 	});
 });
 

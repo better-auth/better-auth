@@ -7,6 +7,11 @@ import { CIBA_ERROR_CODES } from "./error-codes";
 import { createCibaGrantHandler } from "./grant-handler";
 import { getCibaSchema } from "./schema";
 import type { CibaOptions } from "./types";
+import {
+	DELIVERY_MODE_FIELD,
+	NOTIFICATION_ENDPOINT_FIELD,
+	validateCibaClientMetadata,
+} from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -42,6 +47,11 @@ export const ciba = (options: CibaOptions) => {
 		init(ctx) {
 			extendOAuthProvider(ctx, {
 				grants: { [CIBA_GRANT_TYPE]: createCibaGrantHandler(options) },
+				clientMetadata: {
+					fields: [DELIVERY_MODE_FIELD, NOTIFICATION_ENDPOINT_FIELD],
+					validate: (input) =>
+						validateCibaClientMetadata(input, settings.deliveryModes),
+				},
 				metadata: ({ ctx: endpointCtx }) => ({
 					backchannel_authentication_endpoint: `${endpointCtx.context.baseURL}${BC_AUTHORIZE_PATH}`,
 					backchannel_token_delivery_modes_supported: settings.deliveryModes,

@@ -506,15 +506,12 @@ test.describe("CIBA over HTTP", () => {
 		);
 	});
 
-	test("ping: a client registered with a non-https endpoint is refused", async () => {
-		const client = await provider.registerClient({
-			backchannel_token_delivery_mode: "ping",
-			backchannel_client_notification_endpoint: `http://${RECEIVER_HOST}/cb`,
-		});
-		const started = await backchannelAuthorize(provider, client, {
-			client_notification_token: "client-token",
-		});
-		expect(started.status).toBe(400);
-		expect(started.body.error).toBe("invalid_request");
+	test("ping: registration refuses a non-https notification endpoint", async () => {
+		await expect(
+			provider.registerClient({
+				backchannel_token_delivery_mode: "ping",
+				backchannel_client_notification_endpoint: `http://${RECEIVER_HOST}/cb`,
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_client_metadata" } });
 	});
 });
