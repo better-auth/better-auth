@@ -118,6 +118,7 @@ export const kakao = (options: KakaoOptions) => {
 				options,
 				authorizationEndpoint: "https://kauth.kakao.com/oauth/authorize",
 				scopes: _scopes,
+				scopeJoiner: ",",
 				state,
 				redirectURI,
 				additionalParams,
