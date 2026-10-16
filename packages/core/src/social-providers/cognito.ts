@@ -10,24 +10,28 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
+/**
+ * Profile data from a Cognito ID token or userinfo response.
+ */
 export interface CognitoProfile {
 	sub: string;
-	email: string;
-	email_verified: boolean;
-	name: string;
+	email?: string | undefined;
+	email_verified?: boolean | "true" | "false" | undefined;
+	name?: string | undefined;
 	given_name?: string | undefined;
 	family_name?: string | undefined;
 	picture?: string | undefined;
 	username?: string | undefined;
+	"cognito:username"?: string;
 	locale?: string | undefined;
 	phone_number?: string | undefined;
-	phone_number_verified?: boolean | undefined;
-	aud: string;
-	iss: string;
-	exp: number;
-	iat: number;
+	phone_number_verified?: boolean | "true" | "false" | undefined;
+	aud?: string | undefined;
+	iss?: string | undefined;
+	exp?: number | undefined;
+	iat?: number | undefined;
 	// Custom attributes from Cognito can be added here
-	[key: string]: any;
+	[key: string]: unknown;
 }
 
 export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
@@ -65,6 +69,8 @@ export const cognito = (options: CognitoOptions) => {
 		throw new BetterAuthError("DOMAIN_AND_REGION_REQUIRED");
 	}
 
+	const originalIssuer = `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`;
+	const updatedIssuer = `https://issuer-cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`;
 	const cleanDomain = options.domain.replace(/^https?:\/\//, "");
 	const authorizationEndpoint = `https://${cleanDomain}/oauth2/authorize`;
 	const tokenEndpoint = `https://${cleanDomain}/oauth2/token`;
@@ -157,9 +163,18 @@ export const cognito = (options: CognitoOptions) => {
 				},
 
 		idToken: {
-			jwks: (header) =>
-				getCognitoPublicKey(header.kid!, options.region, options.userPoolId),
-			issuer: `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`,
+			jwks: (header, jws) => {
+				const claims = decodeJwt(
+					`${jws.protected}.${jws.payload}.${jws.signature}`,
+				);
+				return getCognitoPublicKey(
+					header.kid!,
+					options.region,
+					options.userPoolId,
+					claims.iss === updatedIssuer ? updatedIssuer : originalIssuer,
+				);
+			},
+			issuer: [originalIssuer, updatedIssuer],
 			audience: options.clientId,
 			maxTokenAge: "1h",
 		},
@@ -176,7 +191,11 @@ export const cognito = (options: CognitoOptions) => {
 						return null;
 					}
 					const name =
-						profile.name || profile.given_name || profile.username || "";
+						profile.name ||
+						profile.given_name ||
+						profile.username ||
+						profile["cognito:username"] ||
+						"";
 					const enrichedProfile = {
 						...profile,
 						name,
@@ -188,7 +207,9 @@ export const cognito = (options: CognitoOptions) => {
 							name: enrichedProfile.name,
 							email: profile.email,
 							image: profile.picture,
-							emailVerified: profile.email_verified,
+							emailVerified:
+								profile.email_verified === true ||
+								profile.email_verified === "true",
 							...userMap,
 						},
 						data: enrichedProfile,
@@ -220,7 +241,9 @@ export const cognito = (options: CognitoOptions) => {
 									"",
 								email: userInfo.email,
 								image: userInfo.picture,
-								emailVerified: userInfo.email_verified,
+								emailVerified:
+									userInfo.email_verified === true ||
+									userInfo.email_verified === "true",
 								...userMap,
 							},
 							data: userInfo,
@@ -242,8 +265,9 @@ export const getCognitoPublicKey = async (
 	kid: string,
 	region: string,
 	userPoolId: string,
+	issuer = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`,
 ) => {
-	const COGNITO_JWKS_URI = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}/.well-known/jwks.json`;
+	const COGNITO_JWKS_URI = `${issuer}/.well-known/jwks.json`;
 
 	try {
 		const { data } = await betterFetch<{
