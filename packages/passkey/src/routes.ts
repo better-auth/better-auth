@@ -10,6 +10,7 @@ import type {
 	AuthenticationExtensionsClientInputs,
 	AuthenticationResponseJSON,
 	AuthenticatorTransportFuture,
+	VerifiedRegistrationResponse,
 } from "@simplewebauthn/server";
 import {
 	generateAuthenticationOptions,
@@ -650,13 +651,30 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					typeof ctx.context.options.baseURL === "string"
 						? ctx.context.options.baseURL
 						: undefined;
-				const verification = await verifyRegistrationResponse({
-					response: resp,
-					expectedChallenge,
-					expectedOrigin: origin,
-					expectedRPID: getRpID(options, verifyBaseURL),
-					requireUserVerification: false,
-				});
+				// verifyRegistrationResponse throws (rather than returning
+				// `verified: false`) when the challenge, origin or RP ID don't match.
+				// That is a bad client response, not a server fault, so answer 400
+				// and keep the library message (it contains the expected challenge)
+				// out of the response.
+				let verification: VerifiedRegistrationResponse;
+				try {
+					verification = await verifyRegistrationResponse({
+						response: resp,
+						expectedChallenge,
+						expectedOrigin: origin,
+						expectedRPID: getRpID(options, verifyBaseURL),
+						requireUserVerification: false,
+					});
+				} catch (e) {
+					ctx.context.logger.warn(
+						"Passkey registration response failed verification",
+						e,
+					);
+					throw APIError.from(
+						"BAD_REQUEST",
+						PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+					);
+				}
 				const { verified, registrationInfo } = verification;
 				if (!verified || !registrationInfo) {
 					throw APIError.from(
