@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { SignJWT } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
 	assertType,
 	beforeEach,
@@ -9,6 +9,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { verifyProviderIdToken } from "../oauth2";
 import type { CognitoProfile } from "./cognito";
 import { cognito } from "./cognito";
 
@@ -127,3 +128,58 @@ describe("Cognito profile verification", () => {
 		expect(result?.data).toEqual(profile);
 	});
 });
+
+/** @see https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-the-id-token.html */
+it.each([
+	[{ "cognito:username": "cognito-name" }, "cognito-name"],
+	[{ name: "Full Name", "cognito:username": "cognito-name" }, "Full Name"],
+	[
+		{ username: "legacy-name", "cognito:username": "cognito-name" },
+		"legacy-name",
+	],
+])("uses the ID-token username fallback %j", async (claims, name) => {
+	const token = await new SignJWT({ sub: "user", token_use: "id", ...claims })
+		.setProtectedHeader({ alg: "HS256" })
+		.setIssuedAt()
+		.setExpirationTime("1h")
+		.sign(new TextEncoder().encode("cognito-signing-key"));
+	const result = await cognito(options).getUserInfo({ idToken: token });
+	expect(result?.user.name).toBe(name);
+});
+
+/** @see https://docs.aws.amazon.com/cognito/latest/developerguide/federation-endpoints.html */
+it.each(["cognito-idp", "issuer-cognito-idp", "other-pool"])(
+	"verifies the %s issuer",
+	async (host) => {
+		const { publicKey, privateKey } = await generateKeyPair("RS256", {
+			extractable: true,
+		});
+		const trustedIssuer = `https://${host === "other-pool" ? "cognito-idp" : host}.${options.region}.amazonaws.com/${options.userPoolId}`;
+		const issuer =
+			host === "other-pool"
+				? trustedIssuer.replace(options.userPoolId, "us-east-1_other")
+				: trustedIssuer;
+		const publicJWK = {
+			...(await exportJWK(publicKey)),
+			kid: "cognito-key",
+			alg: "RS256",
+		};
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { keys: [publicJWK] },
+			error: null,
+		});
+		const token = await new SignJWT({ sub: "user", token_use: "id" })
+			.setProtectedHeader({ alg: "RS256", kid: "cognito-key" })
+			.setIssuer(issuer)
+			.setAudience(options.clientId)
+			.setIssuedAt()
+			.setExpirationTime("1h")
+			.sign(privateKey);
+		expect(await verifyProviderIdToken(cognito(options), token)).toBe(
+			host !== "other-pool",
+		);
+		expect(mockedBetterFetch).toHaveBeenCalledWith(
+			`${trustedIssuer}/.well-known/jwks.json`,
+		);
+	},
+);
