@@ -1,5 +1,12 @@
-import { exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
+import {
+	CompactSign,
+	exportJWK,
+	generateKeyPair,
+	SignJWT,
+	UnsecuredJWT,
+} from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { logger } from "../env";
 import { jwksCache } from "../oauth2/verify";
 import { paybin } from "./paybin";
 
@@ -30,11 +37,14 @@ const publicJWK = {
 	use: "sig",
 };
 const mockedFetch = vi.fn<typeof fetch>();
+const mockedWarn = vi.fn<typeof logger.warn>();
 
 beforeEach(() => {
 	vi.useFakeTimers({ toFake: ["Date"] });
 	vi.setSystemTime(now);
 	jwksCache.clear();
+	mockedWarn.mockReset();
+	vi.spyOn(logger, "warn").mockImplementation(mockedWarn);
 	mockedFetch.mockReset();
 	mockedFetch.mockImplementation(async () =>
 		Response.json({ keys: [publicJWK] }),
@@ -43,6 +53,7 @@ beforeEach(() => {
 });
 afterEach(() => {
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 	vi.useRealTimers();
 });
 
@@ -120,6 +131,78 @@ describe("paybin.getUserInfo", () => {
 			expect(await paybin(options).getUserInfo({ idToken: token })).toBeNull();
 		},
 	);
+
+	it.each([
+		["exp", -25, true],
+		["exp", -35, false],
+		["nbf", 25, true],
+		["nbf", 35, false],
+	] as const)(
+		"handles %s clock skew of %ss",
+		async (claim, offset, accepted) => {
+			const result = await paybin(options).getUserInfo({
+				idToken: await signToken({ [claim]: issuedAt + offset }),
+			});
+
+			if (accepted) expect(result?.data.sub).toBe(profile.sub);
+			else expect(result).toBeNull();
+		},
+	);
+
+	it.each(["iat", "exp"] as const)(
+		"rejects a non-finite %s claim",
+		async (claim) => {
+			const payload = JSON.stringify({
+				...profile,
+				[claim]: "overflow",
+			}).replace('"overflow"', "1e400");
+			const token = await new CompactSign(new TextEncoder().encode(payload))
+				.setProtectedHeader({ alg: "RS256", kid: "provider-key" })
+				.sign(privateKey);
+
+			expect(await paybin(options).getUserInfo({ idToken: token })).toBeNull();
+		},
+	);
+
+	it("logs a safe claim error without exposing identity data", async () => {
+		const token = await signToken({ iss: "https://other.example.com" });
+
+		expect(await paybin(options).getUserInfo({ idToken: token })).toBeNull();
+		const output = JSON.stringify(mockedWarn.mock.calls);
+		expect(output).toContain("ERR_JWT_CLAIM_VALIDATION_FAILED");
+		expect(output).not.toContain(token);
+		expect(output).not.toContain(profile.email);
+	});
+
+	it.each([
+		["unavailable", "JWKS_FETCH_FAILED"],
+		["invalid", "ERR_JWKS_INVALID"],
+	])("logs a safe reason for %s signing keys", async (kind, code) => {
+		mockedFetch.mockImplementation(async () =>
+			kind === "unavailable"
+				? new Response("Unavailable", { status: 503 })
+				: Response.json({ keys: {} }),
+		);
+		const token = await signToken();
+
+		expect(await paybin(options).getUserInfo({ idToken: token })).toBeNull();
+		const output = JSON.stringify(mockedWarn.mock.calls);
+		expect(output).toContain(code);
+		expect(output).not.toContain(token);
+		expect(output).not.toContain(profile.email);
+	});
+
+	it("rejects invalid tokens even when a custom logger throws", async () => {
+		mockedWarn.mockImplementationOnce(() => {
+			throw new Error("logger failed");
+		});
+
+		await expect(
+			paybin(options).getUserInfo({
+				idToken: await signToken({ iss: "https://other.example.com" }),
+			}),
+		).resolves.toBeNull();
+	});
 
 	it("preserves the custom getUserInfo override", async () => {
 		const custom = {
