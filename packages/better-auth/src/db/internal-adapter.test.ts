@@ -1644,7 +1644,7 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
 	});
 
-	it("should skip active-sessions rewrite when updateSession omits expiresAt", async () => {
+	it("should skip active-sessions rewrite when updateSession leaves expiresAt unchanged", async () => {
 		const testMap = new Map<string, string>();
 		const ops: string[] = [];
 		const base = createStringSecondaryStorage(testMap);
@@ -1700,6 +1700,23 @@ describe("internal adapter test", async () => {
 			testMap.get(session.token)!,
 		);
 		expect(stored?.session.ipAddress).toBe("10.0.0.1");
+
+		// Re-supplying the stored expiresAt is still a no-op for the list.
+		ops.length = 0;
+		await testInternalAdapter.updateSession(session.token, {
+			expiresAt: session.expiresAt,
+			ipAddress: "10.0.0.2",
+		});
+
+		expect(ops.filter((op) => op === `get:${listKey}`)).toHaveLength(0);
+		expect(ops.filter((op) => op === `set:${listKey}`)).toHaveLength(0);
+		expect(ops.filter((op) => op === `set:${session.token}`)).toHaveLength(1);
+		expect(testMap.get(listKey)).toBe(listBefore);
+
+		const storedAgain = safeJSONParse<{ session: Session }>(
+			testMap.get(session.token)!,
+		);
+		expect(storedAgain?.session.ipAddress).toBe("10.0.0.2");
 	});
 
 	it("deleteUserSessions should keep list entries for tokens whose delete failed", async () => {

@@ -874,6 +874,9 @@ export const createInternalAdapter = (
 
 								const now = Date.now();
 								const expiresMs = new Date(updatedSession.expiresAt).getTime();
+								const previousExpiresMs = new Date(
+									parsedSession.session.expiresAt,
+								).getTime();
 								const sessionTTL = getTTLSeconds(expiresMs, now);
 
 								if (sessionTTL > 0) {
@@ -889,8 +892,10 @@ export const createInternalAdapter = (
 										sessionTTL,
 									);
 
-									// active-sessions only tracks token + expiresAt
-									if (data.expiresAt !== undefined) {
+									// active-sessions only tracks token + expiresAt; skip
+									// when expiry is omitted or unchanged (including no-op
+									// writes that re-supply the stored value).
+									if (expiresMs !== previousExpiresMs) {
 										const listKey = `active-sessions-${updatedSession.userId}`;
 										const listRaw = await secondaryStorage.get(listKey);
 										const list: { token: string; expiresAt: number }[] = listRaw
