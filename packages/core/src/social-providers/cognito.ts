@@ -10,7 +10,9 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
-/** Profile data from a Cognito ID token or userinfo response. */
+/**
+ * Profile data from a Cognito ID token or userinfo response.
+ */
 export interface CognitoProfile {
 	sub: string;
 	email?: string | undefined;

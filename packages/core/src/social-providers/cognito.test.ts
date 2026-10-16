@@ -129,7 +129,9 @@ describe("Cognito profile verification", () => {
 	});
 });
 
-/** @see https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-the-id-token.html */
+/**
+ * @see https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-the-id-token.html
+ */
 it.each([
 	[{ "cognito:username": "cognito-name" }, "cognito-name"],
 	[{ name: "Full Name", "cognito:username": "cognito-name" }, "Full Name"],
@@ -147,7 +149,9 @@ it.each([
 	expect(result?.user.name).toBe(name);
 });
 
-/** @see https://docs.aws.amazon.com/cognito/latest/developerguide/federation-endpoints.html */
+/**
+ * @see https://docs.aws.amazon.com/cognito/latest/developerguide/federation-endpoints.html
+ */
 it.each(["cognito-idp", "issuer-cognito-idp", "other-pool"])(
 	"verifies the %s issuer",
 	async (host) => {
