@@ -48,6 +48,7 @@ export const linear = (options: LinearOptions) => {
 				options,
 				authorizationEndpoint: "https://linear.app/oauth/authorize",
 				scopes: _scopes,
+				scopeJoiner: ",",
 				state,
 				redirectURI,
 				loginHint,

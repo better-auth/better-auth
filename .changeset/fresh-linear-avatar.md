@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Model `LinearUser.avatarUrl` as nullable and leave the local user image unset when Linear returns no avatar. Existing user images are preserved when profile updates are enabled and the provider returns no image.
+Linear profile mappings must handle a null viewer avatar; missing avatars preserve stored images when profile updates are enabled. Authorization requests now separate scopes with commas as documented by Linear.
