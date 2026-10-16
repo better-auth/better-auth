@@ -113,6 +113,12 @@ describe("expo", async () => {
 	});
 
 	it("should send cookie and get session", async () => {
+		const signIn = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(signIn.error).toBeNull();
+
 		const { data } = await client.getSession();
 		expect(data).toMatchObject({
 			session: expect.any(Object),
@@ -548,9 +554,9 @@ describe("expo", async () => {
 	});
 
 	it("should not send cookie or expo-origin headers for ID token requests", async () => {
-		let cookieHeader: string | null | undefined = null;
-		let expoOriginHeader: string | null | undefined = null;
-		let originHeader: string | null | undefined = null;
+		let cookieHeader: string | null | undefined;
+		let expoOriginHeader: string | null | undefined;
+		let originHeader: string | null | undefined;
 		const storage = new Map<string, string>();
 
 		// Pre-populate storage with a cookie to verify it's NOT sent
@@ -674,6 +680,121 @@ describe("expo", async () => {
 		expect(cookieHeader).toContain("better-auth.session_token=existing-token");
 		expect(expoOriginHeader).toBe("better-auth://");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9900
+	 */
+	it.each([
+		{
+			trust: "trusted",
+			trustedOrigins: ["better-auth://"],
+			expectedError: null,
+			expectedData: expect.objectContaining({ status: true, redirect: false }),
+			expectedAccounts: [
+				expect.objectContaining({
+					providerId: "google",
+					accountId: "google-user",
+				}),
+			],
+		},
+		{
+			trust: "untrusted",
+			trustedOrigins: [],
+			expectedError: expect.objectContaining({
+				status: 403,
+				code: "INVALID_ORIGIN",
+			}),
+			expectedData: null,
+			expectedAccounts: [],
+		},
+	])(
+		"should enforce origin validation for link-social ID token requests with $trust origins",
+		async ({
+			trustedOrigins,
+			expectedError,
+			expectedData,
+			expectedAccounts,
+		}) => {
+			const storage = new Map<string, string>();
+			const profile = {
+				sub: "google-user",
+				name: "Expo User",
+				email: "expo-linking@example.com",
+				email_verified: true,
+				aud: "test",
+				azp: "test",
+				iss: "https://accounts.google.com",
+				iat: Math.floor(Date.now() / 1000),
+				exp: Math.floor(Date.now() / 1000) + 3600,
+				given_name: "Expo",
+				family_name: "User",
+				picture: "https://example.com/avatar.png",
+			};
+			const { client, testUser } = await getTestInstance(
+				{
+					plugins: [expo()],
+					trustedOrigins,
+					advanced: {
+						disableOriginCheck: false,
+						disableCSRFCheck: false,
+					},
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							verifyIdToken: async (token) => token === "valid-id-token",
+							getUserInfo: async () => ({
+								user: {
+									name: profile.name,
+									email: profile.email,
+									emailVerified: profile.email_verified,
+								},
+								data: profile,
+							}),
+						},
+					},
+				},
+				{
+					testUser: { email: profile.email },
+					clientOptions: {
+						plugins: [
+							expoClient({
+								storage: {
+									getItem: (key) => storage.get(key) ?? null,
+									setItem: (key, value) => {
+										storage.set(key, value);
+									},
+									getItemAsync: async (key) => storage.get(key) ?? null,
+									setItemAsync: async (key, value) => {
+										storage.set(key, value);
+									},
+								},
+							}),
+						],
+					},
+				},
+			);
+
+			const signIn = await client.signIn.email(
+				{ email: testUser.email, password: testUser.password },
+				{ headers: { origin: "http://localhost:3000" } },
+			);
+			expect(signIn.error).toBeNull();
+
+			const linked = await client.linkSocial({
+				provider: "google",
+				idToken: { token: "valid-id-token" },
+			});
+			expect(linked.error).toEqual(expectedError);
+			expect(linked.data).toEqual(expectedData);
+
+			const accounts = await client.listAccounts();
+			expect(accounts.error).toBeNull();
+			expect(
+				accounts.data?.filter((account) => account.providerId === "google"),
+			).toEqual(expectedAccounts);
+		},
+	);
 
 	it("should preserve existing cookies on link-social", async () => {
 		await client.signIn.email({
