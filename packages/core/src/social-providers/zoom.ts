@@ -9,6 +9,18 @@ import {
 export type LoginType =
 	| 0 /** Facebook OAuth */
 	| 1 /** Google OAuth */
+	/**
+	 * Phone number
+	 */
+	| 11
+	/**
+	 * WeChat
+	 */
+	| 21
+	/**
+	 * Alipay
+	 */
+	| 23
 	| 24 /** Apple OAuth */
 	| 27 /** Microsoft OAuth */
 	| 97 /** Mobile device */
