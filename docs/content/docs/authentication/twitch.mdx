@@ -56,3 +56,7 @@ description: Twitch provider setup and usage.
     </Callout>
   </Step>
 </Steps>
+
+### ID Token Validation
+
+During the authorization code flow, the built-in Twitch provider verifies the returned ID token against Twitch's RS256 signing keys before mapping the profile. Invalid signatures, unexpected issuers or audiences, expired tokens, and missing required identity claims cause sign-in to fail.
