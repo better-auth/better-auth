@@ -180,6 +180,19 @@ function redirectWithPromptNoneError(
 }
 
 /**
+ * Renders a URL for log output with userinfo, query, and fragment removed,
+ * so that secrets in a configured issuer never end up in log output.
+ */
+function redactUrlForLog(value: URL): string {
+	const redacted = new URL(value.toString());
+	redacted.username = "";
+	redacted.password = "";
+	redacted.search = "";
+	redacted.hash = "";
+	return redacted.toString().replace(/\/$/, "");
+}
+
+/**
  * Whether the insecure-issuer rewrite warning has been logged for this
  * process. `validateIssuerUrl` runs on every request through `getIssuer`,
  * so the warning is emitted at most once to avoid log spam.
@@ -192,8 +205,9 @@ let insecureIssuerRewriteWarned = false;
  * - MUST NOT contain query components
  * - MUST NOT contain fragment components
  *
- * A non-loopback `http://` issuer is rewritten to `https://` unless
- * `options.allowInsecureHttpIssuer` is set. The rewrite is reported once
+ * A non-loopback issuer with a non-HTTPS scheme is rewritten to `https://`,
+ * except that `http://` is kept as-is when `options.allowInsecureHttpIssuer`
+ * is set. The rewrite is reported once
  * with `logger.warn`: the JWT plugin keeps signing tokens with the
  * configured value, so a silent rewrite makes the authorization server
  * contradict itself
@@ -211,15 +225,18 @@ export function validateIssuerUrl(
 		if (
 			url.protocol !== "https:" &&
 			!isLoopbackHost(url.host) &&
-			!options?.allowInsecureHttpIssuer
+			!(url.protocol === "http:" && options?.allowInsecureHttpIssuer)
 		) {
+			const originalProtocol = url.protocol;
+			const configuredIssuer = redactUrlForLog(url);
 			url.protocol = "https:";
+			const advertisedIssuer = redactUrlForLog(url);
 			if (!insecureIssuerRewriteWarned) {
 				insecureIssuerRewriteWarned = true;
 				logger.warn(
-					`oauth-provider: configured issuer "${issuer}" uses http:// on a non-loopback ` +
-						`host; advertising "${url.toString().replace(/\/$/, "")}" instead. ` +
-						`ID tokens are still signed with the configured http:// issuer, so ` +
+					`oauth-provider: configured issuer "${configuredIssuer}" uses ${originalProtocol}// on a non-loopback ` +
+						`host; advertising "${advertisedIssuer}" instead. ` +
+						`ID tokens are still signed with the configured ${originalProtocol}// issuer, so ` +
 						`strict OIDC clients may reject the login. Set allowInsecureHttpIssuer: true ` +
 						`if this server is only reachable on a trusted private network.`,
 				);
