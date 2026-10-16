@@ -312,6 +312,70 @@ describe("session", async () => {
 		).toBeLessThanOrEqual(getDate(1000 * 60 * 60 * 24).valueOf());
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11466
+	 */
+	it("refreshes a remembered session after a non-remembered sign-in", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-09-29T00:00:00.000Z"));
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: { expiresIn: 120, updateAge: 60 },
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: false,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		expect(
+			parseCookies(headers.get("cookie") || "").has(
+				"better-auth.dont_remember",
+			),
+		).toBe(true);
+		let persistentCookies = new Map();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+				rememberMe: true,
+				fetchOptions: { headers },
+			},
+			{
+				onSuccess(context) {
+					persistentCookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+		expect(
+			persistentCookies.get("better-auth.session_token")?.["max-age"],
+		).toBe(120);
+		// A browser ignores the old marker once this response expires it.
+		expect(
+			persistentCookies.get("better-auth.dont_remember")?.["max-age"],
+		).toBe(0);
+		const cookies = parseCookies(headers.get("cookie") || "");
+		cookies.delete("better-auth.dont_remember");
+		headers.set(
+			"cookie",
+			[...cookies]
+				.map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+				.join("; "),
+		);
+		const initial = await client.getSession({ fetchOptions: { headers } });
+		expect(initial.data?.session.expiresAt).toBeDefined();
+		vi.advanceTimersByTime(61_000);
+		const refreshed = await client.getSession({ fetchOptions: { headers } });
+		expect(
+			new Date(refreshed.data!.session.expiresAt).getTime(),
+		).toBeGreaterThan(new Date(initial.data!.session.expiresAt).getTime());
+	});
+
 	it("should set cookies correctly on sign in after changing config", async () => {
 		const headers = new Headers();
 		await client.signIn.email(
