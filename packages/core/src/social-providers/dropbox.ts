@@ -1,3 +1,4 @@
+// cspell:ignore addin
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
@@ -17,7 +18,36 @@ export interface DropboxProfile {
 	};
 	email: string;
 	email_verified: boolean;
-	profile_photo_url: string;
+	profile_photo_url?: string;
+	disabled: boolean;
+	country?: string;
+	locale: string;
+	referral_link: string;
+	team?: {
+		id: string;
+		name: string;
+		sharing_policies: {
+			shared_folder_member_policy: { ".tag": string };
+			shared_folder_join_policy: { ".tag": string };
+			shared_link_create_policy: { ".tag": string };
+			group_creation_policy: { ".tag": string };
+			shared_folder_link_restriction_policy: { ".tag": string };
+			enforce_link_password_policy: { ".tag": string };
+			default_link_expiration_days_policy: { ".tag": string };
+			shared_link_default_permissions_policy: { ".tag": string };
+		};
+		office_addin_policy: { ".tag": "disabled" | "enabled" | "other" };
+		top_level_content_policy: { ".tag": "everyone" | "admin_only" | "other" };
+	};
+	team_member_id?: string;
+	is_paired: boolean;
+	account_type: { ".tag": "basic" | "pro" | "business" };
+	root_info: {
+		root_namespace_id: string;
+		home_namespace_id: string;
+		".tag": "team" | "user";
+		home_path?: string;
+	};
 }
 
 export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
