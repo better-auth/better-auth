@@ -10,7 +10,9 @@ it("accepts a Kakao profile without account information", () => {
 
 import { kakao } from "./kakao";
 
-/** @see https://developers.kakao.com/docs/ko/kakaologin/rest-api#req-auth-code */
+/**
+ * @see https://developers.kakao.com/docs/ko/kakaologin/rest-api#req-auth-code
+ */
 it("joins authorization scopes with commas", async () => {
 	const provider = kakao({ clientId: "app", scope: ["openid"] });
 	const url = await provider.createAuthorizationURL({
