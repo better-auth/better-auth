@@ -27,9 +27,13 @@ export interface HuggingFaceProfile {
 				plan?: string;
 				canPay?: boolean;
 				roleInOrg?: string;
-				/** @deprecated Use securityRestrictions with "sso". */
+				/**
+				 * @deprecated Use `securityRestrictions` with `"sso"`.
+				 */
 				pendingSSO?: boolean;
-				/** @deprecated Use securityRestrictions with "mfa". */
+				/**
+				 * @deprecated Use `securityRestrictions` with `"mfa"`.
+				 */
 				missingMFA?: boolean;
 				securityRestrictions?: ("mfa" | "sso" | "ip" | "token-policy")[];
 				resourceGroups?: {
