@@ -49,7 +49,9 @@ async function tokenFor(kind = "valid", tokenIssuer = issuer) {
 		.sign(kind === "signature" ? otherKeys.privateKey : privateKey);
 }
 
-/** @see https://developers.paybin.io/knowledge-center/oidc#token-management */
+/**
+ * @see https://developers.paybin.io/knowledge-center/oidc#token-management
+ */
 describe("paybin ID-token profiles", () => {
 	it("maps a verified token without optional display claims", async () => {
 		const provider = paybin({ clientId });
@@ -78,7 +80,9 @@ describe("paybin ID-token profiles", () => {
 	});
 });
 
-/** @see https://developers.paybin.io/knowledge-center/oidc#authorization-flow */
+/**
+ * @see https://developers.paybin.io/knowledge-center/oidc#authorization-flow
+ */
 it.each(["https://idp.paybin.io", "https://paybin.example.com/"])(
 	"uses the documented endpoints for %s",
 	async (configuredIssuer) => {
@@ -121,7 +125,9 @@ it.each(["https://idp.paybin.io", "https://paybin.example.com/"])(
 	},
 );
 
-/** @see https://developers.paybin.io/knowledge-center/oidc#available-scopes */
+/**
+ * @see https://developers.paybin.io/knowledge-center/oidc#available-scopes
+ */
 it("maps the provider's limited email claims", async () => {
 	const result = await paybin({ clientId }).getUserInfo({
 		idToken: await tokenFor("no email"),
@@ -130,7 +136,9 @@ it("maps the provider's limited email claims", async () => {
 	expect(result?.user.emailVerified).toBe(false);
 });
 
-/** @see https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation */
+/**
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+ */
 it("preserves the configured issuer's trailing slash", async () => {
 	const configuredIssuer = "https://paybin.example.com/";
 	server.use(
