@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Kakao profile callbacks now accept responses without account information. Profile mappings must handle an omitted `kakao_account`.
+Kakao profile mappings now accept profiles without account information. Authorization requests separate consent scopes with commas as documented by Kakao.
