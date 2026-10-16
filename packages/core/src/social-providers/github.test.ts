@@ -87,7 +87,9 @@ describe("github profile", () => {
 	});
 });
 
-/** @see https://docs.github.com/en/rest/users/users#get-the-authenticated-user */
+/**
+ * @see https://docs.github.com/en/rest/users/users#get-the-authenticated-user
+ */
 it("types additional GitHub account fields", () => {
 	expectTypeOf<GithubProfile["user_view_type"]>().toEqualTypeOf<
 		string | undefined
