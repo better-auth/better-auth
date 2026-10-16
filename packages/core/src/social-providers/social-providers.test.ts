@@ -466,7 +466,9 @@ describe("spotify profile fields", () => {
 		{ displayName: null, images: [], name: undefined, image: undefined },
 		{
 			displayName: "Spotify User",
-			images: [{ url: "https://example.com/avatar.png" }],
+			images: [
+				{ url: "https://example.com/avatar.png", height: null, width: 300 },
+			],
 			name: "Spotify User",
 			image: "https://example.com/avatar.png",
 		},
@@ -482,7 +484,9 @@ describe("spotify profile fields", () => {
 			mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
 			const mapProfileToUser = vi.fn((claims: SpotifyProfile) => {
 				expectTypeOf(claims.display_name).toEqualTypeOf<string | null>();
-				expectTypeOf(claims.images).toEqualTypeOf<{ url: string }[]>();
+				expectTypeOf(claims.images).toEqualTypeOf<
+					{ url: string; height: number | null; width: number | null }[]
+				>();
 				return {};
 			});
 			const provider = spotify({ ...credentials, mapProfileToUser });

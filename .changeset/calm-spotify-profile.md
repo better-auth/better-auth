@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-`SpotifyProfile` now permits missing email addresses and nullable display names. Missing display names leave the local user name unset.
+Spotify profile mappings must handle nullable display names, omitted email, and nullable image dimensions. A missing display name leaves the local name unset while raw profile fields remain available.

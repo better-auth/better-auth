@@ -13,6 +13,8 @@ export interface SpotifyProfile {
 	email?: string | undefined;
 	images: {
 		url: string;
+		height: number | null;
+		width: number | null;
 	}[];
 }
 
@@ -25,6 +27,8 @@ export const spotify = (options: SpotifyOptions) => {
 	return {
 		id: "spotify",
 		name: "Spotify",
+		// TODO: Migrate account linking to account_id while preserving existing id-based accounts.
+		// https://developer.spotify.com/documentation/web-api/reference/get-current-users-profile
 		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
