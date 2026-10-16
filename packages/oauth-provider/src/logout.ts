@@ -386,15 +386,19 @@ function isBrowserNavigation(ctx: GenericEndpointContext): boolean {
 	);
 }
 
-function logoutPage(title: string, body: string, status = 200): Response {
+function logoutPage(
+	title: string,
+	body: string,
+	status = 200,
+	formAction?: string,
+): Response {
 	return new Response(
 		`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body>${body}</body></html>`,
 		{
 			status,
 			headers: {
 				"cache-control": "no-store",
-				"content-security-policy":
-					"default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+				"content-security-policy": `default-src 'none'; form-action ${formAction || "'self'"}; base-uri 'none'; frame-ancestors 'none'`,
 				"content-type": "text/html; charset=utf-8",
 				pragma: "no-cache",
 				"x-content-type-options": "nosniff",
@@ -416,11 +420,36 @@ function logoutConfirmationCookiePath(ctx: GenericEndpointContext): string {
 	}
 }
 
-function logoutConfirmationPage(ctx: GenericEndpointContext): Response {
+function getLogoutFormActionCsp(targetUri?: string): string {
+	if (!targetUri) return "'self'";
+	try {
+		const parsed = new URL(targetUri);
+		if (parsed.origin && parsed.origin !== "null") {
+			return `'self' ${parsed.origin}`;
+		}
+		if (parsed.protocol) {
+			return `'self' ${parsed.protocol}`;
+		}
+		return "'self'";
+	} catch {
+		return "'self'";
+	}
+}
+
+function logoutConfirmationPage(
+	ctx: GenericEndpointContext,
+	confirmation?: LogoutConfirmationContext,
+): Response {
 	const action = logoutConfirmationPath(ctx);
+	const targetUri =
+		confirmation && !confirmation.redirectInvalid
+			? confirmation.postLogoutRedirectUri
+			: undefined;
 	return logoutPage(
 		"Confirm logout",
 		`<main><h1>Confirm logout</h1><p>Do you want to log out of this account?</p><form method="post" data-oidc-logout-confirmation action="${escapeHtml(action)}"><button type="submit" name="action" value="confirm">Confirm logout</button></form></main>`,
+		200,
+		getLogoutFormActionCsp(targetUri),
 	);
 }
 
@@ -793,7 +822,7 @@ async function confirmationRequired(
 	if (!currentSession) {
 		if (isBrowserNavigation(ctx)) {
 			await setLogoutConfirmationState(ctx, undefined, confirmation);
-			return logoutConfirmationPage(ctx);
+			return logoutConfirmationPage(ctx, confirmation);
 		}
 		return logoutProtocolError(
 			ctx,
@@ -815,7 +844,7 @@ async function confirmationRequired(
 		currentSession.session.id,
 		confirmation,
 	);
-	return logoutConfirmationPage(ctx);
+	return logoutConfirmationPage(ctx, confirmation);
 }
 
 async function completeConfirmedLogout(
