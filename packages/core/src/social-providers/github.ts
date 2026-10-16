@@ -47,6 +47,10 @@ export interface GithubProfile {
 	disk_usage?: number;
 	collaborators?: number;
 	two_factor_authentication?: boolean;
+	user_view_type?: string;
+	notification_email?: string | null;
+	business_plus?: boolean;
+	ldap_dn?: string;
 	plan?: {
 		name: string;
 		space: number;
@@ -153,7 +157,7 @@ export const github = (options: GithubOptions) => {
 					email: string;
 					primary: boolean;
 					verified: boolean;
-					visibility: "public" | "private";
+					visibility: "public" | "private" | null;
 				}[]
 			>("https://api.github.com/user/emails", {
 				headers: {
