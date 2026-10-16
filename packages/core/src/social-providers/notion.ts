@@ -6,7 +6,9 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
-/** Full or partial owner-user profile returned by Notion. */
+/**
+ * Full or partial owner-user profile returned by Notion.
+ */
 export interface NotionProfile {
 	object: "user";
 	id: string;
