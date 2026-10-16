@@ -174,6 +174,21 @@ describe("mapConcurrent", () => {
 		await expect(run).rejects.toThrow("cancel");
 		expect(processed.length).toBeLessThan(20);
 	});
+
+	it("rejects after in-flight work when abort fires with every item already claimed", async () => {
+		const controller = new AbortController();
+		const run = mapConcurrent(
+			[1, 2, 3],
+			async (x) => {
+				await wait(20);
+				return x;
+			},
+			{ concurrency: 3, signal: controller.signal },
+		);
+		await wait(5);
+		controller.abort(new Error("cancel-inflight"));
+		await expect(run).rejects.toThrow("cancel-inflight");
+	});
 });
 
 describe("mapConcurrentSettled", () => {
@@ -274,6 +289,21 @@ describe("mapConcurrentSettled", () => {
 		controller.abort(new Error("cancel"));
 		await expect(run).rejects.toThrow("cancel");
 		expect(processed.length).toBeLessThan(20);
+	});
+
+	it("rejects after in-flight work when abort fires with every item already claimed", async () => {
+		const controller = new AbortController();
+		const run = mapConcurrentSettled(
+			[1, 2, 3],
+			async (x) => {
+				await wait(20);
+				return x;
+			},
+			{ concurrency: 3, signal: controller.signal },
+		);
+		await wait(5);
+		controller.abort(new Error("cancel-inflight"));
+		await expect(run).rejects.toThrow("cancel-inflight");
 	});
 });
 

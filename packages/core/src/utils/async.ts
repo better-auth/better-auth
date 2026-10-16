@@ -52,6 +52,9 @@ export async function mapConcurrent<T, R>(
 	};
 
 	await Promise.all(Array.from({ length: width }, worker));
+	// In-flight work may finish after abort without re-entering the loop
+	// (e.g. every item already claimed). Honor cancellation before returning.
+	if (signal?.aborted) throw signal.reason;
 	return results;
 }
 
@@ -97,6 +100,9 @@ export async function mapConcurrentSettled<T, R>(
 	};
 
 	await Promise.all(Array.from({ length: width }, worker));
+	// Workers only observe abort between items. When every item is already
+	// in flight, they exit on `idx === n` without setting `aborted`.
+	if (signal?.aborted) throw signal.reason;
 	if (aborted !== undefined) throw aborted;
 	return results;
 }
