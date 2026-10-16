@@ -7,17 +7,17 @@ import type { Accessor } from "solid-js";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
+import { createAuthClient as createLynxClient } from "./lynx";
 import {
 	adminClient,
 	deviceAuthorizationClient,
 	emailOTPClient,
-	genericOAuthClient,
 	magicLinkClient,
 	multiSessionClient,
-	oidcClient,
 	organizationClient,
 	twoFactorClient,
 } from "./plugins";
+import type { ReactAuthClient } from "./react";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
@@ -30,6 +30,12 @@ import {
 import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
+vi.mock("@lynx-js/react", () => ({
+	useCallback: vi.fn(),
+	useRef: vi.fn(),
+	useSyncExternalStore: vi.fn(),
+}));
+
 describe("run time proxy", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
@@ -39,6 +45,29 @@ describe("run time proxy", async () => {
 		const client = createVanillaClient();
 		const atom = client.$store.atoms.session;
 		expect(isProxy(atom)).toBe(false);
+	});
+
+	it("every framework client should expose the real $fetch and $store", async () => {
+		// A key missing from the proxy routes silently falls through to the
+		// dynamic path handler, so `client.$fetch(...)` would issue a request
+		// to a phantom `/fetch` action instead of using the better-fetch
+		// instance, and `$store.atoms.session` would resolve to a path proxy
+		// instead of the session atom.
+		const clients = {
+			vanilla: createVanillaClient(),
+			react: createReactClient(),
+			solid: createSolidClient(),
+			svelte: createSvelteClient(),
+			vue: createVueClient(),
+			lynx: createLynxClient(),
+		};
+		for (const [framework, client] of Object.entries(clients)) {
+			expect(isProxy(client.$fetch), `${framework} $fetch`).toBe(false);
+			expect(
+				isProxy(client.$store.atoms.session),
+				`${framework} session atom`,
+			).toBe(false);
+		}
 	});
 
 	it("proxy api should be called", async () => {
@@ -119,6 +148,240 @@ describe("run time proxy", async () => {
 		vi.useRealTimers();
 	});
 
+	it("should hydrate session on an existing client", async () => {
+		vi.useFakeTimers();
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(
+						JSON.stringify({
+							user: {
+								id: "2",
+								email: "fresh@email.com",
+							},
+							session: {
+								id: "session-2",
+							},
+						}),
+					),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession({
+			user: {
+				id: "1",
+				name: "Hydrated User",
+				email: "hydrated@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "session-token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const session = client.useSession();
+
+		expect(session()).toMatchObject({
+			data: {
+				user: {
+					id: "1",
+					email: "hydrated@email.com",
+				},
+				session: {
+					id: "session-1",
+				},
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+
+		await vi.runAllTimersAsync();
+
+		expect(session()).toMatchObject({
+			data: {
+				user: {
+					id: "2",
+					email: "fresh@email.com",
+				},
+				session: {
+					id: "session-2",
+				},
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+	});
+
+	it("should not overwrite session when already hydrated", async () => {
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () =>
+					new Response(
+						JSON.stringify({
+							user: { id: "1", email: "fresh@email.com" },
+							session: { id: "session-1" },
+						}),
+					),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession({
+			user: {
+				id: "1",
+				name: "First",
+				email: "first@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		// Second call should be a no-op
+		client.hydrateSession({
+			user: {
+				id: "2",
+				name: "Second",
+				email: "second@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-2",
+				userId: "2",
+				expiresAt: new Date(),
+				token: "token-2",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const session = client.useSession();
+		expect(session().data?.user?.email).toBe("first@email.com");
+	});
+
+	it("should not hydrate when session is null", () => {
+		const client = createSolidClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		client.hydrateSession(null);
+
+		const session = client.useSession();
+		expect(session().data).toBeNull();
+		expect(session().isPending).toBe(true);
+	});
+
+	/**
+	 * Re-running hydrateSession on a later render (e.g. after sign-out cleared
+	 * the atom) must not restore the stale initial session. Hydration is
+	 * one-shot per client instance.
+	 */
+	it("should not re-hydrate after the session atom has been cleared", () => {
+		const client = createVanillaClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const initialSession = {
+			user: {
+				id: "1",
+				name: "Hydrated",
+				email: "hydrated@email.com",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			session: {
+				id: "session-1",
+				userId: "1",
+				expiresAt: new Date(),
+				token: "token-1",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		};
+
+		client.hydrateSession(initialSession);
+
+		// Simulate sign-out clearing the session atom.
+		const sessionAtom = client.$store.atoms.session!;
+		sessionAtom.set({
+			...sessionAtom.get(),
+			data: null,
+			isPending: false,
+		});
+
+		// A later render calls hydrateSession again with the same initialSession.
+		client.hydrateSession(initialSession);
+
+		expect(sessionAtom.get().data).toBeNull();
+	});
+
+	/**
+	 * The auth client is a module-level singleton, so the session atom is shared
+	 * across concurrent SSR requests. Writing during server render would leak one
+	 * request's session into another. Hydration must be a no-op on the server.
+	 */
+	it("should not write to the shared atom during server render", () => {
+		const client = createVanillaClient({
+			fetchOptions: {
+				customFetchImpl: async () => new Response(JSON.stringify(null)),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		vi.stubGlobal("window", undefined);
+		try {
+			client.hydrateSession({
+				user: {
+					id: "user-a",
+					name: "User A",
+					email: "a@email.com",
+					emailVerified: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+				session: {
+					id: "session-a",
+					userId: "user-a",
+					expiresAt: new Date(),
+					token: "token-a",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		} finally {
+			vi.unstubAllGlobals();
+		}
+
+		expect(client.$store.atoms.session!.get().data).toBeNull();
+	});
+
 	it("should allow second argument fetch options", async () => {
 		let called = false;
 		const client = createSolidClient({
@@ -157,6 +420,19 @@ describe("run time proxy", async () => {
 });
 
 describe("type", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10897
+	 */
+	it("keeps a client with more plugins assignable to a client type with fewer plugins", () => {
+		type EmailOtpClient = ReactAuthClient<{
+			plugins: [ReturnType<typeof emailOTPClient>];
+		}>;
+		const client = createReactClient({
+			plugins: [emailOTPClient(), adminClient()],
+		});
+		expectTypeOf(client).toMatchTypeOf<EmailOtpClient>();
+	});
+
 	it("should not infer non-action endpoints", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],
@@ -201,6 +477,21 @@ describe("type", () => {
 			error: BetterFetchError | null;
 			isPending: boolean;
 		}>();
+	});
+	it("should infer hydrateSession react", () => {
+		const client = createReactClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async () => {
+					return new Response();
+				},
+			},
+		});
+		type HydrateSession = typeof client.hydrateSession;
+		expectTypeOf<HydrateSession>().toMatchTypeOf<
+			(session: ReturnType<typeof client.useSession>["data"]) => void
+		>();
 	});
 	it("should infer resolved hooks react", () => {
 		const client = createReactClient({
@@ -391,6 +682,99 @@ describe("type", () => {
 				};
 			} | null>
 		>();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9781
+	 */
+	describe("useSession().data with nullable types", () => {
+		it("useSession().data should be nullable with `throw:true` - react", () => {
+			const client = createReactClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSessionReturn = ReturnType<typeof client.useSession>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
+		it("useSession().data should be nullable with `throw:true` - vue", () => {
+			const client = createVueClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			const session = client.useSession();
+			type DataField = (typeof session)["value"]["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
+		it("useSession().data should be nullable with `throw:true` - solid", () => {
+			const client = createSolidClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSession = ReturnType<typeof client.useSession>;
+			type UseSessionReturn = ReturnType<UseSession>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
+		it("useSession().data should be nullable with `throw:true` - svelte", () => {
+			const client = createSvelteClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSessionAtom = ReturnType<typeof client.useSession>;
+			type UseSessionReturn = ReturnType<UseSessionAtom["get"]>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
+
+		it("useSession().data should be nullable with `throw:true` - vanilla", () => {
+			const client = createVanillaClient({
+				plugins: [testClientPlugin()],
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					throw: true,
+					customFetchImpl: async (url, init) => {
+						return new Response();
+					},
+				},
+			});
+
+			type UseSessionAtom = typeof client.useSession;
+			type UseSessionReturn = ReturnType<UseSessionAtom["get"]>;
+			type DataField = UseSessionReturn["data"];
+			expectTypeOf<null>().toMatchTypeOf<DataField>();
+		});
 	});
 
 	it("should infer `error` schema correctly", async () => {
@@ -609,8 +993,6 @@ describe("type", () => {
 				emailOTPClient(),
 				adminClient(),
 				multiSessionClient(),
-				oidcClient(),
-				genericOAuthClient(),
 				deviceAuthorizationClient(),
 				testClientPlugin(),
 				testClientPlugin2(),
@@ -641,11 +1023,6 @@ describe("type", () => {
 		expectTypeOf(
 			client.$ERROR_CODES.INVALID_SESSION_TOKEN.code,
 		).toEqualTypeOf<"INVALID_SESSION_TOKEN">();
-
-		// Should have generic-oauth error codes
-		expectTypeOf(
-			client.$ERROR_CODES.PROVIDER_NOT_FOUND.code,
-		).toEqualTypeOf<"PROVIDER_NOT_FOUND">();
 
 		// Should have device-authorization error codes
 		expectTypeOf(

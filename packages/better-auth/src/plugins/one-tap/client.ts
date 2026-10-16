@@ -1,9 +1,12 @@
 /// <reference types="@types/google.accounts" />
 import type {
+	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
 	ClientFetchOption,
+	ClientStore,
 } from "@better-auth/core";
 import { isSafeUrlScheme } from "@better-auth/core/utils/url";
+import type { BetterFetch } from "@better-fetch/fetch";
 import { PACKAGE_VERSION } from "../../version";
 
 declare global {
@@ -95,7 +98,7 @@ export interface GoogleOneTapOptions {
 	/**
 	 * Cancel the flow when the user taps outside the prompt
 	 *
-	 * Note: To use this option, disable `promptOptions.fedCM`
+	 * Note: This may have no effect, as FedCM lets the browser manage dismissal
 	 */
 	cancelOnTapOutside?: boolean | undefined;
 	/**
@@ -134,7 +137,9 @@ export interface GoogleOneTapOptions {
 				 */
 				maxAttempts?: number;
 				/**
-				 * Whether to support FedCM (Federated Credential Management) support.
+				 * Whether to call `navigator.credentials.preventSilentAccess()` on
+				 * sign-out to clear the browser's FedCM credential state. FedCM for
+				 * the prompt itself is managed by Google and cannot be disabled.
 				 *
 				 * @see {@link https://developer.chrome.com/docs/identity/fedcm/overview}
 				 * @default true
@@ -188,7 +193,6 @@ function isFedCMSupported() {
  */
 const noRetryReasons = {
 	dismissed: ["credential_returned", "cancel_called"],
-	skipped: ["user_cancel", "tap_outside"],
 } as const;
 
 export const oneTapClient = (options: GoogleOneTapOptions) => {
@@ -212,7 +216,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 				},
 			},
 		],
-		getActions: ($fetch, _) => {
+		getActions: (
+			$fetch: BetterFetch,
+			_$store: ClientStore,
+			_options: BetterAuthClientOptions | undefined,
+		) => {
 			return {
 				oneTap: async (
 					opts?: GoogleOneTapActionOptions | undefined,
@@ -271,10 +279,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							}
 						}
 
-						const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
-						const contextValue = context ?? options.context ?? "signin";
+						const autoSelect = opts?.autoSelect ?? options.autoSelect;
+						const cancelOnTapOutside =
+							opts?.cancelOnTapOutside ?? options.cancelOnTapOutside;
+						const contextValue = opts?.context ?? options.context ?? "signin";
 
-						const useFedCM = options.promptOptions?.fedCM !== false;
 						window.google?.accounts.id.initialize({
 							client_id: options.clientId,
 							callback: async (response: { credential: string }) => {
@@ -290,7 +299,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							ux_mode: opts?.uxMode || "popup",
 							nonce: opts?.nonce,
 							itp_support: true,
-							use_fedcm_for_prompt: useFedCM,
 							...options.additionalOptions,
 						});
 
@@ -326,8 +334,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						}
 					}
 
-					const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
-					const contextValue = context ?? options.context ?? "signin";
+					const autoSelect = opts?.autoSelect ?? options.autoSelect;
+					const cancelOnTapOutside =
+						opts?.cancelOnTapOutside ?? options.cancelOnTapOutside;
+					const contextValue = opts?.context ?? options.context ?? "signin";
 					isRequestInProgress = true;
 
 					try {
@@ -337,7 +347,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							const baseDelay = options.promptOptions?.baseDelay ?? 1000;
 							const maxAttempts = options.promptOptions?.maxAttempts ?? 5;
 
-							const useFedCM = options.promptOptions?.fedCM !== false;
 							window.google?.accounts.id.initialize({
 								client_id: options.clientId,
 								callback: async (response: { credential: string }) => {
@@ -359,7 +368,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
 								 */
 								itp_support: true,
-								use_fedcm_for_prompt: useFedCM,
 								...options.additionalOptions,
 							});
 
@@ -384,24 +392,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											resolve();
 										}
 									} else if (notification.isSkippedMoment?.()) {
-										// Under FedCM, getSkippedReason() is not available.
-										// Treat missing reason the same as a no-retry reason.
-										const reason = notification.getSkippedReason?.();
-										if (!reason || noRetryReasons.skipped.includes(reason)) {
-											opts?.onPromptNotification?.(notification);
-											resolve();
-											return;
-										}
-										if (attempt < maxAttempts) {
-											const delay = Math.pow(2, attempt) * baseDelay;
-											setTimeout(() => handlePrompt(attempt + 1), delay);
-										} else {
-											opts?.onPromptNotification?.(notification);
-											resolve();
-										}
+										// FedCM gives no skip reason, and Google's cooldown blocks a retry.
+										opts?.onPromptNotification?.(notification);
+										resolve();
 									} else if (notification.isNotDisplayed?.()) {
-										// Under FedCM, isNotDisplayed() is deprecated.
-										// Still handle it for non-FedCM fallback.
+										// Only browsers without FedCM send display moments.
 										opts?.onPromptNotification?.(notification);
 										resolve();
 									}

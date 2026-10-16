@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { getAuthTables } from "../get-tables";
+import { getAuthTables, getAuthTablesWithResolvedIndexes } from "../get-tables";
+import type { SecondaryStorage } from "../type";
+
+const secondaryStorageStub: SecondaryStorage = {
+	get: async () => null,
+	getAndDelete: async () => null,
+	increment: async () => 1,
+	set: async () => {},
+	delete: async () => {},
+};
 
 describe("getAuthTables", () => {
 	it("should use correct field name for refreshTokenExpiresAt", () => {
@@ -60,6 +69,141 @@ describe("getAuthTables", () => {
 		expect(accessTokenExpiresAtField.fieldName).toBe("accessTokenExpiresAt");
 	});
 
+	it("keys accounts by provider id and account id with configured field names", () => {
+		const tables = getAuthTables({
+			account: {
+				fields: {
+					accountId: "provider_subject",
+					providerId: "provider_alias",
+				},
+			},
+		});
+
+		expect(tables.account?.fields.accountId?.fieldName).toBe(
+			"provider_subject",
+		);
+		expect(tables.account?.fields.providerId?.fieldName).toBe("provider_alias");
+		expect(tables.account?.fields.issuer).toBeUndefined();
+		expect(tables.account?.fields.providerAccountId).toBeUndefined();
+		expect(tables.account?.indexes).toBeUndefined();
+	});
+
+	it("should propagate compound indexes from plugin schemas", () => {
+		const tables = getAuthTables({
+			plugins: [
+				{
+					id: "directory",
+					schema: {
+						directoryUser: {
+							fields: {
+								connectionId: { type: "string" },
+								externalId: { type: "string" },
+							},
+							indexes: [
+								{
+									fields: ["connectionId", "externalId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.directoryUser?.indexes).toEqual([
+			{
+				fields: ["connectionId", "externalId"],
+				unique: true,
+			},
+		]);
+	});
+
+	it("should preserve compound indexes when a plugin extends a core table", () => {
+		const tables = getAuthTables({
+			plugins: [
+				{
+					id: "account-identity",
+					schema: {
+						account: {
+							fields: {
+								issuer: { type: "string" },
+								accountId: { type: "string" },
+							},
+							indexes: [
+								{
+									fields: ["issuer", "accountId"],
+									unique: true,
+								},
+							],
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.account?.indexes).toEqual([
+			{
+				fields: ["issuer", "accountId"],
+				unique: true,
+			},
+		]);
+	});
+
+	it("should reject multiple logical tables targeting one physical table", () => {
+		expect(() =>
+			getAuthTables({
+				plugins: [
+					{
+						id: "ambiguous-schema",
+						schema: {
+							directorySubject: {
+								modelName: "directory_identity",
+								fields: { subject: { type: "string" } },
+								indexes: [{ fields: ["subject"] }],
+							},
+							directoryIdentity: {
+								modelName: "directory_identity",
+								fields: { issuer: { type: "string" } },
+							},
+						},
+					},
+				],
+			}),
+		).toThrow(
+			'Database schema resolves more than one indexed logical table to "directory_identity".',
+		);
+	});
+
+	it("should return resolved indexes with the constructed tables", () => {
+		const { indexesByTable, tables } = getAuthTablesWithResolvedIndexes({
+			plugins: [
+				{
+					id: "resolved-indexes",
+					schema: {
+						directoryIdentity: {
+							modelName: "directory_identity",
+							fields: {
+								issuer: { fieldName: "issuer_url", type: "string" },
+								subject: { type: "string" },
+							},
+							indexes: [{ fields: ["issuer", "subject"], unique: true }],
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.directoryIdentity?.indexes).toHaveLength(1);
+		expect(indexesByTable.get("directory_identity")).toEqual([
+			{
+				columns: ["issuer_url", "subject"],
+				name: "directory_identity_issuer_url_subject_uidx",
+				unique: true,
+			},
+		]);
+	});
+
 	it("should merge additionalFields into verification table metadata", () => {
 		const tables = getAuthTables({
 			verification: {
@@ -83,11 +227,7 @@ describe("getAuthTables", () => {
 
 	it("should exclude verification table when secondaryStorage is configured", () => {
 		const tables = getAuthTables({
-			secondaryStorage: {
-				get: async () => null,
-				set: async () => {},
-				delete: async () => {},
-			},
+			secondaryStorage: secondaryStorageStub,
 		});
 
 		expect(tables.verification).toBeUndefined();
@@ -95,11 +235,7 @@ describe("getAuthTables", () => {
 
 	it("should include verification table when storeInDatabase is true", () => {
 		const tables = getAuthTables({
-			secondaryStorage: {
-				get: async () => null,
-				set: async () => {},
-				delete: async () => {},
-			},
+			secondaryStorage: secondaryStorageStub,
 			verification: {
 				storeInDatabase: true,
 			},
@@ -160,5 +296,76 @@ describe("getAuthTables", () => {
 		});
 
 		expect(tables.shared!.disableMigrations).toBe(true);
+	});
+
+	it("should merge distinct indexes when plugins extend the same table", () => {
+		const connectionIndex = {
+			fields: ["connectionId", "externalId"],
+			unique: true,
+		} as const;
+		const tables = getAuthTables({
+			plugins: [
+				{
+					id: "a",
+					schema: {
+						shared: {
+							fields: {
+								connectionId: { type: "string" },
+								externalId: { type: "string" },
+							},
+							indexes: [connectionIndex],
+						},
+					},
+				},
+				{
+					id: "b",
+					schema: {
+						shared: {
+							fields: { status: { type: "string" } },
+							indexes: [
+								connectionIndex,
+								{ fields: ["connectionId", "status"] },
+							],
+						},
+					},
+				},
+			],
+		});
+
+		expect(tables.shared?.indexes).toEqual([
+			connectionIndex,
+			{ fields: ["connectionId", "status"] },
+		]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8111
+	 */
+	describe("user.modelName collision with account schema key", () => {
+		it("should point session.userId at the user table when user.modelName='account' and account.modelName='identity'", () => {
+			const tables = getAuthTables({
+				user: { modelName: "account" },
+				account: { modelName: "identity" },
+			});
+
+			const sessionUserIdRef = tables.session!.fields.userId!.references;
+			expect(sessionUserIdRef).toBeDefined();
+			expect(tables[sessionUserIdRef!.model]).toBeDefined();
+			expect(tables[sessionUserIdRef!.model]!.modelName).toBe("account");
+			expect(tables[sessionUserIdRef!.model]!.fields.email).toBeDefined();
+		});
+
+		it("should point account.userId at the user table when user.modelName='account' and account.modelName='identity'", () => {
+			const tables = getAuthTables({
+				user: { modelName: "account" },
+				account: { modelName: "identity" },
+			});
+
+			const accountUserIdRef = tables.account!.fields.userId!.references;
+			expect(accountUserIdRef).toBeDefined();
+			expect(tables[accountUserIdRef!.model]).toBeDefined();
+			expect(tables[accountUserIdRef!.model]!.modelName).toBe("account");
+			expect(tables[accountUserIdRef!.model]!.fields.email).toBeDefined();
+		});
 	});
 });

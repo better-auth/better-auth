@@ -7,8 +7,10 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
+import { logger } from "@better-auth/core/env";
 import type { ClientSession, Db, MongoClient } from "mongodb";
-import { ObjectId, UUID } from "mongodb";
+import { MongoError, MongoErrorLabel, ObjectId, UUID } from "mongodb";
 import {
 	escapeForMongoRegex,
 	insensitiveContains,
@@ -27,6 +29,52 @@ class MongoAdapterError extends Error {
 	) {
 		super(message);
 		this.name = "MongoAdapterError";
+	}
+}
+
+/**
+ * NoSuchTransaction (251) and TransactionCommitted (256) both mean the server
+ * has nothing left open, so the abort has already achieved what it was for.
+ */
+const ABORT_SETTLED_CODES = new Set([251, 256]);
+
+/**
+ * Abort a transaction whose commit did not complete, as a command on its own
+ * session.
+ *
+ * `session.abortTransaction()` is retried by the driver on a transient error;
+ * a raw command is not, and giving up after one attempt would leave the
+ * transaction open until `transactionLifetimeLimitSeconds` — the leak this is
+ * here to close. So a retryable write is tried once more.
+ *
+ * The abort is best-effort either way: the caller's original error is the one
+ * that must surface, so a failure here is only logged.
+ */
+async function abortTransactionCommand(
+	client: MongoClient,
+	session: ClientSession,
+): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			await client.db("admin").command({ abortTransaction: 1 }, { session });
+			return;
+		} catch (abortError) {
+			const code = (abortError as { code?: number })?.code;
+			if (code !== undefined && ABORT_SETTLED_CODES.has(code)) {
+				return;
+			}
+			const retryable =
+				abortError instanceof MongoError &&
+				abortError.hasErrorLabel(MongoErrorLabel.RetryableWriteError);
+			if (retryable && attempt === 0) {
+				continue;
+			}
+			logger.error(
+				"Failed to abort a MongoDB transaction whose commit did not complete",
+				abortError,
+			);
+			return;
+		}
 	}
 }
 
@@ -65,6 +113,7 @@ export const mongodbAdapter = (
 	config?: MongoDBAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null;
+	const indexSetupByDefinition = new Map<string, Promise<string>>();
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator = options.advanced?.database?.generateId;
@@ -79,15 +128,68 @@ export const mongodbAdapter = (
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
-		({
-			getFieldAttributes,
-			getFieldName,
-			schema,
-			getDefaultModelName,
-			options,
-		}) => {
+		({ getFieldAttributes, getFieldName, schema, options }) => {
 			const customIdGen = getCustomIdGenerator(options);
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
+			const resolvedIndexesByModel = new Map<
+				string,
+				ReturnType<typeof resolveDatabaseTableIndexes>
+			>();
+
+			const getResolvedModelIndexes = (model: string, modelKey: string) => {
+				const cachedIndexes = resolvedIndexesByModel.get(model);
+				if (cachedIndexes) return cachedIndexes;
+
+				const table = schema[modelKey];
+				const indexes =
+					!table || table.disableMigrations
+						? []
+						: resolveDatabaseTableIndexes({
+								fields: table.fields,
+								indexes: table.indexes,
+								tableName: model,
+							});
+				resolvedIndexesByModel.set(model, indexes);
+				return indexes;
+			};
+
+			const ensureModelIndexes = async (model: string, modelKey: string) => {
+				const indexes = getResolvedModelIndexes(model, modelKey);
+
+				await Promise.all(
+					indexes.map((index) => {
+						const physicalFieldNames = index.columns.map((fieldName) =>
+							fieldName === "id" ? "_id" : fieldName,
+						);
+						const indexDefinition = JSON.stringify([
+							model,
+							index.name,
+							physicalFieldNames,
+							index.unique ?? false,
+						]);
+						const existingIndexSetup =
+							indexSetupByDefinition.get(indexDefinition);
+						if (existingIndexSetup !== undefined) return existingIndexSetup;
+
+						const indexFields = Object.fromEntries(
+							physicalFieldNames.map((field) => [field, 1] as const),
+						);
+						const indexSetup = Promise.resolve().then(() =>
+							db.collection(model).createIndex(indexFields, {
+								name: index.name,
+								unique: index.unique ?? false,
+							}),
+						);
+						indexSetupByDefinition.set(indexDefinition, indexSetup);
+						void indexSetup.catch(() => {
+							if (indexSetupByDefinition.get(indexDefinition) === indexSetup) {
+								indexSetupByDefinition.delete(indexDefinition);
+							}
+						});
+						return indexSetup;
+					}),
+				);
+			};
 
 			function coerceToIdType(value: string): ObjectId | UUID {
 				if (useUUIDs) return new UUID(value);
@@ -111,7 +213,6 @@ export const mongodbAdapter = (
 				if (customIdGen) {
 					return value;
 				}
-				model = getDefaultModelName(model);
 				if (
 					field === "id" ||
 					field === "_id" ||
@@ -155,10 +256,10 @@ export const mongodbAdapter = (
 
 			function convertWhereClause({
 				where,
-				model,
+				modelKey,
 			}: {
 				where: Where[];
-				model: string;
+				modelKey: string;
 			}) {
 				if (!where.length) return {};
 				const conditions = where.map((w) => {
@@ -170,9 +271,12 @@ export const mongodbAdapter = (
 						mode = "sensitive",
 					} = w;
 					let condition: any;
-					let field = getFieldName({ model, field: field_ });
+					let field = getFieldName({ model: modelKey, field: field_ });
 					if (field === "id") field = "_id";
-					const fieldAttributes = getFieldAttributes({ model, field: field_ });
+					const fieldAttributes = getFieldAttributes({
+						model: modelKey,
+						field: field_,
+					});
 					const isIdOrIdReference =
 						field === "_id" || fieldAttributes?.references?.field === "id";
 					const isInsensitive =
@@ -191,7 +295,7 @@ export const mongodbAdapter = (
 									[field]: serializeID({
 										field,
 										value,
-										model,
+										model: modelKey,
 									}),
 								};
 							}
@@ -204,9 +308,9 @@ export const mongodbAdapter = (
 									[field]: {
 										$in: Array.isArray(value)
 											? value.map((v) =>
-													serializeID({ field, value: v, model }),
+													serializeID({ field, value: v, model: modelKey }),
 												)
-											: [serializeID({ field, value, model })],
+											: [serializeID({ field, value, model: modelKey })],
 									},
 								};
 							}
@@ -219,9 +323,9 @@ export const mongodbAdapter = (
 									[field]: {
 										$nin: Array.isArray(value)
 											? value.map((v) =>
-													serializeID({ field, value: v, model }),
+													serializeID({ field, value: v, model: modelKey }),
 												)
-											: [serializeID({ field, value, model })],
+											: [serializeID({ field, value, model: modelKey })],
 									},
 								};
 							}
@@ -232,7 +336,7 @@ export const mongodbAdapter = (
 									$gt: serializeID({
 										field,
 										value,
-										model,
+										model: modelKey,
 									}),
 								},
 							};
@@ -243,7 +347,7 @@ export const mongodbAdapter = (
 									$gte: serializeID({
 										field,
 										value,
-										model,
+										model: modelKey,
 									}),
 								},
 							};
@@ -254,7 +358,7 @@ export const mongodbAdapter = (
 									$lt: serializeID({
 										field,
 										value,
-										model,
+										model: modelKey,
 									}),
 								},
 							};
@@ -265,7 +369,7 @@ export const mongodbAdapter = (
 									$lte: serializeID({
 										field,
 										value,
-										model,
+										model: modelKey,
 									}),
 								},
 							};
@@ -279,7 +383,7 @@ export const mongodbAdapter = (
 										$ne: serializeID({
 											field,
 											value,
-											model,
+											model: modelKey,
 										}),
 									},
 								};
@@ -341,14 +445,15 @@ export const mongodbAdapter = (
 			}
 
 			return {
-				async create({ model, data: values }) {
+				async create({ model, modelKey = model, data: values }) {
+					await ensureModelIndexes(model, modelKey);
 					const res = await db.collection(model).insertOne(values, { session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
-				async findOne({ model, where, select, join }) {
+				async findOne({ model, modelKey = model, where, select, join }) {
 					const matchStage = where
-						? { $match: convertWhereClause({ where, model }) }
+						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
 					const pipeline: any[] = [matchStage];
 
@@ -356,11 +461,11 @@ export const mongodbAdapter = (
 						for (const [joinedModel, joinConfig] of Object.entries(join)) {
 							const localField = getFieldName({
 								field: joinConfig.on.from,
-								model,
+								model: modelKey,
 							});
 							const foreignField = getFieldName({
 								field: joinConfig.on.to,
-								model: joinedModel,
+								model: joinConfig.modelKey ?? joinedModel,
 							});
 
 							const localFieldName = localField === "id" ? "_id" : localField;
@@ -369,7 +474,7 @@ export const mongodbAdapter = (
 
 							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
 							const joinedModelSchema =
-								schema[getDefaultModelName(joinedModel)];
+								schema[joinConfig.modelKey ?? joinedModel];
 							const foreignFieldAttribute =
 								joinedModelSchema?.fields[joinConfig.on.to];
 							const isUnique = foreignFieldAttribute?.unique === true;
@@ -430,7 +535,7 @@ export const mongodbAdapter = (
 					if (select) {
 						const projection: any = {};
 						select.forEach((field) => {
-							projection[getFieldName({ field, model })] = 1;
+							projection[getFieldName({ field, model: modelKey })] = 1;
 						});
 
 						// Include joined collections in projection
@@ -453,9 +558,18 @@ export const mongodbAdapter = (
 					if (!res || res.length === 0) return null;
 					return res[0] as any;
 				},
-				async findMany({ model, where, limit, select, offset, sortBy, join }) {
+				async findMany({
+					model,
+					modelKey = model,
+					where,
+					limit,
+					select,
+					offset,
+					sortBy,
+					join,
+				}) {
 					const matchStage = where
-						? { $match: convertWhereClause({ where, model }) }
+						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
 					const pipeline: any[] = [matchStage];
 
@@ -463,11 +577,11 @@ export const mongodbAdapter = (
 						for (const [joinedModel, joinConfig] of Object.entries(join)) {
 							const localField = getFieldName({
 								field: joinConfig.on.from,
-								model,
+								model: modelKey,
 							});
 							const foreignField = getFieldName({
 								field: joinConfig.on.to,
-								model: joinedModel,
+								model: joinConfig.modelKey ?? joinedModel,
 							});
 
 							const localFieldName = localField === "id" ? "_id" : localField;
@@ -476,7 +590,7 @@ export const mongodbAdapter = (
 
 							// Only unwind if the foreign field has a unique constraint (one-to-one relationship)
 							const foreignFieldAttribute = getFieldAttributes({
-								model: joinedModel,
+								model: joinConfig.modelKey ?? joinedModel,
 								field: joinConfig.on.to,
 							});
 							const isUnique = foreignFieldAttribute?.unique === true;
@@ -540,7 +654,7 @@ export const mongodbAdapter = (
 					if (select?.length && select.length > 0) {
 						const projection: any = {};
 						select.forEach((field) => {
-							projection[getFieldName({ field, model })] = 1;
+							projection[getFieldName({ field, model: modelKey })] = 1;
 						});
 
 						// Include joined collections in projection
@@ -554,9 +668,13 @@ export const mongodbAdapter = (
 					}
 
 					if (sortBy) {
+						const sortField = getFieldName({
+							field: sortBy.field,
+							model: modelKey,
+						});
 						pipeline.push({
 							$sort: {
-								[getFieldName({ field: sortBy.field, model })]:
+								[sortField === "id" ? "_id" : sortField]:
 									sortBy.direction === "desc" ? -1 : 1,
 							},
 						});
@@ -577,9 +695,9 @@ export const mongodbAdapter = (
 
 					return res as any;
 				},
-				async count({ model, where }) {
+				async count({ model, modelKey = model, where }) {
 					const matchStage = where
-						? { $match: convertWhereClause({ where, model }) }
+						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
 					const pipeline: any[] = [matchStage, { $count: "total" }];
 
@@ -591,8 +709,9 @@ export const mongodbAdapter = (
 					if (!res || res.length === 0) return 0;
 					return res[0]?.total ?? 0;
 				},
-				async update({ model, where, update: values }) {
-					const clause = convertWhereClause({ where, model });
+				async update({ model, modelKey = model, where, update: values }) {
+					await ensureModelIndexes(model, modelKey);
+					const clause = convertWhereClause({ where, modelKey });
 
 					const res = await db.collection(model).findOneAndUpdate(
 						clause,
@@ -607,8 +726,9 @@ export const mongodbAdapter = (
 					if (!doc) return null;
 					return doc as any;
 				},
-				async updateMany({ model, where, update: values }) {
-					const clause = convertWhereClause({ where, model });
+				async updateMany({ model, modelKey = model, where, update: values }) {
+					await ensureModelIndexes(model, modelKey);
+					const clause = convertWhereClause({ where, modelKey });
 
 					const res = await db.collection(model).updateMany(
 						clause,
@@ -619,36 +739,43 @@ export const mongodbAdapter = (
 					);
 					return res.modifiedCount;
 				},
-				async delete({ model, where }) {
-					const clause = convertWhereClause({ where, model });
+				async delete({ model, modelKey = model, where }) {
+					const clause = convertWhereClause({ where, modelKey });
 					await db.collection(model).deleteOne(clause, { session });
 				},
-				async deleteMany({ model, where }) {
-					const clause = convertWhereClause({ where, model });
+				async deleteMany({ model, modelKey = model, where }) {
+					const clause = convertWhereClause({ where, modelKey });
 					const res = await db
 						.collection(model)
 						.deleteMany(clause, { session });
 					return res.deletedCount;
 				},
-				async consumeOne({ model, where }) {
-					const clause = convertWhereClause({ where, model });
+				async consumeOne({ model, modelKey = model, where }) {
+					const clause = convertWhereClause({ where, modelKey });
 					const doc = await db.collection(model).findOneAndDelete(clause, {
 						session,
 						includeResultMetadata: true,
 					});
 					return ((doc as any)?.value as any) ?? null;
 				},
-				async incrementOne({ model, where, increment, set }) {
-					const clause = convertWhereClause({ where, model });
+				async incrementOne({ model, modelKey = model, where, increment, set }) {
+					await ensureModelIndexes(model, modelKey);
+					const clause = convertWhereClause({ where, modelKey });
 					// Only include operators that carry fields. An empty `$inc: {}`
 					// errors on MongoDB server < 5.0, and a set-only guarded
 					// transition passes an empty `increment`.
-					const update: { $inc?: Record<string, number>; $set?: any } = {};
+					const update: {
+						$inc?: Record<string, number>;
+						$set?: Record<string, unknown>;
+					} = {};
 					if (Object.keys(increment).length > 0) {
 						update.$inc = increment;
 					}
 					if (set && Object.keys(set).length > 0) {
 						update.$set = set;
+					}
+					if (!update.$inc && !update.$set) {
+						return db.collection(model).findOne(clause, { session });
 					}
 					const res = await db
 						.collection(model)
@@ -688,10 +815,9 @@ export const mongodbAdapter = (
 							}
 
 							const session = config.client.startSession();
+							let commitAttempted = false;
 
 							try {
-								session.startTransaction();
-
 								const adapter = createAdapterFactory({
 									config: {
 										...adapterOptions!.config,
@@ -700,12 +826,24 @@ export const mongodbAdapter = (
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);
 
-								const result = await cb(adapter);
-
-								await session.commitTransaction();
-								return result;
+								// `withTransaction` retries a `TransientTransactionError` (such as a
+								// WriteConflict between concurrent transactions) and an unknown
+								// commit result, so `cb` can run more than once.
+								return await session.withTransaction(async () => {
+									commitAttempted = false;
+									const result = await cb(adapter);
+									// `withTransaction` commits as soon as the callback resolves.
+									commitAttempted = true;
+									return result;
+								});
 							} catch (err) {
-								await session.abortTransaction();
+								// `withTransaction` aborts when the callback fails, but not when the
+								// commit fails in flight: the driver then no longer reports the
+								// session as being in a transaction, while the server keeps it open
+								// until `transactionLifetimeLimitSeconds`. Abort it with a command.
+								if (commitAttempted) {
+									await abortTransactionCommand(config.client, session);
+								}
 								throw err;
 							} finally {
 								await session.endSession();

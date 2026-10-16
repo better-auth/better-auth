@@ -1,225 +1,180 @@
-import { describe, expect, it } from "vitest";
-import { parseCookies } from "../../cookies";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { test as baseTest, describe, expect } from "vitest";
+import type { CookieAttributes } from "../../cookies";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { LastLoginMethodOptions } from ".";
 import { lastLoginMethod } from ".";
-import { lastLoginMethodClient } from "./client";
 
-describe("lastLoginMethod custom cookie prefix", async () => {
-	it("should work with default cookie name regardless of custom prefix", async () => {
-		const { client, cookieSetter, testUser } = await getTestInstance(
-			{
-				advanced: {
-					cookiePrefix: "custom-auth",
-				},
-				plugins: [lastLoginMethod()],
-			},
-			{
-				clientOptions: {
-					plugins: [lastLoginMethodClient()],
-				},
-			},
-		);
+const DEFAULT_COOKIE_NAME = "better-auth.last_used_login_method";
 
-		const headers = new Headers();
-		await client.signIn.email(
-			{
+const test = baseTest
+	.extend("options", {} as Pick<BetterAuthOptions, "baseURL" | "advanced">)
+	.extend("pluginOptions", {} as LastLoginMethodOptions)
+	.extend("cookies", async ({ options, pluginOptions }) => {
+		const { auth, testUser } = await getTestInstance({
+			...options,
+			plugins: [lastLoginMethod(pluginOptions)],
+		});
+		const { headers } = await auth.api.signInEmail({
+			returnHeaders: true,
+			body: {
 				email: testUser.email,
 				password: testUser.password,
 			},
-			{
-				onSuccess(context) {
-					cookieSetter(headers)(context);
-				},
-			},
-		);
-		const cookies = parseCookies(headers.get("cookie") || "");
-		// Uses exact cookie name from config, not affected by cookiePrefix
-		expect(cookies.get("better-auth.last_used_login_method")).toBe("email");
+		});
+		const { authCookies } = await auth.$context;
+		const cookies = parseSetCookieHeader(headers.get("set-cookie") ?? "");
+		return {
+			get: (name: string) => cookies.get(name),
+			session: cookies.get(authCookies.sessionToken.name),
+		};
 	});
 
-	it("should work with custom cookie name and prefix", async () => {
-		const { client, cookieSetter, testUser } = await getTestInstance(
-			{
+function scopeAttributes(cookie: CookieAttributes | undefined) {
+	return {
+		domain: cookie?.domain,
+		path: cookie?.path,
+		secure: cookie?.secure,
+		samesite: cookie?.samesite,
+	};
+}
+
+describe("lastLoginMethod cookie name", () => {
+	describe("with a custom cookiePrefix", () => {
+		test.override("options", {
+			advanced: {
+				cookiePrefix: "custom-auth",
+			},
+		});
+
+		test("keeps the default name", ({ cookies }) => {
+			expect(cookies.get(DEFAULT_COOKIE_NAME)?.value).toBe("email");
+		});
+	});
+
+	describe("with a cookieName that includes the prefix", () => {
+		test
+			.override("options", {
 				advanced: {
 					cookiePrefix: "my-app",
 				},
-				plugins: [lastLoginMethod({ cookieName: "my-app.last_method" })],
-			},
-			{
-				clientOptions: {
-					plugins: [lastLoginMethodClient()],
-				},
-			},
-		);
+			})
+			.override("pluginOptions", {
+				cookieName: "my-app.last_method",
+			});
 
-		const headers = new Headers();
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess(context) {
-					cookieSetter(headers)(context);
-				},
-			},
-		);
-		const cookies = parseCookies(headers.get("cookie") || "");
-		expect(cookies.get("my-app.last_method")).toBe("email");
+		test("uses the name verbatim", ({ cookies }) => {
+			expect(cookies.get("my-app.last_method")?.value).toBe("email");
+		});
 	});
 
-	it("should work with custom cookie name regardless of prefix", async () => {
-		const { client, cookieSetter, testUser } = await getTestInstance(
-			{
+	describe("with a cookieName without the prefix", () => {
+		test
+			.override("options", {
 				advanced: {
 					cookiePrefix: "my-app",
 				},
-				plugins: [lastLoginMethod({ cookieName: "last_login_method" })],
-			},
-			{
-				clientOptions: {
-					plugins: [lastLoginMethodClient()],
-				},
-			},
-		);
+			})
+			.override("pluginOptions", { cookieName: "last_login_method" });
 
-		const headers = new Headers();
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess(context) {
-					cookieSetter(headers)(context);
-				},
-			},
-		);
-		const cookies = parseCookies(headers.get("cookie") || "");
-		// Uses exact cookie name from config, not affected by cookiePrefix
-		expect(cookies.get("last_login_method")).toBe("email");
+		test("does not apply cookiePrefix", ({ cookies }) => {
+			expect(cookies.get("last_login_method")?.value).toBe("email");
+		});
 	});
 
-	it("should work with cross-subdomain and custom prefix", async () => {
-		const { client, testUser } = await getTestInstance(
-			{
-				baseURL: "https://auth.example.com",
-				advanced: {
-					cookiePrefix: "custom-auth",
-					crossSubDomainCookies: {
-						enabled: true,
-						domain: "example.com",
-					},
-				},
-				plugins: [lastLoginMethod()],
-			},
-			{
-				clientOptions: {
-					plugins: [lastLoginMethodClient()],
-				},
-			},
-		);
+	describe("with cookieName explicitly undefined", () => {
+		test.override("pluginOptions", { cookieName: undefined });
 
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toContain("Domain=example.com");
-					expect(setCookie).toContain("SameSite=Lax");
-					// Uses exact cookie name from config, not affected by cookiePrefix
-					expect(setCookie).toContain(
-						"better-auth.last_used_login_method=email",
-					);
+		test("falls back to the default name", ({ cookies }) => {
+			expect(cookies.get(DEFAULT_COOKIE_NAME)?.value).toBe("email");
+		});
+	});
+});
+
+describe("lastLoginMethod cookie attributes", () => {
+	describe("with cross-subdomain cookies", () => {
+		test.override("options", {
+			baseURL: "https://auth.example.com",
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
+					domain: "example.com",
 				},
 			},
-		);
+		});
+
+		test("mirrors the session cookie scope", ({ cookies }) => {
+			const cookie = cookies.get(DEFAULT_COOKIE_NAME);
+
+			expect(scopeAttributes(cookie)).toMatchObject({
+				domain: "example.com",
+				samesite: "lax",
+				secure: true,
+			});
+			expect(scopeAttributes(cookie)).toEqual(scopeAttributes(cookies.session));
+		});
+
+		test("is readable by client scripts", ({ cookies }) => {
+			expect(cookies.get(DEFAULT_COOKIE_NAME)?.httponly).toBeUndefined();
+		});
 	});
 
-	it("should work with cross-origin cookies", async () => {
-		const { client, testUser } = await getTestInstance(
-			{
-				baseURL: "https://api.example.com",
-				advanced: {
-					crossOriginCookies: {
-						enabled: true,
-					},
-					defaultCookieAttributes: {
-						sameSite: "none",
-						secure: true,
-					},
-				},
-				plugins: [lastLoginMethod()],
-			},
-			{
-				clientOptions: {
-					plugins: [lastLoginMethodClient()],
+	describe("with SameSite=None", () => {
+		test.override("options", {
+			baseURL: "https://api.example.com",
+			advanced: {
+				defaultCookieAttributes: {
+					sameSite: "none",
+					secure: true,
 				},
 			},
-		);
+		});
 
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toContain("SameSite=None");
-					expect(setCookie).toContain("Secure");
-					// Should not contain Domain attribute for cross-origin
-					expect(setCookie).not.toContain("Domain=");
-					expect(setCookie).toContain(
-						"better-auth.last_used_login_method=email",
-					);
-				},
-			},
-		);
+		test("mirrors the session cookie scope", ({ cookies }) => {
+			const cookie = cookies.get(DEFAULT_COOKIE_NAME);
+
+			expect(scopeAttributes(cookie)).toMatchObject({
+				domain: undefined,
+				samesite: "none",
+				secure: true,
+			});
+			expect(scopeAttributes(cookie)).toEqual(scopeAttributes(cookies.session));
+		});
 	});
 
-	it("should handle cross-origin on localhost for development", async () => {
-		const { client, testUser } = await getTestInstance(
-			{
-				baseURL: "http://localhost:3000",
-				advanced: {
-					crossOriginCookies: {
-						enabled: true,
-						allowLocalhostUnsecure: true,
-					},
-					defaultCookieAttributes: {
-						sameSite: "none",
-						secure: false,
-					},
-				},
-				plugins: [lastLoginMethod()],
-			},
-			{
-				clientOptions: {
-					plugins: [lastLoginMethodClient()],
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-rfc6265bis-22#section-5.7
+	 */
+	describe("with SameSite=None and secure disabled", () => {
+		test.override("options", {
+			baseURL: "http://localhost:3000",
+			advanced: {
+				defaultCookieAttributes: {
+					sameSite: "none",
+					secure: false,
 				},
 			},
-		);
+		});
 
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onResponse(context) {
-					const setCookie = context.response.headers.get("set-cookie");
-					expect(setCookie).toContain("SameSite=None");
-					// Should not contain Secure on localhost when allowLocalhostUnsecure is true
-					expect(setCookie).not.toContain("Secure");
-					expect(setCookie).toContain(
-						"better-auth.last_used_login_method=email",
-					);
-				},
-			},
-		);
+		test("still sets Secure like the session cookie", ({ cookies }) => {
+			const cookie = cookies.get(DEFAULT_COOKIE_NAME);
+
+			expect(scopeAttributes(cookie)).toMatchObject({
+				samesite: "none",
+				secure: true,
+			});
+			expect(scopeAttributes(cookie)).toEqual(scopeAttributes(cookies.session));
+		});
+	});
+
+	describe("with maxAge explicitly undefined", () => {
+		test.override("pluginOptions", { maxAge: undefined });
+
+		test("falls back to the default max age", ({ cookies }) => {
+			expect(cookies.get(DEFAULT_COOKIE_NAME)?.["max-age"]).toBe(
+				60 * 60 * 24 * 30,
+			);
+		});
 	});
 });

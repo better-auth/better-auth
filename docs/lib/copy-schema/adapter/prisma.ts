@@ -1,5 +1,10 @@
 import type { Resolver } from "../types";
-import { capitalize, getTypeFactory } from "../utils";
+import {
+	capitalize,
+	filterNonUniqueIndexes,
+	getIndexName,
+	getTypeFactory,
+} from "../utils";
 
 export type PrismaResolverOptions = {
 	/**
@@ -43,6 +48,15 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 					foreignKeyId += " @db.ObjectId";
 				}
 
+				// Only PostgreSQL, CockroachDB, and MongoDB support Prisma scalar
+				// lists. They cannot be nullable (`String[]?` is invalid) and
+				// default to an empty list, so `@default([])` is emitted to match
+				// the generated schema. The other providers have no array type, so
+				// the adapter stores these as a JSON string in a plain `String`.
+				const supportsScalarList =
+					provider === "postgresql" ||
+					provider === "cockroachdb" ||
+					provider === "mongodb";
 				return {
 					string,
 					boolean: `Boolean${field.required === false ? "?" : ""}`,
@@ -50,8 +64,10 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 					date: `DateTime${field.required === false ? "?" : ""}`,
 					json: `Json${field.required === false ? "?" : ""}`,
 					id,
-					"string[]": `String[]${field.required === false ? "?" : ""}`,
-					"number[]": `${field.bigint ? "BigInt" : "Int"}[]${field.required === false ? "?" : ""}`,
+					"string[]": supportsScalarList ? "String[] @default([])" : "String",
+					"number[]": supportsScalarList
+						? `${field.bigint ? "BigInt" : "Int"}[] @default([])`
+						: "String",
 					foreignKeyId,
 				};
 			});
@@ -86,6 +102,11 @@ export const prismaResolver = (options: PrismaResolverOptions): Resolver => {
 					lines.push(`\t${additionalLine}`);
 				}
 				lines.push(`\t${newLine}`);
+			}
+			for (const field of filterNonUniqueIndexes(ctx.schema)) {
+				lines.push(
+					`\t@@index([${field.fieldName}], map: "${getIndexName(ctx.schema.modelName, field)}")`,
+				);
 			}
 			lines.push(
 				`\t@@map("${ctx.schema.modelName}${options.usePlural ? "s" : ""}")`,

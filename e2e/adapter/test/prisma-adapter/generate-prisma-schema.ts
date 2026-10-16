@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
-import type { PrismaClient } from "@prisma/client";
+import type { PrismaClient } from "./.tmp/prisma-client-base/client";
 import type { Dialect } from "./constants";
 
 export async function generatePrismaSchema(
@@ -12,7 +12,24 @@ export async function generatePrismaSchema(
 	iteration: number,
 	dialect: Dialect,
 ) {
-	const i = async (x: string) => await import(x);
+	const i = async (x: string) => {
+		// Clear the Node.js module cache for the generated schema file to ensure fresh import
+		try {
+			const resolvedPath =
+				typeof require !== "undefined"
+					? require.resolve(x)
+					: new URL(x, import.meta.url).pathname;
+			if (
+				resolvedPath &&
+				typeof resolvedPath === "string" &&
+				typeof require !== "undefined" &&
+				require.cache
+			) {
+				delete require.cache[resolvedPath];
+			}
+		} catch {}
+		return await import(x);
+	};
 	const { generateSchema } = (await i(
 		join(
 			import.meta.dirname,
@@ -30,18 +47,30 @@ export async function generatePrismaSchema(
 		}>;
 	};
 
+	const schemaPath = join(import.meta.dirname, `schema-${dialect}.prisma`);
+	// Always regenerate from a clean slate. The CLI generator returns empty
+	// `code` when the target already exists and is unchanged; writing that
+	// would wipe the schema file and break the subsequent `db push`.
+	await fs.rm(schemaPath, { force: true });
+
 	const prismaDB = prismaAdapter(db, { provider: dialect });
 	let { fileName, code } = await generateSchema({
-		file: join(import.meta.dirname, `schema-${dialect}.prisma`),
+		file: schemaPath,
 		adapter: prismaDB({}),
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
+
+	if (!code) {
+		throw new Error(
+			`generateSchema returned empty code for ${dialect} (iteration ${iteration})`,
+		);
+	}
 
 	// The CLI may not detect Prisma v7 if process.cwd() doesn't have prisma
 	// in its package.json (e.g. monorepo root). Ensure the schema uses the v7
 	// format: "prisma-client" provider, no url in datasource, and custom output.
 	code = code
-		?.replace('provider = "prisma-client-js"', 'provider = "prisma-client"')
+		.replace('provider = "prisma-client-js"', 'provider = "prisma-client"')
 		.replace(/\s*url\s*=\s*(?:env\([^)]*\)|"[^"]*")\n?/g, "\n")
 		.split("\n")
 		.map((line, index) => {
@@ -53,5 +82,5 @@ export async function generatePrismaSchema(
 			return line;
 		})
 		.join("\n");
-	await fs.writeFile(fileName, code || "", "utf-8");
+	await fs.writeFile(fileName, code, "utf-8");
 }

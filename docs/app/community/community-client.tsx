@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import Footer from "@/components/landing/footer";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
+import { SignatureMark } from "@/components/landing/signature-mark";
 import type { CommunityStats } from "@/lib/community-stats";
 
 // Icons - using text-foreground for theme support
@@ -398,6 +399,9 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 							<HalftoneBackground />
 						</div>
 						<CommunityHero stats={stats} />
+						<div className="absolute left-10 right-6 bottom-4 z-[3]">
+							<SignatureMark compact />
+						</div>
 					</div>
 
 					{/* Right side — Stats & platforms */}
@@ -541,7 +545,9 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 								</Link>
 							</motion.div>
 						</div>
-						<Footer />
+						<div className="lg:hidden">
+							<Footer />
+						</div>
 					</div>
 				</div>
 			</div>

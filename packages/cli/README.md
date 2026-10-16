@@ -1,7 +1,8 @@
 # Better Auth CLI
 
 Better Auth comes with a built-in CLI to help you manage the database schema
-needed for both core functionality and plugins.
+needed for both core functionality and plugins, and to create an initial admin user
+for projects using the Admin plugin.
 
 ### **Init**
 
@@ -32,6 +33,16 @@ tool.
 
 ```bash title="terminal"
 npx auth@latest migrate
+```
+
+### **Create Admin**
+
+Create the first admin user for an app using the Admin plugin. The command
+uses your Better Auth config and prompts before creating an admin when users
+already exist. The created admin email is marked as verified by default.
+
+```bash title="terminal"
+npx auth@latest create-admin --email admin@example.com --name "Admin" --role admin
 ```
 
 ### **Secret**

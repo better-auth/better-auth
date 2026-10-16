@@ -1,4 +1,5 @@
 ---
+icon: authenticationGoogle
 title: Google
 description: Google provider setup and usage.
 ---
@@ -145,6 +146,30 @@ await authClient.signIn.social({
   The array only expands ID token audience verification. The authorization code flow still uses the first entry paired with the single `clientSecret` and `redirectURI`, so those cannot vary per platform within one provider block.
 </Callout>
 
+### Restrict Sign-In to Google Workspace
+
+Set `hd` on the Google provider to require a verified Google Workspace hosted-domain claim. Google also receives this value as an account-selection hint, but Better Auth enforces the returned ID token/profile claim after Google signs the response.
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        hd: "company.com", // [!code highlight]
+    },
+}
+```
+
+Set `hd: "*"` to allow any Google Workspace hosted domain. Tokens with no `hd` claim are rejected whenever `hd` is configured.
+
+<Callout type="warn">
+  A custom `getUserInfo` callback replaces Google's built-in callback-path `hd`
+  check. Validate the claim from a trusted provider response and return `null`
+  when it is missing or does not match. Direct ID-token sign-in follows the
+  provider's ID-token verification path, while Google One Tap enforces the
+  configured `hd` separately.
+</Callout>
+
 ### Always ask to select an account
 
 If you want to always ask the user to select an account, you pass the `prompt` parameter to the provider, setting it to `select_account`.
@@ -187,6 +212,24 @@ This will trigger a new OAuth flow that requests the additional scopes. After co
   provider.
 </Callout>
 
+### Disable incremental authorization
+
+By default, Better Auth sends `include_granted_scopes=true` to Google's authorization endpoint so newly issued access tokens cover scopes from prior grants in addition to the ones requested for the current flow. Set `includeGrantedScopes: false` if each OAuth flow should request only its own scopes.
+
+```ts
+socialProviders: {
+    google: {
+        clientId: process.env.GOOGLE_CLIENT_ID as string,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        includeGrantedScopes: false, // [!code highlight]
+    },
+}
+```
+
+Call-time `additionalParams.include_granted_scopes` still follows the general OAuth parameter precedence rules and can override this provider default for a single flow.
+
+See Google's [Incremental authorization](https://developers.google.com/identity/protocols/oauth2/web-server#incrementalAuth) docs for the underlying parameter behavior.
+
 ### Always get refresh token
 
 Google only issues a refresh token the first time a user consents to your app.
@@ -210,3 +253,19 @@ socialProviders: {
   already authorized your app, you must have them revoke your app's access in
   their Google account settings, then re-authorize.
 </Callout>
+
+### Restricting to a Google Workspace domain
+
+To limit sign-in to accounts in a specific Google Workspace domain, forward the
+`hd` parameter on the call. This mirrors Google's `hd` authorization-URL
+parameter and is resolved per request:
+
+```ts
+await authClient.signIn.social({
+  provider: "google",
+  additionalParams: { hd: "example.com" },
+});
+```
+
+You can also set `hd` at the provider config level if the restriction is static
+for your application.

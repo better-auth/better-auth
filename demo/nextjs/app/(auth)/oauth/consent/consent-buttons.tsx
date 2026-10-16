@@ -18,8 +18,8 @@ export function ConsentBtns() {
 						accept: true,
 					});
 					setLoading(false);
-					if (res.data?.redirect && res.data?.uri) {
-						window.location.href = res.data?.uri;
+					if (res.data?.redirect && res.data.url) {
+						window.location.href = res.data.url;
 						return;
 					}
 					toast.error("Failed to authorize");
@@ -33,8 +33,8 @@ export function ConsentBtns() {
 					const res = await authClient.oauth2.consent({
 						accept: false,
 					});
-					if (res.data?.redirect && res.data?.uri) {
-						window.location.href = res.data?.uri;
+					if (res.data?.redirect && res.data.url) {
+						window.location.href = res.data.url;
 						return;
 					}
 					toast.error("Failed to cancel");

@@ -1,3 +1,4 @@
+import type { AuthContext } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -6,7 +7,7 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
 import type { SSOOptions, SSOProvider } from "../types";
-import { getHostnameFromDomain } from "../utils";
+import { parseProviderDomains } from "../utils";
 import { checkProviderAccess } from "./providers";
 
 const DNS_LABEL_MAX_LENGTH = 63;
@@ -15,6 +16,37 @@ const DEFAULT_TOKEN_PREFIX = "better-auth-token";
 const domainVerificationBodySchema = z.object({
 	providerId: z.string(),
 });
+
+async function completeDomainVerification(
+	adapter: AuthContext["adapter"],
+	provider: {
+		id: string;
+		domain: string;
+	},
+) {
+	// Guarding on `id` and `domain` is what binds the proof to what DNS answered
+	// for. `domainVerified` stays out of the guard: it is nullable for providers
+	// that predate the option, and an equality guard would never match those.
+	const verifiedProvider = await adapter.incrementOne<SSOProvider<SSOOptions>>({
+		model: "ssoProvider",
+		where: [
+			{ field: "id", value: provider.id },
+			{ field: "domain", value: provider.domain },
+		],
+		increment: {},
+		set: {
+			domainVerified: true,
+		},
+	});
+
+	if (!verifiedProvider) {
+		throw new APIError("CONFLICT", {
+			code: "SSO_PROVIDER_CHANGED",
+			message:
+				"SSO provider changed while domain verification was in progress. Reload the provider and try again",
+		});
+	}
+}
 
 export function getVerificationIdentifier(
 	options: SSOOptions,
@@ -109,7 +141,7 @@ export const verifyDomain = (options: SSOOptions) => {
 						},
 						"409": {
 							description:
-								"Domain has already been verified or no pending verification exists",
+								"Domain has already been verified, or the provider changed while verification was in progress",
 						},
 						"502": {
 							description:
@@ -159,7 +191,6 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			let records: string[] = [];
 			let dns: typeof import("node:dns/promises");
 
 			try {
@@ -175,43 +206,47 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			const hostname = getHostnameFromDomain(provider.domain);
-			if (!hostname) {
+			const domains = parseProviderDomains(provider.domain);
+			if (!domains) {
 				throw new APIError("BAD_REQUEST", {
 					message: "Invalid domain",
 					code: "INVALID_DOMAIN",
 				});
 			}
 
-			try {
-				const dnsRecords = await dns.resolveTxt(`${identifier}.${hostname}`);
-				records = dnsRecords.flat();
-			} catch (error) {
-				ctx.context.logger.warn(
-					"DNS resolution failure while validating domain ownership",
-					error,
-				);
-			}
+			for (const domain of domains) {
+				let records: string[] = [];
+				try {
+					const dnsRecords = await dns.resolveTxt(`${identifier}.${domain}`);
+					records = dnsRecords.map((record) => record.join(""));
+				} catch (error) {
+					ctx.context.logger.warn(
+						`DNS resolution failure while validating domain ownership for ${domain}`,
+						error,
+					);
+				}
 
-			const record = records.find((record) =>
-				record.includes(
-					`${activeVerification.identifier}=${activeVerification.value}`,
-				),
-			);
-			if (!record) {
-				throw new APIError("BAD_GATEWAY", {
-					message: "Unable to verify domain ownership. Try again later",
-					code: "DOMAIN_VERIFICATION_FAILED",
+				const verificationValue = activeVerification.value;
+				const verificationRecord = `${activeVerification.identifier}=${verificationValue}`;
+				const record = records.find((record) => {
+					const normalizedRecord = record.trim();
+					return (
+						normalizedRecord === verificationRecord ||
+						normalizedRecord === verificationValue
+					);
 				});
+				if (!record) {
+					throw new APIError("BAD_GATEWAY", {
+						message: `Unable to verify domain ownership for ${domain}. Try again later`,
+						code: "DOMAIN_VERIFICATION_FAILED",
+					});
+				}
 			}
 
-			await ctx.context.adapter.update<SSOProvider<SSOOptions>>({
-				model: "ssoProvider",
-				where: [{ field: "providerId", value: provider.providerId }],
-				update: {
-					domainVerified: true,
-				},
-			});
+			// FIXME(next): this remains a provider-level proof bit. When the next
+			// schema can change, store verification per normalized domain or force
+			// previously verified multi-domain providers through re-verification.
+			await completeDomainVerification(ctx.context.adapter, provider);
 
 			ctx.setStatus(204);
 			return;

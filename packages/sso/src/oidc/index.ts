@@ -11,13 +11,15 @@ export {
 	discoverOIDCConfig,
 	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
+	fetchOIDCEndpoint,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,
 	normalizeUrl,
 	selectTokenEndpointAuthMethod,
 	validateDiscoveryDocument,
 	validateDiscoveryUrl,
-	validateSkipDiscoveryEndpoints,
+	validateOIDCEndpointUrls,
+	validateOIDCIdToken,
 } from "./discovery";
 
 export { mapDiscoveryErrorToAPIError } from "./errors";

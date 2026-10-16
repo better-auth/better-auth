@@ -7,7 +7,7 @@ import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
+import { getAuthoritativeSessionFromCtx, getSessionFromCtx } from "../../api";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -15,6 +15,10 @@ import {
 } from "../../cookies";
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import {
+	assertPasswordNotTooLong,
+	assertPasswordNotTooShort,
+} from "../../utils/password";
 import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
@@ -31,7 +35,7 @@ import type {
  * Will also provide additional types on the user to include role types.
  */
 const adminMiddleware = createAuthMiddleware(async (ctx) => {
-	const session = await getSessionFromCtx(ctx);
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session) {
 		throw APIError.fromStatus("UNAUTHORIZED");
 	}
@@ -333,7 +337,9 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx<{ role: string }>(ctx);
+			const session = await getAuthoritativeSessionFromCtx<{ role: string }>(
+				ctx,
+			);
 			if (!session && (ctx.request || ctx.headers)) {
 				throw ctx.error("UNAUTHORIZED");
 			}
@@ -424,6 +430,10 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
 
+			if (ctx.body.password) {
+				assertPasswordNotTooLong(ctx, ctx.body.password);
+			}
+
 			const existUser =
 				await ctx.context.internalAdapter.findUserByEmail(email);
 			if (existUser) {
@@ -432,15 +442,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>({
-				...userData,
-				email: email,
-				name: ctx.body.name,
-				role:
-					requestedRole !== undefined
-						? parseRoles(requestedRole as string | string[])
-						: (opts?.defaultRole ?? "user"),
-			});
+			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+				{
+					...userData,
+					email: email,
+					name: ctx.body.name,
+					role:
+						requestedRole !== undefined
+							? parseRoles(requestedRole as string | string[])
+							: (opts?.defaultRole ?? "user"),
+				},
+				{ method: "admin" },
+			);
 
 			if (!user) {
 				throw APIError.from(
@@ -454,8 +467,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ctx.body.password,
 				);
 				await ctx.context.internalAdapter.linkAccount({
-					accountId: user.id,
 					providerId: "credential",
+					accountId: user.id,
 					password: hashedPassword,
 					userId: user.id,
 				});
@@ -1140,11 +1153,13 @@ export const banUser = (opts: AdminOptions) =>
 					banned: true,
 					banReason:
 						ctx.body.banReason || opts?.defaultBanReason || "No reason",
+					// null (not undefined) so a permanent ban clears any expiration
+					// left over from a previous temporary ban.
 					banExpires: ctx.body.banExpiresIn
 						? getDate(ctx.body.banExpiresIn, "sec")
 						: opts?.defaultBanExpiresIn
 							? getDate(opts.defaultBanExpiresIn, "sec")
-							: undefined,
+							: null,
 					updatedAt: new Date(),
 				},
 			);
@@ -1707,25 +1722,15 @@ export const setUserPassword = (opts: AdminOptions) =>
 			}
 
 			const { newPassword, userId } = ctx.body;
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (newPassword.length < minPasswordLength) {
-				ctx.context.logger.warn("Password is too short");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (newPassword.length > maxPasswordLength) {
-				ctx.context.logger.warn("Password is too long");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordNotTooShort(ctx, newPassword);
+			assertPasswordNotTooLong(ctx, newPassword);
 			const user = await ctx.context.internalAdapter.findUserById(userId);
 			if (!user) {
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const hashedPassword = await ctx.context.password.hash(newPassword);
-			const accounts = await ctx.context.internalAdapter.findAccounts(userId);
-			const credentialAccount = accounts.find(
-				(account) => account.providerId === "credential",
-			);
+			const credentialAccount =
+				await ctx.context.internalAdapter.findCredentialAccount(userId);
 			if (credentialAccount) {
 				await ctx.context.internalAdapter.updatePassword(
 					userId,
@@ -1735,7 +1740,7 @@ export const setUserPassword = (opts: AdminOptions) =>
 				await ctx.context.internalAdapter.createAccount({
 					userId,
 					providerId: "credential",
-					accountId: userId,
+					accountId: user.id,
 					password: hashedPassword,
 				});
 			}
@@ -1856,7 +1861,7 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 					message: "invalid permission check. no permission(s) were passed.",
 				});
 			}
-			const session = await getSessionFromCtx(ctx);
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 
 			if (!session && (ctx.request || ctx.headers)) {
 				throw new APIError("UNAUTHORIZED");

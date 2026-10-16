@@ -1,17 +1,26 @@
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
 import { publicSessionMiddleware } from "../middleware";
+import { createOAuthEndpoint } from "../oauth-endpoint";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
-import { SafeUrlSchema } from "../types/zod";
+import {
+	clientJwksSchema,
+	ResourceUriSchema,
+	SafeUrlSchema,
+} from "../types/zod";
 import {
 	deleteClientEndpoint,
 	getClientEndpoint,
 	getClientPublicEndpoint,
 	getClientsEndpoint,
+	rotateClientKeysEndpoint,
 	rotateClientSecretEndpoint,
 	updateClientEndpoint,
 } from "./endpoints";
+
+const tokenEndpointAuthMethodSchema = z.string().trim().min(1);
+const grantTypesSchema = z.array(z.string().trim().min(1)).min(1);
 
 export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 	createAuthEndpoint(
@@ -19,7 +28,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 		{
 			method: "POST",
 			body: z.object({
-				redirect_uris: z.array(SafeUrlSchema).min(1),
+				redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
@@ -31,25 +40,16 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-				token_endpoint_auth_method: z
-					.enum(["none", "client_secret_basic", "client_secret_post"])
-					.default("client_secret_basic")
-					.optional(),
-				grant_types: z
-					.array(
-						z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
-					)
-					.default(["authorization_code"])
-					.optional(),
-				response_types: z
-					.array(z.enum(["code"]))
-					.default(["code"])
-					.optional(),
-				type: z.enum(["web", "native", "user-agent-based"]).optional(),
+				backchannel_logout_uri: SafeUrlSchema.optional(),
+				backchannel_logout_session_required: z.boolean().optional(),
+				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
+				application_type: z.enum(["web", "native"]).optional(),
+				jwks: clientJwksSchema.optional(),
+				jwks_uri: z.string().optional(),
+				grant_types: grantTypesSchema.optional(),
+				client_credentials_scopes: z.array(z.string().trim().min(1)).optional(),
+				resources: z.array(ResourceUriSchema).optional(),
+				response_types: z.array(z.enum(["code"])).optional(),
 				// SERVER_ONLY applicable fields
 				client_secret_expires_at: z
 					.union([z.string(), z.number()])
@@ -58,15 +58,18 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				skip_consent: z.boolean().optional(),
 				enable_end_session: z.boolean().optional(),
 				require_pkce: z.boolean().optional(),
+				// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
+				dpop_bound_access_tokens: z.boolean().optional(),
 				subject_type: z.enum(["public", "pairwise"]).optional(),
 				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
 			metadata: {
+				noStore: true,
 				SERVER_ONLY: true,
 				openapi: {
 					description: "Register an OAuth2 application",
 					responses: {
-						"200": {
+						"201": {
 							description: "OAuth2 application registered successfully",
 							content: {
 								"application/json": {
@@ -91,6 +94,12 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												type: "string",
 												description:
 													"Space-separated scopes allowed by the client",
+											},
+											client_credentials_scopes: {
+												type: "array",
+												items: { type: "string" },
+												description:
+													"Server-authorized scope ceiling for client_credentials tokens",
 											},
 											user_id: {
 												type: "string",
@@ -155,24 +164,14 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												type: "string",
 												description:
 													"Requested authentication method for the token endpoint",
-												enum: [
-													"none",
-													"client_secret_basic",
-													"client_secret_post",
-												],
 											},
 											grant_types: {
 												type: "array",
 												items: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
 												},
 												description:
-													"Requested authentication method for the token endpoint",
+													"Grant types the client may use at the token endpoint",
 											},
 											response_types: {
 												type: "array",
@@ -181,17 +180,22 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 													enum: ["code"],
 												},
 												description:
-													"Requested authentication method for the token endpoint",
+													"Response types the client may use at the authorization endpoint",
 											},
-											public: {
-												type: "boolean",
-												description:
-													"Whether the client is public as determined by the type",
-											},
-											type: {
+											application_type: {
 												type: "string",
-												description: "Type of the client",
-												enum: ["web", "native", "user-agent-based"],
+												description:
+													"OIDC application type used to classify redirect URI policy",
+												enum: ["web", "native"],
+											},
+											resources: {
+												type: "array",
+												items: {
+													type: "string",
+													format: "uri",
+												},
+												description:
+													"Final server-owned resources linked to the client",
 											},
 											disabled: {
 												type: "boolean",
@@ -219,9 +223,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return createOAuthClientEndpoint(ctx, opts, {
-				isRegister: false,
-			});
+			return createOAuthClientEndpoint(ctx, opts, { admin: true });
 		},
 	);
 
@@ -232,7 +234,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
-				redirect_uris: z.array(SafeUrlSchema).min(1),
+				redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
@@ -244,31 +246,23 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
 				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-				token_endpoint_auth_method: z
-					.enum(["none", "client_secret_basic", "client_secret_post"])
-					.default("client_secret_basic")
-					.optional(),
-				grant_types: z
-					.array(
-						z.enum([
-							"authorization_code",
-							"client_credentials",
-							"refresh_token",
-						]),
-					)
-					.default(["authorization_code"])
-					.optional(),
-				response_types: z
-					.array(z.enum(["code"]))
-					.default(["code"])
-					.optional(),
-				type: z.enum(["web", "native", "user-agent-based"]).optional(),
+				backchannel_logout_uri: SafeUrlSchema.optional(),
+				backchannel_logout_session_required: z.boolean().optional(),
+				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
+				application_type: z.enum(["web", "native"]).optional(),
+				jwks: clientJwksSchema.optional(),
+				jwks_uri: z.string().optional(),
+				grant_types: grantTypesSchema.optional(),
+				response_types: z.array(z.enum(["code"])).optional(),
+				// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
+				dpop_bound_access_tokens: z.boolean().optional(),
 			}),
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: "Register an OAuth2 application",
 					responses: {
-						"200": {
+						"201": {
 							description: "OAuth2 application registered successfully",
 							content: {
 								"application/json": {
@@ -355,25 +349,16 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 											},
 											token_endpoint_auth_method: {
 												type: "string",
-												description: "Response types the client may use",
-												enum: [
-													"none",
-													"client_secret_basic",
-													"client_secret_post",
-												],
+												description:
+													"Requested authentication method for the token endpoint",
 											},
 											grant_types: {
 												type: "array",
 												items: {
 													type: "string",
-													enum: [
-														"authorization_code",
-														"client_credentials",
-														"refresh_token",
-													],
 												},
 												description:
-													"Requested authentication method for the token endpoint",
+													"Grant types the client may use at the token endpoint",
 											},
 											response_types: {
 												type: "array",
@@ -382,17 +367,22 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 													enum: ["code"],
 												},
 												description:
-													"Requested authentication method for the token endpoint",
+													"Response types the client may use at the authorization endpoint",
 											},
-											public: {
-												type: "boolean",
-												description:
-													"Whether the client is public as determined by the type",
-											},
-											type: {
+											application_type: {
 												type: "string",
-												description: "Type of the client",
-												enum: ["web", "native", "user-agent-based"],
+												description:
+													"OIDC application type used to classify redirect URI policy",
+												enum: ["web", "native"],
+											},
+											resources: {
+												type: "array",
+												items: {
+													type: "string",
+													format: "uri",
+												},
+												description:
+													"Final server-owned resources linked to the client",
 											},
 											disabled: {
 												type: "boolean",
@@ -415,9 +405,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return createOAuthClientEndpoint(ctx, opts, {
-				isRegister: false,
-			});
+			return createOAuthClientEndpoint(ctx, opts);
 		},
 	);
 
@@ -522,24 +510,25 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
-					grant_types: z
-						.array(
-							z.enum([
-								"authorization_code",
-								"client_credentials",
-								"refresh_token",
-							]),
-						)
+					backchannel_logout_uri: SafeUrlSchema.optional(),
+					backchannel_logout_session_required: z.boolean().optional(),
+					// token_endpoint_auth_method is immutable because changing the
+					// registered authentication method also changes credential handling.
+					application_type: z.enum(["web", "native"]).optional(),
+					grant_types: grantTypesSchema.optional(),
+					client_credentials_scopes: z
+						.array(z.string().trim().min(1))
 						.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
-					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 					// SERVER_ONLY applicable fields
 					client_secret_expires_at: z
 						.union([z.string(), z.number()])
 						.optional(),
 					skip_consent: z.boolean().optional(),
 					enable_end_session: z.boolean().optional(),
+					disabled: z.boolean().optional(),
+					// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
+					dpop_bound_access_tokens: z.boolean().optional(),
 					metadata: z.record(z.string(), z.unknown()).optional(),
 				}),
 			}),
@@ -551,7 +540,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			},
 		},
 		async (ctx) => {
-			return updateClientEndpoint(ctx, opts);
+			return updateClientEndpoint(ctx, opts, { admin: true });
 		},
 	);
 
@@ -576,18 +565,13 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
 					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-					// NOTE: token_endpoint_auth_method is currently immutable since it changes isPublic definition
-					grant_types: z
-						.array(
-							z.enum([
-								"authorization_code",
-								"client_credentials",
-								"refresh_token",
-							]),
-						)
-						.optional(),
+					backchannel_logout_uri: SafeUrlSchema.optional(),
+					backchannel_logout_session_required: z.boolean().optional(),
+					// token_endpoint_auth_method is immutable because changing the
+					// registered authentication method also changes credential handling.
+					application_type: z.enum(["web", "native"]).optional(),
+					grant_types: grantTypesSchema.optional(),
 					response_types: z.array(z.enum(["code"])).optional(),
-					type: z.enum(["web", "native", "user-agent-based"]).optional(),
 				}),
 			}),
 			metadata: {
@@ -611,6 +595,7 @@ export const rotateClientSecret = (opts: OAuthOptions<Scope[]>) =>
 				client_id: z.string(),
 			}),
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: "Rotates a confidential client's secret",
 				},
@@ -618,6 +603,38 @@ export const rotateClientSecret = (opts: OAuthOptions<Scope[]>) =>
 		},
 		async (ctx) => {
 			return rotateClientSecretEndpoint(ctx, opts);
+		},
+	);
+
+/**
+ * Replaces a `private_key_jwt` client's own signing keys. The client proves it
+ * holds a current key with a client assertion, so no session is needed.
+ */
+export const rotateClientKeys = (opts: OAuthOptions<Scope[]>) =>
+	createOAuthEndpoint(
+		"/oauth2/client/rotate-keys",
+		{
+			method: "POST",
+			body: z.object({
+				client_assertion: z.string(),
+				client_assertion_type: z.string(),
+				jwks: clientJwksSchema,
+			}),
+			errorCodesByField: {
+				client_assertion: "invalid_client",
+				client_assertion_type: "invalid_client",
+				jwks: "invalid_client_metadata",
+			},
+			metadata: {
+				noStore: true,
+				openapi: {
+					description:
+						"Replaces the signing keys of a private_key_jwt client. The request is authenticated by a client assertion signed with one of the client's current keys and addressed to this endpoint. Keys left out of the new set stop verifying at once.",
+				},
+			},
+		},
+		async (ctx) => {
+			return rotateClientKeysEndpoint(ctx, opts);
 		},
 	);
 

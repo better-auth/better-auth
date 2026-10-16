@@ -44,7 +44,8 @@ export const naver = (options: NaverOptions) => {
 	return {
 		id: "naver",
 		name: "Naver",
-		createAuthorizationURL({ state, scopes, redirectURI }) {
+		accountSubject: ({ profile }) => profile.response.id,
+		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
 			const _scopes = options.disableDefaultScope ? [] : ["profile", "email"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
@@ -55,6 +56,7 @@ export const naver = (options: NaverOptions) => {
 				scopes: _scopes,
 				state,
 				redirectURI,
+				additionalParams,
 			});
 		},
 		validateAuthorizationCode: async ({ code, redirectURI }) => {
@@ -96,7 +98,6 @@ export const naver = (options: NaverOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			const res = profile.response || {};
 			const user = {
-				id: res.id,
 				name: res.name || res.nickname || "",
 				email: res.email,
 				image: res.profile_image,

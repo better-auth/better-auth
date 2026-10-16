@@ -5,7 +5,7 @@ import { nextCookies } from "better-auth/next-js";
 import { PostgresJSDialect } from "kysely-postgres-js";
 import postgres from "postgres";
 
-test.describe("postgres-js", async () => {
+test.describe("postgres-js", () => {
 	test("run migration", async () => {
 		const sql = postgres(
 			process.env.DATABASE_URL ||
@@ -36,6 +36,7 @@ test.describe("postgres-js", async () => {
       AND table_type='BASE TABLE';
     `;
 		const tableNames = allTables.map((row) => row.table_name);
-		expect(tableNames).toEqual(["user", "session", "account", "verification"]);
+		const expectedTableNames = ["user", "session", "account", "verification"];
+		expect([...tableNames].sort()).toEqual([...expectedTableNames].sort());
 	});
 });

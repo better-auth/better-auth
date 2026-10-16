@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-	getHostnameFromDomain,
+	domainMatches,
+	parseProviderDomains,
 	parseProviderEmailVerified,
 	validateEmailDomain,
 } from "./utils";
@@ -34,6 +35,21 @@ describe("parseProviderEmailVerified", () => {
 		]) {
 			expect(parseProviderEmailVerified(value)).toBe(false);
 		}
+	});
+});
+
+describe("parseProviderDomains", () => {
+	it("normalizes comma-separated provider domains", () => {
+		expect(
+			parseProviderDomains(
+				"https://company.com/path, subsidiary.com, COMPANY.com",
+			),
+		).toEqual(["company.com", "subsidiary.com"]);
+	});
+
+	it("returns null when no domain can be parsed", () => {
+		expect(parseProviderDomains(", ,")).toBeNull();
+		expect(parseProviderDomains("")).toBeNull();
 	});
 });
 
@@ -120,6 +136,19 @@ describe("validateEmailDomain", () => {
 			expect(validateEmailDomain("user@company.com", domains)).toBe(true);
 			expect(validateEmailDomain("USER@SUBSIDIARY.COM", domains)).toBe(true);
 		});
+
+		it("should use the same normalized domains as ownership verification", () => {
+			const domains = "https://attacker.com/path,victim.com";
+			expect(domainMatches("attacker.com", domains)).toBe(true);
+			expect(validateEmailDomain("user@attacker.com", domains)).toBe(true);
+			expect(validateEmailDomain("user@victim.com", domains)).toBe(true);
+		});
+
+		it("should not normalize malformed email domains", () => {
+			expect(
+				validateEmailDomain("user@https://victim.com/path", "victim.com"),
+			).toBe(false);
+		});
 	});
 
 	describe("edge cases", () => {
@@ -144,30 +173,34 @@ describe("validateEmailDomain", () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/8361
  */
-describe("getHostnameFromDomain", () => {
+describe("parseProviderDomains hostname normalization", () => {
 	it("should extract hostname from a bare domain", () => {
-		expect(getHostnameFromDomain("github.com")).toBe("github.com");
+		expect(parseProviderDomains("github.com")).toEqual(["github.com"]);
 	});
 
 	it("should extract hostname from a full URL", () => {
-		expect(getHostnameFromDomain("https://github.com")).toBe("github.com");
+		expect(parseProviderDomains("https://github.com")).toEqual(["github.com"]);
 	});
 
 	it("should extract hostname from a URL with port", () => {
-		expect(getHostnameFromDomain("https://github.com:8081")).toBe("github.com");
+		expect(parseProviderDomains("https://github.com:8081")).toEqual([
+			"github.com",
+		]);
 	});
 
 	it("should extract hostname from a subdomain", () => {
-		expect(getHostnameFromDomain("auth.github.com")).toBe("auth.github.com");
+		expect(parseProviderDomains("auth.github.com")).toEqual([
+			"auth.github.com",
+		]);
 	});
 
 	it("should extract hostname from a URL with path", () => {
-		expect(getHostnameFromDomain("https://github.com/path/to/resource")).toBe(
-			"github.com",
+		expect(parseProviderDomains("https://github.com/path/to/resource")).toEqual(
+			["github.com"],
 		);
 	});
 
 	it("should return null for an empty string", () => {
-		expect(getHostnameFromDomain("")).toBeNull();
+		expect(parseProviderDomains("")).toBeNull();
 	});
 });

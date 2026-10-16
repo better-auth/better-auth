@@ -1,4 +1,5 @@
 ---
+icon: pluginsStripe
 title: Stripe
 description: Stripe plugin for Better Auth to manage subscriptions and payments.
 ---
@@ -53,7 +54,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
     import Stripe from "stripe"
 
     const stripeClient = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: "2026-03-25.dahlia", // Latest API version as of Stripe SDK v22.0.0
+        apiVersion: "2026-06-24.dahlia", // Latest API version as of Stripe SDK v22.0.0
     })
 
     export const auth = betterAuth({
