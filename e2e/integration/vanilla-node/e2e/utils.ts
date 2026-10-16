@@ -62,6 +62,7 @@ export function setup(overrides?: Partial<BetterAuthOptions>) {
 		start: async () => {
 			server = await createAuthServer(undefined, overrides);
 			clientChild = spawn("pnpm", ["run", "start:client"], {
+				detached: process.platform !== "win32",
 				cwd: root,
 				stdio: "pipe",
 			});
@@ -101,7 +102,7 @@ export function setup(overrides?: Partial<BetterAuthOptions>) {
 			]);
 		},
 		clean: async () => {
-			await terminate(clientChild.pid!);
+			await terminate(clientChild);
 			server.close();
 		},
 	};
