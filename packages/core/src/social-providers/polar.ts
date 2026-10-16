@@ -6,7 +6,9 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
-/** Claims returned by Polar's OAuth userinfo endpoint for a user or organization. */
+/**
+ * Claims returned by Polar's OAuth userinfo endpoint for a user or organization.
+ */
 export interface PolarProfile {
 	sub: string;
 	name?: string | null | undefined;
