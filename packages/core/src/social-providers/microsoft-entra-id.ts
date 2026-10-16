@@ -45,7 +45,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	/** Access token hash included in ID tokens when issued with an OAuth 2.0 access token */
 	at_hash?: string;
 	/** Internal claim used to record data for token reuse */
-	aio: string;
+	aio?: string;
 	/** The primary username that represents the user */
 	preferred_username?: string;
 	/** User's email address */
@@ -121,7 +121,7 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	/** Change Password URL */
 	pwd_url?: string;
 	/** Inside Corporate Network flag */
-	in_corp?: string;
+	in_corp?: boolean;
 	/** User's family name/surname */
 	family_name?: string;
 	/** User's given/first name */

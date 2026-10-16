@@ -345,6 +345,7 @@ describe("microsoft id_token alg omission", () => {
  * @see https://github.com/better-auth/better-auth/issues/3802
  * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
  * @see https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference
+ * @see https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference
  */
 it("accepts numeric Microsoft timestamps and configured claim arrays", async () => {
 	const profile = {
@@ -353,7 +354,6 @@ it("accepts numeric Microsoft timestamps and configured claim arrays", async () 
 		iat: 1700000000,
 		nbf: 1700000000,
 		exp: 1700003600,
-		aio: "opaque-value",
 		oid: "ms-stable-oid",
 		sub: "ms-pairwise-sub",
 		tid: WORK_TENANT_ID,
@@ -361,6 +361,8 @@ it("accepts numeric Microsoft timestamps and configured claim arrays", async () 
 	assertType<MicrosoftEntraIDProfile>(profile);
 	const configuredProfile = {
 		...profile,
+		aio: "opaque-value",
+		in_corp: true,
 		auth_time: 1700000000,
 		groups: ["group-id"],
 		acrs: ["c1"],
