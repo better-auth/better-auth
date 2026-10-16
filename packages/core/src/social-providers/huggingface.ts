@@ -23,17 +23,25 @@ export interface HuggingFaceProfile {
 				name: string;
 				picture: string;
 				preferred_username: string;
-				isEnterprise: boolean | "plus";
+				isEnterprise?: boolean | "plus";
+				plan?: string;
 				canPay?: boolean;
-				roleInOrg?: "admin" | "write" | "contributor" | "read";
+				roleInOrg?: string;
+				/**
+				 * @deprecated Use `securityRestrictions` with `"sso"`.
+				 */
 				pendingSSO?: boolean;
+				/**
+				 * @deprecated Use `securityRestrictions` with `"mfa"`.
+				 */
 				missingMFA?: boolean;
+				securityRestrictions?: ("mfa" | "sso" | "ip" | "token-policy")[];
 				resourceGroups?: {
 					sub: string;
 					name: string;
 					role: "admin" | "write" | "contributor" | "read";
 				}[];
-		  }
+		  }[]
 		| undefined;
 }
 
