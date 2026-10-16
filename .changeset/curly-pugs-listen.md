@@ -2,4 +2,4 @@
 "better-auth": minor
 ---
 
-Add an `active` mode to the One Tap client plugin. Passing `mode: "active"` alongside the `button` option opts the rendered Sign in with Google button into Google's FedCM button flow, so clicking it opens the browser's centered account chooser instead of a popup window, and `autoSelect` becomes the flow's auto select.
+If you render the Sign in with Google button with `authClient.oneTap({ button })`, you can now set `button: { container, fedCM: true }` to open the browser's account chooser over the page instead of Google's popup window. With `autoSelect: true`, a returning user who is signed in to Google skips the chooser. This uses Google's FedCM button flow on Chrome 125+ on desktop and Chrome 128+ on Android; other browsers keep the popup. Existing prompt and button setups are unchanged.
