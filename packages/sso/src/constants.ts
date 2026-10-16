@@ -77,3 +77,12 @@ export const DEFAULT_MAX_SAML_METADATA_SIZE = 100 * 1024;
 // ============================================================================
 
 export const SAML_STATUS_SUCCESS = "urn:oasis:names:tc:SAML:2.0:status:Success";
+
+/**
+ * NameID format whose value is an email address. Other formats, such as
+ * persistent and transient, are opaque identifiers.
+ *
+ * @see https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf (§8.3.2)
+ */
+export const SAML_EMAIL_NAME_ID_FORMAT =
+	"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress";
