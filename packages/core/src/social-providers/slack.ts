@@ -6,7 +6,9 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
-/** Claims from Slack's OpenID Connect userinfo response. */
+/**
+ * Claims from Slack's OpenID Connect userinfo response.
+ */
 export interface SlackProfile extends Record<string, unknown> {
 	ok: boolean;
 	sub: string;
