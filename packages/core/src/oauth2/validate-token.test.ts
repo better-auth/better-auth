@@ -1,12 +1,27 @@
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { validateToken } from "./validate-authorization-code";
+import { jwksCache, verifyJwsAccessToken } from "./verify";
 
 describe("validateToken", () => {
 	const originalFetch = globalThis.fetch;
+	const jwksEndpoint = "https://example.com/.well-known/jwks";
 	const mockedFetch = vi.fn() as unknown as typeof fetch &
 		ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		mockedFetch.mockReset();
+		jwksCache.clear();
+	});
 
 	beforeAll(() => {
 		globalThis.fetch = mockedFetch;
@@ -251,5 +266,153 @@ describe("validateToken", () => {
 		expect(result).toBeDefined();
 		expect(result.payload.aud).toBe("test-client");
 		expect(result.payload.iss).toBe("https://example.com");
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+	 */
+	describe("verification policy", () => {
+		it("rejects a valid signature using an algorithm outside the allowlist", async () => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS("ES256");
+			const token = await createSignedToken(privateKey, "ES256", kid);
+			mockJWKSResponse(publicJWK);
+
+			await expect(
+				validateToken(token, jwksEndpoint, { algorithms: ["RS256"] }),
+			).rejects.toMatchObject({ code: "ERR_JOSE_ALG_NOT_ALLOWED" });
+		});
+
+		it("rejects a signed token missing a required claim", async () => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS("RS256");
+			const token = new SignJWT({ sub: "user-123" }).setProtectedHeader({
+				alg: "RS256",
+				kid,
+			});
+			mockJWKSResponse(publicJWK);
+
+			await expect(
+				validateToken(await token.sign(privateKey), jwksEndpoint, {
+					requiredClaims: ["exp"],
+				}),
+			).rejects.toMatchObject({
+				code: "ERR_JWT_CLAIM_VALIDATION_FAILED",
+				claim: "exp",
+			});
+		});
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#RotateSigKeys
+	 */
+	describe("signing key cache", () => {
+		it("reuses signing keys across repeated verifications", async () => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS("RS256");
+			const token = await createSignedToken(privateKey, "RS256", kid);
+			mockedFetch.mockImplementation(async () =>
+				Response.json({ keys: [publicJWK] }),
+			);
+
+			await validateToken(token, jwksEndpoint);
+			await validateToken(token, jwksEndpoint);
+
+			expect(mockedFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it("shares cached keys with access token verification", async () => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS("RS256");
+			const token = await createSignedToken(privateKey, "RS256", kid);
+			mockedFetch.mockImplementation(async () =>
+				Response.json({ keys: [publicJWK] }),
+			);
+
+			await validateToken(token, jwksEndpoint);
+			await verifyJwsAccessToken(token, {
+				jwksFetch: jwksEndpoint,
+				verifyOptions: {
+					issuer: "https://example.com",
+					audience: "test-client",
+				},
+			});
+
+			expect(mockedFetch).toHaveBeenCalledTimes(1);
+		});
+
+		it("refreshes cached keys for a rotated token without kid", async () => {
+			const first = await createTestJWKS("RS256");
+			const second = await createTestJWKS("RS256");
+			mockJWKSResponse(first.publicJWK);
+			await validateToken(
+				await createSignedToken(first.privateKey, "RS256", first.kid),
+				jwksEndpoint,
+			);
+			mockJWKSResponse(second.publicJWK);
+			const token = await new SignJWT({ sub: "user-123" })
+				.setProtectedHeader({ alg: "RS256" })
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(second.privateKey);
+
+			await expect(validateToken(token, jwksEndpoint)).resolves.toMatchObject({
+				payload: { sub: "user-123" },
+			});
+			expect(mockedFetch).toHaveBeenCalledTimes(2);
+		});
+
+		it("keeps signing keys isolated by endpoint", async () => {
+			const first = await createTestJWKS("RS256");
+			const second = await createTestJWKS("RS256");
+			const kid = "shared-key";
+			const firstToken = await createSignedToken(
+				first.privateKey,
+				"RS256",
+				kid,
+			);
+			const secondToken = await createSignedToken(
+				second.privateKey,
+				"RS256",
+				kid,
+			);
+			mockJWKSResponse({ ...first.publicJWK, kid });
+			mockJWKSResponse({ ...second.publicJWK, kid });
+			mockJWKSResponse({ ...second.publicJWK, kid });
+
+			await validateToken(firstToken, jwksEndpoint);
+			await validateToken(secondToken, `${jwksEndpoint}/other`);
+			await expect(
+				validateToken(firstToken, `${jwksEndpoint}/other`),
+			).rejects.toMatchObject({
+				code: "ERR_JWS_SIGNATURE_VERIFICATION_FAILED",
+			});
+		});
+
+		it("refreshes cached keys after rotation", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				const first = await createTestJWKS("RS256");
+				const second = await createTestJWKS("RS256");
+				second.publicJWK.kid = "rotated-key";
+				const firstToken = await createSignedToken(
+					first.privateKey,
+					"RS256",
+					first.kid,
+				);
+				const secondToken = await createSignedToken(
+					second.privateKey,
+					"RS256",
+					"rotated-key",
+				);
+				mockJWKSResponse(first.publicJWK);
+				mockJWKSResponse(second.publicJWK);
+
+				await validateToken(firstToken, jwksEndpoint);
+				vi.advanceTimersByTime(31_000);
+				const result = await validateToken(secondToken, jwksEndpoint);
+
+				expect(result.payload.sub).toBe("user-123");
+				expect(mockedFetch).toHaveBeenCalledTimes(2);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
 	});
 });
