@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { assertType, expect, it, vi } from "vitest";
+import { assertType, expect, expectTypeOf, it, vi } from "vitest";
 import type { DiscordProfile } from "./discord";
 import { discord } from "./discord";
 
@@ -37,4 +37,20 @@ it("accepts Discord identity profiles without optional fields", async () => {
 		},
 		data: { ...profile, image_url: imageURL },
 	});
+});
+
+/** @see https://docs.discord.com/developers/resources/user#user-object */
+it("types Discord decorations and guild identity", () => {
+	expectTypeOf<
+		NonNullable<DiscordProfile["avatar_decoration_data"]>["asset"]
+	>().toEqualTypeOf<string>();
+	expectTypeOf<
+		NonNullable<DiscordProfile["collectibles"]>["nameplate"]
+	>().toEqualTypeOf<
+		| { sku_id: string; asset: string; label: string; palette: string }
+		| undefined
+	>();
+	expectTypeOf<
+		NonNullable<DiscordProfile["primary_guild"]>["identity_enabled"]
+	>().toEqualTypeOf<boolean | null>();
 });
