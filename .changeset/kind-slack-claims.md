@@ -3,4 +3,4 @@
 "better-auth": minor
 ---
 
-Make Slack's scope-dependent profile claims optional in the built-in provider and Generic OAuth helper, and default missing email verification to false.
+Slack profile mappings now handle scope-dependent claims in the built-in provider and Generic OAuth helper. Both use the documented POST request and reject Slack error responses, including errors returned with HTTP 200.
