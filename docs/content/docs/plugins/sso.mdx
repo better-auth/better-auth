@@ -1492,8 +1492,21 @@ To verify your ownership over a domain, follow these steps:
   <Step>
     #### Acquire verification token
 
-    When an SSO provider is registered, a **verification token** will be issued to the provider (it will be returned as part of the response).
-    You can use this token to prove ownership over the domain.
+    When an SSO provider is registered, a **verification token** is returned in the response.
+    Call `requestDomainVerification` with the provider ID to retrieve the token and its DNS record host:
+
+    ```ts
+    const { data, error } = await authClient.sso.requestDomainVerification({
+      providerId: "acme-corp",
+    });
+
+    if (data) {
+      // Host: data.domainVerificationIdentifier
+      // Value: data.domainVerificationToken
+    }
+    ```
+
+    This returns the existing token while it is valid, or issues a new token if it has expired.
   </Step>
 
   <Step>
@@ -1501,8 +1514,8 @@ To verify your ownership over a domain, follow these steps:
 
     To do this, you'll need to add a `TXT` record to your domain's DNS settings:
 
-    * **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
-    * **Value:** The verification token you were given.
+    * **Host:** `data.domainVerificationIdentifier`, relative to the provider domain. By default, this is `_better-auth-token-{your-provider-id}`. The server includes the configured `domainVerification.tokenPrefix` and prepends the underscore, so the client does not need to reconstruct the host.
+    * **Value:** `data.domainVerificationToken`.
 
     If the SSO provider lists multiple comma-separated domains, add this `TXT` record under every listed domain. For example, a provider with `domain: "company.com,subsidiary.com"` must publish the record for both `company.com` and `subsidiary.com`.
 
@@ -1553,6 +1566,13 @@ you can create a new verification token:
   }
   ```
 </APIMethod>
+
+The response includes:
+
+* `domainVerificationIdentifier`: the DNS TXT record host relative to each provider domain, including the server-configured prefix.
+* `domainVerificationToken`: the DNS TXT record value.
+
+An existing, unexpired token is returned without extending its expiry. Otherwise, a new token is issued. The endpoint requires a session and access to the provider, and returns `409` if the provider's domains are already verified.
 
 ### SAML Endpoints
 
