@@ -1644,7 +1644,7 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
 	});
 
-	it("should skip active-sessions rewrite when updateSession leaves expiresAt unchanged", async () => {
+	it("should skip active-sessions rewrite when updateSession omits expiresAt", async () => {
 		const testMap = new Map<string, string>();
 		const ops: string[] = [];
 		const base = createStringSecondaryStorage(testMap);
@@ -1701,22 +1701,121 @@ describe("internal adapter test", async () => {
 		);
 		expect(stored?.session.ipAddress).toBe("10.0.0.1");
 
-		// Re-supplying the stored expiresAt is still a no-op for the list.
+		// Explicit expiresAt still rewrites the list even when it matches the
+		// payload, so a retry can repair active-sessions after a partial failure.
 		ops.length = 0;
 		await testInternalAdapter.updateSession(session.token, {
 			expiresAt: session.expiresAt,
 			ipAddress: "10.0.0.2",
 		});
 
-		expect(ops.filter((op) => op === `get:${listKey}`)).toHaveLength(0);
-		expect(ops.filter((op) => op === `set:${listKey}`)).toHaveLength(0);
+		expect(ops.filter((op) => op === `get:${listKey}`)).toHaveLength(1);
+		expect(ops.filter((op) => op === `set:${listKey}`)).toHaveLength(1);
 		expect(ops.filter((op) => op === `set:${session.token}`)).toHaveLength(1);
-		expect(testMap.get(listKey)).toBe(listBefore);
 
 		const storedAgain = safeJSONParse<{ session: Session }>(
 			testMap.get(session.token)!,
 		);
 		expect(storedAgain?.session.ipAddress).toBe("10.0.0.2");
+	});
+
+	/**
+	 * Expiry extension writes the session payload before the active-sessions
+	 * index. If the index write fails, a retry with the same expiresAt must
+	 * still reconcile the list—otherwise listSessions / deleteUserSessions
+	 * lose the live session once the stale index TTL elapses.
+	 */
+	it("should repair active-sessions on retry after a failed index write", async () => {
+		const testMap = new Map<string, string>();
+		const testExpirationMap = new Map<string, number>();
+		const base = createStringSecondaryStorage(testMap, testExpirationMap);
+		let failNextListWrite = false;
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			// Secondary-only: listSessions / deleteUserSessions rely on the index.
+			session: { storeSessionInDatabase: false },
+			secondaryStorage: {
+				get(key: string) {
+					return base.get(key);
+				},
+				set(key: string, value: string, ttl?: number) {
+					if (failNextListWrite && key.startsWith("active-sessions-")) {
+						failNextListWrite = false;
+						throw new Error("secondary-storage index write failed");
+					}
+					return base.set(key, value, ttl);
+				},
+				delete(key: string) {
+					return base.delete(key);
+				},
+				getAndDelete(key: string) {
+					return base.getAndDelete?.(key) ?? null;
+				},
+				increment(key: string, ttl?: number) {
+					return base.increment?.(key, ttl ?? 0) ?? 1;
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		await (await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-index-retry",
+				email: "test-index-retry@email.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testInternalAdapter.createSession(user.id);
+		const listKey = `active-sessions-${user.id}`;
+		const initialList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			testMap.get(listKey)!,
+		);
+		const initialExpiresAt = initialList![0]!.expiresAt;
+		const newExpiresAt = new Date(initialExpiresAt + 60 * 60 * 1000);
+
+		failNextListWrite = true;
+		await expect(
+			testInternalAdapter.updateSession(session.token, {
+				expiresAt: newExpiresAt,
+			}),
+		).rejects.toThrow("secondary-storage index write failed");
+
+		// Payload was written; index still has the old expiry/TTL.
+		const partialPayload = safeJSONParse<{ session: Session }>(
+			testMap.get(session.token)!,
+		);
+		expect(new Date(partialPayload!.session.expiresAt).getTime()).toBe(
+			newExpiresAt.getTime(),
+		);
+		const staleList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			testMap.get(listKey)!,
+		);
+		expect(staleList![0]!.expiresAt).toBe(initialExpiresAt);
+
+		// Identical retry must reconcile the index even though the payload
+		// already carries the new expiresAt.
+		await testInternalAdapter.updateSession(session.token, {
+			expiresAt: newExpiresAt,
+		});
+
+		const repairedList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			testMap.get(listKey)!,
+		);
+		expect(repairedList).toEqual([
+			{ token: session.token, expiresAt: newExpiresAt.getTime() },
+		]);
+		const repairedTTL = testExpirationMap.get(listKey);
+		const expectedTTL = Math.floor(
+			(newExpiresAt.getTime() - Date.now()) / 1000,
+		);
+		expect(repairedTTL).toBeDefined();
+		expect(repairedTTL! - expectedTTL).toBeLessThanOrEqual(1);
+		expect(repairedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
+
+		const listed = await testInternalAdapter.listSessions(user.id);
+		expect(listed.map((s) => s.token)).toEqual([session.token]);
 	});
 
 	/**
