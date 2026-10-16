@@ -3,6 +3,7 @@ import type { User } from "@better-auth/core/db";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
+	CustomAdapter,
 	DBAdapter,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
@@ -20,13 +21,26 @@ The rest are just edge cases.
 
 */
 
+/**
+ * `Mock` resolves the generics of the function it wraps, so a typed
+ * `vi.fn<CustomAdapter[K]>()` is not assignable to the generic `CustomAdapter`
+ * methods. This resolves them the same way so those mocks can stand in.
+ */
+type AdapterOverrides = {
+	[K in keyof CustomAdapter]?: CustomAdapter[K] extends (
+		...args: infer A
+	) => infer R
+		? (...args: A) => R
+		: CustomAdapter[K];
+};
+
 async function createTestAdapter<Options extends BetterAuthOptions>(
 	props: {
 		config?: Partial<AdapterFactoryConfig>;
 		options?: Options;
 		adapter?: (
 			...args: Parameters<AdapterFactoryCustomizeAdapterCreator>
-		) => Partial<ReturnType<AdapterFactoryCustomizeAdapterCreator>>;
+		) => AdapterOverrides;
 	} = {
 		config: {
 			adapterId: "test-id",
@@ -369,18 +383,16 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test('Should receive a generated id during the call, unless "disableIdGeneration" is set to true', async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					adapter: () => ({ create }),
 				});
 				await adapter.create({ model: "user", data: { name: "test-name" } });
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ id: expect.any(String) }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data.id).toBeTypeOf("string");
 
-				const createWithoutId = vi.fn();
+				const createWithoutId = vi.fn<CustomAdapter["create"]>();
 				const adapterWithoutId = await createTestAdapter({
 					config: { disableIdGeneration: true, debugLogs: {} },
 					adapter: () => ({ create: createWithoutId }),
@@ -389,11 +401,9 @@ describe("Create Adapter Helper", async () => {
 					model: "user",
 					data: { name: "test-name" },
 				});
-				expect(createWithoutId).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.not.objectContaining({ id: expect.anything() }),
-					}),
-				);
+				const argsWithoutId = createWithoutId.mock.lastCall?.[0];
+				expect.assert(argsWithoutId);
+				expect(argsWithoutId.data).not.toHaveProperty("id");
 			});
 
 			test("Should not modify result null to string for id or fields referencing id", async () => {
@@ -432,7 +442,7 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test("Should modify boolean type to 1 or 0 if the DB doesn't support it. And expect the result to be transformed back to boolean", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						supportsBooleans: false,
@@ -447,11 +457,6 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(trueResult).toHaveProperty("emailVerified");
 				expect(trueResult.emailVerified).toBe(true);
-				expect(create).toHaveBeenLastCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ emailVerified: 1 }),
-					}),
-				);
 
 				// Testing false
 				const falseResult = await adapter.create({
@@ -460,15 +465,14 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(falseResult).toHaveProperty("emailVerified");
 				expect(falseResult.emailVerified).toBe(false);
-				expect(create).toHaveBeenLastCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ emailVerified: 0 }),
-					}),
-				);
+				expect(create.mock.calls.map(([args]) => args.data)).toMatchObject([
+					{ emailVerified: 1 },
+					{ emailVerified: 0 },
+				]);
 			});
 
 			test("Should modify string[] type to TEXT if the DB doesn't support it. And expect the result to be transformed back to string[]", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						supportsJSON: false,
@@ -491,17 +495,15 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("preferences");
 				expect(res.preferences).toEqual(obj.preferences);
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({
-							preferences: '[\"medium\",\"large\"]',
-						}),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					preferences: '[\"medium\",\"large\"]',
+				});
 			});
 
 			test("Should modify number[] type to TEXT if the DB doesn't support it. And expect the result to be transformed back to number[]", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						supportsJSON: false,
@@ -524,15 +526,15 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("preferences");
 				expect(res.preferences).toEqual(obj.preferences);
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ preferences: "[6,7]" }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					preferences: "[6,7]",
+				});
 			});
 
 			test("Should modify JSON type to TEXT if the DB doesn't support it. And expect the result to be transformed back to JSON", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						supportsJSON: false,
@@ -555,18 +557,16 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("preferences");
 				expect(res.preferences).toEqual(obj.preferences);
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({
-							preferences: '{"color":"blue","size":"large"}',
-						}),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					preferences: '{"color":"blue","size":"large"}',
+				});
 			});
 
 			test("Should modify date type to TEXT if the DB doesn't support it. And expect the result to be transformed back to date", async () => {
 				const testDate = new Date();
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						supportsDates: false,
@@ -579,17 +579,15 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("createdAt");
 				expect(res.createdAt).toBeInstanceOf(Date);
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({
-							createdAt: testDate.toISOString(),
-						}),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					createdAt: testDate.toISOString(),
+				});
 			});
 
 			test("Should allow custom transform input", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -608,15 +606,15 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("name");
 				expect(res.name).toEqual("TEST-NAME");
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ name: "TEST-NAME" }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					name: "TEST-NAME",
+				});
 			});
 
 			test("Should allow custom transform output", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -635,21 +633,16 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("name");
 				expect(res.name).toEqual("test-name");
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ name: expect.anything() }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
 				// Remains the same as the input because we're only transforming the output
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ name: "TEST-NAME" }),
-					}),
-				);
+				expect(args.data).toMatchObject({
+					name: "TEST-NAME",
+				});
 			});
 
 			test("Should allow custom transform input and output", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -674,15 +667,15 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("name");
 				expect(res.name).toEqual("test-name");
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ name: "TEST-NAME" }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					name: "TEST-NAME",
+				});
 			});
 
 			test("Should allow custom map input key transformation", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -701,15 +694,15 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("email");
 				expect(res).not.toHaveProperty("email_address");
 				expect(res.email).toEqual(undefined); // The reason it's undefined is because we did transform `email` to `email_address`, however we never transformed `email_address` back to `email`.
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ email_address: "test@test.com" }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email_address: "test@test.com",
+				});
 			});
 
 			test("Should allow custom transform input to transform the where clause", async () => {
-				const findOne = vi.fn();
+				const findOne = vi.fn<CustomAdapter["findOne"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -724,15 +717,13 @@ describe("Create Adapter Helper", async () => {
 					where: [{ field: "id", value: "123" }],
 				});
 
-				expect(findOne).toHaveBeenCalledWith(
-					expect.objectContaining({
-						where: [expect.objectContaining({ field: "_id" })],
-					}),
-				);
+				const args = findOne.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.where).toMatchObject([{ field: "_id" }]);
 			});
 
 			test("Should allow custom map output key transformation", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -753,15 +744,15 @@ describe("Create Adapter Helper", async () => {
 				expect(res).not.toHaveProperty("email");
 				expect(res.wrong_email_key).toEqual("test@test.com");
 
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ email: "test@test.com" }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email: "test@test.com",
+				});
 			});
 
 			test("Should allow custom map input and output key transformation", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -781,20 +772,16 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("email");
 				expect(res).not.toHaveProperty("email_address");
 				expect(res.email).toEqual("test@test.com");
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ email_address: "test@test.com" }),
-					}),
-				);
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.not.objectContaining({ email: expect.anything() }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email_address: "test@test.com",
+				});
+				expect(args.data).not.toHaveProperty("email");
 			});
 
 			test("Should expect the fields to be transformed into the correct field names if customized", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -815,20 +802,16 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("email");
 				expect(res).not.toHaveProperty("email_address");
 				expect(res.email).toEqual("test@test.com");
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ email_address: "test@test.com" }),
-					}),
-				);
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.not.objectContaining({ email: expect.anything() }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email_address: "test@test.com",
+				});
+				expect(args.data).not.toHaveProperty("email");
 			});
 
 			test("Should expect the model to be transformed into the correct model name if customized", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -846,13 +829,13 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("id");
 				expect(res).toHaveProperty("email");
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({ model: "user_table" }),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.model).toEqual("user_table");
 			});
 
 			test("Should expect the result to follow the schema", async () => {
-				const create = vi.fn();
+				const create = vi.fn<CustomAdapter["create"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -878,16 +861,12 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("emailVerified");
 				expect(res).toHaveProperty("image");
 				expect(res).not.toHaveProperty("email_address");
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.objectContaining({ email_address: "test@test.com" }),
-					}),
-				);
-				expect(create).toHaveBeenCalledWith(
-					expect.objectContaining({
-						data: expect.not.objectContaining({ email: expect.anything() }),
-					}),
-				);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email_address: "test@test.com",
+				});
+				expect(args.data).not.toHaveProperty("email");
 			});
 
 			test("Should expect the result to respect the select fields", async () => {
@@ -955,7 +934,7 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test("Should modify boolean type to 1 or 0 if the DB doesn't support it. And expect the result to be transformed back to boolean", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						supportsBooleans: false,
@@ -977,11 +956,6 @@ describe("Create Adapter Helper", async () => {
 				expect(trueResult).toHaveProperty("emailVerified");
 				//@ts-expect-error
 				expect(trueResult.emailVerified).toBe(true);
-				expect(update).toHaveBeenLastCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({ emailVerified: 1 }),
-					}),
-				);
 
 				// Testing false
 				const falseResult = await adapter.update({
@@ -992,15 +966,14 @@ describe("Create Adapter Helper", async () => {
 				expect(falseResult).toHaveProperty("emailVerified");
 				//@ts-expect-error
 				expect(falseResult.emailVerified).toBe(false);
-				expect(update).toHaveBeenLastCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({ emailVerified: 0 }),
-					}),
-				);
+				expect(update.mock.calls.map(([args]) => args.update)).toMatchObject([
+					{ emailVerified: 1 },
+					{ emailVerified: 0 },
+				]);
 			});
 
 			test("Should modify JSON type to TEXT if the DB doesn't support it. And expect the result to be transformed back to JSON", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						supportsJSON: false,
@@ -1028,18 +1001,16 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("preferences");
 				expect(res?.preferences).toEqual(obj.preferences);
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({
-							preferences: '{"color":"blue","size":"large"}',
-						}),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					preferences: '{"color":"blue","size":"large"}',
+				});
 			});
 
 			test("Should modify date type to TEXT if the DB doesn't support it. And expect the result to be transformed back to date", async () => {
 				const testDate = new Date();
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						supportsDates: false,
@@ -1057,17 +1028,15 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("createdAt");
 				expect(res?.createdAt).toBeInstanceOf(Date);
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({
-							createdAt: testDate.toISOString(),
-						}),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					createdAt: testDate.toISOString(),
+				});
 			});
 
 			test("Should allow custom transform input", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						customTransformInput({ field, data }) {
@@ -1090,15 +1059,15 @@ describe("Create Adapter Helper", async () => {
 				});
 
 				expect(res).toMatchObject({ name: "TEST-NAME-2" });
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({ name: "TEST-NAME-2" }),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					name: "TEST-NAME-2",
+				});
 			});
 
 			test("Should allow custom transform output", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						customTransformOutput({ field, data }) {
@@ -1121,15 +1090,15 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("name");
 				expect(res?.name).toEqual("test-name-2");
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({ name: "test-name-2" }),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					name: "test-name-2",
+				});
 			});
 
 			test("Should allow custom transform input and output", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						customTransformInput({ field, data }) {
@@ -1158,17 +1127,15 @@ describe("Create Adapter Helper", async () => {
 				});
 				expect(res).toHaveProperty("name");
 				expect(res?.name).toEqual("test-name-2");
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({
-							name: "test-name-2".toUpperCase(),
-						}),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					name: "test-name-2".toUpperCase(),
+				});
 			});
 
 			test("Should allow custom map input key transformation", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -1192,17 +1159,15 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("email");
 				expect(res).not.toHaveProperty("email_address");
 				expect(res?.email).toEqual(undefined); // The reason it's undefined is because we did transform `email` to `email_address`, however we never transformed `email_address` back to `email`.
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({
-							email_address: "test2@test.com",
-						}),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					email_address: "test2@test.com",
+				});
 			});
 
 			test("Should allow custom map output key transformation", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -1226,22 +1191,16 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("email_address");
 				expect(res).not.toHaveProperty("email");
 				expect(res?.email_address).toEqual("test2@test.com");
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({ email: "test2@test.com" }),
-					}),
-				);
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.not.objectContaining({
-							email_address: expect.anything(),
-						}),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					email: "test2@test.com",
+				});
+				expect(args.update).not.toHaveProperty("email_address");
 			});
 
 			test("Should allow custom map input and output key transformation", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -1268,22 +1227,16 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("email");
 				expect(res).not.toHaveProperty("email_address");
 				expect(res?.email).toEqual("test2@test.com");
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({
-							email_address: "test2@test.com",
-						}),
-					}),
-				);
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.not.objectContaining({ email: expect.anything() }),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					email_address: "test2@test.com",
+				});
+				expect(args.update).not.toHaveProperty("email");
 			});
 
 			test("Should expect the fields to be transformed into the correct field names if customized", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						debugLogs: {},
@@ -1309,22 +1262,16 @@ describe("Create Adapter Helper", async () => {
 				expect(res).toHaveProperty("email");
 				expect(res).not.toHaveProperty("email_address");
 				expect(res?.email).toEqual("test2@test.com");
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.objectContaining({
-							email_address: "test2@test.com",
-						}),
-					}),
-				);
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.not.objectContaining({ email: expect.anything() }),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					email_address: "test2@test.com",
+				});
+				expect(args.update).not.toHaveProperty("email");
 			});
 
 			test("Should expect not to receive an id even if disableIdGeneration is false in an update call", async () => {
-				const update = vi.fn();
+				const update = vi.fn<CustomAdapter["update"]>();
 				const adapter = await createTestAdapter({
 					config: {
 						disableIdGeneration: true,
@@ -1340,11 +1287,9 @@ describe("Create Adapter Helper", async () => {
 					update: { email: "test2@test.com" },
 					where: [{ field: "id", value: user.id }],
 				});
-				expect(update).toHaveBeenCalledWith(
-					expect.objectContaining({
-						update: expect.not.objectContaining({ id: expect.anything() }),
-					}),
-				);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).not.toHaveProperty("id");
 			});
 		});
 
@@ -1361,7 +1306,9 @@ describe("Create Adapter Helper", async () => {
 					updatedAt: new Date(),
 					name: "test-name",
 				};
-				const findOne = vi.fn().mockResolvedValue(fakeResult);
+				const findOne = vi
+					.fn<CustomAdapter["findOne"]>()
+					.mockResolvedValue(fakeResult);
 				const adapter = await createTestAdapter({
 					options: {
 						user: {
@@ -1379,11 +1326,9 @@ describe("Create Adapter Helper", async () => {
 				expect(res).not.toHaveProperty("email_address");
 				expect(res).toHaveProperty("email");
 				expect(res?.email).toEqual("test@test.com");
-				expect(findOne).toHaveBeenCalledWith(
-					expect.objectContaining({
-						where: [expect.objectContaining({ field: "email_address" })],
-					}),
-				);
+				const args = findOne.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.where).toMatchObject([{ field: "email_address" }]);
 			});
 			test("findMany: Should transform the where clause according to the schema", async () => {
 				const fakeResult: (Omit<User, "email"> & {
@@ -1398,7 +1343,9 @@ describe("Create Adapter Helper", async () => {
 						name: "test-name",
 					},
 				];
-				const findMany = vi.fn().mockResolvedValue(fakeResult);
+				const findMany = vi
+					.fn<CustomAdapter["findMany"]>()
+					.mockResolvedValue(fakeResult);
 				const adapter = await createTestAdapter({
 					options: {
 						user: {
@@ -1416,11 +1363,9 @@ describe("Create Adapter Helper", async () => {
 				expect(res[0]).not.toHaveProperty("email_address");
 				expect(res[0]).toHaveProperty("email");
 				expect(res[0]?.email).toEqual("test@test.com");
-				expect(findMany).toHaveBeenCalledWith(
-					expect.objectContaining({
-						where: [expect.objectContaining({ field: "email_address" })],
-					}),
-				);
+				const args = findMany.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.where).toMatchObject([{ field: "email_address" }]);
 			});
 
 			test("findOne: Should receive an integer id in where clause if the user has enabled `serial`", async () => {
@@ -1432,7 +1377,9 @@ describe("Create Adapter Helper", async () => {
 					updatedAt: new Date(),
 					name: "test-name",
 				};
-				const findOne = vi.fn().mockResolvedValue(fakeResult);
+				const findOne = vi
+					.fn<CustomAdapter["findOne"]>()
+					.mockResolvedValue(fakeResult);
 				const adapter = await createTestAdapter({
 					options: {
 						advanced: {
@@ -1450,12 +1397,10 @@ describe("Create Adapter Helper", async () => {
 
 				expect(res).toHaveProperty("id");
 				expect(res?.id).toEqual("1");
+				const args = findOne.mock.lastCall?.[0];
+				expect.assert(args);
 				// The where clause should convert the string id value of `"1"` to an int since `generateId` is serial.
-				expect(findOne).toHaveBeenCalledWith(
-					expect.objectContaining({
-						where: [expect.objectContaining({ value: 1 })],
-					}),
-				);
+				expect(args.where).toMatchObject([{ value: 1 }]);
 			});
 			test("findMany: Should receive an integer id in where clause if the user has enabled `serial`", async () => {
 				const fakeResult: (Omit<User, "id"> & { id: number })[] = [
@@ -1468,7 +1413,9 @@ describe("Create Adapter Helper", async () => {
 						name: "test-name",
 					},
 				];
-				const findMany = vi.fn().mockResolvedValue(fakeResult);
+				const findMany = vi
+					.fn<CustomAdapter["findMany"]>()
+					.mockResolvedValue(fakeResult);
 				const adapter = await createTestAdapter({
 					options: {
 						advanced: {
@@ -1486,12 +1433,10 @@ describe("Create Adapter Helper", async () => {
 
 				expect(res[0]).toHaveProperty("id");
 				expect(res[0]!.id).toEqual("1");
+				const args = findMany.mock.lastCall?.[0];
+				expect.assert(args);
 				// The where clause should convert the string id value of `"1"` to an int since `serial` is enabled.
-				expect(findMany).toHaveBeenCalledWith(
-					expect.objectContaining({
-						where: [expect.objectContaining({ value: 1 })],
-					}),
-				);
+				expect(args.where).toMatchObject([{ value: 1 }]);
 			});
 		});
 	});
