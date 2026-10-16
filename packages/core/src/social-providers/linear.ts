@@ -6,7 +6,9 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
-/** Viewer fields selected from Linear's GraphQL API. */
+/**
+ * Viewer fields selected from Linear's GraphQL API.
+ */
 export interface LinearUser {
 	id: string;
 	name: string;
