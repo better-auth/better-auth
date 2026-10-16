@@ -1,4 +1,4 @@
-import { assertType, describe, expect, it } from "vitest";
+import { assertType, describe, expect, expectTypeOf, it } from "vitest";
 import type { GithubProfile } from "./github";
 import { github } from "./github";
 
@@ -85,4 +85,18 @@ describe("github profile", () => {
 		const result = await provider.getUserInfo({ accessToken: "access-token" });
 		expect(result?.data).toBe(profile);
 	});
+});
+
+/** @see https://docs.github.com/en/rest/users/users#get-the-authenticated-user */
+it("types additional GitHub account fields", () => {
+	expectTypeOf<GithubProfile["user_view_type"]>().toEqualTypeOf<
+		string | undefined
+	>();
+	expectTypeOf<GithubProfile["notification_email"]>().toEqualTypeOf<
+		string | null | undefined
+	>();
+	expectTypeOf<GithubProfile["business_plus"]>().toEqualTypeOf<
+		boolean | undefined
+	>();
+	expectTypeOf<GithubProfile["ldap_dn"]>().toEqualTypeOf<string | undefined>();
 });
