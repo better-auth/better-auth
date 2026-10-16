@@ -1,4 +1,3 @@
-import { decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -6,11 +5,12 @@ import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
+	validateToken,
 } from "../oauth2";
 
 export interface PaybinProfile {
 	sub: string;
-	email: string;
+	email?: string;
 	email_verified?: boolean | undefined;
 	name?: string | undefined;
 	preferred_username?: string | undefined;
@@ -30,8 +30,9 @@ export interface PaybinOptions extends ProviderOptions<PaybinProfile> {
 
 export const paybin = (options: PaybinOptions) => {
 	const issuer = options.issuer || "https://idp.paybin.io";
-	const authorizationEndpoint = `${issuer}/oauth2/authorize`;
-	const tokenEndpoint = `${issuer}/oauth2/token`;
+	const endpointBase = issuer.replace(/\/+$/, "");
+	const authorizationEndpoint = `${endpointBase}/connect/authorize`;
+	const tokenEndpoint = `${endpointBase}/connect/token`;
 
 	return {
 		id: "paybin",
@@ -102,7 +103,22 @@ export const paybin = (options: PaybinOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const user = decodeJwt(token.idToken) as PaybinProfile;
+			let user: PaybinProfile;
+			try {
+				const { payload } = await validateToken<PaybinProfile>(
+					token.idToken,
+					`${endpointBase}/.well-known/jwks.json`,
+					{
+						issuer,
+						audience: options.clientId,
+						algorithms: ["RS256"],
+						requiredClaims: ["iss", "sub", "aud", "exp", "iat"],
+					},
+				);
+				user = payload;
+			} catch {
+				return null;
+			}
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
