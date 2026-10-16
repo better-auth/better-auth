@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Paybin profile callbacks now accept identities without email access. Profile mappings must handle an omitted `email` claim.
+Paybin now uses the documented `/connect/authorize` and `/connect/token` endpoints and verifies identity tokens against signing keys, issuer, audience, and required identity and expiration claims. Profile mappings must handle an omitted email claim.
