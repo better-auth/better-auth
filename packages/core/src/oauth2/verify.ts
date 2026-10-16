@@ -332,6 +332,9 @@ export async function verifyJwsToken<PayloadType = JWTPayload>(
 		verifyOptions: JWTVerifyOptions;
 	},
 ) {
+	if (token.split(".").length !== 3) {
+		throw new joseErrors.JWSInvalid("Invalid Compact JWS");
+	}
 	const resolved = await getJwksForVerification(token, opts);
 	let jwks = resolved.jwks;
 	// Retry with a newer cached key set, then await a fetch already in progress.

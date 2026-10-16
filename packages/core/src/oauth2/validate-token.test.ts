@@ -1,5 +1,5 @@
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { CompactEncrypt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import {
 	afterAll,
 	beforeAll,
@@ -272,6 +272,39 @@ describe("validateToken", () => {
 	 * @see https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
 	 */
 	describe("verification policy", () => {
+		it("rejects encrypted tokens before requesting signing keys", async () => {
+			const token = await new CompactEncrypt(new TextEncoder().encode("{}"))
+				.setProtectedHeader({ alg: "dir", enc: "A256GCM" })
+				.encrypt(new Uint8Array(32).fill(1));
+			mockJWKSResponse();
+
+			await expect(validateToken(token, jwksEndpoint)).rejects.toMatchObject({
+				code: "ERR_JWS_INVALID",
+			});
+			expect(mockedFetch).not.toHaveBeenCalled();
+		});
+
+		it("allows clock skew only when requested", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				const { publicJWK, privateKey, kid } = await createTestJWKS("RS256");
+				const token = await createSignedToken(privateKey, "RS256", kid, {
+					nbf: Math.floor(Date.now() / 1000) + 5,
+				});
+				mockJWKSResponse(publicJWK);
+
+				await expect(
+					validateToken(token, jwksEndpoint, { clockTolerance: 30 }),
+				).resolves.toMatchObject({ payload: { sub: "user-123" } });
+				await expect(validateToken(token, jwksEndpoint)).rejects.toMatchObject({
+					code: "ERR_JWT_CLAIM_VALIDATION_FAILED",
+					claim: "nbf",
+				});
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
 		it("rejects a valid signature using an algorithm outside the allowlist", async () => {
 			const { publicJWK, privateKey, kid } = await createTestJWKS("ES256");
 			const token = await createSignedToken(privateKey, "ES256", kid);

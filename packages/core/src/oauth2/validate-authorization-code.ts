@@ -172,6 +172,10 @@ export async function validateToken<PayloadType = JWTPayload>(
 		 * Claims that must be present. Claim values require separate validation.
 		 */
 		requiredClaims?: string[];
+		/**
+		 * Allowed clock skew in seconds. Defaults to zero.
+		 */
+		clockTolerance?: number;
 	},
 ) {
 	return verifyJwsToken<PayloadType>(token, {
@@ -181,6 +185,7 @@ export async function validateToken<PayloadType = JWTPayload>(
 			issuer: options?.issuer,
 			algorithms: options?.algorithms,
 			requiredClaims: options?.requiredClaims,
+			clockTolerance: options?.clockTolerance,
 		},
 	});
 }
