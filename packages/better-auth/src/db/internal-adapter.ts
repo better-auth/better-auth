@@ -577,16 +577,21 @@ export const createInternalAdapter = (
 				if (!secondaryStorage) return sessionData;
 				const listKey = `active-sessions-${userId}`;
 				const now = Date.now();
-				// Independent reads: list lookup and user fetch can overlap.
-				const db = await getCurrentAdapter(adapter);
-				const [currentList, user] = await Promise.all([
-					secondaryStorage.get(listKey),
+				// Start the user fetch early so it overlaps list RMW, but keep
+				// get(listKey) immediately before set(listKey). Widening that
+				// window (e.g. by awaiting findOne in between) makes concurrent
+				// sign-ins more likely to drop a token from active-sessions.
+				const userPromise = getCurrentAdapter(adapter).then((db) =>
 					db.findOne<User>({
 						model: "user",
 						where: [{ field: "id", value: userId }],
 					}),
-				]);
+				);
+				// Attach a handler now so a fast rejection during list RMW is not
+				// reported as unhandled. await userPromise below still rethrows.
+				userPromise.catch(() => {});
 
+				const currentList = await secondaryStorage.get(listKey);
 				let list: { token: string; expiresAt: number }[] = [];
 				if (currentList) {
 					list = safeJSONParse(currentList) || [];
@@ -612,6 +617,7 @@ export const createInternalAdapter = (
 						furthestSessionTTL,
 					);
 				}
+				const user = await userPromise;
 				const sessionTTL = getTTLSeconds(data.expiresAt, now);
 				if (sessionTTL > 0) {
 					await secondaryStorage.set(
