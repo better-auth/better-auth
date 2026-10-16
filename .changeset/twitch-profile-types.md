@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Twitch profile callbacks now accept null emails for unverified users and omitted username or picture claims. Profile mappings must handle these missing values.
+Twitch profile mappings now handle null email addresses and omitted display claims. Identity tokens are verified against Twitch signing keys, issuer, audience, and required identity and expiration claims before profiles are mapped.
