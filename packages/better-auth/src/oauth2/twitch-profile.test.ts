@@ -47,7 +47,9 @@ async function tokenFor(kind = "valid") {
 		.sign(kind === "signature" ? otherKeys.privateKey : privateKey);
 }
 
-/** @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#validating-an-id-token */
+/**
+ * @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#validating-an-id-token
+ */
 describe("twitch ID-token profiles", () => {
 	it("maps a verified token without optional display claims", async () => {
 		const provider = twitch({ clientId });
@@ -76,7 +78,9 @@ describe("twitch ID-token profiles", () => {
 	});
 });
 
-/** @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#requesting-claims */
+/**
+ * @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#requesting-claims
+ */
 it("maps the provider's limited email claims", async () => {
 	const result = await twitch({ clientId }).getUserInfo({
 		idToken: await tokenFor("unverified email"),
