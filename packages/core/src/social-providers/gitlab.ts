@@ -12,6 +12,7 @@ export interface GitlabProfile extends Record<string, any> {
 	email: string;
 	name: string;
 	state: string;
+	locked: boolean;
 	avatar_url: string | null;
 	web_url: string;
 	created_at: string;
@@ -139,8 +140,8 @@ export const gitlab = (options: GitlabOptions) => {
 				return null;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
-			// GitLab may provide email_verified claim, but it's not guaranteed.
-			// We check for it first, then default to false for security consistency.
+			// GitLab does not document email_verified on /api/v4/user.
+			// Default to false unless an extension supplies the claim.
 			return {
 				user: {
 					name: profile.name ?? profile.username ?? "",
