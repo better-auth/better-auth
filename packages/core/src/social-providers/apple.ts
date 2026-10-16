@@ -52,7 +52,7 @@ export interface AppleProfile {
 	 */
 	name: string;
 	/**
-	 * The URL to the user's profile picture.
+	 * An optional profile extension; Apple does not document a picture claim.
 	 */
 	picture?: string;
 	user?: AppleNonConformUser | undefined;
