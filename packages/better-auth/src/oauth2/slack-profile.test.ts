@@ -18,7 +18,9 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-/** @see https://docs.slack.dev/reference/methods/openid.connect.userInfo/ */
+/**
+ * @see https://docs.slack.dev/reference/methods/openid.connect.userInfo/
+ */
 describe("Slack userinfo responses", () => {
 	it("rejects HTTP 200 platform errors in both providers", async () => {
 		server.use(
