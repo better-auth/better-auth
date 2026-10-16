@@ -10,12 +10,13 @@ import {
 export interface NotionProfile {
 	object: "user";
 	id: string;
-	type?: "person" | "bot" | undefined;
+	type?: "person" | undefined;
 	name?: string | null | undefined;
 	avatar_url?: string | null | undefined;
 	person?:
 		| {
 				email?: string;
+				email_verified?: boolean;
 		  }
 		| undefined;
 }

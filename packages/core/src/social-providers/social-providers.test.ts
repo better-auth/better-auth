@@ -461,6 +461,7 @@ describe("cognito provider", () => {
 /**
  * @see https://github.com/makenotion/notion-sdk-js/blob/v2.2.15/src/api-endpoints.ts
  * @see https://github.com/makenotion/notion-sdk-js/blob/v2.2.15/src/Client.ts
+ * @see https://developers.notion.com/page/changelog#new-identity-fields-in-oauth-token-responses
  */
 describe("notion owner profiles", () => {
 	it.each([null, "https://example.com/owner.png"])(
@@ -472,15 +473,21 @@ describe("notion owner profiles", () => {
 				type: "person",
 				name: null,
 				avatar_url,
-				person: { email: "owner@example.com" },
+				person: { email: "owner@example.com", email_verified: true },
 			} satisfies NotionProfile;
 			mockedBetterFetch.mockResolvedValueOnce({
 				data: {
 					object: "user",
+					type: "bot",
 					id: "notion-bot",
 					name: "Integration Bot",
 					avatar_url: "https://example.com/bot.png",
-					bot: { owner: { type: "user", user: owner } },
+					bot: {
+						owner: { type: "user", user: owner },
+						workspace_name: "Workspace",
+						workspace_icon: null,
+						workspace_id: "workspace-id",
+					},
 				},
 				error: null,
 			});
@@ -488,6 +495,9 @@ describe("notion owner profiles", () => {
 				expectTypeOf(profile.name).toEqualTypeOf<string | null | undefined>();
 				expectTypeOf(profile.avatar_url).toEqualTypeOf<
 					string | null | undefined
+				>();
+				expectTypeOf(profile.person?.email_verified).toEqualTypeOf<
+					boolean | undefined
 				>();
 				return {};
 			});
@@ -521,15 +531,25 @@ describe("notion owner profiles", () => {
 			id: "notion-owner",
 		} satisfies NotionProfile;
 		mockedBetterFetch.mockResolvedValueOnce({
-			data: { bot: { owner: { type: "user", user: owner } } },
+			data: {
+				object: "user",
+				id: "notion-bot",
+				type: "bot",
+				name: "Integration Bot",
+				avatar_url: null,
+				bot: {
+					owner: { type: "user", user: owner },
+					workspace_name: "Workspace",
+					workspace_icon: null,
+					workspace_id: "workspace-id",
+				},
+			},
 			error: null,
 		});
 		const provider = notion({
 			...credentials,
 			mapProfileToUser(profile) {
-				expectTypeOf(profile.type).toEqualTypeOf<
-					"person" | "bot" | undefined
-				>();
+				expectTypeOf(profile.type).toEqualTypeOf<"person" | undefined>();
 				return {
 					name: profile.name ?? "Mapped Owner",
 					email: profile.person?.email ?? `${profile.id}@example.com`,
