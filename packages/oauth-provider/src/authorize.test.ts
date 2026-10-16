@@ -6,7 +6,15 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import * as z from "zod";
 import { formatErrorURL, validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
@@ -82,6 +90,70 @@ describe("validateIssuerUrl (RFC 9207)", () => {
 		expect(
 			validateIssuerUrl("http://auth.example.com:8080/path?query=1#hash"),
 		).toBe("https://auth.example.com:8080/path");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11740
+ */
+describe("validateIssuerUrl insecure http issuer", () => {
+	let freshValidateIssuerUrl: typeof validateIssuerUrl;
+	let loggerModule: typeof import("@better-auth/core/env");
+
+	beforeEach(async () => {
+		// Reset the module registry so each test gets a fresh
+		// warn-once flag inside validateIssuerUrl.
+		vi.resetModules();
+		const authorize = await import("./authorize");
+		freshValidateIssuerUrl = authorize.validateIssuerUrl;
+		loggerModule = await import("@better-auth/core/env");
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("keeps a non-loopback http issuer when allowInsecureHttpIssuer is set", () => {
+		expect(
+			freshValidateIssuerUrl("http://10.0.0.5:3000/api/auth", {
+				allowInsecureHttpIssuer: true,
+			}),
+		).toBe("http://10.0.0.5:3000/api/auth");
+	});
+
+	it("still rewrites a non-loopback http issuer to https by default", () => {
+		expect(freshValidateIssuerUrl("http://10.0.0.5:3000/api/auth")).toBe(
+			"https://10.0.0.5:3000/api/auth",
+		);
+	});
+
+	it("warns exactly once when the rewrite fires", () => {
+		const warn = vi
+			.spyOn(loggerModule.logger, "warn")
+			.mockImplementation(() => {});
+		freshValidateIssuerUrl("http://10.0.0.5:3000/api/auth");
+		freshValidateIssuerUrl("http://10.0.0.6:3000/api/auth");
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn.mock.calls[0]?.[0]).toContain("http://10.0.0.5:3000/api/auth");
+		expect(warn.mock.calls[0]?.[0]).toContain("https://10.0.0.5:3000/api/auth");
+	});
+
+	it("does not warn when the opt-out flag is set", () => {
+		const warn = vi
+			.spyOn(loggerModule.logger, "warn")
+			.mockImplementation(() => {});
+		freshValidateIssuerUrl("http://10.0.0.5:3000/api/auth", {
+			allowInsecureHttpIssuer: true,
+		});
+		expect(warn).not.toHaveBeenCalled();
+	});
+
+	it("does not warn for loopback http issuers", () => {
+		const warn = vi
+			.spyOn(loggerModule.logger, "warn")
+			.mockImplementation(() => {});
+		freshValidateIssuerUrl("http://localhost:3000");
+		expect(warn).not.toHaveBeenCalled();
 	});
 });
 

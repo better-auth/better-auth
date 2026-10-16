@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { logger } from "@better-auth/core/env";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import { appendQueryParams } from "@better-auth/core/utils/url";
@@ -179,19 +180,50 @@ function redirectWithPromptNoneError(
 }
 
 /**
+ * Whether the insecure-issuer rewrite warning has been logged for this
+ * process. `validateIssuerUrl` runs on every request through `getIssuer`,
+ * so the warning is emitted at most once to avoid log spam.
+ */
+let insecureIssuerRewriteWarned = false;
+
+/**
  * Validates that the issuer URL
  * - MUST use HTTPS scheme (HTTP allowed for localhost in dev)
  * - MUST NOT contain query components
  * - MUST NOT contain fragment components
  *
+ * A non-loopback `http://` issuer is rewritten to `https://` unless
+ * `options.allowInsecureHttpIssuer` is set. The rewrite is reported once
+ * with `logger.warn`: the JWT plugin keeps signing tokens with the
+ * configured value, so a silent rewrite makes the authorization server
+ * contradict itself
+ * (see https://github.com/better-auth/better-auth/issues/11740).
+ *
  * @returns The validated issuer URL, or a sanitized version if invalid
  */
-export function validateIssuerUrl(issuer: string): string {
+export function validateIssuerUrl(
+	issuer: string,
+	options?: { allowInsecureHttpIssuer?: boolean },
+): string {
 	try {
 		const url = new URL(issuer);
 
-		if (url.protocol !== "https:" && !isLoopbackHost(url.host)) {
+		if (
+			url.protocol !== "https:" &&
+			!isLoopbackHost(url.host) &&
+			!options?.allowInsecureHttpIssuer
+		) {
 			url.protocol = "https:";
+			if (!insecureIssuerRewriteWarned) {
+				insecureIssuerRewriteWarned = true;
+				logger.warn(
+					`oauth-provider: configured issuer "${issuer}" uses http:// on a non-loopback ` +
+						`host; advertising "${url.toString().replace(/\/$/, "")}" instead. ` +
+						`ID tokens are still signed with the configured http:// issuer, so ` +
+						`strict OIDC clients may reject the login. Set allowInsecureHttpIssuer: true ` +
+						`if this server is only reachable on a trusted private network.`,
+				);
+			}
 		}
 
 		url.search = "";
@@ -224,7 +256,9 @@ export function getIssuer(
 		}
 	}
 
-	return validateIssuerUrl(issuer);
+	return validateIssuerUrl(issuer, {
+		allowInsecureHttpIssuer: opts.allowInsecureHttpIssuer,
+	});
 }
 
 /**

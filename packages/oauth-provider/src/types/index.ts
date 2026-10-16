@@ -1499,6 +1499,21 @@ export interface OAuthOptions<
 		 */
 		signingAlgorithms?: JWSAlgorithms[];
 	};
+	/**
+	 * Allows a non-loopback `http://` issuer for private-network deployments
+	 * (LAN/VPN/homelab without HTTPS).
+	 *
+	 * By default the provider rewrites a non-loopback `http://` issuer to
+	 * `https://` in discovery metadata and the RFC 9207 `iss` parameter (and
+	 * logs a one-time warning), while the JWT plugin keeps signing ID tokens
+	 * with the configured `http://` issuer — a combination strict OIDC clients
+	 * reject. Setting this to `true` keeps the configured issuer everywhere,
+	 * so the discovery issuer, the `iss` parameter, and the ID token `iss`
+	 * claim all agree. Only enable on networks you trust.
+	 *
+	 * @default false
+	 */
+	allowInsecureHttpIssuer?: boolean;
 }
 
 export interface OAuthAuthorizationQuery {
