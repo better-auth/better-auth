@@ -1644,6 +1644,121 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
 	});
 
+	it("should skip active-sessions rewrite when updateSession omits expiresAt", async () => {
+		const testMap = new Map<string, string>();
+		const ops: string[] = [];
+		const base = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				get(key: string) {
+					ops.push(`get:${key}`);
+					return base.get(key);
+				},
+				set(key: string, value: string, ttl?: number) {
+					ops.push(`set:${key}`);
+					return base.set(key, value, ttl);
+				},
+				delete(key: string) {
+					ops.push(`delete:${key}`);
+					return base.delete(key);
+				},
+				getAndDelete(key: string) {
+					return base.getAndDelete?.(key) ?? null;
+				},
+				increment(key: string, ttl?: number) {
+					return base.increment?.(key, ttl ?? 0) ?? 1;
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		await (await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-meta-update",
+				email: "test-meta-update@email.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testInternalAdapter.createSession(user.id);
+		const listKey = `active-sessions-${user.id}`;
+		const listBefore = testMap.get(listKey);
+
+		ops.length = 0;
+		await testInternalAdapter.updateSession(session.token, {
+			ipAddress: "10.0.0.1",
+		});
+
+		expect(ops.filter((op) => op === `get:${listKey}`)).toHaveLength(0);
+		expect(ops.filter((op) => op === `set:${listKey}`)).toHaveLength(0);
+		expect(ops.filter((op) => op === `set:${session.token}`)).toHaveLength(1);
+		expect(testMap.get(listKey)).toBe(listBefore);
+
+		const stored = safeJSONParse<{ session: Session }>(
+			testMap.get(session.token)!,
+		);
+		expect(stored?.session.ipAddress).toBe("10.0.0.1");
+	});
+
+	it("deleteUserSessions should keep list entries for tokens whose delete failed", async () => {
+		const testMap = new Map<string, string>();
+		const base = createStringSecondaryStorage(testMap);
+		const failingToken = { current: "" as string };
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				get(key: string) {
+					return base.get(key);
+				},
+				set(key: string, value: string, ttl?: number) {
+					return base.set(key, value, ttl);
+				},
+				delete(key: string) {
+					if (key === failingToken.current) {
+						throw new Error("secondary-storage delete failed");
+					}
+					return base.delete(key);
+				},
+				getAndDelete(key: string) {
+					return base.getAndDelete?.(key) ?? null;
+				},
+				increment(key: string, ttl?: number) {
+					return base.increment?.(key, ttl ?? 0) ?? 1;
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		await (await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-revoke-list",
+				email: "test-revoke-list@email.com",
+			},
+			{ method: "test" },
+		);
+		const sessionA = await testInternalAdapter.createSession(user.id);
+		const sessionB = await testInternalAdapter.createSession(user.id);
+		const sessionC = await testInternalAdapter.createSession(user.id);
+		failingToken.current = sessionB.token;
+
+		// Queued cache deletion reports via onError and still applies partial
+		// revoke: successful deletes drop off the list; the failed token stays.
+		await testInternalAdapter.deleteUserSessions(user.id);
+
+		expect(testMap.has(sessionA.token)).toBe(false);
+		expect(testMap.has(sessionB.token)).toBe(true);
+		expect(testMap.has(sessionC.token)).toBe(false);
+
+		const list = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			testMap.get(`active-sessions-${user.id}`)!,
+		);
+		expect(list?.map((entry) => entry.token)).toEqual([sessionB.token]);
+	});
+
 	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();

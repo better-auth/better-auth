@@ -17,6 +17,11 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
+import {
+	mapConcurrent,
+	mapConcurrentSettled,
+	throwIfAnyRejected,
+} from "@better-auth/core/utils/async";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -38,6 +43,8 @@ import {
 } from "./verification-token-storage";
 import type { DatabaseHooksEntry } from "./with-hooks";
 import { getWithHooks } from "./with-hooks";
+
+const SECONDARY_STORAGE_CONCURRENCY = 10;
 
 function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	const expiresMs =
@@ -122,8 +129,11 @@ export const createInternalAdapter = (
 			safeJSONParse<{ token: string; expiresAt: number }[]>(listRaw) || [];
 		const validSessions = list.filter((s) => s.expiresAt > now);
 
-		await Promise.all(
-			validSessions.map(async ({ token }) => {
+		// Best-effort refresh: attempt every session under the concurrency
+		// cap even if individual get/set calls fail.
+		const refreshResults = await mapConcurrentSettled(
+			validSessions,
+			async ({ token }) => {
 				const cached = await secondaryStorage.get(token);
 				if (!cached) return;
 				const parsed = safeJSONParse<{ session: Session; user: User }>(cached);
@@ -139,7 +149,12 @@ export const createInternalAdapter = (
 					}),
 					Math.floor(sessionTTL),
 				);
-			}),
+			},
+			{ concurrency: SECONDARY_STORAGE_CONCURRENCY },
+		);
+		throwIfAnyRejected(
+			refreshResults,
+			"Failed to refresh some user sessions in secondary storage",
 		);
 	}
 
@@ -159,11 +174,19 @@ export const createInternalAdapter = (
 	) {
 		if (!secondaryStorage) return;
 
-		const deletedTokens = new Set(
-			sessionReferences.map((session) => session.token),
+		// Attempt every token delete under the concurrency cap. Only tokens
+		// whose delete fulfilled are removed from the active-sessions list so a
+		// failed delete cannot hide a still-live session from later revokes.
+		const deleteResults = await mapConcurrentSettled(
+			sessionReferences,
+			({ token }) => secondaryStorage.delete(token),
+			{ concurrency: SECONDARY_STORAGE_CONCURRENCY },
 		);
-		for (const { token } of sessionReferences) {
-			await secondaryStorage.delete(token);
+		const deletedTokens = new Set<string>();
+		for (let i = 0; i < deleteResults.length; i++) {
+			if (deleteResults[i]!.status === "fulfilled") {
+				deletedTokens.add(sessionReferences[i]!.token);
+			}
 		}
 
 		const activeSessionsKey = `active-sessions-${userId}`;
@@ -181,9 +204,14 @@ export const createInternalAdapter = (
 				JSON.stringify(remainingSessionReferences),
 				getTTLSeconds(furthestExpiration, now),
 			);
-			return;
+		} else {
+			await secondaryStorage.delete(activeSessionsKey);
 		}
-		await secondaryStorage.delete(activeSessionsKey);
+
+		throwIfAnyRejected(
+			deleteResults,
+			"Failed to delete some user sessions from secondary storage",
+		);
 	}
 
 	async function queueCachedUserSessionDeletion(
@@ -364,35 +392,37 @@ export const createInternalAdapter = (
 				const now = Date.now();
 
 				const seenTokens = new Set<string>();
-				const sessions: Session[] = [];
-
+				const tokensToLoad: string[] = [];
 				for (const { token, expiresAt } of list) {
 					if (expiresAt <= now || seenTokens.has(token)) continue;
 					seenTokens.add(token);
+					tokensToLoad.push(token);
+				}
 
-					const data = await secondaryStorage.get(token);
-					if (!data) continue;
-
-					try {
-						const parsed = (
-							typeof data === "string" ? JSON.parse(data) : data
-						) as {
-							session: Session;
-							user: User;
-						};
-						if (!parsed?.session) continue;
-
-						sessions.push(
-							parseSessionOutput(ctx.options, {
+				const loaded = await mapConcurrent(
+					tokensToLoad,
+					async (token) => {
+						const data = await secondaryStorage.get(token);
+						if (!data) return null;
+						try {
+							const parsed = (
+								typeof data === "string" ? JSON.parse(data) : data
+							) as {
+								session: Session;
+								user: User;
+							};
+							if (!parsed?.session) return null;
+							return parseSessionOutput(ctx.options, {
 								...parsed.session,
 								expiresAt: new Date(parsed.session.expiresAt),
-							}),
-						);
-					} catch {
-						continue;
-					}
-				}
-				return sessions;
+							});
+						} catch {
+							return null;
+						}
+					},
+					{ concurrency: SECONDARY_STORAGE_CONCURRENCY },
+				);
+				return loaded.filter((session): session is Session => session !== null);
 			}
 
 			const sessions = await (
@@ -545,12 +575,19 @@ export const createInternalAdapter = (
 			} satisfies Partial<Session>;
 			const mirrorSessionToSecondaryStorage = async (sessionData: Session) => {
 				if (!secondaryStorage) return sessionData;
-				const currentList = await secondaryStorage.get(
-					`active-sessions-${userId}`,
-				);
+				const listKey = `active-sessions-${userId}`;
+				const now = Date.now();
+				// Independent reads: list lookup and user fetch can overlap.
+				const db = await getCurrentAdapter(adapter);
+				const [currentList, user] = await Promise.all([
+					secondaryStorage.get(listKey),
+					db.findOne<User>({
+						model: "user",
+						where: [{ field: "id", value: userId }],
+					}),
+				]);
 
 				let list: { token: string; expiresAt: number }[] = [];
-				const now = Date.now();
 				if (currentList) {
 					list = safeJSONParse(currentList) || [];
 					list = list.filter(
@@ -566,18 +603,15 @@ export const createInternalAdapter = (
 				const furthestSessionExp =
 					sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
 				const furthestSessionTTL = getTTLSeconds(furthestSessionExp, now);
+				// List-first: prefer a dangling list entry over a live session
+				// payload missing from active-sessions (which bulk revoke would miss).
 				if (furthestSessionTTL > 0) {
 					await secondaryStorage.set(
-						`active-sessions-${userId}`,
+						listKey,
 						JSON.stringify(sorted),
 						furthestSessionTTL,
 					);
 				}
-
-				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
-					model: "user",
-					where: [{ field: "id", value: userId }],
-				});
 				const sessionTTL = getTTLSeconds(data.expiresAt, now);
 				if (sessionTTL > 0) {
 					await secondaryStorage.set(
@@ -708,8 +742,15 @@ export const createInternalAdapter = (
 			>();
 			const missingTokens: string[] = [];
 			if (secondaryStorage) {
-				for (const sessionToken of uniqueTokens) {
-					const sessionStringified = await secondaryStorage.get(sessionToken);
+				const cached = await mapConcurrent(
+					uniqueTokens,
+					async (sessionToken) => ({
+						sessionToken,
+						sessionStringified: await secondaryStorage.get(sessionToken),
+					}),
+					{ concurrency: SECONDARY_STORAGE_CONCURRENCY },
+				);
+				for (const { sessionToken, sessionStringified } of cached) {
 					if (sessionStringified) {
 						try {
 							const s = (
@@ -836,40 +877,46 @@ export const createInternalAdapter = (
 								const sessionTTL = getTTLSeconds(expiresMs, now);
 
 								if (sessionTTL > 0) {
+									const sessionPayload = JSON.stringify({
+										session: updatedSession,
+										user: parsedSession.user,
+									});
+									// Session write first so a failed list rewrite cannot
+									// advertise a new expiresAt without an updated payload.
 									await secondaryStorage.set(
 										sessionToken,
-										JSON.stringify({
-											session: updatedSession,
-											user: parsedSession.user,
-										}),
+										sessionPayload,
 										sessionTTL,
 									);
 
-									const listKey = `active-sessions-${updatedSession.userId}`;
-									const listRaw = await secondaryStorage.get(listKey);
-									const list: { token: string; expiresAt: number }[] = listRaw
-										? safeJSONParse(listRaw) || []
-										: [];
+									// active-sessions only tracks token + expiresAt
+									if (data.expiresAt !== undefined) {
+										const listKey = `active-sessions-${updatedSession.userId}`;
+										const listRaw = await secondaryStorage.get(listKey);
+										const list: { token: string; expiresAt: number }[] = listRaw
+											? safeJSONParse(listRaw) || []
+											: [];
 
-									const filtered = list
-										.filter(
-											(s) => s.token !== sessionToken && s.expiresAt > now,
-										)
-										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
+										const filtered = list
+											.filter(
+												(s) => s.token !== sessionToken && s.expiresAt > now,
+											)
+											.concat([{ token: sessionToken, expiresAt: expiresMs }]);
 
-									const sorted = filtered.sort(
-										(a, b) => a.expiresAt - b.expiresAt,
-									);
-									const furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-									if (furthestSessionExp && furthestSessionExp > now) {
-										await secondaryStorage.set(
-											listKey,
-											JSON.stringify(sorted),
-											getTTLSeconds(furthestSessionExp, now),
+										const sorted = filtered.sort(
+											(a, b) => a.expiresAt - b.expiresAt,
 										);
-									} else {
-										await secondaryStorage.delete(listKey);
+										const furthestSessionExp = sorted.at(-1)?.expiresAt;
+
+										if (furthestSessionExp && furthestSessionExp > now) {
+											await secondaryStorage.set(
+												listKey,
+												JSON.stringify(sorted),
+												getTTLSeconds(furthestSessionExp, now),
+											);
+										} else {
+											await secondaryStorage.delete(listKey);
+										}
 									}
 								}
 
@@ -896,10 +943,11 @@ export const createInternalAdapter = (
 						return;
 					}
 					const userId = session.userId;
+					const listKey = `active-sessions-${userId}`;
 
-					const currentList = await secondaryStorage.get(
-						`active-sessions-${userId}`,
-					);
+					// List rewrite before token delete so a failed list write cannot
+					// leave a dangling active-sessions entry after the token is gone.
+					const currentList = await secondaryStorage.get(listKey);
 					if (currentList) {
 						const list: { token: string; expiresAt: number }[] =
 							safeJSONParse(currentList) || [];
@@ -914,15 +962,15 @@ export const createInternalAdapter = (
 						if (
 							filtered.length > 0 &&
 							furthestSessionExp &&
-							furthestSessionExp > Date.now()
+							furthestSessionExp > now
 						) {
 							await secondaryStorage.set(
-								`active-sessions-${userId}`,
+								listKey,
 								JSON.stringify(filtered),
 								getTTLSeconds(furthestSessionExp, now),
 							);
 						} else {
-							await secondaryStorage.delete(`active-sessions-${userId}`);
+							await secondaryStorage.delete(listKey);
 						}
 					} else {
 						logger.error("Active sessions list not found in secondary storage");
@@ -1007,18 +1055,32 @@ export const createInternalAdapter = (
 			}
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
+			// Revoke paths must attempt every secondary-storage token under the
+			// concurrency cap even when individual deletes fail. Durable DB
+			// cleanup still runs afterward; secondary failures are surfaced last.
+			let secondaryDeleteResults: PromiseSettledResult<unknown>[] | undefined;
 			if (secondaryStorage) {
-				await Promise.all(
-					sessionTokens.map((token) => secondaryStorage.delete(token)),
+				secondaryDeleteResults = await mapConcurrentSettled(
+					sessionTokens,
+					(token) => secondaryStorage.delete(token),
+					{ concurrency: SECONDARY_STORAGE_CONCURRENCY },
 				);
 
 				if (!options.session?.storeSessionInDatabase) {
+					throwIfAnyRejected(
+						secondaryDeleteResults,
+						"Failed to delete some sessions from secondary storage",
+					);
 					return;
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
 					await endPreservedSessions([
 						{ field: "token", value: sessionTokens, operator: "in" },
 					]);
+					throwIfAnyRejected(
+						secondaryDeleteResults,
+						"Failed to delete some sessions from secondary storage",
+					);
 					return;
 				}
 			}
@@ -1033,6 +1095,12 @@ export const createInternalAdapter = (
 				"session",
 				undefined,
 			);
+			if (secondaryDeleteResults) {
+				throwIfAnyRejected(
+					secondaryDeleteResults,
+					"Failed to delete some sessions from secondary storage",
+				);
+			}
 		},
 		findAccountOwnerByKey: async ({ providerId, accountId }) => {
 			const accountsWithUsers = await (
