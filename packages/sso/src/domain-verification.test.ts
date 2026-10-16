@@ -208,6 +208,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(201);
 			expect(await response.json()).toEqual({
+				domainVerificationIdentifier: "_better-auth-token-saml-provider-1",
 				domainVerificationToken: provider.domainVerificationToken,
 			});
 		});
@@ -1010,6 +1011,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(201);
 			expect(await response.json()).toEqual({
+				domainVerificationIdentifier: "_better-auth-token-saml-provider-1",
 				domainVerificationToken: provider.domainVerificationToken,
 			});
 
