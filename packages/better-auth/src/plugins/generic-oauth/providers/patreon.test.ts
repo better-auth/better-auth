@@ -12,9 +12,13 @@ afterAll(() => server.close());
  * @see https://docs.patreon.com/#user-v2
  * @see https://docs.patreon.com/#2026-05-26-member-identity-masking-implemented
  */
-it.each([null, undefined])(
-	"normalizes a masked Patreon profile with email=%s",
-	async (email) => {
+it.each([
+	{ email: null, display: null, expectedDisplay: undefined },
+	{ email: undefined, display: null, expectedDisplay: undefined },
+	{ email: null, display: "", expectedDisplay: "" },
+])(
+	"handles Patreon profiles with email=$email and display=$display",
+	async ({ email, display, expectedDisplay }) => {
 		server.use(
 			http.get("https://www.patreon.com/api/oauth2/v2/identity", () =>
 				HttpResponse.json({
@@ -22,9 +26,9 @@ it.each([null, undefined])(
 						id: "patreon-user",
 						type: "user",
 						attributes: {
-							full_name: null,
+							full_name: display,
 							email,
-							image_url: null,
+							image_url: display,
 							is_email_verified: false,
 						},
 					},
@@ -41,9 +45,9 @@ it.each([null, undefined])(
 
 		expect(profile).toEqual({
 			id: "patreon-user",
-			name: undefined,
+			name: expectedDisplay,
 			email,
-			image: undefined,
+			image: expectedDisplay,
 			emailVerified: false,
 		});
 	},
