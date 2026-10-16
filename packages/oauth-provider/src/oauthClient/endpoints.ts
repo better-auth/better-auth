@@ -362,6 +362,8 @@ export async function updateClientEndpoint(
 	const schemaUpdates: Record<string, unknown> = {
 		...oauthToSchema(updates),
 	};
+	// 0 means the secret never expires, so clear any stored expiry
+	if (updates.client_secret_expires_at === 0) schemaUpdates.expiresAt = null;
 	// A client created before sectors were stored keeps deriving its sector
 	// from its redirect URI host, so only recompute a stored sector.
 	if (updates.redirect_uris && client.sectorIdentifier) {

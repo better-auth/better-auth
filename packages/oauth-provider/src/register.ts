@@ -1040,10 +1040,11 @@ async function persistOAuthClientRegistration(
 		disabled: undefined,
 		// Required if client secret is issued
 		client_secret_expires_at: storedClientSecret
-			? input.registrationSource === "dynamic" &&
-				opts.clientRegistrationClientSecretExpiration
-				? toExpJWT(opts.clientRegistrationClientSecretExpiration, iat)
-				: 0
+			? input.registrationSource === "dynamic"
+				? opts.clientRegistrationClientSecretExpiration
+					? toExpJWT(opts.clientRegistrationClientSecretExpiration, iat)
+					: 0
+				: (body.client_secret_expires_at ?? 0)
 			: undefined,
 		// Override
 		client_id: clientId,
@@ -1528,7 +1529,6 @@ export async function createOAuthClientEndpoint(
 export function oauthToSchema(
 	input: OAuthClientRegistrationMetadata & {
 		client_id: string;
-		client_secret_expires_at?: number;
 	},
 ): SchemaClient<Scope[]>;
 export function oauthToSchema(
@@ -1583,9 +1583,23 @@ export function oauthToSchema(
 	} = input;
 
 	// Type conversions
-	const expiresAt = _expiresAt
-		? new Date(Number(_expiresAt) * 1000)
-		: undefined;
+	let expiresAt: Date | undefined;
+	if (_expiresAt !== undefined && _expiresAt !== 0) {
+		try {
+			// A number is seconds since the epoch; a string is a span from now ("30d").
+			expiresAt = new Date(
+				toExpJWT(_expiresAt, Math.floor(Date.now() / 1000)) * 1000,
+			);
+			// A number too large for a Date yields an invalid date instead of throwing
+			if (Number.isNaN(expiresAt.getTime())) throw new RangeError();
+		} catch {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					'client_secret_expires_at must be seconds since the epoch or a time span such as "30d"',
+			});
+		}
+	}
 	const createdAt = _createdAt ? new Date(_createdAt * 1000) : undefined;
 	const scopes = _scope?.split(" ");
 	const metadataObj = stripReservedOAuthClientMetadataExtensions(

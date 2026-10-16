@@ -71,7 +71,10 @@ interface TTLCache<K, V> {
 	set(key: K, value: V): void;
 }
 
-function createTTLCache<K, V extends { expiresAt?: Date }>(): TTLCache<K, V> {
+function createTTLCache<K, V extends { expiresAt?: Date | null }>(): TTLCache<
+	K,
+	V
+> {
 	const cache = new Map<K, V>();
 	return {
 		get(key) {
@@ -912,6 +915,14 @@ export async function validateClientCredentials(
 			))
 		) {
 			throwInvalidClient("invalid client_secret", { method: authMethod });
+		}
+
+		if (
+			clientSecret &&
+			client.expiresAt &&
+			new Date(client.expiresAt) <= new Date()
+		) {
+			throwInvalidClient("client secret has expired", { method: authMethod });
 		}
 	}
 

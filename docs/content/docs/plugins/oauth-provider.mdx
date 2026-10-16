@@ -231,7 +231,7 @@ To create an oauth client tied to a specific user or organization, use the `/oau
 
 The following fields on the database are considered restricted and should only be editable by admin users.
 
-* `client_secret_expires_at`: The expiration time for a secret of a confidential client
+* `client_secret_expires_at`: When the secret of a confidential client expires, as seconds since the epoch or a time span from now such as `"90d"`. `0`, the default, means the secret never expires. After that time, the token, introspection, and revocation endpoints reject the secret with `invalid_client`.
 * `skip_consent`: Allows the ability to skip user consent flow. Useful for trusted clients.
 * `enable_end_session`: Allows a user to logout of a session from the client via their `id_token` at the `/oauth2/end-session` endpoint. Used in OIDC-setups and specified trusted clients.
 * `metadata`: Additional private metadata to attach to the client.
@@ -303,6 +303,8 @@ await auth.api.adminUpdateOAuthClient({
 });
 ```
 
+To extend a secret's expiry, set a later `client_secret_expires_at`. Set it to `0` to remove the expiry.
+
 To pause token issuance without deleting a client, set `disabled` through the server-only update API:
 
 ```ts
@@ -319,6 +321,8 @@ Set `disabled: false` to resume issuance. A disabled client cannot obtain new to
 <Callout type="warn">
   The current implementation rotates the client secret immediately and the previous secret is invalidated immediately.
 </Callout>
+
+The new secret keeps the client's `client_secret_expires_at`. To extend it, update the client with `adminUpdateOAuthClient`.
 
 To rotate a client secret, you must use the following endpoint:
 
@@ -1796,6 +1800,8 @@ oauthProvider({
 })
 ```
 
+The registration response reports the expiry as `client_secret_expires_at`. After that time, the client's secret is rejected with `invalid_client`, so the client must register again unless you extend the expiry with `adminUpdateOAuthClient`.
+
 #### Dynamic Client Registration Scopes
 
 Registration scope metadata describes the scopes a client is capable of requesting; it is not a user authorization grant. Better Auth validates a requested `scope` as a subset of the operator policy, then persists the complete operator-approved capability set so later authorization can step up without re-registering the client.
@@ -2557,6 +2563,13 @@ export const oauthClientTableFields = [
     name: "updatedAt",
     type: "Date",
     description: "Timestamp of when the OAuth client was last updated",
+    isOptional: true,
+  },
+  {
+    name: "expiresAt",
+    type: "Date",
+    description:
+      "When the client secret expires. Empty means the secret never expires.",
     isOptional: true,
   },
   {
