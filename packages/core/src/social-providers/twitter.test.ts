@@ -101,7 +101,9 @@ it.each([
 	expect(result?.data.data.entities).toEqual(entities);
 });
 
-/** @see https://api.x.com/2/openapi.json */
+/**
+ * @see https://api.x.com/2/openapi.json
+ */
 it("types description entities and URL previews", () => {
 	assertType<TwitterProfile["data"]["entities"]>({
 		description: {
