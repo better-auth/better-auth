@@ -2,7 +2,7 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { getSessionFromCtx } from "better-auth/api";
+import { getAuthoritativeSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
@@ -278,10 +278,10 @@ export function updateApiKey({
 			// Updating an API key mutates a credential, so resolve the session from
 			// the authoritative store rather than the signed cookie-cache snapshot,
 			// matching create-api-key. A revoked session must not modify a key within
-			// the cookie-cache window.
-			const session = await getSessionFromCtx(ctx, {
-				disableCookieCache: true,
-			});
+			// the cookie-cache window. `getAuthoritativeSessionFromCtx` also clears a
+			// session an earlier hook memoized on the context, which would otherwise
+			// satisfy this read from the cookie cache and defeat the bypass.
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 			const authRequired = ctx.request || ctx.headers;
 			const user =
 				authRequired && !session
