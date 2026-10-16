@@ -8,6 +8,7 @@ on:
       - completed
     branches:
       # Match editBranch values with a pinned commitSha in `docs/lib/docs-version-sources.json`.
+      - next
       - "v*.*.x"
 
 permissions:
