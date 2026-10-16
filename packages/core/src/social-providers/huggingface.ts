@@ -26,9 +26,12 @@ export interface HuggingFaceProfile {
 				isEnterprise?: boolean | "plus";
 				plan?: string;
 				canPay?: boolean;
-				roleInOrg?: "admin" | "write" | "contributor" | "read";
+				roleInOrg?: string;
+				/** @deprecated Use securityRestrictions with "sso". */
 				pendingSSO?: boolean;
+				/** @deprecated Use securityRestrictions with "mfa". */
 				missingMFA?: boolean;
+				securityRestrictions?: ("mfa" | "sso" | "ip" | "token-policy")[];
 				resourceGroups?: {
 					sub: string;
 					name: string;
