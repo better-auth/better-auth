@@ -12,7 +12,9 @@ import {
 } from "../oauth2";
 import { ID_TOKEN_CLOCK_TOLERANCE_SECONDS } from "../oauth2/verify-id-token";
 
-/** Claims from a Google ID token. */
+/**
+ * Claims from a Google ID token.
+ */
 export interface GoogleProfile {
 	aud: string;
 	azp?: string | undefined;
