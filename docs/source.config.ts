@@ -12,6 +12,12 @@ import {
 	remarkAutoTypeTable,
 } from "fumadocs-typescript";
 import * as z from "zod";
+import packageMetadata from "../packages/better-auth/package.json" with {
+	type: "json",
+};
+import { docsVersionSources } from "./lib/docs-version-sources";
+import type { DocsVersion } from "./lib/docs-versions";
+import { docsVersions } from "./lib/docs-versions";
 
 const docsPageSchema = pageSchema.extend({
 	sidebarBadge: z.string().min(1).optional(),
@@ -22,8 +28,16 @@ const processedMarkdownOptions = {
 	mdxAsPlaceholder: ["APIMethod"],
 } satisfies LLMsOptions;
 
+function getContentDirectory(version: DocsVersion) {
+	return packageMetadata.version.startsWith(`${version.releaseLine}.`)
+		? "./content/docs"
+		: `./content/${docsVersionSources[version.id].contentDirectory}`;
+}
+
+const [betaVersion, latestVersion, version16] = docsVersions;
+
 export const docs = defineDocs({
-	dir: "./content/docs",
+	dir: getContentDirectory(latestVersion),
 	docs: {
 		schema: docsPageSchema,
 		postprocess: {
@@ -34,7 +48,18 @@ export const docs = defineDocs({
 });
 
 export const docsV16 = defineDocs({
-	dir: "./content/_generated/docs/v1-6",
+	dir: getContentDirectory(version16),
+	docs: {
+		schema: docsPageSchema,
+		postprocess: {
+			includeProcessedMarkdown: processedMarkdownOptions,
+		},
+		async: true,
+	},
+});
+
+export const docsBeta = defineDocs({
+	dir: getContentDirectory(betaVersion),
 	docs: {
 		schema: docsPageSchema,
 		postprocess: {

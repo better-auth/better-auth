@@ -32,9 +32,11 @@ import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
+import { findRefreshToken } from "./token-lookup";
 import type {
 	Confirmation,
 	OAuthAuthenticatedClient,
+	OAuthAuthenticationContext,
 	OAuthClientAuthenticationRequest,
 	OAuthOptions,
 	OAuthProviderApi,
@@ -57,7 +59,6 @@ import {
 	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
-	getStoredToken,
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
@@ -67,6 +68,7 @@ import {
 	toAudienceClaim,
 	toResourceList,
 	validateClientCredentials,
+	validateClientScopes,
 } from "./utils";
 
 // Seed the ID token with the standard UserInfo claim names set to `undefined`,
@@ -205,6 +207,20 @@ export function getOAuthProviderApi(
 			}
 			return createUserTokens(ctx, opts, { ...params, grantType });
 		},
+		resolveConfirmation: async (params) => {
+			if (params.confirmation) return params.confirmation;
+			const policy = await resolveResourcePolicy(ctx, opts, {
+				resource: params.resources,
+				clientId: params.client.clientId,
+				requestedScopes: params.scopes,
+			});
+			return resolveDpopTokenBinding(ctx, opts, {
+				client: params.client,
+				grantIssuance: {
+					dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
+				},
+			});
+		},
 		hashToken: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {
@@ -231,6 +247,8 @@ async function createJwtAccessToken(
 		iat?: number;
 		exp?: number;
 		sid?: string;
+		/** Consent reference from `postLogin.consentReferenceId`. */
+		referenceId?: string;
 		/**
 		 * Per-resource signing config resolved by {@link resolveResourcePolicy}.
 		 * `null` falls back to the JWT plugin's primary key.
@@ -280,6 +298,9 @@ async function createJwtAccessToken(
 			azp: client.clientId,
 			scope: scopes.join(" "),
 			sid: overrides?.sid,
+			// AS-owned, like `sid`: grants derived from this token (token exchange)
+			// read the consent reference back from here.
+			reference_id: overrides?.referenceId,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
@@ -333,6 +354,7 @@ async function createIdToken(
 	authTime?: Date,
 	accessToken?: string,
 	extraClaims?: Record<string, unknown>,
+	authenticationContext?: OAuthAuthenticationContext,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
@@ -369,12 +391,15 @@ async function createIdToken(
 		: undefined;
 
 	const emitSid = Boolean(
-		client.enableEndSession || client.backchannelLogoutUri,
+		client.enableEndSession ||
+			client.backchannelLogoutUri ||
+			client.frontchannelLogoutUri,
 	);
 	const payload: JWTPayload = {
 		...ID_TOKEN_SCOPE_CLAIM_GUARDS,
 		auth_time: authTimeSec,
-		acr: LEVEL_0_ACR,
+		acr: authenticationContext?.acr ?? LEVEL_0_ACR,
+		amr: authenticationContext?.amr,
 		...customClaims,
 		at_hash: atHash,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -444,34 +469,9 @@ async function encodeRefreshToken(
 	return (
 		(opts.prefix?.refreshToken ?? "") +
 		(opts.formatRefreshToken?.encrypt
-			? opts.formatRefreshToken.encrypt(token, sessionId)
+			? await opts.formatRefreshToken.encrypt(token, sessionId)
 			: token)
 	);
-}
-
-/**
- * Decodes a refresh token for a client
- *
- * @internal
- */
-export async function decodeRefreshToken(
-	opts: OAuthOptions<Scope[]>,
-	token: string,
-) {
-	if (opts.prefix?.refreshToken) {
-		if (token.startsWith(opts.prefix.refreshToken)) {
-			token = token.replace(opts.prefix.refreshToken, "");
-		} else {
-			throw new APIError("BAD_REQUEST", {
-				error_description: "refresh token not found",
-				error: "invalid_token",
-			});
-		}
-	}
-
-	return opts.formatRefreshToken?.decrypt
-		? opts.formatRefreshToken?.decrypt(token)
-		: { token };
 }
 
 async function createOpaqueAccessToken(
@@ -604,6 +604,7 @@ async function createRefreshToken(
 	resources?: string[],
 	confirmation?: Confirmation,
 	requestedUserInfoClaims?: string[],
+	authenticationContext?: OAuthAuthenticationContext,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -624,6 +625,8 @@ async function createRefreshToken(
 		referenceId,
 		authorizationCodeId,
 		authTime,
+		acr: authenticationContext?.acr,
+		amr: authenticationContext?.amr,
 		confirmation,
 		requestedUserInfoClaims: requestedUserInfoClaims?.length
 			? requestedUserInfoClaims
@@ -791,7 +794,7 @@ async function resolveDpopTokenBinding(
 	opts: OAuthOptions<Scope[]>,
 	params: {
 		client: SchemaClient<Scope[]>;
-		grantIssuance: ResourceGrantIssuance;
+		grantIssuance: Pick<ResourceGrantIssuance, "dpopBoundAccessTokensRequired">;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
@@ -817,7 +820,9 @@ async function resolveDpopTokenBinding(
 		const proof = await verifyDpopProof({
 			proofJwt: dpopProofJwt,
 			method: "POST",
-			url: getEndpointUrl(ctx, "/oauth2/token"),
+			// The endpoint serving this request: the token endpoint, or a plugin's
+			// own endpoint that issues tokens out-of-grant.
+			url: getEndpointUrl(ctx, ctx.path ?? "/oauth2/token"),
 			expectedJkt,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
@@ -1106,14 +1111,30 @@ async function createUserTokens(
 		nonce,
 		refreshToken: existingRefreshToken,
 		authTime,
+		acr,
+		amr,
 		verificationValue,
 	} = params;
+	const authenticationContext = { acr, amr };
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
 		? (opts.accessTokenExpiresIn ?? 3600)
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
-	const defaultExp = iat + baseExpiry;
+	// Every other access token expiry is min()-ed against this, so the cap holds.
+	const defaultExp = Math.min(
+		iat + baseExpiry,
+		params.maxExpiresAt
+			? Math.floor(params.maxExpiresAt.getTime() / 1000)
+			: Number.POSITIVE_INFINITY,
+	);
+	// A cap that has already passed would mint a token that is born expired.
+	if (defaultExp <= iat) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: "the token this grant derives from has expired",
+		});
+	}
 	const scopeExp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>
@@ -1221,6 +1242,7 @@ async function createUserTokens(
 					refreshResources,
 					confirmation,
 					requestedUserInfoClaims,
+					authenticationContext,
 				)
 			: undefined;
 
@@ -1258,6 +1280,7 @@ async function createUserTokens(
 						iat,
 						exp,
 						sid: sessionId,
+						referenceId,
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,
@@ -1303,6 +1326,7 @@ async function createUserTokens(
 						refreshResources,
 						confirmation,
 						requestedUserInfoClaims,
+						authenticationContext,
 					)
 				: undefined,
 	]);
@@ -1320,6 +1344,7 @@ async function createUserTokens(
 				authTime,
 				accessToken,
 				additionalIdTokenClaims,
+				authenticationContext,
 			)
 		: undefined;
 
@@ -1524,6 +1549,20 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the code lookup can report
+	 * `invalid_grant` and before a one-time code is consumed). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret,
+		undefined,
+		preVerified,
+		"authorization_code",
+		authMethod,
+	);
+
 	/** Get and check Verification Value */
 	const {
 		verificationValue,
@@ -1545,18 +1584,7 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_scope",
 		});
 	}
-
-	/** Verify Client */
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret,
-		scopes,
-		preVerified,
-		"authorization_code",
-		authMethod,
-	);
+	validateClientScopes(client, scopes);
 
 	// Parse scopes from the authorization request
 	const requestedScopes =
@@ -1597,7 +1625,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (pkceUsedInAuth && !pkceUsedInToken) {
 			// PKCE was used in authorization but not in token exchange
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier required because PKCE was used in authorization",
 				error: "invalid_request",
@@ -1606,7 +1634,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (!pkceUsedInAuth && pkceUsedInToken) {
 			// PKCE was not used in authorization but verifier provided
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier provided but PKCE was not used in authorization",
 				error: "invalid_request",
@@ -1620,9 +1648,9 @@ async function handleAuthorizationCodeGrant(
 				: undefined;
 
 		if (challenge !== verificationValue.query?.code_challenge) {
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description: "code verification failed",
-				error: "invalid_request",
+				error: "invalid_grant",
 			});
 		}
 	}
@@ -1679,6 +1707,8 @@ async function handleAuthorizationCodeGrant(
 		sessionId: session.id,
 		nonce: verificationValue.query?.nonce,
 		authTime,
+		acr: verificationValue.acr,
+		amr: verificationValue.amr,
 		verificationValue,
 		authorizationCodeId,
 		requestedUserInfoClaims,
@@ -1820,23 +1850,22 @@ async function handleRefreshTokenGrant(
 			error: "invalid_request",
 		});
 	}
-	const decodedRefresh = await decodeRefreshToken(opts, refresh_token);
 
-	const refreshToken = await ctx.context.adapter.findOne<
-		OAuthRefreshToken<Scope[]> & { id: string }
-	>({
-		model: "oauthRefreshToken",
-		where: [
-			{
-				field: "token",
-				value: await getStoredToken(
-					opts.storeTokens,
-					decodedRefresh.token,
-					"refresh_token",
-				),
-			},
-		],
-	});
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the refresh token lookup can
+	 * report `invalid_grant`). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret, // Optional for refresh_grant but required on confidential clients
+		undefined,
+		preVerified,
+		"refresh_token",
+		authMethod,
+	);
+
+	const refreshToken = await findRefreshToken(ctx, opts, refresh_token);
 
 	// Check refresh
 	if (!refreshToken) {
@@ -1884,16 +1913,7 @@ async function handleRefreshTokenGrant(
 		}
 	}
 
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret, // Optional for refresh_grant but required on confidential clients
-		requestedScopes ?? scopes,
-		preVerified,
-		"refresh_token",
-		authMethod,
-	);
+	validateClientScopes(client, requestedScopes ?? scopes);
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
@@ -1954,6 +1974,8 @@ async function handleRefreshTokenGrant(
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
+		acr: refreshToken.acr ?? undefined,
+		amr: refreshToken.amr ?? undefined,
 		requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
 	});
 }

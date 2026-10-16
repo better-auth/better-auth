@@ -113,28 +113,96 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
 	 */
-	it.each([
-		"/oauth2/introspect",
-		"/oauth2/revoke",
-	])("%s rejects repeated form client authentication fields", async (path) => {
-		if (!oauthClient?.client_id || !oauthClient.client_secret) {
-			throw new Error("OAuth client was not created");
+	it.each(["/oauth2/introspect", "/oauth2/revoke"])(
+		"%s rejects repeated form client authentication fields",
+		async (path) => {
+			if (!oauthClient?.client_id || !oauthClient.client_secret) {
+				throw new Error("OAuth client was not created");
+			}
+			const { status, body } = await captureJsonResponse(path, {
+				method: "POST",
+				body: new URLSearchParams([
+					["client_id", oauthClient.client_id],
+					["client_secret", oauthClient.client_secret],
+					["client_secret", "duplicate-secret"],
+					["token", "opaque-token"],
+				]),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			});
+
+			expect(status).toBe(400);
+			expect(body?.error).toBe("invalid_request");
+		},
+	);
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
+	 */
+	describe("repeated token parameters", () => {
+		function postWithBasicAuth(path: string, params: [string, string][]) {
+			if (!oauthClient?.client_id || !oauthClient.client_secret) {
+				throw new Error("OAuth client was not created");
+			}
+			return captureJsonResponse(path, {
+				method: "POST",
+				body: new URLSearchParams(params),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(
+						`${oauthClient.client_id}:${oauthClient.client_secret}`,
+					).toString("base64")}`,
+				},
+			});
 		}
-		const { status, body } = await captureJsonResponse(path, {
-			method: "POST",
-			body: new URLSearchParams([
-				["client_id", oauthClient.client_id],
-				["client_secret", oauthClient.client_secret],
-				["client_secret", "duplicate-secret"],
+
+		it.each([
+			["/oauth2/introspect", "token"],
+			["/oauth2/introspect", "token_type_hint"],
+			["/oauth2/revoke", "token"],
+			["/oauth2/revoke", "token_type_hint"],
+		])("%s rejects a repeated %s parameter", async (path, name) => {
+			const { status, body } = await postWithBasicAuth(path, [
 				["token", "opaque-token"],
-			]),
-			headers: {
-				"content-type": "application/x-www-form-urlencoded",
-			},
+				["token_type_hint", "access_token"],
+				[name, name === "token" ? "other-token" : "refresh_token"],
+			]);
+
+			expect(status).toBe(400);
+			expect(body).toEqual({
+				error: "invalid_request",
+				error_description: `${name} must not be repeated`,
+			});
 		});
 
-		expect(status).toBe(400);
-		expect(body?.error).toBe("invalid_request");
+		it.each([
+			[
+				"before",
+				[
+					["token", ""],
+					["token", "opaque-token"],
+				],
+			],
+			[
+				"after",
+				[
+					["token", "opaque-token"],
+					["token", ""],
+				],
+			],
+		] as [string, [string, string][]][])(
+			"treats an empty value %s a valid one as omitted",
+			async (_label, params) => {
+				const { status, body } = await postWithBasicAuth(
+					"/oauth2/introspect",
+					params,
+				);
+
+				expect(status).toBe(200);
+				expect(body).toEqual({ active: false });
+			},
+		);
 	});
 
 	describe("oauth2Token (JSON delivery)", () => {

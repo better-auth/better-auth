@@ -225,7 +225,7 @@ describe("internal adapter test", async () => {
 			plugins: [],
 		} satisfies BetterAuthOptions;
 		try {
-			(await getMigrations(abortingOptions)).runMigrations();
+			await (await getMigrations(abortingOptions)).runMigrations();
 			const abortingContext = await init(abortingOptions);
 
 			await expect(
@@ -464,7 +464,7 @@ describe("internal adapter test", async () => {
 				},
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(hashedOpts)).runMigrations();
+			await (await getMigrations(hashedOpts)).runMigrations();
 			const hashedCtx = await init(hashedOpts);
 			const hashedAdapter = hashedCtx.internalAdapter;
 
@@ -507,7 +507,7 @@ describe("internal adapter test", async () => {
 				},
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(overrideOpts)).runMigrations();
+			await (await getMigrations(overrideOpts)).runMigrations();
 			const overrideCtx = await init(overrideOpts);
 			const overrideAdapter = overrideCtx.internalAdapter;
 
@@ -539,7 +539,7 @@ describe("internal adapter test", async () => {
 				verification: { storeIdentifier: "plain" as const },
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(plainOpts)).runMigrations();
+			await (await getMigrations(plainOpts)).runMigrations();
 			const plainCtx = await init(plainOpts);
 			await plainCtx.internalAdapter.createVerificationValue({
 				identifier: "old-token:abc123",
@@ -663,7 +663,7 @@ describe("internal adapter test", async () => {
 		} satisfies BetterAuthOptions;
 
 		// Run migrations for the new database
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 
 		// Test the actual refreshUserSessions functionality from internal adapter
 		const testCtx = await init(testOpts);
@@ -934,34 +934,34 @@ describe("internal adapter test", async () => {
 		expect(foundAccount).toBeNull();
 	});
 
-	it.each([
-		false,
-		true,
-	])("rejects ambiguous account keys with joins=%s", async (joins) => {
-		const { auth } = await getTestInstance(
-			{ advanced: { database: { joins } } },
-			{ disableTestUser: true },
-		);
-		const { internalAdapter: accounts } = await auth.$context;
-		for (const name of ["first", "second"]) {
-			const user = await accounts.createUser(
-				{ name, email: `${name}@ambiguous-account.test` },
-				{ method: "test" },
+	it.each([false, true])(
+		"rejects ambiguous account keys with joins=%s",
+		async (joins) => {
+			const { auth } = await getTestInstance(
+				{ advanced: { database: { joins } } },
+				{ disableTestUser: true },
 			);
-			await accounts.createAccount({
-				userId: user.id,
-				providerId: "tenant",
-				accountId: "shared-subject",
-			});
-		}
-		const key = { providerId: "tenant", accountId: "shared-subject" };
-		await expect(accounts.findAccountByKey(key)).rejects.toThrow(
-			'Multiple accounts match the same accountId for provider "tenant".',
-		);
-		await expect(accounts.findAccountOwnerByKey(key)).rejects.toThrow(
-			'Multiple accounts match the same accountId for provider "tenant".',
-		);
-	});
+			const { internalAdapter: accounts } = await auth.$context;
+			for (const name of ["first", "second"]) {
+				const user = await accounts.createUser(
+					{ name, email: `${name}@ambiguous-account.test` },
+					{ method: "test" },
+				);
+				await accounts.createAccount({
+					userId: user.id,
+					providerId: "tenant",
+					accountId: "shared-subject",
+				});
+			}
+			const key = { providerId: "tenant", accountId: "shared-subject" };
+			await expect(accounts.findAccountByKey(key)).rejects.toThrow(
+				'Multiple accounts match the same accountId for provider "tenant".',
+			);
+			await expect(accounts.findAccountOwnerByKey(key)).rejects.toThrow(
+				'Multiple accounts match the same accountId for provider "tenant".',
+			);
+		},
+	);
 
 	it("finds an account owner by the exact account key", async () => {
 		const firstUser = await internalAdapter.createUser(
@@ -1107,7 +1107,7 @@ describe("internal adapter test", async () => {
 			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
@@ -1146,7 +1146,7 @@ describe("internal adapter test", async () => {
 			database: new DatabaseSync(":memory:"),
 			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
 		const user = await testCtx.internalAdapter.createUser(
 			{
@@ -1182,7 +1182,7 @@ describe("internal adapter test", async () => {
 			secondaryStorage: createStringSecondaryStorage(testMap),
 			session: { storeSessionInDatabase: true },
 		} satisfies BetterAuthOptions;
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
 		const user = await testCtx.internalAdapter.createUser(
 			{
@@ -1238,7 +1238,7 @@ describe("internal adapter test", async () => {
 				},
 			},
 		} satisfies BetterAuthOptions;
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
 		const user = await testCtx.internalAdapter.createUser(
 			{
@@ -1262,6 +1262,47 @@ describe("internal adapter test", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11642
+	 */
+	it("keeps a secondary-only session write inside the transaction even when deferral is requested", async () => {
+		const testMap = new Map<string, string>();
+		const secondaryStorage = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...secondaryStorage,
+				set: async () => {
+					throw new Error("secondary storage unavailable");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				const user = await testCtx.internalAdapter.createUser(
+					{
+						name: "rolled-back-user",
+						email: "rolled-back@example.com",
+					},
+					{ method: "test" },
+				);
+				await testCtx.internalAdapter.createSession(
+					user.id,
+					undefined,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
+				);
+			}),
+		).rejects.toThrow("secondary storage unavailable");
+		expect(
+			await testCtx.internalAdapter.findUserByEmail("rolled-back@example.com"),
+		).toBeNull();
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
 	 */
 	it("preserves sessions created after user session deletion is requested", async () => {
@@ -1270,7 +1311,7 @@ describe("internal adapter test", async () => {
 			database: new DatabaseSync(":memory:"),
 			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
 		const user = await testCtx.internalAdapter.createUser(
 			{
@@ -1329,7 +1370,7 @@ describe("internal adapter test", async () => {
 				storeSessionInDatabase: true,
 			},
 		} satisfies BetterAuthOptions;
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 		const testCtx = await init(testOpts);
 		const user = await testCtx.internalAdapter.createUser(
 			{
@@ -1361,7 +1402,7 @@ describe("internal adapter test", async () => {
 			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
@@ -1398,7 +1439,7 @@ describe("internal adapter test", async () => {
 			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
@@ -1434,7 +1475,7 @@ describe("internal adapter test", async () => {
 			secondaryStorage: createStringSecondaryStorage(testMap),
 		} satisfies BetterAuthOptions;
 
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
@@ -1469,41 +1510,42 @@ describe("internal adapter test", async () => {
 			caseName: "JSON null sessions",
 			storedValue: "null",
 		},
-	])("findSessions skips $caseName without discarding valid sessions", async ({
-		storedValue,
-	}) => {
-		const testMap = new Map<string, string>();
-		const testOpts = {
-			database: new DatabaseSync(":memory:"),
-			secondaryStorage: createStringSecondaryStorage(testMap),
-		} satisfies BetterAuthOptions;
+	])(
+		"findSessions skips $caseName without discarding valid sessions",
+		async ({ storedValue }) => {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+			} satisfies BetterAuthOptions;
 
-		(await getMigrations(testOpts)).runMigrations();
-		const { internalAdapter } = await init(testOpts);
-		const user = await internalAdapter.createUser(
-			{
-				name: "test-user-find",
-				email: "test-find@email.com",
-			},
-			{ method: "test" },
-		);
-		const session1 = await internalAdapter.createSession(user.id);
-		const session2 = await internalAdapter.createSession(user.id);
-		const session3 = await internalAdapter.createSession(user.id);
+			await (await getMigrations(testOpts)).runMigrations();
+			const { internalAdapter } = await init(testOpts);
+			const user = await internalAdapter.createUser(
+				{
+					name: "test-user-find",
+					email: "test-find@email.com",
+				},
+				{ method: "test" },
+			);
+			const session1 = await internalAdapter.createSession(user.id);
+			const session2 = await internalAdapter.createSession(user.id);
+			const session3 = await internalAdapter.createSession(user.id);
 
-		testMap.set(session2.token, storedValue);
+			testMap.set(session2.token, storedValue);
 
-		const sessions = await internalAdapter.findSessions([
-			session1.token,
-			session2.token,
-			session3.token,
-		]);
+			const sessions = await internalAdapter.findSessions([
+				session1.token,
+				session2.token,
+				session3.token,
+			]);
 
-		expect(sessions.map(({ session }) => session.token)).toEqual([
-			session1.token,
-			session3.token,
-		]);
-	});
+			expect(sessions.map(({ session }) => session.token)).toEqual([
+				session1.token,
+				session3.token,
+			]);
+		},
+	);
 
 	it("should update session and active-sessions list in secondary storage", async () => {
 		const testMap = new Map<string, string>();
@@ -1518,7 +1560,7 @@ describe("internal adapter test", async () => {
 		} satisfies BetterAuthOptions;
 
 		// Run migrations for the new database
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
@@ -1614,7 +1656,7 @@ describe("internal adapter test", async () => {
 			),
 		} satisfies BetterAuthOptions;
 
-		(await getMigrations(testOpts)).runMigrations();
+		await (await getMigrations(testOpts)).runMigrations();
 		const testAuthContext = await init(testOpts);
 		const testInternalAdapter = testAuthContext.internalAdapter;
 
@@ -1675,7 +1717,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
 			const verification = await ctx.internalAdapter.createVerificationValue({
@@ -1696,7 +1738,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
 			await ctx.internalAdapter.createVerificationValue({
@@ -1720,7 +1762,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
 			await ctx.internalAdapter.createVerificationValue({
@@ -1746,7 +1788,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
 			await ctx.internalAdapter.createVerificationValue({
@@ -1773,7 +1815,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(dualStorageOpts)).runMigrations();
+			await (await getMigrations(dualStorageOpts)).runMigrations();
 			const ctx = await init(dualStorageOpts);
 
 			await ctx.internalAdapter.createVerificationValue({
@@ -1802,7 +1844,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(dualStorageOpts)).runMigrations();
+			await (await getMigrations(dualStorageOpts)).runMigrations();
 			const ctx = await init(dualStorageOpts);
 
 			await ctx.internalAdapter.createVerificationValue({
@@ -1827,7 +1869,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
 			const expiresIn = 300000; // 5 minutes in ms
@@ -1896,7 +1938,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(opts)).runMigrations();
+			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 
 			await ctx.internalAdapter.createVerificationValue({
@@ -2009,7 +2051,7 @@ describe("internal adapter test", async () => {
 				database: new DatabaseSync(":memory:"),
 				...overrides,
 			} satisfies BetterAuthOptions;
-			(await getMigrations(opts)).runMigrations();
+			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 			return ctx.internalAdapter;
 		}
@@ -2293,7 +2335,7 @@ describe("internal adapter test", async () => {
 				database: new DatabaseSync(":memory:"),
 				...overrides,
 			} satisfies BetterAuthOptions;
-			(await getMigrations(opts)).runMigrations();
+			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 			return ctx.internalAdapter;
 		}
@@ -2383,6 +2425,41 @@ describe("internal adapter test", async () => {
 				}),
 			).rejects.toThrow(/requires database-backed verification storage/);
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10624
+		 */
+		describe("with configured id strategies", () => {
+			it("yields exactly one winner when ids are uuids", async () => {
+				const adapter = await makeAdapter({
+					advanced: { database: { generateId: "uuid" } },
+				});
+				const reserve = () =>
+					adapter.reserveVerificationValue({
+						identifier: "reserve:uuid-race",
+						value: "jti-uuid",
+						expiresAt: new Date(Date.now() + 60_000),
+					});
+
+				const results = await Promise.all([reserve(), reserve(), reserve()]);
+				expect(results.filter((r) => r === true)).toHaveLength(1);
+				expect(await reserve()).toBe(false);
+			});
+
+			it("keeps reserving when ids are database-generated numbers", async () => {
+				const adapter = await makeAdapter({
+					advanced: { database: { generateId: "serial" } },
+				});
+
+				await expect(
+					adapter.reserveVerificationValue({
+						identifier: "reserve:serial",
+						value: "jti-serial",
+						expiresAt: new Date(Date.now() + 60_000),
+					}),
+				).resolves.toBe(true);
+			});
+		});
 	});
 
 	describe("reserveVerificationValue", () => {
@@ -2391,7 +2468,7 @@ describe("internal adapter test", async () => {
 				database: new DatabaseSync(":memory:"),
 				...overrides,
 			} satisfies BetterAuthOptions;
-			(await getMigrations(opts)).runMigrations();
+			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 			return ctx.internalAdapter;
 		}

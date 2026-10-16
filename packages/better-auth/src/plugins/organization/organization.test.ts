@@ -1,7 +1,15 @@
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it, onTestFinished, vi } from "vitest";
+import {
+	beforeAll,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	onTestFinished,
+	vi,
+} from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -191,8 +199,14 @@ describe("organization", async () => {
 
 	let organizationId: string;
 	let organization2Id: string;
-	it("create organization", async () => {
-		const organization = await client.organization.create({
+	let createdOrganization: Awaited<
+		ReturnType<typeof client.organization.create>
+	>;
+	let createdOrganization2: Awaited<
+		ReturnType<typeof auth.api.createOrganization>
+	>;
+	beforeAll(async () => {
+		createdOrganization = await client.organization.create({
 			name: "test",
 			slug: "test",
 			metadata: {
@@ -202,11 +216,26 @@ describe("organization", async () => {
 				headers,
 			},
 		});
-		organizationId = organization.data?.id as string;
-		expect(organization.data?.name).toBeDefined();
-		expect(organization.data?.metadata).toBeDefined();
-		expect(organization.data?.members.length).toBe(1);
-		expect(organization.data?.members[0]?.role).toBe("owner");
+		organizationId = createdOrganization.data?.id as string;
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		createdOrganization2 = await auth.api.createOrganization({
+			body: {
+				name: "test2",
+				slug: "test2",
+				userId: session.data?.session.userId,
+			},
+		});
+		organization2Id = createdOrganization2?.id as string;
+	});
+	it("create organization", async () => {
+		expect(createdOrganization.data?.name).toBeDefined();
+		expect(createdOrganization.data?.metadata).toBeDefined();
+		expect(createdOrganization.data?.members.length).toBe(1);
+		expect(createdOrganization.data?.members[0]?.role).toBe("owner");
 		const session = await client.getSession({
 			fetchOptions: {
 				headers,
@@ -262,24 +291,9 @@ describe("organization", async () => {
 	});
 
 	it("should create organization directly in the server without cookie", async () => {
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		const organization = await auth.api.createOrganization({
-			body: {
-				name: "test2",
-				slug: "test2",
-				userId: session.data?.session.userId,
-			},
-		});
-
-		organization2Id = organization?.id as string;
-		expect(organization?.name).toBe("test2");
-		expect(organization?.members.length).toBe(1);
-		expect(organization?.members[0]?.role).toBe("owner");
+		expect(createdOrganization2?.name).toBe("test2");
+		expect(createdOrganization2?.members.length).toBe(1);
+		expect(createdOrganization2?.members[0]?.role).toBe("owner");
 	});
 	it("should allow listing organizations", async () => {
 		const organizations = await client.organization.list({
@@ -2658,32 +2672,30 @@ describe("Additional Fields", async () => {
 		)[];
 	} | null;
 	let org: NonNullable<ExpectedResult>;
-	it("create organization", async () => {
-		try {
-			const orgRes = await auth.api.createOrganization({
-				body: {
-					name: "test",
-					slug: "test",
-					someRequiredField: "hey",
-					someOptionalField: "hey",
-				},
-				headers,
-			});
+	beforeAll(async () => {
+		const orgRes = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+				someRequiredField: "hey",
+				someOptionalField: "hey",
+			},
+			headers,
+		});
 
-			type Result = PrettifyDeep<typeof orgRes>;
-			expectTypeOf<Result>().toMatchTypeOf<ExpectedResult>();
-			expect(orgRes).not.toBeNull();
-			if (!orgRes) throw new Error("Organization is null");
-			org = orgRes;
-			expect(org.someRequiredField).toBeDefined();
-			expect(org.someRequiredField).toBe("hey");
-			expect(org.someOptionalField).toBe("hey");
-			expect(org.someHiddenField).toBeUndefined();
-			//@ts-expect-error
-			expect(db.organization[0]?.someRequiredField).toBe("hey");
-		} catch (error) {
-			throw error;
-		}
+		type Result = PrettifyDeep<typeof orgRes>;
+		expectTypeOf<Result>().toMatchTypeOf<ExpectedResult>();
+		if (!orgRes) throw new Error("Organization is null");
+		org = orgRes;
+	});
+	it("create organization", async () => {
+		expect(org).not.toBeNull();
+		expect(org.someRequiredField).toBeDefined();
+		expect(org.someRequiredField).toBe("hey");
+		expect(org.someOptionalField).toBe("hey");
+		expect(org.someHiddenField).toBeUndefined();
+		//@ts-expect-error
+		expect(db.organization[0]?.someRequiredField).toBe("hey");
 	});
 
 	it("update organization", async () => {

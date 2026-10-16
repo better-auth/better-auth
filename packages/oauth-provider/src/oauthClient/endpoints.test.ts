@@ -93,6 +93,50 @@ describe("oauthClient", async () => {
 		});
 	});
 
+	it("clears a logout URI and its session flag when an update sends null", async () => {
+		const created = await authClient.oauth2.createClient({
+			redirect_uris: [redirectUri],
+			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
+			backchannel_logout_session_required: true,
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+			frontchannel_logout_session_required: true,
+		});
+		expect(created.error).toBeNull();
+		const clientId = created.data!.client_id;
+
+		const clearedFrontchannel = await authClient.oauth2.updateClient({
+			client_id: clientId,
+			update: { frontchannel_logout_uri: null },
+		});
+		expect(clearedFrontchannel.error).toBeNull();
+		expect(clearedFrontchannel.data?.frontchannel_logout_uri).toBeUndefined();
+		expect(
+			clearedFrontchannel.data?.frontchannel_logout_session_required,
+		).toBeUndefined();
+		expect(clearedFrontchannel.data?.backchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/backchannel`,
+		);
+
+		const clearedBackchannel = await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: clientId,
+				update: { backchannel_logout_uri: null },
+			},
+		});
+		expect(clearedBackchannel.backchannel_logout_uri).toBeUndefined();
+		expect(
+			clearedBackchannel.backchannel_logout_session_required,
+		).toBeUndefined();
+
+		const stored = await authClient.oauth2.getClient({
+			query: { client_id: clientId },
+		});
+		expect(stored.data?.backchannel_logout_uri).toBeUndefined();
+		expect(stored.data?.frontchannel_logout_uri).toBeUndefined();
+		await authClient.oauth2.deleteClient({ client_id: clientId });
+	});
+
 	it("round-trips application_type through admin create and update", async () => {
 		const created = await auth.api.adminCreateOAuthClient({
 			headers,
@@ -539,5 +583,53 @@ describe("oauthClient private_key_jwt clients", async () => {
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
 		expect(result.error?.status).toBeLessThan(500);
+	});
+});
+
+describe("oauthClient - trusted clients", async () => {
+	const baseURL = "http://localhost:3000";
+	const trustedClients = new Set<string>();
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				cachedTrustedClients: trustedClients,
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	it("refuses to change a trusted client as a client error, not a server failure", async () => {
+		const created = await auth.api.createOAuthClient({
+			headers,
+			body: { redirect_uris: ["https://rp.example.com/callback"] },
+		});
+		const clientId = created.client_id;
+		trustedClients.add(clientId);
+
+		for (const [path, body] of [
+			[
+				"/oauth2/update-client",
+				{ client_id: clientId, update: { client_name: "x" } },
+			],
+			["/oauth2/client/rotate-secret", { client_id: clientId }],
+			["/oauth2/delete-client", { client_id: clientId }],
+		] as const) {
+			const response = await customFetchImpl(`${baseURL}/api/auth${path}`, {
+				method: "POST",
+				headers: {
+					...Object.fromEntries(headers),
+					"content-type": "application/json",
+				},
+				body: JSON.stringify(body),
+			});
+			expect(response.status, path).toBe(400);
+			expect(await response.json(), path).toMatchObject({
+				error: "invalid_client",
+			});
+		}
 	});
 });

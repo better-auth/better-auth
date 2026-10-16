@@ -5,6 +5,7 @@
     "e2e:integration": "pnpm --dir nuxt exec nuxt prepare && playwright test"
   },
   "dependencies": {
+    "@better-auth/ciba": "workspace:*",
     "@better-auth/cimd": "workspace:*",
     "@better-auth/electron": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
