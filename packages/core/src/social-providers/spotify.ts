@@ -6,7 +6,9 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
-/** Profile fields from Spotify's current user endpoint. */
+/**
+ * Profile fields from Spotify's current user endpoint.
+ */
 export interface SpotifyProfile {
 	id: string;
 	display_name: string | null;
