@@ -10,7 +10,7 @@ afterAll(() => server.close());
 
 /**
  * @see https://docs.patreon.com/#user-v2
- * @see https://docs.patreon.com/#2026-05-26-member-identity-masking-implemented
+ * @see https://docs.patreon.com/#code-2026-05-26-code-member-identity-masking-implemented
  */
 it.each([
 	{ email: null, display: null, expectedDisplay: undefined },
