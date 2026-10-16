@@ -39,7 +39,9 @@ it("accepts Discord identity profiles without optional fields", async () => {
 	});
 });
 
-/** @see https://docs.discord.com/developers/resources/user#user-object */
+/**
+ * @see https://docs.discord.com/developers/resources/user#user-object
+ */
 it("types Discord decorations and guild identity", () => {
 	expectTypeOf<
 		NonNullable<DiscordProfile["avatar_decoration_data"]>["asset"]
