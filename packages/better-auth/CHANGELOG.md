@@ -1,5 +1,22 @@
 # better-auth
 
+## 1.8.0-beta.1
+
+### Minor Changes
+
+- [#11343](https://github.com/better-auth/better-auth/pull/11343) [`7404879`](https://github.com/better-auth/better-auth/commit/740487984baa0a84ab7fbdb8ac52f7f126edf3cb) Thanks [@qamarq](https://github.com/qamarq)! - If you render the Sign in with Google button with `authClient.oneTap({ button })`, you can now set `button: { container, fedCM: true }` to open the browser's account chooser over the page instead of Google's popup window. With `autoSelect: true`, a returning user who is signed in to Google skips the chooser. This uses Google's FedCM button flow on Chrome 125+ on desktop and Chrome 128+ on Android; other browsers keep the popup. Existing prompt and button setups are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`c7a7926`](https://github.com/better-auth/better-auth/commit/c7a7926fd2b36c972d74d70a248da3c267b762bf)]:
+  - @better-auth/drizzle-adapter@1.8.0-beta.1
+  - @better-auth/core@1.8.0-beta.1
+  - @better-auth/kysely-adapter@1.8.0-beta.1
+  - @better-auth/memory-adapter@1.8.0-beta.1
+  - @better-auth/mongo-adapter@1.8.0-beta.1
+  - @better-auth/prisma-adapter@1.8.0-beta.1
+  - @better-auth/telemetry@1.8.0-beta.1
+
 ## 1.8.0-beta.0
 
 ### Minor Changes

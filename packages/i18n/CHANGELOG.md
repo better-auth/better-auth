@@ -1,5 +1,7 @@
 # @better-auth/i18n
 
+## 1.8.0-beta.1
+
 ## 1.8.0-beta.0
 
 ### Patch Changes
