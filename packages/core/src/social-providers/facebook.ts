@@ -26,9 +26,9 @@ export interface FacebookGraphProfile {
 
 export interface FacebookLimitedLoginProfile {
 	sub: string;
-	email: string;
-	name: string;
-	picture: string;
+	email?: string;
+	name?: string;
+	picture?: string;
 }
 
 export type FacebookProfile =
