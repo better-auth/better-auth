@@ -1,3 +1,4 @@
+import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
 import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
@@ -161,12 +162,14 @@ export async function validateAuthorizationCode({
 	return tokens;
 }
 
-export async function validateToken(
+export async function validateToken<PayloadType = JWTPayload>(
 	token: string,
 	jwksEndpoint: string,
 	options?: {
 		audience?: string | string[];
 		issuer?: string | string[];
+		algorithms?: string[];
+		requiredClaims?: string[];
 	},
 ) {
 	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
@@ -176,9 +179,11 @@ export async function validateToken(
 			return response;
 		},
 	});
-	const verified = await jwtVerify(token, jwks, {
+	const verified = await jwtVerify<PayloadType>(token, jwks, {
 		audience: options?.audience,
 		issuer: options?.issuer,
+		algorithms: options?.algorithms,
+		requiredClaims: options?.requiredClaims,
 	});
 	return verified;
 }
