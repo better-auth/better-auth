@@ -46,7 +46,9 @@ it("accepts Dropbox accounts without a profile photo", async () => {
 	expect(result?.data.account_id).toBe("dropbox-user");
 });
 
-/** @see https://github.com/dropbox/dropbox-api-spec/blob/3c363a594dafbe0f4646e73352b62a4767540d25/users.stone#L179-L206 */
+/**
+ * @see https://github.com/dropbox/dropbox-api-spec/blob/3c363a594dafbe0f4646e73352b62a4767540d25/users.stone#L179-L206
+ */
 it("types the current Dropbox account", () => {
 	expectTypeOf<DropboxProfile["disabled"]>().toEqualTypeOf<boolean>();
 	expectTypeOf<DropboxProfile["locale"]>().toEqualTypeOf<string>();
