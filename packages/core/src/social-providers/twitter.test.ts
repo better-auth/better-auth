@@ -100,3 +100,26 @@ it.each([
 
 	expect(result?.data.data.entities).toEqual(entities);
 });
+
+/** @see https://api.x.com/2/openapi.json */
+it("types description entities and URL previews", () => {
+	assertType<TwitterProfile["data"]["entities"]>({
+		description: {
+			cashtags: [{ start: 0, end: 4, tag: "X" }],
+			mentions: [{ start: 5, end: 10, username: "user", id: null }],
+			urls: [
+				{
+					start: 11,
+					end: 34,
+					url: "https://t.co/example",
+					title: null,
+					description: "Page",
+					status: 200,
+					unwound_url: "https://example.com",
+					media_key: null,
+					images: [{ url: null, width: 640, height: null }],
+				},
+			],
+		},
+	});
+});
