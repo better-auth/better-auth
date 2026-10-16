@@ -1,7 +1,9 @@
 import { expect, it } from "vitest";
 import { linear } from "./linear";
 
-/** @see https://linear.app/developers/oauth-2-0-authentication */
+/**
+ * @see https://linear.app/developers/oauth-2-0-authentication
+ */
 it("joins authorization scopes with commas", async () => {
 	const provider = linear({ clientId: "app", scope: ["write"] });
 	const url = await provider.createAuthorizationURL({
