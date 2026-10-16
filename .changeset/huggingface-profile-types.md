@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Hugging Face profile callbacks now accept organization arrays with optional plan information and omitted legacy enterprise flags. Profile mappings must iterate over `orgs` instead of reading it as a single organization.
+Hugging Face profile mappings must iterate over organization arrays and can read optional plan and security restrictions. Organization roles are strings; use `securityRestrictions` instead of the deprecated SSO and MFA flags.

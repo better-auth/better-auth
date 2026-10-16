@@ -24,7 +24,12 @@ it("accepts organization arrays in Hugging Face profiles", async () => {
 	};
 	assertType<HuggingFaceProfile>(profile);
 	assertType<NonNullable<HuggingFaceProfile["orgs"]>>([
-		{ ...organization, plan: "team" },
+		{
+			...organization,
+			plan: "team",
+			roleInOrg: "reviewer",
+			securityRestrictions: ["mfa", "sso", "ip", "token-policy"],
+		},
 		{ ...organization, isEnterprise: "plus" },
 	]);
 	const provider = huggingface({
