@@ -62,7 +62,9 @@ it("preserves a missing GitLab avatar while leaving the local image unset", asyn
 	expect(result?.data).toEqual(profile);
 });
 
-/** @see https://docs.gitlab.com/api/users/#retrieve-the-current-user */
+/**
+ * @see https://docs.gitlab.com/api/users/#retrieve-the-current-user
+ */
 it("types the GitLab account lock", () => {
 	expectTypeOf<GitlabProfile["locked"]>().toEqualTypeOf<boolean>();
 });
