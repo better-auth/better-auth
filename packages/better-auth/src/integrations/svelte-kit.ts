@@ -43,7 +43,14 @@ export function isAuthPath(url: string, options: BetterAuthOptions) {
 	const baseURL = new URL(
 		`${baseURLStr || _url.origin}${options.basePath || "/api/auth"}`,
 	);
-	if (_url.origin !== baseURL.origin) return false;
+	// Compare hosts rather than full origins. A TLS-terminating proxy or tunnel
+	// (for example ngrok) forwards plain HTTP to the app, so SvelteKit reports
+	// `http://<host>` while `baseURL` is configured as `https://<host>`. The
+	// scheme is not a trust boundary here; the host is, and Better Auth
+	// validates it via `trustedOrigins` / `baseURL.allowedHosts` inside the
+	// request handler. Comparing origins made every `/api/auth/*` request fall
+	// through to SvelteKit's router and 404 behind such proxies.
+	if (_url.host !== baseURL.host) return false;
 	if (
 		!_url.pathname.startsWith(
 			baseURL.pathname.endsWith("/")
