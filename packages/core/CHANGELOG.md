@@ -1,5 +1,23 @@
 # @better-auth/core
 
+## 1.7.10
+
+### Patch Changes
+
+- [#11612](https://github.com/better-auth/better-auth/pull/11612) [`fedd055`](https://github.com/better-auth/better-auth/commit/fedd05586c5a7ee2eb6b8d16b88b08dfb7e16a89) Thanks [@vhinayindia](https://github.com/vhinayindia)! - If your resource server verifies access tokens with `verifyAccessTokenRequest` or `verifyBearerToken` and a `jwksUrl`, including through the MCP plugin, a key set that cannot be reached at all, for example a refused connection, now throws an error. Before, the token was rejected as invalid with 401 "no token payload", which hid the outage. A key set that answers with an HTTP error already threw.
+
+  With `remoteVerify` configured, such a failure no longer falls back to remote introspection.
+
+  The OAuth provider's `/oauth2/introspect`, `/oauth2/userinfo` and `/oauth2/revoke` behave the same way with the JWT plugin's `jwks.remoteUrl`: they return 500 instead of reporting the token as invalid.
+
+- [#11805](https://github.com/better-auth/better-auth/pull/11805) [`bbd0a19`](https://github.com/better-auth/better-auth/commit/bbd0a19c30fc384213d1e98b9a8a54a903a0b574) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Servers that verify JWTs against a key set now refetch that key set at most once every 30 seconds per server process when a token names a key ID (`kid`) the cached set does not contain. This covers the OAuth provider plugin's introspection, revocation, UserInfo, and logout endpoints, and resource servers that call `verifyAccessTokenRequest` or `verifyBearerToken` with `jwksUrl`. Previously every such token caused a new fetch: a remote request with `jwksUrl` or `jwks.remoteUrl`, or otherwise a read of the `jwks` table. Anyone could send tokens with made-up `kid` values to force one fetch per request, and the UserInfo endpoint needs no client credentials.
+
+  Concurrent verifications now share one fetch, and a key set fetch that takes longer than 5 seconds fails with a `JWKSTimeout` error instead of waiting indefinitely.
+
+  A token signed with a newly published key still verifies without waiting for the 5-minute cache to expire. It can be rejected for up to 30 seconds if the key set was already refetched for another unknown `kid` in that time. No configuration change is needed.
+
+## 1.7.9
+
 ## 1.7.8
 
 ### Patch Changes
