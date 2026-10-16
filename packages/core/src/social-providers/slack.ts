@@ -92,13 +92,14 @@ export const slack = (options: SlackOptions) => {
 			const { data: profile, error } = await betterFetch<SlackProfile>(
 				"https://slack.com/api/openid.connect.userInfo",
 				{
+					method: "POST",
 					headers: {
 						authorization: `Bearer ${token.accessToken}`,
 					},
 				},
 			);
 
-			if (error) {
+			if (error || !profile || !profile.ok) {
 				return null;
 			}
 

@@ -3432,7 +3432,7 @@ describe("oauth2", async () => {
 				"https://slack.com/team_id": "T123",
 			};
 			mswServer.use(
-				http.get("https://slack.com/api/openid.connect.userInfo", () =>
+				http.post("https://slack.com/api/openid.connect.userInfo", () =>
 					HttpResponse.json(profile),
 				),
 			);
