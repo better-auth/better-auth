@@ -27,6 +27,7 @@ import {
 	getOAuthCallbackPath,
 	setTokenUtil,
 } from "../../oauth2/utils";
+import { consumeIssuedIdTokenNonce } from "./id-token-nonce";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -280,6 +281,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			const { token, nonce } = c.body.idToken;
+			await consumeIssuedIdTokenNonce(c, provider, nonce);
 			const valid = await verifyProviderIdToken(provider, token, nonce, c);
 			if (!valid) {
 				c.context.logger.warn("Invalid id token", {

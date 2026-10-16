@@ -251,5 +251,16 @@ describe("verifyProviderIdToken", () => {
 				await verifyProviderIdToken(provider, "opaque-graph-access-token"),
 			).toBe(true);
 		});
+
+		it("rejects an opaque token when a nonce is expected, since it cannot carry one", async () => {
+			const provider = facebook({ clientId: "c", clientSecret: "s" });
+			expect(
+				await verifyProviderIdToken(
+					provider,
+					"opaque-graph-access-token",
+					"n1",
+				),
+			).toBe(false);
+		});
 	});
 });

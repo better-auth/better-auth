@@ -336,6 +336,22 @@ export type ProviderOptions<Profile extends object = object> = {
 	 */
 	disableIdTokenSignIn?: boolean | undefined;
 	/**
+	 * Require a nonce issued by `POST /id-token/nonce` when a client signs in or
+	 * links an account with an ID token from this provider. The nonce is single
+	 * use, expires after five minutes, and must equal the token's `nonce` claim
+	 * (or its SHA-256 hex digest for Apple). Requests without an issued nonce are
+	 * rejected with `INVALID_ID_TOKEN_NONCE`.
+	 *
+	 * A custom `verifyIdToken` (or a provider's remote `verify`) receives the
+	 * issued nonce and must compare it to the token's `nonce` claim itself.
+	 *
+	 * Enable it only when every client that submits ID tokens for this provider
+	 * can pass a nonce to the provider's SDK.
+	 *
+	 * @default false
+	 */
+	requireIssuedIdTokenNonce?: boolean | undefined;
+	/**
 	 * verifyIdToken function to verify the id token.
 	 *
 	 * The optional endpoint context exposes request metadata to custom
