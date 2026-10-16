@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { assertType, expect, it, vi } from "vitest";
+import { assertType, expect, expectTypeOf, it, vi } from "vitest";
 import type { GitlabProfile } from "./gitlab";
 import { gitlab } from "./gitlab";
 
@@ -8,7 +8,7 @@ vi.mock(import("@better-fetch/fetch"), () => ({ betterFetch: vi.fn() }));
 /**
  * @see https://docs.gitlab.com/api/users/#retrieve-the-current-user
  * @see https://github.com/gitlabhq/gitlabhq/blob/803abea42cb2e61278e3fe6a20e4fe4fb5046f43/lib/api/entities/user_public.rb#L5-L14
- * @see https://github.com/gitlabhq/gitlabhq/blob/a2042efa3487d2c5077cb265a6754727aa6f800d/db/structure.sql#L31231-L31243
+ * @see https://github.com/gitlabhq/gitlabhq/blob/a2042efa3487d2c5077cb265a6754727aa6f800d/db/structure.sql#L33417-L33427
  */
 it("accepts nullable and conditional GitLab profile fields", () => {
 	const profileFields = {
@@ -49,6 +49,7 @@ it("preserves a missing GitLab avatar while leaving the local image unset", asyn
 		name: "GitLab User",
 		email: "user@example.com",
 		state: "active",
+		locked: false,
 		avatar_url: null,
 		pronouns: null,
 	};
@@ -59,4 +60,9 @@ it("preserves a missing GitLab avatar while leaving the local image unset", asyn
 
 	expect(result?.user.image).toBeUndefined();
 	expect(result?.data).toEqual(profile);
+});
+
+/** @see https://docs.gitlab.com/api/users/#retrieve-the-current-user */
+it("types the GitLab account lock", () => {
+	expectTypeOf<GitlabProfile["locked"]>().toEqualTypeOf<boolean>();
 });
