@@ -467,12 +467,24 @@ export async function registerEndpoint(
 					session: session.session,
 				})
 			: undefined);
+	// Only the server's own token check can grant machine scopes; the request
+	// body never sets them.
+	const clientCredentialsScopes = normalizeClientCredentialsScopes(
+		tokenAuthorization?.clientCredentialsScopes ?? [],
+	);
+	validateClientCredentialsScopes(
+		clientCredentialsScopes,
+		resolveRegistrationGrantTypes(registrationMetadata),
+		registrationMetadata.token_endpoint_auth_method,
+		opts,
+	);
 	const response = await createOAuthClientRegistration(ctx, opts, {
 		metadata: { ...registrationMetadata, metadata },
 		registrationSource: "dynamic",
 		userId: referenceId ? undefined : session?.session.userId,
 		referenceId,
 		requestedResources,
+		clientCredentialsScopes,
 	});
 	ctx.setStatus(201);
 	return ctx.json(response);
@@ -864,6 +876,8 @@ export type CreateOAuthClientRegistrationInput =
 			registrationSource: "dynamic";
 			/** Client-requested DCR resources resolved and linked by the operation. */
 			requestedResources?: string[];
+			/** Scope ceiling granted by the initial access token check. */
+			clientCredentialsScopes?: Scope[];
 	  })
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
@@ -1042,9 +1056,7 @@ async function persistOAuthClientRegistration(
 	schema.clientCredentialsScopes =
 		input.registrationSource === "clientMetadataDocument"
 			? (input.existingClient?.clientCredentialsScopes ?? [])
-			: input.registrationSource === "managed"
-				? (input.clientCredentialsScopes ?? [])
-				: [];
+			: (input.clientCredentialsScopes ?? []);
 	schema.clientDiscoveryId =
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
