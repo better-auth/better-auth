@@ -1062,13 +1062,19 @@ export const createInternalAdapter = (
 		deleteSessions: async (sessionTokens: string[]) => {
 			// Revoke paths must attempt every secondary-storage token under the
 			// concurrency cap even when individual deletes fail. Durable DB
-			// cleanup still runs afterward; secondary failures are surfaced last.
+			// cleanup only targets tokens whose cache delete succeeded so a
+			// surviving cache entry cannot outlive its DB row (listSessions
+			// reads the DB when storeSessionInDatabase is enabled).
 			let secondaryDeleteResults: PromiseSettledResult<unknown>[] | undefined;
+			let tokensToDeleteFromDb = sessionTokens;
 			if (secondaryStorage) {
 				secondaryDeleteResults = await mapConcurrentSettled(
 					sessionTokens,
 					(token) => secondaryStorage.delete(token),
 					{ concurrency: SECONDARY_STORAGE_CONCURRENCY },
+				);
+				tokensToDeleteFromDb = sessionTokens.filter(
+					(_, index) => secondaryDeleteResults![index]!.status === "fulfilled",
 				);
 
 				if (!options.session?.storeSessionInDatabase) {
@@ -1079,9 +1085,15 @@ export const createInternalAdapter = (
 					return;
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
-					await endPreservedSessions([
-						{ field: "token", value: sessionTokens, operator: "in" },
-					]);
+					if (tokensToDeleteFromDb.length > 0) {
+						await endPreservedSessions([
+							{
+								field: "token",
+								value: tokensToDeleteFromDb,
+								operator: "in",
+							},
+						]);
+					}
 					throwIfAnyRejected(
 						secondaryDeleteResults,
 						"Failed to delete some sessions from secondary storage",
@@ -1089,17 +1101,19 @@ export const createInternalAdapter = (
 					return;
 				}
 			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "token",
-						value: sessionTokens,
-						operator: "in",
-					},
-				],
-				"session",
-				undefined,
-			);
+			if (tokensToDeleteFromDb.length > 0) {
+				await deleteManyWithHooks(
+					[
+						{
+							field: "token",
+							value: tokensToDeleteFromDb,
+							operator: "in",
+						},
+					],
+					"session",
+					undefined,
+				);
+			}
 			if (secondaryDeleteResults) {
 				throwIfAnyRejected(
 					secondaryDeleteResults,

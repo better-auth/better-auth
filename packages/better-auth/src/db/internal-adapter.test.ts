@@ -1719,6 +1719,70 @@ describe("internal adapter test", async () => {
 		expect(storedAgain?.session.ipAddress).toBe("10.0.0.2");
 	});
 
+	/**
+	 * @see storeSessionInDatabase dual-write: a failed cache delete must not
+	 * remove the DB row, or listSessions (DB-backed) loses a still-live cache session
+	 */
+	it("deleteSessions should keep DB rows when secondary delete fails under storeSessionInDatabase", async () => {
+		const testMap = new Map<string, string>();
+		const base = createStringSecondaryStorage(testMap);
+		const failingToken = { current: "" as string };
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			session: { storeSessionInDatabase: true },
+			secondaryStorage: {
+				get(key: string) {
+					return base.get(key);
+				},
+				set(key: string, value: string, ttl?: number) {
+					return base.set(key, value, ttl);
+				},
+				delete(key: string) {
+					if (key === failingToken.current) {
+						throw new Error("secondary-storage delete failed");
+					}
+					return base.delete(key);
+				},
+				getAndDelete(key: string) {
+					return base.getAndDelete?.(key) ?? null;
+				},
+				increment(key: string, ttl?: number) {
+					return base.increment?.(key, ttl ?? 0) ?? 1;
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		await (await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-dual-write-revoke",
+				email: "test-dual-write-revoke@email.com",
+			},
+			{ method: "test" },
+		);
+		const keepSession = await testInternalAdapter.createSession(user.id);
+		const dropSession = await testInternalAdapter.createSession(user.id);
+		failingToken.current = keepSession.token;
+
+		await expect(
+			testInternalAdapter.deleteSessions([
+				keepSession.token,
+				dropSession.token,
+			]),
+		).rejects.toThrow("secondary-storage delete failed");
+
+		expect(testMap.has(keepSession.token)).toBe(true);
+		expect(testMap.has(dropSession.token)).toBe(false);
+
+		const found = await testInternalAdapter.findSession(keepSession.token);
+		expect(found?.session.token).toBe(keepSession.token);
+
+		const listed = await testInternalAdapter.listSessions(user.id);
+		expect(listed.map((session) => session.token)).toEqual([keepSession.token]);
+	});
+
 	it("deleteUserSessions should keep list entries for tokens whose delete failed", async () => {
 		const testMap = new Map<string, string>();
 		const base = createStringSecondaryStorage(testMap);
