@@ -180,15 +180,18 @@ it.each([
 	["true", true],
 	["false", false],
 ] as const)(
-	"accepts email_verified=%s without native-only claims",
+	"accepts email_verified=%s without optional claims",
 	async (emailVerified, expected) => {
 		const profile = {
 			sub: "apple-user-123",
-			name: "",
 			email_verified: emailVerified,
 		};
-		assertType<AppleProfile>(profile);
-		assertType<AppleProfile>({ ...profile, is_private_email: "true" });
+		assertType<AppleProfile>({ ...profile, name: "" });
+		assertType<AppleProfile>({
+			...profile,
+			name: "",
+			is_private_email: "true",
+		});
 		const provider = apple({ clientId: "service.example.app" });
 
 		const result = await provider.getUserInfo({
