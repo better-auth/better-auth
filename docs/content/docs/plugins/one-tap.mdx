@@ -125,6 +125,23 @@ To render a "Sign In with Google" button instead of showing the automatic prompt
   </Tab>
 </Tabs>
 
+##### FedCM Account Chooser
+
+By default, clicking the button opens Google's sign-in popup window. Set `fedCM: true` to open the browser's own account chooser over your page instead, with no new window. This is Google's [FedCM button flow](https://developers.google.com/identity/gsi/web/guides/fedcm-migration):
+
+```ts
+await authClient.oneTap({
+  button: {
+    container: "#google-signin-button",
+    fedCM: true, // [!code highlight]
+  },
+});
+```
+
+With `autoSelect: true`, a returning user who is signed in to Google is signed in without seeing the chooser.
+
+The FedCM button flow runs on Chrome 125+ on desktop and Chrome 128+ on Android. Other browsers open the popup window, so you don't need to detect support yourself.
+
 ### Customizing Redirect Behavior
 
 By default, after a successful login the plugin will hard redirect the user to `/`. You can customize this behavior as follows:
@@ -206,6 +223,7 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
   * `logo_alignment`: Google logo alignment - `"left"` (default) or `"center"` (for standard button only)
   * `width`: Minimum button width in pixels (max 400)
   * `locale`: Display button using specified language code (e.g., `"zh_CN"`)
+* `fedCM`: Open the browser's FedCM account chooser instead of Google's popup window when the button is clicked. See [FedCM Account Chooser](#fedcm-account-chooser). Default is false.
 
 ### Server Options
 
