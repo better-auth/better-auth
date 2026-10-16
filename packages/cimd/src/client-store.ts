@@ -13,7 +13,7 @@ import {
 	validateClientIdUrl,
 } from "./validate-metadata-document";
 
-const FETCH_TIMEOUT_MS = 5_000;
+export const FETCH_TIMEOUT_MS = 5_000;
 const MAX_RESPONSE_BYTES = 5 * 1024;
 const JSON_CONTENT_TYPE_RE = /^application\/(?:[-\w.]+\+)?json\s*(?:;|$)/i;
 const FETCH_FAILURE_DESCRIPTION =
