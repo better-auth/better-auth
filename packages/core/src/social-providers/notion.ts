@@ -6,15 +6,19 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
+/**
+ * Full or partial owner-user profile returned by Notion.
+ */
 export interface NotionProfile {
 	object: "user";
 	id: string;
-	type: "person" | "bot";
-	name?: string | undefined;
-	avatar_url?: string | undefined;
+	type?: "person" | undefined;
+	name?: string | null | undefined;
+	avatar_url?: string | null | undefined;
 	person?:
 		| {
 				email?: string;
+				email_verified?: boolean;
 		  }
 		| undefined;
 }
@@ -103,7 +107,7 @@ export const notion = (options: NotionOptions) => {
 				user: {
 					name: userProfile.name || "",
 					email: userProfile.person?.email || null,
-					image: userProfile.avatar_url,
+					image: userProfile.avatar_url ?? undefined,
 					emailVerified: false,
 					...userMap,
 				},
