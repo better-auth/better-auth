@@ -1,5 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
@@ -884,6 +884,12 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 					null,
 					ctx,
 				);
+				if (!updatedSession) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+					);
+				}
 				await setSessionCookie(ctx, {
 					session: updatedSession,
 					user: session.user,
@@ -942,6 +948,12 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				organization.id,
 				ctx,
 			);
+			if (!updatedSession) {
+				throw APIError.from(
+					"UNAUTHORIZED",
+					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+				);
+			}
 			await setSessionCookie(ctx, {
 				session: updatedSession,
 				user: session.user,
