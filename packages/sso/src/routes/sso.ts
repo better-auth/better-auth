@@ -2249,7 +2249,9 @@ export const sloEndpoint = (options?: SSOOptions) => {
 					wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
 				},
 			});
-			const idp = createIdP(config);
+			const idp = createIdP(config, {
+				signLogoutResponses: options?.saml?.signLogoutResponses,
+			});
 
 			if (samlResponse) {
 				return handleLogoutResponse(ctx, sp, idp, relayState, providerId);
@@ -2497,7 +2499,9 @@ export const initiateSLO = (options?: SSOOptions) => {
 					wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
 				},
 			});
-			const idp = createIdP(config);
+			const idp = createIdP(config, {
+				signLogoutRequests: options?.saml?.signLogoutRequests,
+			});
 
 			const session = ctx.context.session;
 			const sessionLookupKey = `${constants.SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
@@ -2525,11 +2529,12 @@ export const initiateSLO = (options?: SSOOptions) => {
 				}
 			}
 
-			const logoutRequest = sp.createLogoutRequest(idp, "redirect", {
-				logoutNameID: nameID,
-				sessionIndex,
-				relayState: callbackURL,
-			}) as { id: string; context: string };
+			const logoutRequest = sp.createLogoutRequest(
+				idp,
+				"redirect",
+				{ logoutNameID: nameID, sessionIndex },
+				{ relayState: callbackURL },
+			);
 
 			const ttl =
 				options?.saml?.logoutRequestTTL ??
