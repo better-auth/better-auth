@@ -3,6 +3,8 @@ import { createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink, oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { expo } from "../src";
@@ -28,7 +30,9 @@ vi.mock("react-native", async () => {
 			removeEventListener: vi.fn(),
 		},
 		Platform: {
-			OS: "android",
+			get OS() {
+				return "android";
+			},
 		},
 	};
 });
@@ -36,8 +40,8 @@ vi.mock("react-native", async () => {
 vi.mock("expo-constants", async () => {
 	return {
 		default: {
-			platform: {
-				scheme: "better-auth",
+			get platform() {
+				return { scheme: "better-auth" };
 			},
 		},
 	};
@@ -54,6 +58,39 @@ const fn = vi.fn();
 it("should preserve the public storage exports", () => {
 	expect(storageAdapter).toBe(clientStorage.storageAdapter);
 	expect(normalizeCookieName).toBe(clientStorage.normalizeCookieName);
+});
+
+describe("scheme handling", () => {
+	const storage = {
+		getItem: vi.fn(() => null),
+		setItem: vi.fn(),
+		getItemAsync: vi.fn(async () => null),
+		setItemAsync: vi.fn(async () => {}),
+	};
+
+	it("requires a scheme on native platforms", () => {
+		vi.spyOn(Constants, "platform", "get").mockReturnValue(undefined);
+
+		expect(() => expoClient({ storage })).toThrow(
+			"Scheme not found in app.json. Please provide a scheme in the options.",
+		);
+	});
+
+	it.each([undefined, "custom-scheme"])(
+		"preserves web requests with scheme %s",
+		async (scheme) => {
+			vi.spyOn(Platform, "OS", "get").mockReturnValue("web");
+			vi.spyOn(Constants, "platform", "get").mockReturnValue(undefined);
+			const plugin = expoClient({ scheme, storage });
+			const url = "http://localhost:3000/api/auth/get-session";
+			const options = { headers: { "x-test": "preserved" } };
+
+			const result = await plugin.fetchPlugins[0]?.init?.(url, options);
+
+			expect(result).toEqual({ url, options });
+			expect(storage.getItemAsync).not.toHaveBeenCalled();
+		},
+	);
 });
 
 describe("expo", async () => {
