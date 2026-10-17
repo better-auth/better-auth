@@ -15,7 +15,7 @@ export const rateLimitSchema = z.object({
 	 */
 	count: z.number(),
 	/**
-	 * The last request time in milliseconds
+	 * The time of the request that opened the current window, in milliseconds
 	 */
 	lastRequest: z.number(),
 });
