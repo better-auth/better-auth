@@ -10,6 +10,7 @@ import {
 	DEFAULT_ACCOUNT_LOCKOUT_MAX_FAILED_ATTEMPTS,
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
+	TWO_FACTOR_ATTEMPT_COUNTER_PREFIX,
 	TWO_FACTOR_COOKIE_NAME,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
@@ -142,7 +143,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			},
 			key: signedTwoFactorCookie,
 			beginAttempt: async (allowedAttempts: number) => {
-				const identifier = `2fa-attempts-${signedTwoFactorCookie}`;
+				const identifier = `${TWO_FACTOR_ATTEMPT_COUNTER_PREFIX}${signedTwoFactorCookie}`;
 				// Consume the precreated counter as the atomic race gate; a missing
 				// row means a lost race or an expired challenge.
 				const consumed = await ctx.context.internalAdapter
@@ -189,6 +190,12 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				return {
 					// recordFailure spends a slot; restore returns it on a server
 					// error. Both swallow write errors (fail closed).
+					// The overwrite is safe because only this attempt holds the
+					// counter: the consume above is the race gate, and every
+					// caller runs exactly one of recordFailure/restore per
+					// attempt, so no other request's slot can be overwritten. A
+					// lost rearm leaves no counter, and the next beginAttempt
+					// then fails closed instead of spending an unbounded budget.
 					recordFailure: () => rearm(attempts + 1),
 					restore: () => rearm(attempts),
 				};

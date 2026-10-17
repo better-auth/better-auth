@@ -21,6 +21,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { createHash } from "@better-auth/utils/hash";
+import { TWO_FACTOR_VERIFICATION_PREFIX } from "../plugins/two-factor/constant";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import {
@@ -46,19 +47,29 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 }
 
 /**
- * Prefix for single-use two-factor challenges, including the per-challenge
- * attempt counters (`2fa-attempts-*`). These records are auth-critical: a
- * missed read fails the sign-in the user just started.
- */
-const TWO_FACTOR_VERIFICATION_PREFIX = "2fa-";
-
-/**
  * Delays between secondary-storage re-reads for two-factor challenges when
  * the first read misses. Only the miss path pays this latency, and only for
  * `2fa-*` identifiers in secondary-only mode; every other verification flow
  * keeps its single-read behavior.
+ *
+ * The bound is deliberately far below a worst-case cross-region KV lag
+ * (~60s): no in-request retry can cover that without destroying request
+ * latency (and worker wall-clock budgets), so retries target transient
+ * propagation blips only. A store that lags longer than a moment still fails
+ * closed, and its durable answer is `verification.storeInDatabase: true`.
+ * Worst case added latency: 500ms on find (3 retries); 200ms per key on
+ * consume (2 retries), at most 400ms across the hashed + plain key pair.
+ * The arrays are fixed, so the total is always bounded — no unbounded loops.
  */
-const TWO_FACTOR_SECONDARY_RETRY_DELAYS_MS = [25, 75, 150] as const;
+const TWO_FACTOR_SECONDARY_FIND_RETRY_DELAYS_MS = [50, 150, 300] as const;
+/**
+ * Shorter budget than find: the consume path mints sessions, and the loser
+ * of a genuine race (double submit, already-consumed challenge) pays the
+ * full sleep before failing. A miss deletes nothing, so re-issuing the
+ * atomic `getAndDelete` stays single-use safe (see `SecondaryStorage`
+ * contract) while capping the race-loser tax at 200ms per key.
+ */
+const TWO_FACTOR_SECONDARY_CONSUME_RETRY_DELAYS_MS = [50, 150] as const;
 
 function isTwoFactorChallengeIdentifier(identifier: string): boolean {
 	return identifier.startsWith(TWO_FACTOR_VERIFICATION_PREFIX);
@@ -1381,7 +1392,7 @@ export const createInternalAdapter = (
 					!options.verification?.storeInDatabase &&
 					isTwoFactorChallengeIdentifier(identifier)
 				) {
-					for (const delayMs of TWO_FACTOR_SECONDARY_RETRY_DELAYS_MS) {
+					for (const delayMs of TWO_FACTOR_SECONDARY_FIND_RETRY_DELAYS_MS) {
 						await sleepMs(delayMs);
 						const retried = await readFromSecondary();
 						if (retried) {
@@ -1509,14 +1520,16 @@ export const createInternalAdapter = (
 					);
 				};
 				// A replication miss deletes nothing, so re-issuing the atomic
-				// getAndDelete is safe. Other verification flows keep the
-				// single attempt below.
+				// getAndDelete is safe: at most one racer can observe the
+				// value, and a permanent miss still returns null (fail
+				// closed). Other verification flows keep the single attempt
+				// below.
 				const retryTwoFactorConsume =
 					isTwoFactorChallengeIdentifier(identifier);
 				const consumeCacheKeyWithRetry = async (key: string) => {
 					const first = await consumeCacheKey(key);
 					if (first || !retryTwoFactorConsume) return first;
-					for (const delayMs of TWO_FACTOR_SECONDARY_RETRY_DELAYS_MS) {
+					for (const delayMs of TWO_FACTOR_SECONDARY_CONSUME_RETRY_DELAYS_MS) {
 						await sleepMs(delayMs);
 						const retried = await consumeCacheKey(key);
 						if (retried) return retried;

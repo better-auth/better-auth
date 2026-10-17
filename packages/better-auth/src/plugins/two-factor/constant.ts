@@ -1,3 +1,17 @@
+/**
+ * Prefix for single-use two-factor verification identifiers, including the
+ * per-challenge attempt counters (`2fa-attempts-*`) and OTP rows (`2fa-otp-*`).
+ * The secondary-storage retry in the internal adapter matches this prefix, so
+ * every writer of a `2fa-*` identifier must build it from this constant —
+ * a literal here would silently diverge from the matcher and lose the retry.
+ */
+export const TWO_FACTOR_VERIFICATION_PREFIX = "2fa-";
+/**
+ * Prefix for the per-challenge attempt counters consumed as the race gate by
+ * `verifyTwoFactor().beginAttempt`.
+ */
+export const TWO_FACTOR_ATTEMPT_COUNTER_PREFIX = `${TWO_FACTOR_VERIFICATION_PREFIX}attempts-`;
+
 export const TWO_FACTOR_COOKIE_NAME = "two_factor";
 export const TRUST_DEVICE_COOKIE_NAME = "trust_device";
 export const TRUST_DEVICE_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days
