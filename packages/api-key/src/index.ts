@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin, HookEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { getIp } from "@better-auth/core/utils/ip";
+import { getIP } from "@better-auth/core/utils/ip";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { BetterAuthError } from "better-auth";
@@ -246,7 +246,7 @@ export function apiKey(
 								userId: apiKey.referenceId,
 								userAgent: ctx.request?.headers.get("user-agent") ?? null,
 								ipAddress: ctx.request
-									? getIp(ctx.request, ctx.context.options)
+									? getIP(ctx.request, ctx.context.options)
 									: null,
 								createdAt: new Date(),
 								updatedAt: new Date(),

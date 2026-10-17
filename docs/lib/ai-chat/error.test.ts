@@ -32,9 +32,13 @@ describe("getChatErrorMessage", () => {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10760
+	 */
 	it("does not mistake unrelated quota or numeric details for rate limits", () => {
 		const errors = [
 			"Moderation blocked due to output quota policy",
+			"Gateway metadata: not a rate limit error",
 			"Unexpected value 429 in response",
 		];
 

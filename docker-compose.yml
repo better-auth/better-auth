@@ -22,7 +22,7 @@ x-mysql-healthcheck: &mysql-healthcheck
 
 services:
   mongodb:
-    image: mongo:latest
+    image: mongo:7.0.34@sha256:c1a84ab5d0c17deed1e0dba1d24bd7c76e5c7b281145fe536911939b1551754c
     container_name: mongodb
     ports:
       - "27017:27017"

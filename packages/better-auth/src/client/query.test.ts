@@ -108,6 +108,98 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().data).toBeNull();
 	});
 
+	it.each([
+		{
+			earlier: "unauthorized",
+			initialOutcome: () =>
+				Response.json({ message: "Unauthorized" }, { status: 401 }),
+			refreshedResponse: () => Response.json({ id: "current" }),
+			expectedData: { id: "current" },
+		},
+		{
+			earlier: "successful",
+			initialOutcome: () => Response.json({ id: "previous" }),
+			refreshedResponse: () =>
+				Response.json({ message: "Unauthorized" }, { status: 401 }),
+			expectedData: null,
+		},
+		{
+			earlier: "network failure",
+			initialOutcome: () => new TypeError("Failed to fetch"),
+			refreshedResponse: () => Response.json({ id: "current" }),
+			expectedData: { id: "current" },
+		},
+	])(
+		"keeps the latest result when an earlier $earlier request finishes last",
+		async ({ initialOutcome, refreshedResponse, expectedData }) => {
+			const initialRequest = Promise.withResolvers<Response>();
+			const fetchImpl = vi
+				.fn(async () => refreshedResponse())
+				.mockImplementationOnce(() => initialRequest.promise);
+			const $fetch = createFetch({
+				baseURL: "http://localhost:3000",
+				customFetchImpl: fetchImpl,
+			});
+
+			const $signal = atom(false);
+			const query = useAuthQuery<{ id: string }>($signal, "/test", $fetch, {
+				method: "GET",
+			});
+			const unsubscribe = query.listen(() => {});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(fetchImpl).toHaveBeenCalledOnce();
+
+			$signal.set(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(fetchImpl).toHaveBeenCalledTimes(2);
+			expect(query.get().data).toEqual(expectedData);
+			const latestState = query.get();
+
+			const outcome = initialOutcome();
+			if (outcome instanceof Error) {
+				initialRequest.reject(outcome);
+			} else {
+				initialRequest.resolve(outcome);
+			}
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(query.get()).toEqual(latestState);
+			unsubscribe();
+		},
+	);
+
+	it("runs fetch callbacks for superseded requests", async () => {
+		const initialRequest = Promise.withResolvers<Response>();
+		const fetchImpl = vi
+			.fn(async () => Response.json({ id: "current" }))
+			.mockImplementationOnce(() => initialRequest.promise);
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: fetchImpl,
+		});
+		const onSuccess = vi.fn();
+		const onError = vi.fn();
+		const query = useAuthQuery(atom(false), "/test", $fetch, {
+			method: "GET",
+			onSuccess,
+			onError,
+		});
+
+		const unsubscribe = query.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		expect(fetchImpl).toHaveBeenCalledOnce();
+
+		await query.get().refetch();
+		initialRequest.resolve(
+			Response.json({ message: "Unauthorized" }, { status: 401 }),
+		);
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(onSuccess).toHaveBeenCalledOnce();
+		expect(onError).toHaveBeenCalledOnce();
+		unsubscribe();
+	});
+
 	it("should normalize null session responses to null data", async () => {
 		const client = createAuthClient({
 			plugins: [testClientPlugin()],
@@ -272,6 +364,35 @@ describe("useAuthQuery - error handling", () => {
 		expect(fetchCount).toBe(1);
 
 		unsubscribe();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/10015#discussion_r3400409998
+	 */
+	it("should clean up the equality gate when the query atom unmounts", async () => {
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000",
+			customFetchImpl: async () => {
+				return new Promise<Response>(() => {});
+			},
+		});
+
+		const $signal = atom(false);
+		const queryAtom = useAuthQuery<{ data: string }>($signal, "/test", $fetch, {
+			method: "GET",
+		});
+
+		const unsubscribe = queryAtom.listen(() => {});
+		await vi.advanceTimersByTimeAsync(0);
+		const previousState = queryAtom.get();
+
+		unsubscribe();
+		await vi.advanceTimersByTimeAsync(1000);
+
+		const equalState = { ...previousState };
+		queryAtom.set(equalState);
+
+		expect(queryAtom.get()).toBe(equalState);
 	});
 
 	it("should preserve stale data on 500 server error", async () => {

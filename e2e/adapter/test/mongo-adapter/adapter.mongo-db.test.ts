@@ -11,6 +11,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { compoundIndexTestSuite } from "../adapter-factory/compound-index-test-suite";
 
 const dbClient = async (connectionString: string, dbName: string) => {
 	const client = new MongoClient(connectionString);
@@ -90,6 +91,51 @@ const { execute } = await testAdapter({
 		caseInsensitiveTestSuite(),
 		updateObjectIdTestSuite(),
 		uuidTestSuite(),
+		compoundIndexTestSuite({
+			mismatchError: /existing index has the same name/i,
+			async verifyIndexState() {
+				const indexes = await db
+					.collection("compound_index_subject")
+					.listIndexes()
+					.toArray();
+				expect(indexes).toEqual(
+					expect.arrayContaining([
+						expect.objectContaining({
+							key: { issuer_url: 1, provider_subject: 1 },
+							name: "compound_identity_uidx",
+							unique: true,
+						}),
+					]),
+				);
+			},
+			async verifyMismatchedIndexRejected(options) {
+				const collection = db.collection("compound_index_subject");
+				await collection.dropIndex("compound_identity_uidx");
+				await collection.createIndex(
+					{ provider_subject: 1 },
+					{ name: "compound_identity_uidx" },
+				);
+				try {
+					const freshAdapter = mongodbAdapter(db, { transaction: false })(
+						options,
+					);
+					await freshAdapter.create({
+						model: "compoundIndexSubject",
+						data: {
+							displayName: "Mismatch probe",
+							issuer: "https://mismatch.example",
+							providerSubject: "employee-mismatch",
+						},
+					});
+				} finally {
+					await collection.dropIndex("compound_identity_uidx");
+					await collection.createIndex(
+						{ issuer_url: 1, provider_subject: 1 },
+						{ name: "compound_identity_uidx", unique: true },
+					);
+				}
+			},
+		}),
 		// numberIdTestSuite(), // no support
 	],
 	customIdGenerator: () => new ObjectId().toHexString(),

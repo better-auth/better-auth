@@ -4,6 +4,7 @@ import { atom, onMount, STORE_UNMOUNT_DELAY } from "nanostores";
 import type { Session, User } from "../types";
 import { isJsonEqual, withEquality } from "./equality";
 import type { AuthQueryAtom, AuthQueryState } from "./query";
+import { createAuthQueryAtom } from "./query-atom";
 import { createSessionRefreshManager } from "./session-refresh";
 import type { SessionQueryParams } from "./types";
 
@@ -13,15 +14,33 @@ const isServer = () => typeof window === "undefined";
 // Align session request reuse with the nanostores's remount lifecycle.
 const SESSION_MOUNT_DEDUPE_INTERVAL = STORE_UNMOUNT_DELAY;
 
-export type SessionAtom = AuthQueryAtom<{
-	user: User;
-	session: Session;
-}>;
-
-type SessionData = {
+export type SessionData = {
 	user: User;
 	session: Session;
 } & Record<string, any>;
+
+export type SessionAtom = AuthQueryAtom<SessionData>;
+
+export function hydrateSessionAtom(
+	sessionAtom: SessionAtom,
+	session: SessionData | null,
+) {
+	// The client is a module-level singleton, so writing during SSR would leak
+	// one request's session into concurrent requests sharing the same process.
+	if (typeof window === "undefined") {
+		return;
+	}
+	const currentSession = sessionAtom.get();
+	if (currentSession.data !== null || session === null) {
+		return;
+	}
+	sessionAtom.set({
+		...currentSession,
+		data: session,
+		error: null,
+		isPending: false,
+	});
+}
 
 type SessionResponse = (
 	| { session: null; user: null; needsRefresh?: boolean }
@@ -95,13 +114,15 @@ export function getSessionAtom(
 		queryParams?: { query?: SessionQueryParams } | undefined,
 	): Promise<void> => fetchSession(queryParams);
 
-	const session: SessionAtom = atom<AuthQueryState<SessionData>>({
-		data: null,
-		error: null,
-		isPending: true,
-		isRefetching: false,
-		refetch,
-	});
+	const session: SessionAtom = createAuthQueryAtom<AuthQueryState<SessionData>>(
+		{
+			data: null,
+			error: null,
+			isPending: true,
+			isRefetching: false,
+			refetch,
+		},
+	);
 	withEquality(session, isSessionAtomEqual);
 
 	const executeSessionFetch = async (

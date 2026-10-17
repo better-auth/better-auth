@@ -3,6 +3,8 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Auth } from "better-auth";
 import { createAuthClient, InferPlugin } from "better-auth/client";
 import { customSession } from "better-auth/plugins/custom-session";
+import type { GenericOAuthUserInfo } from "better-auth/plugins/generic-oauth";
+import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { describe, expectTypeOf, test } from "vitest";
 
 describe("Endpoint method types", () => {
@@ -43,6 +45,58 @@ describe("Endpoint method types", () => {
 		}));
 		type Method = (typeof endpoint)["options"]["method"];
 		expectTypeOf<Method>().toEqualTypeOf<"DELETE">();
+	});
+
+	test("server-only helper preserves endpoint types", () => {
+		const endpoint = createAuthEndpoint.serverOnly(
+			{ method: "POST" },
+			async () => ({ ok: true }),
+		);
+		type Method = (typeof endpoint)["options"]["method"];
+		expectTypeOf<Method>().toEqualTypeOf<"POST">();
+	});
+});
+
+describe("Generic OAuth types", () => {
+	test("exports the generic user info profile type", () => {
+		expectTypeOf<GenericOAuthUserInfo["id"]>().toEqualTypeOf<
+			string | number | null | undefined
+		>();
+	});
+
+	test("account subject resolver supports providers without a standard id", () => {
+		genericOAuth({
+			config: [
+				{
+					providerId: "custom",
+					authorizationUrl: "https://example.com/authorize",
+					tokenUrl: "https://example.com/token",
+					userInfoUrl: "https://example.com/userinfo",
+					clientId: "client",
+					accountSubject({ profile }) {
+						expectTypeOf(profile.id).toEqualTypeOf<
+							string | number | null | undefined
+						>();
+						expectTypeOf(profile.sub).toEqualTypeOf<
+							string | number | null | undefined
+						>();
+						expectTypeOf(profile.username).toEqualTypeOf<unknown>();
+
+						return typeof profile.username === "string"
+							? profile.username
+							: "missing-subject";
+					},
+					mapProfileToUser(profile) {
+						return {
+							name:
+								typeof profile.display_name === "string"
+									? profile.display_name
+									: undefined,
+						};
+					},
+				},
+			],
+		});
 	});
 });
 

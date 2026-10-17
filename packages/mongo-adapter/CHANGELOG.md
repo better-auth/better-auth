@@ -1,5 +1,108 @@
 # @better-auth/mongo-adapter
 
+## 1.7.10
+
+### Patch Changes
+
+- [#11801](https://github.com/better-auth/better-auth/pull/11801) [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you use the MongoDB adapter, `findMany` calls that sort by `id` now return rows in id order. Previously the sort was silently ignored, so paging through results with `limit` and `offset` could repeat or skip rows.
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11014](https://github.com/better-auth/better-auth/pull/11014) [`8133265`](https://github.com/better-auth/better-auth/commit/813326536c79291d70897a18b63272fa1e7346a7) Thanks [@codewithbharat](https://github.com/codewithbharat)! - Report the original MongoDB commit failure instead of "Cannot call abortTransaction after calling commitTransaction" during authentication.
+
+- [#11602](https://github.com/better-auth/better-auth/pull/11602) [`ea85d13`](https://github.com/better-auth/better-auth/commit/ea85d133d640233c1564417f3bad611d99356bb9) Thanks [@maxnze1](https://github.com/maxnze1)! - When you pass `client` to `mongodbAdapter`, a transaction whose commit fails before it reaches the server, for example because the commit timed out, is now aborted on the server. Before, the transaction stayed open until MongoDB's `transactionLifetimeLimitSeconds` expired (60 seconds by default), and other writes to the same documents waited or failed with write conflicts. The original commit error is still the one your code receives.
+
+- [#11515](https://github.com/better-auth/better-auth/pull/11515) [`916ef5c`](https://github.com/better-auth/better-auth/commit/916ef5c5307103d9bea44446a40da5d31de2b3fe) Thanks [@BilalAtique](https://github.com/BilalAtique)! - If you pass `client` to `mongodbAdapter` on a replica set, concurrent requests that write the same documents no longer fail with a 500. Before, MongoDB aborted all but one of them with a write conflict, so a SCIM directory that provisions several users at once returned 500 for most of them. The adapter now retries such a transaction, as MongoDB requires, for up to 120 seconds or until your `MongoClient`'s `timeoutMS`. Under contention a request can take longer instead of failing.
+
+  A retry runs the work again. `databaseHooks` `before` hooks can run more than once for one request, and `after` hooks still run once, after the commit. Work that the request does outside the database before it commits can also repeat on a retried request. For example, an email sign-up can send its verification email twice. Requests that succeed on the first attempt are unaffected, and so are other adapters.
+
+## 1.7.7
+
+## 1.7.6
+
+### Patch Changes
+
+- [#11333](https://github.com/better-auth/better-auth/pull/11333) [`631ac29`](https://github.com/better-auth/better-auth/commit/631ac296a55ccecf51a7995e89a3e528a5f782da) Thanks [@bytaesu](https://github.com/bytaesu)! - Preserve logical model identity when a custom model name matches another schema key.
+
+## 1.7.5
+
+## 1.7.4
+
+## 1.7.3
+
+## 1.7.2
+
+## 1.7.1
+
+## 1.7.0
+
+### Minor Changes
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+## 1.7.0-rc.6
+
+## 1.7.0-rc.5
+
+## 1.7.0-rc.4
+
+## 1.7.0-rc.3
+
+## 1.7.0-rc.2
+
+### Minor Changes
+
+- [#10402](https://github.com/better-auth/better-auth/pull/10402) [`763a267`](https://github.com/better-auth/better-auth/commit/763a2671c5372d88c291881977c8a1c2e29034b1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin database schemas can now define named or generated table-level indexes across multiple fields. SQL migrations and generated Drizzle or Prisma schemas resolve configured table and column names consistently, while the MongoDB adapter creates the same indexes before the first index-enforcing write.
+
+## 1.7.0-rc.1
+
+## 1.7.0-rc.0
+
+## 1.7.0-beta.10
+
+## 1.7.0-beta.9
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.9
+
+## 1.7.0-beta.8
+
+### Patch Changes
+
+- Updated dependencies [[`7c7313c`](https://github.com/better-auth/better-auth/commit/7c7313c8189baabd11a2ecb681bd2b16eb40fa4d), [`97903c9`](https://github.com/better-auth/better-auth/commit/97903c9cca47f5fa62cf1d2ab86f6228db04aff0), [`3a79aff`](https://github.com/better-auth/better-auth/commit/3a79aff58ed82e45caf04c2ee4acaf0f4d09a86c)]:
+  - @better-auth/core@1.7.0-beta.8
+
+## 1.7.0-beta.7
+
+### Patch Changes
+
+- Updated dependencies [[`3d04fab`](https://github.com/better-auth/better-auth/commit/3d04fababbf3efd4c46a4012f46ed9397715c2e3), [`de8394d`](https://github.com/better-auth/better-auth/commit/de8394de207bae2fe9d0b8d7e901a196c1dc08d0)]:
+  - @better-auth/core@1.7.0-beta.7
+
+## 1.7.0-beta.6
+
+### Patch Changes
+
+- Updated dependencies [[`aedcb97`](https://github.com/better-auth/better-auth/commit/aedcb974f055c3514fe0464dc53d71d45a8a1725), [`2196ea6`](https://github.com/better-auth/better-auth/commit/2196ea65e724830d9f1066c6593210579de586b9)]:
+  - @better-auth/core@1.7.0-beta.6
+
+## 1.7.0-beta.5
+
+### Patch Changes
+
+- Updated dependencies [[`7fe0e2b`](https://github.com/better-auth/better-auth/commit/7fe0e2b165c17207a43863b0f1c12c401976d6b2), [`4f53b61`](https://github.com/better-auth/better-auth/commit/4f53b61f49b470a40ccab18fe1fe4d80f225905f), [`91f235f`](https://github.com/better-auth/better-auth/commit/91f235f8604cd432749adf18c7bd7d658aa1519b), [`41cca60`](https://github.com/better-auth/better-auth/commit/41cca606d14e7b8a1d16da662d644ca39fe4281f)]:
+  - @better-auth/core@1.7.0-beta.5
+
+## 1.7.0-beta.4
+
 ## 1.6.30
 
 ### Patch Changes
@@ -131,24 +234,24 @@
 
 ### Patch Changes
 
-- Updated dependencies [[`43c08a2`](https://github.com/better-auth/better-auth/commit/43c08a2bc77eb01d59ecac28379d5971af6beddc), [`5c3e248`](https://github.com/better-auth/better-auth/commit/5c3e248cbf4f81c2cb540b545baa4a5e69d3b066)]:
-  - @better-auth/core@1.6.13
+- Updated dependencies [[`e7eb45b`](https://github.com/better-auth/better-auth/commit/e7eb45b065903f5fccddae491696cb069814a3c8), [`03e6c94`](https://github.com/better-auth/better-auth/commit/03e6c94e965a7e87c1d44074b8e90257cb1f1cd2), [`1e5b808`](https://github.com/better-auth/better-auth/commit/1e5b80847208cf839c9d45363ca19b8eab41c68a), [`13abc79`](https://github.com/better-auth/better-auth/commit/13abc7922b47f800da59ca212d364a64feeec91f)]:
+  - @better-auth/core@1.7.0-beta.4
 
-## 1.6.12
-
-### Patch Changes
-
-- Updated dependencies [[`a3b0c63`](https://github.com/better-auth/better-auth/commit/a3b0c63de908b9f85d6c1d6c06f89bab16a72ba3), [`c5b9f93`](https://github.com/better-auth/better-auth/commit/c5b9f93498489888f543e1aa1fc07aae26f73a7f), [`83fa369`](https://github.com/better-auth/better-auth/commit/83fa3695e7cc0083ff8531f3a2b4101a2e56deff), [`04303a9`](https://github.com/better-auth/better-auth/commit/04303a92acd6fd3cf9d5f5ab5901255e67526ad3), [`7bf5449`](https://github.com/better-auth/better-auth/commit/7bf5449b11866bd82deafee910619660c153d799)]:
-  - @better-auth/core@1.6.12
-
-## 1.6.11
+## 1.7.0-beta.3
 
 ### Patch Changes
 
-- [#9568](https://github.com/better-auth/better-auth/pull/9568) [`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Add `internalAdapter.consumeVerificationValue(identifier)`: atomically consume a verification row keyed by identifier. The first concurrent caller receives the row; later racers receive `null`. Backed by a new `DBAdapter.consumeOne` primitive implemented natively per adapter (memory, mongo, drizzle, kysely, prisma), with a `transaction(findMany + delete)` factory fallback. `SecondaryStorage.getAndDelete` is added as an optional companion; Redis ships it via an atomic Lua get-and-delete operation for compatibility with Redis versions before 6.2.
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.3
 
-- Updated dependencies [[`0cbddb8`](https://github.com/better-auth/better-auth/commit/0cbddb8fa4eb19fbca75e9822134f89b3604286a), [`da7e50b`](https://github.com/better-auth/better-auth/commit/da7e50beee849c59a2ed1ec6b3a38cc6ab9fb563), [`b0ef96f`](https://github.com/better-auth/better-auth/commit/b0ef96fd8ec08ebb4d6ad0c0557d4b7855703f10), [`e21d744`](https://github.com/better-auth/better-auth/commit/e21d744987476c20a934c79ef226fe6a5f468e22)]:
-  - @better-auth/core@1.6.11
+## 1.7.0-beta.2
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.2
+
+## 1.7.0-beta.1
 
 ## 1.6.10
 
@@ -190,6 +293,14 @@
 ### Patch Changes
 
 - Updated dependencies []:
+  - @better-auth/core@1.7.0-beta.1
+
+## 1.7.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`93d3871`](https://github.com/better-auth/better-auth/commit/93d3871bd2f7c2fdd423c4c88a22a50b6333e656)]:
+  - @better-auth/core@1.7.0-beta.0
   - @better-auth/core@1.6.5
 
 ## 1.6.4

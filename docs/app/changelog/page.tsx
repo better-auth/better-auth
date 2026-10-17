@@ -55,7 +55,13 @@ function getContent(content: string) {
 			}
 		}
 		if (line.trim().startsWith("- ")) {
-			return line.replace(/&nbsp/g, "");
+			const [mainContent, , context] = line.split(";");
+			const cleanedContent = (mainContent || line).replace(/&nbsp/g, "");
+			const usernames = context ? getMentionUsernames(context) : [];
+			if (usernames.length === 0) {
+				return cleanedContent;
+			}
+			return `${cleanedContent} – ${getContributorAvatarLinks(usernames)}`;
 		}
 		return line;
 	});

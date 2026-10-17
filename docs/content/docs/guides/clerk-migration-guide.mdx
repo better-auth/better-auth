@@ -1,4 +1,6 @@
 ---
+icon: guidesClerkMigrationGuide
+sidebarTitle: "Clerk Migration Guide"
 title: Migrating from Clerk to Better Auth
 description: A step-by-step guide to transitioning from Clerk to Better Auth.
 ---
@@ -351,6 +353,9 @@ Before starting the migration process, set up Better Auth in your project. Follo
                   }]
               })
           })
+          if (!createdUser) {
+              throw new Error(`Unable to create or find user ${id}`);
+          }
           // create external account
           const externalAccounts = clerkUser?.external_accounts;
           if (externalAccounts) {
@@ -362,23 +367,24 @@ Before starting the migration process, set up Better Auth in your project. Follo
                           data: {
                               id,
                               providerId: provider,
-                              accountId: externalAccount.provider_user_id,
+                              accountId: createdUser.id,
                               scope: approved_scopes,
-                              userId: createdUser?.id,
+                              userId: createdUser.id,
                               createdAt: safeDateConversion(created_at),
                               updatedAt: safeDateConversion(updated_at),
                               password: password_digest,
                           }
                       })
                   } else {
+                      const providerId = provider.replace("oauth_", "");
                       await ctx.adapter.create({
                           model: "account",
                           data: {
                               id,
-                              providerId: provider.replace("oauth_", ""),
+                              providerId,
                               accountId: externalAccount.provider_user_id,
                               scope: approved_scopes,
-                              userId: createdUser?.id,
+                              userId: createdUser.id,
                               createdAt: safeDateConversion(created_at),
                               updatedAt: safeDateConversion(updated_at),
                           },
@@ -393,7 +399,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
               await ctx.adapter.create({
                   model: "twoFactor",
                   data: {
-                      userId: createdUser?.id,
+                      userId: createdUser.id,
                       secret: totp_secret,
                       backupCodes: await generateBackupCodes(totp_secret)
                   }
@@ -447,7 +453,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
     Now that the data is migrated, you can start updating your components to use Better Auth. Here's an example for the sign-in component:
 
     ```tsx title="components/auth/sign-in.tsx"
-    import { authClient } from "better-auth/client";
+    import { authClient } from "@/lib/auth-client";
 
     export const SignIn = () => {
       const handleSignIn = async () => {

@@ -11,10 +11,10 @@ export const metadata: Metadata = createMetadata({
 		url: "/blog",
 		title: "Blog - Better Auth",
 		description,
-		images: ["/api/og-release?heading=Better%20Auth%20Blog"],
+		images: ["/api/og-blog?title=Better%20Auth%20Blog"],
 	},
 	twitter: {
-		images: ["/api/og-release?heading=Better%20Auth%20Blog"],
+		images: ["/api/og-blog?title=Better%20Auth%20Blog"],
 		title: "Blog - Better Auth",
 		description,
 	},
@@ -36,7 +36,7 @@ export default function BlogLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<RootProvider>
+		<RootProvider theme={{ enabled: false }}>
 			<div className="relative flex min-h-screen flex-col">
 				<main className="flex-1">{children}</main>
 			</div>

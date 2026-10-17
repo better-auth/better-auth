@@ -12,6 +12,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 import { pushDrizzleSchema } from "./push-drizzle-schema";
 
@@ -27,6 +28,7 @@ const { execute } = await testAdapter({
 			debugLogs: { isRunningAdapterTests: true },
 			schema,
 			provider: "mysql",
+			transaction: true,
 		});
 	},
 	async runMigrations(betterAuthOptions) {
@@ -62,7 +64,7 @@ const { execute } = await testAdapter({
 	prefixTests: "mysql",
 	tests: [
 		normalTestSuite(),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
@@ -71,6 +73,11 @@ const { execute } = await testAdapter({
 			disableTests: {
 				"findOne - eq with mode sensitive (default) should not match different case": true,
 			},
+		}),
+		scimHttpTestSuite({
+			connectionId: "drizzle-mysql-workforce",
+			token: "drizzle-mysql-scim-token",
+			testId: "drizzle-mysql",
 		}),
 	],
 	async onFinish() {
