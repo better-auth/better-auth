@@ -103,6 +103,15 @@ export const requestPasswordReset = createAuthEndpoint(
 		}
 		const { email, redirectTo } = ctx.body;
 
+		/**
+		 * Enforce a constant-time floor so an attacker cannot tell an address
+		 * with an account (token write + awaited email send) from one without
+		 * (a single lookup) by comparing response times. Skipped when a
+		 * background task handler is configured, since the send is then off
+		 * the response path for both branches.
+		 */
+		const MINIMUM_MS = 500;
+		const start = Date.now();
 		const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 			includeAccounts: true,
 		});
@@ -116,36 +125,38 @@ export const requestPasswordReset = createAuthEndpoint(
 				"dummy-verification-token",
 			);
 			ctx.context.logger.warn("Reset Password: User not found");
-			return ctx.json({
-				status: true,
-				message:
-					"If this email exists in our system, check your email for the reset link",
+		} else {
+			const defaultExpiresIn = 60 * 60 * 1;
+			const expiresAt = getDate(
+				ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
+					defaultExpiresIn,
+				"sec",
+			);
+			const verificationToken = generateId(24);
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: user.user.id,
+				identifier: `reset-password:${verificationToken}`,
+				expiresAt,
 			});
+			const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
+			const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.emailAndPassword.sendResetPassword(
+					{
+						user: user.user,
+						url,
+						token: verificationToken,
+					},
+					ctx.request,
+				),
+			);
 		}
-		const defaultExpiresIn = 60 * 60 * 1;
-		const expiresAt = getDate(
-			ctx.context.options.emailAndPassword.resetPasswordTokenExpiresIn ||
-				defaultExpiresIn,
-			"sec",
-		);
-		const verificationToken = generateId(24);
-		await ctx.context.internalAdapter.createVerificationValue({
-			value: user.user.id,
-			identifier: `reset-password:${verificationToken}`,
-			expiresAt,
-		});
-		const callbackURL = redirectTo ? encodeURIComponent(redirectTo) : "";
-		const url = `${ctx.context.baseURL}/reset-password/${verificationToken}?callbackURL=${callbackURL}`;
-		await ctx.context.runInBackgroundOrAwait(
-			ctx.context.options.emailAndPassword.sendResetPassword(
-				{
-					user: user.user,
-					url,
-					token: verificationToken,
-				},
-				ctx.request,
-			),
-		);
+		if (!ctx.context.options.advanced?.backgroundTasks?.handler) {
+			const remaining = MINIMUM_MS - (Date.now() - start);
+			if (remaining > 0) {
+				await new Promise((resolve) => setTimeout(resolve, remaining));
+			}
+		}
 		return ctx.json({
 			status: true,
 			message:

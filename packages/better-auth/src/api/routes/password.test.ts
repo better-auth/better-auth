@@ -306,6 +306,7 @@ describe("forgot password", async () => {
 		});
 		expect(res.data?.status).toBe(true);
 		expect(onPasswordReset).toHaveBeenCalledOnce();
+		vi.useRealTimers();
 		await runWithUser(async () => {
 			await client.requestPasswordReset({
 				email: testUser.email,
@@ -772,5 +773,80 @@ describe("verify password length", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11871
+ */
+describe("request password reset response timing", async () => {
+	const sendResetPassword = vi.fn(async () => {});
+	const { auth, testUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			sendResetPassword,
+		},
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		sendResetPassword.mockClear();
+	});
+
+	/**
+	 * Starts a reset request under fake timers and reports whether it was
+	 * still pending once its handler had parked on a timer.
+	 */
+	async function requestWithFakeTimers(email: string) {
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		let settled = false;
+		const pending = auth.api
+			.requestPasswordReset({
+				body: { email, redirectTo: "http://localhost:3000" },
+			})
+			.finally(() => {
+				settled = true;
+			});
+		await vi.waitFor(() => {
+			expect(vi.getTimerCount()).toBe(1);
+		});
+		const settledBeforeFloor = settled;
+		await vi.runAllTimersAsync();
+		return { settledBeforeFloor, response: await pending };
+	}
+
+	it("holds the response for an unknown address to the same floor as a known one", async () => {
+		const known = await requestWithFakeTimers(testUser.email);
+		const unknown = await requestWithFakeTimers("nobody@example.com");
+
+		expect(known.settledBeforeFloor).toBe(false);
+		expect(unknown.settledBeforeFloor).toBe(false);
+		expect(unknown.response).toEqual(known.response);
+		expect(sendResetPassword).toHaveBeenCalledOnce();
+	});
+
+	it("skips the floor when sends run in a background task handler", async () => {
+		const { auth, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				sendResetPassword,
+			},
+			advanced: {
+				backgroundTasks: { handler: () => {} },
+			},
+		});
+		vi.useFakeTimers({ toFake: ["setTimeout"] });
+		const known = await auth.api.requestPasswordReset({
+			body: { email: testUser.email, redirectTo: "http://localhost:3000" },
+		});
+		const unknown = await auth.api.requestPasswordReset({
+			body: {
+				email: "nobody@example.com",
+				redirectTo: "http://localhost:3000",
+			},
+		});
+		expect(vi.getTimerCount()).toBe(0);
+		expect(unknown).toEqual(known);
+		expect(sendResetPassword).toHaveBeenCalledOnce();
 	});
 });
