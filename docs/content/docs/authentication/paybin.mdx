@@ -89,3 +89,7 @@ Paybin returns user information in the ID token following OpenID Connect standar
 * `email` from `email` claim
 * `image` from `picture` claim
 * `emailVerified` from `email_verified` claim
+
+### ID Token Validation
+
+The built-in provider checks the ID token's signature, issuer, audience, and expiration using signing keys from `<issuer>/.well-known/jwks.json`. Custom `getUserInfo` overrides replace these checks.
