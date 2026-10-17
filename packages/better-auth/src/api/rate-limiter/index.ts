@@ -62,16 +62,28 @@ function decideConsume(
 	const windowInMs = rule.window * 1000;
 	if (!data) {
 		return {
-			next: { key: "", count: 1, lastRequest: now },
+			next: {
+				key: "",
+				count: 1,
+				lastRequest: now,
+				windowExpiresAt: now + windowInMs,
+			},
 			update: false,
 			allowed: true,
 			retryAfter: null,
 		};
 	}
-	const timeSinceWindowStart = now - data.lastRequest;
-	if (timeSinceWindowStart >= windowInMs) {
+	// Rows written before `windowExpiresAt` existed only have the window start,
+	// so derive the deadline from the window currently in effect.
+	const windowExpiresAt = data.windowExpiresAt ?? data.lastRequest + windowInMs;
+	if (now >= windowExpiresAt) {
 		return {
-			next: { ...data, count: 1, lastRequest: now },
+			next: {
+				...data,
+				count: 1,
+				lastRequest: now,
+				windowExpiresAt: now + windowInMs,
+			},
 			update: true,
 			allowed: true,
 			retryAfter: null,
@@ -82,11 +94,11 @@ function decideConsume(
 			next: data,
 			update: true,
 			allowed: false,
-			retryAfter: getRetryAfter(data.lastRequest, rule.window),
+			retryAfter: getRetryAfter(windowExpiresAt),
 		};
 	}
 	return {
-		next: { ...data, count: data.count + 1 },
+		next: { ...data, count: data.count + 1, windowExpiresAt },
 		update: true,
 		allowed: true,
 		retryAfter: null,
@@ -109,10 +121,14 @@ function rateLimitResponse(retryAfter: number) {
 	);
 }
 
-function getRetryAfter(windowStart: number, window: number) {
-	const now = Date.now();
-	const windowInMs = window * 1000;
-	return Math.ceil((windowStart + windowInMs - now) / 1000);
+/**
+ * Seconds until `windowExpiresAt`, never below 1. A window that has already
+ * elapsed by the time this runs would otherwise yield a `0` or negative
+ * `X-Retry-After`, telling the client to retry immediately and be rejected
+ * again; 1 second lands in the next window instead.
+ */
+function getRetryAfter(windowExpiresAt: number) {
+	return Math.max(1, Math.ceil((windowExpiresAt - Date.now()) / 1000));
 }
 
 function createDatabaseStorageWrapper(
@@ -129,6 +145,9 @@ function createDatabaseStorageWrapper(
 		const data = res[0];
 		if (typeof data?.lastRequest === "bigint") {
 			data.lastRequest = Number(data.lastRequest);
+		}
+		if (typeof data?.windowExpiresAt === "bigint") {
+			data.windowExpiresAt = Number(data.windowExpiresAt);
 		}
 		return data;
 	};
@@ -152,7 +171,12 @@ function createDatabaseStorageWrapper(
 			try {
 				await db.create({
 					model,
-					data: { key, count: 1, lastRequest: now },
+					data: {
+						key,
+						count: 1,
+						lastRequest: now,
+						windowExpiresAt: now + windowInMs,
+					},
 				});
 				return { allowed: true, retryAfter: null };
 			} catch (error) {
@@ -169,12 +193,15 @@ function createDatabaseStorageWrapper(
 		}
 
 		// `lastRequest` is the window start (fixed window anchored to the
-		// first request), not the most recent request.
-		const timeSinceWindowStart = now - data.lastRequest;
+		// first request), not the most recent request. Rows written before
+		// `windowExpiresAt` existed only carry the start, so derive their
+		// deadline from the window currently in effect.
+		const windowExpiresAt =
+			data.windowExpiresAt ?? data.lastRequest + windowInMs;
 
 		// Window elapsed: reset to a single request, guarded on the window so a
 		// concurrent increment in a new window cannot be clobbered.
-		if (timeSinceWindowStart >= windowInMs) {
+		if (now >= windowExpiresAt) {
 			const reset = await db.incrementOne<RateLimit>({
 				model,
 				where: [
@@ -186,7 +213,11 @@ function createDatabaseStorageWrapper(
 					},
 				],
 				increment: {},
-				set: { count: 1, lastRequest: now },
+				set: {
+					count: 1,
+					lastRequest: now,
+					windowExpiresAt: now + windowInMs,
+				},
 			});
 			if (reset) {
 				await deleteExpiredRows(now);
@@ -195,16 +226,15 @@ function createDatabaseStorageWrapper(
 			return consume(key, rule);
 		}
 
-		// Within the window and under the max: increment the count only, keeping
-		// `lastRequest` as the window start so the window does not slide.
-		// Guarded on both the window and the max, so a burst of concurrent
-		// requests can never exceed the limit.
-		const windowStart = now - windowInMs;
+		// Within the window and under the max: increment the count only, keeping the
+		// window's start and deadline so the window does not slide. Guarded on
+		// both the window and the max, so a burst of concurrent requests can
+		// never exceed the limit.
 		const incremented = await db.incrementOne<RateLimit>({
 			model,
 			where: [
 				{ field: "key", value: key },
-				{ field: "lastRequest", operator: "gt", value: windowStart },
+				{ field: "lastRequest", operator: "gt", value: now - windowInMs },
 				{ field: "count", operator: "lt", value: rule.max },
 			],
 			increment: { count: 1 },
@@ -219,28 +249,45 @@ function createDatabaseStorageWrapper(
 		if (!fresh) {
 			return consume(key, rule);
 		}
-		if (now - fresh.lastRequest >= windowInMs) {
+		const freshExpiresAt =
+			fresh.windowExpiresAt ?? fresh.lastRequest + windowInMs;
+		if (now >= freshExpiresAt) {
 			return consume(key, rule);
 		}
 		return {
 			allowed: false,
-			retryAfter: getRetryAfter(fresh.lastRequest, rule.window),
+			retryAfter: getRetryAfter(freshExpiresAt),
 		};
 	};
 
-	// Best-effort sweep of clearly-expired rows to bound table growth. Without a
-	// background handler, the request awaits cleanup so it survives teardown;
-	// failures are logged and do not reject the request.
+	// Best-effort sweep of rows whose own window has elapsed, to bound table
+	// growth. Without a background handler, the request awaits cleanup so it
+	// survives teardown; failures are logged and do not reject the request.
+	//
+	// `windowExpiresAt` is the row's own deadline, so pruning cannot delete a
+	// counter that a longer window (including one returned by a `customRules`
+	// function) still has open. Rows written before that field existed fall
+	// back to the longest window this instance has observed, which is the
+	// previous behaviour for them.
 	const deleteExpiredRows = async (now: number) => {
-		const cutoff = now - longestObservedWindow * 1000;
-		await ctx.runInBackgroundOrAwait(
-			db
-				.deleteMany({
+		const legacyCutoff = now - longestObservedWindow * 1000;
+		const prune = db
+			.deleteMany({
+				model,
+				where: [{ field: "windowExpiresAt", operator: "lt", value: now }],
+			})
+			.then(() =>
+				db.deleteMany({
 					model,
-					where: [{ field: "lastRequest", operator: "lt", value: cutoff }],
-				})
-				.then(() => undefined)
-				.catch((e) => ctx.logger.error("Error pruning rate limit rows", e)),
+					where: [
+						{ field: "windowExpiresAt", operator: "eq", value: null },
+						{ field: "lastRequest", operator: "lt", value: legacyCutoff },
+					],
+				}),
+			)
+			.then(() => undefined);
+		await ctx.runInBackgroundOrAwait(
+			prune.catch((e) => ctx.logger.error("Error pruning rate limit rows", e)),
 		);
 	};
 
@@ -317,9 +364,19 @@ function getRateLimitStorage(
 				const current = entry && now < entry.expiresAt ? entry.data : undefined;
 				const decision = decideConsume(current, rule, now);
 				if (decision.allowed) {
+					// Expire the entry when its own window ends, not `window` after
+					// this request: a `customRules` function can return a different
+					// window per request, and a shorter one must not cut a counter
+					// short that a longer window still has open.
+					const expiresAt =
+						decision.next.windowExpiresAt ?? now + ttlFor(rule.window) * 1000;
+					const existing = memory.get(key);
 					memory.set(key, {
 						data: { ...decision.next, key },
-						expiresAt: decision.next.lastRequest + ttlFor(rule.window) * 1000,
+						expiresAt:
+							existing && existing.expiresAt > expiresAt
+								? existing.expiresAt
+								: expiresAt,
 					});
 				}
 				return {
