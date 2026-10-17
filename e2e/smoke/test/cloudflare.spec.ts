@@ -35,6 +35,20 @@ describe("(cloudflare) simple server", () => {
 		});
 
 		const stopProcessTree = () => terminate(cp);
+		const stopOnSignal = (signal: NodeJS.Signals) => {
+			const exitWithSignal = () => {
+				process.off("SIGINT", stopOnSignal);
+				process.off("SIGTERM", stopOnSignal);
+				process.kill(process.pid, signal);
+			};
+			void stopProcessTree().then(exitWithSignal, exitWithSignal);
+		};
+		process.on("SIGINT", stopOnSignal);
+		process.on("SIGTERM", stopOnSignal);
+		cp.once("close", () => {
+			process.off("SIGINT", stopOnSignal);
+			process.off("SIGTERM", stopOnSignal);
+		});
 		t.after(stopProcessTree);
 
 		const unexpectedWarnings = new Set(["node:sqlite", "node:async_hooks"]);

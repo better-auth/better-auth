@@ -102,8 +102,11 @@ export function setup(overrides?: Partial<BetterAuthOptions>) {
 			]);
 		},
 		clean: async () => {
-			await terminate(clientChild);
-			server.close();
+			try {
+				await terminate(clientChild);
+			} finally {
+				server.close();
+			}
 		},
 	};
 }

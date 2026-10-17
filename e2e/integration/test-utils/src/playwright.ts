@@ -18,10 +18,18 @@ export async function terminate(child: ChildProcess): Promise<void> {
 		: once(child, "close", { signal: AbortSignal.timeout(5000) });
 	const killing = Promise.resolve().then(async () => {
 		if (process.platform === "win32") {
-			await promisify(execFile)("taskkill", ["/pid", String(pid), "/T", "/F"], {
-				timeout: 5000,
-				windowsHide: true,
-			});
+			try {
+				await promisify(execFile)(
+					"taskkill",
+					["/pid", String(pid), "/T", "/F"],
+					{
+						timeout: 5000,
+						windowsHide: true,
+					},
+				);
+			} catch (error) {
+				if (child.exitCode === null && child.signalCode === null) throw error;
+			}
 		} else {
 			try {
 				process.kill(-pid, "SIGKILL");
