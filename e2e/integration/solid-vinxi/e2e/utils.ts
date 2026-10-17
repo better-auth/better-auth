@@ -25,6 +25,7 @@ export function setup() {
 		ref,
 		start: async () => {
 			clientChild = spawn("pnpm", ["run", "dev"], {
+				detached: process.platform !== "win32",
 				cwd: root,
 				stdio: "pipe",
 				env: {
@@ -58,7 +59,7 @@ export function setup() {
 			]);
 		},
 		clean: async () => {
-			await terminate(clientChild.pid!);
+			await terminate(clientChild);
 		},
 	};
 }

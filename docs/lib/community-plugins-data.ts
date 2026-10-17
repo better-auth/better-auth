@@ -434,7 +434,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "good-webhooks",
 		url: "https://github.com/pplytas/good-webhooks",
 		description:
-			"Authenticated webhook endpoint management with typed client APIs, scoped permissions, signing-secret rotation, and optional self-hosted delivery. Currently in beta with a frozen public API.",
+			"Authenticated webhook endpoint management with typed client APIs, scoped permissions, signing-secret rotation, and optional self-hosted delivery.",
 		author: {
 			name: "Panagiotis Plytas",
 			github: "pplytas",
