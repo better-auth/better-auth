@@ -2132,6 +2132,7 @@ describe("internal adapter test", async () => {
 
 			// Dual-write: the challenge lands in the secondary store ...
 			expect(dataMap.has("verification:2fa-dual-write")).toBe(true);
+			const secondaryCopy = dataMap.get("verification:2fa-dual-write");
 
 			// ... and the database copy serves reads when secondary misses.
 			dataMap.clear();
@@ -2139,6 +2140,11 @@ describe("internal adapter test", async () => {
 				await ctx.internalAdapter.findVerificationValue("2fa-dual-write");
 			expect(found).not.toBeNull();
 			expect(found?.value).toBe("2fa-value");
+
+			// Restore the secondary copy so the delete below proves secondary
+			// deletion instead of asserting against an already-cleared map.
+			dataMap.set("verification:2fa-dual-write", secondaryCopy!);
+			expect(dataMap.has("verification:2fa-dual-write")).toBe(true);
 
 			// Delete removes the database copy too: the value is gone everywhere.
 			await ctx.internalAdapter.deleteVerificationByIdentifier(

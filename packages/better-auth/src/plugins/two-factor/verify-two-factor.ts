@@ -192,10 +192,13 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					// error. Both swallow write errors (fail closed).
 					// The overwrite is safe because only this attempt holds the
 					// counter: the consume above is the race gate, and every
-					// caller runs exactly one of recordFailure/restore per
-					// attempt, so no other request's slot can be overwritten. A
-					// lost rearm leaves no counter, and the next beginAttempt
-					// then fails closed instead of spending an unbounded budget.
+					// path that re-arms the consumed counter runs exactly one
+					// of recordFailure/restore, so no other request's slot can
+					// be overwritten. (A successful verification re-arms
+					// nothing: it proceeds to valid() with the counter left
+					// consumed.) A lost rearm leaves no counter, and the next
+					// beginAttempt then fails closed instead of spending an
+					// unbounded budget.
 					recordFailure: () => rearm(attempts + 1),
 					restore: () => rearm(attempts),
 				};
