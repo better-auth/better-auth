@@ -325,6 +325,26 @@ export const auth = betterAuth({
 When implementing secondary storage directly, prefix its keys to avoid
 collisions with other applications sharing the same Redis database.
 
+### Verification Records
+
+When `secondaryStorage` is configured, verification records — including
+two-factor authentication challenges — are stored in the secondary store
+instead of the database by default. On an eventually consistent store
+(such as a globally replicated KV), a read immediately after the write can
+miss, and the pending flow fails even though the user's code is correct.
+Two-factor challenges are re-read a few times to tolerate a transient miss
+(a verification read sleeps up to \~500ms across its retries; a consume
+sleeps up to \~200ms per key, \~400ms worst case when both the hashed and
+plain keys are tried — and only when the first read misses; a permanent
+miss still fails closed), but a longer lag still surfaces as an
+`INVALID_TWO_FACTOR_COOKIE` error on 2FA verification.
+
+If your secondary store is eventually consistent, set
+[`verification.storeInDatabase: true`](/docs/reference/options#verification)
+so verification records are written to both stores, with the database as a
+fallback on a secondary-store miss. Enabling it brings back the
+`verification` table, so run migrations after changing it.
+
 ## Core Schema
 
 Better Auth requires the following tables to be present in the database. The types are in `typescript` format. You can use corresponding types in your database.

@@ -35,6 +35,7 @@ import {
 import {
 	getStorageOption,
 	processIdentifier,
+	TWO_FACTOR_VERIFICATION_PREFIX,
 } from "./verification-token-storage";
 import type { DatabaseHooksEntry } from "./with-hooks";
 import { getWithHooks } from "./with-hooks";
@@ -43,6 +44,45 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	const expiresMs =
 		typeof expiresAt === "number" ? expiresAt : expiresAt.getTime();
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
+}
+
+/**
+ * Delays between secondary-storage re-reads for two-factor challenges when
+ * the first read misses. Only the miss path pays this latency, and only for
+ * `2fa-*` identifiers in secondary-only mode; every other verification flow
+ * keeps its single-read behavior.
+ *
+ * The bound is deliberately far below a worst-case cross-region KV lag
+ * (~60s): no in-request retry can cover that without destroying request
+ * latency (and worker wall-clock budgets), so retries target transient
+ * propagation blips only. A store that lags longer than a moment still fails
+ * closed, and its durable answer is `verification.storeInDatabase: true`.
+ * Worst-case added sleep: 500ms on find (50+150+300 across 1 initial +
+ * 3 retried reads); 200ms per key on consume (50+150), up to 400ms stacked
+ * across the hashed + plain key pair. Each attempt also pays its own
+ * secondary read(s) — up to 8 gets on find and 6 getAndDeletes on consume
+ * when the hashed + plain fallback both apply — so these are sleep budgets,
+ * not full totals. A verify request that consumes the attempt counter and
+ * then reads the challenge can stack both budgets.
+ * The arrays are fixed, so the total is always bounded — no unbounded loops.
+ */
+const TWO_FACTOR_SECONDARY_FIND_RETRY_DELAYS_MS = [50, 150, 300] as const;
+/**
+ * Shorter budget than find: the consume path mints sessions, and the loser
+ * of a genuine race (double submit, already-consumed challenge) pays the
+ * full sleep before failing. A miss deletes nothing, so re-issuing the
+ * atomic `getAndDelete` stays single-use safe (see `SecondaryStorage`
+ * contract) while capping the race-loser sleep at 200ms per key — 400ms
+ * stacked when the hashed + plain fallback both miss.
+ */
+const TWO_FACTOR_SECONDARY_CONSUME_RETRY_DELAYS_MS = [50, 150] as const;
+
+function isTwoFactorChallengeIdentifier(identifier: string): boolean {
+	return identifier.startsWith(TWO_FACTOR_VERIFICATION_PREFIX);
+}
+
+function sleepMs(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 type ActiveSessionReference = {
@@ -1323,23 +1363,46 @@ export const createInternalAdapter = (
 			);
 
 			if (secondaryStorage) {
-				const cached = await secondaryStorage.get(
-					`verification:${storedIdentifier}`,
-				);
-				if (cached) {
-					const parsed = safeJSONParse<Verification>(cached);
-					if (parsed) {
-						return parsed;
-					}
-				}
-				if (storageOption && storageOption !== "plain") {
-					const plainCached = await secondaryStorage.get(
-						`verification:${identifier}`,
+				const readFromSecondary = async (): Promise<Verification | null> => {
+					const cached = await secondaryStorage.get(
+						`verification:${storedIdentifier}`,
 					);
-					if (plainCached) {
-						const parsed = safeJSONParse<Verification>(plainCached);
+					if (cached) {
+						const parsed = safeJSONParse<Verification>(cached);
 						if (parsed) {
 							return parsed;
+						}
+					}
+					if (storageOption && storageOption !== "plain") {
+						const plainCached = await secondaryStorage.get(
+							`verification:${identifier}`,
+						);
+						if (plainCached) {
+							const parsed = safeJSONParse<Verification>(plainCached);
+							if (parsed) {
+								return parsed;
+							}
+						}
+					}
+					return null;
+				};
+				const found = await readFromSecondary();
+				if (found) {
+					return found;
+				}
+				// Secondary-only two-factor challenges have no database copy to
+				// fall back to, so tolerate a transient replication miss with a
+				// bounded re-read. Any other verification flow keeps the
+				// single-read behavior below.
+				if (
+					!options.verification?.storeInDatabase &&
+					isTwoFactorChallengeIdentifier(identifier)
+				) {
+					for (const delayMs of TWO_FACTOR_SECONDARY_FIND_RETRY_DELAYS_MS) {
+						await sleepMs(delayMs);
+						const retried = await readFromSecondary();
+						if (retried) {
+							return retried;
 						}
 					}
 				}
@@ -1462,10 +1525,27 @@ export const createInternalAdapter = (
 						await secondaryStorage.getAndDelete(key),
 					);
 				};
+				// A replication miss deletes nothing, so re-issuing the atomic
+				// getAndDelete is safe: at most one racer can observe the
+				// value, and a permanent miss still returns null (fail
+				// closed). Other verification flows keep the single attempt
+				// below.
+				const retryTwoFactorConsume =
+					isTwoFactorChallengeIdentifier(identifier);
+				const consumeCacheKeyWithRetry = async (key: string) => {
+					const first = await consumeCacheKey(key);
+					if (first || !retryTwoFactorConsume) return first;
+					for (const delayMs of TWO_FACTOR_SECONDARY_CONSUME_RETRY_DELAYS_MS) {
+						await sleepMs(delayMs);
+						const retried = await consumeCacheKey(key);
+						if (retried) return retried;
+					}
+					return null;
+				};
 
 				for (const stored of identifiersToTry) {
 					const cacheKey = `verification:${stored}`;
-					const cached = await consumeCacheKey(cacheKey);
+					const cached = await consumeCacheKeyWithRetry(cacheKey);
 					if (!cached) continue;
 					await Promise.all(
 						identifiersToTry
