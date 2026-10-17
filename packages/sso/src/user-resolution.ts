@@ -40,7 +40,9 @@ function isSSOUserResolution(value: unknown): value is SSOUserResolution {
 	return (
 		value.action === "reject" &&
 		isNonEmptyString(value.code) &&
-		(value.message === undefined || typeof value.message === "string")
+		(value.message === undefined || typeof value.message === "string") &&
+		(value.requestFreshAuthentication === undefined ||
+			typeof value.requestFreshAuthentication === "boolean")
 	);
 }
 

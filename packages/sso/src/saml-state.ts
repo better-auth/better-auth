@@ -2,8 +2,31 @@ import type { GenericEndpointContext, StateData } from "better-auth";
 import { generateGenericState, parseGenericState } from "better-auth";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import {
+	AUTHN_REQUEST_KEY_PREFIX,
+	DEFAULT_AUTHN_REQUEST_TTL_MS,
+} from "./constants";
 import type { SSOProviderReference } from "./provider-reference";
-import { SSO_PROVIDER_STATE_KEY } from "./provider-reference";
+import {
+	computeSSOProviderReference,
+	SSO_PROVIDER_STATE_KEY,
+} from "./provider-reference";
+import { createIdP, createSP } from "./routes/helpers";
+import type {
+	AuthnRequestRecord,
+	SAMLConfig,
+	SSOOptions,
+	SSOProvider,
+} from "./types";
+
+export const SAML_FRESH_AUTHENTICATION_STATE_KEY = "samlFreshAuthentication";
+
+type SAMLAuthenticationState = {
+	callbackURL: string;
+	errorCallbackURL?: string;
+	newUserCallbackURL?: string;
+	requestSignUp?: boolean;
+};
 
 export async function generateRelayState(
 	c: GenericEndpointContext,
@@ -14,8 +37,10 @@ export async function generateRelayState(
 		  }
 		| undefined,
 	providerReference?: SSOProviderReference,
+	body: SAMLAuthenticationState = c.body,
+	freshAuthentication = false,
 ) {
-	const callbackURL = c.body.callbackURL;
+	const callbackURL = body.callbackURL;
 	if (!callbackURL) {
 		throw new APIError("BAD_REQUEST", {
 			message: "callbackURL is required",
@@ -26,17 +51,25 @@ export async function generateRelayState(
 	const stateData: StateData = {
 		callbackURL,
 		codeVerifier,
-		errorURL: c.body.errorCallbackURL,
-		newUserURL: c.body.newUserCallbackURL,
+		errorURL: body.errorCallbackURL,
+		newUserURL: body.newUserCallbackURL,
 		link,
 		/**
 		 * This is the actual expiry time of the state
 		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
-		requestSignUp: c.body.requestSignUp,
-		serverContext: providerReference
-			? { [SSO_PROVIDER_STATE_KEY]: providerReference }
-			: undefined,
+		requestSignUp: body.requestSignUp,
+		serverContext:
+			providerReference || freshAuthentication
+				? {
+						...(providerReference
+							? { [SSO_PROVIDER_STATE_KEY]: providerReference }
+							: {}),
+						...(freshAuthentication
+							? { [SAML_FRESH_AUTHENTICATION_STATE_KEY]: true }
+							: {}),
+					}
+				: undefined,
 	};
 
 	try {
@@ -84,4 +117,50 @@ export async function parseRelayState(c: GenericEndpointContext) {
 	}
 
 	return parsedData;
+}
+
+/** Creates fresh RelayState and request correlation for initial and forced SAML authentication. */
+export async function createSAMLAuthenticationRequest(
+	ctx: GenericEndpointContext,
+	provider: SSOProvider<SSOOptions>,
+	config: SAMLConfig,
+	options?: SSOOptions,
+	body: SAMLAuthenticationState = ctx.body,
+	forceAuthn = false,
+) {
+	const providerReference = await computeSSOProviderReference(provider);
+	const { state: relayState } = await generateRelayState(
+		ctx,
+		undefined,
+		providerReference,
+		body,
+		forceAuthn,
+	);
+	const sp = createSP(config, ctx.context.baseURL, provider.providerId, {
+		relayState,
+	});
+	const request = sp.createLoginRequest(
+		createIdP(config),
+		"redirect",
+		forceAuthn ? { forceAuthn: true } : undefined,
+	);
+	if (!request?.id)
+		throw new APIError("BAD_REQUEST", { message: "Invalid SAML request" });
+	if (options?.saml?.enableInResponseToValidation !== false) {
+		const now = Date.now();
+		const record: AuthnRequestRecord = {
+			id: request.id,
+			providerId: provider.providerId,
+			providerReference,
+			createdAt: now,
+			expiresAt:
+				now + (options?.saml?.requestTTL ?? DEFAULT_AUTHN_REQUEST_TTL_MS),
+		};
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: `${AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
+			value: JSON.stringify(record),
+			expiresAt: new Date(record.expiresAt),
+		});
+	}
+	return request;
 }
