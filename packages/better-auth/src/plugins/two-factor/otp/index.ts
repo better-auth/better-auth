@@ -11,6 +11,7 @@ import {
 } from "../../../crypto";
 import { parseUserOutput } from "../../../db/schema";
 import { PACKAGE_VERSION } from "../../../version";
+import { TWO_FACTOR_VERIFICATION_PREFIX } from "../constant";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type {
 	TwoFactorProvider,
@@ -219,7 +220,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const hashedCode = await storeOTP(ctx, code);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${hashedCode}:0`,
-				identifier: `2fa-otp-${key}`,
+				identifier: `${TWO_FACTOR_VERIFICATION_PREFIX}otp-${key}`,
 				expiresAt: new Date(Date.now() + opts.period),
 			});
 			const sendOTPResult = options.sendOTP(
@@ -339,7 +340,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			// so a stale row returns null without minting a session.
 			const consumed =
 				await ctx.context.internalAdapter.consumeVerificationValue(
-					`2fa-otp-${key}`,
+					`${TWO_FACTOR_VERIFICATION_PREFIX}otp-${key}`,
 				);
 			if (!consumed) {
 				throw APIError.from(
@@ -410,7 +411,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			// the lock-out guard above. The original expiry caps the whole burst.
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${otp}:${attempts + 1}`,
-				identifier: `2fa-otp-${key}`,
+				identifier: `${TWO_FACTOR_VERIFICATION_PREFIX}otp-${key}`,
 				expiresAt: consumed.expiresAt,
 			});
 			if (twoFactor) {

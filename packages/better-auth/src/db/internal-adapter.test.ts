@@ -2107,6 +2107,49 @@ describe("internal adapter test", async () => {
 			expect(found?.value).toBe("both-value");
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("should dual-write, find, and delete 2fa-* values when storeInDatabase is true", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const dualStorageOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeInDatabase: true,
+				},
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(dualStorageOpts)).runMigrations();
+			const ctx = await init(dualStorageOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-dual-write",
+				value: "2fa-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			// Dual-write: the challenge lands in the secondary store ...
+			expect(dataMap.has("verification:2fa-dual-write")).toBe(true);
+
+			// ... and the database copy serves reads when secondary misses.
+			dataMap.clear();
+			const found =
+				await ctx.internalAdapter.findVerificationValue("2fa-dual-write");
+			expect(found).not.toBeNull();
+			expect(found?.value).toBe("2fa-value");
+
+			// Delete removes the database copy too: the value is gone everywhere.
+			await ctx.internalAdapter.deleteVerificationByIdentifier(
+				"2fa-dual-write",
+			);
+			const afterDelete =
+				await ctx.internalAdapter.findVerificationValue("2fa-dual-write");
+			expect(afterDelete).toBeNull();
+			expect(dataMap.has("verification:2fa-dual-write")).toBe(false);
+		});
+
 		it("should fallback to database when not in secondary storage", async () => {
 			const { dataMap, storage } = createMockStorage();
 

@@ -21,7 +21,6 @@ import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { createHash } from "@better-auth/utils/hash";
-import { TWO_FACTOR_VERIFICATION_PREFIX } from "../plugins/two-factor/constant";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import {
@@ -36,6 +35,7 @@ import {
 import {
 	getStorageOption,
 	processIdentifier,
+	TWO_FACTOR_VERIFICATION_PREFIX,
 } from "./verification-token-storage";
 import type { DatabaseHooksEntry } from "./with-hooks";
 import { getWithHooks } from "./with-hooks";
@@ -57,8 +57,13 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
  * latency (and worker wall-clock budgets), so retries target transient
  * propagation blips only. A store that lags longer than a moment still fails
  * closed, and its durable answer is `verification.storeInDatabase: true`.
- * Worst case added latency: 500ms on find (3 retries); 200ms per key on
- * consume (2 retries), at most 400ms across the hashed + plain key pair.
+ * Worst-case added sleep: 500ms on find (50+150+300 across 1 initial +
+ * 3 retried reads); 200ms per key on consume (50+150), up to 400ms stacked
+ * across the hashed + plain key pair. Each attempt also pays its own
+ * secondary read(s) — up to 8 gets on find and 6 getAndDeletes on consume
+ * when the hashed + plain fallback both apply — so these are sleep budgets,
+ * not full totals. A verify request that consumes the attempt counter and
+ * then reads the challenge can stack both budgets.
  * The arrays are fixed, so the total is always bounded — no unbounded loops.
  */
 const TWO_FACTOR_SECONDARY_FIND_RETRY_DELAYS_MS = [50, 150, 300] as const;
@@ -67,7 +72,8 @@ const TWO_FACTOR_SECONDARY_FIND_RETRY_DELAYS_MS = [50, 150, 300] as const;
  * of a genuine race (double submit, already-consumed challenge) pays the
  * full sleep before failing. A miss deletes nothing, so re-issuing the
  * atomic `getAndDelete` stays single-use safe (see `SecondaryStorage`
- * contract) while capping the race-loser tax at 200ms per key.
+ * contract) while capping the race-loser sleep at 200ms per key — 400ms
+ * stacked when the hashed + plain fallback both miss.
  */
 const TWO_FACTOR_SECONDARY_CONSUME_RETRY_DELAYS_MS = [50, 150] as const;
 

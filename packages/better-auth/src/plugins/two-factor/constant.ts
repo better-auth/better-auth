@@ -1,11 +1,6 @@
-/**
- * Prefix for single-use two-factor verification identifiers, including the
- * per-challenge attempt counters (`2fa-attempts-*`) and OTP rows (`2fa-otp-*`).
- * The secondary-storage retry in the internal adapter matches this prefix, so
- * every writer of a `2fa-*` identifier must build it from this constant —
- * a literal here would silently diverge from the matcher and lose the retry.
- */
-export const TWO_FACTOR_VERIFICATION_PREFIX = "2fa-";
+import { TWO_FACTOR_VERIFICATION_PREFIX } from "../../db/verification-token-storage";
+
+export { TWO_FACTOR_VERIFICATION_PREFIX };
 /**
  * Prefix for the per-challenge attempt counters consumed as the race gate by
  * `verifyTwoFactor().beginAttempt`.
