@@ -9,6 +9,7 @@ export const uk: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "Не вдалося створити сеанс",
 	FAILED_TO_UPDATE_USER: "Не вдалося оновити користувача",
 	FAILED_TO_GET_SESSION: "Не вдалося отримати сеанс",
+	FAILED_TO_GET_ACCESS_TOKEN: "Не вдалося отримати дійсний токен доступу",
 	INVALID_PASSWORD: "Неправильний пароль",
 	INVALID_EMAIL: "Недійсна адреса електронної пошти",
 	INVALID_EMAIL_OR_PASSWORD: "Неправильна адреса електронної пошти або пароль",

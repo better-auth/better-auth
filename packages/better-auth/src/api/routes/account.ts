@@ -746,10 +746,10 @@ async function getValidAccessToken(
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
 	} catch (_error) {
-		throw APIError.from("BAD_REQUEST", {
-			message: "Failed to get a valid access token",
-			code: "FAILED_TO_GET_ACCESS_TOKEN",
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.FAILED_TO_GET_ACCESS_TOKEN,
+		);
 	}
 }
 

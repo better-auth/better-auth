@@ -9,6 +9,8 @@ export const sv: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "Misslyckades med att skapa session",
 	FAILED_TO_UPDATE_USER: "Misslyckades med att uppdatera användare",
 	FAILED_TO_GET_SESSION: "Misslyckades med att hämta session",
+	FAILED_TO_GET_ACCESS_TOKEN:
+		"Misslyckades med att hämta en giltig åtkomsttoken",
 	INVALID_PASSWORD: "Ogiltigt lösenord",
 	INVALID_EMAIL: "Ogiltig e-postadress",
 	INVALID_EMAIL_OR_PASSWORD: "Ogiltig e-postadress eller lösenord",

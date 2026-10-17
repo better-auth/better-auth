@@ -451,6 +451,7 @@ describe("i18n plugin", async () => {
 				"USER_ALREADY_EXISTS",
 				"SESSION_EXPIRED",
 				"ACCOUNT_NOT_FOUND",
+				"FAILED_TO_GET_ACCESS_TOKEN",
 			];
 
 			for (const [locale, dict] of Object.entries(locales)) {

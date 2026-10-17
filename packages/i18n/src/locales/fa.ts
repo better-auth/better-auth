@@ -9,6 +9,7 @@ export const fa: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "ایجاد نشست ناموفق بود",
 	FAILED_TO_UPDATE_USER: "به‌روزرسانی کاربر ناموفق بود",
 	FAILED_TO_GET_SESSION: "دریافت نشست ناموفق بود",
+	FAILED_TO_GET_ACCESS_TOKEN: "دریافت توکن دسترسی معتبر ناموفق بود",
 	INVALID_PASSWORD: "رمز عبور نامعتبر است",
 	INVALID_EMAIL: "ایمیل نامعتبر است",
 	INVALID_EMAIL_OR_PASSWORD: "ایمیل یا رمز عبور نامعتبر است",

@@ -9,6 +9,7 @@ export const es: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "Error al crear la sesión",
 	FAILED_TO_UPDATE_USER: "Error al actualizar el usuario",
 	FAILED_TO_GET_SESSION: "Error al obtener la sesión",
+	FAILED_TO_GET_ACCESS_TOKEN: "Error al obtener un token de acceso válido",
 	INVALID_PASSWORD: "Contraseña inválida",
 	INVALID_EMAIL: "Correo electrónico inválido",
 	INVALID_EMAIL_OR_PASSWORD: "Correo electrónico o contraseña inválidos",
