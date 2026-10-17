@@ -4,6 +4,7 @@ import {
 	runWithEndpointContext,
 	runWithRequestState,
 } from "@better-auth/core/context";
+import { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import {
@@ -80,6 +81,66 @@ describe("session", async () => {
 	it("should return null when not authenticated", async () => {
 		const response = await client.getSession();
 		expect(response.data).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11882
+	 */
+	describe("session lookup errors", () => {
+		it.each([
+			new Error("Store query failed", {
+				cause: new Error("Connection timeout"),
+			}),
+			{ code: "STORE_UNAVAILABLE", detail: "Private store details" },
+		])(
+			"should preserve the store failure as a server-only cause (%j)",
+			async (cause) => {
+				const { auth, signInWithTestUser } = await getTestInstance({
+					logger: { disabled: true },
+				});
+				const { headers } = await signInWithTestUser();
+				const context = await auth.$context;
+				vi.spyOn(context.internalAdapter, "findSession").mockRejectedValue(
+					cause,
+				);
+
+				const error: unknown = await auth.api
+					.getSession({ headers })
+					.catch((error: unknown) => error);
+				expect(error).toBeInstanceOf(APIError);
+				expect(error).toMatchObject({
+					status: "INTERNAL_SERVER_ERROR",
+					body: {
+						code: "FAILED_TO_GET_SESSION",
+						message: "Failed to get session",
+					},
+				});
+				expect((error as APIError).cause).toBe(cause);
+
+				const response = await auth.handler(
+					new Request("http://localhost:3000/api/auth/get-session", {
+						headers,
+					}),
+				);
+				expect(response.status).toBe(500);
+				expect(await response.json()).toEqual({
+					code: "FAILED_TO_GET_SESSION",
+					message: "Failed to get session",
+				});
+			},
+		);
+
+		it("should rethrow an existing APIError unchanged", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance();
+			const { headers } = await signInWithTestUser();
+			const context = await auth.$context;
+			const error = new APIError("SERVICE_UNAVAILABLE", {
+				message: "Session store unavailable",
+			});
+			vi.spyOn(context.internalAdapter, "findSession").mockRejectedValue(error);
+
+			await expect(auth.api.getSession({ headers })).rejects.toBe(error);
+		});
 	});
 
 	it("should require a fresh session based on session creation time", async () => {
