@@ -47,6 +47,7 @@ import {
 	insensitiveNotInArray,
 } from "../query-builders";
 import { findDrizzleSchemaProblems } from "../schema-check";
+import { updatedRowWhere } from "../updated-row-where";
 
 export interface DB {
 	[key: string]: any;
@@ -395,16 +396,11 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				const schemaModel = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
-					// If we're updating a field that's in the where clause, use the new value
-					const updatedWhere = where.map((w) => {
-						// If this field was updated, use the new value for lookup
-						if (data[w.field] !== undefined) {
-							return { ...w, value: data[w.field] };
-						}
-						return w;
-					});
-
-					const clause = convertWhereClause(updatedWhere, model, modelKey);
+					const clause = convertWhereClause(
+						updatedRowWhere(where, data),
+						model,
+						modelKey,
+					);
 					const res = await db
 						.select()
 						.from(schemaModel)
