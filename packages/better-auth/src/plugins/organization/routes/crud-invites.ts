@@ -820,10 +820,14 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 							ctx,
 						);
 
-						await setSessionCookie(ctx, {
-							session: updatedSession,
-							user: session.user,
-						});
+						// null when a session.update.before hook vetoed the write
+						// or the row is gone; the invitation can still be accepted.
+						if (updatedSession) {
+							await setSessionCookie(ctx, {
+								session: updatedSession,
+								user: session.user,
+							});
+						}
 					}
 				}
 
