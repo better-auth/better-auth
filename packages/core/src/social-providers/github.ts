@@ -55,11 +55,16 @@ export interface GithubProfile {
 	};
 }
 
+const defaultHostName = "github.com";
+
 export interface GithubOptions extends ProviderOptions<GithubProfile> {
 	clientId: string;
+	hostName?: string;
 }
+
 export const github = (options: GithubOptions) => {
-	const tokenEndpoint = "https://github.com/login/oauth/access_token";
+	const hostName = options.hostName ?? defaultHostName;
+	const tokenEndpoint = `https://${hostName}/login/oauth/access_token`;
 	return {
 		id: "github",
 		name: "GitHub",
@@ -80,7 +85,7 @@ export const github = (options: GithubOptions) => {
 			return createAuthorizationURL({
 				id: "github",
 				options,
-				authorizationEndpoint: "https://github.com/login/oauth/authorize",
+				authorizationEndpoint: `https://${hostName}/login/oauth/authorize`,
 				scopes: _scopes,
 				state,
 				codeVerifier,
@@ -137,7 +142,7 @@ export const github = (options: GithubOptions) => {
 				return options.getUserInfo(token);
 			}
 			const { data: profile, error } = await betterFetch<GithubProfile>(
-				"https://api.github.com/user",
+				`https://api.${hostName}/user`,
 				{
 					headers: {
 						"User-Agent": "better-auth",
@@ -155,7 +160,7 @@ export const github = (options: GithubOptions) => {
 					verified: boolean;
 					visibility: "public" | "private";
 				}[]
-			>("https://api.github.com/user/emails", {
+			>(`https://api.${hostName}/user/emails`, {
 				headers: {
 					Authorization: `Bearer ${token.accessToken}`,
 					"User-Agent": "better-auth",
