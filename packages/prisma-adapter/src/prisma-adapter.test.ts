@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it, vi } from "vitest";
+import type { PrismaConfig } from "./prisma-adapter";
 import { prismaAdapter } from "./prisma-adapter";
 
 describe("prisma-adapter", () => {
@@ -10,9 +11,13 @@ describe("prisma-adapter", () => {
 
 	// incrementOne mutates numeric counters; declare the fields it touches on an
 	// existing model so the factory's where/input transforms recognize them.
-	const createCounterAdapter = (prisma: Record<string, unknown>) =>
+	const createCounterAdapter = (
+		prisma: Record<string, unknown>,
+		config?: Partial<PrismaConfig>,
+	) =>
 		prismaAdapter(prisma as never, {
 			provider: "sqlite",
+			...config,
 		})({
 			verification: {
 				additionalFields: {
@@ -397,14 +402,18 @@ describe("prisma-adapter", () => {
 		expect(del).toHaveBeenCalledTimes(1);
 	});
 
-	it("incrementOne keyed on the primary key updates that one row in a single round trip", async () => {
-		const update = vi
+	it("incrementOne keyed on the primary key updates that one row using updateMany and returns the updated row", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
 			.fn()
 			.mockResolvedValue({ id: "counter-id", remaining: 4 });
-		const findFirst = vi.fn();
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
 		const adapter = createCounterAdapter({
-			$transaction: vi.fn(),
-			verification: { findFirst, update },
+			$transaction: transaction,
+			verification: {},
 		});
 
 		const result = await adapter.incrementOne({
@@ -413,12 +422,14 @@ describe("prisma-adapter", () => {
 			increment: { remaining: 1 },
 		});
 
+		expect(transaction).toHaveBeenCalledTimes(1);
 		expect(result).toEqual({ id: "counter-id", remaining: 4 });
-		// No transaction or pre-read: the unique key resolves a single row directly.
-		expect(findFirst).not.toHaveBeenCalled();
-		expect(update).toHaveBeenCalledWith({
-			where: { id: "counter-id" },
+		expect(updateMany).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id" } },
 			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenCalledWith({
+			where: { id: "counter-id" },
 		});
 	});
 
@@ -426,12 +437,12 @@ describe("prisma-adapter", () => {
 		const target = { id: "counter-id", remaining: 2 };
 		const txClient = {
 			verification: {
-				findFirst: vi.fn().mockResolvedValue(target),
-				update: vi.fn().mockResolvedValue({
+				findFirst: vi.fn().mockResolvedValueOnce(target).mockResolvedValueOnce({
 					id: "counter-id",
 					remaining: 1,
 					lastRefill: 1700,
 				}),
+				updateMany: vi.fn().mockResolvedValue({ count: 1 }),
 			},
 		};
 		const transaction = vi.fn(async (cb) => cb(txClient));
@@ -452,10 +463,9 @@ describe("prisma-adapter", () => {
 			remaining: 1,
 			lastRefill: 1700,
 		});
-		expect(txClient.verification.update).toHaveBeenCalledWith({
+		expect(txClient.verification.updateMany).toHaveBeenCalledWith({
 			where: {
-				id: "counter-id",
-				AND: [{ remaining: { gt: 0 } }],
+				AND: [{ remaining: { gt: 0 } }, { id: { equals: "counter-id" } }],
 			},
 			data: expect.objectContaining({
 				lastRefill: 1700,
@@ -466,16 +476,18 @@ describe("prisma-adapter", () => {
 
 	// A non-unique guard (e.g. `remaining > 0`) can match many rows, but the
 	// contract mutates at most one. The adapter resolves a single target id and
-	// keys the write on it, so `update` (single-row) runs and `updateMany` never
-	// does, leaving every other matching row untouched.
+	// keys the write on it, so `updateMany` pins the write to that id alone,
+	// leaving every other matching row untouched.
 	it("incrementOne with a non-unique guard mutates exactly one matching row", async () => {
 		const target = { id: "row-1", remaining: 5 };
-		const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
-		const updateMany = vi.fn();
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValueOnce(target)
+			.mockResolvedValueOnce({ id: "row-1", remaining: 4 });
 		const txClient = {
 			verification: {
-				findFirst: vi.fn().mockResolvedValue(target),
-				update,
+				findFirst,
 				updateMany,
 			},
 		};
@@ -492,23 +504,62 @@ describe("prisma-adapter", () => {
 		});
 
 		expect(result).toEqual({ id: "row-1", remaining: 4 });
-		expect(updateMany).not.toHaveBeenCalled();
-		expect(update).toHaveBeenCalledTimes(1);
-		expect(update).toHaveBeenCalledWith({
+		expect(updateMany).toHaveBeenCalledTimes(1);
+		expect(updateMany).toHaveBeenCalledWith({
 			where: {
-				id: "row-1",
-				AND: [{ remaining: { gt: 0 } }],
+				AND: [{ remaining: { gt: 0 } }, { id: { equals: "row-1" } }],
 			},
 			data: { remaining: { increment: -1 } },
 		});
 	});
 
+	it("incrementOne with non-equality id filter resolves a single target row via findFirst before updating", async () => {
+		const target = { id: "counter-1", remaining: 5 };
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValueOnce(target)
+			.mockResolvedValueOnce({ id: "counter-1", remaining: 6 });
+		const txClient = {
+			verification: {
+				findFirst,
+				updateMany,
+			},
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-0", operator: "gt" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(findFirst).toHaveBeenNthCalledWith(1, {
+			where: { id: { gt: "counter-0" } },
+		});
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [{ id: { gt: "counter-0" } }, { id: { equals: "counter-1" } }],
+			},
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenNthCalledWith(2, {
+			where: { id: "counter-1" },
+		});
+		expect(result).toEqual({ id: "counter-1", remaining: 6 });
+	});
+
 	it("incrementOne returns null when the guard matches no row", async () => {
-		const update = vi.fn();
+		const updateMany = vi.fn();
 		const txClient = {
 			verification: {
 				findFirst: vi.fn().mockResolvedValue(null),
-				update,
+				updateMany,
 			},
 		};
 		const transaction = vi.fn(async (cb) => cb(txClient));
@@ -524,20 +575,18 @@ describe("prisma-adapter", () => {
 		});
 
 		expect(result).toBeNull();
-		expect(update).not.toHaveBeenCalled();
+		expect(updateMany).not.toHaveBeenCalled();
 	});
 
 	it("incrementOne returns null when a racer invalidated the guard between read and write", async () => {
 		const target = { id: "counter-id", remaining: 1 };
-		const notFound = Object.assign(new Error("Record to update not found."), {
-			code: "P2025",
-		});
 		const txClient = {
 			verification: {
 				findFirst: vi.fn().mockResolvedValue(target),
 				// The guarded update matches no row because a concurrent caller
-				// already drove `remaining` to 0 after the read; Prisma raises P2025.
-				update: vi.fn().mockRejectedValue(notFound),
+				// already drove `remaining` to 0 after the read; updateMany returns { count: 0 }
+				// without throwing or logging P2025.
+				updateMany: vi.fn().mockResolvedValue({ count: 0 }),
 			},
 		};
 		const transaction = vi.fn(async (cb) => cb(txClient));
@@ -553,7 +602,346 @@ describe("prisma-adapter", () => {
 		});
 
 		expect(result).toBeNull();
-		expect(txClient.verification.update).toHaveBeenCalledTimes(1);
+		expect(txClient.verification.updateMany).toHaveBeenCalledTimes(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10701
+	 */
+	it("incrementOne uses non-throwing updateMany for optimistic concurrency guards without logging P2025", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+		const update = vi.fn();
+		const findFirst = vi.fn();
+		const txClient = {
+			verification: { findFirst, update, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [
+				{ field: "id", value: "counter-id" },
+				{ field: "remaining", value: 0, operator: "gt" },
+			],
+			increment: { remaining: -1 },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(result).toBeNull();
+		expect(update).not.toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [{ id: { equals: "counter-id" } }, { remaining: { gt: 0 } }],
+			},
+			data: { remaining: { increment: -1 } },
+		});
+		expect(findFirst).not.toHaveBeenCalled();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10701
+	 */
+	it("incrementOne handles concurrent window resets via updateMany returning count: 0 on collision", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+		const findFirst = vi.fn();
+		const txClient = {
+			verification: { updateMany, findFirst },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter({
+			$transaction: transaction,
+			verification: {},
+		});
+
+		const windowStart = new Date(Date.now() - 60_000);
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [
+				{ field: "id", value: "key-1" },
+				{ field: "lastRefill", operator: "lte", value: windowStart.getTime() },
+			],
+			increment: {},
+			set: { lastRefill: Date.now() },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(result).toBeNull();
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [
+					{ id: { equals: "key-1" } },
+					{ lastRefill: { lte: windowStart.getTime() } },
+				],
+			},
+			data: expect.objectContaining({
+				lastRefill: expect.any(Number),
+			}),
+		});
+	});
+
+	it("incrementOne on standalone mongodb executes sequentially without calling db.$transaction", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const transaction = vi.fn();
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: { findFirst, updateMany },
+			},
+			{ provider: "mongodb" },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).not.toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id" } },
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenCalledWith({
+			where: { id: "counter-id" },
+		});
+		expect(result).toEqual({ id: "counter-id", remaining: 4 });
+	});
+
+	it("incrementOne on mongodb with replica set (transaction: true) uses db.$transaction", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: {},
+			},
+			{ provider: "mongodb", transaction: true },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(result).toEqual({ id: "counter-id", remaining: 4 });
+	});
+
+	it("incrementOne with transaction: false executes sequentially without calling db.$transaction", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const transaction = vi.fn();
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: { findFirst, updateMany },
+			},
+			{ provider: "sqlite", transaction: false },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).not.toHaveBeenCalled();
+		expect(updateMany).toHaveBeenCalledWith({
+			where: { id: { equals: "counter-id" } },
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenCalledWith({
+			where: { id: "counter-id" },
+		});
+		expect(result).toEqual({ id: "counter-id", remaining: 4 });
+	});
+
+	it("incrementOne with mode: 'insensitive' on postgresql routes through target resolution and returns the updated row", async () => {
+		const target = { id: "COUNTER-ID", remaining: 5 };
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValueOnce(target)
+			.mockResolvedValueOnce({ id: "COUNTER-ID", remaining: 6 });
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: {},
+			},
+			{ provider: "postgresql" },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id", mode: "insensitive" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(findFirst).toHaveBeenNthCalledWith(1, {
+			where: { id: { equals: "counter-id", mode: "insensitive" } },
+		});
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [
+					{ id: { equals: "counter-id", mode: "insensitive" } },
+					{ id: { equals: "COUNTER-ID" } },
+				],
+			},
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenNthCalledWith(2, {
+			where: { id: "COUNTER-ID" },
+		});
+		expect(result).toEqual({ id: "COUNTER-ID", remaining: 6 });
+	});
+
+	it("incrementOne with mode: 'insensitive' on mongodb routes through target resolution and returns the updated row", async () => {
+		const target = { id: "COUNTER-ID", remaining: 5 };
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValueOnce(target)
+			.mockResolvedValueOnce({ id: "COUNTER-ID", remaining: 6 });
+		const adapter = createCounterAdapter(
+			{
+				$transaction: vi.fn(),
+				verification: { findFirst, updateMany },
+			},
+			{ provider: "mongodb" },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "counter-id", mode: "insensitive" }],
+			increment: { remaining: 1 },
+		});
+
+		expect(findFirst).toHaveBeenNthCalledWith(1, {
+			where: { id: { equals: "counter-id", mode: "insensitive" } },
+		});
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [
+					{ id: { equals: "counter-id", mode: "insensitive" } },
+					{ id: { equals: "COUNTER-ID" } },
+				],
+			},
+			data: { remaining: { increment: 1 } },
+		});
+		expect(findFirst).toHaveBeenNthCalledWith(2, {
+			where: { id: "COUNTER-ID" },
+		});
+		expect(result).toEqual({ id: "COUNTER-ID", remaining: 6 });
+	});
+
+	it("incrementOne with insensitive id filter and guard selects and updates the matching case-variant row rather than another row with different casing", async () => {
+		const matchingTarget = { id: "COUNTER-ID", remaining: 5 };
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValueOnce(matchingTarget)
+			.mockResolvedValueOnce({ id: "COUNTER-ID", remaining: 4 });
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = createCounterAdapter(
+			{
+				$transaction: transaction,
+				verification: {},
+			},
+			{ provider: "postgresql" },
+		);
+
+		const result = await adapter.incrementOne({
+			model: "verification",
+			where: [
+				{ field: "id", value: "counter-id", mode: "insensitive" },
+				{ field: "remaining", value: 0, operator: "gt" },
+			],
+			increment: { remaining: -1 },
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
+		expect(findFirst).toHaveBeenNthCalledWith(1, {
+			where: {
+				AND: [
+					{ id: { equals: "counter-id", mode: "insensitive" } },
+					{ remaining: { gt: 0 } },
+				],
+			},
+		});
+		expect(updateMany).toHaveBeenCalledWith({
+			where: {
+				AND: [
+					{ id: { equals: "counter-id", mode: "insensitive" } },
+					{ remaining: { gt: 0 } },
+					{ id: { equals: "COUNTER-ID" } },
+				],
+			},
+			data: { remaining: { increment: -1 } },
+		});
+		expect(findFirst).toHaveBeenNthCalledWith(2, {
+			where: { id: "COUNTER-ID" },
+		});
+		expect(result).toEqual({ id: "COUNTER-ID", remaining: 4 });
+	});
+
+	it("incrementOne does not open a nested transaction from a transaction adapter", async () => {
+		const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+		const findFirst = vi
+			.fn()
+			.mockResolvedValue({ id: "counter-id", remaining: 4 });
+		const txClient = {
+			verification: { findFirst, updateMany },
+		};
+		const transaction = vi.fn(async (cb) => cb(txClient));
+		const adapter = prismaAdapter(
+			{
+				$transaction: transaction,
+			} as never,
+			{
+				provider: "sqlite",
+				transaction: true,
+			},
+		)({
+			verification: {
+				additionalFields: {
+					remaining: { type: "number" },
+				},
+			},
+		} as BetterAuthOptions);
+
+		await adapter.transaction(async (trx) => {
+			await trx.incrementOne({
+				model: "verification",
+				where: [{ field: "id", value: "counter-id" }],
+				increment: { remaining: 1 },
+			});
+		});
+
+		expect(transaction).toHaveBeenCalledTimes(1);
 	});
 
 	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {
