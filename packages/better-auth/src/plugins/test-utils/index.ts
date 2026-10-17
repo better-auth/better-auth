@@ -75,7 +75,10 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 	return {
 		id: "test-utils",
 		version: PACKAGE_VERSION,
-		init(ctx) {
+		init(ctx): {
+			context: { test: TestHelpers };
+			options?: Partial<BetterAuthOptions>;
+		} {
 			// Check if organization plugin is present
 			const hasOrgPlugin = ctx.hasPlugin("organization");
 
@@ -150,11 +153,20 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 					} satisfies BetterAuthOptions["databaseHooks"])
 				: null;
 
+			if (!databaseHooks) {
+				return {
+					context: {
+						test: helpers,
+					},
+				};
+			}
 			return {
 				context: {
 					test: helpers,
 				},
-				options: databaseHooks ? { databaseHooks } : undefined,
+				options: {
+					databaseHooks,
+				},
 			};
 		},
 		options,
