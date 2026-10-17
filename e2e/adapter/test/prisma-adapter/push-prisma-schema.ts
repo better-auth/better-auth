@@ -9,13 +9,11 @@ import { DATABASE_URLS } from "./constants";
 // so we can copy instead of running `prisma generate` again.
 const lastGeneratedDir = new Map<string, string>();
 
-// Track the schema last actually DDL-pushed per dialect. Migrations fire on
-// every better-auth options change, but most re-apply a schema that is already
-// in the database; a full `prisma db push --force-reset` (CLI subprocess +
-// drop/recreate every table) is then pure overhead. When the schema is
-// unchanged we only need to clear DATA for test isolation, which an in-process
-// TRUNCATE does in milliseconds instead of ~1s. This is the bulk of the
-// adapter-integration long pole (measured: 134 pushes ~= 148s on mysql upstream).
+// Track the schema last pushed per dialect. Migrations run on every
+// better-auth options change, but most of them produce a schema that is
+// already in the database. Then a full `prisma db push --force-reset` (a CLI
+// subprocess that drops and recreates every table) is not needed, and clearing
+// the data in-process is enough for test isolation.
 const lastPushedSchema = new Map<string, string>();
 
 // Minimal structural type for the raw-query surface we use, so we don't depend
@@ -38,11 +36,9 @@ function resolvePrismaCli() {
 	);
 }
 
-// Fast, in-process data reset. Truncates every table in the database so the
-// resulting state is identical to `db push --force-reset`'s data effect (empty
-// tables, same schema), without the CLI subprocess or DDL. Only valid when the
-// schema is unchanged. Throws on any failure so the caller can fall back to a
-// full push (correctness is never traded for speed).
+// Empties every table and resets its identity counter, which leaves the same
+// state as `db push --force-reset` when the schema is unchanged. Throws on any
+// failure so the caller can fall back to a full push.
 async function truncateAllTables(
 	dialect: Dialect,
 	db: RawClient,
@@ -59,25 +55,27 @@ async function truncateAllTables(
 		}
 		return;
 	}
-	// mysql: run on a SINGLE connection (interactive transaction) so the
-	// session-scoped FOREIGN_KEY_CHECKS=0 applies to every statement — the
-	// mariadb adapter pools connections, so separate calls could otherwise land
-	// on different connections. Use DELETE (DML), not TRUNCATE: TRUNCATE is DDL
-	// and implicitly commits, which breaks Prisma's interactive transaction.
-	await db.$transaction(async (tx) => {
+	// The mariadb adapter pools connections, so the session-scoped
+	// FOREIGN_KEY_CHECKS=0 only holds inside an interactive transaction. TRUNCATE
+	// commits implicitly and would end that transaction, so rows are deleted
+	// with DELETE and the counters are reset after the transaction.
+	const tables = await db.$transaction(async (tx) => {
 		await tx.$executeRawUnsafe(`SET FOREIGN_KEY_CHECKS = 0`);
-		// CAST to CHAR: the mariadb driver returns information_schema text columns
-		// as binary Buffers, which stringify to comma-joined bytes; CAST + String()
-		// guarantees a real table-name string.
+		// The mariadb driver returns information_schema text columns as binary
+		// buffers, so the name is cast to CHAR.
 		const rows = await tx.$queryRawUnsafe<Array<{ name: unknown }>>(
 			`SELECT CAST(table_name AS CHAR) AS name FROM information_schema.tables WHERE table_schema = DATABASE()`,
 		);
-		for (const r of rows) {
-			const table = String(r.name);
+		const names = rows.map((r) => String(r.name));
+		for (const table of names) {
 			await tx.$executeRawUnsafe(`DELETE FROM \`${table}\``);
 		}
 		await tx.$executeRawUnsafe(`SET FOREIGN_KEY_CHECKS = 1`);
+		return names;
 	});
+	for (const table of tables) {
+		await db.$executeRawUnsafe(`ALTER TABLE \`${table}\` AUTO_INCREMENT = 1`);
+	}
 }
 
 export async function pushPrismaSchema(dialect: Dialect, db?: RawClient) {
