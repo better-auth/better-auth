@@ -429,10 +429,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					throw error;
 				}
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
-				throw APIError.from(
+				const sessionError = APIError.from(
 					"INTERNAL_SERVER_ERROR",
 					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
 				);
+				// Keep the cause on the error, outside the serialized response body.
+				Object.defineProperty(sessionError, "cause", {
+					value: error,
+					configurable: true,
+					writable: true,
+				});
+				throw sessionError;
 			}
 		},
 	);
