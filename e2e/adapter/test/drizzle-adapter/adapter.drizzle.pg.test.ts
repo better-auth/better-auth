@@ -46,6 +46,7 @@ const { execute } = await testAdapter({
 		console.log(`Options:`, betterAuthOptions);
 		try {
 			await pushDrizzleSchema(
+				import.meta.dirname,
 				"postgresql",
 				`${fileName}.ts`,
 				"postgres://user:password@localhost:5432/better_auth",

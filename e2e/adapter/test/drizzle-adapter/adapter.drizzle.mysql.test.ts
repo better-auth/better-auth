@@ -45,6 +45,7 @@ const { execute } = await testAdapter({
 		console.log(`Options:`, betterAuthOptions);
 		try {
 			await pushDrizzleSchema(
+				import.meta.dirname,
 				"mysql",
 				`${fileName}.ts`,
 				"mysql://user:password@localhost:3306/better_auth",

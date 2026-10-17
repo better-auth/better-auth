@@ -49,7 +49,12 @@ const { execute } = await testAdapter({
 
 		console.log(`Options:`, betterAuthOptions);
 		try {
-			await pushDrizzleSchema("sqlite", `${fileName}.ts`, "./test.db");
+			await pushDrizzleSchema(
+				import.meta.dirname,
+				"sqlite",
+				`${fileName}.ts`,
+				"./test.db",
+			);
 		} catch (error) {
 			console.error("Failed to push drizzle schema (sqlite):", error);
 			throw error;

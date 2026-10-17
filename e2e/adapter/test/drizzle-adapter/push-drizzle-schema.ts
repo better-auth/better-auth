@@ -4,35 +4,41 @@ import { dirname, join } from "node:path";
 
 export type DrizzleKitDialect = "mysql" | "postgresql" | "sqlite";
 
-/**
- * Finds the `drizzle-kit` CLI that the workspace already installs.
- *
- * `drizzle-kit` is a devDependency of the parent `e2e/adapter` workspace. When
- * the tests started it as `npx drizzle-kit`, npx looked in the parent
- * directories and found the package again at each start. A full adapter run
- * makes 407 starts. This function does the search one time.
- *
- * This cannot use `require.resolve("drizzle-kit/package.json")`, which is the
- * method that `push-prisma-schema.ts` uses for Prisma. The `exports` map of
- * drizzle-kit supplies only `.` and `./api`, so a deep specifier gives the
- * error ERR_PACKAGE_PATH_NOT_EXPORTED. This function resolves the main entry
- * and uses the `bin` file beside it.
- */
-function resolveDrizzleKitCli() {
-	const require = createRequire(import.meta.url);
-	return join(dirname(require.resolve("drizzle-kit")), "bin.cjs");
-}
+const drizzleKitCliPaths = new Map<string, string>();
 
-const drizzleKitCli = resolveDrizzleKitCli();
+/**
+ * Finds the `drizzle-kit` CLI that is installed for a test directory, one time
+ * per directory.
+ *
+ * Each test package can pin its own `drizzle-kit` version, so the CLI is
+ * resolved from the directory of the caller and not from this file.
+ *
+ * This cannot use `require.resolve("drizzle-kit/package.json")`. The `exports`
+ * map of drizzle-kit does not include it, so a deep specifier gives the error
+ * ERR_PACKAGE_PATH_NOT_EXPORTED. This function resolves the main entry and
+ * uses the `bin` file beside it.
+ */
+function resolveDrizzleKitCli(cwd: string) {
+	let cli = drizzleKitCliPaths.get(cwd);
+	if (!cli) {
+		const require = createRequire(join(cwd, "noop.js"));
+		cli = join(dirname(require.resolve("drizzle-kit")), "bin.cjs");
+		drizzleKitCliPaths.set(cwd, cli);
+	}
+	return cli;
+}
 
 /**
  * Runs `drizzle-kit push` for a generated schema.
  *
- * The arguments go to the CLI as an array, not as one shell string. Thus no
- * shell starts, and schema paths and connection URLs do not need quotation
- * marks.
+ * The CLI runs with the current Node.js binary and the arguments go to it as
+ * an array, so no shell or package runner starts for each push.
+ *
+ * @param cwd - The test directory. The schema path is relative to it, and the
+ * `drizzle-kit` version installed for it is used.
  */
 export async function pushDrizzleSchema(
+	cwd: string,
 	dialect: DrizzleKitDialect,
 	schema: string,
 	url: string,
@@ -46,8 +52,8 @@ export async function pushDrizzleSchema(
 	console.log(`Running: drizzle-kit ${args.join(" ")}`);
 	// wait for the above console.log to be printed
 	await new Promise((resolve) => setTimeout(resolve, 10));
-	execFileSync(process.execPath, [drizzleKitCli, ...args], {
-		cwd: import.meta.dirname,
+	execFileSync(process.execPath, [resolveDrizzleKitCli(cwd), ...args], {
+		cwd,
 		stdio: "inherit",
 	});
 }
