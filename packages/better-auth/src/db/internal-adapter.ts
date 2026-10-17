@@ -45,6 +45,29 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
 }
 
+/**
+ * Prefix for single-use two-factor challenges, including the per-challenge
+ * attempt counters (`2fa-attempts-*`). These records are auth-critical: a
+ * missed read fails the sign-in the user just started.
+ */
+const TWO_FACTOR_VERIFICATION_PREFIX = "2fa-";
+
+/**
+ * Delays between secondary-storage re-reads for two-factor challenges when
+ * the first read misses. Only the miss path pays this latency, and only for
+ * `2fa-*` identifiers in secondary-only mode; every other verification flow
+ * keeps its single-read behavior.
+ */
+const TWO_FACTOR_SECONDARY_RETRY_DELAYS_MS = [25, 75, 150] as const;
+
+function isTwoFactorChallengeIdentifier(identifier: string): boolean {
+	return identifier.startsWith(TWO_FACTOR_VERIFICATION_PREFIX);
+}
+
+function sleepMs(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 type ActiveSessionReference = {
 	readonly token: string;
 	readonly expiresAt: number;
@@ -1323,23 +1346,46 @@ export const createInternalAdapter = (
 			);
 
 			if (secondaryStorage) {
-				const cached = await secondaryStorage.get(
-					`verification:${storedIdentifier}`,
-				);
-				if (cached) {
-					const parsed = safeJSONParse<Verification>(cached);
-					if (parsed) {
-						return parsed;
-					}
-				}
-				if (storageOption && storageOption !== "plain") {
-					const plainCached = await secondaryStorage.get(
-						`verification:${identifier}`,
+				const readFromSecondary = async (): Promise<Verification | null> => {
+					const cached = await secondaryStorage.get(
+						`verification:${storedIdentifier}`,
 					);
-					if (plainCached) {
-						const parsed = safeJSONParse<Verification>(plainCached);
+					if (cached) {
+						const parsed = safeJSONParse<Verification>(cached);
 						if (parsed) {
 							return parsed;
+						}
+					}
+					if (storageOption && storageOption !== "plain") {
+						const plainCached = await secondaryStorage.get(
+							`verification:${identifier}`,
+						);
+						if (plainCached) {
+							const parsed = safeJSONParse<Verification>(plainCached);
+							if (parsed) {
+								return parsed;
+							}
+						}
+					}
+					return null;
+				};
+				const found = await readFromSecondary();
+				if (found) {
+					return found;
+				}
+				// Secondary-only two-factor challenges have no database copy to
+				// fall back to, so tolerate a transient replication miss with a
+				// bounded re-read. Any other verification flow keeps the
+				// single-read behavior below.
+				if (
+					!options.verification?.storeInDatabase &&
+					isTwoFactorChallengeIdentifier(identifier)
+				) {
+					for (const delayMs of TWO_FACTOR_SECONDARY_RETRY_DELAYS_MS) {
+						await sleepMs(delayMs);
+						const retried = await readFromSecondary();
+						if (retried) {
+							return retried;
 						}
 					}
 				}
@@ -1462,10 +1508,25 @@ export const createInternalAdapter = (
 						await secondaryStorage.getAndDelete(key),
 					);
 				};
+				// A replication miss deletes nothing, so re-issuing the atomic
+				// getAndDelete is safe. Other verification flows keep the
+				// single attempt below.
+				const retryTwoFactorConsume =
+					isTwoFactorChallengeIdentifier(identifier);
+				const consumeCacheKeyWithRetry = async (key: string) => {
+					const first = await consumeCacheKey(key);
+					if (first || !retryTwoFactorConsume) return first;
+					for (const delayMs of TWO_FACTOR_SECONDARY_RETRY_DELAYS_MS) {
+						await sleepMs(delayMs);
+						const retried = await consumeCacheKey(key);
+						if (retried) return retried;
+					}
+					return null;
+				};
 
 				for (const stored of identifiersToTry) {
 					const cacheKey = `verification:${stored}`;
-					const cached = await consumeCacheKey(cacheKey);
+					const cached = await consumeCacheKeyWithRetry(cacheKey);
 					if (!cached) continue;
 					await Promise.all(
 						identifiersToTry

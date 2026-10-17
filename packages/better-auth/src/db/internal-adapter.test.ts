@@ -1780,6 +1780,126 @@ describe("internal adapter test", async () => {
 			expect(found).toBeNull(); // Proves DB was NOT used
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("retries secondary-only 2fa-* reads across transient KV misses", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let misses = 2;
+			const flaky: SecondaryStorage = {
+				...base,
+				get(key: string) {
+					if (key.startsWith("verification:2fa-") && misses > 0) {
+						misses -= 1;
+						return null;
+					}
+					return base.get(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: flaky,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-transient-miss",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("2fa-transient-miss");
+			expect(found).not.toBeNull();
+			expect(found?.value).toBe("user-id");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("retries secondary-only 2fa-* consume across transient KV misses and stays single-use", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let misses = 2;
+			const flaky: SecondaryStorage = {
+				...base,
+				get(key: string) {
+					if (key.startsWith("verification:2fa-") && misses > 0) {
+						misses -= 1;
+						return null;
+					}
+					return base.get(key);
+				},
+				getAndDelete(key: string) {
+					if (key.startsWith("verification:2fa-") && misses > 0) {
+						misses -= 1;
+						return null;
+					}
+					return base.getAndDelete(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: flaky,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-consume-miss",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const consumed =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-consume-miss");
+			expect(consumed).not.toBeNull();
+			expect(consumed?.value).toBe("user-id");
+			const replay =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-consume-miss");
+			expect(replay).toBeNull();
+		});
+
+		it("keeps single-read behavior for non-2fa identifiers in secondary-only mode", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let reads = 0;
+			const counting: SecondaryStorage = {
+				...base,
+				get(key: string) {
+					reads += 1;
+					return base.get(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: counting,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "password-reset-guard",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			store.clear();
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"password-reset-guard",
+			);
+			expect(found).toBeNull();
+			expect(reads).toBe(1);
+		});
+
 		it("should delete verification from secondary storage", async () => {
 			const { dataMap, storage } = createMockStorage();
 
