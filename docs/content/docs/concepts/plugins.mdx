@@ -355,17 +355,21 @@ const myPlugin = () => {
 
 ### On Request & On Response
 
-Additional to middlewares, you can also hook into right before a request is made and right after a response is returned. This is mostly useful if you want to do something that affects all requests or responses.
+Use these hooks to run logic across HTTP requests. `onRequest` runs before Better Auth handles a request, while `onResponse` runs before its response is returned. For example, a plugin can reject a request early or inspect the final response.
+
+<Callout type="info">
+  These hooks apply to incoming HTTP traffic. Calling `auth.api.*()` directly does not trigger them, even if you pass a `Request` or set `asResponse: true`.
+</Callout>
 
 #### On Request
 
-The `onRequest` function is called right before the request is made. It takes two parameters: the `request` and the `context` object.
+`onRequest` receives the incoming `Request` and auth context.
 
 Here’s how it works:
 
-* **Continue as Normal**: If you don't return anything, the request will proceed as usual.
-* **Interrupt the Request**: To stop the request and send a response, return an object with a `response` property that contains a `Response` object.
-* **Modify the Request**: You can also return a modified `request` object to change the request before it's sent.
+* **Continue Normally:** Return nothing.
+* **Modify the Request:** Return `{ request }` with a modified `Request`.
+* **Respond Early:** Return `{ response }` with a `Response` to stop processing.
 
 ```ts title="plugin.ts"
 import type { BetterAuthPlugin } from "better-auth";
@@ -382,12 +386,12 @@ const myPlugin = () => {
 
 #### On Response
 
-The `onResponse` function is executed immediately after a response is returned. It takes two parameters: the `response` and the `context` object.
+`onResponse` receives the `Response` and auth context. It also runs for responses returned early from `onRequest`, such as rate limit responses, and for responses produced after errors.
 
-Here’s how to use it:
+Here’s how it works:
 
-* **Modify the Response**: You can return a modified response object to change the response before it is sent to the client.
-* **Continue Normally**: If you don't return anything, the response will be sent as is.
+* **Continue Normally:** Return nothing.
+* **Modify the Response:** Return `{ response }` with the modified `Response`.
 
 ```ts title="plugin.ts"
 import type { BetterAuthPlugin } from "better-auth";
