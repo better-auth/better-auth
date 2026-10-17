@@ -43,9 +43,9 @@ async function getAvailablePort(): Promise<number> {
 async function stopProcess(
 	child: ChildProcessWithoutNullStreams | undefined,
 ): Promise<void> {
-	if (!child?.pid || child.exitCode !== null) return;
+	if (!child) return;
 	const { terminate } = await import("@better-auth-test/test-utils/playwright");
-	await terminate(child.pid);
+	await terminate(child);
 }
 
 async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
@@ -108,7 +108,7 @@ async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
 			["dev", "--hostname", "127.0.0.1", "--port", String(port)],
 			{
 				cwd: demoDirectory,
-				detached: true,
+				detached: process.platform !== "win32",
 				env: environment,
 				stdio: "pipe",
 			},
