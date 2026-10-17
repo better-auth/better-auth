@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.7.11
+
+### Patch Changes
+
+- [#11623](https://github.com/better-auth/better-auth/pull/11623) [`ce96569`](https://github.com/better-auth/better-auth/commit/ce965696d1f8695e96e6b88490fc8ea2f8ab78ae) Thanks [@cpojer](https://github.com/cpojer)! - Reduce installation size by removing the semantic conventions production dependency while preserving all instrumentation attribute keys.
+
 ## 1.7.10
 
 ### Patch Changes
