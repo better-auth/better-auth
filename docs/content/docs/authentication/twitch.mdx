@@ -59,6 +59,4 @@ description: Twitch provider setup and usage.
 
 ### ID Token Validation
 
-By default, the built-in Twitch provider verifies the returned ID token's RS256 signature, issuer, audience, and required claims (`iss`, `sub`, `aud`, `exp`, and `iat`) before mapping the profile. Expiration and `nbf` checks allow 30 seconds of clock skew.
-
-Custom `getUserInfo` overrides replace these checks and are responsible for validating the identity data they return.
+The built-in provider checks the ID token's signature, issuer, audience, and expiration before mapping the profile. Custom `getUserInfo` overrides replace these checks.

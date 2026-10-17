@@ -92,6 +92,4 @@ Paybin returns user information in the ID token following OpenID Connect standar
 
 ### ID Token Validation
 
-By default, the built-in Paybin provider verifies the returned ID token against `<issuer>/.well-known/jwks.json` before mapping the profile. It requires an RS256 signature and the `iss`, `sub`, `aud`, `exp`, and `iat` claims. Expiration and `nbf` checks allow 30 seconds of clock skew.
-
-Custom `getUserInfo` overrides replace these checks and are responsible for validating the identity data they return.
+The built-in provider checks the ID token's signature, issuer, audience, and expiration using signing keys from `<issuer>/.well-known/jwks.json`. Custom `getUserInfo` overrides replace these checks.
