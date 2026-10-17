@@ -6,17 +6,29 @@ import {
 	getVersionFromPathname,
 	getVersionTargetHref,
 	resolveVersionFromSlug,
+	scopeDocsHref,
 	versionedDocsHref,
 } from "./docs-versions";
 
-const [latestVersion, version16] = docsVersions;
+const [betaVersion, latestVersion, version16] = docsVersions;
 
 const availability: VersionAvailability = {
 	latest: [],
 	"1.6": ["/docs/introduction", "/docs/plugins/scim"],
+	beta: ["/docs/introduction", "/docs/plugins/scim"],
 };
 
 describe("documentation versions", () => {
+	it("lists beta before stable while keeping stable as the default", () => {
+		expect(docsVersions.map((version) => version.id)).toEqual([
+			"beta",
+			"latest",
+			"1.6",
+		]);
+		expect(getVersionFromPathname("/docs/introduction").id).toBe("latest");
+		expect(resolveVersionFromSlug([]).version.id).toBe("latest");
+	});
+
 	it("targets maintenance branches for documentation edits", () => {
 		expect(docsVersionSources[version16.id].editBranch).toBe("v1.6.x");
 	});
@@ -26,6 +38,51 @@ describe("documentation versions", () => {
 		expect(docsVersionSources[version16.id].commitSha).toMatch(
 			/^[0-9a-f]{40}$/,
 		);
+	});
+
+	it("pins beta documentation to next and keeps its release line separate", () => {
+		expect(docsVersionSources[betaVersion.id].editBranch).toBe("next");
+		expect(docsVersionSources[betaVersion.id].commitSha).toMatch(
+			/^[0-9a-f]{40}$/,
+		);
+		expect(betaVersion.releaseLine).toBe("1.8");
+	});
+
+	it("resolves beta pages and scopes their links", () => {
+		expect(resolveVersionFromSlug(["beta", "plugins", "scim"])).toEqual({
+			version: betaVersion,
+			relSlug: ["plugins", "scim"],
+		});
+		expect(getVersionFromPathname("/docs/beta/plugins/scim")).toBe(betaVersion);
+		expect(getVersionFromPathname("/docs/beta-tutorial")).toBe(latestVersion);
+		expect(scopeDocsHref("/docs/plugins/scim", betaVersion)).toBe(
+			"/docs/beta/plugins/scim",
+		);
+		expect(scopeDocsHref("/docs/beta/plugins/scim", betaVersion)).toBe(
+			"/docs/beta/plugins/scim",
+		);
+		expect(scopeDocsHref("/docs/1.6/introduction", betaVersion)).toBe(
+			"/docs/1.6/introduction",
+		);
+	});
+
+	it("switches between beta and stable without losing the current page", () => {
+		expect(
+			getVersionTargetHref(
+				"/docs/beta/plugins/scim",
+				betaVersion,
+				latestVersion,
+				{ ...availability, latest: ["/docs/plugins/scim"] },
+			),
+		).toBe("/docs/plugins/scim");
+		expect(
+			getVersionTargetHref(
+				"/docs/plugins/scim",
+				latestVersion,
+				betaVersion,
+				availability,
+			),
+		).toBe("/docs/beta/plugins/scim");
 	});
 
 	it("resolves archived version slugs", () => {
