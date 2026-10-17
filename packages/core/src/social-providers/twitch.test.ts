@@ -1,10 +1,4 @@
-import {
-	CompactSign,
-	exportJWK,
-	generateKeyPair,
-	SignJWT,
-	UnsecuredJWT,
-} from "jose";
+import { CompactSign, exportJWK, generateKeyPair, UnsecuredJWT } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { logger } from "../env";
 import { jwksCache } from "../oauth2/verify";
@@ -58,12 +52,15 @@ afterEach(() => {
 });
 
 function signToken(
-	overrides: Record<string, unknown> = {},
+	overrides: Record<string, unknown> | string = {},
 	key = privateKey,
 	includeKid = true,
 ) {
-	const payload: Record<string, unknown> = { ...profile, ...overrides };
-	return new SignJWT(payload)
+	const payload =
+		typeof overrides === "string"
+			? overrides
+			: JSON.stringify({ ...profile, ...overrides });
+	return new CompactSign(new TextEncoder().encode(payload))
 		.setProtectedHeader({
 			alg: "RS256",
 			...(includeKid ? { kid: "provider-key" } : {}),
@@ -101,7 +98,7 @@ describe("twitch.getUserInfo", () => {
 		["wrong audience", { aud: "other-client" }],
 		[
 			"untrusted additional audience",
-			{ aud: [options.clientId, "other-client"] },
+			{ aud: [options.clientId, "other-client"], azp: options.clientId },
 		],
 		["expired", { exp: 0 }],
 		["missing expiration", { exp: undefined }],
@@ -133,21 +130,25 @@ describe("twitch.getUserInfo", () => {
 	);
 
 	it.each([
-		["exp", -25, true],
-		["exp", -35, false],
-		["nbf", 25, true],
-		["nbf", 35, false],
-	] as const)(
-		"handles %s clock skew of %ss",
-		async (claim, offset, accepted) => {
-			const result = await twitch(options).getUserInfo({
-				idToken: await signToken({ [claim]: issuedAt + offset }),
-			});
+		["exp", -29],
+		["nbf", 29],
+	] as const)("accepts %s with %ss of clock skew", async (claim, offset) => {
+		const result = await twitch(options).getUserInfo({
+			idToken: await signToken({ [claim]: issuedAt + offset }),
+		});
+		expect(result?.data.sub).toBe(profile.sub);
+	});
 
-			if (accepted) expect(result?.data.sub).toBe(profile.sub);
-			else expect(result).toBeNull();
-		},
-	);
+	it.each([
+		["exp", -31],
+		["nbf", 31],
+	] as const)("rejects %s with %ss of clock skew", async (claim, offset) => {
+		expect(
+			await twitch(options).getUserInfo({
+				idToken: await signToken({ [claim]: issuedAt + offset }),
+			}),
+		).toBeNull();
+	});
 
 	it.each(["iat", "exp"] as const)(
 		"rejects a non-finite %s claim",
@@ -156,9 +157,7 @@ describe("twitch.getUserInfo", () => {
 				...profile,
 				[claim]: "overflow",
 			}).replace('"overflow"', "1e400");
-			const token = await new CompactSign(new TextEncoder().encode(payload))
-				.setProtectedHeader({ alg: "RS256", kid: "provider-key" })
-				.sign(privateKey);
+			const token = await signToken(payload);
 
 			expect(await twitch(options).getUserInfo({ idToken: token })).toBeNull();
 		},
