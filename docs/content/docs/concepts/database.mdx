@@ -332,8 +332,9 @@ two-factor authentication challenges — are stored in the secondary store
 instead of the database by default. On an eventually consistent store
 (such as a globally replicated KV), a read immediately after the write can
 miss, and the pending flow fails even though the user's code is correct.
-For 2FA sign-in this surfaces as an `INVALID_TWO_FACTOR_COOKIE` error on
-verification.
+Two-factor challenges are re-read a few times to tolerate a transient miss,
+but a longer lag still surfaces as an `INVALID_TWO_FACTOR_COOKIE` error on
+2FA verification.
 
 If your secondary store is eventually consistent, set
 [`verification.storeInDatabase: true`](/docs/reference/options#verification)
