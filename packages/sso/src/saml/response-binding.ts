@@ -3,8 +3,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import { APIError } from "better-auth/api";
 import { countAllNodes, xmlParser } from "./parser";
 
-export const SAML_HTTP_POST_BINDING =
-	"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+const SAML_HTTP_POST_BINDING = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
 
 const SAML_BEARER_CONFIRMATION_METHOD = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
 const SAML_METADATA_NAMESPACE = "urn:oasis:names:tc:SAML:2.0:metadata";
