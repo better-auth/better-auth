@@ -82,6 +82,9 @@
       "path": "./packages/scim/tsconfig.json"
     },
     {
+      "path": "./packages/siwx/tsconfig.json"
+    },
+    {
       "path": "./e2e/adapter/tsconfig.json"
     },
     {
