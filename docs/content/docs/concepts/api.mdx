@@ -106,7 +106,7 @@ const response = await auth.api.signInEmail({
 
 When you call an API endpoint on the server, it will throw an error if the request fails. You can catch the error and handle it as you see fit. The error instance is an instance of `APIError`.
 
-When `auth.api.getSession()` wraps a session lookup or refresh failure in a `FAILED_TO_GET_SESSION` error, its `cause` preserves the underlying error. Server-side callers can inspect that cause, including any nested causes, to decide how to handle a storage failure. HTTP responses contain only the public error code and message.
+When `auth.api.getSession()` wraps an unexpected session lookup error in a `FAILED_TO_GET_SESSION` error, its `cause` preserves the underlying error. Server-side callers can inspect that cause, including any nested causes, to decide how to handle a storage failure. HTTP responses contain only the public error code and message.
 
 ```ts title="server.ts"
 import { auth } from "@/lib/auth"
