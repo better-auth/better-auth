@@ -238,6 +238,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@agentaos/better-auth",
+		url: "https://github.com/AgentaOS/agentaos/tree/main/packages/better-auth",
+		description:
+			"AgentaOS (merchant of record) plugin for Better Auth: checkouts for signed-in users, their subscriptions, and verified webhooks. VAT, sales tax and invoices handled, with payouts in many countries Stripe does not support.",
+		author: {
+			name: "AgentaOS",
+			github: "AgentaOS",
+			avatar: "https://github.com/AgentaOS.png",
+		},
+	},
+	{
 		name: "better-invite",
 		url: "https://github.com/better-invite/better-invite",
 		description:
