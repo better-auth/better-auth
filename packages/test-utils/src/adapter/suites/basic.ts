@@ -2238,6 +2238,23 @@ export const getNormalTestSuiteTests = (
 			});
 			expect(result).toBeNull();
 		},
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11737
+		 */
+		"delete - should not delete any rows when where is empty": async () => {
+			const users = (await insertRandom("user", 2)).map((x) => x[0]);
+			await adapter.delete({
+				model: "user",
+				where: [],
+			});
+			for (const user of users) {
+				const result = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+				});
+				expect(result).not.toBeNull();
+			}
+		},
 		"deleteMany - should delete many models": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			await adapter.deleteMany({
