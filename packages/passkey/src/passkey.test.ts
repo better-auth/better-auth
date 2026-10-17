@@ -1,5 +1,6 @@
 import { APIError } from "@better-auth/core/error";
 import type { Verification } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
 import {
@@ -69,6 +70,29 @@ describe("passkey", async () => {
 		serverMocks.verifyAuthenticationResponse.mockReset();
 	});
 
+	it("should reject registration without a response", async () => {
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		headers.set("content-type", "application/json");
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/passkey/verify-registration",
+			{
+				method: "POST",
+				headers,
+				body: JSON.stringify({}),
+			},
+		);
+
+		expect(response.status).toBe(400);
+		expect(serverMocks.verifyRegistrationResponse).not.toHaveBeenCalled();
+	});
+
 	it("should generate register options", async () => {
 		const { headers } = await signInWithTestUser();
 		const options = await auth.api.generatePasskeyRegistrationOptions({
@@ -123,6 +147,161 @@ describe("passkey", async () => {
 		expect(options).toHaveProperty("rp");
 		expect(options).toHaveProperty("user");
 		expect(options).toHaveProperty("pubKeyCredParams");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9866
+	 */
+	it("should create a session after pre-auth passkey registration", async () => {
+		let userId = "";
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+				passkey: [],
+			}),
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pending-passkey-registration",
+							name: "passkey-first@example.com",
+						}),
+						afterVerification: async ({ ctx }) => {
+							const user = await ctx.context.internalAdapter.createUser(
+								{
+									name: "Passkey First",
+									email: "passkey-first@example.com",
+								},
+								{ method: "test" },
+							);
+							userId = user.id;
+							return { userId };
+						},
+					},
+				}),
+			],
+		});
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		const setCookie = cookieSetter(headers);
+
+		await preAuthClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		const result = await preAuth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				createSession: true,
+			},
+			returnHeaders: true,
+		});
+
+		expect(result.response).toMatchObject({
+			credentialID: mockRegistrationVerification.registrationInfo.credential.id,
+			session: { userId },
+			user: { id: userId },
+		});
+		expect(result.headers.get("set-cookie")).toContain(
+			"better-auth.session_token=",
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/9866
+	 */
+	it("should roll back passkey persistence when session creation fails", async () => {
+		let userId = "";
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+				passkey: [],
+			}),
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "pending-failed-registration",
+							name: "failed-session@example.com",
+						}),
+						afterVerification: async ({ ctx }) => {
+							const user = await ctx.context.internalAdapter.createUser(
+								{
+									name: "Failed Session",
+									email: "failed-session@example.com",
+								},
+								{ method: "test" },
+							);
+							userId = user.id;
+							return { userId };
+						},
+					},
+				}),
+			],
+		});
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		const setCookie = cookieSetter(headers);
+
+		await preAuthClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const context = await preAuth.$context;
+		const createSession = vi
+			.spyOn(context.internalAdapter, "createSession")
+			.mockResolvedValueOnce(null as never);
+
+		try {
+			await expect(
+				preAuth.api.verifyPasskeyRegistration({
+					headers,
+					body: {
+						response: mockRegistrationResponse,
+						createSession: true,
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "INTERNAL_SERVER_ERROR",
+				body: { code: "UNABLE_TO_CREATE_SESSION" },
+			});
+		} finally {
+			createSession.mockRestore();
+		}
+
+		const passkeys = await context.adapter.findMany<Passkey>({
+			model: "passkey",
+			where: [
+				{
+					field: "credentialID",
+					value: mockRegistrationVerification.registrationInfo.credential.id,
+				},
+			],
+		});
+		expect(passkeys).toHaveLength(0);
+		expect(await context.internalAdapter.findUserById(userId)).toBeNull();
 	});
 
 	it("should require resolveUser when session is not available", async () => {
@@ -371,6 +550,32 @@ describe("passkey", async () => {
 		});
 
 		expect(updateResult.passkey.name).toBe("newName");
+	});
+
+	it("rejects a whitespace-only passkey name on update", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "original",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "update-reject-cred",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "internal",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+		await expect(
+			auth.api.updatePasskey({
+				headers,
+				body: { id: passkey.id, name: "   " },
+			}),
+		).rejects.toMatchObject({ status: 400 });
 	});
 
 	it("should not delete a passkey that doesn't exist", async () => {
@@ -922,6 +1127,355 @@ describe("passkey", async () => {
 		} finally {
 			consumeSpy.mockRestore();
 		}
+	});
+});
+
+describe("passkey ceremony and identity gating", async () => {
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+		serverMocks.verifyAuthenticationResponse.mockReset();
+	});
+
+	// A challenge minted for one ceremony must never be accepted by the other
+	// verifier: the stored challenge carries a ceremony-type marker, and a
+	// registration ceremony cannot consume an authentication challenge.
+	it("rejects a registration that reuses an authentication challenge in pre-auth mode", async () => {
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "resolved-user-id",
+							name: "resolved@example.com",
+						}),
+					},
+				}),
+			],
+		});
+
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		// Unauthenticated caller obtains an authentication challenge.
+		await preAuthClient.$fetch("/passkey/generate-authenticate-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		await expect(
+			preAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: { response: mockRegistrationResponse },
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "CHALLENGE_NOT_FOUND" },
+		});
+
+		// The registration verifier must reject before touching the WebAuthn
+		// library or persisting a passkey row.
+		expect(serverMocks.verifyRegistrationResponse).not.toHaveBeenCalled();
+
+		const context = await preAuth.$context;
+		const rows = await context.adapter.findMany<Passkey>({
+			model: "passkey",
+			where: [{ field: "credentialID", value: mockRegistrationResponse.id }],
+		});
+		expect(rows.length).toBe(0);
+	});
+
+	it("rejects an authentication that reuses a registration challenge", async () => {
+		const {
+			auth: sessionAuth,
+			client: sessionClient,
+			cookieSetter,
+			signInWithTestUser,
+		} = await getTestInstance({
+			plugins: [passkey()],
+		});
+
+		const { headers, user } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		const context = await sessionAuth.$context;
+		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "cross-ceremony-passkey",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "cross-ceremony-credential-id",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "internal",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		// Obtain a registration challenge, then try to spend it on authentication.
+		await sessionClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: setCookie,
+		});
+
+		serverMocks.verifyAuthenticationResponse.mockResolvedValue({
+			verified: true,
+			authenticationInfo: { newCounter: 1 },
+		});
+
+		await expect(
+			sessionAuth.api.verifyPasskeyAuthentication({
+				headers,
+				body: {
+					response: {
+						id: "cross-ceremony-credential-id",
+						rawId: "cross-ceremony-credential-id",
+						response: {
+							clientDataJSON: "mockClientDataJSON",
+							authenticatorData: "mockAuthenticatorData",
+							signature: "mockSignature",
+							userHandle: "mockUserHandle",
+						},
+						type: "public-key" as const,
+						clientExtensionResults: {},
+					},
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "CHALLENGE_NOT_FOUND" },
+		});
+
+		expect(serverMocks.verifyAuthenticationResponse).not.toHaveBeenCalled();
+	});
+
+	// Even a well-formed registration challenge must not persist a passkey when
+	// the resolved target user id is empty; an empty userId would dangle without
+	// an owning account.
+	it("rejects registration when the resolved target user id is empty", async () => {
+		const {
+			auth: preAuth,
+			client: preAuthClient,
+			cookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "seed-user-id",
+							name: "seed@example.com",
+						}),
+					},
+				}),
+			],
+		});
+
+		const headers = new Headers();
+		headers.set("origin", "http://localhost:3000");
+		const setCookie = cookieSetter(headers);
+
+		// Generate a real registration challenge, then overwrite the stored target
+		// user id with an empty string to exercise the final persistence guard.
+		await preAuthClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: setCookie,
+		});
+
+		const context = await preAuth.$context;
+		const verifications = await context.adapter.findMany<Verification>({
+			model: "verification",
+		});
+		const challenge = verifications[verifications.length - 1];
+		assert(challenge);
+		const parsed = JSON.parse(challenge.value);
+		await context.adapter.update({
+			model: "verification",
+			where: [{ field: "id", value: challenge.id }],
+			update: {
+				value: JSON.stringify({
+					...parsed,
+					userData: { ...parsed.userData, id: "" },
+				}),
+			},
+		});
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		await expect(
+			preAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: { response: mockRegistrationResponse },
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "RESOLVED_USER_INVALID" },
+		});
+
+		const rows = await context.adapter.findMany<Passkey>({
+			model: "passkey",
+			where: [{ field: "credentialID", value: mockRegistrationResponse.id }],
+		});
+		expect(rows.length).toBe(0);
+	});
+});
+
+const buildRegistrationVerification = (
+	aaguid: string,
+	credentialID: string,
+) => ({
+	verified: true,
+	registrationInfo: {
+		aaguid,
+		credentialDeviceType: "singleDevice",
+		credentialBackedUp: false,
+		credential: {
+			id: credentialID,
+			publicKey: new Uint8Array([1, 2, 3]),
+			counter: 0,
+		},
+	},
+});
+
+// A known AAGUID, used to prove the server still does not derive a label from it.
+const googleAaguid = "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4";
+
+describe("passkey registration naming (default options)", async () => {
+	const { auth, client, cookieSetter, signInWithTestUser } =
+		await getTestInstance({ plugins: [passkey()] });
+
+	const register = async (opts: {
+		aaguid: string;
+		credentialID: string;
+		name?: string;
+	}) => {
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			buildRegistrationVerification(opts.aaguid, opts.credentialID),
+		);
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		return auth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				...(opts.name === undefined ? {} : { name: opts.name }),
+			},
+		});
+	};
+
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+	});
+
+	it("stores the trimmed client-provided name", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-explicit",
+			name: "  My Work Key  ",
+		});
+		expect(record.name).toBe("My Work Key");
+	});
+
+	it("stores no label for a whitespace-only name", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-whitespace",
+			name: "   ",
+		});
+		expect(record.name ?? null).toBeNull();
+	});
+
+	it("does not infer a label from the AAGUID, but persists the raw AAGUID", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-no-name",
+		});
+		expect(record.name ?? null).toBeNull();
+		expect(record.aaguid).toBe(googleAaguid);
+	});
+});
+
+describe("passkey registration naming (afterVerification fallback)", async () => {
+	const afterVerification = vi.fn(async () => ({ name: "My Provider" }));
+	const { auth, client, cookieSetter, signInWithTestUser } =
+		await getTestInstance({
+			plugins: [passkey({ registration: { afterVerification } })],
+		});
+
+	const register = async (opts: {
+		aaguid: string;
+		credentialID: string;
+		name?: string;
+	}) => {
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			buildRegistrationVerification(opts.aaguid, opts.credentialID),
+		);
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		return auth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+				...(opts.name === undefined ? {} : { name: opts.name }),
+			},
+		});
+	};
+
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+	});
+
+	it("uses the returned name when the client provides none", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-fallback",
+		});
+		expect(record.name).toBe("My Provider");
+	});
+
+	it("falls back to the returned name when the client sends only whitespace", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-whitespace-fallback",
+			name: "   ",
+		});
+		expect(record.name).toBe("My Provider");
+	});
+
+	it("keeps the client-provided name over the returned one, but still runs the hook", async () => {
+		const record = await register({
+			aaguid: googleAaguid,
+			credentialID: "cred-precedence",
+			name: "Explicit Name",
+		});
+		expect(record.name).toBe("Explicit Name");
+		expect(afterVerification).toHaveBeenCalled();
 	});
 });
 

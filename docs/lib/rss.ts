@@ -10,7 +10,7 @@ export function getRSS() {
 		id: `${baseUrl}blog`,
 		link: `${baseUrl}blog`,
 		language: "en",
-		image: `${baseUrl}release-og/blogs.png`,
+		image: `${baseUrl}og.png`,
 		favicon: `${baseUrl}favicon/favicon-32x32.png`,
 		copyright: `All rights reserved ${new Date().getFullYear()}, Better Auth Inc.`,
 	});
@@ -19,15 +19,19 @@ export function getRSS() {
 		return new Date(b.data.date).getTime() - new Date(a.data.date).getTime();
 	})) {
 		const url = page.url.replace("blogs/", "blog/");
+		const image =
+			typeof page.data.image === "string"
+				? page.data.image
+				: page.data.image?.dark;
 
 		feed.addItem({
 			id: page.url,
 			title: page.data.title,
 			description: page.data.description,
-			image: page.data.image
-				? page.data.image.startsWith("/")
-					? `${baseUrl}${page.data.image.slice(1)}`
-					: page.data.image
+			image: image
+				? image.startsWith("/")
+					? `${baseUrl}${image.slice(1)}`
+					: image
 				: undefined,
 			link: url.startsWith("/") ? `${baseUrl}${url.slice(1)}` : url,
 			date: new Date(page.data.date),

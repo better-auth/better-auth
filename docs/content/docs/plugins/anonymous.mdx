@@ -1,4 +1,5 @@
 ---
+icon: pluginsAnonymous
 title: Anonymous  
 description: Anonymous plugin for Better Auth.
 ---
@@ -68,15 +69,23 @@ The Anonymous plugin allows users to have an authenticated experience without re
 
 ## Usage
 
-### Sign In
+### Sign In Anonymously
 
-To sign in a user anonymously, use the `signIn.anonymous()` method.
+To sign in a user anonymously, use the `signIn.anonymous()` method. This creates a new user with a generated email and the configured or default name, then establishes a session.
 
-```ts
-import { authClient } from "@/lib/auth-client";
+<APIMethod path="/sign-in/anonymous" method="POST">
+  ```ts
+  type signInAnonymous = {
+  }
+  ```
+</APIMethod>
 
-const user = await authClient.signIn.anonymous()
-```
+<Callout type="info">
+  If the current session belongs to an anonymous user, calling
+  `signIn.anonymous()` again returns an error to prevent creating another
+  anonymous user. Link the current account using another authentication method,
+  or sign out before starting a new anonymous session.
+</Callout>
 
 ### Link Account
 
@@ -131,7 +140,7 @@ To delete an anonymous user, you can call the `/delete-anonymous-user` endpoint.
 
 ### `emailDomainName`
 
-The domain name to use when generating an email address for anonymous users. If not provided, the default format `temp@{id}.com` is used.
+The domain name to use when generating an email address for anonymous users. If not provided, the default format `{id}@anonymous.placeholder.invalid` is used.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"

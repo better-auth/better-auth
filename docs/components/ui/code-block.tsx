@@ -3,6 +3,7 @@ import { Check, Copy } from "lucide-react";
 import type {
 	ButtonHTMLAttributes,
 	ComponentProps,
+	CSSProperties,
 	HTMLAttributes,
 	ReactElement,
 	ReactNode,
@@ -162,7 +163,7 @@ export function CodeBlock({
 							? `line ${Number(props["data-line-numbers-start"] ?? 1) - 1}`
 							: undefined,
 						...viewportProps.style,
-					} as object
+					} as CSSProperties
 				}
 			>
 				{children}

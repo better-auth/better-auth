@@ -56,7 +56,13 @@ export interface PasskeyRegistrationOptions {
 		| undefined;
 	/**
 	 * Callback after a successful registration verification.
-	 * Useful for user linking or auditing.
+	 * Useful for user linking, auditing, or labeling the passkey.
+	 *
+	 * Return `userId` to attribute the passkey to a different user. Return `name`
+	 * to set the stored label when the client did not provide one; the AAGUID is
+	 * available via `verification.registrationInfo?.aaguid`. A non-empty
+	 * client-supplied name always takes precedence over the returned `name`;
+	 * whitespace-only input is treated as absent.
 	 */
 	afterVerification?:
 		| ((args: {
@@ -65,7 +71,7 @@ export interface PasskeyRegistrationOptions {
 				user: PasskeyRegistrationUser;
 				clientData: RegistrationResponseJSON;
 				context?: string | null | undefined;
-		  }) => Awaitable<{ userId?: string } | void>)
+		  }) => Awaitable<{ userId?: string; name?: string } | void>)
 		| undefined;
 	/**
 	 * Optional WebAuthn extensions to include in registration options.

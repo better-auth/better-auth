@@ -8,7 +8,13 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import {
+	checksSchema,
+	createSchemaCheck,
+	registerSchemaCheck,
+} from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
+import { findPrismaSchemaProblems, readPrismaDataModel } from "./schema-check";
 
 export interface PrismaConfig {
 	/**
@@ -48,10 +54,14 @@ export interface PrismaConfig {
 
 interface PrismaClient {}
 
+// Prisma raises `P2025` for every "record not found" surface area we care
+// about (`update`, `delete`, and `incrementOne`) with the actual cause
+// distinguishable via `meta.cause` (e.g. "Record to update not found." vs
+// "Record to delete does not exist."). Match on the code alone: any other
+// failure (constraint, connection, permission) must propagate so the caller
+// sees a real error rather than a silent `null`/no-op.
 function isPrismaNotFoundError(e: any): boolean {
-	return (
-		e?.code === "P2025" || e?.meta?.cause === "Record to delete does not exist."
-	);
+	return e?.code === "P2025";
 }
 
 type PrismaClientInternal = {
@@ -114,7 +124,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					for (const [joinModel, joinAttr] of Object.entries(join)) {
-						const key = getJoinKeyName(model, getModelName(joinModel), schema);
+						const key = getJoinKeyName(
+							model,
+							joinAttr.modelKey ?? joinModel,
+							schema,
+						);
 						if (joinAttr.relation === "one-to-one") {
 							result[key] = true;
 						} else {
@@ -397,7 +411,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			};
 
 			return {
-				async create({ model, data: values, select }) {
+				async create({ model, modelKey = model, data: values, select }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -405,14 +419,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 					const result = await db[model]!.create({
 						data: values,
-						select: convertSelect(select, model),
+						select: convertSelect(select, modelKey),
 					});
 					return result;
 				},
-				async findOne({ model, where, select, join }) {
+				async findOne({ model, modelKey = model, where, select, join }) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "findOne",
 					});
@@ -424,12 +438,16 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// transform join keys to use Prisma expected field names
 					const map = new Map<string, string>();
-					for (const joinModel of Object.keys(join ?? {})) {
-						const key = getJoinKeyName(model, joinModel, schema);
-						map.set(key, getModelName(joinModel));
+					for (const [joinModel, joinAttr] of Object.entries(join ?? {})) {
+						const key = getJoinKeyName(
+							modelKey,
+							joinAttr.modelKey ?? joinModel,
+							schema,
+						);
+						map.set(key, joinModel);
 					}
 
-					const selects = convertSelect(select, model, join);
+					const selects = convertSelect(select, modelKey, join);
 
 					const result = await db[model]!.findFirst({
 						where: whereClause,
@@ -448,10 +466,19 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 					return result;
 				},
-				async findMany({ model, where, limit, select, offset, sortBy, join }) {
+				async findMany({
+					model,
+					modelKey = model,
+					where,
+					limit,
+					select,
+					offset,
+					sortBy,
+					join,
+				}) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "findMany",
 					});
@@ -463,13 +490,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// transform join keys to use Prisma expected field names
 					const map = new Map<string, string>();
 					if (join) {
-						for (const [joinModel, _value] of Object.entries(join)) {
-							const key = getJoinKeyName(model, joinModel, schema);
-							map.set(key, getModelName(joinModel));
+						for (const [joinModel, joinAttr] of Object.entries(join)) {
+							const key = getJoinKeyName(
+								modelKey,
+								joinAttr.modelKey ?? joinModel,
+								schema,
+							);
+							map.set(key, joinModel);
 						}
 					}
 
-					const selects = convertSelect(select, model, join);
+					const selects = convertSelect(select, modelKey, join);
 
 					const result = await db[model]!.findMany({
 						where: whereClause,
@@ -478,7 +509,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						...(sortBy?.field
 							? {
 									orderBy: {
-										[getFieldName({ model, field: sortBy.field })]:
+										[getFieldName({ model: modelKey, field: sortBy.field })]:
 											sortBy.direction === "desc" ? "desc" : "asc",
 									},
 								}
@@ -501,9 +532,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					return result;
 				},
-				async count({ model, where }) {
+				async count({ model, modelKey = model, where }) {
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "count",
 					});
@@ -516,19 +547,19 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						where: whereClause,
 					});
 				},
-				async update({ model, where, update }) {
+				async update({ model, modelKey = model, where, update }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
 					const hasRootUniqueCondition = hasRootUniqueWhereCondition(
-						model,
+						modelKey,
 						where,
 					);
 					if (!hasRootUniqueCondition) {
 						const whereClause = convertWhereClause({
-							model,
+							model: modelKey,
 							where,
 							action: "updateMany",
 						});
@@ -545,24 +576,39 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						});
 					}
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "update",
 					});
 
-					return await db[model]!.update({
-						where: whereClause,
-						data: update,
-					});
+					// `prisma.model.update` requires a WhereUniqueInput but still
+					// applies any non-unique predicates as guards before mutating
+					// the row. When those guards exclude the row (e.g. a CAS like
+					// `WHERE id = ? AND revoked IS NULL` losing the race, or the
+					// row simply not existing) Prisma raises P2025 rather than
+					// silently returning the row. Surface that as `null` so every
+					// adapter — Kysely's RETURNING/OUTPUT paths, this one, the
+					// in-memory adapter — agree on the "guarded update matched no
+					// row" signal. `incrementOne` and `delete` already convert
+					// P2025 the same way.
+					try {
+						return await db[model]!.update({
+							where: whereClause,
+							data: update,
+						});
+					} catch (e: any) {
+						if (isPrismaNotFoundError(e)) return null;
+						throw e;
+					}
 				},
-				async updateMany({ model, where, update }) {
+				async updateMany({ model, modelKey = model, where, update }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "updateMany",
 					});
@@ -572,7 +618,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 					return result ? (result.count as number) : 0;
 				},
-				async delete({ model, where }) {
+				async delete({ model, modelKey = model, where }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -583,7 +629,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					const hasIdField = where?.some((w) => w.field === "id");
 					if (!hasIdField) {
 						const whereClause = convertWhereClause({
-							model,
+							model: modelKey,
 							where,
 							action: "deleteMany",
 						});
@@ -593,7 +639,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return;
 					}
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "delete",
 					});
@@ -602,14 +648,15 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where: whereClause,
 						});
 					} catch (e: any) {
+						// Deletes are idempotent: a missing row is a no-op. Any other
+						// failure must propagate instead of reporting success.
 						if (isPrismaNotFoundError(e)) return;
-						// otherwise if it's an unknown error, we want to just log it for debugging.
-						console.log(e);
+						throw e;
 					}
 				},
-				async deleteMany({ model, where }) {
+				async deleteMany({ model, modelKey = model, where }) {
 					const whereClause = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "deleteMany",
 					});
@@ -618,7 +665,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					});
 					return result ? (result.count as number) : 0;
 				},
-				async consumeOne({ model, where }) {
+				async consumeOne({ model, modelKey = model, where }) {
 					if (!db[model]) {
 						throw new BetterAuthError(
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
@@ -636,7 +683,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					const hasIdField = where?.some((w) => w.field === "id");
 					if (hasIdField) {
 						const whereClause = convertWhereClause({
-							model,
+							model: modelKey,
 							where,
 							action: "delete",
 						});
@@ -650,7 +697,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					const findWhere = convertWhereClause({
-						model,
+						model: modelKey,
 						where,
 						action: "findOne",
 					});
@@ -662,7 +709,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						try {
 							const result = await (tx as any)[model].deleteMany({
 								where: convertWhereClause({
-									model,
+									model: modelKey,
 									where: [
 										...(where ?? []),
 										{
@@ -685,6 +732,87 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					return inTransaction || typeof db.$transaction !== "function"
 						? claimFromTransaction(db)
 						: db.$transaction(claimFromTransaction);
+				},
+				async incrementOne({ model, modelKey = model, where, increment, set }) {
+					if (!db[model]) {
+						throw new BetterAuthError(
+							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
+						);
+					}
+
+					// Prisma applies `{ [field]: { increment: delta } }` server-side, so
+					// the read of the current value and the write of `value + delta`
+					// happen in a single statement. The contract mutates at most one
+					// row, so we resolve a single target id and key the write on it the
+					// same way `consumeOne` does, never `updateMany`.
+					const data: Record<string, unknown> = { ...(set ?? {}) };
+					for (const [field, delta] of Object.entries(increment)) {
+						data[field] = { increment: delta };
+					}
+
+					// `prisma.model.update` requires a WhereUniqueInput and returns the
+					// mutated row. When the caller keys on the primary key we update in a
+					// single round trip; otherwise we resolve the target id inside a
+					// transaction and update by id. Either way the original guard stays in
+					// the where, so a racer that invalidated it (e.g. remaining dropped to
+					// 0) yields P2025 and we report no mutation.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (hasIdField) {
+						const whereClause = convertWhereClause({
+							model: modelKey,
+							where,
+							action: "update",
+						});
+						try {
+							const row = await db[model]!.update({
+								where: whereClause,
+								data,
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					}
+
+					const findWhere = convertWhereClause({
+						model: modelKey,
+						where,
+						action: "findOne",
+					});
+					const mutateInTransaction = async (tx: PrismaClient) => {
+						const target = await (tx as any)[model].findFirst({
+							where: findWhere,
+						});
+						if (!target) return null;
+						try {
+							const row = await (tx as any)[model].update({
+								where: convertWhereClause({
+									model: modelKey,
+									where: [
+										...where,
+										{
+											field: "id",
+											value: (target as any).id,
+											operator: "eq",
+											connector: "AND",
+											mode: "sensitive",
+										},
+									],
+									action: "update",
+								}),
+								data,
+							});
+							return (row as any) ?? null;
+						} catch (e: any) {
+							if (isPrismaNotFoundError(e)) return null;
+							throw e;
+						}
+					};
+
+					return inTransaction || typeof db.$transaction !== "function"
+						? mutateInTransaction(db)
+						: db.$transaction(mutateInTransaction);
 				},
 				options: config,
 			};
@@ -723,6 +851,17 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 	const adapter = createAdapterFactory(adapterOptions);
 	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
-		return adapter(options);
+		const instance = adapter(options);
+		const dataModel = readPrismaDataModel(prisma);
+		if (dataModel) {
+			const schemaCheck = createSchemaCheck(
+				() => findPrismaSchemaProblems(dataModel, options, config.usePlural),
+				"prisma",
+			);
+			registerSchemaCheck(instance, schemaCheck, {
+				runtimeEnabled: checksSchema(options),
+			});
+		}
+		return instance;
 	};
 };

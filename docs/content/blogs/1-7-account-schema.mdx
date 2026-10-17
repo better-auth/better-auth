@@ -1,0 +1,58 @@
+---
+title: "The account change in Better Auth 1.7"
+description: "Why a database change broke upgrades, what changes in 1.7.3, and what to do if you already migrated."
+date: 2026-09-07
+author:
+  name: "Better Auth Maintainers"
+  avatar: ""
+tags: ["1.7", "migration", "OAuth", "SSO", "database"]
+---
+
+# The account change in Better Auth 1.7
+
+Better Auth 1.7.0 added a required field, `issuer`, to the account table. That meant even apps with only password or GitHub sign-in had to update their databases. Version 1.7.3 removes that requirement, but users who already added the field still need to clean up their databases.
+
+We're sorry for the failed sign-ins and the extra database work this caused. You should be able to upgrade within 1.x without having to migrate Better Auth's core tables. We did not meet that expectation in 1.7, and people who followed our earlier instructions now face a second change.
+
+## Do I need to change my database?
+
+**I created or migrated my database on 1.7.0 through 1.7.2.** Follow the [cleanup steps](#how-do-i-clean-up-a-database-that-already-migrated) before deploying 1.7.3.
+
+**I'm upgrading directly from 1.6 to 1.7.3.** No issuer cleanup is needed. Follow the [upgrade guide](/docs/guides/1-7-upgrade-guide) for the other changes.
+
+## Why did a simple app need a migration?
+
+We introduced `issuer` so multiple connections to the same login service could share an account for the same user. Making it a required core field imposed that migration on apps that did not need account sharing. We did not adequately assess the cost for existing databases.
+
+A proposed compatibility option preserved the old account matching but still required the new field and a migration. Some instructions also referred to commands that were not yet available in the published CLI. By then, users had already begun migrating, which made reversing the change harder.
+
+## Why we reversed the schema change
+
+The 1.x commitment has not changed: upgrades should not require a migration of Better Auth's core tables. Changes that require a core migration belong in 2.0. Plugins and optional features can still have their own upgrade requirements.
+
+Version 1.7.3 restores the account schema used before 1.7, identifying accounts by the configured provider ID (`providerId`) and that provider's user ID (`accountId`). Token issuer verification remains in place; it does not depend on storing `issuer` in the account table.
+
+Because 1.7.3 no longer writes `issuer`, databases that still require it can reject new accounts. Schema validation starts when Better Auth initializes. If it detects an incompatible schema, authentication requests are blocked.
+
+## How do I clean up a database that already migrated?
+
+Back up your database and test the [database-specific cleanup](/docs/guides/1-7-upgrade-guide#account-identity-keeps-the-provider-key) on a restored copy. The cleanup removes the issuer index and makes the column optional or removes it. Include any Prisma or Drizzle schema changes, and check for [duplicate account keys](/docs/guides/1-7-upgrade-guide#check-for-duplicate-account-keys) before applying the changes.
+
+Pause authentication and background writes during the cutover, then restart every app instance after deployment. Plan your recovery before resuming writes: once 1.7.3 creates accounts without issuer values, downgrading packages alone is not a safe rollback.
+
+## What if several company logins shared an account?
+
+If several single sign-on (SSO) connections shared one account, column cleanup alone may leave a connection unable to sign in. Review how each connection reaches the existing user before upgrading. The [SSO user resolver](/docs/plugins/sso) can preserve that link using a trusted identity; do not link accounts by email alone.
+
+## How do I know the cleanup worked?
+
+Test existing sessions, fresh sign-ins, and registrations with every provider, confirming that returning users reach their existing accounts. Include account linking, token refresh, and unlinking where supported. For SCIM-managed users, also verify that disabling a user blocks access and enabling them restores it.
+
+## Keeping 1.x upgrades stable
+
+We will add guardrails to our review and release process to:
+
+* Catch core schema changes before they ship in a 1.x release.
+* Check upgrades using databases populated by published versions, including existing logins and account ownership after the upgrade.
+* Check that upgrade instructions work with the exact packages and commands available to users.
+* Review recovery paths before shipping changes that affect existing deployments.

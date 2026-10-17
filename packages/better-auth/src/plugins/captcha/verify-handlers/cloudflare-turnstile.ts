@@ -1,12 +1,17 @@
+import type { InternalLogger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
 import { middlewareResponse } from "../../../utils/middleware-response";
+import { CAPTCHA_VERIFY_TIMEOUT_MS } from "../constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
 
 type Params = {
 	siteVerifyURL: string;
 	secretKey: string;
 	captchaResponse: string;
+	logger: InternalLogger;
 	remoteIP?: string | undefined;
+	expectedAction?: string | undefined;
+	allowedHostnames?: string[] | undefined;
 };
 
 type SiteVerifyResponse = {
@@ -28,10 +33,14 @@ export const cloudflareTurnstile = async ({
 	siteVerifyURL,
 	captchaResponse,
 	secretKey,
+	logger,
 	remoteIP,
+	expectedAction,
+	allowedHostnames,
 }: Params) => {
 	const response = await betterFetch<SiteVerifyResponse>(siteVerifyURL, {
 		method: "POST",
+		timeout: CAPTCHA_VERIFY_TIMEOUT_MS,
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({
 			secret: secretKey,
@@ -44,11 +53,50 @@ export const cloudflareTurnstile = async ({
 		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE.message);
 	}
 
-	if (!response.data.success) {
+	const verificationFailed = (details: Record<string, unknown>) => {
+		logger.warn("Cloudflare Turnstile verification failed", {
+			provider: "cloudflare-turnstile",
+			...details,
+		});
+
 		return middlewareResponse({
 			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.message,
 			code: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.code,
 			status: 403,
+		});
+	};
+
+	if (!response.data.success) {
+		return verificationFailed({
+			reason: "siteverify_rejected",
+			errorCodes: response.data["error-codes"] ?? [],
+			...(response.data.hostname && { hostname: response.data.hostname }),
+			...(response.data.action && { action: response.data.action }),
+		});
+	}
+
+	// When configured, bind the token to the expected action and to an
+	// allow-list of hostnames so a token issued for a different action or host
+	// (e.g. under a shared widget or "Any Hostname") cannot be reused here.
+	if (expectedAction && response.data.action !== expectedAction) {
+		return verificationFailed({
+			reason: "action_mismatch",
+			expectedAction,
+			actualAction: response.data.action,
+		});
+	}
+	if (
+		allowedHostnames &&
+		allowedHostnames.length > 0 &&
+		!(
+			response.data.hostname &&
+			allowedHostnames.includes(response.data.hostname)
+		)
+	) {
+		return verificationFailed({
+			reason: "hostname_mismatch",
+			allowedHostnames,
+			actualHostname: response.data.hostname,
 		});
 	}
 

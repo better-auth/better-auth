@@ -309,7 +309,7 @@ export type SubscriptionOptions = {
 	 */
 	onSubscriptionCancel?:
 		| ((data: {
-				event?: Stripe.Event;
+				event: Stripe.Event;
 				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
 				cancellationDetails?: Stripe.Subscription.CancellationDetails | null;

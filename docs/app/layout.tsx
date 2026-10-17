@@ -1,5 +1,3 @@
-import { GeistPixelSquare } from "geist/font/pixel";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
@@ -7,17 +5,9 @@ import Script from "next/script";
 import type { ReactNode } from "react";
 import { StaggeredNavFiles } from "@/components/landing/staggered-nav-files";
 import { Providers } from "@/components/providers";
+import { fontVariables } from "@/lib/fonts";
 import { createMetadata } from "@/lib/metadata";
-
-const fontSans = Geist({
-	subsets: ["latin"],
-	variable: "--font-sans",
-});
-
-const fontMono = Geist_Mono({
-	subsets: ["latin"],
-	variable: "--font-mono",
-});
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = createMetadata({
 	title: {
@@ -29,7 +19,12 @@ export const metadata: Metadata = createMetadata({
 
 export default function RootLayout({ children }: { children: ReactNode }) {
 	return (
-		<html lang="en" suppressHydrationWarning data-scroll-behavior="smooth">
+		<html
+			lang="en"
+			className={cn(fontVariables, "antialiased")}
+			suppressHydrationWarning
+			data-scroll-behavior="smooth"
+		>
 			<head>
 				<script
 					dangerouslySetInnerHTML={{
@@ -62,10 +57,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 					/>
 				)}
 			</head>
-			<body
-				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased`}
-				suppressHydrationWarning
-			>
+			<body suppressHydrationWarning>
 				<Providers>
 					<div className="relative min-h-dvh">
 						<StaggeredNavFiles />

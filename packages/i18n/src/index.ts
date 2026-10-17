@@ -7,6 +7,7 @@ import { parseCookies } from "better-auth/cookies";
 import type { I18nOptions, LocaleDetectionStrategy } from "./types";
 import { PACKAGE_VERSION } from "./version";
 
+export * as locales from "./locales";
 export type {
 	I18nOptions,
 	LocaleDetectionStrategy,
@@ -74,10 +75,8 @@ export const i18n = <Locales extends string[]>(
 		availableLocales.includes(options.defaultLocale)
 	) {
 		defaultLocale = options.defaultLocale;
-	} else if (availableLocales.includes("en")) {
-		defaultLocale = "en" as Locales[number];
 	} else if (availableLocales.length > 0) {
-		defaultLocale = availableLocales[0] as Locales[number];
+		defaultLocale = "en" as Locales[number];
 	} else {
 		throw new Error(
 			"i18n plugin: translations object is empty. At least one locale must be provided.",

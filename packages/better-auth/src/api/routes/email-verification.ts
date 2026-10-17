@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { appendQueryParams } from "@better-auth/core/utils/url";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
@@ -9,6 +10,7 @@ import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
 import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
+import { safeCloneRequest } from "../../utils/request";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
 
@@ -64,15 +66,15 @@ export async function sendVerificationEmailFn(
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-	await ctx.context.runInBackgroundOrAwait(
-		ctx.context.options.emailVerification.sendVerificationEmail(
-			{
-				user: user,
-				url,
-				token,
-			},
-			ctx.request?.clone(),
-		),
+	// Await directly: `runInBackgroundOrAwait` may defer work or swallow errors (see #8757).
+	// This path only runs once a real unverified user is known, so timing here does not weaken the unauthenticated anti-enumeration behavior above.
+	await ctx.context.options.emailVerification.sendVerificationEmail(
+		{
+			user: user,
+			url,
+			token,
+		},
+		ctx.request,
 	);
 }
 export const sendVerificationEmail = createAuthEndpoint(
@@ -171,7 +173,16 @@ export const sendVerificationEmail = createAuthEndpoint(
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
+			/**
+			 * Enforce a constant-time floor so an attacker cannot distinguish
+			 * "email not found / already verified" (fast local JWT sign) from
+			 * "email found and unverified" (slow external email-send) by
+			 * comparing response times.
+			 */
+			const MINIMUM_MS = 500;
+			const start = Date.now();
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			let error: unknown;
 			if (!user || user.user.emailVerified) {
 				await createEmailVerificationToken(
 					ctx.context.secret,
@@ -179,12 +190,18 @@ export const sendVerificationEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				// We're returning true to avoid leaking information about the user
-				return ctx.json({
-					status: true,
-				});
+			} else {
+				try {
+					await sendVerificationEmailFn(ctx, user.user);
+				} catch (e) {
+					error = e;
+				}
 			}
-			await sendVerificationEmailFn(ctx, user.user);
+			const remaining = MINIMUM_MS - (Date.now() - start);
+			if (remaining > 0) {
+				await new Promise((resolve) => setTimeout(resolve, remaining));
+			}
+			if (error) throw error;
 			return ctx.json({
 				status: true,
 			});
@@ -275,10 +292,10 @@ export const verifyEmail = createAuthEndpoint(
 	async (ctx) => {
 		function redirectOnError(error: { code: string; message: string }) {
 			if (ctx.query.callbackURL) {
-				if (ctx.query.callbackURL.includes("?")) {
-					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error.code}`);
-				}
-				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error.code}`);
+				const params = new URLSearchParams({ error: error.code });
+				const redirectURL = appendQueryParams(ctx.query.callbackURL, params);
+
+				throw ctx.redirect(redirectURL);
 			}
 			throw APIError.from("UNAUTHORIZED", error);
 		}
@@ -339,7 +356,7 @@ export const verifyEmail = createAuthEndpoint(
 									url,
 									token: newToken,
 								},
-								ctx.request?.clone(),
+								safeCloneRequest(ctx.request),
 							),
 						);
 					}
@@ -438,7 +455,7 @@ export const verifyEmail = createAuthEndpoint(
 									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
 									token: newToken,
 								},
-								ctx.request?.clone(),
+								safeCloneRequest(ctx.request),
 							),
 						);
 					}

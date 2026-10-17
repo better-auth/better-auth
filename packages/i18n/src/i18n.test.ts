@@ -1,6 +1,7 @@
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { i18n } from ".";
+import * as locales from "./locales";
 
 const translations = {
 	en: {
@@ -267,7 +268,7 @@ describe("i18n plugin", async () => {
 	});
 
 	describe("defaultLocale validation", () => {
-		it("should use first available locale when defaultLocale not provided and 'en' not available", async () => {
+		it("should use default 'en' locale when defaultLocale not provided and 'en' not available on translations", async () => {
 			const translationsWithoutEn = {
 				fr: {
 					USER_NOT_FOUND: "Utilisateur non trouvé",
@@ -289,7 +290,8 @@ describe("i18n plugin", async () => {
 				],
 			});
 
-			// Should fall back to first available locale (fr in this case)
+			// Should keep the original built-in English message because the
+			// default locale resolves to "en" and no translations.en is provided.
 			const response = await authWithoutEn.api.signInEmail({
 				body: {
 					email: "nonexistent@example.com",
@@ -300,7 +302,7 @@ describe("i18n plugin", async () => {
 			});
 
 			const body = await response.json();
-			expect(body.message).toBe("Email ou mot de passe invalide");
+			expect(body.message).toBe("Invalid email or password");
 		});
 
 		it("should use specified defaultLocale when it exists in translations", async () => {
@@ -372,6 +374,102 @@ describe("i18n plugin", async () => {
 					translations: {} as any,
 				});
 			}).toThrow("i18n plugin: translations object is empty");
+		});
+	});
+
+	describe("built-in locales", () => {
+		it("should export all expected built-in locales", () => {
+			const expectedLocales = [
+				"ar",
+				"bn",
+				"de",
+				"en",
+				"es",
+				"fa",
+				"fr",
+				"hi",
+				"id",
+				"it",
+				"ja",
+				"ko",
+				"nl",
+				"pl",
+				"pt",
+				"ru",
+				"sv",
+				"th",
+				"tr",
+				"uk",
+				"vi",
+				"zh",
+			];
+
+			for (const locale of expectedLocales) {
+				expect(locales).toHaveProperty(locale);
+				expect(typeof (locales as Record<string, unknown>)[locale]).toBe(
+					"object",
+				);
+			}
+		});
+
+		it("should translate errors using built-in locales", async () => {
+			const { auth: authWithBuiltInLocales } = await getTestInstance({
+				plugins: [
+					i18n({
+						translations: locales,
+						defaultLocale: "en",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			const response = await authWithBuiltInLocales.api.signInEmail({
+				body: {
+					email: "nonexistent@example.com",
+					password: "wrongpassword",
+				},
+				headers: {
+					"Accept-Language": "fr",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe("INVALID_EMAIL_OR_PASSWORD");
+			expect(body.message).toBe(locales.fr.INVALID_EMAIL_OR_PASSWORD);
+		});
+
+		it("should contain common error codes in every built-in locale", () => {
+			const requiredKeys = [
+				"USER_NOT_FOUND",
+				"INVALID_PASSWORD",
+				"INVALID_EMAIL",
+				"INVALID_EMAIL_OR_PASSWORD",
+				"EMAIL_NOT_VERIFIED",
+				"PASSWORD_TOO_SHORT",
+				"PASSWORD_TOO_LONG",
+				"USER_ALREADY_EXISTS",
+				"SESSION_EXPIRED",
+				"ACCOUNT_NOT_FOUND",
+			];
+
+			for (const [locale, dict] of Object.entries(locales)) {
+				for (const key of requiredKeys) {
+					expect(
+						dict,
+						`Locale "${locale}" is missing key "${key}"`,
+					).toHaveProperty(key);
+					expect(
+						typeof (dict as Record<string, unknown>)[key],
+						`Locale "${locale}" key "${key}" must be a non-empty string`,
+					).toBe("string");
+					const value = (dict as Record<string, string>)[key];
+					expect(
+						value?.length ?? 0,
+						`Locale "${locale}" key "${key}" must not be empty`,
+					).toBeGreaterThan(0);
+				}
+			}
 		});
 	});
 });

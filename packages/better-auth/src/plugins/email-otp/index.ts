@@ -103,7 +103,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						const email = response?.user.email;
 						if (email) {
 							const otp =
-								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
+								opts.generateOTP({ email, type: "email-verification" }, ctx) ||
 								defaultOTPGenerator(opts);
 							const storedOTP = await storeOTP(ctx, opts, otp);
 							await ctx.context.internalAdapter.createVerificationValue({

@@ -3,6 +3,7 @@ export type {
 	AuthContext,
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
+	CookieCacheSigner,
 	GenericEndpointContext,
 	InfoContext,
 	InternalAdapter,
@@ -11,7 +12,9 @@ export type {
 export type {
 	BetterAuthCookie,
 	BetterAuthCookies,
+	CookieCachePayload,
 } from "./cookie";
+export type { D1Database } from "./database";
 export type * from "./helper";
 export type {
 	BaseURLConfig,
@@ -24,6 +27,13 @@ export type {
 	DynamicBaseURLConfig,
 	GenerateIdFn,
 	StoreIdentifierOption,
+	UserProvisioningSource,
+	ValidateUserInfoAction,
+	ValidateUserInfoMethod,
+	ValidateUserInfoOAuthInfo,
+	ValidateUserInfoResult,
+	ValidateUserInfoSource,
+	ValidateUserInfoSSOInfo,
 } from "./init-options";
 export type {
 	BetterAuthPlugin,

@@ -1,19 +1,10 @@
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import type { BetterAuthClientPlugin } from "better-auth/types";
+import type { oauthDeviceAuthorization } from "./device-code";
 import type { oauthProvider } from "./oauth";
+import { buildSignedOAuthQuery } from "./signed-query";
 import { PACKAGE_VERSION } from "./version";
-
-function parseSignedQuery(search: string) {
-	const params = new URLSearchParams(search);
-	if (params.has("sig")) {
-		const signedParams = new URLSearchParams();
-		for (const [key, value] of params.entries()) {
-			signedParams.append(key, value);
-			if (key === "sig") break;
-		}
-		return signedParams.toString();
-	}
-}
 
 export const oauthProviderClient = () => {
 	return {
@@ -42,7 +33,7 @@ export const oauthProviderClient = () => {
 						) {
 							ctx.body = JSON.stringify({
 								...body,
-								oauth_query: parseSignedQuery(window.location.search),
+								oauth_query: buildSignedOAuthQuery(window.location.search),
 							});
 						}
 					},
@@ -50,5 +41,13 @@ export const oauthProviderClient = () => {
 			},
 		],
 		$InferServerPlugin: {} as ReturnType<typeof oauthProvider>,
+	} satisfies BetterAuthClientPlugin;
+};
+
+/** Client plugin for {@link oauthDeviceAuthorization}. */
+export const oauthDeviceAuthorizationClient = () => {
+	return {
+		...deviceAuthorizationClient(),
+		$InferServerPlugin: {} as ReturnType<typeof oauthDeviceAuthorization>,
 	} satisfies BetterAuthClientPlugin;
 };

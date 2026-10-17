@@ -1,4 +1,4 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, LiteralString } from "@better-auth/core";
 import { symmetricDecrypt, symmetricEncrypt } from "../crypto";
 
 /**
@@ -34,4 +34,16 @@ export function setTokenUtil(
 		});
 	}
 	return token;
+}
+
+export function getOAuthCallbackPath(provider: {
+	id: LiteralString;
+	callbackPath?: string | undefined;
+}) {
+	if (!provider.callbackPath) {
+		return `/callback/${provider.id}`;
+	}
+	return provider.callbackPath.startsWith("/")
+		? provider.callbackPath
+		: `/${provider.callbackPath}`;
 }

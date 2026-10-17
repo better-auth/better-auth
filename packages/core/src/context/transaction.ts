@@ -1,19 +1,27 @@
-import type { AsyncLocalStorage } from "node:async_hooks";
+import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
+import { runtimeSchemaCheckFor } from "../db/schema-check";
+import { logger } from "../env";
+import type { BetterAuthOptions } from "../types";
 import { __getBetterAuthGlobal } from "./global";
 
+type StoredAdapter = DBTransactionAdapter<BetterAuthOptions>;
+
 type HookContext = {
-	adapter: DBTransactionAdapter;
+	adapter: StoredAdapter;
 	pendingHooks: Array<() => Promise<void>>;
+	isTransactionActive: boolean;
 };
 
 const ensureAsyncStorage = async () => {
 	const betterAuthGlobal = __getBetterAuthGlobal();
-	if (!betterAuthGlobal.context.adapterAsyncStorage) {
-		const AsyncLocalStorage = await getAsyncLocalStorage();
-		betterAuthGlobal.context.adapterAsyncStorage = new AsyncLocalStorage();
+	const existing = betterAuthGlobal.context.adapterAsyncStorage;
+	if (existing) {
+		return existing as AsyncLocalStorage<HookContext>;
 	}
+	const AsyncLocalStorage = await getAsyncLocalStorage();
+	betterAuthGlobal.context.adapterAsyncStorage ??= new AsyncLocalStorage();
 	return betterAuthGlobal.context
 		.adapterAsyncStorage as AsyncLocalStorage<HookContext>;
 };
@@ -27,21 +35,29 @@ export const getCurrentDBAdapterAsyncLocalStorage = async () => {
 	return ensureAsyncStorage();
 };
 
-export const getCurrentAdapter = async (
-	fallback: DBTransactionAdapter,
-): Promise<DBTransactionAdapter> => {
+export const getCurrentAdapter = async <
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	fallback: DBTransactionAdapter<Options>,
+): Promise<DBTransactionAdapter<Options>> => {
 	return ensureAsyncStorage()
 		.then((als) => {
 			const store = als.getStore();
-			return store?.adapter || fallback;
+			return (
+				(store?.adapter as DBTransactionAdapter<Options> | undefined) ||
+				fallback
+			);
 		})
 		.catch(() => {
 			return fallback;
 		});
 };
 
-export const runWithAdapter = async <R>(
-	adapter: DBAdapter,
+export const runWithAdapter = async <
+	R,
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	adapter: DBAdapter<Options>,
 	fn: () => R,
 ): Promise<R> => {
 	let called = false;
@@ -53,7 +69,14 @@ export const runWithAdapter = async <R>(
 			let error: unknown;
 			let hasError = false;
 			try {
-				result = await als.run({ adapter, pendingHooks }, fn);
+				result = await als.run(
+					{
+						adapter: adapter as unknown as StoredAdapter,
+						pendingHooks,
+						isTransactionActive: false,
+					},
+					fn,
+				);
 			} catch (err) {
 				error = err;
 				hasError = true;
@@ -75,32 +98,95 @@ export const runWithAdapter = async <R>(
 		});
 };
 
-export const runWithTransaction = async <R>(
-	adapter: DBAdapter,
+/**
+ * Runs `fn` in a transaction on `adapter`, joining the current one when
+ * already inside it, then runs the hooks queued with
+ * `queueAfterTransactionHook` once the work commits.
+ *
+ * When the adapter has no real transaction (`transaction: false`), writes are
+ * applied as they happen and cannot roll back, so queued hooks also run when
+ * `fn` throws. The original error is still rethrown; a hook failure on that
+ * path goes to `onAfterCommitHookError`, or is logged when none is given.
+ */
+export const runWithTransaction = async <
+	R,
+	Options extends BetterAuthOptions = BetterAuthOptions,
+>(
+	adapter: DBAdapter<Options>,
 	fn: () => R,
+	options?: {
+		onAfterCommitHookError?: (error: unknown) => void | Promise<void>;
+	},
 ): Promise<R> => {
-	let called = true;
+	let called = false;
 	return ensureAsyncStorage()
 		.then(async (als) => {
 			called = true;
-			const pendingHooks: Array<() => Promise<void>> = [];
+			const store = als.getStore();
+			if (store?.isTransactionActive) {
+				return fn();
+			}
+			// Settle the schema verdict before this transaction holds the
+			// connection a single-connection store would need for the lookup.
+			const pendingSchemaCheck = runtimeSchemaCheckFor(adapter)?.();
+			if (pendingSchemaCheck) await pendingSchemaCheck;
+			let pendingHooks: Array<() => Promise<void>> = [];
 			let result: Awaited<R>;
 			let error: unknown;
 			let hasError = false;
 			try {
 				result = await adapter.transaction(async (trx) => {
-					return als.run({ adapter: trx, pendingHooks }, fn);
+					// An adapter may run this callback again after a transient abort.
+					// Only the hooks of the attempt that commits may run.
+					pendingHooks = [];
+					return als.run(
+						{
+							adapter: trx as unknown as StoredAdapter,
+							pendingHooks,
+							isTransactionActive: true,
+						},
+						fn,
+					);
 				});
 			} catch (e) {
 				hasError = true;
 				error = e;
 			}
-			for (const hook of pendingHooks) {
-				await hook();
-			}
+			const runPendingHooks = async (unhandledErrors: "throw" | "log") => {
+				for (const hook of pendingHooks) {
+					try {
+						await hook();
+					} catch (hookError) {
+						if (!options?.onAfterCommitHookError) {
+							if (unhandledErrors === "throw") throw hookError;
+							try {
+								logger.error(
+									"Failed to run an after-commit hook for work that could not roll back",
+									hookError,
+								);
+							} catch {
+								// A failing logger must not skip later hooks or replace the original error.
+							}
+							continue;
+						}
+						try {
+							await options.onAfterCommitHookError(hookError);
+						} catch {
+							// Reporting cannot roll back committed work or suppress later hooks.
+						}
+					}
+				}
+			};
 			if (hasError) {
+				// Without a real transaction (`transaction: false`), each write was
+				// applied directly and nothing rolled back, so the hooks queued for
+				// those writes still have to run. The original error wins over theirs.
+				if (adapter.options?.adapterConfig.transaction === false) {
+					await runPendingHooks("log");
+				}
 				throw error;
 			}
+			await runPendingHooks("throw");
 			return result!;
 		})
 		.catch((err) => {
@@ -114,23 +200,33 @@ export const runWithTransaction = async <R>(
 /**
  * Queue a hook to be executed after the current transaction commits.
  * If not in a transaction, the hook will execute immediately.
+ *
+ * When the adapter has no real transaction (`transaction: false`), the hook
+ * also runs if the surrounding work fails, since its writes were kept.
  */
 export const queueAfterTransactionHook = async (
 	hook: () => Promise<void>,
+	options?: {
+		/** Handles a queued hook failure after the surrounding work has committed. */
+		onError?: (error: unknown) => void | Promise<void>;
+	},
 ): Promise<void> => {
-	return ensureAsyncStorage()
-		.then((als) => {
-			const store = als.getStore();
-			if (store) {
-				// We're in a transaction context, queue the hook
-				store.pendingHooks.push(hook);
-			} else {
-				// Not in a transaction, execute immediately
-				return hook();
-			}
-		})
-		.catch(() => {
-			// No async storage available, execute immediately
-			return hook();
-		});
+	const executeHook = async () => {
+		try {
+			await hook();
+		} catch (error) {
+			if (!options?.onError) throw error;
+			await options.onError(error);
+		}
+	};
+	let storage: Awaited<ReturnType<typeof ensureAsyncStorage>>;
+	try {
+		storage = await ensureAsyncStorage();
+	} catch {
+		return executeHook();
+	}
+
+	const store = storage.getStore();
+	if (!store?.isTransactionActive) return executeHook();
+	store.pendingHooks.push(executeHook);
 };

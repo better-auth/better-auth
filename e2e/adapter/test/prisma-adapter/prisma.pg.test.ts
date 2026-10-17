@@ -10,6 +10,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
 import {
@@ -26,6 +27,7 @@ const { execute } = await testAdapter({
 		return prismaAdapter(db, {
 			provider: dialect,
 			debugLogs: { isRunningAdapterTests: true },
+			transaction: true,
 		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
@@ -44,6 +46,11 @@ const { execute } = await testAdapter({
 		joinsTestSuite(),
 		uuidTestSuite({}),
 		caseInsensitiveTestSuite(),
+		scimHttpTestSuite({
+			connectionId: "prisma-postgres-workforce",
+			token: "prisma-postgres-scim-token",
+			testId: "prisma-postgres",
+		}),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",
