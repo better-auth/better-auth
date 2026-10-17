@@ -9,7 +9,7 @@ import {
 } from "./crypto";
 import { derivePurposeKey } from "./crypto/purpose";
 
-const stateDataSchema = z.looseObject({
+export const stateDataSchema = z.looseObject({
 	callbackURL: z.string(),
 	codeVerifier: z.string(),
 	errorURL: z.string().optional(),

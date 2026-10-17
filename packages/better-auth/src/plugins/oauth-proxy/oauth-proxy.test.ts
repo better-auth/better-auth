@@ -1,3 +1,4 @@
+import type { SecretConfig } from "@better-auth/core";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
@@ -21,7 +22,7 @@ import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { derivePurposeKey } from "../../crypto/purpose";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { oAuthProxy } from ".";
+import { oAuthProxy, packCompactState, unpackCompactState } from ".";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
@@ -56,6 +57,24 @@ beforeAll(async () => {
 				id_token: testIdToken,
 				expires_in: 3600,
 				refresh_token_expires_in: 86400,
+			});
+		}),
+		http.post("https://api.x.com/2/oauth2/token", () => {
+			return HttpResponse.json({
+				token_type: "bearer",
+				access_token: "twitter-access-token",
+				expires_in: 7200,
+				scope: "users.read tweet.read",
+			});
+		}),
+		http.get("https://api.x.com/2/users/me", () => {
+			return HttpResponse.json({
+				data: {
+					id: "twitter-user-12345",
+					name: "Twitter Test User",
+					username: "twitter_user",
+					profile_image_url: "https://x.com/avatar.png",
+				},
 			});
 		}),
 	];
@@ -93,12 +112,11 @@ describe("oauth-proxy", async () => {
 		if (!signIn.url) throw new Error("OAuth authorization URL missing");
 		const encryptedPackage = new URL(signIn.url).searchParams.get("state");
 		if (!encryptedPackage) throw new Error("OAuth proxy state missing");
-		const payload = parseJSON<{ state: string; isOAuthProxy: boolean }>(
-			await symmetricDecrypt({
-				key: derivePurposeKey(proxySecret, "oauth-proxy-package"),
-				data: encryptedPackage,
-			}),
+		const payload = await unpackCompactState(
+			derivePurposeKey(proxySecret, "oauth-proxy-package"),
+			encryptedPackage,
 		);
+		if (!payload) throw new Error("Failed to unpack compact state package");
 		expect(payload.isOAuthProxy).toBe(true);
 		expect(
 			await (await auth.$context).internalAdapter.findVerificationValue(
@@ -705,23 +723,333 @@ describe("oauth-proxy", async () => {
 			const encryptedState = new URL(res.url!).searchParams.get("state");
 			expect(encryptedState).toBeTruthy();
 
-			// Verify we can decrypt the state package
-			const decrypted = await symmetricDecrypt({
-				key: derivePurposeKey(secret, "oauth-proxy-package"),
-				data: encryptedState!,
-			});
-
-			const statePackage = parseJSON<{
-				state: string;
-				stateCookie: string;
-				isOAuthProxy: boolean;
-			}>(decrypted);
+			// Verify we can decrypt the compact state package
+			const statePackage = await unpackCompactState(
+				derivePurposeKey(secret, "oauth-proxy-package"),
+				encryptedState!,
+			);
+			expect(statePackage).not.toBeNull();
 
 			// Verify state package structure
 			expect(statePackage).toHaveProperty("state");
 			expect(statePackage).toHaveProperty("stateCookie");
 			expect(statePackage).toHaveProperty("isOAuthProxy");
-			expect(statePackage.isOAuthProxy).toBe(true);
+			expect(statePackage!.isOAuthProxy).toBe(true);
+		});
+
+		it("should seamlessly decrypt and handle legacy double-encrypted state packages for backward compatibility", async () => {
+			const { client, auth } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const { secret } = await auth.$context;
+
+			// Create a legacy double-encrypted state package
+			const originalState = "legacy-original-state-12345678";
+			const plaintextState = JSON.stringify({
+				callbackURL:
+					"http://preview-localhost:3000/api/auth/callback/google/oauth-proxy?callbackURL=%2Fdashboard",
+				codeVerifier: "legacy-code-verifier-12345",
+				expiresAt: Date.now() + 600000,
+				oauthState: originalState,
+			});
+
+			const stateCookie = await symmetricEncrypt({
+				key: derivePurposeKey(secret, "oauth-proxy-state"),
+				data: plaintextState,
+			});
+			const legacyStatePackage = {
+				state: originalState,
+				stateCookie,
+				isOAuthProxy: true,
+			};
+			const legacyEncryptedPackage = await symmetricEncrypt({
+				key: derivePurposeKey(secret, "oauth-proxy-package"),
+				data: JSON.stringify(legacyStatePackage),
+			});
+
+			// Verify production callback accepts the legacy encrypted state
+			await client.$fetch(
+				`/callback/google?code=test&state=${legacyEncryptedPackage}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toBeTruthy();
+						expect(location).toContain("/callback/google/oauth-proxy");
+						expect(location).toContain("profile=");
+					},
+				},
+			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/9408
+		 */
+		it("produces compact state parameter for Twitter (X) with length <= 500 and completes OAuth flow", async () => {
+			const { client, auth } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+					}),
+				],
+				socialProviders: {
+					twitter: {
+						clientId: "twitter-client-id",
+						clientSecret: "twitter-client-secret",
+					},
+				},
+			});
+
+			// 1. Sign-in redirect generates compact state
+			const res = await client.signIn.social(
+				{
+					provider: "twitter",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const twitterAuthURL = new URL(res.url!);
+			const state = twitterAuthURL.searchParams.get("state");
+			expect(state).toBeTruthy();
+
+			// Assert Twitter state ceiling: must be <= 500 chars (Issue #9408)
+			expect(state!.length).toBeLessThanOrEqual(500);
+
+			// Assert preview unpacks the compact state package correctly
+			const { secret } = await auth.$context;
+			const unpacked = await unpackCompactState(
+				derivePurposeKey(secret, "oauth-proxy-package"),
+				state!,
+			);
+			expect(unpacked).not.toBeNull();
+			expect(unpacked!.isOAuthProxy).toBe(true);
+
+			// 2. Production callback handles the authorization code and redirects with profile
+			let previewRedirectLocation: string | null = null;
+			await client.$fetch(`/callback/twitter?code=test-code&state=${state}`, {
+				onError(context) {
+					previewRedirectLocation = context.response.headers.get("location");
+				},
+			});
+
+			expect(previewRedirectLocation).toBeTruthy();
+			expect(previewRedirectLocation).toContain(
+				"http://preview-localhost:3000/api/auth/callback/twitter/oauth-proxy",
+			);
+			expect(previewRedirectLocation).toContain("profile=");
+		});
+
+		it("unpackCompactState safely handles malformed, truncated, and corrupted payloads", async () => {
+			const secret = "test-secret-key-32-bytes-long!!";
+
+			// Invalid base64
+			const invalidBase64 = await unpackCompactState(
+				secret,
+				"ba_c.invalid@@@not-base64",
+			);
+			expect(invalidBase64).toBeNull();
+
+			// Truncated ciphertext (< 40 bytes)
+			const truncated = await unpackCompactState(secret, "ba_c.dHJ1bmNhdGVk");
+			expect(truncated).toBeNull();
+
+			// Valid payload packed then corrupted
+			const validPayload = {
+				state: "test-state-12345",
+				stateCookie: JSON.stringify({
+					callbackURL: "/dashboard",
+					codeVerifier: "code-verifier",
+					expiresAt: Date.now() + 60000,
+				}),
+				isOAuthProxy: true,
+			};
+			const packed = await packCompactState(secret, validPayload);
+			expect(packed.startsWith("ba_c.")).toBe(true);
+
+			// Corrupt payload bytes
+			const corrupted = `ba_c.${packed.slice(5, 20)}XXXX${packed.slice(24)}`;
+			const unpackedCorrupted = await unpackCompactState(secret, corrupted);
+			expect(unpackedCorrupted).toBeNull();
+		});
+
+		it("unpackCompactState safely handles SecretConfig with versioned envelope and legacy fallback", async () => {
+			const v1Secret = "version-1-secret-32-bytes-long!";
+			const v2Secret = "version-2-secret-32-bytes-long!";
+			const legacySecret = "legacy-secret-32-bytes-long!!!!";
+
+			const secretConfig: SecretConfig = {
+				currentVersion: 2,
+				keys: new Map([
+					[1, v1Secret],
+					[2, v2Secret],
+				]),
+				legacySecret,
+			};
+
+			const validPayload = {
+				state: "secret-config-state",
+				stateCookie: JSON.stringify({
+					callbackURL: "/dashboard",
+					codeVerifier: "code-verifier-v2",
+					expiresAt: Date.now() + 60000,
+				}),
+				isOAuthProxy: true,
+			};
+
+			// 1. Packed with v2 (current version) -> unpacked with SecretConfig
+			const packedV2 = await packCompactState(secretConfig, validPayload);
+			const unpackedV2 = await unpackCompactState(secretConfig, packedV2);
+			expect(unpackedV2).not.toBeNull();
+			expect(unpackedV2?.state).toBe("secret-config-state");
+
+			// 2. Packed with v1 -> unpacked with SecretConfig containing v1
+			const v1Config: SecretConfig = {
+				currentVersion: 1,
+				keys: new Map([[1, v1Secret]]),
+			};
+			const packedV1 = await packCompactState(v1Config, validPayload);
+			const unpackedV1 = await unpackCompactState(secretConfig, packedV1);
+			expect(unpackedV1).not.toBeNull();
+			expect(unpackedV1?.state).toBe("secret-config-state");
+
+			// 3. Packed with raw legacy secret (no version envelope) -> unpacked via legacySecret fallback
+			const packedLegacy = await packCompactState(legacySecret, validPayload);
+			const unpackedLegacy = await unpackCompactState(
+				secretConfig,
+				packedLegacy,
+			);
+			expect(unpackedLegacy).not.toBeNull();
+			expect(unpackedLegacy?.state).toBe("secret-config-state");
+
+			// 4. Missing version in keys returns null safely
+			const unknownVersionConfig: SecretConfig = {
+				currentVersion: 99,
+				keys: new Map([[99, "other-secret-key-32-bytes-long!"]]),
+			};
+			const packedV99 = await packCompactState(
+				unknownVersionConfig,
+				validPayload,
+			);
+			const unpackedMissingVersion = await unpackCompactState(
+				secretConfig,
+				packedV99,
+			);
+			expect(unpackedMissingVersion).toBeNull();
+		});
+
+		it("round-trips payload within 64 KB decompression limit and rejects payload exceeding 64 KB", async () => {
+			const secret = "test-secret-key-32-bytes-long!!";
+
+			// 1. Payload expanding to ~60 KB (< 64 KB) packs and unpacks cleanly
+			const withinLimitPayload = {
+				state: "state-within-limit",
+				stateCookie: JSON.stringify({
+					callbackURL: "/dashboard",
+					codeVerifier: "code-verifier-60kb",
+					expiresAt: Date.now() + 60000,
+					serverContext: {
+						padding: "a".repeat(60 * 1024),
+					},
+				}),
+				isOAuthProxy: true,
+			};
+			const packedWithin = await packCompactState(secret, withinLimitPayload);
+			const unpackedWithin = await unpackCompactState(secret, packedWithin);
+			expect(unpackedWithin).not.toBeNull();
+			expect(unpackedWithin?.state).toBe("state-within-limit");
+			expect(unpackedWithin?.stateCookie).toBe(withinLimitPayload.stateCookie);
+
+			// 2. Payload expanding to > 64 KB (~70 KB) returns null safely without hanging
+			const oversizedPayload = {
+				state: "state-oversized",
+				stateCookie: JSON.stringify({
+					callbackURL: "/dashboard",
+					codeVerifier: "code-verifier-70kb",
+					expiresAt: Date.now() + 60000,
+					serverContext: {
+						padding: "a".repeat(70 * 1024),
+					},
+				}),
+				isOAuthProxy: true,
+			};
+			const packedOversized = await packCompactState(secret, oversizedPayload);
+			const unpackedOversized = await unpackCompactState(
+				secret,
+				packedOversized,
+			);
+			expect(unpackedOversized).toBeNull();
+		});
+
+		it("supports node:zlib fallback when CompressionStream / DecompressionStream are unavailable", async () => {
+			const secret = "test-secret-key-32-bytes-long!!";
+			const originalCS = globalThis.CompressionStream;
+			const originalDS = globalThis.DecompressionStream;
+
+			try {
+				// Simulate runtime without web streams (e.g. Node 16)
+				// @ts-expect-error simulating runtime without CompressionStream
+				globalThis.CompressionStream = undefined;
+				// @ts-expect-error simulating runtime without DecompressionStream
+				globalThis.DecompressionStream = undefined;
+
+				const payload = {
+					state: "zlib-fallback-state",
+					stateCookie: JSON.stringify({
+						callbackURL: "/dashboard",
+						codeVerifier: "code-verifier-zlib",
+						expiresAt: Date.now() + 60000,
+						serverContext: {
+							padding: "z".repeat(10 * 1024),
+						},
+					}),
+					isOAuthProxy: true,
+				};
+
+				const packed = await packCompactState(secret, payload);
+				expect(packed.startsWith("ba_c.")).toBe(true);
+
+				const unpacked = await unpackCompactState(secret, packed);
+				expect(unpacked).not.toBeNull();
+				expect(unpacked?.state).toBe("zlib-fallback-state");
+
+				// Oversized payload through zlib fallback returns null safely
+				const oversized = {
+					state: "zlib-oversized",
+					stateCookie: JSON.stringify({
+						callbackURL: "/dashboard",
+						codeVerifier: "code-verifier-zlib-oversized",
+						expiresAt: Date.now() + 60000,
+						serverContext: {
+							padding: "z".repeat(70 * 1024),
+						},
+					}),
+					isOAuthProxy: true,
+				};
+				const packedOversized = await packCompactState(secret, oversized);
+				const unpackedOversized = await unpackCompactState(
+					secret,
+					packedOversized,
+				);
+				expect(unpackedOversized).toBeNull();
+			} finally {
+				globalThis.CompressionStream = originalCS;
+				globalThis.DecompressionStream = originalDS;
+			}
 		});
 
 		it("should work on same origin without proxy", async () => {
