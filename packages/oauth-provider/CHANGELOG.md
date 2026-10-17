@@ -1,5 +1,13 @@
 # @better-auth/oauth-provider
 
+## 1.7.11
+
+### Patch Changes
+
+- [#11830](https://github.com/better-auth/better-auth/pull/11830) [`a1f6f0b`](https://github.com/better-auth/better-auth/commit/a1f6f0bf19ba1be85e977d891d0f0ca43723c0a3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps using the CIMD plugin no longer lose an administrator's change to a discovered client when a metadata refresh is running at the same time. Before, disabling the client, setting `skipConsent` or `enableEndSession`, or assigning `client_credentials` scopes while its document was being fetched could be undone by the refresh. No action is needed.
+
+- [#10881](https://github.com/better-auth/better-auth/pull/10881) [`37debaa`](https://github.com/better-auth/better-auth/commit/37debaa8a17d11d05f8eeabdb94877a4b1575a1d) Thanks [@sahiljagtap08](https://github.com/sahiljagtap08)! - Corrected the OpenAPI response schemas for `/oauth2/consent` and `/oauth2/continue` to describe `{ redirect: true, url: string }`, so generated clients no longer expect a nonexistent `redirect_uri` field. Runtime responses are unchanged.
+
 ## 1.7.10
 
 ### Patch Changes
