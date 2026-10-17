@@ -441,11 +441,11 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/pplytas.png",
 		},
 	},
-		{
+	{
 		name: "better-auth-vetto",
 		url: "https://github.com/yasaiiko/better-auth-vetto",
 		description:
-			"Blocks disposable sign-up emails with an offline CC0 list, lets privacy relays through, optional dead-domain (MX) check, and a Gmail canonical-email helper.",
+			"Blocks disposable sign-up emails with an offline CC0 list, lets privacy relays through, and offers an optional dead-domain (MX) check plus a Gmail canonical-email helper.",
 		author: {
 			name: "yasaiiko",
 			github: "yasaiiko",
