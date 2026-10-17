@@ -4196,3 +4196,26 @@ describe("delete cascade rollback", async () => {
 		expect(teamMemberCount).toBe(1);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10773
+ */
+describe("organization with serial ids", () => {
+	it("answers a non-numeric organization id as not found", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			advanced: { database: { generateId: "serial" } },
+			plugins: [organization()],
+		});
+		const { headers } = await signInWithTestUser();
+		const response = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/organization/get-full-organization?organizationId=abc",
+				{ headers },
+			),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			code: "ORGANIZATION_NOT_FOUND",
+		});
+	});
+});
