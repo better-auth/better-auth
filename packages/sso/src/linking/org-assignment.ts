@@ -1,4 +1,13 @@
-import type { GenericEndpointContext, OAuth2Tokens, User } from "better-auth";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
+import type {
+	DBTransactionAdapter,
+	GenericEndpointContext,
+	OAuth2Tokens,
+	User,
+} from "better-auth";
 import type { SSOOptions, SSOProvider } from "../types";
 import { domainMatches, parseProviderDomains } from "../utils";
 import type { NormalizedSSOProfile } from "./types";
@@ -6,6 +15,9 @@ import type { NormalizedSSOProfile } from "./types";
 export interface OrganizationProvisioningOptions {
 	disabled?: boolean;
 	defaultRole?: string;
+	withOrganizationAssignment?: NonNullable<
+		SSOOptions["organizationProvisioning"]
+	>["withOrganizationAssignment"];
 	getRole?: (data: {
 		user: User & Record<string, any>;
 		userInfo: Record<string, any>;
@@ -70,12 +82,13 @@ function getEmailDomain(email: string): string | null {
 async function findVerifiedDomainProviders(
 	ctx: GenericEndpointContext,
 	domain: string,
+	database: DBTransactionAdapter = ctx.context.adapter,
 ): Promise<SSOProvider<SSOOptions>[]> {
 	const matchingProviders: SSOProvider<SSOOptions>[] = [];
 	let offset = 0;
 
 	while (true) {
-		const page = await ctx.context.adapter.findMany<SSOProvider<SSOOptions>>({
+		const page = await database.findMany<SSOProvider<SSOOptions>>({
 			model: "ssoProvider",
 			where: [{ field: "domainVerified", value: true }],
 			limit: VERIFIED_PROVIDER_PAGE_SIZE,
@@ -95,6 +108,7 @@ async function findVerifiedDomainProviders(
 async function assignOrganization(
 	ctx: GenericEndpointContext,
 	options: OrganizationAssignmentOptions,
+	database: DBTransactionAdapter = ctx.context.adapter,
 ): Promise<OrganizationAssignmentResult> {
 	if (options.provisioningOptions?.disabled) {
 		return "provisioning-disabled";
@@ -140,7 +154,7 @@ async function assignOrganization(
 			return "unverified-identity";
 		}
 		const matchingProviders = (
-			await findVerifiedDomainProviders(ctx, domain)
+			await findVerifiedDomainProviders(ctx, domain, database)
 		).filter(
 			(
 				matchingProvider,
@@ -177,7 +191,7 @@ async function assignOrganization(
 		token = undefined;
 	}
 
-	const isAlreadyMember = await ctx.context.adapter.findOne({
+	const isAlreadyMember = await database.findOne({
 		model: "member",
 		where: [
 			{ field: "organizationId", value: organizationId },
@@ -188,7 +202,7 @@ async function assignOrganization(
 		return "already-member";
 	}
 
-	const pendingInvitation = await ctx.context.adapter.findOne({
+	const pendingInvitation = await database.findOne({
 		model: "invitation",
 		where: [
 			{ field: "organizationId", value: organizationId },
@@ -212,7 +226,7 @@ async function assignOrganization(
 
 	// FIXME(sso-membership-policy): route automatic SSO membership through the
 	// organization plugin's limits, hooks, additional fields, and atomic guard.
-	await ctx.context.adapter.create({
+	await database.create({
 		model: "member",
 		data: {
 			organizationId,
@@ -231,6 +245,31 @@ export async function assignOrganizationFromProvider(
 	ctx: GenericEndpointContext,
 	options: AssignOrganizationFromProviderOptions,
 ): Promise<void> {
+	const assignmentFence =
+		options.provisioningOptions?.withOrganizationAssignment;
+	const organizationId = options.provider.organizationId;
+	if (
+		assignmentFence &&
+		organizationId &&
+		!options.provisioningOptions?.disabled &&
+		ctx.context.hasPlugin("organization")
+	) {
+		await runWithTransaction(ctx.context.adapter, async () => {
+			const database = await getCurrentAdapter(ctx.context.adapter);
+			await assignmentFence({
+				organizationId,
+				database,
+				assign: async () => {
+					await assignOrganization(
+						ctx,
+						{ reason: "provider-bound", ...options },
+						database,
+					);
+				},
+			});
+		});
+		return;
+	}
 	await assignOrganization(ctx, {
 		reason: "provider-bound",
 		...options,
