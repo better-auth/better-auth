@@ -297,7 +297,7 @@ Better Auth builds the standard grant parameters, while `customizeRequest` adds 
 
 **accessTokenExpiresIn**: (Optional) Fallback access-token lifetime in seconds, used only when the provider's token response omits `expires_in`. Without a known expiry, `getAccessToken` cannot tell the token has expired and never refreshes it. Set this to the token's lifetime so the expiry is tracked and the token is refreshed when needed. Leave unset if the provider returns `expires_in`.
 
-**getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters.
+**getToken**: (Optional) A custom function to exchange authorization code for tokens. If provided, this function will be used instead of the default token exchange logic. This is useful for providers with non-standard token endpoints that use GET requests or custom parameters. It receives the configured `redirectURI` (falling back to the callback URI) and receives `codeVerifier` only when `pkce` is enabled. Custom exchanges perform their own network requests outside the built-in redirect-refusing fetch, so validate any URLs they request.
 
 **getUserInfo**: (Optional) A custom function to fetch user info from the provider, given the OAuth tokens. If not provided, a default fetch is used.
 
