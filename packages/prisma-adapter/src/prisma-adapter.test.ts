@@ -265,6 +265,41 @@ describe("prisma-adapter", () => {
 		});
 	});
 
+	/**
+	 * @see https://www.prisma.io/docs/orm/overview/databases/mongodb#filtering-for-null-and-missing-fields
+	 */
+	it("matches unset fields for `eq null` on MongoDB", async () => {
+		const findMany = vi.fn().mockResolvedValue([]);
+		const update = vi.fn().mockResolvedValue({ id: "user-id" });
+		const adapter = prismaAdapter(
+			{ $transaction: vi.fn(), user: { findMany, update } },
+			{ provider: "mongodb" },
+		)({});
+		const isNull = {
+			OR: [{ image: null }, { image: { isSet: false } }],
+		};
+
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "image", operator: "eq", value: null }],
+		});
+		expect(findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: isNull }),
+		);
+
+		await adapter.update({
+			model: "user",
+			where: [
+				{ field: "id", value: "user-id" },
+				{ field: "image", operator: "eq", value: null },
+			],
+			update: { name: "Updated" },
+		});
+		expect(update).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { id: "user-id", AND: [isNull] } }),
+		);
+	});
+
 	it("should use update (not updateMany) for insensitive mode on unsupported providers", async () => {
 		const update = vi.fn().mockResolvedValue({
 			id: "user-id",

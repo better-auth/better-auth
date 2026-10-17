@@ -1103,29 +1103,17 @@ export async function findConsent(
 	userId: string,
 	referenceId: string | undefined,
 ): Promise<OAuthConsent<Scope[]> | null> {
-	const where = [
-		{ field: "clientId", value: clientId },
-		{ field: "userId", value: userId },
-	];
-	if (referenceId) {
-		return ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+	const findByReference = (value: string | null) =>
+		ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
 			model: "oauthConsent",
-			where: [...where, { field: "referenceId", value: referenceId }],
+			where: [
+				{ field: "clientId", value: clientId },
+				{ field: "userId", value: userId },
+				{ field: "referenceId", value },
+			],
 		});
-	}
-	// Matched in code: Prisma on MongoDB leaves an omitted referenceId unset, and `eq null` skips unset fields.
-	const pageSize = 100;
-	for (let offset = 0; ; offset += pageSize) {
-		const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
-			model: "oauthConsent",
-			where,
-			limit: pageSize,
-			offset,
-			sortBy: { field: "id", direction: "asc" },
-		});
-		const consent = consents.find((row) => !row.referenceId);
-		if (consent || consents.length < pageSize) return consent ?? null;
-	}
+	if (referenceId) return findByReference(referenceId);
+	return (await findByReference(null)) ?? findByReference("");
 }
 
 /**
