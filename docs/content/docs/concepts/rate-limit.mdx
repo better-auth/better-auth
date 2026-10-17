@@ -26,6 +26,8 @@ export const auth = betterAuth({
 })
 ```
 
+Rate limiting uses a fixed window: the first request starts a window that lasts `window` seconds, and requests after that do not extend it. So `max` is the number of requests allowed per window, and steady traffic below that limit is never rejected. Once `max` requests are used in a window, further requests are rejected with `429` until the window ends.
+
 Rate limiting is disabled in development mode by default. In order to enable it, set `enabled` to `true`:
 
 ```ts title="auth.ts"
@@ -351,7 +353,14 @@ export const rateLimitTableFields = [
 	{
 		name: "lastRequest",
 		type: "bigint",
-		description: "Timestamp of the last request (epoch ms)",
+		description:
+			"Timestamp of the first request in the current window (epoch ms). Rate limiting uses a fixed window anchored to its first request, so this is the window start rather than the most recent request.",
+	},
+	{
+		name: "windowExpiresAt",
+		type: "bigint",
+		description:
+			"Nullable timestamp of when the current window ends (epoch ms). Used to prune each row once its own window has elapsed.",
 	},
 ];
 
