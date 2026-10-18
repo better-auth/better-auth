@@ -31,13 +31,19 @@ const getAdditionalFields = <
 	options: O,
 	shouldBePartial: AllPartial = false as AllPartial,
 ) => {
-	const additionalFields =
+	const sourceFields =
 		options?.schema?.organizationRole?.additionalFields || {};
-	if (shouldBePartial) {
-		for (const key in additionalFields) {
-			additionalFields[key]!.required = false;
-		}
-	}
+	// Never mutate the shared options object. When shouldBePartial is true we need
+	// every field to be optional, so we build a shallow copy of the fields map with
+	// each field entry also shallow-copied (preserving all other attributes).
+	const additionalFields = shouldBePartial
+		? Object.fromEntries(
+				Object.entries(sourceFields).map(([k, v]) => [
+					k,
+					{ ...v, required: false as const },
+				]),
+			)
+		: sourceFields;
 	const additionalFieldsSchema = toZodSchema({
 		fields: additionalFields,
 		isClientSide: true,
