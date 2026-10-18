@@ -443,6 +443,12 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
+			// Hash the password before opening the transaction, so the (CPU-bound)
+			// hash doesn't hold the connection and write locks open.
+			const hashedPassword = ctx.body.password
+				? await ctx.context.password.hash(ctx.body.password)
+				: undefined;
+
 			const user = await runWithTransaction(ctx.context.adapter, async () => {
 				const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
 					{
@@ -463,11 +469,8 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 						ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 					);
 				}
-				// Only create credential account if password is provided
-				if (ctx.body.password) {
-					const hashedPassword = await ctx.context.password.hash(
-						ctx.body.password,
-					);
+				// Only create credential account if a password was provided
+				if (hashedPassword) {
 					const account = await ctx.context.internalAdapter.linkAccount({
 						providerId: "credential",
 						accountId: user.id,
