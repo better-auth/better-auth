@@ -92,14 +92,12 @@ describe("admin create-user transaction", () => {
 	it("rolls back the user when the credential account insert fails", async () => {
 		const { auth, db, client, headers } = await setup();
 		const ctx = await auth.$context;
-		const transaction = ctx.adapter.transaction;
-		vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
-			transaction(async (trx) => {
-				await cb(trx);
-				throw APIError.from("INTERNAL_SERVER_ERROR", {
-					code: "TEST_ACCOUNT_INSERT_FAILED",
-					message: "injected account insert failure",
-				});
+		// Make the credential account insert reject inside the transaction, so
+		// the already-created user rolls back.
+		vi.spyOn(ctx.internalAdapter, "linkAccount").mockRejectedValue(
+			APIError.from("INTERNAL_SERVER_ERROR", {
+				code: "TEST_ACCOUNT_INSERT_FAILED",
+				message: "injected account insert failure",
 			}),
 		);
 
