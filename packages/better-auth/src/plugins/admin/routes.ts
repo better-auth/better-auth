@@ -468,12 +468,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					const hashedPassword = await ctx.context.password.hash(
 						ctx.body.password,
 					);
-					await ctx.context.internalAdapter.linkAccount({
+					const account = await ctx.context.internalAdapter.linkAccount({
 						providerId: "credential",
 						accountId: user.id,
 						password: hashedPassword,
 						userId: user.id,
 					});
+					if (!account) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
+						);
+					}
 				}
 				return user;
 			});

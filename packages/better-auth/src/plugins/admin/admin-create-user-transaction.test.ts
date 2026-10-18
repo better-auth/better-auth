@@ -1,8 +1,10 @@
+import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { admin } from "./admin";
 import { adminClient } from "./client";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 
 /**
  * Tests for the admin `create-user` endpoint's transactional behavior
@@ -103,7 +105,10 @@ describe("admin create-user transaction", () => {
 				const origCreate = trx.create;
 				vi.spyOn(trx, "create").mockImplementation(async (args: any) => {
 					if (args?.model === "account") {
-						throw new Error("DB error when creating account row");
+						throw APIError.from("INTERNAL_SERVER_ERROR", {
+							code: "TEST_ACCOUNT_INSERT_FAILED",
+							message: "injected account insert failure",
+						});
 					}
 					return origCreate.call(trx, args);
 				});
@@ -120,11 +125,40 @@ describe("admin create-user transaction", () => {
 			},
 			{ headers },
 		);
-		expect(res.error).toBeDefined();
+		expect(res.error?.code).toBe("TEST_ACCOUNT_INSERT_FAILED");
 
 		const users = await db.findMany({
 			model: "user",
 			where: [{ field: "email", value: "orphan-user@email.com" }],
+		});
+		expect(users).toHaveLength(0);
+	});
+
+	/**
+	 * Verifies that when the credential account is not created (e.g. an
+	 * account.create.before hook returns `false`), the already-created user is
+	 * rolled back instead of being committed without a sign-in method.
+	 */
+	it("rolls back the user when the credential account is not created", async () => {
+		const { auth, db, client, headers } = await setup();
+		const ctx = await auth.$context;
+		// Simulate a create.before hook veto: linkAccount returns null.
+		vi.spyOn(ctx.internalAdapter, "linkAccount").mockResolvedValue(null as any);
+
+		const res = await client.admin.createUser(
+			{
+				name: "Vetoed User",
+				email: "vetoed-user@email.com",
+				password: "password123",
+				role: "user",
+			},
+			{ headers },
+		);
+		expect(res.error?.code).toBe(ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER.code);
+
+		const users = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: "vetoed-user@email.com" }],
 		});
 		expect(users).toHaveLength(0);
 	});
