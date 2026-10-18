@@ -441,4 +441,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/pplytas.png",
 		},
 	},
+	{
+		name: "better-auth-saml-idp",
+		url: "https://github.com/mmcintosh/better-auth-saml-idp",
+		description:
+			"Turn Better Auth into a SAML 2.0 identity provider for Microsoft 365, Google Workspace, Okta, Salesforce, AWS and other service providers. SP registry with metadata import, signed and encrypted assertions, Single Logout, and step-up MFA.",
+		author: {
+			name: "Mark McIntosh",
+			github: "mmcintosh",
+			avatar: "https://github.com/mmcintosh.png",
+		},
+	},
 ];
