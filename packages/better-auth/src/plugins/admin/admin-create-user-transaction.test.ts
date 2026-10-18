@@ -1,6 +1,5 @@
 import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { admin } from "./admin";
 import { adminClient } from "./client";
@@ -22,32 +21,29 @@ describe("admin create-user transaction", () => {
 	});
 
 	const setup = async () => {
-		const { auth, signInWithTestUser, customFetchImpl, db } =
-			await getTestInstance(
-				{
-					plugins: [admin()],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => ({
-									data: {
-										...user,
-										...(user.name === "Admin" ? { role: "admin" } : {}),
-									},
-								}),
-							},
+		const { auth, client, signInWithTestUser, db } = await getTestInstance(
+			{
+				plugins: [admin()],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: {
+									...user,
+									...(user.name === "Admin" ? { role: "admin" } : {}),
+								},
+							}),
 						},
 					},
 				},
-				{
-					testUser: { name: "Admin" },
+			},
+			{
+				testUser: { name: "Admin" },
+				clientOptions: {
+					plugins: [adminClient()],
 				},
-			);
-		const client = createAuthClient({
-			fetchOptions: { customFetchImpl },
-			plugins: [adminClient()],
-			baseURL: "http://localhost:3000",
-		});
+			},
+		);
 		const { headers } = await signInWithTestUser();
 		return { auth, db, client, headers };
 	};
