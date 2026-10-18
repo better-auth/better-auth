@@ -153,39 +153,81 @@ export const createInternalAdapter = (
 			: [];
 	}
 
+	/**
+	 * Removes every listed session from secondary storage and reconciles the
+	 * user's active-sessions index against what was actually removed.
+	 *
+	 * The eviction set is derived solely from the `active-sessions-${userId}`
+	 * index, so a cached session that is missing from that index is not covered
+	 * here. The caller runs this after its database work commits, so a failure is
+	 * reported to it but cannot roll that work back.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11073
+	 */
 	async function deleteCachedUserSessions(
 		userId: string,
 		sessionReferences: readonly ActiveSessionReference[],
 	) {
 		if (!secondaryStorage) return;
 
-		const deletedTokens = new Set(
-			sessionReferences.map((session) => session.token),
-		);
+		const evictedTokens = new Set<string>();
+		let evictionError: unknown;
 		for (const { token } of sessionReferences) {
-			await secondaryStorage.delete(token);
+			try {
+				await secondaryStorage.delete(token);
+				evictedTokens.add(token);
+			} catch (error) {
+				// Every remaining token is still attempted, so a partial eviction
+				// clears as much as the storage will allow before it is reported.
+				evictionError ??= error;
+			}
 		}
 
 		const activeSessionsKey = `active-sessions-${userId}`;
-		const currentSessionReferences = await getActiveSessionReferences(userId);
-		const now = Date.now();
-		const remainingSessionReferences = currentSessionReferences.filter(
-			(session) => session.expiresAt > now && !deletedTokens.has(session.token),
-		);
-		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
-		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
-
-		if (furthestExpiration) {
-			await secondaryStorage.set(
-				activeSessionsKey,
-				JSON.stringify(remainingSessionReferences),
-				getTTLSeconds(furthestExpiration, now),
+		try {
+			const currentSessionReferences = await getActiveSessionReferences(userId);
+			const now = Date.now();
+			// Only tokens confirmed removed are dropped from the index. A token whose
+			// eviction failed stays listed, so a later revocation retries it instead
+			// of stranding a cached session nothing can find.
+			const remainingSessionReferences = currentSessionReferences.filter(
+				(session) =>
+					session.expiresAt > now && !evictedTokens.has(session.token),
 			);
-			return;
+			remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
+			const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
+
+			if (furthestExpiration) {
+				await secondaryStorage.set(
+					activeSessionsKey,
+					JSON.stringify(remainingSessionReferences),
+					getTTLSeconds(furthestExpiration, now),
+				);
+			} else {
+				await secondaryStorage.delete(activeSessionsKey);
+			}
+		} catch (error) {
+			// A reconciliation failure must not hide an eviction failure.
+			evictionError ??= error;
 		}
-		await secondaryStorage.delete(activeSessionsKey);
+
+		if (evictionError) throw evictionError;
 	}
 
+	/**
+	 * Queues the removal of a user's sessions from secondary storage, running it
+	 * once the surrounding database work commits.
+	 *
+	 * Callers may pass the revocation set captured before their destructive work
+	 * so a session created afterwards survives. The set comes from the
+	 * `active-sessions-${userId}` index and is not re-derived from the database.
+	 *
+	 * Because the eviction runs after the commit, a failure is reported to the
+	 * caller but cannot roll back the committed database work — in particular it
+	 * cannot undo a committed password change.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11073
+	 */
 	async function queueCachedUserSessionDeletion(
 		userId: string,
 		sessionReferences?: readonly ActiveSessionReference[],
@@ -196,16 +238,8 @@ export const createInternalAdapter = (
 		// replacement session created by a later hook must remain active.
 		const references =
 			sessionReferences ?? (await getActiveSessionReferences(userId));
-		await queueAfterTransactionHook(
-			() => deleteCachedUserSessions(userId, references),
-			{
-				onError(error) {
-					logger.error(
-						"Failed to delete committed user sessions from secondary storage",
-						error,
-					);
-				},
-			},
+		await queueAfterTransactionHook(() =>
+			deleteCachedUserSessions(userId, references),
 		);
 	}
 

@@ -660,6 +660,93 @@ describe("revoke sessions on password reset", async () => {
 			expect(await getExistingSession()).toBeNull();
 			expect((await signInWith(testUser.password)).data).not.toBeNull();
 		});
+
+		/**
+		 * Every other test in this block mocks `deleteUserSessions`, so the failure
+		 * it injects lands inside the reset transaction and rolls the token spend
+		 * back. This one lets the real secondary-storage eviction fail: that
+		 * eviction runs after the commit, so the new password stands while the
+		 * sessions it was supposed to revoke stay valid.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/11326
+		 */
+		it("reports a secondary-storage eviction failure that runs after the reset commits", async () => {
+			const store = new Map<string, string>();
+			let storageDown = false;
+			let resetToken = "";
+			const instance = await getTestInstance({
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
+					delete(key) {
+						// Only session-token eviction fails. Index and verification
+						// cleanup must keep working or the reset never reaches it.
+						if (
+							storageDown &&
+							!key.startsWith("active-sessions-") &&
+							!key.startsWith("verification:")
+						) {
+							throw new Error("secondary storage is unavailable");
+						}
+						store.delete(key);
+					},
+				},
+				session: { storeSessionInDatabase: true },
+				verification: { storeInDatabase: true },
+				emailAndPassword: {
+					enabled: true,
+					async sendResetPassword({ url }) {
+						resetToken = url.split("?")[0]!.split("/").pop() || "";
+					},
+					revokeSessionsOnPasswordReset: true,
+				},
+			});
+			const { headers } = await instance.signInWithTestUser();
+			await instance.client.requestPasswordReset({
+				email: instance.testUser.email,
+				redirectTo: "http://localhost:3000",
+			});
+			const signInWith = (password: string) =>
+				instance.client.signIn.email({
+					email: instance.testUser.email,
+					password,
+				});
+
+			storageDown = true;
+			const reset = await instance.client.resetPassword(
+				{ newPassword: "new-password" },
+				{ query: { token: resetToken } },
+			);
+
+			expect(reset.error?.status).toBe(500);
+			expect((await signInWith("new-password")).data).not.toBeNull();
+			expect((await signInWith(instance.testUser.password)).error?.status).toBe(
+				401,
+			);
+			// Reported, not hidden: the caller learns the revocation did not happen.
+			expect(await instance.auth.api.getSession({ headers })).not.toBeNull();
+
+			// The reset committed, so its token is spent and cannot be reused.
+			const retry = await instance.client.resetPassword(
+				{ newPassword: "new-password" },
+				{ query: { token: resetToken } },
+			);
+			expect(retry.error?.status).toBe(400);
+		});
 	});
 });
 

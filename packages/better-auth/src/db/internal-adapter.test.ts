@@ -1394,6 +1394,384 @@ describe("internal adapter test", async () => {
 		expect(storedSession?.session.token).toBe(session.token);
 	});
 
+	const SECONDARY_STORAGE_UNAVAILABLE = "secondary storage is unavailable";
+
+	/**
+	 * Wraps `createStringSecondaryStorage` so `delete` can fail on demand while
+	 * every other member keeps working, and records the keys it was asked to
+	 * delete so the eviction set can be inspected.
+	 */
+	function createEvictableSecondaryStorage(
+		store: Map<string, string>,
+		shouldFail: (key: string) => boolean,
+	) {
+		const storage = createStringSecondaryStorage(store);
+		const deleteAttempts: string[] = [];
+		return {
+			deleteAttempts,
+			storage: {
+				...storage,
+				delete(key: string) {
+					deleteAttempts.push(key);
+					if (shouldFail(key)) {
+						throw new Error(SECONDARY_STORAGE_UNAVAILABLE);
+					}
+					void storage.delete(key);
+				},
+			} satisfies SecondaryStorage,
+		};
+	}
+
+	function readActiveSessions(store: Map<string, string>, userId: string) {
+		return safeJSONParse<{ token: string; expiresAt: number }[]>(
+			store.get(`active-sessions-${userId}`) ?? "[]",
+		);
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("rejects when a cached user session cannot be evicted", async () => {
+		const testMap = new Map<string, string>();
+		let storageDown = false;
+		const { storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => storageDown && !key.startsWith("active-sessions-"),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "eviction-failure-user",
+				email: "eviction-failure@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		expect(testMap.has(session.token)).toBe(true);
+		expect(
+			await testCtx.internalAdapter.findSession(session.token),
+		).not.toBeNull();
+		expect(
+			await testCtx.adapter.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(1);
+
+		storageDown = true;
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow(SECONDARY_STORAGE_UNAVAILABLE);
+
+		// The database work already committed as deleted, and the caller is told
+		// about the eviction instead of being handed a silent success.
+		expect(
+			await testCtx.adapter.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(0);
+		expect(testMap.has(session.token)).toBe(true);
+		expect(
+			await testCtx.internalAdapter.findSession(session.token),
+		).not.toBeNull();
+	});
+
+	/**
+	 * The eviction set is index-derived, so a token that could not be evicted has
+	 * to stay in the index for a later revocation to retry it. Reconciling against
+	 * the whole snapshot instead would write it out and strand it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("keeps an un-evicted token indexed when only part of the eviction succeeds", async () => {
+		const testMap = new Map<string, string>();
+		let failingToken: string | null = null;
+		const { storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => key === failingToken,
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "partial-eviction-user",
+				email: "partial-eviction@example.com",
+			},
+			{ method: "test" },
+		);
+		const first = await testCtx.internalAdapter.createSession(user.id);
+		const second = await testCtx.internalAdapter.createSession(user.id);
+		const third = await testCtx.internalAdapter.createSession(user.id);
+
+		// Failing the last indexed token guarantees the eviction is partial rather
+		// than all-or-nothing, whatever order the tokens were created in.
+		const indexed = readActiveSessions(testMap, user.id);
+		expect(indexed).toHaveLength(3);
+		failingToken = indexed.at(-1)!.token;
+		const evictedTokens = [first.token, second.token, third.token].filter(
+			(token) => token !== failingToken,
+		);
+
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow(SECONDARY_STORAGE_UNAVAILABLE);
+
+		for (const token of evictedTokens) {
+			expect(testMap.has(token)).toBe(false);
+		}
+		expect(testMap.has(failingToken)).toBe(true);
+		expect(
+			await testCtx.adapter.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(0);
+		expect(readActiveSessions(testMap, user.id)).toEqual([
+			{ token: failingToken, expiresAt: indexed.at(-1)!.expiresAt },
+		]);
+	});
+
+	/**
+	 * Characterisation, not a regression test: this passes before and after the
+	 * fix. The revocation set comes only from the active-sessions index, so a
+	 * cached session missing from that index is never evicted and the call
+	 * resolves while the token stays live. Tracked separately.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11073
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("leaves an unindexed cached session untouched by a revocation", async () => {
+		const testMap = new Map<string, string>();
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: createStringSecondaryStorage(testMap),
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "unindexed-session-user",
+				email: "unindexed-session@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+		testMap.delete(`active-sessions-${user.id}`);
+
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).resolves.toBeUndefined();
+
+		expect(
+			await testCtx.adapter.findMany({
+				model: "session",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toHaveLength(0);
+		expect(testMap.has(session.token)).toBe(true);
+		expect(
+			await testCtx.internalAdapter.findSession(session.token),
+		).not.toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("rejects when a cached session cannot be evicted and preserved rows are ended, not deleted", async () => {
+		const testMap = new Map<string, string>();
+		let storageDown = false;
+		const { storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => storageDown && !key.startsWith("active-sessions-"),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+				preserveSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "preserved-eviction-user",
+				email: "preserved-eviction@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		storageDown = true;
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow(SECONDARY_STORAGE_UNAVAILABLE);
+
+		// The preserved row is ended rather than deleted, so the failure has to
+		// leave that semantics untouched.
+		const preserved = await testCtx.adapter.findOne({
+			model: "session",
+			where: [{ field: "token", value: session.token }],
+		});
+		expect(preserved).not.toBeNull();
+		expect(new Date(preserved!.expiresAt).getTime()).toBeLessThanOrEqual(
+			Date.now(),
+		);
+		expect(testMap.has(session.token)).toBe(true);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("rejects and applies nothing when secondary storage is the only session store", async () => {
+		const testMap = new Map<string, string>();
+		let storageDown = false;
+		const { storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => storageDown && !key.startsWith("active-sessions-"),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "storage-only-user",
+				email: "storage-only@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		storageDown = true;
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow(SECONDARY_STORAGE_UNAVAILABLE);
+
+		// The cache is the only store, so nothing was revoked and the end state is
+		// fully retryable.
+		expect(testMap.has(session.token)).toBe(true);
+		expect(
+			await testCtx.internalAdapter.findSession(session.token),
+		).not.toBeNull();
+
+		storageDown = false;
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).resolves.toBeUndefined();
+		expect(testMap.has(session.token)).toBe(false);
+		expect(await testCtx.internalAdapter.findSession(session.token)).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("rejects from deleteUser when the cached sessions cannot be evicted", async () => {
+		const testMap = new Map<string, string>();
+		let storageDown = false;
+		const { storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => storageDown && !key.startsWith("active-sessions-"),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "deleted-user-eviction",
+				email: "deleted-user-eviction@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		storageDown = true;
+		await expect(testCtx.internalAdapter.deleteUser(user.id)).rejects.toThrow(
+			SECONDARY_STORAGE_UNAVAILABLE,
+		);
+
+		expect(await testCtx.internalAdapter.findUserById(user.id)).toBeNull();
+		expect(testMap.has(session.token)).toBe(true);
+	});
+
+	/**
+	 * Records the residual: the eviction is guarded on the user row having been
+	 * deleted, so retrying `deleteUser` after a failed eviction cannot re-arm it.
+	 * `deleteUserSessions` does retry, which the test above covers.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("does not re-arm the eviction when deleteUser is retried after a failed eviction", async () => {
+		const testMap = new Map<string, string>();
+		let storageDown = false;
+		const { deleteAttempts, storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => storageDown && !key.startsWith("active-sessions-"),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "retried-delete-user",
+				email: "retried-delete-user@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		storageDown = true;
+		await expect(testCtx.internalAdapter.deleteUser(user.id)).rejects.toThrow(
+			SECONDARY_STORAGE_UNAVAILABLE,
+		);
+		expect(deleteAttempts.filter((key) => key === session.token)).toHaveLength(
+			1,
+		);
+
+		storageDown = false;
+		await testCtx.internalAdapter.deleteUser(user.id);
+
+		expect(deleteAttempts.filter((key) => key === session.token)).toHaveLength(
+			1,
+		);
+		expect(testMap.has(session.token)).toBe(true);
+	});
+
 	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {
 		const testMap = new Map<string, string>();
 
