@@ -1522,7 +1522,7 @@ describe("internal adapter test", async () => {
 
 		// Failing the last indexed token guarantees the eviction is partial rather
 		// than all-or-nothing, whatever order the tokens were created in.
-		const indexed = readActiveSessions(testMap, user.id);
+		const indexed = readActiveSessions(testMap, user.id) ?? [];
 		expect(indexed).toHaveLength(3);
 		failingToken = indexed.at(-1)!.token;
 		const evictedTokens = [first.token, second.token, third.token].filter(
@@ -1630,7 +1630,9 @@ describe("internal adapter test", async () => {
 
 		// The preserved row is ended rather than deleted, so the failure has to
 		// leave that semantics untouched.
-		const preserved = await testCtx.adapter.findOne({
+		const preserved = await testCtx.adapter.findOne<{
+			expiresAt: Date | number;
+		}>({
 			model: "session",
 			where: [{ field: "token", value: session.token }],
 		});
