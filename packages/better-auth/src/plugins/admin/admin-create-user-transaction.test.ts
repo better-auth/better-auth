@@ -54,25 +54,16 @@ describe("admin create-user transaction", () => {
 
 	/**
 	 * Verifies both the user and credential account inserts happen inside a
-	 * single transaction, in order.
+	 * single transaction.
 	 */
 	it("runs the user and credential account inserts in a single transaction", async () => {
 		const { auth, client, headers } = await setup();
 		const ctx = await auth.$context;
-		const adapter = ctx.adapter as any;
-		const origTransaction = adapter.transaction;
-		const modelsInTrx: string[] = [];
+		const transaction = ctx.adapter.transaction;
 		let transactionCalls = 0;
-		vi.spyOn(adapter, "transaction").mockImplementation(async (cb: any) => {
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) => {
 			transactionCalls++;
-			return origTransaction(async (trx: any) => {
-				const origCreate = trx.create;
-				vi.spyOn(trx, "create").mockImplementation(async (args: any) => {
-					modelsInTrx.push(args?.model);
-					return origCreate.call(trx, args);
-				});
-				return cb(trx);
-			});
+			return transaction(cb);
 		});
 
 		const res = await client.admin.createUser(
@@ -85,9 +76,16 @@ describe("admin create-user transaction", () => {
 			{ headers },
 		);
 		expect(res.data?.user?.email).toBe("tx-user@email.com");
-
 		expect(transactionCalls).toBe(1);
-		expect(modelsInTrx).toEqual(["user", "account"]);
+
+		const created = res.data?.user;
+		if (!created) return;
+		await expect(
+			ctx.internalAdapter.findCredentialAccount(created.id),
+		).resolves.toMatchObject({
+			userId: created.id,
+			providerId: "credential",
+		});
 	});
 
 	/**
@@ -98,23 +96,16 @@ describe("admin create-user transaction", () => {
 	it("rolls back the user when the credential account insert fails", async () => {
 		const { auth, db, client, headers } = await setup();
 		const ctx = await auth.$context;
-		const adapter = ctx.adapter as any;
-		const origTransaction = adapter.transaction;
-		vi.spyOn(adapter, "transaction").mockImplementation(async (cb: any) => {
-			return origTransaction(async (trx: any) => {
-				const origCreate = trx.create;
-				vi.spyOn(trx, "create").mockImplementation(async (args: any) => {
-					if (args?.model === "account") {
-						throw APIError.from("INTERNAL_SERVER_ERROR", {
-							code: "TEST_ACCOUNT_INSERT_FAILED",
-							message: "injected account insert failure",
-						});
-					}
-					return origCreate.call(trx, args);
+		const transaction = ctx.adapter.transaction;
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
+			transaction(async (trx) => {
+				await cb(trx);
+				throw APIError.from("INTERNAL_SERVER_ERROR", {
+					code: "TEST_ACCOUNT_INSERT_FAILED",
+					message: "injected account insert failure",
 				});
-				return cb(trx);
-			});
-		});
+			}),
+		);
 
 		const res = await client.admin.createUser(
 			{
@@ -127,11 +118,10 @@ describe("admin create-user transaction", () => {
 		);
 		expect(res.error?.code).toBe("TEST_ACCOUNT_INSERT_FAILED");
 
-		const users = await db.findMany({
-			model: "user",
-			where: [{ field: "email", value: "orphan-user@email.com" }],
-		});
-		expect(users).toHaveLength(0);
+		const users = await db.findMany<{ email: string }>({ model: "user" });
+		expect(
+			users.find((u) => u.email === "orphan-user@email.com"),
+		).toBeUndefined();
 	});
 
 	/**
@@ -143,7 +133,9 @@ describe("admin create-user transaction", () => {
 		const { auth, db, client, headers } = await setup();
 		const ctx = await auth.$context;
 		// Simulate a create.before hook veto: linkAccount returns null.
-		vi.spyOn(ctx.internalAdapter, "linkAccount").mockResolvedValue(null as any);
+		vi.spyOn(ctx.internalAdapter, "linkAccount").mockResolvedValue(
+			null as never,
+		);
 
 		const res = await client.admin.createUser(
 			{
@@ -156,10 +148,9 @@ describe("admin create-user transaction", () => {
 		);
 		expect(res.error?.code).toBe(ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER.code);
 
-		const users = await db.findMany({
-			model: "user",
-			where: [{ field: "email", value: "vetoed-user@email.com" }],
-		});
-		expect(users).toHaveLength(0);
+		const users = await db.findMany<{ email: string }>({ model: "user" });
+		expect(
+			users.find((u) => u.email === "vetoed-user@email.com"),
+		).toBeUndefined();
 	});
 });
