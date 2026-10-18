@@ -85,6 +85,114 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 }
 
 describe("Node CIMD metadata transport", () => {
+	it("rejects immediately when the signal is already aborted", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/11423
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		const controller = new AbortController();
+		controller.abort(new Error("deadline exceeded"));
+
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json", {
+				signal: controller.signal,
+			}),
+		).rejects.toThrow("deadline exceeded");
+		expect(mocks.lookup).not.toHaveBeenCalled();
+		expect(mocks.request).not.toHaveBeenCalled();
+	});
+
+	it("stops awaiting a stalled lookup when the signal aborts mid-resolution", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/11423
+		let resolveLookup:
+			| ((addresses: { address: string; family: number }[]) => void)
+			| undefined;
+		mocks.lookup.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveLookup = resolve;
+				}),
+		);
+		const controller = new AbortController();
+
+		const pending = fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+			{ signal: controller.signal },
+		);
+		controller.abort(new Error("deadline exceeded"));
+
+		await expect(pending).rejects.toThrow("deadline exceeded");
+		expect(mocks.request).not.toHaveBeenCalled();
+
+		// the outstanding lookup settles in the background without unhandled
+		// rejection; its result is discarded
+		resolveLookup?.([{ address: "93.184.216.34", family: 4 }]);
+		await new Promise((resolve) => setImmediate(resolve));
+		expect(mocks.request).not.toHaveBeenCalled();
+	});
+
+	it("caps outstanding resolver work even after callers abort", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/11423
+		const resolveLookups: Array<
+			(addresses: { address: string; family: number }[]) => void
+		> = [];
+		mocks.lookup.mockImplementation(
+			() =>
+				new Promise((resolve) => {
+					resolveLookups.push(resolve);
+				}),
+		);
+
+		for (let i = 0; i < 16; i++) {
+			const controller = new AbortController();
+			const pending = fetchClientMetadataResource(
+				"https://client.example.com/client.json",
+				{ signal: controller.signal },
+			);
+			await Promise.resolve(); // let the async transport reach the lookup first
+			controller.abort(new Error("deadline exceeded"));
+			await expect(pending).rejects.toThrow("deadline exceeded");
+		}
+		expect(mocks.lookup).toHaveBeenCalledTimes(16);
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).rejects.toThrow("metadata DNS lookup limit exceeded");
+		expect(mocks.lookup).toHaveBeenCalledTimes(16);
+
+		for (const resolve of resolveLookups) {
+			resolve([{ address: "93.184.216.34", family: 4 }]);
+		}
+		await new Promise((resolve) => setImmediate(resolve));
+		mocks.lookup.mockResolvedValueOnce([
+			{ address: "93.184.216.34", family: 4 },
+		]);
+		mockHttpsResponse();
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).resolves.toBeInstanceOf(Response);
+		expect(mocks.lookup).toHaveBeenCalledTimes(17);
+	});
+
+	it("cleans up the abort listener when the lookup settles first", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/11423
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		mockHttpsResponse({ body: "ok" });
+		const controller = new AbortController();
+		const addListener = vi.spyOn(controller.signal, "addEventListener");
+		const removeListener = vi.spyOn(controller.signal, "removeEventListener");
+
+		const response = await fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+			{ signal: controller.signal },
+		);
+		expect(await response.text()).toBe("ok");
+		const removed = removeListener.mock.calls.find(
+			([type]) => type === "abort",
+		)?.[1];
+		expect(removed).toBeDefined();
+		expect(addListener).toHaveBeenCalledWith("abort", removed, {
+			once: true,
+		});
+	});
+
 	it("rejects private DNS answers before opening a connection", async () => {
 		mocks.lookup.mockResolvedValue([
 			{ address: "93.184.216.34", family: 4 },
