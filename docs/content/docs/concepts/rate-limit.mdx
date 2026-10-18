@@ -359,8 +359,9 @@ export const rateLimitTableFields = [
 	{
 		name: "windowExpiresAt",
 		type: "bigint",
+		isOptional: true,
 		description:
-			"Nullable timestamp of when the current window ends (epoch ms). Used to prune each row once its own window has elapsed.",
+			"Timestamp of when the current window ends (epoch ms). Used to prune each row once its own window has elapsed.",
 	},
 ];
 

@@ -10,7 +10,7 @@ The `rateLimit` table gains a nullable `windowExpiresAt` column holding each row
 If you generate the `rateLimit` schema, run your migration to add the column:
 
 ```bash
-npx @better-auth/cli@latest generate
+npx auth@latest generate
 ```
 
 A minor bump is used because database-backed users must apply a schema migration. `X-Retry-After` is now also clamped to at least 1 second, so a request that arrives as its window ends no longer receives a `0` or negative value.

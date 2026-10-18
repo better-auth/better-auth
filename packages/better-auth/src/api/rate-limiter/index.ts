@@ -73,9 +73,14 @@ function decideConsume(
 			retryAfter: null,
 		};
 	}
-	// Rows written before `windowExpiresAt` existed only have the window start,
-	// so derive the deadline from the window currently in effect.
-	const windowExpiresAt = data.windowExpiresAt ?? data.lastRequest + windowInMs;
+	// The window this row is held open for is the longer of its stored deadline
+	// (absent on entries written before the field existed) and the current
+	// window measured from the same start, so a rule that later returns a
+	// shorter window cannot close a window that is still open.
+	const windowExpiresAt = Math.max(
+		data.windowExpiresAt ?? data.lastRequest,
+		data.lastRequest + windowInMs,
+	);
 	if (now >= windowExpiresAt) {
 		return {
 			next: {
@@ -193,11 +198,15 @@ function createDatabaseStorageWrapper(
 		}
 
 		// `lastRequest` is the window start (fixed window anchored to the
-		// first request), not the most recent request. Rows written before
-		// `windowExpiresAt` existed only carry the start, so derive their
-		// deadline from the window currently in effect.
-		const windowExpiresAt =
-			data.windowExpiresAt ?? data.lastRequest + windowInMs;
+		// first request), not the most recent request. A `customRules` function
+		// can return a different window per request, so the window this row is
+		// actually held open for is the longer of its stored deadline (absent on
+		// rows written before the column existed) and the current window measured
+		// from the same start.
+		const windowExpiresAt = Math.max(
+			data.windowExpiresAt ?? data.lastRequest,
+			data.lastRequest + windowInMs,
+		);
 
 		// Window elapsed: reset to a single request, guarded on the window so a
 		// concurrent increment in a new window cannot be clobbered.
@@ -227,19 +236,33 @@ function createDatabaseStorageWrapper(
 		}
 
 		// Within the window and under the max: increment the count only, keeping the
-		// window's start and deadline so the window does not slide. Guarded on
-		// both the window and the max, so a burst of concurrent requests can
-		// never exceed the limit.
+		// window's start and deadline so the window does not slide. The guard is
+		// the row's own deadline, not the current rule's window, so a shorter
+		// window returned later cannot reject a request that still has budget.
+		// Rows without the deadline fall back to the window-start comparison.
 		const incremented = await db.incrementOne<RateLimit>({
 			model,
 			where: [
 				{ field: "key", value: key },
-				{ field: "lastRequest", operator: "gt", value: now - windowInMs },
+				{ field: "windowExpiresAt", operator: "gt", value: now },
 				{ field: "count", operator: "lt", value: rule.max },
 			],
 			increment: { count: 1 },
 		});
 		if (incremented) {
+			return { allowed: true, retryAfter: null };
+		}
+		const incrementedLegacy = await db.incrementOne<RateLimit>({
+			model,
+			where: [
+				{ field: "key", value: key },
+				{ field: "windowExpiresAt", operator: "eq", value: null },
+				{ field: "lastRequest", operator: "gt", value: now - windowInMs },
+				{ field: "count", operator: "lt", value: rule.max },
+			],
+			increment: { count: 1 },
+		});
+		if (incrementedLegacy) {
 			return { allowed: true, retryAfter: null };
 		}
 
@@ -249,8 +272,10 @@ function createDatabaseStorageWrapper(
 		if (!fresh) {
 			return consume(key, rule);
 		}
-		const freshExpiresAt =
-			fresh.windowExpiresAt ?? fresh.lastRequest + windowInMs;
+		const freshExpiresAt = Math.max(
+			fresh.windowExpiresAt ?? fresh.lastRequest,
+			fresh.lastRequest + windowInMs,
+		);
 		if (now >= freshExpiresAt) {
 			return consume(key, rule);
 		}
