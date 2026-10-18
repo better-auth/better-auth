@@ -59,14 +59,21 @@ type ActiveSessionReference = {
 const NO_EVICTION_FAILURE = Symbol("no eviction failure");
 
 /**
- * The after-commit hooks queued on the transaction currently in scope, or
+ * The after-commit hook queue of the transaction currently in scope, or
  * `undefined` when there is none.
+ *
+ * Only a transaction drains that queue. Without one, `queueAfterTransactionHook`
+ * runs a hook inline instead of queueing it, so a hook that re-queued itself here
+ * would never run.
  */
 async function getPendingTransactionHooks(): Promise<
 	Array<() => Promise<void>> | undefined
 > {
 	return getCurrentDBAdapterAsyncLocalStorage()
-		.then((storage) => storage.getStore()?.pendingHooks)
+		.then((storage) => {
+			const store = storage.getStore();
+			return store?.isTransactionActive ? store.pendingHooks : undefined;
+		})
 		.catch(() => undefined);
 }
 
@@ -254,49 +261,49 @@ export const createInternalAdapter = (
 		// replacement session created by a later hook must remain active.
 		const references =
 			sessionReferences ?? (await getActiveSessionReferences(userId));
+		// Read before queueing: the drain runs after the transaction's callback has
+		// returned, outside the scope that owns the queue, so the hook below cannot
+		// look it up again from inside the drain.
+		const pendingHooks = await getPendingTransactionHooks();
 		// The eviction reports its failure by throwing, and a throwing after-commit
 		// hook ends the drain, so it must not run while hooks are still queued
-		// behind it. Moving itself to the back on its first turn does that without
-		// having to know what those hooks are: the eviction's failure then surfaces
-		// once nothing is left behind it to skip, and `/change-password` still gets
-		// the replacement session mirrored into the cache.
-		const pendingHooks = await getPendingTransactionHooks();
-		const queuedAt = pendingHooks?.length;
-		let queuedHook: (() => Promise<void>) | undefined;
+		// behind it. On its first turn it re-queues itself and returns. Holding a
+		// reference to itself is all that takes: nothing has to survive the await
+		// inside `queueAfterTransactionHook` and then find its own entry in the
+		// queue by index, which a concurrent queueing call could invalidate.
+		// `deferred` is never reset, so this happens at most once and the eviction
+		// runs on the turn after it — by which point nothing is queued behind it,
+		// and `/change-password` still gets the replacement session mirrored into
+		// the cache.
+		//
+		// That only orders the eviction last; it cannot make it run. A hook queued
+		// ahead of it that throws — a `databaseHooks.*.delete.after` the user wrote,
+		// for instance — still ends the drain before the eviction's turn comes
+		// round. See https://github.com/better-auth/better-auth/issues/11735.
 		let deferred = false;
-		await queueAfterTransactionHook(
-			async () => {
-				if (
-					pendingHooks &&
-					queuedHook &&
-					!deferred &&
-					pendingHooks.at(-1) !== queuedHook
-				) {
-					deferred = true;
-					pendingHooks.push(queuedHook);
-					return;
-				}
+		const evict = async () => {
+			if (pendingHooks && !deferred) {
+				deferred = true;
+				pendingHooks.push(evict);
+				return;
+			}
+			try {
 				await deleteCachedUserSessions(userId, references);
-			},
-			{
-				onError(error) {
+			} catch (error) {
+				// Surfaced to the caller as well: the cache is still serving a
+				// session they were told was revoked.
+				try {
 					logger.error(
 						"Failed to delete committed user sessions from secondary storage",
 						error,
 					);
-					// Surfaced to the caller as well: the cache is still serving a
-					// session they were told was revoked.
-					throw error;
-				},
-			},
-		);
-		if (
-			pendingHooks &&
-			queuedAt !== undefined &&
-			pendingHooks.length > queuedAt
-		) {
-			queuedHook = pendingHooks[queuedAt];
-		}
+				} catch {
+					// A failing logger must not replace the eviction error.
+				}
+				throw error;
+			}
+		};
+		await queueAfterTransactionHook(evict);
 	}
 
 	async function withVerificationConsumeLock<T>(

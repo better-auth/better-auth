@@ -1487,6 +1487,49 @@ describe("internal adapter test", async () => {
 	});
 
 	/**
+	 * `logger` is user-supplied, and `createLogger` hands the call straight to the
+	 * user's `log` function, so the report of an eviction failure can itself throw.
+	 * A failing logger must not replace the error the caller is told about — that
+	 * error is the only thing identifying which storage call failed.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("reports the eviction error even when the logger throws", async () => {
+		const testMap = new Map<string, string>();
+		let storageDown = false;
+		let failLogging = false;
+		const { storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => storageDown && !key.startsWith("active-sessions-"),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			logger: {
+				log() {
+					if (failLogging) throw new Error("the logger is down");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "failing-logger-user",
+				email: "failing-logger@example.com",
+			},
+			{ method: "test" },
+		);
+		await testCtx.internalAdapter.createSession(user.id);
+
+		storageDown = true;
+		failLogging = true;
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow(SECONDARY_STORAGE_UNAVAILABLE);
+	});
+
+	/**
 	 * The eviction set is index-derived, so a token that could not be evicted has
 	 * to stay in the index for a later revocation to retry it. Reconciling against
 	 * the whole snapshot instead would write it out and strand it.
