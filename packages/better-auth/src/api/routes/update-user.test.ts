@@ -281,6 +281,79 @@ describe("updateUser", () => {
 			expect((await changePassword()).error?.status).toBe(500);
 			expect([...store.keys()].sort()).toEqual(keysBefore);
 		});
+
+		/**
+		 * `revokeOtherSessions` queues the cached-session eviction and then the
+		 * replacement session's cache mirror in the same transaction. The eviction
+		 * reports a failure by throwing, and a throwing after-commit hook ends the
+		 * drain, so it has to be queued ahead of the mirror: otherwise the mirror
+		 * never runs and the replacement session survives only as a committed
+		 * database row.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/11326
+		 */
+		it("mirrors the replacement session even when the eviction fails", async () => {
+			const store = new Map<string, string>();
+			let storageDown = false;
+			const { db, ctx, changePassword, getExistingSession } = await setup({
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, value);
+					},
+					get(key) {
+						return store.get(key) || null;
+					},
+					getAndDelete(key) {
+						const value = store.get(key) || null;
+						store.delete(key);
+						return value;
+					},
+					increment(key) {
+						const count = Number(store.get(key) ?? 0) + 1;
+						store.set(key, String(count));
+						return count;
+					},
+					delete(key) {
+						// The index has to stay writable or the eviction stops at the
+						// reconciliation instead of the token.
+						if (storageDown && !key.startsWith("active-sessions-")) {
+							throw new Error("secondary storage is unavailable");
+						}
+						store.delete(key);
+					},
+				},
+				session: { storeSessionInDatabase: true },
+			});
+			const userId = (await getExistingSession())!.user.id;
+			const sessionsBefore: Session[] = await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: userId }],
+			});
+			const staleTokens = sessionsBefore.map((row) => row.token);
+			expect(staleTokens.length).toBeGreaterThan(0);
+			storageDown = true;
+
+			expect((await changePassword()).error?.status).toBe(500);
+
+			// The replacement session is committed, and the failed eviction must not
+			// have skipped the mirror that puts it in the cache.
+			const sessionsAfter: Session[] = await db.findMany({
+				model: "session",
+				where: [{ field: "userId", value: userId }],
+			});
+			expect(sessionsAfter).toHaveLength(1);
+			const replacement = sessionsAfter[0]!.token;
+			expect(store.has(replacement)).toBe(true);
+			expect(
+				(await ctx.internalAdapter.findSession(replacement))?.session.token,
+			).toBe(replacement);
+
+			// The eviction still failed, so the sessions it should have revoked are
+			// still served.
+			for (const token of staleTokens) {
+				expect(store.has(token)).toBe(true);
+			}
+		});
 	});
 
 	it("should update account's updatedAt when changing password", async () => {

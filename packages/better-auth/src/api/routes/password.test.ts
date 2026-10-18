@@ -674,6 +674,7 @@ describe("revoke sessions on password reset", async () => {
 			const store = new Map<string, string>();
 			let storageDown = false;
 			let resetToken = "";
+			const onPasswordReset = vi.fn();
 			const instance = await getTestInstance({
 				secondaryStorage: {
 					set(key, value) {
@@ -713,6 +714,7 @@ describe("revoke sessions on password reset", async () => {
 						resetToken = url.split("?")[0]!.split("/").pop() || "";
 					},
 					revokeSessionsOnPasswordReset: true,
+					onPasswordReset,
 				},
 			});
 			const { headers } = await instance.signInWithTestUser();
@@ -739,6 +741,9 @@ describe("revoke sessions on password reset", async () => {
 			);
 			// Reported, not hidden: the caller learns the revocation did not happen.
 			expect(await instance.auth.api.getSession({ headers })).not.toBeNull();
+			// The reset itself failed, so the documented hook contract is that
+			// `onPasswordReset` does not run — even though the password did change.
+			expect(onPasswordReset).not.toHaveBeenCalled();
 
 			// The reset committed, so its token is spent and cannot be reused.
 			const retry = await instance.client.resetPassword(

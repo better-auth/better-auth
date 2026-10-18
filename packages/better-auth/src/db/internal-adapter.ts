@@ -9,6 +9,7 @@ import type {
 import {
 	getCurrentAdapter,
 	getCurrentAuthEndpointContext,
+	getCurrentDBAdapterAsyncLocalStorage,
 	queueAfterTransactionHook,
 	runWithTransaction,
 	tryGetCurrentAuthEndpointContext,
@@ -49,6 +50,25 @@ type ActiveSessionReference = {
 	readonly token: string;
 	readonly expiresAt: number;
 };
+
+/**
+ * Marks "no eviction failed" for `deleteCachedUserSessions`. A secondary storage
+ * can reject with any value, including a falsy one, so the failure cannot be
+ * tracked by truthiness.
+ */
+const NO_EVICTION_FAILURE = Symbol("no eviction failure");
+
+/**
+ * The after-commit hooks queued on the transaction currently in scope, or
+ * `undefined` when there is none.
+ */
+async function getPendingTransactionHooks(): Promise<
+	Array<() => Promise<void>> | undefined
+> {
+	return getCurrentDBAdapterAsyncLocalStorage()
+		.then((storage) => storage.getStore()?.pendingHooks)
+		.catch(() => undefined);
+}
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -171,7 +191,7 @@ export const createInternalAdapter = (
 		if (!secondaryStorage) return;
 
 		const evictedTokens = new Set<string>();
-		let evictionError: unknown;
+		let evictionError: unknown = NO_EVICTION_FAILURE;
 		for (const { token } of sessionReferences) {
 			try {
 				await secondaryStorage.delete(token);
@@ -179,7 +199,7 @@ export const createInternalAdapter = (
 			} catch (error) {
 				// Every remaining token is still attempted, so a partial eviction
 				// clears as much as the storage will allow before it is reported.
-				evictionError ??= error;
+				if (evictionError === NO_EVICTION_FAILURE) evictionError = error;
 			}
 		}
 
@@ -208,19 +228,15 @@ export const createInternalAdapter = (
 			}
 		} catch (error) {
 			// A reconciliation failure must not hide an eviction failure.
-			evictionError ??= error;
+			if (evictionError === NO_EVICTION_FAILURE) evictionError = error;
 		}
 
-		if (evictionError) throw evictionError;
+		if (evictionError !== NO_EVICTION_FAILURE) throw evictionError;
 	}
 
 	/**
 	 * Queues the removal of a user's sessions from secondary storage, running it
 	 * once the surrounding database work commits.
-	 *
-	 * Callers may pass the revocation set captured before their destructive work
-	 * so a session created afterwards survives. The set comes from the
-	 * `active-sessions-${userId}` index and is not re-derived from the database.
 	 *
 	 * Because the eviction runs after the commit, a failure is reported to the
 	 * caller but cannot roll back the committed database work — in particular it
@@ -238,9 +254,49 @@ export const createInternalAdapter = (
 		// replacement session created by a later hook must remain active.
 		const references =
 			sessionReferences ?? (await getActiveSessionReferences(userId));
-		await queueAfterTransactionHook(() =>
-			deleteCachedUserSessions(userId, references),
+		// The eviction reports its failure by throwing, and a throwing after-commit
+		// hook ends the drain, so it must not run while hooks are still queued
+		// behind it. Moving itself to the back on its first turn does that without
+		// having to know what those hooks are: the eviction's failure then surfaces
+		// once nothing is left behind it to skip, and `/change-password` still gets
+		// the replacement session mirrored into the cache.
+		const pendingHooks = await getPendingTransactionHooks();
+		const queuedAt = pendingHooks?.length;
+		let queuedHook: (() => Promise<void>) | undefined;
+		let deferred = false;
+		await queueAfterTransactionHook(
+			async () => {
+				if (
+					pendingHooks &&
+					queuedHook &&
+					!deferred &&
+					pendingHooks.at(-1) !== queuedHook
+				) {
+					deferred = true;
+					pendingHooks.push(queuedHook);
+					return;
+				}
+				await deleteCachedUserSessions(userId, references);
+			},
+			{
+				onError(error) {
+					logger.error(
+						"Failed to delete committed user sessions from secondary storage",
+						error,
+					);
+					// Surfaced to the caller as well: the cache is still serving a
+					// session they were told was revoked.
+					throw error;
+				},
+			},
 		);
+		if (
+			pendingHooks &&
+			queuedAt !== undefined &&
+			pendingHooks.length > queuedAt
+		) {
+			queuedHook = pendingHooks[queuedAt];
+		}
 	}
 
 	async function withVerificationConsumeLock<T>(

@@ -1404,6 +1404,8 @@ describe("internal adapter test", async () => {
 	function createEvictableSecondaryStorage(
 		store: Map<string, string>,
 		shouldFail: (key: string) => boolean,
+		failureFor: (key: string) => Error = () =>
+			new Error(SECONDARY_STORAGE_UNAVAILABLE),
 	) {
 		const storage = createStringSecondaryStorage(store);
 		const deleteAttempts: string[] = [];
@@ -1411,12 +1413,10 @@ describe("internal adapter test", async () => {
 			deleteAttempts,
 			storage: {
 				...storage,
-				delete(key: string) {
+				async delete(key: string) {
 					deleteAttempts.push(key);
-					if (shouldFail(key)) {
-						throw new Error(SECONDARY_STORAGE_UNAVAILABLE);
-					}
-					void storage.delete(key);
+					if (shouldFail(key)) throw failureFor(key);
+					await storage.delete(key);
 				},
 			} satisfies SecondaryStorage,
 		};
@@ -1546,6 +1546,208 @@ describe("internal adapter test", async () => {
 		expect(readActiveSessions(testMap, user.id)).toEqual([
 			{ token: failingToken, expiresAt: indexed.at(-1)!.expiresAt },
 		]);
+	});
+
+	/**
+	 * A single failing delete must not cut the eviction short: the remaining
+	 * tokens are still evicted and the first failure is reported once the sweep
+	 * is done. Failing the first indexed token is what proves the loop keeps
+	 * going instead of stopping at the rejection.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("attempts every indexed token after an eviction failure", async () => {
+		const testMap = new Map<string, string>();
+		let failingToken: string | null = null;
+		const { deleteAttempts, storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => key === failingToken,
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "continued-eviction-user",
+				email: "continued-eviction@example.com",
+			},
+			{ method: "test" },
+		);
+		const first = await testCtx.internalAdapter.createSession(user.id);
+		const second = await testCtx.internalAdapter.createSession(user.id);
+		const third = await testCtx.internalAdapter.createSession(user.id);
+
+		const indexed = readActiveSessions(testMap, user.id) ?? [];
+		expect(indexed).toHaveLength(3);
+		failingToken = indexed.at(0)!.token;
+
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow(SECONDARY_STORAGE_UNAVAILABLE);
+
+		for (const session of [first, second, third]) {
+			expect(
+				deleteAttempts.filter((key) => key === session.token),
+			).toHaveLength(1);
+		}
+		for (const session of [second, third]) {
+			expect(testMap.has(session.token)).toBe(false);
+		}
+		expect(testMap.has(first.token)).toBe(true);
+	});
+
+	/**
+	 * Reconciling the active-sessions index is part of the same revocation. A
+	 * failure there leaves the index describing sessions that are already gone,
+	 * so it is reported like an eviction failure instead of passing silently.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("rejects when the active-sessions index cannot be reconciled", async () => {
+		const testMap = new Map<string, string>();
+		const { storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => key.startsWith("active-sessions-"),
+			(key) => new Error(`index write failed for ${key}`),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "reconciliation-failure-user",
+				email: "reconciliation-failure@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow(`index write failed for active-sessions-${user.id}`);
+
+		// The eviction itself still ran, so the token is gone even though the
+		// index that listed it could not be rewritten.
+		expect(testMap.has(session.token)).toBe(false);
+		expect(testMap.has(`active-sessions-${user.id}`)).toBe(true);
+	});
+
+	/**
+	 * When both halves of the revocation fail, the eviction failure is the one
+	 * the caller sees: it is the reason a revoked session can stay usable, while
+	 * a reconciliation failure is secondary bookkeeping.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("reports the eviction failure when the index reconciliation fails too", async () => {
+		const testMap = new Map<string, string>();
+		let failingToken: string | null = null;
+		const { storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => key === failingToken || key.startsWith("active-sessions-"),
+			(key) =>
+				key.startsWith("active-sessions-")
+					? new Error(`index write failed for ${key}`)
+					: new Error(SECONDARY_STORAGE_UNAVAILABLE),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "eviction-and-index-failure-user",
+				email: "eviction-and-index-failure@example.com",
+			},
+			{ method: "test" },
+		);
+		await testCtx.internalAdapter.createSession(user.id);
+		await testCtx.internalAdapter.createSession(user.id);
+
+		// Ageing the failing entry out of the index leaves the reconciliation
+		// with nothing to write, so it takes the delete path and fails too.
+		const indexed = readActiveSessions(testMap, user.id) ?? [];
+		expect(indexed).toHaveLength(2);
+		failingToken = indexed.at(0)!.token;
+		const evictedToken = indexed.at(1)!.token;
+		testMap.set(
+			`active-sessions-${user.id}`,
+			JSON.stringify([
+				{ token: failingToken, expiresAt: Date.now() - 60_000 },
+				indexed.at(1),
+			]),
+		);
+
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toThrow(SECONDARY_STORAGE_UNAVAILABLE);
+
+		expect(testMap.has(failingToken)).toBe(true);
+		expect(testMap.has(evictedToken)).toBe(false);
+	});
+
+	/**
+	 * A storage can reject with any value, and a falsy one is still a failure.
+	 * Resolving on one would tell the caller a session was revoked while the
+	 * cache still serves it.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("rejects when the eviction rejects with a falsy value", async () => {
+		const testMap = new Map<string, string>();
+		let storageDown = false;
+		const storage = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				...storage,
+				delete(key: string) {
+					if (storageDown && !key.startsWith("active-sessions-")) {
+						return Promise.reject(undefined);
+					}
+					return storage.delete(key);
+				},
+			} satisfies SecondaryStorage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const user = await testCtx.internalAdapter.createUser(
+			{
+				name: "falsy-eviction-failure-user",
+				email: "falsy-eviction-failure@example.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testCtx.internalAdapter.createSession(user.id);
+
+		storageDown = true;
+		let outcome: "resolved" | "rejected" = "resolved";
+		await testCtx.internalAdapter.deleteUserSessions(user.id).catch(() => {
+			outcome = "rejected";
+		});
+
+		expect(outcome).toBe("rejected");
+		expect(testMap.has(session.token)).toBe(true);
 	});
 
 	/**
