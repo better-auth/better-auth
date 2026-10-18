@@ -308,8 +308,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
 	const scheme = Array.isArray(rawScheme) ? rawScheme[0] : rawScheme;
+	const nativeScheme = isWeb ? undefined : scheme;
 
-	if (!scheme && !isWeb) {
+	if (!nativeScheme && !isWeb) {
 		throw new Error(
 			"Scheme not found in app.json. Please provide a scheme in the options.",
 		);
@@ -443,7 +444,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					},
 				},
 				async init(url, options) {
-					if (isWeb) {
+					if (!nativeScheme) {
 						return {
 							url,
 							options: options as ClientFetchOption,
@@ -469,7 +470,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
-							...(isLinkSocial ? { "expo-origin": getOrigin(scheme!) } : {}),
+							...(isLinkSocial
+								? { "expo-origin": getOrigin(nativeScheme) }
+								: {}),
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
@@ -478,7 +481,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
-							"expo-origin": getOrigin(scheme!),
+							"expo-origin": getOrigin(nativeScheme),
 							"x-skip-oauth-proxy": "true",
 						};
 						if (options.body?.callbackURL) {

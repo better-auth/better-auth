@@ -1,17 +1,14 @@
-import { createRemoteJWKSet, customFetch, jwtVerify } from "jose";
+import type { JWTPayload } from "jose";
 import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
-import {
-	assertResponseNotRedirect,
-	fetchRefusingRedirects,
-	noFollowRedirect,
-} from "./reject-redirects";
+import { fetchRefusingRedirects } from "./reject-redirects";
 import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
 import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+import { verifyJwsToken } from "./verify";
 
 interface AuthorizationCodeRequestInput {
 	code: string;
@@ -161,24 +158,34 @@ export async function validateAuthorizationCode({
 	return tokens;
 }
 
-export async function validateToken(
+export async function validateToken<PayloadType = JWTPayload>(
 	token: string,
 	jwksEndpoint: string,
 	options?: {
 		audience?: string | string[];
 		issuer?: string | string[];
+		/**
+		 * Allowed JWS algorithms. Omit to use JOSE's default algorithm policy.
+		 */
+		algorithms?: string[];
+		/**
+		 * Claims that must be present. Claim values require separate validation.
+		 */
+		requiredClaims?: string[];
+		/**
+		 * Allowed clock skew in seconds. Defaults to zero.
+		 */
+		clockTolerance?: number;
 	},
 ) {
-	const jwks = createRemoteJWKSet(new URL(jwksEndpoint), {
-		[customFetch]: async (url, init) => {
-			const response = await fetch(url, { ...init, ...noFollowRedirect });
-			assertResponseNotRedirect(String(url), response);
-			return response;
+	return verifyJwsToken<PayloadType>(token, {
+		jwksFetch: new URL(jwksEndpoint).href,
+		verifyOptions: {
+			audience: options?.audience,
+			issuer: options?.issuer,
+			algorithms: options?.algorithms,
+			requiredClaims: options?.requiredClaims,
+			clockTolerance: options?.clockTolerance,
 		},
 	});
-	const verified = await jwtVerify(token, jwks, {
-		audience: options?.audience,
-		issuer: options?.issuer,
-	});
-	return verified;
 }
