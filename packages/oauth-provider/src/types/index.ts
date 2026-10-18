@@ -570,6 +570,32 @@ export interface OAuthOptions<
 		defaultResult: boolean,
 	) => Awaitable<boolean>;
 	/**
+	 * Allows `http:` redirect URIs that the default policy rejects.
+	 *
+	 * By default, redirect and post-logout redirect URIs must use HTTPS, except
+	 * on loopback hosts, and web clients cannot use loopback hosts at all. When
+	 * the default policy rejects an `http:` URI, this callback decides: return
+	 * `true` to accept it. It applies to client registration and updates, the
+	 * authorize endpoint, and the end-session endpoint. A callback that throws
+	 * rejects the URI.
+	 *
+	 * Use it for deployments served over plain HTTP on a private network, or
+	 * for web clients on `localhost` during development. Plain HTTP exposes
+	 * authorization codes to anyone on the network path, so accept only origins
+	 * you control.
+	 *
+	 * @example
+	 * ```ts
+	 * oauthProvider({
+	 *   allowInsecureRedirectUri: (url) => url.origin === "http://192.168.1.50:8000",
+	 * })
+	 * ```
+	 *
+	 * @param url - The parsed `http:` redirect URI
+	 * @returns `true` to accept the URI
+	 */
+	allowInsecureRedirectUri?: (url: URL) => boolean;
+	/**
 	 * Protected resources the AS issues access tokens for. Promotes the
 	 * resource model into a first-class persisted entity with per-resource
 	 * token policy.

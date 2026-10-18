@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
@@ -16,6 +17,7 @@ import {
 	decryptStoredClientSecret,
 	getClient,
 	getJwtPlugin,
+	isRedirectUriTransportAllowed,
 	resolveSubjectIdentifier,
 } from "./utils";
 
@@ -891,6 +893,17 @@ export async function rpInitiatedLogoutEndpoint(
 	const query = (ctx.query ?? {}) as RPInitiatedLogoutRequest;
 	const body = (ctx.body ?? {}) as RPInitiatedLogoutRequest;
 	const request: RPInitiatedLogoutRequest = { ...query, ...body };
+	if (
+		request.post_logout_redirect_uri &&
+		!isRedirectUriTransportAllowed(opts, request.post_logout_redirect_uri)
+	) {
+		return logoutProtocolError(
+			ctx,
+			"BAD_REQUEST",
+			"invalid_request",
+			INSECURE_REDIRECT_URI_MESSAGE,
+		);
+	}
 
 	const currentSession = await getCurrentBrowserSession(ctx);
 	const hasHint = request.id_token_hint !== undefined;

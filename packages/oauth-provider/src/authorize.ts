@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
-import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
+import { isLoopbackIP } from "@better-auth/core/utils/host";
+import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
@@ -29,7 +30,7 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import { authorizationQuerySchema, SafeUrlSchema } from "./types/zod";
+import { authorizationQuerySchema, RedirectUriSyntaxSchema } from "./types/zod";
 
 import {
 	clientAllowsGrant,
@@ -38,6 +39,7 @@ import {
 	getConsentReferenceId,
 	getJwtPlugin,
 	isPKCERequired,
+	isRedirectUriTransportAllowed,
 	parsePrompt,
 	storeToken,
 	toResourceList,
@@ -179,21 +181,15 @@ function redirectWithPromptNoneError(
 }
 
 /**
- * Validates that the issuer URL
- * - MUST use HTTPS scheme (HTTP allowed for localhost in dev)
- * - MUST NOT contain query components
- * - MUST NOT contain fragment components
+ * Normalizes the issuer URL by removing query and fragment components, which
+ * RFC 8414 §2 forbids. The scheme is kept as configured: the issuer must match
+ * the `iss` claim of issued tokens exactly (RFC 9207 §2.4).
  *
- * @returns The validated issuer URL, or a sanitized version if invalid
+ * @returns The issuer URL without query, fragment, or trailing slash
  */
 export function validateIssuerUrl(issuer: string): string {
 	try {
 		const url = new URL(issuer);
-
-		if (url.protocol !== "https:" && !isLoopbackHost(url.host)) {
-			url.protocol = "https:";
-		}
-
 		url.search = "";
 		url.hash = "";
 
@@ -336,9 +332,12 @@ function findRegisteredRedirectUri(
 	});
 }
 
-/** Keep URI syntax and credential checks outside the custom trust decision. */
+/**
+ * Keep URI syntax and credential checks outside the custom trust decision.
+ * Callers apply the HTTPS policy first.
+ */
 function isSafeCustomRedirectUri(uri: string): boolean {
-	if (!SafeUrlSchema.safeParse(uri).success) return false;
+	if (!RedirectUriSyntaxSchema.safeParse(uri).success) return false;
 	const parsed = new URL(uri);
 	return parsed.username.length === 0 && parsed.password.length === 0;
 }
@@ -358,6 +357,7 @@ async function resolveTrustedRedirectUri(
 	redirectUri: string | undefined,
 ): Promise<string | null> {
 	if (!clientId || !redirectUri) return null;
+	if (!isRedirectUriTransportAllowed(opts, redirectUri)) return null;
 	let client: Awaited<ReturnType<typeof getClient>> | undefined;
 	try {
 		client = await getClient(ctx, opts, clientId);
@@ -524,6 +524,15 @@ export async function authorizeEndpoint(
 	}
 	query = parsedQuery.data as OAuthAuthorizationQuery;
 	ctx.query = query;
+	if (
+		query.redirect_uri &&
+		!isRedirectUriTransportAllowed(opts, query.redirect_uri)
+	) {
+		return handleRedirect(
+			ctx,
+			getErrorURL(ctx, "invalid_request", INSECURE_REDIRECT_URI_MESSAGE),
+		);
+	}
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
 	});

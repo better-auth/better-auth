@@ -4,7 +4,10 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
-import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import {
+	INSECURE_REDIRECT_URI_MESSAGE,
+	isNativePrivateUseRedirectUri,
+} from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
@@ -32,7 +35,12 @@ import type {
 	Scope,
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import {
+	isInsecureRedirectUriAllowed,
+	isRedirectUriTransportAllowed,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
@@ -231,6 +239,7 @@ async function resolveClientRegistrationResources(
 function validateClientRedirectUri(
 	redirectUri: string,
 	applicationType: "web" | "native",
+	opts: OAuthOptions<Scope[]>,
 ) {
 	let url: URL;
 	try {
@@ -255,6 +264,7 @@ function validateClientRedirectUri(
 			`redirect URI localhost must not include trailing dots: ${redirectUri}`,
 		);
 	}
+	if (isHttp && isInsecureRedirectUriAllowed(opts, url)) return;
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
 
@@ -471,7 +481,16 @@ export async function checkOAuthClient(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??
 				(isClientMetadataDocument ? "native" : "web"),
+			opts,
 		);
+	}
+	for (const uri of clientWithDefaults.post_logout_redirect_uris ?? []) {
+		if (!isRedirectUriTransportAllowed(opts, uri)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `${INSECURE_REDIRECT_URI_MESSAGE}: ${uri}`,
+			});
+		}
 	}
 
 	// Validate correlation between grant_types and response_types
