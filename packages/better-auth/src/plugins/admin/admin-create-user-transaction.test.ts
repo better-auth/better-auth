@@ -57,9 +57,17 @@ describe("admin create-user transaction", () => {
 		const ctx = await auth.$context;
 		const transaction = ctx.adapter.transaction;
 		let transactionCalls = 0;
+		const modelsInTrx: string[] = [];
 		vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) => {
 			transactionCalls++;
-			return transaction(cb);
+			return transaction(async (trx) => {
+				const origCreate = trx.create.bind(trx);
+				vi.spyOn(trx, "create").mockImplementation(async (data) => {
+					modelsInTrx.push(data.model);
+					return origCreate(data);
+				});
+				return cb(trx);
+			});
 		});
 
 		const res = await client.admin.createUser(
@@ -73,6 +81,7 @@ describe("admin create-user transaction", () => {
 		);
 		expect(res.data?.user?.email).toBe("tx-user@email.com");
 		expect(transactionCalls).toBe(1);
+		expect(modelsInTrx).toEqual(["user", "account"]);
 
 		const created = res.data?.user;
 		if (!created) return;
