@@ -2,6 +2,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import type { Session } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
@@ -442,37 +443,41 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
 				);
 			}
-			const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
-				{
-					...userData,
-					email: email,
-					name: ctx.body.name,
-					role:
-						requestedRole !== undefined
-							? parseRoles(requestedRole as string | string[])
-							: (opts?.defaultRole ?? "user"),
-				},
-				{ method: "admin" },
-			);
+			const user = await runWithTransaction(ctx.context.adapter, async () => {
+				const user = await ctx.context.internalAdapter.createUser<UserWithRole>(
+					{
+						...userData,
+						email: email,
+						name: ctx.body.name,
+						role:
+							requestedRole !== undefined
+								? parseRoles(requestedRole as string | string[])
+								: (opts?.defaultRole ?? "user"),
+					},
+					{ method: "admin" },
+				);
 
-			if (!user) {
-				throw APIError.from(
-					"INTERNAL_SERVER_ERROR",
-					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
-				);
-			}
-			// Only create credential account if password is provided
-			if (ctx.body.password) {
-				const hashedPassword = await ctx.context.password.hash(
-					ctx.body.password,
-				);
-				await ctx.context.internalAdapter.linkAccount({
-					providerId: "credential",
-					accountId: user.id,
-					password: hashedPassword,
-					userId: user.id,
-				});
-			}
+				if (!user) {
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
+					);
+				}
+				// Only create credential account if password is provided
+				if (ctx.body.password) {
+					const hashedPassword = await ctx.context.password.hash(
+						ctx.body.password,
+					);
+					await ctx.context.internalAdapter.linkAccount({
+						providerId: "credential",
+						accountId: user.id,
+						password: hashedPassword,
+						userId: user.id,
+					});
+				}
+				return user;
+			});
+
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
