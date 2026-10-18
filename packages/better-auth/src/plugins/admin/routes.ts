@@ -470,7 +470,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					);
 				}
 				// Only create credential account if a password was provided
-				if (hashedPassword) {
+				if (ctx.body.password) {
 					const account = await ctx.context.internalAdapter.linkAccount({
 						providerId: "credential",
 						accountId: user.id,
