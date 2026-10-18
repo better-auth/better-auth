@@ -16,15 +16,18 @@ const lastGeneratedDir = new Map<string, string>();
 // the data in-process is enough for test isolation.
 const lastPushedSchema = new Map<string, string>();
 
-// Minimal structural type for the raw-query surface we use, so we don't depend
-// on the generated PrismaClient type.
-type RawClient = {
+// The raw query methods used for the data reset. Prisma omits `$transaction`
+// from the client passed to a transaction callback.
+type RawQueryClient = {
 	$queryRawUnsafe: <T = unknown>(
 		query: string,
 		...values: unknown[]
 	) => Promise<T>;
 	$executeRawUnsafe: (query: string, ...values: unknown[]) => Promise<number>;
-	$transaction: <T>(fn: (tx: RawClient) => Promise<T>) => Promise<T>;
+};
+
+type RawClient = RawQueryClient & {
+	$transaction: <T>(fn: (tx: RawQueryClient) => Promise<T>) => Promise<T>;
 };
 
 function resolvePrismaCli() {
@@ -108,10 +111,8 @@ export default defineConfig({
 	}
 	const outputDir = join(cwd, outputMatch[1]);
 
-	// Fast path: schema unchanged since the last push for this dialect -> clear
-	// data in-process instead of a full DDL push. sqlite pushes are cheap (local
-	// file) so we skip the fast path there. Any failure falls through to the
-	// full push below, so correctness is preserved.
+	// When the schema is unchanged since the last push, only clear the data.
+	// sqlite pushes are cheap, so sqlite always does a full push.
 	let didReset = false;
 	if (
 		db != null &&
@@ -131,8 +132,6 @@ export default defineConfig({
 
 	try {
 		if (!didReset) {
-			// execFileSync (binary + args array, no shell) so the prisma CLI path
-			// and flags are never parsed by a shell.
 			execFileSync(
 				process.execPath,
 				[
