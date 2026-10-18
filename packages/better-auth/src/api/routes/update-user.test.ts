@@ -286,7 +286,7 @@ describe("updateUser", () => {
 		 * `revokeOtherSessions` queues the cached-session eviction and then the
 		 * replacement session's cache mirror in the same transaction. The eviction
 		 * reports a failure by throwing, and a throwing after-commit hook ends the
-		 * drain, so it has to be queued ahead of the mirror: otherwise the mirror
+		 * drain, so the mirror has to run ahead of the eviction: otherwise the mirror
 		 * never runs and the replacement session survives only as a committed
 		 * database row.
 		 *
