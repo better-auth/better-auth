@@ -350,6 +350,12 @@ describe("database rate-limit pruning with active long windows", async () => {
 		backgroundTasks.length = 0;
 	});
 
+	// Restore the clock even when an assertion fails, so a failure here cannot
+	// leak fake timers into the suites that follow.
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("keeps a long window's counter while that window is still open", async () => {
 		vi.useFakeTimers();
 		vi.advanceTimersByTime(30_000_000);
@@ -388,7 +394,6 @@ describe("database rate-limit pruning with active long windows", async () => {
 		});
 		expect(row).not.toBeNull();
 		expect(Number(row?.count)).toBe(2);
-		vi.useRealTimers();
 	});
 
 	it("prunes a counter once its own window has elapsed", async () => {
@@ -419,7 +424,46 @@ describe("database rate-limit pruning with active long windows", async () => {
 			where: [{ field: "key", value: expiredKey }],
 		});
 		expect(row).toBeNull();
-		vi.useRealTimers();
+	});
+
+	it("allows an under-limit request when a later rule returns a shorter window", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(50_000_000);
+		const { auth: shortRuleAuth } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+					storage: "database",
+					window: 120,
+					max: 10,
+					customRules: {
+						// Long for the first request, then short.
+						"/get-session": (req) =>
+							req.headers.get("x-short") === "1"
+								? { window: 10, max: 10 }
+								: { window: 120, max: 10 },
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const getSession = (short?: boolean) =>
+			shortRuleAuth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: {
+						"x-forwarded-for": "127.0.0.3",
+						...(short ? { "x-short": "1" } : {}),
+					},
+				}),
+			);
+
+		// Open a 120s window and use a single slot of the ten.
+		expect((await getSession()).status).toBe(200);
+		vi.advanceTimersByTime(70_000);
+		// The rule now reports 10s, but the stored 120s window is still open and
+		// there is budget left, so this must not be rejected.
+		expect((await getSession(true)).status).toBe(200);
 	});
 });
 
