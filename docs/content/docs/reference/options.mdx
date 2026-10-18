@@ -310,7 +310,7 @@ export const auth = betterAuth({
 * `maxPasswordLength`: Maximum password length (default: `128`)
 * `autoSignIn`: Automatically sign in the user after sign up
 * `sendResetPassword`: Function to send reset password email
-* `onPasswordReset`: Callback triggered after a user's password is reset. It runs after the new password is saved and, when `revokeSessionsOnPasswordReset` is enabled, after sessions are revoked
+* `onPasswordReset`: Callback triggered after a user's password is reset. It runs after the new password is saved and, when `revokeSessionsOnPasswordReset` is enabled, after sessions are revoked. It does not run when the reset fails, including when sessions could not be removed from secondary storage
 * `revokeSessionsOnPasswordReset`: Revoke all of the user's sessions when resetting the password. For database sessions, revocation and the password change run in one transaction when transactions are enabled for the adapter. Secondary-storage sessions are removed after the commit; a failure to remove them fails the request while the committed password change stands (default: `false`)
 * `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
 * `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
