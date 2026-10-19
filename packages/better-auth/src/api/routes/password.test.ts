@@ -1,3 +1,4 @@
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils";
@@ -772,5 +773,30 @@ describe("verify password length", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("password error codes", async () => {
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+	});
+
+	it("returns a registered RESET_PASSWORD_DISABLED code when reset is not enabled", async () => {
+		await expect(
+			auth.api.requestPasswordReset({
+				body: {
+					email: "nobody@test.com",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "RESET_PASSWORD_DISABLED" },
+		});
+		expect(BASE_ERROR_CODES).toHaveProperty("RESET_PASSWORD_DISABLED");
 	});
 });

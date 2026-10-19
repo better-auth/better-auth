@@ -1366,3 +1366,42 @@ describe("password length on verify-only fields", async () => {
 		expect(verify).not.toHaveBeenCalled();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("update-user error codes", async () => {
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	it("returns NO_FIELDS_TO_UPDATE when no fields are provided", async () => {
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.updateUser({
+				body: {},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "NO_FIELDS_TO_UPDATE" },
+		});
+	});
+
+	it("returns EMAIL_IS_THE_SAME when the new email matches the current email", async () => {
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.changeEmail({
+				body: { newEmail: testUser.email },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "EMAIL_IS_THE_SAME" },
+		});
+	});
+});

@@ -2923,3 +2923,274 @@ describe("account resolution in stateless mode", async () => {
 		expect(accountCookie?.maxAge).not.toBe(0);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("account error codes", async () => {
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+				verifyIdToken: async () => true,
+			},
+		},
+	});
+	const ctx = await auth.$context;
+	const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+	const { runWithUser, user } = await signInWithTestUser();
+
+	it("returns USER_ID_OR_SESSION_REQUIRED when neither userId nor session is provided", async () => {
+		await expect(
+			auth.api.accountInfo({
+				query: { accountId: "no-such-account" },
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "USER_ID_OR_SESSION_REQUIRED" },
+		});
+		expect(BASE_ERROR_CODES).toHaveProperty("USER_ID_OR_SESSION_REQUIRED");
+	});
+
+	it("preserves PROVIDER_NOT_SUPPORTED code with the interpolated provider id", async () => {
+		const staleAccount = await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "retired-provider",
+			accountId: "retired-provider-subject",
+			accessToken: "stale-access-token",
+		});
+		await runWithUser(async () => {
+			const tokenRes = await client.getAccessToken({
+				accountId: staleAccount.id,
+			});
+			expect(tokenRes.error?.status).toBe(400);
+			expect(tokenRes.error?.code).toBe("PROVIDER_NOT_SUPPORTED");
+			expect(tokenRes.error?.message).toContain("retired-provider");
+
+			const refreshRes = await client.refreshToken({
+				accountId: staleAccount.id,
+			});
+			expect(refreshRes.error?.status).toBe(400);
+			expect(refreshRes.error?.code).toBe("PROVIDER_NOT_SUPPORTED");
+			expect(refreshRes.error?.message).toContain("retired-provider");
+
+			expect(BASE_ERROR_CODES).toHaveProperty("PROVIDER_NOT_SUPPORTED");
+		});
+	});
+
+	it("returns PROVIDER_NOT_CONFIGURED for account-info on an unconfigured provider", async () => {
+		const staleAccount = await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "retired-provider",
+			accountId: "retired-provider-info-subject",
+			accessToken: "stale-access-token",
+		});
+		await runWithUser(async () => {
+			const infoRes = await client.$fetch("/account-info", {
+				query: { accountId: staleAccount.id },
+				method: "GET",
+			});
+			expect(infoRes.error?.status).toBe(400);
+			expect(infoRes.error).toMatchObject({ code: "PROVIDER_NOT_CONFIGURED" });
+			expect(BASE_ERROR_CODES).toHaveProperty("PROVIDER_NOT_CONFIGURED");
+		});
+	});
+
+	it("returns REFRESH_TOKEN_NOT_FOUND when the account has no refresh token", async () => {
+		const accountWithoutRefreshToken = await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "no-refresh-token-subject",
+			accessToken: "some-access-token",
+		});
+		await runWithUser(async () => {
+			const res = await client.refreshToken({
+				accountId: accountWithoutRefreshToken.id,
+			});
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.code).toBe("REFRESH_TOKEN_NOT_FOUND");
+			expect(BASE_ERROR_CODES).toHaveProperty("REFRESH_TOKEN_NOT_FOUND");
+		});
+	});
+
+	it("returns TOKEN_REFRESH_NOT_SUPPORTED when the provider cannot refresh", async () => {
+		const providerRecord = googleProvider as unknown as {
+			refreshAccessToken?: unknown;
+		};
+		const originalRefresh = providerRecord.refreshAccessToken;
+		providerRecord.refreshAccessToken = undefined;
+		try {
+			const accountWithRefreshToken = await ctx.internalAdapter.createAccount({
+				userId: user.id,
+				providerId: "google",
+				accountId: "no-refresh-support-subject",
+				accessToken: "some-access-token",
+				refreshToken: "some-refresh-token",
+			});
+			await runWithUser(async () => {
+				const res = await client.refreshToken({
+					accountId: accountWithRefreshToken.id,
+				});
+				expect(res.error?.status).toBe(400);
+				expect(res.error?.code).toBe("TOKEN_REFRESH_NOT_SUPPORTED");
+				expect(res.error?.message).toContain("google");
+				expect(BASE_ERROR_CODES).toHaveProperty("TOKEN_REFRESH_NOT_SUPPORTED");
+			});
+		} finally {
+			providerRecord.refreshAccessToken = originalRefresh;
+		}
+	});
+
+	it("returns FAILED_TO_GET_ACCESS_TOKEN and FAILED_TO_REFRESH_ACCESS_TOKEN when refresh fails", async () => {
+		const refreshSpy = vi
+			.spyOn(googleProvider, "refreshAccessToken")
+			.mockRejectedValue(new Error("refresh down"));
+		try {
+			const expiringAccount = await ctx.internalAdapter.createAccount({
+				userId: user.id,
+				providerId: "google",
+				accountId: "expiring-subject",
+				accessToken: "expired-access-token",
+				refreshToken: "valid-refresh-token",
+				accessTokenExpiresAt: new Date(Date.now() - 60_000),
+			});
+			await runWithUser(async () => {
+				const tokenRes = await client.getAccessToken({
+					accountId: expiringAccount.id,
+				});
+				expect(tokenRes.error?.status).toBe(400);
+				expect(tokenRes.error?.code).toBe("FAILED_TO_GET_ACCESS_TOKEN");
+				expect(BASE_ERROR_CODES).toHaveProperty("FAILED_TO_GET_ACCESS_TOKEN");
+
+				const refreshRes = await client.refreshToken({
+					accountId: expiringAccount.id,
+				});
+				expect(refreshRes.error?.status).toBe(400);
+				expect(refreshRes.error?.code).toBe("FAILED_TO_REFRESH_ACCESS_TOKEN");
+				expect(BASE_ERROR_CODES).toHaveProperty(
+					"FAILED_TO_REFRESH_ACCESS_TOKEN",
+				);
+			});
+			expect(refreshSpy).toHaveBeenCalled();
+		} finally {
+			refreshSpy.mockRestore();
+		}
+	});
+
+	it("returns ACCESS_TOKEN_NOT_FOUND for account-info when no access token exists", async () => {
+		const tokenlessAccount = await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "tokenless-subject",
+		});
+		await runWithUser(async () => {
+			const infoRes = await client.$fetch("/account-info", {
+				query: { accountId: tokenlessAccount.id },
+				method: "GET",
+			});
+			expect(infoRes.error?.status).toBe(400);
+			expect(infoRes.error).toMatchObject({ code: "ACCESS_TOKEN_NOT_FOUND" });
+			expect(BASE_ERROR_CODES).toHaveProperty("ACCESS_TOKEN_NOT_FOUND");
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("account linking error codes", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+				verifyIdToken: async () => true,
+			},
+		},
+		account: {
+			accountLinking: {
+				enabled: false,
+			},
+		},
+	});
+	const ctx = await auth.$context;
+	const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+	vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+		user: {
+			email: "link-disabled@test.com",
+			name: "Link Disabled",
+			emailVerified: true,
+		},
+		data: { sub: "google-link-subject" },
+	});
+
+	it("returns LINKING_NOT_ALLOWED when account linking is disabled", async () => {
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.linkSocialAccount({
+				body: {
+					provider: "google",
+					idToken: { token: "test-id-token" },
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "UNAUTHORIZED",
+			body: { code: "LINKING_NOT_ALLOWED" },
+		});
+		expect(BASE_ERROR_CODES).toHaveProperty("LINKING_NOT_ALLOWED");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("account linking email mismatch error code", async () => {
+	const { auth, db, signInWithTestUser, testUser } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+				verifyIdToken: async () => true,
+			},
+		},
+	});
+	const ctx = await auth.$context;
+	const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+	vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+		user: {
+			email: "different-email@test.com",
+			name: "Different Email",
+			emailVerified: true,
+		},
+		data: { sub: "google-mismatch-subject" },
+	});
+	await db.update({
+		model: "user",
+		update: { emailVerified: true },
+		where: [{ field: "email", value: testUser.email }],
+	});
+
+	it("returns LINKING_DIFFERENT_EMAILS_NOT_ALLOWED for mismatched emails", async () => {
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.linkSocialAccount({
+				body: {
+					provider: "google",
+					idToken: { token: "test-id-token" },
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "UNAUTHORIZED",
+			body: { code: "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED" },
+		});
+		expect(BASE_ERROR_CODES).toHaveProperty(
+			"LINKING_DIFFERENT_EMAILS_NOT_ALLOWED",
+		);
+	});
+});

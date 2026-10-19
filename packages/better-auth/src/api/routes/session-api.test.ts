@@ -4,6 +4,7 @@ import {
 	runWithEndpointContext,
 	runWithRequestState,
 } from "@better-auth/core/context";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createLocalJWKSet, decodeProtectedHeader, jwtVerify } from "jose";
 import {
@@ -2506,6 +2507,9 @@ describe("updateSession", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11908
+	 */
 	it("should return error when no fields to update", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {
@@ -2514,6 +2518,7 @@ describe("updateSession", async () => {
 			} as any);
 			expect(res.error?.status).toBe(400);
 			expect(res.error?.message).toContain("No fields to update");
+			expect(res.error?.code).toBe("NO_FIELDS_TO_UPDATE");
 		});
 	});
 
@@ -2773,5 +2778,21 @@ describe("get-session cache headers", async () => {
 
 		expect(res.status).toBe(200);
 		expect(res.headers.get("cache-control")).toBeNull();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("session error codes", async () => {
+	const { client } = await getTestInstance();
+
+	it("returns a registered UNAUTHORIZED code for session-gated endpoints without a session", async () => {
+		const res = await client.updateUser({
+			name: "no-session",
+		});
+		expect(res.error?.status).toBe(401);
+		expect(res.error?.code).toBe("UNAUTHORIZED");
+		expect(BASE_ERROR_CODES).toHaveProperty("UNAUTHORIZED");
 	});
 });

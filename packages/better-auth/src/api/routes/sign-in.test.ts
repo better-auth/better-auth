@@ -742,3 +742,34 @@ describe("sign-in password length", async () => {
 		expect(verify).not.toHaveBeenCalled();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("sign-in error codes", async () => {
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: false,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("returns a registered EMAIL_PASSWORD_DISABLED code when email/password is disabled", async () => {
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: "disabled@test.com",
+					password: "password123",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "EMAIL_PASSWORD_DISABLED" },
+		});
+		expect(BASE_ERROR_CODES).toHaveProperty("EMAIL_PASSWORD_DISABLED");
+	});
+});

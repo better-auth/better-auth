@@ -319,6 +319,7 @@ describe("plugin types through factory and indirection patterns", () => {
 		expectTypeOf<Codes>().not.toBeAny();
 		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
 		expectTypeOf<Codes>().toHaveProperty("USER_ALREADY_EXISTS");
+		// @see https://github.com/better-auth/better-auth/issues/11908
 		expectTypeOf<Codes>().toHaveProperty("FAILED_TO_GET_ACCESS_TOKEN");
 		expectTypeOf<Codes>().toHaveProperty("UNAUTHORIZED");
 		expectTypeOf<Codes>().toHaveProperty("NO_FIELDS_TO_UPDATE");
@@ -449,6 +450,7 @@ describe("any-poisoning guards", () => {
 		type Codes = (typeof auth)["$ERROR_CODES"];
 		expectTypeOf<Codes>().not.toBeAny();
 		expectTypeOf<Codes>().toHaveProperty("SESSION_EXPIRED");
+		// @see https://github.com/better-auth/better-auth/issues/11908
 		expectTypeOf<Codes>().toHaveProperty("FAILED_TO_GET_ACCESS_TOKEN");
 		expectTypeOf<Codes>().toHaveProperty("UNAUTHORIZED");
 	});

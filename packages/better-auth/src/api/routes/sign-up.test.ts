@@ -1176,3 +1176,36 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 		expect(secondUser.banExpires).toBeNull();
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("sign-up error codes", async () => {
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				disableSignUp: true,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("returns a registered EMAIL_PASSWORD_SIGN_UP_DISABLED code when sign-up is disabled", async () => {
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "disabled-signup@test.com",
+					password: "password123",
+					name: "Disabled",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "EMAIL_PASSWORD_SIGN_UP_DISABLED" },
+		});
+		expect(BASE_ERROR_CODES).toHaveProperty("EMAIL_PASSWORD_SIGN_UP_DISABLED");
+	});
+});
