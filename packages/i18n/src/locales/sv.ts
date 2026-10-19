@@ -55,7 +55,7 @@ export const sv: TranslationDictionary = {
 	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
 		"Länkning av konton med olika e-postadresser är inte tillåten",
 	LINKING_FAILED: "Kontolänkning misslyckades",
-	EMAIL_PASSWORD_DISABLED: "E-post och lösenord är inte aktiverat",
+	EMAIL_PASSWORD_DISABLED: "E-post och lösenord är inte aktiverade",
 	EMAIL_PASSWORD_SIGN_UP_DISABLED:
 		"Registrering med e-post och lösenord är inte aktiverad",
 	RESET_PASSWORD_DISABLED: "Återställning av lösenord är inte aktiverad",

@@ -768,7 +768,10 @@ describe("sign-in error codes", async () => {
 			}),
 		).rejects.toMatchObject({
 			status: "BAD_REQUEST",
-			body: { code: "EMAIL_PASSWORD_DISABLED" },
+			body: {
+				code: "EMAIL_PASSWORD_DISABLED",
+				message: "Email and password is not enabled",
+			},
 		});
 		expect(BASE_ERROR_CODES).toHaveProperty("EMAIL_PASSWORD_DISABLED");
 	});

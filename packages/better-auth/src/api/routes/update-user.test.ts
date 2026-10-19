@@ -1388,7 +1388,7 @@ describe("update-user error codes", async () => {
 			}),
 		).rejects.toMatchObject({
 			status: "BAD_REQUEST",
-			body: { code: "NO_FIELDS_TO_UPDATE" },
+			body: { code: "NO_FIELDS_TO_UPDATE", message: "No fields to update" },
 		});
 	});
 
@@ -1401,7 +1401,23 @@ describe("update-user error codes", async () => {
 			}),
 		).rejects.toMatchObject({
 			status: "BAD_REQUEST",
-			body: { code: "EMAIL_IS_THE_SAME" },
+			body: { code: "EMAIL_IS_THE_SAME", message: "Email is the same" },
+		});
+	});
+
+	it("returns VERIFICATION_EMAIL_NOT_ENABLED when no verification flow is configured", async () => {
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.changeEmail({
+				body: { newEmail: "different-unused@example.com" },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: {
+				code: "VERIFICATION_EMAIL_NOT_ENABLED",
+				message: "Verification email isn't enabled",
+			},
 		});
 	});
 });

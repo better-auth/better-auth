@@ -54,5 +54,5 @@ export const th: TranslationDictionary = {
 	RESET_PASSWORD_DISABLED: "ยังไม่ได้เปิดใช้งานการรีเซ็ตรหัสผ่าน",
 	UNAUTHORIZED: "ไม่ได้รับอนุญาต",
 	NO_FIELDS_TO_UPDATE: "ไม่มีฟิลด์ให้อัปเดต",
-	EMAIL_IS_THE_SAME: "อีเมลเดิม",
+	EMAIL_IS_THE_SAME: "อีเมลนี้เหมือนเดิม",
 };

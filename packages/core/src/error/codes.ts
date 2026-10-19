@@ -25,6 +25,7 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	INVALID_EMAIL_OR_PASSWORD: "Invalid email or password",
 	INVALID_USER: "Invalid user",
 	SOCIAL_ACCOUNT_ALREADY_LINKED: "Social account already linked",
+	// Request-body provider lookup (sign-in / link paths); status NOT_FOUND.
 	PROVIDER_NOT_FOUND: "Provider not found",
 	INVALID_TOKEN: "Invalid token",
 	TOKEN_EXPIRED: "Token expired",
@@ -69,13 +70,18 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
 	PASSWORD_ALREADY_SET: "User already has a password set",
 	USER_ID_OR_SESSION_REQUIRED: "Either userId or session is required",
+	// getValidAccessToken catch-all: any failure obtaining a usable token.
 	FAILED_TO_GET_ACCESS_TOKEN: "Failed to get a valid access token",
+	// Stored-account provider lookup in token paths (getValidAccessToken, refreshToken endpoint); status BAD_REQUEST — throw sites override the message with the provider id.
 	PROVIDER_NOT_SUPPORTED: "Provider not supported",
 	TOKEN_REFRESH_NOT_SUPPORTED: "Provider does not support token refreshing",
 	REFRESH_TOKEN_NOT_FOUND: "Refresh token not found",
+	// RefreshToken endpoint catch: the refresh-grant attempt itself failed.
 	FAILED_TO_REFRESH_ACCESS_TOKEN: "Failed to refresh access token",
+	// Stored-account provider lookup in the accountInfo path (cf. PROVIDER_NOT_FOUND for request-body lookups); status BAD_REQUEST.
 	PROVIDER_NOT_CONFIGURED:
 		"Account is not associated with a configured social provider.",
+	// accountInfo stored-token check: no access token stored for this account at all.
 	ACCESS_TOKEN_NOT_FOUND: "Access token not found",
 	LINKING_NOT_ALLOWED: "Account linking is not allowed",
 	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:

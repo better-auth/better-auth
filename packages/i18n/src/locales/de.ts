@@ -57,7 +57,7 @@ export const de: TranslationDictionary = {
 	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
 		"Kontoverknüpfung mit unterschiedlichen E-Mails ist nicht erlaubt",
 	LINKING_FAILED: "Kontoverknüpfung fehlgeschlagen",
-	EMAIL_PASSWORD_DISABLED: "E-Mail und Passwort ist nicht aktiviert",
+	EMAIL_PASSWORD_DISABLED: "E-Mail und Passwort sind nicht aktiviert",
 	EMAIL_PASSWORD_SIGN_UP_DISABLED:
 		"Registrierung mit E-Mail und Passwort ist nicht aktiviert",
 	RESET_PASSWORD_DISABLED: "Zurücksetzen des Passworts ist nicht aktiviert",

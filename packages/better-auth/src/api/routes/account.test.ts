@@ -3194,3 +3194,57 @@ describe("account linking email mismatch error code", async () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11908
+ */
+describe("account linking failure error code", async () => {
+	const { auth, db, signInWithTestUser, testUser } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+				verifyIdToken: async () => true,
+			},
+		},
+	});
+	const ctx = await auth.$context;
+	const googleProvider = ctx.socialProviders.find((v) => v.id === "google")!;
+	vi.spyOn(googleProvider, "getUserInfo").mockResolvedValue({
+		user: {
+			email: testUser.email,
+			name: "Link Test",
+			emailVerified: true,
+		},
+		data: { sub: "google-link-fail-subject" },
+	});
+	await db.update({
+		model: "user",
+		update: { emailVerified: true },
+		where: [{ field: "email", value: testUser.email }],
+	});
+
+	it("returns LINKING_FAILED when account creation fails", async () => {
+		const { headers } = await signInWithTestUser();
+		vi.spyOn(ctx.internalAdapter, "createAccount").mockRejectedValueOnce(
+			new Error("db down"),
+		);
+		await expect(
+			auth.api.linkSocialAccount({
+				body: {
+					provider: "google",
+					idToken: { token: "test-id-token" },
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			status: "EXPECTATION_FAILED",
+			body: {
+				code: "LINKING_FAILED",
+				message: "Account not linked - unable to create account",
+			},
+		});
+		expect(BASE_ERROR_CODES).toHaveProperty("LINKING_FAILED");
+	});
+});

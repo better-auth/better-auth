@@ -443,6 +443,7 @@ describe("i18n plugin", async () => {
 		 * @see https://github.com/better-auth/better-auth/issues/11908
 		 */
 		it("should contain common error codes in every built-in locale", () => {
+			// Keep in sync with BASE_ERROR_CODES in packages/core/src/error/codes.ts: add every new code here, or this test will not enforce its locale coverage.
 			const requiredKeys = [
 				"USER_NOT_FOUND",
 				"INVALID_PASSWORD",

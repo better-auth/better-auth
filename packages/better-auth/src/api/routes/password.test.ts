@@ -795,7 +795,10 @@ describe("password error codes", async () => {
 			}),
 		).rejects.toMatchObject({
 			status: "BAD_REQUEST",
-			body: { code: "RESET_PASSWORD_DISABLED" },
+			body: {
+				code: "RESET_PASSWORD_DISABLED",
+				message: "Reset password isn't enabled",
+			},
 		});
 		expect(BASE_ERROR_CODES).toHaveProperty("RESET_PASSWORD_DISABLED");
 	});

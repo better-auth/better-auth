@@ -1204,7 +1204,10 @@ describe("sign-up error codes", async () => {
 			}),
 		).rejects.toMatchObject({
 			status: "BAD_REQUEST",
-			body: { code: "EMAIL_PASSWORD_SIGN_UP_DISABLED" },
+			body: {
+				code: "EMAIL_PASSWORD_SIGN_UP_DISABLED",
+				message: "Email and password sign up is not enabled",
+			},
 		});
 		expect(BASE_ERROR_CODES).toHaveProperty("EMAIL_PASSWORD_SIGN_UP_DISABLED");
 	});
