@@ -41,4 +41,24 @@ export const vi: TranslationDictionary = {
 	VALIDATION_ERROR: "Lỗi xác thực",
 	MISSING_FIELD: "Trường này là bắt buộc",
 	PASSWORD_ALREADY_SET: "Người dùng đã có mật khẩu được đặt",
+	USER_ID_OR_SESSION_REQUIRED: "Cần userId hoặc phiên",
+	FAILED_TO_GET_ACCESS_TOKEN: "Không lấy được mã truy cập hợp lệ",
+	PROVIDER_NOT_SUPPORTED: "Nhà cung cấp không được hỗ trợ",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Nhà cung cấp không hỗ trợ làm mới mã",
+	REFRESH_TOKEN_NOT_FOUND: "Không tìm thấy mã làm mới",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Làm mới mã truy cập thất bại",
+	PROVIDER_NOT_CONFIGURED:
+		"Tài khoản không được liên kết với nhà cung cấp xã hội đã cấu hình.",
+	ACCESS_TOKEN_NOT_FOUND: "Không tìm thấy mã truy cập",
+	LINKING_NOT_ALLOWED: "Không cho phép liên kết tài khoản",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Không cho phép liên kết tài khoản có email khác nhau",
+	LINKING_FAILED: "Liên kết tài khoản thất bại",
+	EMAIL_PASSWORD_DISABLED: "Email và mật khẩu chưa được bật",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"Đăng ký bằng email và mật khẩu chưa được bật",
+	RESET_PASSWORD_DISABLED: "Đặt lại mật khẩu chưa được bật",
+	UNAUTHORIZED: "Không được phép",
+	NO_FIELDS_TO_UPDATE: "Không có trường nào để cập nhật",
+	EMAIL_IS_THE_SAME: "Email giống nhau",
 };

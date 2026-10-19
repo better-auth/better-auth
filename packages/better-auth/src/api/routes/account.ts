@@ -373,8 +373,8 @@ export const linkSocialAccount = createAuthEndpoint(
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				throw APIError.from("UNAUTHORIZED", {
+					...BASE_ERROR_CODES.LINKING_NOT_ALLOWED,
 					message: "Account not linked - linking not allowed",
-					code: "LINKING_NOT_ALLOWED",
 				});
 			}
 
@@ -384,8 +384,8 @@ export const linkSocialAccount = createAuthEndpoint(
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				throw APIError.from("UNAUTHORIZED", {
+					...BASE_ERROR_CODES.LINKING_DIFFERENT_EMAILS_NOT_ALLOWED,
 					message: "Account not linked - different emails not allowed",
-					code: "LINKING_DIFFERENT_EMAILS_NOT_ALLOWED",
 				});
 			}
 
@@ -405,8 +405,8 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			} catch {
 				throw APIError.from("EXPECTATION_FAILED", {
+					...BASE_ERROR_CODES.LINKING_FAILED,
 					message: "Account not linked - unable to create account",
-					code: "LINKING_FAILED",
 				});
 			}
 
@@ -536,10 +536,10 @@ async function resolveUserId(
 	}
 	const resolvedUserId = session?.user?.id || userId;
 	if (!resolvedUserId) {
-		throw APIError.from("BAD_REQUEST", {
-			message: "Either userId or session is required",
-			code: "USER_ID_OR_SESSION_REQUIRED",
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.USER_ID_OR_SESSION_REQUIRED,
+		);
 	}
 	return resolvedUserId;
 }
@@ -676,8 +676,8 @@ async function getValidAccessToken(
 	});
 	if (!provider) {
 		throw APIError.from("BAD_REQUEST", {
+			...BASE_ERROR_CODES.PROVIDER_NOT_SUPPORTED,
 			message: `Provider ${account.providerId} is not supported.`,
-			code: "PROVIDER_NOT_SUPPORTED",
 		});
 	}
 
@@ -746,10 +746,10 @@ async function getValidAccessToken(
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
 	} catch (_error) {
-		throw APIError.from("BAD_REQUEST", {
-			message: "Failed to get a valid access token",
-			code: "FAILED_TO_GET_ACCESS_TOKEN",
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.FAILED_TO_GET_ACCESS_TOKEN,
+		);
 	}
 }
 
@@ -865,24 +865,24 @@ export const refreshToken = createAuthEndpoint(
 		});
 		if (!provider) {
 			throw APIError.from("BAD_REQUEST", {
+				...BASE_ERROR_CODES.PROVIDER_NOT_SUPPORTED,
 				message: `Provider ${account.providerId} is not supported.`,
-				code: "PROVIDER_NOT_SUPPORTED",
 			});
 		}
 		if (!provider.refreshAccessToken) {
 			throw APIError.from("BAD_REQUEST", {
+				...BASE_ERROR_CODES.TOKEN_REFRESH_NOT_SUPPORTED,
 				message: `Provider ${account.providerId} does not support token refreshing.`,
-				code: "TOKEN_REFRESH_NOT_SUPPORTED",
 			});
 		}
 
 		const refreshToken = account.refreshToken ?? undefined;
 
 		if (!refreshToken) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "Refresh token not found",
-				code: "REFRESH_TOKEN_NOT_FOUND",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.REFRESH_TOKEN_NOT_FOUND,
+			);
 		}
 
 		try {
@@ -943,10 +943,10 @@ export const refreshToken = createAuthEndpoint(
 				accountId: account.id,
 			});
 		} catch (_error) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "Failed to refresh access token",
-				code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.FAILED_TO_REFRESH_ACCESS_TOKEN,
+			);
 		}
 	},
 );
@@ -1025,10 +1025,10 @@ export const accountInfo = createAuthEndpoint(
 		});
 
 		if (!provider) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "Account is not associated with a configured social provider.",
-				code: "PROVIDER_NOT_CONFIGURED",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.PROVIDER_NOT_CONFIGURED,
+			);
 		}
 		const tokens = await getValidAccessToken(ctx, {
 			resolvedUserId,
@@ -1036,10 +1036,10 @@ export const accountInfo = createAuthEndpoint(
 			account,
 		});
 		if (!tokens.accessToken) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "Access token not found",
-				code: "ACCESS_TOKEN_NOT_FOUND",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.ACCESS_TOKEN_NOT_FOUND,
+			);
 		}
 		const info = await provider.getUserInfo({
 			...tokens,

@@ -41,4 +41,24 @@ export const uk: TranslationDictionary = {
 	VALIDATION_ERROR: "Помилка валідації",
 	MISSING_FIELD: "Це поле є обов'язковим",
 	PASSWORD_ALREADY_SET: "У користувача вже встановлено пароль",
+	USER_ID_OR_SESSION_REQUIRED: "Потрібен userId або сесія",
+	FAILED_TO_GET_ACCESS_TOKEN: "Не вдалося отримати дійсний токен доступу",
+	PROVIDER_NOT_SUPPORTED: "Провайдер не підтримується",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Провайдер не підтримує оновлення токенів",
+	REFRESH_TOKEN_NOT_FOUND: "Токен оновлення не знайдено",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Не вдалося оновити токен доступу",
+	PROVIDER_NOT_CONFIGURED:
+		"Обліковий запис не пов'язано з налаштованим соціальним провайдером.",
+	ACCESS_TOKEN_NOT_FOUND: "Токен доступу не знайдено",
+	LINKING_NOT_ALLOWED: "Прив'язування облікових записів заборонено",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Прив'язування облікових записів з різними адресами електронної пошти заборонено",
+	LINKING_FAILED: "Не вдалося прив'язати облікові записи",
+	EMAIL_PASSWORD_DISABLED: "Вхід за електронною поштою та паролем вимкнено",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"Реєстрацію за електронною поштою та паролем вимкнено",
+	RESET_PASSWORD_DISABLED: "Скидання пароля вимкнено",
+	UNAUTHORIZED: "Немає доступу",
+	NO_FIELDS_TO_UPDATE: "Немає полів для оновлення",
+	EMAIL_IS_THE_SAME: "Адреса електронної пошти збігається",
 };

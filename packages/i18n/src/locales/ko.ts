@@ -41,4 +41,24 @@ export const ko: TranslationDictionary = {
 	VALIDATION_ERROR: "유효성 검사 오류",
 	MISSING_FIELD: "이 필드는 필수입니다",
 	PASSWORD_ALREADY_SET: "사용자에게 이미 비밀번호가 설정되어 있습니다",
+	USER_ID_OR_SESSION_REQUIRED: "userId 또는 세션이 필요합니다",
+	FAILED_TO_GET_ACCESS_TOKEN: "유효한 액세스 토큰을 가져오지 못했습니다",
+	PROVIDER_NOT_SUPPORTED: "지원되지 않는 제공업체입니다",
+	TOKEN_REFRESH_NOT_SUPPORTED: "제공업체가 토큰 갱신을 지원하지 않습니다",
+	REFRESH_TOKEN_NOT_FOUND: "갱신 토큰을 찾을 수 없습니다",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "액세스 토큰 갱신에 실패했습니다",
+	PROVIDER_NOT_CONFIGURED:
+		"계정이 구성된 소셜 제공업체와 연결되어 있지 않습니다.",
+	ACCESS_TOKEN_NOT_FOUND: "액세스 토큰을 찾을 수 없습니다",
+	LINKING_NOT_ALLOWED: "계정 연결이 허용되지 않습니다",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"다른 이메일로의 계정 연결은 허용되지 않습니다",
+	LINKING_FAILED: "계정 연결에 실패했습니다",
+	EMAIL_PASSWORD_DISABLED: "이메일과 비밀번호가 활성화되어 있지 않습니다",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"이메일과 비밀번호 회원가입이 활성화되어 있지 않습니다",
+	RESET_PASSWORD_DISABLED: "비밀번호 재설정이 활성화되어 있지 않습니다",
+	UNAUTHORIZED: "권한 없음",
+	NO_FIELDS_TO_UPDATE: "업데이트할 필드가 없습니다",
+	EMAIL_IS_THE_SAME: "이메일이 동일합니다",
 };

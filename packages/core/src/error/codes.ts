@@ -68,6 +68,25 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 		"POST method requires deferSessionRefresh to be enabled in session config",
 	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
 	PASSWORD_ALREADY_SET: "User already has a password set",
+	USER_ID_OR_SESSION_REQUIRED: "Either userId or session is required",
+	FAILED_TO_GET_ACCESS_TOKEN: "Failed to get a valid access token",
+	PROVIDER_NOT_SUPPORTED: "Provider not supported",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Provider does not support token refreshing",
+	REFRESH_TOKEN_NOT_FOUND: "Refresh token not found",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Failed to refresh access token",
+	PROVIDER_NOT_CONFIGURED:
+		"Account is not associated with a configured social provider.",
+	ACCESS_TOKEN_NOT_FOUND: "Access token not found",
+	LINKING_NOT_ALLOWED: "Account linking is not allowed",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Account linking with different emails is not allowed",
+	LINKING_FAILED: "Account linking failed",
+	EMAIL_PASSWORD_DISABLED: "Email and password is not enabled",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED: "Email and password sign up is not enabled",
+	RESET_PASSWORD_DISABLED: "Reset password isn't enabled",
+	UNAUTHORIZED: "Unauthorized",
+	NO_FIELDS_TO_UPDATE: "No fields to update",
+	EMAIL_IS_THE_SAME: "Email is the same",
 });
 
 export type APIErrorCode = keyof typeof BASE_ERROR_CODES;

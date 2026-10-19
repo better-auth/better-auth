@@ -118,9 +118,10 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				name === undefined &&
 				Object.keys(additionalFields).length === 0
 			) {
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "No fields to update",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.NO_FIELDS_TO_UPDATE,
+				);
 			}
 			const user = await ctx.context.internalAdapter.updateUser(
 				session.user.id,
@@ -732,9 +733,7 @@ export const changeEmail = createAuthEndpoint(
 
 		if (newEmail === ctx.context.session.user.email) {
 			ctx.context.logger.warn("Email is the same");
-			throw APIError.fromStatus("BAD_REQUEST", {
-				message: "Email is the same",
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_IS_THE_SAME);
 		}
 
 		/**
@@ -759,9 +758,10 @@ export const changeEmail = createAuthEndpoint(
 			!canSendVerification
 		) {
 			ctx.context.logger.error("Verification email isn't enabled.");
-			throw APIError.fromStatus("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+			);
 		}
 
 		const existingUser =
@@ -863,9 +863,10 @@ export const changeEmail = createAuthEndpoint(
 
 		if (!canSendVerification) {
 			ctx.context.logger.error("Verification email isn't enabled.");
-			throw APIError.fromStatus("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+			);
 		}
 
 		const token = await createEmailVerificationToken(

@@ -43,4 +43,26 @@ export const fr: TranslationDictionary = {
 	VALIDATION_ERROR: "Erreur de validation",
 	MISSING_FIELD: "Ce champ est requis",
 	PASSWORD_ALREADY_SET: "L'utilisateur a déjà un mot de passe défini",
+	USER_ID_OR_SESSION_REQUIRED: "userId ou session requis",
+	FAILED_TO_GET_ACCESS_TOKEN: "Échec de l'obtention d'un jeton d'accès valide",
+	PROVIDER_NOT_SUPPORTED: "Fournisseur non pris en charge",
+	TOKEN_REFRESH_NOT_SUPPORTED:
+		"Le fournisseur ne prend pas en charge l'actualisation du jeton",
+	REFRESH_TOKEN_NOT_FOUND: "Jeton d'actualisation non trouvé",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Échec de l'actualisation du jeton d'accès",
+	PROVIDER_NOT_CONFIGURED:
+		"Le compte n'est associé à aucun fournisseur social configuré.",
+	ACCESS_TOKEN_NOT_FOUND: "Jeton d'accès non trouvé",
+	LINKING_NOT_ALLOWED: "La liaison de compte n'est pas autorisée",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"La liaison de comptes avec des e-mails différents n'est pas autorisée",
+	LINKING_FAILED: "Échec de la liaison du compte",
+	EMAIL_PASSWORD_DISABLED: "L'e-mail et le mot de passe ne sont pas activés",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"L'inscription par e-mail et mot de passe n'est pas activée",
+	RESET_PASSWORD_DISABLED:
+		"La réinitialisation du mot de passe n'est pas activée",
+	UNAUTHORIZED: "Non autorisé",
+	NO_FIELDS_TO_UPDATE: "Aucun champ à mettre à jour",
+	EMAIL_IS_THE_SAME: "L'adresse e-mail est identique",
 };

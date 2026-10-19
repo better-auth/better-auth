@@ -42,4 +42,24 @@ export const sv: TranslationDictionary = {
 	VALIDATION_ERROR: "Valideringsfel",
 	MISSING_FIELD: "Det här fältet är obligatoriskt",
 	PASSWORD_ALREADY_SET: "Användaren har redan ett lösenord inställt",
+	USER_ID_OR_SESSION_REQUIRED: "userId eller session krävs",
+	FAILED_TO_GET_ACCESS_TOKEN: "Kunde inte hämta en giltig åtkomsttoken",
+	PROVIDER_NOT_SUPPORTED: "Leverantören stöds inte",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Leverantören stöder inte tokenuppdatering",
+	REFRESH_TOKEN_NOT_FOUND: "Uppdateringstoken hittades inte",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Misslyckades med att uppdatera åtkomsttoken",
+	PROVIDER_NOT_CONFIGURED:
+		"Kontot är inte kopplat till en konfigurerad social leverantör.",
+	ACCESS_TOKEN_NOT_FOUND: "Åtkomsttoken hittades inte",
+	LINKING_NOT_ALLOWED: "Kontolänkning är inte tillåten",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Länkning av konton med olika e-postadresser är inte tillåten",
+	LINKING_FAILED: "Kontolänkning misslyckades",
+	EMAIL_PASSWORD_DISABLED: "E-post och lösenord är inte aktiverat",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"Registrering med e-post och lösenord är inte aktiverad",
+	RESET_PASSWORD_DISABLED: "Återställning av lösenord är inte aktiverad",
+	UNAUTHORIZED: "Obehörig",
+	NO_FIELDS_TO_UPDATE: "Inga fält att uppdatera",
+	EMAIL_IS_THE_SAME: "E-postadressen är densamma",
 };

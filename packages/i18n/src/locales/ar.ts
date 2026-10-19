@@ -40,4 +40,23 @@ export const ar: TranslationDictionary = {
 	VALIDATION_ERROR: "خطأ في التحقق",
 	MISSING_FIELD: "هذا الحقل مطلوب",
 	PASSWORD_ALREADY_SET: "المستخدم لديه كلمة مرور محددة بالفعل",
+	USER_ID_OR_SESSION_REQUIRED: "يلزم توفير userId أو جلسة",
+	FAILED_TO_GET_ACCESS_TOKEN: "تعذّر الحصول على رمز وصول صالح",
+	PROVIDER_NOT_SUPPORTED: "موفر الخدمة غير مدعوم",
+	TOKEN_REFRESH_NOT_SUPPORTED: "موفر الخدمة لا يدعم تحديث الرموز",
+	REFRESH_TOKEN_NOT_FOUND: "تعذّر العثور على رمز التحديث",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "تعذّر تحديث رمز الوصول",
+	PROVIDER_NOT_CONFIGURED: "الحساب غير مرتبط بموفر اجتماعي مُعد.",
+	ACCESS_TOKEN_NOT_FOUND: "تعذّر العثور على رمز الوصول",
+	LINKING_NOT_ALLOWED: "ربط الحسابات غير مسموح به",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"ربط الحسابات ذات عناوين البريد المختلفة غير مسموح به",
+	LINKING_FAILED: "تعذّر ربط الحساب",
+	EMAIL_PASSWORD_DISABLED: "البريد الإلكتروني وكلمة المرور غير مفعّلة",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"التسجيل بالبريد الإلكتروني وكلمة المرور غير مفعّل",
+	RESET_PASSWORD_DISABLED: "إعادة تعيين كلمة المرور غير مفعّلة",
+	UNAUTHORIZED: "غير مصرّح",
+	NO_FIELDS_TO_UPDATE: "لا توجد حقول للتحديث",
+	EMAIL_IS_THE_SAME: "البريد الإلكتروني نفسه",
 };

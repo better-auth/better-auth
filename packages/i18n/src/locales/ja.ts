@@ -42,4 +42,25 @@ export const ja: TranslationDictionary = {
 	VALIDATION_ERROR: "バリデーションエラー",
 	MISSING_FIELD: "このフィールドは必須です",
 	PASSWORD_ALREADY_SET: "ユーザーにはすでにパスワードが設定されています",
+	USER_ID_OR_SESSION_REQUIRED: "userIdまたはセッションが必要です",
+	FAILED_TO_GET_ACCESS_TOKEN: "有効なアクセストークンを取得できませんでした",
+	PROVIDER_NOT_SUPPORTED: "プロバイダーはサポートされていません",
+	TOKEN_REFRESH_NOT_SUPPORTED:
+		"プロバイダーはトークンの更新をサポートしていません",
+	REFRESH_TOKEN_NOT_FOUND: "リフレッシュトークンが見つかりません",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "アクセストークンの更新に失敗しました",
+	PROVIDER_NOT_CONFIGURED:
+		"アカウントは設定済みのソーシャルプロバイダーに関連付けられていません。",
+	ACCESS_TOKEN_NOT_FOUND: "アクセストークンが見つかりません",
+	LINKING_NOT_ALLOWED: "アカウントのリンクは許可されていません",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"異なるメールアドレスでのアカウントのリンクは許可されていません",
+	LINKING_FAILED: "アカウントのリンクに失敗しました",
+	EMAIL_PASSWORD_DISABLED: "メールアドレスとパスワードが有効になっていません",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"メールアドレスとパスワードでのサインアップが有効になっていません",
+	RESET_PASSWORD_DISABLED: "パスワードのリセットが有効になっていません",
+	UNAUTHORIZED: "権限がありません",
+	NO_FIELDS_TO_UPDATE: "更新するフィールドがありません",
+	EMAIL_IS_THE_SAME: "メールアドレスが同じです",
 };

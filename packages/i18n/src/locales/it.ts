@@ -41,4 +41,25 @@ export const it: TranslationDictionary = {
 	VALIDATION_ERROR: "Errore di validazione",
 	MISSING_FIELD: "Questo campo è obbligatorio",
 	PASSWORD_ALREADY_SET: "L'utente ha già una password impostata",
+	USER_ID_OR_SESSION_REQUIRED: "È richiesto userId o sessione",
+	FAILED_TO_GET_ACCESS_TOKEN: "Impossibile ottenere un token di accesso valido",
+	PROVIDER_NOT_SUPPORTED: "Provider non supportato",
+	TOKEN_REFRESH_NOT_SUPPORTED:
+		"Il provider non supporta l'aggiornamento del token",
+	REFRESH_TOKEN_NOT_FOUND: "Token di aggiornamento non trovato",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Impossibile aggiornare il token di accesso",
+	PROVIDER_NOT_CONFIGURED:
+		"L'account non è associato ad alcun provider social configurato.",
+	ACCESS_TOKEN_NOT_FOUND: "Token di accesso non trovato",
+	LINKING_NOT_ALLOWED: "Il collegamento dell'account non è consentito",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Il collegamento di account con email diverse non è consentito",
+	LINKING_FAILED: "Collegamento dell'account non riuscito",
+	EMAIL_PASSWORD_DISABLED: "Email e password non sono abilitati",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"La registrazione con email e password non è abilitata",
+	RESET_PASSWORD_DISABLED: "La reimpostazione della password non è abilitata",
+	UNAUTHORIZED: "Non autorizzato",
+	NO_FIELDS_TO_UPDATE: "Nessun campo da aggiornare",
+	EMAIL_IS_THE_SAME: "L'email è la stessa",
 };

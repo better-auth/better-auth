@@ -41,4 +41,24 @@ export const nl: TranslationDictionary = {
 	VALIDATION_ERROR: "Validatiefout",
 	MISSING_FIELD: "Dit veld is verplicht",
 	PASSWORD_ALREADY_SET: "Gebruiker heeft al een wachtwoord ingesteld",
+	USER_ID_OR_SESSION_REQUIRED: "userId of sessie is vereist",
+	FAILED_TO_GET_ACCESS_TOKEN: "Geen geldig toegangstoken kunnen ophalen",
+	PROVIDER_NOT_SUPPORTED: "Provider wordt niet ondersteund",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Provider ondersteunt geen tokenvernieuwing",
+	REFRESH_TOKEN_NOT_FOUND: "Vernieuwingstoken niet gevonden",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Vernieuwen van toegangstoken mislukt",
+	PROVIDER_NOT_CONFIGURED:
+		"Het account is niet gekoppeld aan een geconfigureerde sociale provider.",
+	ACCESS_TOKEN_NOT_FOUND: "Toegangstoken niet gevonden",
+	LINKING_NOT_ALLOWED: "Accountkoppeling is niet toegestaan",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Koppelen van accounts met verschillende e-mails is niet toegestaan",
+	LINKING_FAILED: "Accountkoppeling mislukt",
+	EMAIL_PASSWORD_DISABLED: "E-mail en wachtwoord zijn niet ingeschakeld",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"Registratie met e-mail en wachtwoord is niet ingeschakeld",
+	RESET_PASSWORD_DISABLED: "Wachtwoord opnieuw instellen is niet ingeschakeld",
+	UNAUTHORIZED: "Niet geautoriseerd",
+	NO_FIELDS_TO_UPDATE: "Geen velden om bij te werken",
+	EMAIL_IS_THE_SAME: "E-mail is hetzelfde",
 };

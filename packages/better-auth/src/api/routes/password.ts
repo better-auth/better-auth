@@ -96,10 +96,10 @@ export const requestPasswordReset = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Reset password isn't enabled.Please pass an emailAndPassword.sendResetPassword function in your auth config!",
 			);
-			throw APIError.from("BAD_REQUEST", {
-				message: "Reset password isn't enabled",
-				code: "RESET_PASSWORD_DISABLED",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.RESET_PASSWORD_DISABLED,
+			);
 		}
 		const { email, redirectTo } = ctx.body;
 

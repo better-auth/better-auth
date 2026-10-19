@@ -68,9 +68,10 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 			);
 
 			if (Object.keys(additionalFields).length === 0) {
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: "No fields to update",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.NO_FIELDS_TO_UPDATE,
+				);
 			}
 
 			const updatedSession = await ctx.context.internalAdapter.updateSession(

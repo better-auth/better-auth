@@ -42,4 +42,24 @@ export const id: TranslationDictionary = {
 	VALIDATION_ERROR: "Kesalahan validasi",
 	MISSING_FIELD: "Kolom ini diperlukan",
 	PASSWORD_ALREADY_SET: "Pengguna sudah memiliki kata sandi yang ditetapkan",
+	USER_ID_OR_SESSION_REQUIRED: "userId atau sesi diperlukan",
+	FAILED_TO_GET_ACCESS_TOKEN: "Gagal mendapatkan token akses yang valid",
+	PROVIDER_NOT_SUPPORTED: "Penyedia tidak didukung",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Penyedia tidak mendukung penyegaran token",
+	REFRESH_TOKEN_NOT_FOUND: "Token penyegaran tidak ditemukan",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Gagal menyegarkan token akses",
+	PROVIDER_NOT_CONFIGURED:
+		"Akun tidak terkait dengan penyedia sosial yang dikonfigurasi.",
+	ACCESS_TOKEN_NOT_FOUND: "Token akses tidak ditemukan",
+	LINKING_NOT_ALLOWED: "Penautan akun tidak diizinkan",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Penautan akun dengan email berbeda tidak diizinkan",
+	LINKING_FAILED: "Penautan akun gagal",
+	EMAIL_PASSWORD_DISABLED: "Email dan kata sandi tidak diaktifkan",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"Pendaftaran email dan kata sandi tidak diaktifkan",
+	RESET_PASSWORD_DISABLED: "Reset kata sandi tidak diaktifkan",
+	UNAUTHORIZED: "Tidak diotorisasi",
+	NO_FIELDS_TO_UPDATE: "Tidak ada kolom untuk diperbarui",
+	EMAIL_IS_THE_SAME: "Email sama",
 };

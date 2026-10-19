@@ -41,4 +41,25 @@ export const ru: TranslationDictionary = {
 	VALIDATION_ERROR: "Ошибка валидации",
 	MISSING_FIELD: "Это поле обязательно для заполнения",
 	PASSWORD_ALREADY_SET: "У пользователя уже установлен пароль",
+	USER_ID_OR_SESSION_REQUIRED: "Требуется userId или сессия",
+	FAILED_TO_GET_ACCESS_TOKEN:
+		"Не удалось получить действительный токен доступа",
+	PROVIDER_NOT_SUPPORTED: "Провайдер не поддерживается",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Провайдер не поддерживает обновление токенов",
+	REFRESH_TOKEN_NOT_FOUND: "Токен обновления не найден",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Не удалось обновить токен доступа",
+	PROVIDER_NOT_CONFIGURED:
+		"Аккаунт не связан с настроенным социальным провайдером.",
+	ACCESS_TOKEN_NOT_FOUND: "Токен доступа не найден",
+	LINKING_NOT_ALLOWED: "Связывание аккаунтов запрещено",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Связывание аккаунтов с разными адресами электронной почты запрещено",
+	LINKING_FAILED: "Не удалось связать аккаунты",
+	EMAIL_PASSWORD_DISABLED: "Вход по электронной почте и паролю отключён",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"Регистрация по электронной почте и паролю отключена",
+	RESET_PASSWORD_DISABLED: "Сброс пароля отключён",
+	UNAUTHORIZED: "Нет доступа",
+	NO_FIELDS_TO_UPDATE: "Нет полей для обновления",
+	EMAIL_IS_THE_SAME: "Адрес электронной почты совпадает",
 };

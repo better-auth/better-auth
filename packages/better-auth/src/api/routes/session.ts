@@ -544,10 +544,7 @@ export const getAuthoritativeSessionFromCtx = async <
 export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
-		throw APIError.from("UNAUTHORIZED", {
-			message: "Unauthorized",
-			code: "UNAUTHORIZED",
-		});
+		throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.UNAUTHORIZED);
 	}
 	return {
 		session,
@@ -561,10 +558,7 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 export const sensitiveSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session?.session) {
-		throw APIError.from("UNAUTHORIZED", {
-			message: "Unauthorized",
-			code: "UNAUTHORIZED",
-		});
+		throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.UNAUTHORIZED);
 	}
 	return {
 		session,
@@ -579,10 +573,7 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 	async (ctx) => {
 		const session = await getSessionFromCtx(ctx);
 		if (!session?.session && (ctx.request || ctx.headers)) {
-			throw APIError.from("UNAUTHORIZED", {
-				message: "Unauthorized",
-				code: "UNAUTHORIZED",
-			});
+			throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.UNAUTHORIZED);
 		}
 		return { session };
 	},
@@ -598,10 +589,7 @@ export const requestOnlySessionMiddleware = createAuthMiddleware(
 export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
 	if (!session?.session) {
-		throw APIError.from("UNAUTHORIZED", {
-			message: "Unauthorized",
-			code: "UNAUTHORIZED",
-		});
+		throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.UNAUTHORIZED);
 	}
 	if (ctx.context.sessionConfig.freshAge !== 0) {
 		const createdAt = new Date(session.session.createdAt).getTime();
@@ -845,10 +833,7 @@ export const revokeOtherSessions = createAuthEndpoint(
 	async (ctx) => {
 		const session = ctx.context.session;
 		if (!session.user) {
-			throw APIError.from("UNAUTHORIZED", {
-				message: "Unauthorized",
-				code: "UNAUTHORIZED",
-			});
+			throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.UNAUTHORIZED);
 		}
 		const sessions = await ctx.context.internalAdapter.listSessions(
 			session.user.id,

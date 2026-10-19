@@ -42,4 +42,26 @@ export const de: TranslationDictionary = {
 	VALIDATION_ERROR: "Validierungsfehler",
 	MISSING_FIELD: "Dieses Feld ist erforderlich",
 	PASSWORD_ALREADY_SET: "Benutzer hat bereits ein Passwort festgelegt",
+	USER_ID_OR_SESSION_REQUIRED: "Entweder userId oder Sitzung ist erforderlich",
+	FAILED_TO_GET_ACCESS_TOKEN: "Kein gültiges Zugriffstoken erhalten",
+	PROVIDER_NOT_SUPPORTED: "Anbieter wird nicht unterstützt",
+	TOKEN_REFRESH_NOT_SUPPORTED:
+		"Anbieter unterstützt keine Token-Aktualisierung",
+	REFRESH_TOKEN_NOT_FOUND: "Aktualisierungstoken nicht gefunden",
+	FAILED_TO_REFRESH_ACCESS_TOKEN:
+		"Aktualisierung des Zugriffstokens fehlgeschlagen",
+	PROVIDER_NOT_CONFIGURED:
+		"Das Konto ist keinem konfigurierten sozialen Anbieter zugeordnet.",
+	ACCESS_TOKEN_NOT_FOUND: "Zugriffstoken nicht gefunden",
+	LINKING_NOT_ALLOWED: "Kontoverknüpfung ist nicht erlaubt",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Kontoverknüpfung mit unterschiedlichen E-Mails ist nicht erlaubt",
+	LINKING_FAILED: "Kontoverknüpfung fehlgeschlagen",
+	EMAIL_PASSWORD_DISABLED: "E-Mail und Passwort ist nicht aktiviert",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"Registrierung mit E-Mail und Passwort ist nicht aktiviert",
+	RESET_PASSWORD_DISABLED: "Zurücksetzen des Passworts ist nicht aktiviert",
+	UNAUTHORIZED: "Unbefugt",
+	NO_FIELDS_TO_UPDATE: "Keine zu aktualisierenden Felder",
+	EMAIL_IS_THE_SAME: "E-Mail ist identisch",
 };

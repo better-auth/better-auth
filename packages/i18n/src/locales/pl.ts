@@ -42,4 +42,26 @@ export const pl: TranslationDictionary = {
 	VALIDATION_ERROR: "Błąd walidacji",
 	MISSING_FIELD: "To pole jest wymagane",
 	PASSWORD_ALREADY_SET: "Użytkownik ma już ustawione hasło",
+	USER_ID_OR_SESSION_REQUIRED:
+		"Wymagany jest identyfikator użytkownika lub sesja",
+	FAILED_TO_GET_ACCESS_TOKEN:
+		"Nie udało się uzyskać prawidłowego tokenu dostępu",
+	PROVIDER_NOT_SUPPORTED: "Dostawca nie jest obsługiwany",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Dostawca nie obsługuje odświeżania tokenów",
+	REFRESH_TOKEN_NOT_FOUND: "Nie znaleziono tokenu odświeżania",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Nie udało się odświeżyć tokenu dostępu",
+	PROVIDER_NOT_CONFIGURED:
+		"Konto nie jest powiązane ze skonfigurowanym dostawcą społecznościowym.",
+	ACCESS_TOKEN_NOT_FOUND: "Nie znaleziono tokenu dostępu",
+	LINKING_NOT_ALLOWED: "Łączenie kont jest niedozwolone",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Łączenie kont z różnymi adresami e-mail jest niedozwolone",
+	LINKING_FAILED: "Nie udało się połączyć kont",
+	EMAIL_PASSWORD_DISABLED: "Logowanie e-mailem i hasłem nie jest włączone",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED:
+		"Rejestracja e-mailem i hasłem nie jest włączona",
+	RESET_PASSWORD_DISABLED: "Resetowanie hasła nie jest włączone",
+	UNAUTHORIZED: "Brak autoryzacji",
+	NO_FIELDS_TO_UPDATE: "Brak pól do aktualizacji",
+	EMAIL_IS_THE_SAME: "Adres e-mail jest taki sam",
 };

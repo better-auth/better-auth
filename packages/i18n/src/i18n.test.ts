@@ -439,6 +439,9 @@ describe("i18n plugin", async () => {
 			expect(body.message).toBe(locales.fr.INVALID_EMAIL_OR_PASSWORD);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11908
+		 */
 		it("should contain common error codes in every built-in locale", () => {
 			const requiredKeys = [
 				"USER_NOT_FOUND",
@@ -451,6 +454,23 @@ describe("i18n plugin", async () => {
 				"USER_ALREADY_EXISTS",
 				"SESSION_EXPIRED",
 				"ACCOUNT_NOT_FOUND",
+				"USER_ID_OR_SESSION_REQUIRED",
+				"FAILED_TO_GET_ACCESS_TOKEN",
+				"PROVIDER_NOT_SUPPORTED",
+				"TOKEN_REFRESH_NOT_SUPPORTED",
+				"REFRESH_TOKEN_NOT_FOUND",
+				"FAILED_TO_REFRESH_ACCESS_TOKEN",
+				"PROVIDER_NOT_CONFIGURED",
+				"ACCESS_TOKEN_NOT_FOUND",
+				"LINKING_NOT_ALLOWED",
+				"LINKING_DIFFERENT_EMAILS_NOT_ALLOWED",
+				"LINKING_FAILED",
+				"EMAIL_PASSWORD_DISABLED",
+				"EMAIL_PASSWORD_SIGN_UP_DISABLED",
+				"RESET_PASSWORD_DISABLED",
+				"UNAUTHORIZED",
+				"NO_FIELDS_TO_UPDATE",
+				"EMAIL_IS_THE_SAME",
 			];
 
 			for (const [locale, dict] of Object.entries(locales)) {

@@ -41,4 +41,23 @@ export const tr: TranslationDictionary = {
 	VALIDATION_ERROR: "Doğrulama hatası",
 	MISSING_FIELD: "Bu alan gerekli",
 	PASSWORD_ALREADY_SET: "Kullanıcının şifresi zaten ayarlanmış",
+	USER_ID_OR_SESSION_REQUIRED: "userId veya oturum gerekli",
+	FAILED_TO_GET_ACCESS_TOKEN: "Geçerli bir erişim jetonu alınamadı",
+	PROVIDER_NOT_SUPPORTED: "Sağlayıcı desteklenmiyor",
+	TOKEN_REFRESH_NOT_SUPPORTED: "Sağlayıcı jeton yenilemeyi desteklemiyor",
+	REFRESH_TOKEN_NOT_FOUND: "Yenileme jetonu bulunamadı",
+	FAILED_TO_REFRESH_ACCESS_TOKEN: "Erişim jetonu yenilenemedi",
+	PROVIDER_NOT_CONFIGURED:
+		"Hesap, yapılandırılmış bir sosyal sağlayıcıyla ilişkili değil.",
+	ACCESS_TOKEN_NOT_FOUND: "Erişim jetonu bulunamadı",
+	LINKING_NOT_ALLOWED: "Hesap bağlamaya izin verilmiyor",
+	LINKING_DIFFERENT_EMAILS_NOT_ALLOWED:
+		"Farklı e-postalarla hesap bağlamaya izin verilmiyor",
+	LINKING_FAILED: "Hesap bağlama başarısız oldu",
+	EMAIL_PASSWORD_DISABLED: "E-posta ve parola etkin değil",
+	EMAIL_PASSWORD_SIGN_UP_DISABLED: "E-posta ve parola ile kayıt etkin değil",
+	RESET_PASSWORD_DISABLED: "Parola sıfırlama etkin değil",
+	UNAUTHORIZED: "Yetkisiz",
+	NO_FIELDS_TO_UPDATE: "Güncellenecek alan yok",
+	EMAIL_IS_THE_SAME: "E-posta aynı",
 };
