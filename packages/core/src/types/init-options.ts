@@ -851,7 +851,7 @@ export type BetterAuthOptions = {
 				 * `revokeSessionsOnPasswordReset` is enabled, after the user's
 				 * sessions have been revoked. It does not run when the reset
 				 * fails, including when sessions could not be removed from
-				 * secondary storage.
+				 * secondary storage (even though the committed password change stands).
 				 */
 				onPasswordReset?: (
 					data: { user: User },
