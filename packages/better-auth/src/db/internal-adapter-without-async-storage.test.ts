@@ -139,6 +139,7 @@ describe("internal adapter without an after-commit hook queue", () => {
 		await expect(
 			testCtx.internalAdapter.deleteUserSessions(session.userId),
 		).resolves.toBeUndefined();
+		expect(deleteAttempts.filter((key) => key === session.token)).toHaveLength(2);
 		expect(store.has(session.token)).toBe(false);
 	});
 
