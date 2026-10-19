@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { mapConcurrent } from "@better-auth/core/utils/async";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -65,7 +66,7 @@ export async function batchMigrateLegacyMetadata(
 	const migrationPromises = keysToMigrate.map(async (apiKey) => {
 		const parsed = parseDoubleStringifiedMetadata(apiKey.metadata);
 		try {
-			await ctx.context.adapter.update({
+			await (await getCurrentAdapter(ctx.context.adapter)).update({
 				model: "apikey",
 				where: [{ field: "id", value: apiKey.id }],
 				update: { metadata: parsed },
@@ -103,7 +104,7 @@ export async function migrateDoubleStringifiedMetadata(
 		(opts.storage === "database" || opts.fallbackToDatabase)
 	) {
 		try {
-			await ctx.context.adapter.update({
+			await (await getCurrentAdapter(ctx.context.adapter)).update({
 				model: "apikey",
 				where: [{ field: "id", value: apiKey.id }],
 				update: { metadata: parsed },
@@ -374,15 +375,17 @@ export async function getApiKey(
 
 	// Database mode only
 	if (opts.storage === "database") {
-		return await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "key",
-					value: hashedKey,
-				},
-			],
-		});
+		return await (await getCurrentAdapter(ctx.context.adapter)).findOne<ApiKey>(
+			{
+				model: "apikey",
+				where: [
+					{
+						field: "key",
+						value: hashedKey,
+					},
+				],
+			},
+		);
 	}
 
 	// Secondary storage mode with fallback
@@ -393,7 +396,9 @@ export async function getApiKey(
 				return cached;
 			}
 		}
-		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
+		const dbKey = await (
+			await getCurrentAdapter(ctx.context.adapter)
+		).findOne<ApiKey>({
 			model: "apikey",
 			where: [
 				{
@@ -421,7 +426,7 @@ export async function getApiKey(
 	}
 
 	// Default fallback
-	return await ctx.context.adapter.findOne<ApiKey>({
+	return await (await getCurrentAdapter(ctx.context.adapter)).findOne<ApiKey>({
 		model: "apikey",
 		where: [
 			{
@@ -444,15 +449,17 @@ export async function getApiKeyById(
 
 	// Database mode only
 	if (opts.storage === "database") {
-		return await ctx.context.adapter.findOne<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "id",
-					value: id,
-				},
-			],
-		});
+		return await (await getCurrentAdapter(ctx.context.adapter)).findOne<ApiKey>(
+			{
+				model: "apikey",
+				where: [
+					{
+						field: "id",
+						value: id,
+					},
+				],
+			},
+		);
 	}
 
 	// Secondary storage mode with fallback
@@ -463,7 +470,9 @@ export async function getApiKeyById(
 				return cached;
 			}
 		}
-		const dbKey = await ctx.context.adapter.findOne<ApiKey>({
+		const dbKey = await (
+			await getCurrentAdapter(ctx.context.adapter)
+		).findOne<ApiKey>({
 			model: "apikey",
 			where: [
 				{
@@ -491,7 +500,7 @@ export async function getApiKeyById(
 	}
 
 	// Default fallback
-	return await ctx.context.adapter.findOne<ApiKey>({
+	return await (await getCurrentAdapter(ctx.context.adapter)).findOne<ApiKey>({
 		model: "apikey",
 		where: [
 			{
@@ -627,7 +636,7 @@ export async function listApiKeys(
 	// Database mode only
 	if (opts.storage === "database") {
 		const [apiKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
+			(await getCurrentAdapter(ctx.context.adapter)).findMany<ApiKey>({
 				model: "apikey",
 				where: [
 					{
@@ -641,7 +650,7 @@ export async function listApiKeys(
 					? { field: sortBy, direction: sortDirection || "asc" }
 					: undefined,
 			}),
-			ctx.context.adapter.count({
+			(await getCurrentAdapter(ctx.context.adapter)).count({
 				model: "apikey",
 				where: [
 					{
@@ -694,7 +703,7 @@ export async function listApiKeys(
 		}
 		// Fallback to database
 		const [dbKeys, total] = await Promise.all([
-			ctx.context.adapter.findMany<ApiKey>({
+			(await getCurrentAdapter(ctx.context.adapter)).findMany<ApiKey>({
 				model: "apikey",
 				where: [
 					{
@@ -708,7 +717,7 @@ export async function listApiKeys(
 					? { field: sortBy, direction: sortDirection || "asc" }
 					: undefined,
 			}),
-			ctx.context.adapter.count({
+			(await getCurrentAdapter(ctx.context.adapter)).count({
 				model: "apikey",
 				where: [
 					{
@@ -780,7 +789,7 @@ export async function listApiKeys(
 
 	// Default fallback
 	const [apiKeys, total] = await Promise.all([
-		ctx.context.adapter.findMany<ApiKey>({
+		(await getCurrentAdapter(ctx.context.adapter)).findMany<ApiKey>({
 			model: "apikey",
 			where: [
 				{
@@ -794,7 +803,7 @@ export async function listApiKeys(
 				? { field: sortBy, direction: sortDirection || "asc" }
 				: undefined,
 		}),
-		ctx.context.adapter.count({
+		(await getCurrentAdapter(ctx.context.adapter)).count({
 			model: "apikey",
 			where: [
 				{

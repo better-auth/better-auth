@@ -1,5 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { role } from "better-auth/plugins/access";
@@ -85,14 +86,14 @@ export async function validateApiKey({
 			const deleteExpiredKey = async () => {
 				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 					await deleteApiKey(ctx, apiKey, opts);
-					await ctx.context.adapter.delete({
+					await (await getCurrentAdapter(ctx.context.adapter)).delete({
 						model: API_KEY_TABLE_NAME,
 						where: [{ field: "id", value: apiKey.id }],
 					});
 				} else if (opts.storage === "secondary-storage") {
 					await deleteApiKey(ctx, apiKey, opts);
 				} else {
-					await ctx.context.adapter.delete({
+					await (await getCurrentAdapter(ctx.context.adapter)).delete({
 						model: API_KEY_TABLE_NAME,
 						where: [{ field: "id", value: apiKey.id }],
 					});
@@ -135,14 +136,14 @@ export async function validateApiKey({
 		const deleteExhaustedKey = async () => {
 			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 				await deleteApiKey(ctx, apiKey, opts);
-				await ctx.context.adapter.delete({
+				await (await getCurrentAdapter(ctx.context.adapter)).delete({
 					model: API_KEY_TABLE_NAME,
 					where: [{ field: "id", value: apiKey.id }],
 				});
 			} else if (opts.storage === "secondary-storage") {
 				await deleteApiKey(ctx, apiKey, opts);
 			} else {
-				await ctx.context.adapter.delete({
+				await (await getCurrentAdapter(ctx.context.adapter)).delete({
 					model: API_KEY_TABLE_NAME,
 					where: [{ field: "id", value: apiKey.id }],
 				});
@@ -202,7 +203,9 @@ async function claimUsageInDatabase({
 
 	// A final `updatedAt` stamp returns the fully consolidated row, reflecting
 	// every guarded counter write applied above.
-	const finalRow = await ctx.context.adapter.update<ApiKey>({
+	const finalRow = await (
+		await getCurrentAdapter(ctx.context.adapter)
+	).update<ApiKey>({
 		model: API_KEY_TABLE_NAME,
 		where: [{ field: "id", value: row.id }],
 		update: { updatedAt: new Date() },
@@ -241,7 +244,9 @@ async function consumeRemaining(
 			apiKey.lastRefillAt ?? apiKey.createdAt,
 		).getTime();
 		if (now.getTime() - lastTime > refillInterval) {
-			const refilled = await ctx.context.adapter.incrementOne<ApiKey>({
+			const refilled = await (
+				await getCurrentAdapter(ctx.context.adapter)
+			).incrementOne<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [
 					{ field: "id", value: apiKey.id },
@@ -258,7 +263,9 @@ async function consumeRemaining(
 		}
 	}
 
-	const decremented = await ctx.context.adapter.incrementOne<ApiKey>({
+	const decremented = await (
+		await getCurrentAdapter(ctx.context.adapter)
+	).incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
 		where: [
 			{ field: "id", value: apiKey.id },
@@ -301,7 +308,9 @@ async function consumeRateLimit(
 		if (decision.lastRequest === null) {
 			return apiKey;
 		}
-		const updated = await ctx.context.adapter.update<ApiKey>({
+		const updated = await (
+			await getCurrentAdapter(ctx.context.adapter)
+		).update<ApiKey>({
 			model: API_KEY_TABLE_NAME,
 			where: [{ field: "id", value: apiKey.id }],
 			update: { lastRequest: decision.lastRequest },
@@ -310,7 +319,9 @@ async function consumeRateLimit(
 	}
 
 	if (decision.type === "increment") {
-		const incremented = await ctx.context.adapter.incrementOne<ApiKey>({
+		const incremented = await (
+			await getCurrentAdapter(ctx.context.adapter)
+		).incrementOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
 			where: [
 				{ field: "id", value: apiKey.id },
@@ -333,7 +344,9 @@ async function consumeRateLimit(
 		}
 		// The window rolled or the max was reached between the read and the
 		// write. Re-evaluate against the freshest row to apply the right guard.
-		const fresh = await ctx.context.adapter.findOne<ApiKey>({
+		const fresh = await (
+			await getCurrentAdapter(ctx.context.adapter)
+		).findOne<ApiKey>({
 			model: API_KEY_TABLE_NAME,
 			where: [{ field: "id", value: apiKey.id }],
 		});
@@ -354,7 +367,9 @@ async function consumeRateLimit(
 				}
 			: { field: "lastRequest", operator: "eq" as const, value: null };
 
-	const started = await ctx.context.adapter.incrementOne<ApiKey>({
+	const started = await (
+		await getCurrentAdapter(ctx.context.adapter)
+	).incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
 		where: [{ field: "id", value: apiKey.id }, windowGuard],
 		increment: {},
@@ -365,7 +380,9 @@ async function consumeRateLimit(
 	}
 	// Another verification already opened the window. Re-evaluate so this
 	// request consumes an increment slot instead of resetting the count.
-	const fresh = await ctx.context.adapter.findOne<ApiKey>({
+	const fresh = await (
+		await getCurrentAdapter(ctx.context.adapter)
+	).findOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
 		where: [{ field: "id", value: apiKey.id }],
 	});
