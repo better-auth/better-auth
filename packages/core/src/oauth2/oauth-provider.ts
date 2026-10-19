@@ -25,7 +25,10 @@ export type OAuthIdTokenConfig =
 			issuer?: (string | string[]) | undefined;
 			/** Expected `aud`, usually the client ID. */
 			audience: string | string[];
-			/** Permitted JWS algorithms. Defaults to the token's `alg` header. */
+			/**
+			 * Permitted JWS algorithms. Set this to the algorithms the provider signs with.
+			 * When omitted, jose accepts any algorithm the resolved key supports.
+			 */
 			algorithms?: string[] | undefined;
 			/** Maximum token age passed to jose (e.g. `"1h"`). */
 			maxTokenAge?: string | undefined;
