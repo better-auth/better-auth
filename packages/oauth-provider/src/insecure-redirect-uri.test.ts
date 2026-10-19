@@ -288,7 +288,11 @@ describe("http redirect URIs on private networks", () => {
 });
 
 describe("allowInsecureRedirectUri boundaries", () => {
-	it("rejects credentials in an http post-logout redirect URI the predicate allows", async () => {
+	it.each([
+		"http://user:pass@192.168.1.50:8000/logged-out",
+		"http://user:pass@localhost:8000/logged-out",
+		"https://user:pass@rp.example.com/logged-out",
+	])("rejects credentials in the post-logout redirect URI %s", async (uri) => {
 		const provider = await setupProvider({
 			allowInsecureRedirectUri: allowLanOrigin,
 		});
@@ -296,9 +300,7 @@ describe("allowInsecureRedirectUri boundaries", () => {
 		await expect(
 			provider.createClient({
 				redirect_uris: [lanRedirect],
-				post_logout_redirect_uris: [
-					"http://user:pass@192.168.1.50:8000/logged-out",
-				],
+				post_logout_redirect_uris: [uri],
 			}),
 		).rejects.toThrow();
 	});
@@ -375,8 +377,9 @@ describe("web clients on localhost", () => {
 	});
 
 	it("rejects a changed port for a web client localhost redirect URI", async () => {
+		// Allows every localhost port, so only registered-URI matching can reject.
 		const provider = await setupProvider({
-			allowInsecureRedirectUri: (url) => url.origin === "http://localhost:5173",
+			allowInsecureRedirectUri: (url) => url.hostname === "localhost",
 		});
 		const client = await provider.createClient({
 			redirect_uris: [localhostRedirect],

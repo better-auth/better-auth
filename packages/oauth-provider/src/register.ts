@@ -487,6 +487,16 @@ export async function checkOAuthClient(
 		);
 	}
 	for (const uri of clientWithDefaults.post_logout_redirect_uris ?? []) {
+		let url: URL | undefined;
+		try {
+			url = new URL(uri);
+		} catch {}
+		if (!url || url.username || url.password) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `post-logout redirect URI must be an absolute URI without credentials: ${uri}`,
+			});
+		}
 		if (!isRedirectUriTransportAllowed(opts, uri)) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
