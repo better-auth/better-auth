@@ -590,7 +590,7 @@ export const auth = betterAuth({
 
 ### requireIssuedIdTokenNonce
 
-Binds each ID token a client submits to one request. When enabled, `signIn.social` and `linkSocial` with an `idToken` require a nonce from `POST /id-token/nonce`. Each nonce works once and expires after five minutes. The token's `nonce` claim must match it. Without it, the server has no record of the nonces a client uses, so it cannot tell a fresh token from a reused one.
+Binds each ID token a client submits to one request. When enabled, `signIn.social` and `linkSocial` with an `idToken`, and Google One Tap, require a nonce from `POST /id-token/nonce`. Each nonce works once and expires after five minutes. The token's `nonce` claim must match it. Without it, the server has no record of the nonces a client uses, so it cannot tell a fresh token from a reused one.
 
 Enable it only when every client that submits ID tokens for this provider can pass a nonce to the provider's SDK. Clients that send no nonce, or one the server did not issue, get `400 INVALID_ID_TOKEN_NONCE`.
 
@@ -620,6 +620,7 @@ await authClient.signIn.social({
 ```
 
 * **Apple:** Apple recommends passing the SHA-256 hex digest of the nonce to Apple, and sending the raw nonce to Better Auth. Built-in verification accepts either the raw value or its digest in the claim. A custom `verifyIdToken` for Apple must do the same comparison itself.
+* **Google One Tap:** also set `useIssuedNonce` on `oneTapClient`. See [Binding sign-ins to a nonce](/docs/plugins/one-tap#binding-sign-ins-to-a-nonce).
 * **Facebook:** only Limited Login ID tokens carry a nonce. Opaque Graph access tokens are rejected when a nonce is expected.
 * **Custom `verifyIdToken`:** Better Auth consumes the issued nonce and passes it to your function, so your function must still compare it to the token's `nonce` claim and reject tokens that cannot carry one.
 

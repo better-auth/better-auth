@@ -337,7 +337,8 @@ export type ProviderOptions<Profile extends object = object> = {
 	disableIdTokenSignIn?: boolean | undefined;
 	/**
 	 * Require a nonce issued by `POST /id-token/nonce` when a client signs in or
-	 * links an account with an ID token from this provider. The nonce is single
+	 * links an account with an ID token from this provider, including Google
+	 * One Tap. The nonce is single
 	 * use, expires after five minutes, and must equal the token's `nonce` claim
 	 * (or its SHA-256 hex digest for Apple). Requests without an issued nonce are
 	 * rejected with `INVALID_ID_TOKEN_NONCE`.

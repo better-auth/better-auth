@@ -2,15 +2,18 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
-import { supportsIdTokenSignIn } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { generateRandomString } from "../../crypto";
 
 const ID_TOKEN_NONCE_EXPIRES_IN_MS = 5 * 60 * 1000;
+const ISSUED_NONCE_LENGTH = 32;
+const ISSUED_NONCE_PATTERN = new RegExp(
+	`^[a-zA-Z0-9]{${ISSUED_NONCE_LENGTH}}$`,
+);
 
-type ProviderWithOptions = Pick<OAuthProvider, "id" | "idToken" | "options">;
+type ProviderWithOptions = Pick<OAuthProvider, "id" | "options">;
 
 const nonceIdentifier = (providerId: string, nonce: string) =>
 	`id-token-nonce:${providerId}:${nonce}`;
@@ -19,7 +22,8 @@ const requiresIssuedNonce = (provider: ProviderWithOptions) =>
 	provider.options?.requireIssuedIdTokenNonce === true;
 
 /**
- * Consume the issued nonce presented with a client-submitted ID token. A no-op
+ * Consume the issued nonce presented with a client-submitted ID token, from
+ * `/sign-in/social`, `/link-social`, or Google One Tap. A no-op
  * for providers without `requireIssuedIdTokenNonce`. The nonce is burned before
  * the token is verified, so a failed attempt cannot be retried with it.
  */
@@ -29,11 +33,12 @@ export async function consumeIssuedIdTokenNonce(
 	nonce: string | undefined,
 ) {
 	if (!requiresIssuedNonce(provider)) return;
-	const issued = nonce
-		? await ctx.context.internalAdapter.consumeVerificationValue(
-				nonceIdentifier(provider.id, nonce),
-			)
-		: null;
+	const issued =
+		nonce && ISSUED_NONCE_PATTERN.test(nonce)
+			? await ctx.context.internalAdapter.consumeVerificationValue(
+					nonceIdentifier(provider.id, nonce),
+				)
+			: null;
 	if (!issued) {
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_ID_TOKEN_NONCE);
 	}
@@ -45,7 +50,8 @@ export async function consumeIssuedIdTokenNonce(
  * POST `/id-token/nonce`
  *
  * Issues a single-use nonce for a client to pass to the provider's SDK before
- * submitting the resulting ID token to `/sign-in/social` or `/link-social`.
+ * submitting the resulting ID token to `/sign-in/social`, `/link-social`, or
+ * `/one-tap/callback`.
  * Only available for providers that set `requireIssuedIdTokenNonce`.
  */
 export const issueIdTokenNonce = createAuthEndpoint(
@@ -86,13 +92,18 @@ export const issueIdTokenNonce = createAuthEndpoint(
 		if (!provider) {
 			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
 		}
-		if (!requiresIssuedNonce(provider) || !supportsIdTokenSignIn(provider)) {
+		if (!requiresIssuedNonce(provider)) {
 			throw APIError.from(
 				"BAD_REQUEST",
 				BASE_ERROR_CODES.ID_TOKEN_NONCE_NOT_ENABLED,
 			);
 		}
-		const nonce = generateRandomString(32, "a-z", "A-Z", "0-9");
+		const nonce = generateRandomString(
+			ISSUED_NONCE_LENGTH,
+			"a-z",
+			"A-Z",
+			"0-9",
+		);
 		await ctx.context.internalAdapter.createVerificationValue({
 			identifier: nonceIdentifier(provider.id, nonce),
 			value: provider.id,
