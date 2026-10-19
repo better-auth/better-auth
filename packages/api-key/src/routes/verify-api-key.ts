@@ -1,6 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { getCurrentAdapter } from "@better-auth/core/context";
+import { getCurrentAdapter, runWithAdapter } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { role } from "better-auth/plugins/access";
@@ -102,9 +102,11 @@ export async function validateApiKey({
 
 			if (opts.deferUpdates) {
 				ctx.context.runInBackground(
-					deleteExpiredKey().catch((error) => {
-						ctx.context.logger.error("Deferred update failed:", error);
-					}),
+					runWithAdapter(ctx.context.adapter, deleteExpiredKey).catch(
+						(error) => {
+							ctx.context.logger.error("Deferred update failed:", error);
+						},
+					),
 				);
 			} else {
 				await deleteExpiredKey();
@@ -152,9 +154,11 @@ export async function validateApiKey({
 
 		if (opts.deferUpdates) {
 			ctx.context.runInBackground(
-				deleteExhaustedKey().catch((error) => {
-					ctx.context.logger.error("Deferred update failed:", error);
-				}),
+				runWithAdapter(ctx.context.adapter, deleteExhaustedKey).catch(
+					(error) => {
+						ctx.context.logger.error("Deferred update failed:", error);
+					},
+				),
 			);
 		} else {
 			await deleteExhaustedKey();
