@@ -1787,12 +1787,9 @@ describe("internal adapter test", async () => {
 		const session = await testCtx.internalAdapter.createSession(user.id);
 
 		storageDown = true;
-		let outcome: "resolved" | "rejected" = "resolved";
-		await testCtx.internalAdapter.deleteUserSessions(user.id).catch(() => {
-			outcome = "rejected";
-		});
-
-		expect(outcome).toBe("rejected");
+		await expect(
+			testCtx.internalAdapter.deleteUserSessions(user.id),
+		).rejects.toBeUndefined();
 		expect(testMap.has(session.token)).toBe(true);
 	});
 
