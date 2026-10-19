@@ -1639,10 +1639,13 @@ describe("internal adapter test", async () => {
 				deleteAttempts.filter((key) => key === session.token),
 			).toHaveLength(1);
 		}
-		for (const session of [second, third]) {
-			expect(testMap.has(session.token)).toBe(false);
+		const evictedTokens = [first.token, second.token, third.token].filter(
+			(token) => token !== failingToken,
+		);
+		for (const token of evictedTokens) {
+			expect(testMap.has(token)).toBe(false);
 		}
-		expect(testMap.has(first.token)).toBe(true);
+		expect(testMap.has(failingToken)).toBe(true);
 	});
 
 	/**
