@@ -5,15 +5,96 @@ import { parseSetCookieHeader, toCookieOptions } from "../cookies";
 import { PACKAGE_VERSION } from "../version";
 import { warnIfCookiePluginNotLast } from "./cookie-plugin-guard";
 
-export function toNextJsHandler(
-	auth:
-		| {
-				handler: (request: Request) => Promise<Response>;
-		  }
-		| ((request: Request) => Promise<Response>),
+export interface NextJsHandlerOptions {
+	/**
+	 * The `basePath` configured in `next.config`.
+	 *
+	 * Next.js strips its `basePath` from the URL that App Router route
+	 * handlers receive. When the Better Auth `basePath` includes that prefix
+	 * (e.g. `/docs/api/auth`), the handler restores it before routing.
+	 *
+	 * Defaults to the value Next.js injects at build time.
+	 */
+	basePath?: string | undefined;
+}
+
+type NextJsHandlerAuthContext = Promise<{
+	baseURL: string;
+	options: { basePath?: string | undefined };
+}>;
+
+type NextJsHandlerAuth =
+	| {
+			handler: (request: Request) => Promise<Response>;
+			$context?: NextJsHandlerAuthContext | undefined;
+	  }
+	| ((request: Request) => Promise<Response>);
+
+const trimTrailingSlashes = (path: string) => path.replace(/\/+$/, "");
+
+const hasPathPrefix = (pathname: string, prefix: string) =>
+	pathname === prefix || pathname.startsWith(`${prefix}/`);
+
+function getNextBasePath(): string | undefined {
+	try {
+		// Kept as a literal member expression so the Next.js compiler can replace it.
+		return process.env.__NEXT_ROUTER_BASEPATH;
+	} catch {
+		return undefined;
+	}
+}
+
+async function getAuthBasePath(context: NextJsHandlerAuthContext) {
+	const ctx = await context;
+	if (ctx.baseURL) {
+		try {
+			return trimTrailingSlashes(new URL(ctx.baseURL).pathname);
+		} catch {}
+	}
+	return trimTrailingSlashes(ctx.options.basePath || "/api/auth");
+}
+
+/**
+ * Next.js removes its `basePath` from the URL passed to App Router route
+ * handlers. Restore it when the Better Auth `basePath` expects it, so the
+ * router matches and generated URLs keep the public prefix.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11910
+ */
+async function restoreNextBasePath(
+	request: Request,
+	auth: NextJsHandlerAuth,
+	nextBasePath: string | undefined,
 ) {
+	const prefix = trimTrailingSlashes(nextBasePath ?? "");
+	if (!prefix || !("handler" in auth) || !auth.$context) {
+		return request;
+	}
+	const url = new URL(request.url);
+	if (hasPathPrefix(url.pathname, prefix)) {
+		return request;
+	}
+	const authBasePath = await getAuthBasePath(auth.$context);
+	const restoredPathname = `${prefix}${url.pathname}`;
+	if (
+		!hasPathPrefix(authBasePath, prefix) ||
+		!hasPathPrefix(restoredPathname, authBasePath)
+	) {
+		return request;
+	}
+	url.pathname = restoredPathname;
+	return new Request(url, request);
+}
+
+export function toNextJsHandler(
+	auth: NextJsHandlerAuth,
+	options?: NextJsHandlerOptions,
+) {
+	const nextBasePath =
+		options?.basePath !== undefined ? options.basePath : getNextBasePath();
 	const handler = async (request: Request) => {
-		return "handler" in auth ? auth.handler(request) : auth(request);
+		const req = await restoreNextBasePath(request, auth, nextBasePath);
+		return "handler" in auth ? auth.handler(req) : auth(req);
 	};
 	return {
 		GET: handler,

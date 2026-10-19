@@ -277,4 +277,113 @@ describe("next-js integration", () => {
 			expect(headersMock).toHaveBeenCalledOnce();
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11910
+	 */
+	describe("toNextJsHandler with a Next.js basePath", () => {
+		afterEach(() => {
+			vi.unstubAllEnvs();
+		});
+
+		async function getAuth(basePath = "/dev/api/auth") {
+			const [{ getTestInstance }, nextJs] = await Promise.all([
+				import("../test-utils/test-instance"),
+				import("./next-js"),
+			]);
+			const instance = await getTestInstance({ basePath });
+			return { ...instance, toNextJsHandler: nextJs.toNextJsHandler };
+		}
+
+		it("should restore the basePath that Next.js strips from route handler URLs", async () => {
+			const { auth, toNextJsHandler } = await getAuth();
+			const { GET } = toNextJsHandler(auth, { basePath: "/dev" });
+
+			const res = await GET(
+				new Request("http://localhost:3000/api/auth/get-session"),
+			);
+
+			expect(res.status).toBe(200);
+			expect(await res.json()).toBeNull();
+		});
+
+		it("should read the basePath that Next.js injects at build time", async () => {
+			vi.stubEnv("__NEXT_ROUTER_BASEPATH", "/dev");
+			const { auth, toNextJsHandler } = await getAuth();
+			const { GET } = toNextJsHandler(auth);
+
+			const res = await GET(
+				new Request("http://localhost:3000/api/auth/get-session"),
+			);
+
+			expect(res.status).toBe(200);
+		});
+
+		it("should not add the basePath twice when the URL already has it", async () => {
+			const { auth, toNextJsHandler } = await getAuth();
+			const handler = vi.fn(auth.handler);
+			const { GET } = toNextJsHandler(
+				{ ...auth, handler },
+				{ basePath: "/dev" },
+			);
+
+			const res = await GET(
+				new Request("http://localhost:3000/dev/api/auth/get-session"),
+			);
+
+			expect(res.status).toBe(200);
+			expect(new URL(handler.mock.calls[0]![0].url).pathname).toBe(
+				"/dev/api/auth/get-session",
+			);
+		});
+
+		it("should keep working when the auth basePath omits the Next.js basePath", async () => {
+			const { auth, toNextJsHandler } = await getAuth("/api/auth");
+			const handler = vi.fn(auth.handler);
+			const { GET } = toNextJsHandler(
+				{ ...auth, handler },
+				{ basePath: "/dev" },
+			);
+
+			const res = await GET(
+				new Request("http://localhost:3000/api/auth/get-session"),
+			);
+
+			expect(res.status).toBe(200);
+			expect(new URL(handler.mock.calls[0]![0].url).pathname).toBe(
+				"/api/auth/get-session",
+			);
+		});
+
+		it("should preserve the method, body, headers and query", async () => {
+			const { auth, testUser, toNextJsHandler } = await getAuth();
+			const handler = vi.fn(auth.handler);
+			const { POST } = toNextJsHandler(
+				{ ...auth, handler },
+				{ basePath: "/dev" },
+			);
+
+			const res = await POST(
+				new Request("http://localhost:3000/api/auth/sign-in/email?foo=bar", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: "http://localhost:3000",
+					},
+					body: JSON.stringify({
+						email: testUser.email,
+						password: testUser.password,
+					}),
+				}),
+			);
+
+			expect(res.status).toBe(200);
+			expect(res.headers.get("set-cookie")).toContain(
+				"better-auth.session_token",
+			);
+			expect(handler.mock.calls[0]![0].url).toBe(
+				"http://localhost:3000/dev/api/auth/sign-in/email?foo=bar",
+			);
+		});
+	});
 });
