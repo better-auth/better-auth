@@ -7,4 +7,4 @@ Apps where clients sign in or link accounts with a provider ID token (for exampl
 
 One change applies to every provider that uses built-in verification: an opaque (non-JWT) token, such as a Facebook Graph access token, is now rejected when the request also sends a `nonce`, because the token cannot carry one. A custom `verifyIdToken` must compare the nonce to the token's claim itself. Opaque tokens sent without a nonce are still accepted.
 
-Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. Set `verification.disableCleanup` to keep the previous behavior.
+Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. `verification.disableCleanup` turns off both.
