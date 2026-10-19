@@ -1,5 +1,22 @@
 # better-auth
 
+## 1.7.11
+
+### Patch Changes
+
+- [#10719](https://github.com/better-auth/better-auth/pull/10719) [`bd65db0`](https://github.com/better-auth/better-auth/commit/bd65db02c1e7c854dc6090bd1e3885fc0cd55ec8) Thanks [@rendermani](https://github.com/rendermani)! - Recognize PostgreSQL `int8` as a valid number type in migration diffs. Kysely's introspector reports `pg_type.typname`, so Better Auth's own `bigint` columns (such as the database-backed rate limiter's `lastRequest`) came back as `int8` and were reported as a type mismatch on every run.
+
+- [#11521](https://github.com/better-auth/better-auth/pull/11521) [`37a75c9`](https://github.com/better-auth/better-auth/commit/37a75c95d148e0db4f29f30cabcd2ceb26bc7085) Thanks [@aryan1306](https://github.com/aryan1306)! - Fix database-backed rate limiting returning an excessively large `X-Retry-After` header instead of the remaining seconds in the rate-limit window.
+
+- Updated dependencies [[`ce96569`](https://github.com/better-auth/better-auth/commit/ce965696d1f8695e96e6b88490fc8ea2f8ab78ae), [`2f6ca3f`](https://github.com/better-auth/better-auth/commit/2f6ca3f370e80081d911a5e95a39393920b6d22e), [`dfd8dd2`](https://github.com/better-auth/better-auth/commit/dfd8dd287a4cfeb1d3541bb4e004e8f33edce15f)]:
+  - @better-auth/core@1.7.11
+  - @better-auth/drizzle-adapter@1.7.11
+  - @better-auth/kysely-adapter@1.7.11
+  - @better-auth/memory-adapter@1.7.11
+  - @better-auth/mongo-adapter@1.7.11
+  - @better-auth/prisma-adapter@1.7.11
+  - @better-auth/telemetry@1.7.11
+
 ## 1.7.10
 
 ### Patch Changes
