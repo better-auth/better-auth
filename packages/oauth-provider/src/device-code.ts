@@ -1,7 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { APIError } from "better-auth/api";
 import type {
 	DeviceAuthorizationGrant,
 	DeviceAuthorizationPluginOptions,
@@ -25,13 +24,16 @@ import type {
 	OAuthProviderExtension,
 	OAuthTokenResponse,
 } from "./types";
+import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
 	getClient,
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
 	normalizeTimestampValue,
+	parseScopes,
 	readFormParams,
+	tokenError,
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
@@ -87,22 +89,6 @@ type OAuthDeviceCodeFields = {
 	amr?: string[] | null;
 };
 
-function tokenError(
-	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
-	error: string,
-	errorDescription: string,
-): never {
-	throw new APIError(status, {
-		error,
-		error_description: errorDescription,
-	});
-}
-
-function parseScopes(scope: string | null | undefined): string[] {
-	const normalized = scope?.trim();
-	return normalized ? normalized.split(/\s+/) : [];
-}
-
 /**
  * Exchanges an approved RFC 8628 device code for an OAuth token set. Unlike the
  * device-authorization plugin's `/device/token` (which mints a first-party
@@ -126,15 +112,20 @@ async function exchangeOAuthDeviceCode(
 	type ClientAuthorization = Awaited<
 		ReturnType<typeof provider.authenticateClient>
 	> & { scopes: string[] };
+	// RFC 6749 §5.2: an unknown or unauthenticated client is `invalid_client`,
+	// so resolve it before the device code lookup can report `invalid_grant`.
+	const authentication = await provider.authenticateClient({
+		requireCredentials: false,
+	});
 	const {
-		authorizationContext: { client, confirmation, scopes },
+		authorizationContext: { client, scopes },
 		claimedDeviceCode,
-		redemptionContext: resources,
+		redemptionContext: { resources, confirmation },
 		user,
 	} = await redeemDeviceCode<
 		OAuthDeviceCodeFields,
 		ClientAuthorization,
-		string[] | undefined
+		{ resources?: string[]; confirmation?: Confirmation }
 	>({
 		ctx,
 		deviceCode,
@@ -149,9 +140,6 @@ async function exchangeOAuthDeviceCode(
 			}
 
 			const scopes = parseScopes(record.scope);
-			const authentication = await provider.authenticateClient({
-				requireCredentials: false,
-			});
 			if (record.oauthClientId !== authentication.client.clientId) {
 				tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
 			}
@@ -188,7 +176,14 @@ async function exchangeOAuthDeviceCode(
 				clientId: authorization.client.clientId,
 				requestedScopes: authorization.scopes,
 			});
-			return resources;
+			// Same for a rejected DPoP proof: the client can retry with a valid one.
+			const confirmation = await provider.resolveConfirmation({
+				client: authorization.client,
+				scopes: authorization.scopes,
+				resources,
+				confirmation: authorization.confirmation,
+			});
+			return { resources, confirmation };
 		},
 	});
 
@@ -201,7 +196,9 @@ async function exchangeOAuthDeviceCode(
 		authTime: normalizeTimestampValue(claimedDeviceCode.authTime),
 		acr: claimedDeviceCode.acr ?? undefined,
 		amr: claimedDeviceCode.amr ?? undefined,
-		// Forward a sender-constraint a confidential client-auth strategy proved.
+		// Seed refresh tokens with every approved resource, not the narrowed poll.
+		originalResources: claimedDeviceCode.resources ?? undefined,
+		// Resolved before the claim: client-auth proof or the poll's DPoP proof.
 		confirmation,
 	});
 }

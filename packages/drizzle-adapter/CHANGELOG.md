@@ -1,5 +1,20 @@
 # @better-auth/drizzle-adapter
 
+## 1.8.0-beta.1
+
+### Minor Changes
+
+- [#11836](https://github.com/better-auth/better-auth/pull/11836) [`c7a7926`](https://github.com/better-auth/better-auth/commit/c7a7926fd2b36c972d74d70a248da3c267b762bf) Thanks [@bytaesu](https://github.com/bytaesu)! - Generate non-nullable Drizzle Relations v2 columns for fields whose `required` flag is omitted. Regenerating existing schemas may require a nullability migration. Backfill existing `NULL` values before applying `NOT NULL` constraints.
+
+## 1.8.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.8.0-beta.0
+
+## 1.7.10
+
 ## 1.7.9
 
 ## 1.7.8

@@ -5,7 +5,7 @@ import { openAPI } from "better-auth/plugins";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { oauthDeviceAuthorizationClient, oauthProviderClient } from "./client";
 import {
@@ -339,6 +339,7 @@ describe("oauth-provider device-code grant", async () => {
 	/** Registers a public OAuth client able to use the device-code grant. */
 	async function createDeviceClient(
 		grantTypes: string[] = [DEVICE_CODE_GRANT_TYPE],
+		scope = "openid profile email",
 	) {
 		const { headers } = await signInWithTestUser();
 		const created = await auth.api.adminCreateOAuthClient({
@@ -346,7 +347,7 @@ describe("oauth-provider device-code grant", async () => {
 			body: {
 				token_endpoint_auth_method: "none",
 				grant_types: grantTypes,
-				scope: "openid profile email",
+				scope,
 				application_type: "native",
 			},
 		});
@@ -378,6 +379,44 @@ describe("oauth-provider device-code grant", async () => {
 			headers: FORM_HEADERS,
 		});
 	}
+
+	it("keeps an approved device code when the poll's DPoP proof is rejected", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const proofFor = (htu: string) =>
+			new SignJWT({
+				jti: crypto.randomUUID(),
+				htm: "POST",
+				htu,
+				iat: Math.floor(Date.now() / 1000),
+			})
+				.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
+				.sign(privateKey);
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(clientId);
+		const pollWithProof = async (htu: string) =>
+			client.$fetch<Record<string, unknown>>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code: deviceCode,
+					client_id: clientId,
+				}),
+				headers: { ...FORM_HEADERS, dpop: await proofFor(htu) },
+			});
+
+		const rejected = await pollWithProof(
+			`${baseURL}/api/auth/oauth2/introspect`,
+		);
+		expect(rejected.error).toMatchObject({ error: "invalid_dpop_proof" });
+
+		await new Promise((resolve) => setTimeout(resolve, 2_100));
+		const issued = await pollWithProof(`${baseURL}/api/auth/oauth2/token`);
+		expect(issued.error).toBeNull();
+		expect(issued.data?.token_type).toBe("DPoP");
+	});
 
 	it("accepts a confidential client authenticated with Basic without body client_id", async () => {
 		const { headers } = await signInWithTestUser();
@@ -1311,6 +1350,40 @@ describe("oauth-provider device-code grant", async () => {
 		expect(stored?.deviceCode).toBe(deviceCode);
 	});
 
+	it("keeps every approved resource refreshable after a narrowed exchange", async () => {
+		const scope = "openid offline_access";
+		const clientId = await createDeviceClient(
+			[DEVICE_CODE_GRANT_TYPE, "refresh_token"],
+			scope,
+		);
+		const deviceCode = await approvedDeviceCode(clientId, scope, [
+			resource,
+			secondResource,
+		]);
+
+		const narrowed = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: deviceCode,
+			client_id: clientId,
+			resource,
+		});
+		expect(narrowed.error).toBeNull();
+		expect(decodeJwt(narrowed.data!.access_token as string).aud).not.toContain(
+			secondResource,
+		);
+
+		const refreshed = await pollToken({
+			grant_type: "refresh_token",
+			refresh_token: narrowed.data!.refresh_token as string,
+			client_id: clientId,
+			resource: secondResource,
+		});
+		expect(refreshed.error).toBeNull();
+		expect(decodeJwt(refreshed.data!.access_token as string).aud).toContain(
+			secondResource,
+		);
+	});
+
 	it("single-uses the device code (second exchange fails)", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);
@@ -1421,6 +1494,22 @@ describe("oauth-provider device-code grant", async () => {
 		});
 		expect(res.error?.status).toBe(400);
 		expect((res.error as TokenErrorBody)?.error).toBe("invalid_grant");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11035
+	 */
+	it("returns invalid_client for an unknown client_id before looking up the device code", async () => {
+		const res = await pollToken({
+			grant_type: DEVICE_CODE_GRANT_TYPE,
+			device_code: "does-not-exist",
+			client_id: "unknown-client",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client not found",
+		});
 	});
 
 	it("rejects a device code presented by a different client", async () => {
@@ -1891,7 +1980,10 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			device_code,
 		});
 		expect(tokens.error).toBeNull();
-		expect(decodeJwt(tokens.data!.access_token)[referenceClaim]).toBe("org_1");
+		expect(decodeJwt(tokens.data!.access_token)).toMatchObject({
+			[referenceClaim]: "org_1",
+			reference_id: "org_1",
+		});
 		expect(decodeJwt(tokens.data!.id_token!).auth_time).toEqual(
 			expect.any(Number),
 		);
@@ -1902,9 +1994,10 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			refresh_token: tokens.data!.refresh_token!,
 		});
 		expect(refreshed.error).toBeNull();
-		expect(decodeJwt(refreshed.data!.access_token)[referenceClaim]).toBe(
-			"org_1",
-		);
+		expect(decodeJwt(refreshed.data!.access_token)).toMatchObject({
+			[referenceClaim]: "org_1",
+			reference_id: "org_1",
+		});
 	});
 
 	it("carries the resolved acr and amr into device ID tokens and their refreshes", async () => {

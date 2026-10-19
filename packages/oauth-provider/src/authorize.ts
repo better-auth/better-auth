@@ -31,7 +31,6 @@ import { getSupportedClaims } from "./standard-claims";
 import type {
 	OAuthAuthenticationContext,
 	OAuthAuthorizationQuery,
-	OAuthConsent,
 	OAuthInteractionQuery,
 	OAuthInteractionRequest,
 	OAuthOptions,
@@ -42,7 +41,10 @@ import { authorizationQuerySchema, SafeUrlSchema } from "./types/zod";
 
 import {
 	clientAllowsGrant,
+	consentCovers,
+	findConsent,
 	getClient,
+	getConsentReferenceId,
 	getJwtPlugin,
 	isPKCERequired,
 	parsePrompt,
@@ -637,7 +639,7 @@ export async function authorizeEndpoint(
 	if (!client) {
 		return handleRedirect(
 			ctx,
-			getErrorURL(ctx, "invalid_client", "client_id is required"),
+			getErrorURL(ctx, "invalid_client", "client not found"),
 		);
 	}
 	if (client.disabled) {
@@ -1019,7 +1021,7 @@ async function runAuthorizationInteraction(
 		});
 	}
 
-	const referenceId = await opts.postLogin?.consentReferenceId?.({
+	const referenceId = await getConsentReferenceId(opts, {
 		user: session.user,
 		session: session.session,
 		scopes,
@@ -1081,54 +1083,19 @@ async function runAuthorizationInteraction(
 	if (client.skipConsent) {
 		return approve();
 	}
-	const consent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
-		model: "oauthConsent",
-		where: [
-			{
-				field: "clientId",
-				value: client.clientId,
-			},
-			{
-				field: "userId",
-				value: session.user.id,
-			},
-			...(referenceId
-				? [
-						{
-							field: "referenceId",
-							value: referenceId,
-						},
-					]
-				: []),
-		],
-	});
+	const consent = await findConsent(
+		ctx,
+		client.clientId,
+		session.user.id,
+		referenceId,
+	);
 
+	// Prompt again whenever a requested scope, claim, or resource is not covered.
 	if (
 		!consent ||
-		!scopes.every((val) => consent.scopes.includes(val)) ||
+		!consentCovers(consent, scopes, resources) ||
 		!userInfoClaims.every((claim) =>
 			(consent.requestedUserInfoClaims ?? []).includes(claim),
-		)
-	) {
-		if (promptNone) {
-			return redirectWithAuthorizationError(
-				ctx,
-				opts,
-				query,
-				"consent_required",
-				"End-User consent is required",
-			);
-		}
-		return redirectWithPromptCode(ctx, opts, "consent", {
-			sessionId: session.session.id,
-		});
-	}
-
-	// Prompt again whenever a requested resource is not covered by stored consent.
-	const consentedResources = consent?.resources ?? [];
-	if (
-		resources.some(
-			(requestedResource) => !consentedResources.includes(requestedResource),
 		)
 	) {
 		if (promptNone) {

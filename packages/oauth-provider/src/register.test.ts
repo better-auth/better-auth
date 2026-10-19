@@ -18,6 +18,18 @@ import { resetSeedStateForTests } from "./resources";
 import type { OAuthOptions } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
+const makeRegister =
+	(fetchImpl: typeof fetch, baseURL = "http://localhost:3000") =>
+	(body: Record<string, unknown>, headers?: HeadersInit) => {
+		const requestHeaders = new Headers(headers);
+		requestHeaders.set("content-type", "application/json");
+		return fetchImpl(`${baseURL}/api/auth/oauth2/register`, {
+			method: "POST",
+			headers: requestHeaders,
+			body: JSON.stringify(body),
+		});
+	};
+
 describe("oauth register", async () => {
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -565,11 +577,11 @@ describe("oauth register", async () => {
 			});
 		});
 
-		it("still rejects a dynamic registration declaring an unsupported grant", async () => {
+		it("keeps managed registration strict about unsupported grants", async () => {
 			await expect(
 				checkOAuthClient(
 					{
-						client_id: "dcr-client",
+						client_id: "managed-client",
 						redirect_uris: [redirectUri],
 						grant_types: [
 							"authorization_code",
@@ -581,7 +593,7 @@ describe("oauth register", async () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 					},
-					{ registrationSource: "dynamic" },
+					{ registrationSource: "managed" },
 				),
 			).rejects.toMatchObject({
 				body: {
@@ -801,6 +813,95 @@ describe("oauth register", async () => {
 		).rejects.toMatchObject({
 			body: { error: "invalid_client_metadata" },
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11081
+ */
+describe("oauth register - dynamic registration grant narrowing", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const instanceWithGrants = async (grantTypes: OAuthOptions["grantTypes"]) => {
+		const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					allowUnauthenticatedClientRegistration: true,
+					grantTypes,
+				}),
+			],
+		});
+		return {
+			register: makeRegister(customFetchImpl as typeof fetch),
+			signInWithTestUser,
+		};
+	};
+	const { register } = await instanceWithGrants([
+		"authorization_code",
+		"refresh_token",
+	]);
+
+	it("registers Claude's connector with only the grants the server supports", async () => {
+		const response = await register({
+			redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+			token_endpoint_auth_method: "none",
+			grant_types: [
+				"authorization_code",
+				"refresh_token",
+				"urn:ietf:params:oauth:grant-type:jwt-bearer",
+			],
+			response_types: ["code"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.grant_types).toEqual(["authorization_code", "refresh_token"]);
+	});
+
+	it("drops an unsupported client_credentials grant from unauthenticated registration", async () => {
+		const response = await register({
+			redirect_uris: ["https://rp.example.com/callback"],
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code", "client_credentials"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.grant_types).toEqual(["authorization_code"]);
+		expect(body.response_types).toEqual(["code"]);
+	});
+
+	it("rejects a registration that shares no grant with the server", async () => {
+		const response = await register({
+			redirect_uris: ["https://rp.example.com/callback"],
+			token_endpoint_auth_method: "none",
+			grant_types: ["urn:ietf:params:oauth:grant-type:jwt-bearer"],
+		});
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "invalid_client_metadata",
+		});
+	});
+
+	it("drops the code response type along with an unsupported authorization_code grant", async () => {
+		const machineServer = await instanceWithGrants(["client_credentials"]);
+		const { headers } = await machineServer.signInWithTestUser();
+		for (const responseTypes of [undefined, ["code"]]) {
+			const response = await machineServer.register(
+				{
+					token_endpoint_auth_method: "client_secret_basic",
+					grant_types: ["authorization_code", "client_credentials"],
+					response_types: responseTypes,
+				},
+				headers,
+			);
+			const body = (await response.json()) as OAuthClient;
+			expect(response.status, JSON.stringify(body)).toBe(201);
+			expect(body.grant_types).toEqual(["client_credentials"]);
+			expect(body.response_types ?? []).toEqual([]);
+		}
 	});
 });
 
@@ -1205,6 +1306,87 @@ describe("oauth register - skip_consent blocked", async () => {
 			redirect_uris: ["https://rp.example.com/callback"],
 		});
 		expect(res.data?.client_id).toBeDefined();
+	});
+});
+
+describe("oauth register - client_credentials scopes from an initial access token", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "https://erp.example.com/oauth/callback";
+	const grantedScopes = new Map<string, string[]>([
+		["grant-invoices", ["invoices:write"]],
+		["grant-unknown", ["not-configured"]],
+	]);
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				scopes: ["openid", "invoices:write"],
+				validateInitialAccessToken: ({ initialAccessToken }) => {
+					const scopes = grantedScopes.get(initialAccessToken);
+					if (!scopes) return false;
+					return { referenceId: "org_1", clientCredentialsScopes: scopes };
+				},
+			}),
+		],
+	});
+
+	const register = (token: string, body: Record<string, unknown> = {}) =>
+		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/register`, {
+			method: "POST",
+			headers: {
+				authorization: `Bearer ${token}`,
+				"content-type": "application/json",
+			},
+			body: JSON.stringify({
+				client_name: "Self-hosted connector",
+				redirect_uris: [redirectUri],
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				...body,
+			}),
+		});
+	const clientCredentials = (clientId: string, clientSecret: string) =>
+		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/token`, {
+			method: "POST",
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				client_id: clientId,
+				client_secret: clientSecret,
+				scope: "invoices:write",
+			}),
+		});
+
+	it("gives the client the machine scopes the token authorizes", async () => {
+		const response = await register("grant-invoices");
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.reference_id).toBe("org_1");
+		expect(body).not.toHaveProperty("client_credentials_scopes");
+
+		const token = await clientCredentials(body.client_id, body.client_secret!);
+		expect(token.status).toBe(200);
+	});
+
+	it("rejects a scope the provider does not offer", async () => {
+		const response = await register("grant-unknown");
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ error: "invalid_scope" });
+	});
+
+	it("rejects machine scopes for a client that cannot hold them", async () => {
+		const withoutGrant = await register("grant-invoices", {
+			grant_types: ["authorization_code"],
+		});
+		expect(withoutGrant.status).toBe(400);
+		const publicClient = await register("grant-invoices", {
+			token_endpoint_auth_method: "none",
+		});
+		expect(publicClient.status).toBe(400);
 	});
 });
 
@@ -1732,12 +1914,7 @@ describe("oauth register - application_type", async () => {
 		],
 	});
 
-	const register = (body: Record<string, unknown>) =>
-		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/register`, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify(body),
-		});
+	const register = makeRegister(customFetchImpl as typeof fetch);
 
 	it("maps applicationType as a first-class field without hiding it in metadata", () => {
 		const stored = oauthToSchema({
@@ -2025,14 +2202,6 @@ describe("oauth register - application_type", async () => {
  */
 describe("oauth register - clientRegistrationDefaultApplicationType", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const makeRegister = (fetchImpl: typeof fetch) => {
-		return (body: Record<string, unknown>) =>
-			fetchImpl(`${authServerBaseUrl}/api/auth/oauth2/register`, {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(body),
-			});
-	};
 	const instanceWithDefault = async (
 		defaultApplicationType: "web" | "native" | "infer" | undefined,
 	) => {
@@ -2067,7 +2236,28 @@ describe("oauth register - clientRegistrationDefaultApplicationType", async () =
 		]);
 	});
 
-	it("keeps the web classification under infer when every redirect URI is http(s)", async () => {
+	/**
+	 * @see https://github.com/croffasia/itsaplan/issues/563
+	 */
+	it.each([
+		"http://127.0.0.1:33418/callback",
+		"http://localhost:33418/callback",
+		"http://[::1]:33418/callback",
+	])(
+		"infers native for an http loopback redirect URI: %s",
+		async (redirectUri) => {
+			const register = await instanceWithDefault("infer");
+			const response = await register({
+				token_endpoint_auth_method: "none",
+				redirect_uris: [redirectUri],
+			});
+			expect(response.status).toBe(201);
+			const body = (await response.json()) as OAuthClient;
+			expect(body.application_type).toBe("native");
+		},
+	);
+
+	it("keeps the web classification under infer when every redirect URI is https", async () => {
 		const register = await instanceWithDefault("infer");
 		const https = await register({
 			redirect_uris: ["https://rp.example.com/callback"],

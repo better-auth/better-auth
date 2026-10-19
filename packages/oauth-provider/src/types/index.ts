@@ -271,6 +271,14 @@ export interface OAuthTokenIssueParams {
 	 * is stamped after, and cannot be overridden by, contributed claims.
 	 */
 	confirmation?: Confirmation;
+	/**
+	 * Latest time the access token may expire. The authorization server issues
+	 * the earlier of this and its configured lifetime, so a grant derived from
+	 * another token (for example RFC 8693 token exchange) cannot outlive it.
+	 * If it is not in the future, issuance fails with `invalid_request`. Refresh
+	 * and ID tokens are not capped, so such a grant should not issue them.
+	 */
+	maxExpiresAt?: Date;
 }
 
 export interface OAuthTokenResponse {
@@ -326,6 +334,21 @@ export interface OAuthProviderApi {
 	 * calling it.
 	 */
 	issueTokens: (params: OAuthTokenIssueParams) => Awaitable<OAuthTokenResponse>;
+	/**
+	 * Resolves the sender-constraint the tokens for this request will carry: the
+	 * `confirmation` the client proved at authentication, or else the DPoP proof
+	 * on this request, verified and required by the same rules `issueTokens`
+	 * applies. A grant that consumes a one-time credential (a device code, a CIBA
+	 * request) calls this before the claim and passes the result to
+	 * `issueTokens` as `confirmation`, so a rejected proof leaves the credential
+	 * for a retry with a valid one.
+	 */
+	resolveConfirmation: (params: {
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		resources?: string[];
+		confirmation?: Confirmation;
+	}) => Promise<Confirmation | undefined>;
 	/**
 	 * Computes the stored lookup key for a token value (the same hash the
 	 * provider persists), so a caller can find or revoke a previously issued
@@ -672,6 +695,19 @@ export interface InitialAccessTokenAuthorization {
 	 * client is stored with neither a `user_id` nor a `reference_id`).
 	 */
 	referenceId?: string;
+	/**
+	 * Scope ceiling for the `client_credentials` grant, such as the machine
+	 * scopes an administrator approved when the token was issued. Return only
+	 * scopes that approval covered: the token is the only proof of it.
+	 *
+	 * The client must register the `client_credentials` grant with a
+	 * confidential authentication method, and every scope must be one the
+	 * provider offers and not a user-delegated scope such as `openid`.
+	 * Otherwise registration fails.
+	 *
+	 * @default []
+	 */
+	clientCredentialsScopes?: string[];
 }
 
 export interface OAuthOptions<
@@ -932,6 +968,21 @@ export interface OAuthOptions<
 	 */
 	assertionMaxLifetime?: number;
 	/**
+	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
+	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
+	 * signed with one of its current keys. No user session is involved.
+	 *
+	 * Clients that publish their keys at a `jwks_uri` rotate them there, so they
+	 * cannot use this endpoint.
+	 *
+	 * Each rotation assertion must be single-use, so the provider refuses to
+	 * start with this enabled on the memory adapter or with
+	 * `advanced.database.generateId: "serial"`, neither of which enforces it.
+	 *
+	 * @default false
+	 */
+	allowClientKeyRotation?: boolean;
+	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
 	 */
@@ -1049,14 +1100,16 @@ export interface OAuthOptions<
 	 * field.
 	 *
 	 * - `"web"`: the OIDC Registration §2 default. Omitted `application_type` is
-	 *   treated as `web`, so custom-scheme redirect URIs are rejected.
+	 *   treated as `web`, so custom-scheme and loopback redirect URIs are
+	 *   rejected.
 	 * - `"native"`: omitted `application_type` is treated as `native`.
 	 * - `"infer"`: omitted `application_type` is treated as `native` when any
-	 *   `redirect_uris` entry uses a non-http(s) scheme; otherwise `web`. Every
-	 *   redirect URI is then validated against the native rules. Lets native MCP
-	 *   clients that omit `application_type` (for example Cursor, which also
-	 *   registers https and loopback callbacks) register without loosening
-	 *   web-client redirect policy.
+	 *   `redirect_uris` entry uses a non-http(s) scheme or is `http` on
+	 *   `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web`. Every redirect URI
+	 *   of an inferred native client is then validated against the native rules.
+	 *   Lets native MCP clients that omit `application_type` (for example Cursor,
+	 *   or older Claude Code releases with an `http://127.0.0.1` callback)
+	 *   register without loosening web-client redirect policy.
 	 *
 	 * An `application_type` the client actually sends is never overridden.
 	 * Applies only to dynamic client registration; managed clients and Client ID
@@ -1248,7 +1301,8 @@ export interface OAuthOptions<
 		 */
 		page: string;
 		/**
-		 * A value to tie to the consent reference_id.
+		 * A value to tie to the consent reference_id. Consent is stored
+		 * per reference; `undefined` or `""` uses consent given without one.
 		 *
 		 * Note that YOU must fail in this function if the requested
 		 * scope doesn't have a reference id and it should.
@@ -1586,6 +1640,7 @@ export interface OAuthOptions<
 	 *   introspect: { window: 60, max: 100 },
 	 *   revoke: { window: 60, max: 30 },
 	 *   register: { window: 60, max: 5 },
+	 *   rotateClientKeys: { window: 60, max: 5 },
 	 *   userinfo: { window: 60, max: 60 },
 	 * }
 	 * ```
@@ -1616,6 +1671,11 @@ export interface OAuthOptions<
 		 * @default { window: 60, max: 5 }
 		 */
 		register?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/client/rotate-keys endpoint
+		 * @default { window: 60, max: 5 }
+		 */
+		rotateClientKeys?: { window: number; max: number } | false;
 		/**
 		 * Rate limit for /oauth2/userinfo endpoint
 		 * @default { window: 60, max: 60 }

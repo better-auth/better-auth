@@ -68,6 +68,7 @@ import {
 	toAudienceClaim,
 	toResourceList,
 	validateClientCredentials,
+	validateClientScopes,
 } from "./utils";
 
 // Seed the ID token with the standard UserInfo claim names set to `undefined`,
@@ -206,6 +207,20 @@ export function getOAuthProviderApi(
 			}
 			return createUserTokens(ctx, opts, { ...params, grantType });
 		},
+		resolveConfirmation: async (params) => {
+			if (params.confirmation) return params.confirmation;
+			const policy = await resolveResourcePolicy(ctx, opts, {
+				resource: params.resources,
+				clientId: params.client.clientId,
+				requestedScopes: params.scopes,
+			});
+			return resolveDpopTokenBinding(ctx, opts, {
+				client: params.client,
+				grantIssuance: {
+					dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
+				},
+			});
+		},
 		hashToken: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {
@@ -232,6 +247,8 @@ async function createJwtAccessToken(
 		iat?: number;
 		exp?: number;
 		sid?: string;
+		/** Consent reference from `postLogin.consentReferenceId`. */
+		referenceId?: string;
 		/**
 		 * Per-resource signing config resolved by {@link resolveResourcePolicy}.
 		 * `null` falls back to the JWT plugin's primary key.
@@ -281,6 +298,9 @@ async function createJwtAccessToken(
 			azp: client.clientId,
 			scope: scopes.join(" "),
 			sid: overrides?.sid,
+			// AS-owned, like `sid`: grants derived from this token (token exchange)
+			// read the consent reference back from here.
+			reference_id: overrides?.referenceId,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
@@ -774,7 +794,7 @@ async function resolveDpopTokenBinding(
 	opts: OAuthOptions<Scope[]>,
 	params: {
 		client: SchemaClient<Scope[]>;
-		grantIssuance: ResourceGrantIssuance;
+		grantIssuance: Pick<ResourceGrantIssuance, "dpopBoundAccessTokensRequired">;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
@@ -1101,7 +1121,20 @@ async function createUserTokens(
 	const baseExpiry = user
 		? (opts.accessTokenExpiresIn ?? 3600)
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
-	const defaultExp = iat + baseExpiry;
+	// Every other access token expiry is min()-ed against this, so the cap holds.
+	const defaultExp = Math.min(
+		iat + baseExpiry,
+		params.maxExpiresAt
+			? Math.floor(params.maxExpiresAt.getTime() / 1000)
+			: Number.POSITIVE_INFINITY,
+	);
+	// A cap that has already passed would mint a token that is born expired.
+	if (defaultExp <= iat) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: "the token this grant derives from has expired",
+		});
+	}
 	const scopeExp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>
@@ -1247,6 +1280,7 @@ async function createUserTokens(
 						iat,
 						exp,
 						sid: sessionId,
+						referenceId,
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,
@@ -1515,6 +1549,20 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the code lookup can report
+	 * `invalid_grant` and before a one-time code is consumed). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret,
+		undefined,
+		preVerified,
+		"authorization_code",
+		authMethod,
+	);
+
 	/** Get and check Verification Value */
 	const {
 		verificationValue,
@@ -1536,18 +1584,7 @@ async function handleAuthorizationCodeGrant(
 			error: "invalid_scope",
 		});
 	}
-
-	/** Verify Client */
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret,
-		scopes,
-		preVerified,
-		"authorization_code",
-		authMethod,
-	);
+	validateClientScopes(client, scopes);
 
 	// Parse scopes from the authorization request
 	const requestedScopes =
@@ -1588,7 +1625,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (pkceUsedInAuth && !pkceUsedInToken) {
 			// PKCE was used in authorization but not in token exchange
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier required because PKCE was used in authorization",
 				error: "invalid_request",
@@ -1597,7 +1634,7 @@ async function handleAuthorizationCodeGrant(
 
 		if (!pkceUsedInAuth && pkceUsedInToken) {
 			// PKCE was not used in authorization but verifier provided
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description:
 					"code_verifier provided but PKCE was not used in authorization",
 				error: "invalid_request",
@@ -1611,9 +1648,9 @@ async function handleAuthorizationCodeGrant(
 				: undefined;
 
 		if (challenge !== verificationValue.query?.code_challenge) {
-			throw new APIError("UNAUTHORIZED", {
+			throw new APIError("BAD_REQUEST", {
 				error_description: "code verification failed",
-				error: "invalid_request",
+				error: "invalid_grant",
 			});
 		}
 	}
@@ -1813,6 +1850,21 @@ async function handleRefreshTokenGrant(
 			error: "invalid_request",
 		});
 	}
+
+	/** Verify Client (RFC 6749 §5.2: an unknown or unauthenticated client is
+	 * `invalid_client`, so resolve it before the refresh token lookup can
+	 * report `invalid_grant`). */
+	const client = await validateClientCredentials(
+		ctx,
+		opts,
+		client_id,
+		client_secret, // Optional for refresh_grant but required on confidential clients
+		undefined,
+		preVerified,
+		"refresh_token",
+		authMethod,
+	);
+
 	const refreshToken = await findRefreshToken(ctx, opts, refresh_token);
 
 	// Check refresh
@@ -1861,16 +1913,7 @@ async function handleRefreshTokenGrant(
 		}
 	}
 
-	const client = await validateClientCredentials(
-		ctx,
-		opts,
-		client_id,
-		client_secret, // Optional for refresh_grant but required on confidential clients
-		requestedScopes ?? scopes,
-		preVerified,
-		"refresh_token",
-		authMethod,
-	);
+	validateClientScopes(client, requestedScopes ?? scopes);
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {

@@ -26,7 +26,7 @@ The default configuration chooses the safer protocol behavior, including PKCE fo
 * **`client_credentials`:** issues machine-to-machine access tokens.
 * **`device_code`:** adds the optional [Device Authorization](/docs/plugins/device-authorization#authorize-a-cli-to-call-an-api) flow for CLIs and limited-input clients.
 
-`client_credentials` is fail closed. A client's user-delegated `scope` metadata never authorizes machine access. Administrators must assign a non-empty `client_credentials_scopes` value through the administrative create or update endpoint, and `clientPrivileges` must explicitly approve the `configure-client-credentials-scopes` action. The assigned value is both the maximum requestable scope set and the default when the token request omits `scope`. DCR, CIMD, and user-managed registration can declare the grant but cannot assign this server-owned scope ceiling.
+`client_credentials` is fail closed. A client's user-delegated `scope` metadata never authorizes machine access. Administrators must assign a non-empty `client_credentials_scopes` value through the administrative create or update endpoint, and `clientPrivileges` must explicitly approve the `configure-client-credentials-scopes` action. The assigned value is both the maximum requestable scope set and the default when the token request omits `scope`. The one other way to assign it is protected dynamic registration, where your [`validateInitialAccessToken`](#dynamic-client-registration) callback can return it for the token it accepts. Otherwise DCR, CIMD, and user-managed registration can declare the grant but cannot assign this server-owned scope ceiling.
 
 ## Installation
 
@@ -462,6 +462,8 @@ const client = await authClient.oauth2.register({
 
 For all endpoint parameters, see [RFC 7591 Registration](https://datatracker.ietf.org/doc/html/rfc7591#section-2).
 
+Dynamic registration keeps only the requested `grant_types` this server supports, and the registration response lists the grants that were registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). For example, Claude's MCP connector requests `urn:ietf:params:oauth:grant-type:jwt-bearer` alongside `authorization_code` and `refresh_token`, and registers with the last two. When `authorization_code` is dropped, so is the `code` response type. A registration that shares no grant with the server is rejected with `invalid_client_metadata`. Clients created with `createOAuthClient` or `adminCreateOAuthClient` are not narrowed: an unsupported grant is rejected.
+
 `application_type` ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)) defaults to `web` when omitted. A `web` client requires `https` redirect URIs on non-loopback hosts. A `native` client may use any of these redirect URI forms:
 
 * A claimed `https` URI on a non-loopback host.
@@ -475,15 +477,15 @@ Application type is independent of client authentication. For example, a native 
 
 The [MCP 2026-07-28 spec](https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/client-registration#application-type-and-redirect-uri-constraints) requires MCP clients to send an appropriate `application_type`. A [Client ID Metadata Document](/docs/plugins/cimd) may omit it; Better Auth stores that omission as `null` and validates redirects against the safe union of web and native forms.
 
-Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, so the `web` default rejects the registration. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
+Some native MCP clients omit `application_type` during dynamic registration. Cursor, for example, registers `cursor://anysphere.cursor-mcp/oauth/callback`, an `https` callback, and `http://localhost:8787/callback` without it, and older Claude Code releases register a single `http://127.0.0.1:<port>/callback`, so the `web` default rejects both registrations. Current Claude Code releases send `application_type: "native"` and register without this option. `clientRegistrationDefaultApplicationType` sets the type that a dynamic registration gets when it omits the field:
 
-| Value             | Omitted `application_type` becomes                                        |
-| ----------------- | ------------------------------------------------------------------------- |
-| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                  |
-| `"native"`        | `native`                                                                  |
-| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme, otherwise `web` |
+| Value             | Omitted `application_type` becomes                                                                                          |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `"web"` (default) | `web`, as OIDC Registration §2 specifies                                                                                    |
+| `"native"`        | `native`                                                                                                                    |
+| `"infer"`         | `native` when any redirect URI uses a non-http(s) scheme or `http` on `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web` |
 
-Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme becomes `native`, so its `http` URIs must still be loopback. A client that lists only `http` and `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
+Every redirect URI is then validated against the rules for the resulting type. Under `"infer"`, a client that lists a custom scheme or an `http` loopback URI becomes `native`, so its other `http` URIs must still be loopback. A client that lists only `https` URIs stays `web`. An `application_type` the client sends is never overridden. The option applies only to dynamic registration; managed clients and Client ID Metadata Documents are unaffected.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -553,7 +555,7 @@ Important Notes:
 * With the JWT plugin enabled (default), sending `resource` results in a JWT access token with the selected resource in the `aud` claim.
 * With `disableJwtPlugin: true`, access tokens remain opaque. Requested resources are still bound to the token and surfaced through `/oauth2/introspect` and `customAccessTokenClaims` (via `resources`).
 
-Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge.
+Token endpoint errors follow the OAuth taxonomy: missing required request fields and parameters sent more than once return `invalid_request` (only `resource` and `audience` may repeat), a malformed `resource` returns `invalid_target`, failed client authentication returns `invalid_client`, and invalid or mismatched grants return `invalid_grant`. A confidential client must use its registered `token_endpoint_auth_method`. Failed `client_secret_post` authentication returns `400`; failed `client_secret_basic` authentication returns `401` with a Basic `WWW-Authenticate` challenge. For the built-in `authorization_code`, `refresh_token`, `client_credentials`, and device code grants, the client is authenticated before the grant is looked up, so an unknown `client_id` returns `invalid_client` rather than `invalid_grant`. An extension grant handler (see [Provider extensions](#provider-extensions)) gets the same result by calling `provider.authenticateClient()` before it looks up its grant.
 
 #### DPoP sender-constrained tokens
 
@@ -562,7 +564,7 @@ Better Auth supports Demonstrating Proof of Possession (DPoP) as defined by [RFC
 When a token is DPoP-bound:
 
 * The token endpoint requires a valid `DPoP` proof JWT.
-* The proof's `htu` must be the endpoint's public URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`. This holds even when a proxy or dev server rewrites the request host.
+* The proof's `htu` must be the endpoint's public URL: the origin and base path of `baseURL`, followed by the path the client requested, such as `https://auth.example.com/api/auth/oauth2/token`. Set `baseURL` to the public URL clients call, not an internal one, because the expected `htu` ignores the request host, which a proxy or dev server can rewrite.
 * The token response returns `token_type: "DPoP"`.
 * JWT access tokens include `cnf.jkt`; opaque access tokens and refresh tokens persist the same JWK thumbprint.
 * Refresh token rotation requires a DPoP proof from the same key.
@@ -643,6 +645,44 @@ The assertion JWT must contain:
 | `iat` | Optional, but if present must not be older than `assertionMaxLifetime`                                                                                             |
 
 Supported signing algorithms: `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, `EdDSA`.
+
+##### Rotating client keys
+
+A client with inline `jwks` can replace its own keys without a user session. This is how a service rotates its signing key on a schedule. Enable it on the provider:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowClientKeyRotation: true,
+})
+```
+
+The client generates a new key pair, then calls the endpoint with a client assertion signed by one of its current keys:
+
+```
+POST /api/auth/oauth2/client/rotate-keys
+Content-Type: application/json
+
+{
+  "client_assertion_type": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+  "client_assertion": "eyJhbGciOiJFUzI1NiIs...",
+  "jwks": { "keys": [{ "kty": "EC", "crv": "P-256", "kid": "key-2", "x": "...", "y": "..." }] }
+}
+```
+
+The assertion follows the claims in the table above, with one difference: `aud` must include the URL of the rotation endpoint. The token endpoint and the issuer do not count as audiences here, so an assertion minted only for them cannot be redirected to take over a client's keys.
+
+`jwks` is the client's complete new key set. A key left out of it stops verifying at once, so leaving out a leaked key retires it with that request. The response returns `client_id` and the stored `jwks`.
+
+To replace a key without breaking instances that still sign with the old one, roll it in two steps, the way a client that publishes a `jwks_uri` does:
+
+1. Send both the old and the new key, signed by the old key.
+2. Once every instance signs with the new key, send only the new key, signed by the new key.
+
+If the keys change while a rotation is in flight, the losing request fails with `409`, or with `401` if its signing key was already removed. Sign a fresh assertion with a current key and retry.
+
+<Callout type="info">
+  Each rotation assertion must be single-use, so the provider refuses to start with `allowClientKeyRotation` on the memory adapter or with `advanced.database.generateId: "serial"`. Only clients that register inline `jwks` can use this endpoint. A client that publishes a `jwks_uri` rotates its keys at that URI, and clients listed in `cachedTrustedClients` cannot be changed through the client management endpoints. `client_secret_*` clients use `/oauth2/client/rotate-secret` instead.
+</Callout>
 
 #### Authorization code grant
 
@@ -1127,7 +1167,7 @@ You don't need to handle anything from your side; when a new session is created,
 
 When a user is redirected to the OIDC provider for authentication, they may be prompted to authorize the application to access their data.
 
-**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications. Device approvals from `oauthDeviceAuthorization()` always show the consent screen, and their query also carries `user_code`; show it so the user can check that it matches the code on their device.
+**Note**: Trusted clients with `skip_consent: true` will bypass the consent screen entirely, providing a seamless experience for first-party applications. Device approvals from `oauthDeviceAuthorization()` always show the consent screen, and their query also carries `user_code`; show it so the user can check that it matches the code on their device. [CIBA](/docs/plugins/ciba) requests also always show it, and their query carries the client's `binding_message` when the client sent one.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -1275,6 +1315,8 @@ oauthProvider({
   }
 })
 ```
+
+Consent is stored per reference. An authorization reuses only the consent the user gave for the same `consentReferenceId` value, and returning `undefined` or an empty string uses only the consent given without a reference.
 
 The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, call `authClient.oauth2.continue`. Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
 
@@ -1511,6 +1553,8 @@ oauthProvider({
 
 `client.referenceId` is the client's owner, set at registration by `clientReference` or by an [initial access token](#dynamic-client-registration) during protected dynamic registration. It is not the top-level `referenceId` that both callbacks also receive, which is the consent reference from `postLogin.consentReferenceId`.
 
+When `postLogin.consentReferenceId` returns a consent reference, the provider also puts it in the access token as the `reference_id` claim, and introspection returns it for opaque access tokens and refresh tokens. The provider owns this claim, so a claim contributor cannot set or override it. [Token exchange](#keep-the-organization-the-user-approved) uses it to keep the reference on exchanged tokens. Resource servers can read it too, but a claim you derive in `customAccessTokenClaims` keeps your own name and shape.
+
 Opaque-token introspection re-derives contributor claims without `grantType` or `sessionId`, so base any claim needed at introspection on the client, scopes, and resources. `customAccessTokenClaims` and per-resource `customClaims` override a contributor claim with the same name; see [Claim precedence](#claim-precedence).
 
 An organization claim does not prove that the client is still connected. A JWT keeps its claims until it expires, so a resource server that must react to a disabled client right away should introspect the token, which reports tokens of disabled clients as inactive.
@@ -1670,13 +1714,76 @@ oauthProvider({
 })
 ```
 
-Return an object with a `referenceId` to attach application ownership metadata to the created client, or return `false` to reject the token. Omitting `referenceId` creates an unowned client. The `clientMetadata` passed to the callback is the submitted request, self-asserted and not yet fully validated, so treat it as untrusted input.
+Return an object with a `referenceId` to set the client's owner, such as an organization ID, or `false` to reject the token. Without `referenceId`, the client has no owner. Return `clientCredentialsScopes` too to let the client use the `client_credentials` grant: it registers with that scope ceiling, as if an administrator had assigned it. Return only scopes the token's issuer approved, since the token is the only record of that approval. Registration fails unless the client registers the `client_credentials` grant with a confidential authentication method and every scope is one the provider offers and not user-delegated (`openid`, `profile`, `email`, `offline_access`). The registration request itself can never set these scopes. Treat `clientMetadata` as untrusted: it is the submitted request, not yet fully validated.
 
 Token issuance, expiration, and revocation stay in your application because RFC 7591 leaves initial access token lifecycle policy to the authorization server. This is separate from RFC 7592 registration management tokens.
 
 <Callout type="info">
   With the [Bearer](/docs/plugins/bearer) plugin enabled, an `Authorization: Bearer` value that resolves to a valid user session is handled as that session, not as an initial access token.
 </Callout>
+
+#### Enrolling Agents and Devices
+
+Use this when software of yours runs outside your service and must call your API for an organization on its own: a sync or monitoring agent on a customer's server, a plugin on a self-hosted platform, or a signage screen. Each install gets its own client, owned by the organization, and nobody copies a secret:
+
+1. The install starts a [device authorization](#device-code-grant) and shows the user code.
+2. An organization administrator approves it on your consent page, after picking the organization on your [post-login page](#post-login-screen).
+3. The install receives a short-lived registration token and uses it as the initial access token to register its own client.
+4. The client uses `client_credentials` from then on, even if the administrator leaves the organization.
+
+Approval creates a credential that acts for the whole organization and outlives the approver, so a phished approval or a stolen key costs more than a stolen user token. Don't use this flow for:
+
+* A tool each person runs for themselves: use the device code grant directly.
+* An app that serves several organizations: register one client.
+* AI agents acting for users: give them each user's own tokens.
+* Machines that run untrusted code, such as CI runners, or devices in public places, such as payment terminals.
+* High-value scopes, such as admin or payment access. Have an administrator issue the initial access token from your app instead.
+
+Add `oauthDeviceAuthorization({ expiresIn: "5min" })`, a [post-login page](#post-login-screen) whose `consentReferenceId` returns the chosen organization, and:
+
+```ts title="auth.ts"
+const registrationResource = "https://auth.example.com/connector-registration"
+
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  scopes: ["openid", "connector:register", "invoices:write"],
+  // Registration tokens only work here and expire after 5 minutes
+  resources: [{
+    identifier: registrationResource,
+    allowedScopes: ["connector:register", "invoices:write"],
+    accessTokenTtl: 300,
+  }],
+  // Deleting a client does not invalidate tokens it already holds
+  m2mAccessTokenExpiresIn: 600,
+  validateInitialAccessToken: async ({ initialAccessToken }) => {
+    // Your own helpers: verify the token, use it once, recheck the admin
+    const token = await verifyRegistrationToken(initialAccessToken)
+    if (!token || !(await markRegistrationTokenUsed(token.jti))) return false
+    if (!(await isOrganizationAdmin(token.sub, token.reference_id))) return false
+    return {
+      referenceId: token.reference_id,
+      // Only machine scopes the administrator approved
+      clientCredentialsScopes: token.scopes.filter((scope) => scope === "invoices:write"),
+    }
+  },
+})
+```
+
+`verifyRegistrationToken` verifies the access token as a JWT against `auth.api.getJwks()`, with your JWT plugin's `issuer` and `registrationResource` as audience, and checks that `azp` is the installer client and `scope` includes `connector:register`.
+
+Create one public installer client with [`adminCreateOAuthClient`](#create-client) and share its `client_id` with every install: `token_endpoint_auth_method: "none"`, the `urn:ietf:params:oauth:grant-type:device_code` grant, `scope: "connector:register invoices:write"`, and `resources: [registrationResource]`. Without the resource link, device requests fail with `invalid_target`.
+
+The install requests a device code with that `client_id`, `scope: "connector:register invoices:write"` (so the administrator sees the machine scopes), and `resource: registrationResource`, shows the code, and polls the token endpoint. It then registers with the token as `Authorization: Bearer`, `token_endpoint_auth_method: "private_key_jwt"`, its public key in `jwks`, and `grant_types: ["client_credentials"]`. Keep the private key in the platform's key store.
+
+Keep these protections:
+
+* **Say what approval does.** Your consent page must state that approving creates a credential that acts for the organization with the listed scopes and keeps working after the approver leaves.
+* **Approved scopes only.** Take machine scopes from the token's `scope`, never from the registration request.
+* **Single use.** Reject a registration token whose `jti` was already used.
+* **Recheck the administrator.** Their role can change between approval and registration.
+* **Tell the organization.** Notify its administrators of each new enrollment, and record who approved it (the token's `sub`).
+* **Device code phishing.** Every install shares the installer client, so anyone can start a flow and send an administrator its code ([RFC 8628 §5.4](https://datatracker.ietf.org/doc/html/rfc8628#section-5.4)). Show the user code on your consent page and tell administrators to approve only a code their own install displays.
+* **Copied installs.** A copy, such as a staging clone of the install's database, carries the original client's key. Make the copy discard it and enroll again.
 
 #### Dynamic Client Registration Expiration
 
@@ -1805,10 +1912,13 @@ export const customOAuthExtension = () =>
           "urn:example:params:oauth:grant-type:custom": async ({
             provider,
           }) => {
-            const { client } = await provider.authenticateClient();
+            const scopes = ["openid"];
+            // Passing the scopes checks them against the client's registered
+            // scopes. Without them, the call only authenticates the client.
+            const { client } = await provider.authenticateClient({ scopes });
             return provider.issueTokens({
               client,
-              scopes: ["openid"],
+              scopes,
               tokenResponse: {
                 issued_token_type:
                   "urn:ietf:params:oauth:token-type:access_token",
@@ -1823,6 +1933,10 @@ export const customOAuthExtension = () =>
     },
   }) satisfies BetterAuthPlugin;
 ```
+
+`issueTokens` applies the provider's resource policy (registered and linked resources and each resource's `allowedScopes`) but does not re-check anything else it is given: the grant handler must validate the user, the client's registered scopes, and any grant-specific policy before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
+
+Add companion plugins such as `oauthDeviceAuthorization()` and `oauthTokenExchange()` to every `betterAuth()` instance that registers OAuth clients, including a separate admin or provisioning instance. Registration accepts only grant types the instance supports, so registering a client for an extension grant on an instance without that plugin fails with `invalid_client_metadata` and `unsupported grant_type`.
 
 Extension contributions follow two disciplines:
 
@@ -1857,11 +1971,13 @@ A [client metadata document](/docs/plugins/cimd) carries declared fields the sam
 
 #### Provider capabilities outside a grant
 
-A grant handler receives a `provider` capability surface (`getClient`, `authenticateClient`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). A plugin that needs those from its own endpoints (a back-channel authorization endpoint, a polling endpoint) obtains the same object with `getOAuthProviderApi(ctx, opts, grantType?)`, so it can resolve a client or verify a token without reaching into provider internals. Use `validateAccessToken` for introspection-style flows that can handle inactive payloads, and `requireActiveAccessToken` for protected-resource endpoints that should reject inactive or unknown tokens with an OAuth bearer challenge. Pass the grant type to mint tokens away from the token endpoint; omit it for read-only use, in which case `issueTokens` throws rather than mint an unlabeled grant.
+A grant handler receives a `provider` capability surface (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). A plugin that needs those from its own endpoints (a back-channel authorization endpoint, a polling endpoint) obtains the same object with `getOAuthProviderApi(ctx, opts, grantType?)`, so it can resolve a client or verify a token without reaching into provider internals. Use `validateAccessToken` for introspection-style flows that can handle inactive payloads, and `requireActiveAccessToken` for protected-resource endpoints that should reject inactive or unknown tokens with an OAuth bearer challenge. Pass the grant type to mint tokens away from the token endpoint; omit it for read-only use, in which case `issueTokens` throws rather than mint an unlabeled grant.
 
 When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to enforce that client credentials are not repeated or combined across authentication methods, so the endpoint must preserve a readable request after parsing the form.
 
 To sender-constrain an issued token (RFC 7800 `cnf`), pass `confirmation` to `issueTokens`, or return it from a `clientAuthentication` strategy. The provider stamps it as the access token's `cnf` and marks the response `token_type` accordingly. `cnf` is authorization-server-owned and cannot be set through a claim contributor.
+
+A grant that consumes a one-time credential, such as a device code, should resolve the binding before the claim: `provider.resolveConfirmation({ client, scopes, resources, confirmation })` returns the confirmation the client proved at authentication, or verifies the request's DPoP proof by the same rules `issueTokens` applies. Pass the result to `issueTokens` as `confirmation`. A rejected proof then fails before the credential is consumed, so the client can retry with a valid one.
 
 #### Client authentication obligations
 
@@ -1889,13 +2005,164 @@ authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
 
 Three claim surfaces resolve contributions in a fixed order. Across all three, third-party extension claims are strictly additive, while the operator's own first-party callbacks may override profile-style identity claims; protocol-owned identity, lifetime, binding, and authentication-context claims are always pinned or reserved by the provider.
 
-| Token        | Order (lowest to highest authority)                                                                                                   | Pinned or reserved by provider                                                                                                                                                                    |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`), stripped before signing                                                      |
-| ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names |
-| UserInfo     | scope and `claims.userinfo` identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                  | `sub` (re-pinned last)                                                                                                                                                                            |
+| Token        | Order (lowest to highest authority)                                                                                                   | Pinned or reserved by provider                                                                                                                                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`        | reserved RFC 9068 names (`iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`) and the provider-owned `cnf` and `reference_id`, stripped before signing; the provider also sets `azp` and `sid` after contributed claims |
+| ID token     | subject/authentication claims \< `customIdTokenClaims`; extension and per-issuance `idTokenClaims` are reserved-filtered and additive | reserved OIDC/JWT names (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`) and scope-derived UserInfo claim names                                                             |
+| UserInfo     | scope and `claims.userinfo` identity claims \< extension `claims.userInfo` (additive only) \< `customUserInfoClaims`                  | `sub` (re-pinned last)                                                                                                                                                                                                                                        |
 
-Per-issuance `accessTokenClaims` are JWT-only: an opaque access token persists no per-issuance claims, so they do not reappear at introspection. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
+Per-issuance `accessTokenClaims` are signed into JWT access tokens, so introspecting a JWT access token returns them. An opaque access token persists no per-issuance claims, so introspecting it does not return them. A claim that must be visible at opaque-token introspection belongs in a grant-type-stable `claims.accessToken` contributor, which the introspection path re-derives.
+
+### Token exchange
+
+A service that receives a user's access token sometimes needs to call another API as that user. Forwarding the token fails the API's audience check and gives the API more access than it needs. Token exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693)) lets the service trade the token at the token endpoint for a new access token for the other API. The new token has the same user as `sub`, the downstream API as `aud`, and the exchanging service as `client_id`.
+
+The exchanged token impersonates the user: it represents the user and does not name the service as an actor (`act`). A typical case is an MCP server that receives a token for itself and calls a downstream API.
+
+#### Set up token exchange
+
+Add `oauthTokenExchange()` after `oauthProvider()`, and list both the resource the service receives tokens for and the resource it calls:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+import { oauthProvider, oauthTokenExchange } from "@better-auth/oauth-provider"; // [!code highlight]
+
+export const auth = betterAuth({
+  plugins: [
+    jwt(),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      resources: ["https://mcp.example.com", "https://api.example.com"],
+    }),
+    oauthTokenExchange(), // [!code highlight]
+  ],
+});
+```
+
+The grant `urn:ietf:params:oauth:grant-type:token-exchange` is then advertised in `grant_types_supported`. RFC 8693 defines no other discovery metadata.
+
+Register the exchanging service as a confidential client with `TOKEN_EXCHANGE_GRANT_TYPE`. Public clients cannot exchange tokens.
+
+```ts title="register-exchanging-client.ts"
+import { TOKEN_EXCHANGE_GRANT_TYPE } from "@better-auth/oauth-provider";
+
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    client_name: "MCP server",
+    grant_types: [TOKEN_EXCHANGE_GRANT_TYPE],
+    token_endpoint_auth_method: "client_secret_basic",
+    scope: "read write",
+    resources: ["https://mcp.example.com", "https://api.example.com"],
+    skip_consent: true,
+  },
+});
+```
+
+The client's linked [resources](#resources) do two jobs here:
+
+* Linking `https://mcp.example.com` lets the client exchange tokens whose audience is that resource, which are the tokens it receives.
+* Linking `https://api.example.com` lets the client request tokens for that resource.
+
+`skip_consent` decides whether the user must have approved the exchanging client:
+
+* With `skip_consent: true`, which only an admin can set, the client may exchange any token it is allowed to receive. Use it for first-party services.
+* Otherwise, the user must already have a stored consent for this client that covers the requested scopes and resources, for example from an earlier authorization code flow with that client. Without one, the exchange fails with `invalid_request`. A client created through [dynamic registration](#dynamic-client-registration) cannot set `skip_consent`, so it can only reach what the user has already approved for it.
+
+#### Exchange a token
+
+The service sends the user's token as `subject_token` and names the target with `resource`:
+
+```bash
+curl https://auth.example.com/api/auth/oauth2/token \
+  -u "$EXCHANGING_CLIENT_ID:$EXCHANGING_CLIENT_SECRET" \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  --data-urlencode "subject_token=$USER_ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  --data-urlencode resource=https://api.example.com \
+  -d scope=read
+```
+
+```json
+{
+  "access_token": "eyJ...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 58,
+  "expires_at": 1767225658,
+  "scope": "read"
+}
+```
+
+| Parameter                         | Behavior                                                                                                                                                                               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subject_token`                   | Required. An active access token this server issued                                                                                                                                    |
+| `subject_token_type`              | Required. Must be `urn:ietf:params:oauth:token-type:access_token`                                                                                                                      |
+| `resource`                        | Required unless `audience` is sent, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource linked to the client |
+| `scope`                           | Optional. Defaults to the subject token's scopes, without `openid` and `offline_access`, that the client is also registered for                                                        |
+| `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                                             |
+| `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                                                |
+| `audience`                        | Optional, and may repeat. Each value must equal a registered resource identifier and is treated like `resource`                                                                        |
+
+With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
+
+If the request carries a `DPoP` proof, the exchanged token is bound to that key and `token_type` is `DPoP`, as described in [DPoP sender-constrained tokens](#dpop-sender-constrained-tokens). A proof is required when the exchanging client or the target resource requires DPoP-bound tokens.
+
+#### Exchange rules
+
+The provider applies these rules to every exchange, before your `allowExchange` policy:
+
+| Rule                                                                                                                                                  | Why                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
+| The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
+| The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
+| The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
+| Each target resource is registered, enabled, and linked to the client                                                                                 | The client's resource policy still applies, including each resource's `allowedScopes`                               |
+| A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
+| The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                           | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
+| No refresh token or ID token is issued                                                                                                                | The service must exchange again when the token expires                                                              |
+
+Scope names are global across resources. A `read` scope on the MCP server and a `read` scope on the API are the same scope, so restrict what a resource accepts with its `allowedScopes`.
+
+#### Errors
+
+| Condition                                                                                                                                                                                                           | Error                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| Missing or invalid subject token, unsupported `subject_token_type`, `actor_token` or `actor_token_type`, unsupported `requested_token_type`, neither `resource` nor `audience`, missing consent, or a policy denial | `400 invalid_request`     |
+| A scope the subject token or the client does not have, or `openid` or `offline_access`                                                                                                                              | `400 invalid_scope`       |
+| An unknown, disabled, or unlinked resource or `audience` value, or the userinfo endpoint                                                                                                                            | `400 invalid_target`      |
+| Failed client authentication                                                                                                                                                                                        | `invalid_client`          |
+| A client not registered for the token-exchange grant                                                                                                                                                                | `400 unauthorized_client` |
+
+#### Keep the organization the user approved
+
+When `postLogin.consentReferenceId` picks a reference during authorization, such as the [organization](#organizations) the user approved, the exchanged token keeps the subject token's reference. It does not switch to the user's current active organization. `customAccessTokenClaims` receives the same `referenceId`, so a claim you derive from it carries over to the downstream API, and a client that does not skip consent needs a stored consent under that same reference. The provider reads the reference from the subject token's [`reference_id`](#claims) claim, so no extra configuration is needed. An exchange cannot change the organization: to act in another one, the user authorizes the client for that organization.
+
+#### Add your own policy
+
+`allowExchange` runs after every built-in rule passes. Return `false` to deny the exchange with `invalid_request`, or throw an `APIError` to return a different OAuth error. It receives the authenticated `client`, the `user`, the requested `resources` and `scopes`, the inherited `referenceId`, and `subjectToken`, the subject token's introspection payload.
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  allowExchange: ({ client, resources }) =>
+    client.clientId === process.env.MCP_SERVER_CLIENT_ID &&
+    resources.every((resource) => resource === "https://api.example.com"),
+});
+```
+
+#### Limitations
+
+* **No delegation.** `actor_token` is rejected, and exchanged tokens carry no `act` claim. The exchanging service is identified only by `client_id`.
+* **No refresh tokens** are issued for exchanged tokens.
+* **Own access tokens only.** ID tokens, refresh tokens, and tokens from other issuers cannot be exchanged.
+* **Signing out and local JWT verification.** Signing out makes exchanged tokens inactive at introspection. A resource server that verifies JWT access tokens locally against the JWKS keeps accepting them until `exp`, which is never later than the subject token's `exp`.
+* **Subject tokens without a session.** An access token refreshed from an `offline_access` refresh token after the user signed out carries no `sid`, so a token exchanged from it is not tied to a session and lasts until its `exp`. Return `false` from `allowExchange` when `subjectToken.sid` is missing if exchanges must always end with the session.
+* **`may_act` is not evaluated.**
+* **Pairwise subjects.** The exchanged token belongs to the exchanging service, so introspection reports that service's `sub` for the user. A service that exchanges a pairwise client's token can link that client's `sub` to its own.
+* **Registration default resources.** `clientRegistrationDefaultResources` links every dynamically registered client to those resources. Such a client then counts as a resource server for tokens whose audience is one of them, so the audience rule does not tell it apart from your own service. The consent rule still limits it to what the user approved for that client.
 
 ### Organizations
 
@@ -1974,14 +2241,15 @@ The OAuth Provider includes built-in rate limiting for all OAuth endpoints to pr
 
 **Default limits:**
 
-| Endpoint             | Window | Max Requests |
-| -------------------- | ------ | ------------ |
-| `/oauth2/token`      | 60s    | 20           |
-| `/oauth2/authorize`  | 60s    | 30           |
-| `/oauth2/introspect` | 60s    | 100          |
-| `/oauth2/revoke`     | 60s    | 30           |
-| `/oauth2/register`   | 60s    | 5            |
-| `/oauth2/userinfo`   | 60s    | 60           |
+| Endpoint                     | Window | Max Requests |
+| ---------------------------- | ------ | ------------ |
+| `/oauth2/token`              | 60s    | 20           |
+| `/oauth2/authorize`          | 60s    | 30           |
+| `/oauth2/introspect`         | 60s    | 100          |
+| `/oauth2/revoke`             | 60s    | 30           |
+| `/oauth2/register`           | 60s    | 5            |
+| `/oauth2/client/rotate-keys` | 60s    | 5            |
+| `/oauth2/userinfo`           | 60s    | 60           |
 
 You can customize the rate limits for each endpoint:
 
@@ -1993,6 +2261,7 @@ oauthProvider({
     introspect: { window: 60, max: 100 },  // 100 requests per minute
     revoke: { window: 60, max: 30 },       // 30 requests per minute
     register: { window: 60, max: 5 },      // 5 requests per minute
+    rotateClientKeys: { window: 60, max: 5 }, // 5 requests per minute
     userinfo: { window: 60, max: 60 },     // 60 requests per minute
   },
 })
@@ -2190,6 +2459,8 @@ JWT access tokens always use the real user ID as `sub`, since resource servers m
 Use the [`@better-auth/mcp` plugin](/docs/plugins/mcp) when an MCP server is one of your protected resources. It builds on this OAuth Provider and adds MCP defaults, RFC 9728 protected resource metadata, and route helpers that return the authorization challenge MCP clients expect.
 
 `mcp()` is the OAuth Provider for that Better Auth instance, so do not register both `mcp()` and `oauthProvider()`. It accepts the OAuth Provider options directly. Use `requireMcpAuth` when the MCP route shares the auth instance, or `createMcpProtectedRequestHandler` when the resource server runs separately.
+
+An MCP server that calls a downstream API for the user must not pass the user's token through. Exchange it for a token to that API with [token exchange](#token-exchange) instead.
 
 The MCP plugin can also support a separate registered CLI through the device grant. MCP clients keep their discovery-driven authorization code flow, while the CLI asks the same provider for a resource-bound token through device authorization. See [Add device authorization for your own CLI](/docs/plugins/mcp#add-device-authorization-for-your-own-cli).
 
@@ -2409,6 +2680,20 @@ export const oauthClientTableFields = [
     type: "string",
     description:
       "OIDC application type used to classify redirect URI policy. Supports: ['web', 'native']",
+    isOptional: true,
+  },
+  {
+    name: "jwks",
+    type: "string",
+    description:
+      "The client's public JWK Set as JSON, for `private_key_jwt` authentication. Mutually exclusive with `jwksUri`",
+    isOptional: true,
+  },
+  {
+    name: "jwksUri",
+    type: "string",
+    description:
+      "HTTPS URI of the client's public JWK Set. Mutually exclusive with `jwks`",
     isOptional: true,
   },
   {

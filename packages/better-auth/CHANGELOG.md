@@ -1,5 +1,92 @@
 # better-auth
 
+## 1.8.0-beta.1
+
+### Minor Changes
+
+- [#11343](https://github.com/better-auth/better-auth/pull/11343) [`7404879`](https://github.com/better-auth/better-auth/commit/740487984baa0a84ab7fbdb8ac52f7f126edf3cb) Thanks [@qamarq](https://github.com/qamarq)! - If you render the Sign in with Google button with `authClient.oneTap({ button })`, you can now set `button: { container, fedCM: true }` to open the browser's account chooser over the page instead of Google's popup window. With `autoSelect: true`, a returning user who is signed in to Google skips the chooser. This uses Google's FedCM button flow on Chrome 125+ on desktop and Chrome 128+ on Android; other browsers keep the popup. Existing prompt and button setups are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`c7a7926`](https://github.com/better-auth/better-auth/commit/c7a7926fd2b36c972d74d70a248da3c267b762bf)]:
+  - @better-auth/drizzle-adapter@1.8.0-beta.1
+  - @better-auth/core@1.8.0-beta.1
+  - @better-auth/kysely-adapter@1.8.0-beta.1
+  - @better-auth/memory-adapter@1.8.0-beta.1
+  - @better-auth/mongo-adapter@1.8.0-beta.1
+  - @better-auth/prisma-adapter@1.8.0-beta.1
+  - @better-auth/telemetry@1.8.0-beta.1
+
+## 1.8.0-beta.0
+
+### Minor Changes
+
+- [#11751](https://github.com/better-auth/better-auth/pull/11751) [`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On every database adapter, the verification email for an email sign-up, or for a new social or SSO account, is now sent only after the account is saved, and `onExistingUserSignUp` runs after the sign-up request's database work completes. A sign-up that rolls back, or that MongoDB runs again after a write conflict, no longer sends an extra email or an email for an account that doesn't exist.
+
+  Check your setup for two changes:
+  - If `sendVerificationEmail` or `onExistingUserSignUp` throws during a sign-up, the sign-up now succeeds and the error is logged. Before, a callback that threw synchronously failed the sign-up and rolled it back. To reject a sign-up, use a `databaseHooks.user.create.before` hook.
+  - If a `databaseHooks` `user` or `account` `after` hook throws during a sign-up, the request still fails, but the verification email is no longer sent. The user can request a new one.
+
+  With `secondaryStorage` and `session.storeSessionInDatabase: true`, social, SSO, one-tap and oauth-proxy sign-ins now cache their session after the commit, as email sign-up already did. A failed cache write is logged instead of failing the sign-in. This doesn't apply when `session.preserveSessionInDatabase` is `true`, where a failed cache write still fails the sign-in.
+
+- [#11772](https://github.com/better-auth/better-auth/pull/11772) [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When the same device code is approved and denied at the same time, for example from two open approval pages, only the first decision now takes effect, and the other request fails with `invalid_request` and "Device code already processed". Previously, both requests reported success and the later one replaced the first, so a denied device could still receive tokens.
+
+  The `/device/approve` error type no longer lists `device_code_already_processed`. The server never returned that code; an already decided code has always returned `invalid_request`. TypeScript code that compares against `device_code_already_processed` must check `invalid_request` instead.
+
+- [#11610](https://github.com/better-auth/better-auth/pull/11610) [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you wrote a custom `DeviceAuthorizationGrant`, rename `assertSessionRedemption` to `assertStandaloneUse`. It now also runs for `/device`, `/device/approve`, and `/device/deny`, and receives `use: "redeem"` or `use: "approve"`. `getVerificationContext`, `verificationOpenAPIProperties`, and the interface's second type parameter were removed, because `/device` no longer returns grant details. A grant that approves codes on its own pages can use the newly exported `findDeviceCodeByUserCode`, `assertDeviceCodePending`, `decideDeviceCode`, and `buildVerificationUris`. Apps that use `deviceAuthorization()` or `oauthDeviceAuthorization()` without a custom grant are unaffected.
+
+### Patch Changes
+
+- [#11772](https://github.com/better-auth/better-auth/pull/11772) [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Device clients that poll `/device/token` or `/oauth2/token` too soon after their device code expires now receive `expired_token` right away. Previously they received `slow_down` and learned that the code had expired only on a later poll.
+
+- Updated dependencies []:
+  - @better-auth/core@1.8.0-beta.0
+  - @better-auth/drizzle-adapter@1.8.0-beta.0
+  - @better-auth/kysely-adapter@1.8.0-beta.0
+  - @better-auth/memory-adapter@1.8.0-beta.0
+  - @better-auth/mongo-adapter@1.8.0-beta.0
+  - @better-auth/prisma-adapter@1.8.0-beta.0
+  - @better-auth/telemetry@1.8.0-beta.0
+
+## 1.7.10
+
+### Patch Changes
+
+- [#11393](https://github.com/better-auth/better-auth/pull/11393) [`eebd47a`](https://github.com/better-auth/better-auth/commit/eebd47a0e7103caae35e4ac46971e293d1579594) Thanks [@breken-ai](https://github.com/breken-ai)! - If you use the `lastLoginMethod` plugin with `oneTap`, signing in through Google One Tap now records `"google"`, the same value as signing in with the Google button. Before, a One Tap sign-in recorded nothing: the `better-auth.last_used_login_method` cookie kept its previous value or stayed unset, and so did `user.lastLoginMethod` with `storeInDatabase`.
+
+  If your `customResolveMethod` includes a `/one-tap/callback` → `"google"` workaround, remove that mapping; keep the resolver if it handles other routes.
+
+- [#11821](https://github.com/better-auth/better-auth/pull/11821) [`09d07e6`](https://github.com/better-auth/better-auth/commit/09d07e6feac8c0173551c9cbaee222d403c31fd9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The Google One Tap prompt (`authClient.oneTap()` without `button`) no longer calls `getSkippedReason()`, which Google's FedCM migration guide says to remove. Before, it called it under any `promptOptions.fedCM` setting.
+
+  A skipped prompt now ends the flow and calls `onPromptNotification` right away instead of retrying. Google doesn't report why a prompt was skipped, and a prompt the user closed stays hidden for Google's cooldown period, so the retries could not bring it back. Dismissed prompts still retry as before.
+
+  Google Identity Services still logs its FedCM migration warning, because it does so whenever `prompt()` receives a listener. The plugin needs the listener to track dismissals and skips, so the warning is expected and safe to ignore.
+
+- [#11819](https://github.com/better-auth/better-auth/pull/11819) [`eaecb72`](https://github.com/better-auth/better-auth/commit/eaecb7229eeef5cfd763477b12f7dd2e44b89e51) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Google One Tap now applies your `socialProviders.google.mapProfileToUser` and custom `getUserInfo`, the same as the standard Google sign-in. Before, One Tap ignored both and always stored the token's `name`, `email`, `email_verified`, and `picture` claims.
+
+  If you configured either one, users created through One Tap now get the fields it returns, including any extra fields such as a first name from `given_name`. Returning users are updated from it on each One Tap sign-in when `socialProviders.google.overrideUserInfoOnSignIn` is on, and so are existing users that One Tap links when `account.accountLinking.updateUserInfoOnLink` is on. Check that your mapper suits One Tap users too.
+
+  If you set `socialProviders.google.overrideUserInfoOnSignIn`, One Tap sign-ins now update returning users' name, image, and email from Google, as the redirect sign-in already does.
+
+  Setups that configure none of these, including `oneTap({ clientId })` with no Google provider, are unaffected.
+
+- [#11820](https://github.com/better-auth/better-auth/pull/11820) [`88c9a37`](https://github.com/better-auth/better-auth/commit/88c9a378562fcb240085bd803a243062e2d28f47) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you set `autoSelect` or `cancelOnTapOutside` on `oneTapClient()`, the One Tap prompt and the Sign in with Google button now use them. Before, only values passed to `authClient.oneTap()` took effect, so with `autoSelect: true` on the plugin, returning users still had to pick an account. Values passed to `oneTap()` still override the plugin's. Apps that set these options only on `oneTap()`, or not at all, are unaffected.
+
+- [#11696](https://github.com/better-auth/better-auth/pull/11696) [`0cf1f7c`](https://github.com/better-auth/better-auth/commit/0cf1f7c6bc7b9870b276fdf7d9f5c38af6dbaa30) Thanks [@drewsephski](https://github.com/drewsephski)! - You can now import the One Tap plugin from `better-auth/plugins/one-tap`, as you can for other plugins. Previously this import failed with a "not exported" error. Imports from `better-auth/plugins` and `better-auth/client/plugins` are unchanged.
+
+- [#11822](https://github.com/better-auth/better-auth/pull/11822) [`414e845`](https://github.com/better-auth/better-auth/commit/414e845f128011369b451a3ffd15d8d314351cdb) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - You can now import the Captcha and OpenAPI plugins from `better-auth/plugins/captcha` and `better-auth/plugins/open-api`, as you can for other plugins. Previously these imports failed with a "not exported" error. Imports from `better-auth/plugins` are unchanged.
+
+  If your TypeScript config uses `"moduleResolution": "node"` (or `node10`), `better-auth/plugins/multi-session` and `better-auth/test` now resolve their types. Previously TypeScript reported that it could not find their declarations. Projects using `bundler`, `node16`, or `nodenext` resolution are unaffected.
+
+- Updated dependencies [[`fedd055`](https://github.com/better-auth/better-auth/commit/fedd05586c5a7ee2eb6b8d16b88b08dfb7e16a89), [`bbd0a19`](https://github.com/better-auth/better-auth/commit/bbd0a19c30fc384213d1e98b9a8a54a903a0b574), [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976)]:
+  - @better-auth/core@1.7.10
+  - @better-auth/mongo-adapter@1.7.10
+  - @better-auth/drizzle-adapter@1.7.10
+  - @better-auth/kysely-adapter@1.7.10
+  - @better-auth/memory-adapter@1.7.10
+  - @better-auth/prisma-adapter@1.7.10
+  - @better-auth/telemetry@1.7.10
+
 ## 1.7.9
 
 ### Patch Changes
