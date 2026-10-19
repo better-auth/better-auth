@@ -1971,13 +1971,13 @@ describe("internal adapter test", async () => {
 	});
 
 	/**
-	 * Records the residual: the eviction is guarded on the user row having been
-	 * deleted, so retrying `deleteUser` after a failed eviction cannot re-arm it.
-	 * `deleteUserSessions` does retry, which the test above covers.
+	 * Retrying `deleteUser` after a failed eviction re-evicts the remaining cached
+	 * sessions even though the database user row was already deleted on the
+	 * initial attempt.
 	 *
 	 * @see https://github.com/better-auth/better-auth/issues/11326
 	 */
-	it("does not re-arm the eviction when deleteUser is retried after a failed eviction", async () => {
+	it("re-arms the eviction when deleteUser is retried after a failed eviction", async () => {
 		const testMap = new Map<string, string>();
 		let storageDown = false;
 		const { deleteAttempts, storage } = createEvictableSecondaryStorage(
@@ -2011,12 +2011,15 @@ describe("internal adapter test", async () => {
 		);
 
 		storageDown = false;
-		await testCtx.internalAdapter.deleteUser(user.id);
+		await expect(
+			testCtx.internalAdapter.deleteUser(user.id),
+		).resolves.toBeUndefined();
 
 		expect(deleteAttempts.filter((key) => key === session.token)).toHaveLength(
-			1,
+			2,
 		);
-		expect(testMap.has(session.token)).toBe(true);
+		expect(testMap.has(session.token)).toBe(false);
+		expect(await testCtx.internalAdapter.findSession(session.token)).toBeNull();
 	});
 
 	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {

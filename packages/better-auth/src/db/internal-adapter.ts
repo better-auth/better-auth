@@ -581,6 +581,14 @@ export const createInternalAdapter = (
 			);
 			if (deletedUser !== null) {
 				await queueCachedUserSessionDeletion(userId, sessionReferences);
+			} else if (sessionReferences.length > 0) {
+				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+				});
+				if (!user) {
+					await queueCachedUserSessionDeletion(userId, sessionReferences);
+				}
 			}
 		},
 		createSession: async (

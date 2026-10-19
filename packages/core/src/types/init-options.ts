@@ -849,9 +849,10 @@ export type BetterAuthOptions = {
 				 * A callback function that is triggered after a user's password
 				 * is reset. It runs after the new password is saved and, when
 				 * `revokeSessionsOnPasswordReset` is enabled, after the user's
-				 * sessions have been revoked. It does not run when the reset
-				 * fails, including when sessions could not be removed from
-				 * secondary storage (even though the committed password change stands).
+				 * sessions have been revoked. It does not run if saving the
+				 * new password or revoking sessions fails, including when
+				 * sessions could not be removed from secondary storage (even
+				 * though the committed password change stands).
 				 */
 				onPasswordReset?: (
 					data: { user: User },
