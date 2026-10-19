@@ -70,4 +70,22 @@ describe("hasPermissionFn aggregates permissions across roles", () => {
 		);
 		expect(result).toBe(false);
 	});
+
+	it("handles resource names that collide with Object.prototype", () => {
+		const weirdAc = createAccessControl({
+			constructor: ["use-it"],
+		} as const);
+		const weirdRoles = {
+			weird: weirdAc.newRole({ constructor: ["use-it"] }),
+		};
+		const result = hasPermissionFn(
+			{
+				role: "weird",
+				permissions: { constructor: ["use-it"] },
+				options,
+			},
+			weirdRoles,
+		);
+		expect(result).toBe(true);
+	});
 });
