@@ -304,19 +304,24 @@ async function modifyRefList(
 }
 
 /**
- * Runs `write` once the active transaction commits, or immediately outside
- * one. While the transaction is open, `invalidate` runs instead, so the cache
- * never holds rows that may roll back.
+ * Runs `write` outside a transaction. Inside one, runs `invalidate` now and
+ * again once it commits, so the cache only holds rows read outside a
+ * transaction.
  */
-async function writeCacheAfterCommit(
+async function writeOrInvalidateCache(
 	ctx: GenericEndpointContext,
 	write: () => Awaitable<unknown>,
 	invalidate: () => Awaitable<unknown>,
 ): Promise<void> {
-	let written = false;
+	let ranImmediately = false;
+	let queued = false;
 	await queueAfterTransactionHook(
 		async () => {
-			written = true;
+			if (queued) {
+				await invalidate();
+				return;
+			}
+			ranImmediately = true;
 			await write();
 		},
 		{
@@ -328,7 +333,9 @@ async function writeCacheAfterCommit(
 			},
 		},
 	);
-	if (!written) await invalidate();
+	if (ranImmediately) return;
+	queued = true;
+	await invalidate();
 }
 
 function invalidateCachedApiKey(storage: SecondaryStorage, apiKey: ApiKey) {
@@ -353,7 +360,7 @@ async function setApiKeyInStorage(
 	// the ref list is a cache,
 	// so invalidate instead of RMW to avoid concurrent-writer races.
 	if (opts.fallbackToDatabase) {
-		await writeCacheAfterCommit(
+		await writeOrInvalidateCache(
 			ctx,
 			() =>
 				Promise.all([
@@ -391,7 +398,7 @@ async function deleteApiKeyFromStorage(
 	// invalidate in fallback mode, RMW otherwise.
 	if (opts.fallbackToDatabase) {
 		const invalidate = () => invalidateCachedApiKey(storage, apiKey);
-		await writeCacheAfterCommit(ctx, invalidate, invalidate);
+		await writeOrInvalidateCache(ctx, invalidate, invalidate);
 		return;
 	}
 
@@ -780,7 +787,7 @@ export async function listApiKeys(
 				{ concurrency: STORAGE_CONCURRENCY },
 			);
 			const keyIds = dbKeys.map((apiKey) => apiKey.id);
-			await writeCacheAfterCommit(
+			await writeOrInvalidateCache(
 				ctx,
 				() => storage.set(refKey, JSON.stringify(keyIds)),
 				() => storage.delete(refKey),

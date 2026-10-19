@@ -88,14 +88,20 @@ export async function validateApiKey({
 					await deleteApiKey(ctx, apiKey, opts);
 					await (await getCurrentAdapter(ctx.context.adapter)).delete({
 						model: API_KEY_TABLE_NAME,
-						where: [{ field: "id", value: apiKey.id }],
+						where: [
+							{ field: "id", value: apiKey.id },
+							{ field: "expiresAt", operator: "lt", value: new Date() },
+						],
 					});
 				} else if (opts.storage === "secondary-storage") {
 					await deleteApiKey(ctx, apiKey, opts);
 				} else {
 					await (await getCurrentAdapter(ctx.context.adapter)).delete({
 						model: API_KEY_TABLE_NAME,
-						where: [{ field: "id", value: apiKey.id }],
+						where: [
+							{ field: "id", value: apiKey.id },
+							{ field: "expiresAt", operator: "lt", value: new Date() },
+						],
 					});
 				}
 			};
@@ -140,14 +146,22 @@ export async function validateApiKey({
 				await deleteApiKey(ctx, apiKey, opts);
 				await (await getCurrentAdapter(ctx.context.adapter)).delete({
 					model: API_KEY_TABLE_NAME,
-					where: [{ field: "id", value: apiKey.id }],
+					where: [
+						{ field: "id", value: apiKey.id },
+						{ field: "remaining", value: 0 },
+						{ field: "refillAmount", value: null },
+					],
 				});
 			} else if (opts.storage === "secondary-storage") {
 				await deleteApiKey(ctx, apiKey, opts);
 			} else {
 				await (await getCurrentAdapter(ctx.context.adapter)).delete({
 					model: API_KEY_TABLE_NAME,
-					where: [{ field: "id", value: apiKey.id }],
+					where: [
+						{ field: "id", value: apiKey.id },
+						{ field: "remaining", value: 0 },
+						{ field: "refillAmount", value: null },
+					],
 				});
 			}
 		};
@@ -224,6 +238,9 @@ async function claimUsageInDatabase({
 
 	if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 		await setApiKey(ctx, finalRow, opts);
+		if (finalRow.enabled === false) {
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
+		}
 	}
 
 	return finalRow;

@@ -158,6 +158,47 @@ describe("api-key deferred cleanup started inside an active transaction", async 
 			}),
 		).toBe(0);
 	});
+
+	it("deletes an exhausted key", async () => {
+		const created = await auth.api.createApiKey({
+			body: { userId: user.id, remaining: 1 },
+		});
+		await auth.api.verifyApiKey({ body: { key: created.key } });
+		const exhausted = await auth.api.verifyApiKey({
+			body: { key: created.key },
+		});
+		expect(exhausted.valid).toBe(false);
+		await Promise.all(backgroundTasks);
+		expect(
+			await ctx.adapter.count({
+				model: "apikey",
+				where: [{ field: "id", value: created.id }],
+			}),
+		).toBe(0);
+	});
+
+	it("keeps an exhausted key restored by a rollback", async () => {
+		const created = await auth.api.createApiKey({
+			body: { userId: user.id, remaining: 1 },
+		});
+		await expect(
+			runWithTransaction(ctx.adapter, async () => {
+				await auth.api.verifyApiKey({ body: { key: created.key } });
+				const exhausted = await auth.api.verifyApiKey({
+					body: { key: created.key },
+				});
+				expect(exhausted.valid).toBe(false);
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+		await Promise.all(backgroundTasks);
+		expect(
+			await ctx.adapter.count({
+				model: "apikey",
+				where: [{ field: "id", value: created.id }],
+			}),
+		).toBe(1);
+	});
 });
 
 describe("api-key with a database-backed secondary storage inside an active transaction", async () => {
@@ -220,21 +261,22 @@ describe("api-key with a database-backed secondary storage inside an active tran
 	it("keeps a committed update when the cache write fails afterwards", async () => {
 		const created = await createVerifiedKey();
 		const logError = vi.spyOn(ctx.logger, "error").mockImplementation(() => {});
-		const set = vi.spyOn(secondaryStorage, "set").mockImplementation(() => {
-			throw new Error("cache unavailable");
-		});
+		const remove = vi.spyOn(secondaryStorage, "delete");
 		try {
-			await runWithTransaction(ctx.adapter, () =>
-				auth.api.updateApiKey({
+			await runWithTransaction(ctx.adapter, async () => {
+				await auth.api.updateApiKey({
 					body: { keyId: created.id, userId: user.id, name: "committed-name" },
-				}),
-			);
+				});
+				remove.mockImplementation(() => {
+					throw new Error("cache unavailable");
+				});
+			});
 			expect(logError).toHaveBeenCalledWith(
 				"Failed to update committed API key in secondary storage",
 				expect.any(Error),
 			);
 		} finally {
-			set.mockRestore();
+			remove.mockRestore();
 			logError.mockRestore();
 		}
 		const row = await ctx.adapter.findOne<{ name: string }>({
@@ -242,6 +284,30 @@ describe("api-key with a database-backed secondary storage inside an active tran
 			where: [{ field: "id", value: created.id }],
 		});
 		expect(row?.name).toBe("committed-name");
+	});
+
+	it("does not cache rows read in a transaction that commits", async () => {
+		const created = await auth.api.createApiKey({
+			body: { userId: user.id },
+		});
+		store.clear();
+		await runWithTransaction(ctx.adapter, () =>
+			auth.api.verifyApiKey({ body: { key: created.key } }),
+		);
+		expect(
+			[...store.values()].some((value) => value.includes(created.id)),
+		).toBe(false);
+	});
+
+	it("rejects a key disabled in the database while its cached copy is enabled", async () => {
+		const created = await createVerifiedKey();
+		await ctx.adapter.update({
+			model: "apikey",
+			where: [{ field: "id", value: created.id }],
+			update: { enabled: false },
+		});
+		const result = await auth.api.verifyApiKey({ body: { key: created.key } });
+		expect(result.valid).toBe(false);
 	});
 
 	it("stops serving a key whose disable committed", async () => {
