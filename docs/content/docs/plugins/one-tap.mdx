@@ -285,7 +285,7 @@ export const authClient = createAuthClient({
 });
 ```
 
-The client fetches a nonce from `POST /id-token/nonce` and passes it to Google. The callback then accepts only a token whose `nonce` claim matches a nonce the server issued in the last five minutes and has not used yet. Button mode fetches a new nonce after each sign-in attempt and before the current one expires. A callback without a valid nonce fails with `400 INVALID_ID_TOKEN_NONCE`.
+The client fetches a nonce from `POST /id-token/nonce` and passes it to Google. The callback then accepts only a token whose `nonce` claim matches a nonce the server issued in the last five minutes and has not used yet. Button mode fetches a new nonce after each sign-in attempt and before the current one expires. A callback whose nonce is missing, unknown, expired, or already used fails with `400 INVALID_ID_TOKEN_NONCE`. A token whose `nonce` claim differs from the nonce fails as an invalid ID token.
 
 The setting is read from `socialProviders.google`, so it needs the Google provider. With only `oneTap({ clientId })`, One Tap does not use issued nonces.
 

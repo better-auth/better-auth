@@ -1408,6 +1408,24 @@ describe("oneTapClient with useIssuedNonce", async () => {
 		expect(initConfig(1).nonce).not.toBe(initConfig(0).nonce);
 	});
 
+	it("keeps refreshing every live button, not only the newest", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		stubBrowser();
+		await client.oneTap({
+			button: { container: container() },
+			fetchOptions: {},
+		});
+		await client.oneTap({
+			button: { container: container() },
+			fetchOptions: {},
+		});
+		expect(initialize).toHaveBeenCalledTimes(2);
+
+		await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+
+		expect(initialize).toHaveBeenCalledTimes(4);
+	});
+
 	// Simulates the nonce endpoint failing, then recovering.
 	const setNonceEndpointUp = async (up: boolean) => {
 		const google = (await auth.$context).socialProviders.find(

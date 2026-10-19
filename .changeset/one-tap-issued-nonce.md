@@ -2,7 +2,7 @@
 "better-auth": minor
 ---
 
-Google One Tap sign-ins can now be bound to a nonce the server issued. Set `requireIssuedIdTokenNonce: true` on `socialProviders.google` and `useIssuedNonce: true` on `oneTapClient`. The client then fetches a single-use nonce before each prompt and button render, and the callback rejects a token without a matching, unused nonce with `400 INVALID_ID_TOKEN_NONCE`. Button mode fetches a new nonce after each sign-in attempt and before the current one expires. Setups with only `oneTap({ clientId })` and no Google provider cannot enable it.
+Google One Tap sign-ins can now be bound to a nonce the server issued. Set `requireIssuedIdTokenNonce: true` on `socialProviders.google` and `useIssuedNonce: true` on `oneTapClient`. The client then fetches a single-use nonce before each prompt and button render, and a callback whose nonce is missing, unknown, expired, or already used fails with `400 INVALID_ID_TOKEN_NONCE`, and a token whose `nonce` claim differs from it fails as an invalid ID token. Button mode fetches a new nonce after each sign-in attempt and before the current one expires. Setups with only `oneTap({ clientId })` and no Google provider cannot enable it.
 
 Two changes apply to every One Tap setup:
 

@@ -231,13 +231,18 @@ export const createInternalAdapter = (
 		}
 	}
 
+	// Best-effort maintenance: a failed sweep must not fail the request it rides on.
 	async function deleteExpiredVerifications() {
 		if (options.verification?.disableCleanup) return;
-		await deleteManyWithHooks(
-			[{ field: "expiresAt", value: new Date(), operator: "lt" }],
-			"verification",
-			undefined,
-		);
+		try {
+			await deleteManyWithHooks(
+				[{ field: "expiresAt", value: new Date(), operator: "lt" }],
+				"verification",
+				undefined,
+			);
+		} catch (error) {
+			logger.error("Failed to delete expired verification values", error);
+		}
 	}
 
 	return {
@@ -1528,7 +1533,7 @@ export const createInternalAdapter = (
 					);
 				}
 				// Consume-only flows never call findVerificationValue, so sweep here too.
-				await deleteExpiredVerifications();
+				if (consumed) await deleteExpiredVerifications();
 			}
 
 			// Single expiry gate. A row past its `expiresAt` is treated as already

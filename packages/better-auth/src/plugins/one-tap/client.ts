@@ -159,7 +159,10 @@ export interface GoogleOneTapOptions {
 }
 
 export interface GoogleOneTapActionOptions
-	extends Omit<GoogleOneTapOptions, "clientId" | "promptOptions"> {
+	extends Omit<
+		GoogleOneTapOptions,
+		"clientId" | "promptOptions" | "useIssuedNonce"
+	> {
 	fetchOptions?: ClientFetchOption | undefined;
 	/**
 	 * Callback URL.
@@ -211,8 +214,11 @@ let isRequestInProgress = false;
 // Issued nonces expire after five minutes; refresh a rendered button before then.
 const BUTTON_NONCE_REFRESH_MS = 4 * 60 * 1000;
 const BUTTON_NONCE_RETRY_MS = 10 * 1000;
-// shortcut: one refresh chain per page, so the most recently rendered button wins; track per container if apps need several live buttons.
-let buttonRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+// One refresh chain per container, so several live buttons each keep a fresh nonce.
+const buttonRefreshTimers = new WeakMap<
+	HTMLElement,
+	ReturnType<typeof setTimeout>
+>();
 
 function isFedCMSupported() {
 	return typeof window !== "undefined" && "IdentityCredential" in window;
@@ -365,7 +371,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 						const buttonConfig = opts.button.config ?? { type: "icon" };
 						const renderButton = async () => {
-							clearTimeout(buttonRefreshTimer);
+							clearTimeout(buttonRefreshTimers.get(container));
 							const nonce = await fetchNonce();
 							initialize(nonce, async (response) => {
 								let navigated = false;
@@ -381,9 +387,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							// a fresh nonce after every attempt and before expiry.
 							if (nonce) {
 								container.replaceChildren();
-								buttonRefreshTimer = setTimeout(
-									refreshButton,
-									BUTTON_NONCE_REFRESH_MS,
+								buttonRefreshTimers.set(
+									container,
+									setTimeout(refreshButton, BUTTON_NONCE_REFRESH_MS),
 								);
 							}
 							window.google?.accounts.id.renderButton(container, buttonConfig);
@@ -398,9 +404,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 									"Google One Tap: failed to refresh the button",
 									error,
 								);
-								buttonRefreshTimer = setTimeout(
-									refreshButton,
-									BUTTON_NONCE_RETRY_MS,
+								buttonRefreshTimers.set(
+									container,
+									setTimeout(refreshButton, BUTTON_NONCE_RETRY_MS),
 								);
 							}
 						};
