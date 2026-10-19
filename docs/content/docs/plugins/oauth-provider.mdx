@@ -1797,6 +1797,66 @@ oauthProvider({
 
 To set user-specific permissions and roles on tokens see [Claims](#claims).
 
+#### Connecting Clients to Organizations
+
+An organization can relate to a client in two ways, and they suit different clients:
+
+* **The organization uses the client.** Many organizations can use the same client, such as a third-party app, an MCP client, or a client discovered through [CIMD](/docs/plugins/cimd). The client has no owner. Each user's consent records which organization it was given for.
+* **The organization owns the client.** The client is the organization's own integration. Its members see and manage it through the [client endpoints](#oauth-clients), which can change its redirect URIs or delete it. Give ownership only to an organization that controls the client, because it then controls the client for every user.
+
+##### An Organization Uses the Client
+
+Return the organization from [`postLogin.consentReferenceId`](#post-login-screen). The user's consent is stored for that organization, so consenting for one organization does not authorize another, and deleting it through [Delete Consent](#delete-consent) removes only that organization's consent. Deleting a consent does not revoke tokens already issued. Access token callbacks receive the same value as `referenceId`, so tokens can carry the organization:
+
+```ts title="auth.ts"
+oauthProvider({
+  postLogin: {
+    page: "/select-organization",
+    // The selection outlives membership, so check the user still belongs.
+    shouldRedirect: async ({ session, headers }) => {
+      if (!session.activeOrganizationId) return true
+      const organizations = await auth.api.listOrganizations({ headers })
+      return !organizations.some((org) => org.id === session.activeOrganizationId)
+    },
+    consentReferenceId: ({ session }) =>
+      (session?.activeOrganizationId as string | undefined) ?? undefined,
+  },
+  customAccessTokenClaims: ({ referenceId }) => ({
+    "https://example.com/org": referenceId,
+  }),
+})
+```
+
+The client record stays the same for every organization, so this works for clients that register themselves, including open [dynamic client registration](#dynamic-client-registration) and CIMD.
+
+##### An Organization Owns the Client
+
+Set the owner when the client is registered. An owned client's `referenceId` is fixed, and [client-specific claims](#client-specific-access-token-claims) can read it.
+
+* **A member registers it.** With [`clientReference`](#organizations) returning the active organization, a client created by a signed-in member through [Create Client](#create-client) or session-authenticated dynamic registration belongs to that organization. [`clientPrivileges`](#client-crud-privileges) decides which members may create and manage clients.
+* **A machine registers it.** For software that registers itself, such as a deployment pipeline, use protected [dynamic client registration](#dynamic-client-registration). Let an organization administrator issue an initial access token in your app, and return the organization from `validateInitialAccessToken`:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  // Lets the organization's members find and manage the client. The active
+  // organization outlives membership, so check it is still current.
+  clientReference: async ({ user, session }) => {
+    const organizationId = session?.activeOrganizationId as string | undefined
+    if (!user || !organizationId) return undefined
+    return (await isMember(user.id, organizationId)) ? organizationId : undefined
+  },
+  validateInitialAccessToken: async ({ initialAccessToken }) => {
+    // `findRegistrationToken` and `isMember` stand for your own lookups
+    const token = await findRegistrationToken(initialAccessToken)
+    if (!token) return false
+    return { referenceId: token.organizationId }
+  },
+})
+```
+
+An open registration made without a session or initial access token has no owner. That suits a client several organizations use, each through its own consent reference. Software that each organization installs and runs as its own client, such as a self-hosted connector, should register with an initial access token instead, so the client belongs to that organization from the start.
+
 ### Client CRUD Privileges
 
 To determine whether a logged in user has the ability to perform specific actions in client creation, you can utilize the `clientPrivileges` configuration setting. By default, CRUD actions are allowed for users with matching `userId` or `clientReference`.

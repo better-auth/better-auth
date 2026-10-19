@@ -1,4 +1,4 @@
-import { decodeJwt } from "jose";
+import { errors as joseErrors } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -6,7 +6,9 @@ import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
+	validateToken,
 } from "../oauth2";
+import { ID_TOKEN_CLOCK_TOLERANCE_SECONDS } from "../oauth2/verify-id-token";
 
 export interface PaybinProfile {
 	sub: string;
@@ -102,7 +104,48 @@ export const paybin = (options: PaybinOptions) => {
 			if (!token.idToken) {
 				return null;
 			}
-			const user = decodeJwt(token.idToken) as PaybinProfile;
+			let user: PaybinProfile;
+			try {
+				const issuerBaseURL = issuer.endsWith("/") ? issuer : `${issuer}/`;
+				const jwksEndpoint = new URL(".well-known/jwks.json", issuerBaseURL);
+				const { payload } = await validateToken<PaybinProfile>(
+					token.idToken,
+					jwksEndpoint.href,
+					{
+						issuer,
+						audience: options.clientId,
+						algorithms: ["RS256"],
+						requiredClaims: ["iss", "sub", "aud", "exp", "iat"],
+						clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
+					},
+				);
+				if (
+					typeof payload.sub !== "string" ||
+					!payload.sub ||
+					!Number.isFinite(payload.iat) ||
+					!Number.isFinite(payload.exp) ||
+					(Array.isArray(payload.aud) &&
+						payload.aud.some((audience) => audience !== options.clientId))
+				) {
+					throw new joseErrors.JWTClaimValidationFailed(
+						"Invalid ID token identity claims",
+						payload,
+					);
+				}
+				user = payload;
+			} catch (error) {
+				try {
+					logger.warn("Paybin ID token verification failed", {
+						code:
+							error instanceof joseErrors.JOSEError
+								? error.code
+								: "JWKS_FETCH_FAILED",
+					});
+				} catch {
+					// Preserve the rejected result if a custom logger throws.
+				}
+				return null;
+			}
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
