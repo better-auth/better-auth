@@ -1325,7 +1325,7 @@ describe("oneTapClient with useIssuedNonce", async () => {
 		Reflect.deleteProperty(verifiedPayload, "nonce");
 	});
 
-	const { client } = await getTestInstance(
+	const { client, auth } = await getTestInstance(
 		{
 			socialProviders: {
 				google: {
@@ -1406,6 +1406,46 @@ describe("oneTapClient with useIssuedNonce", async () => {
 
 		expect(initialize).toHaveBeenCalledTimes(2);
 		expect(initConfig(1).nonce).not.toBe(initConfig(0).nonce);
+	});
+
+	// Simulates the nonce endpoint failing, then recovering.
+	const setNonceEndpointUp = async (up: boolean) => {
+		const google = (await auth.$context).socialProviders.find(
+			(provider) => provider.id === "google",
+		)!;
+		google.options = { ...google.options, requireIssuedIdTokenNonce: up };
+	};
+
+	it("does not open the prompt when no nonce can be fetched", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		stubBrowser();
+		await setNonceEndpointUp(false);
+
+		await expect(client.oneTap({ fetchOptions: {} })).rejects.toThrow(
+			"failed to fetch a nonce",
+		);
+		expect(initialize).not.toHaveBeenCalled();
+		await setNonceEndpointUp(true);
+		error.mockRestore();
+	});
+
+	it("retries a failed button refresh until the nonce endpoint recovers", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		stubBrowser();
+		await client.oneTap({
+			button: { container: container() },
+			fetchOptions: {},
+		});
+
+		await setNonceEndpointUp(false);
+		await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+		expect(initialize).toHaveBeenCalledTimes(1);
+
+		await setNonceEndpointUp(true);
+		await vi.advanceTimersByTimeAsync(10 * 1000);
+		expect(initialize).toHaveBeenCalledTimes(2);
+		error.mockRestore();
 	});
 
 	it("ignores the deprecated nonce option and warns", async () => {

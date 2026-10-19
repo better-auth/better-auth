@@ -210,6 +210,7 @@ let isRequestInProgress = false;
 
 // Issued nonces expire after five minutes; refresh a rendered button before then.
 const BUTTON_NONCE_REFRESH_MS = 4 * 60 * 1000;
+const BUTTON_NONCE_RETRY_MS = 10 * 1000;
 // shortcut: one refresh chain per page, so the most recently rendered button wins; track per container if apps need several live buttons.
 let buttonRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -305,11 +306,17 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					// onSuccess), so the nonce request does not use them.
 					const fetchNonce = async () => {
 						if (!options.useIssuedNonce) return undefined;
-						const { data } = await $fetch<{ nonce: string }>(
+						const { data, error } = await $fetch<{ nonce: string }>(
 							"/id-token/nonce",
 							{ method: "POST", body: { provider: "google" } },
 						);
-						return data?.nonce;
+						// Without a nonce the server rejects the sign-in, so do not show Google.
+						if (!data?.nonce) {
+							throw new Error("Google One Tap: failed to fetch a nonce", {
+								cause: error,
+							});
+						}
+						return data.nonce;
 					};
 
 					const autoSelect = opts?.autoSelect ?? options.autoSelect;
@@ -390,6 +397,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								console.error(
 									"Google One Tap: failed to refresh the button",
 									error,
+								);
+								buttonRefreshTimer = setTimeout(
+									refreshButton,
+									BUTTON_NONCE_RETRY_MS,
 								);
 							}
 						};
