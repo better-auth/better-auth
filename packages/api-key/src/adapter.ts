@@ -1,5 +1,8 @@
-import type { GenericEndpointContext } from "@better-auth/core";
-import { getCurrentAdapter } from "@better-auth/core/context";
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
+import {
+	getCurrentAdapter,
+	queueAfterTransactionHook,
+} from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { mapConcurrent } from "@better-auth/core/utils/async";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -300,8 +303,44 @@ async function modifyRefList(
 	});
 }
 
+/**
+ * Runs `write` once the active transaction commits, or immediately outside
+ * one. While the transaction is open, `invalidate` runs instead, so the cache
+ * never holds rows that may roll back.
+ */
+async function writeCacheAfterCommit(
+	ctx: GenericEndpointContext,
+	write: () => Awaitable<unknown>,
+	invalidate: () => Awaitable<unknown>,
+): Promise<void> {
+	let written = false;
+	await queueAfterTransactionHook(
+		async () => {
+			written = true;
+			await write();
+		},
+		{
+			onError(error) {
+				ctx.context.logger.error(
+					"Failed to update committed API key in secondary storage",
+					error,
+				);
+			},
+		},
+	);
+	if (!written) await invalidate();
+}
+
+function invalidateCachedApiKey(storage: SecondaryStorage, apiKey: ApiKey) {
+	return Promise.all([
+		storage.delete(getStorageKeyByHashedKey(apiKey.key)),
+		storage.delete(getStorageKeyById(apiKey.id)),
+		storage.delete(getStorageKeyByReferenceId(apiKey.referenceId)),
+	]);
+}
+
 async function setApiKeyInStorage(
-	_ctx: GenericEndpointContext,
+	ctx: GenericEndpointContext,
 	apiKey: ApiKey,
 	storage: SecondaryStorage,
 	ttl: number | undefined,
@@ -314,11 +353,16 @@ async function setApiKeyInStorage(
 	// the ref list is a cache,
 	// so invalidate instead of RMW to avoid concurrent-writer races.
 	if (opts.fallbackToDatabase) {
-		await Promise.all([
-			storage.set(getStorageKeyByHashedKey(apiKey.key), serialized, ttl),
-			storage.set(getStorageKeyById(apiKey.id), serialized, ttl),
-			storage.delete(refKey),
-		]);
+		await writeCacheAfterCommit(
+			ctx,
+			() =>
+				Promise.all([
+					storage.set(getStorageKeyByHashedKey(apiKey.key), serialized, ttl),
+					storage.set(getStorageKeyById(apiKey.id), serialized, ttl),
+					storage.delete(refKey),
+				]),
+			() => invalidateCachedApiKey(storage, apiKey),
+		);
 		return;
 	}
 
@@ -346,11 +390,8 @@ async function deleteApiKeyFromStorage(
 	// Mirror setApiKeyInStorage:
 	// invalidate in fallback mode, RMW otherwise.
 	if (opts.fallbackToDatabase) {
-		await Promise.all([
-			storage.delete(getStorageKeyByHashedKey(apiKey.key)),
-			storage.delete(getStorageKeyById(apiKey.id)),
-			storage.delete(refKey),
-		]);
+		const invalidate = () => invalidateCachedApiKey(storage, apiKey);
+		await writeCacheAfterCommit(ctx, invalidate, invalidate);
 		return;
 	}
 
@@ -739,7 +780,11 @@ export async function listApiKeys(
 				{ concurrency: STORAGE_CONCURRENCY },
 			);
 			const keyIds = dbKeys.map((apiKey) => apiKey.id);
-			await storage.set(refKey, JSON.stringify(keyIds));
+			await writeCacheAfterCommit(
+				ctx,
+				() => storage.set(refKey, JSON.stringify(keyIds)),
+				() => storage.delete(refKey),
+			);
 		}
 
 		return { apiKeys: dbKeys, total };

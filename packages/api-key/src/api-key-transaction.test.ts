@@ -1,8 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import { runWithTransaction } from "@better-auth/core/context";
+import type { SecondaryStorage } from "@better-auth/core/db";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { apiKey } from ".";
 
 describe("api-key inside an active transaction", async () => {
@@ -56,5 +57,129 @@ describe("api-key inside an active transaction", async () => {
 		).rejects.toThrow("rollback");
 		expect(await keysNamed("original")).toBe(1);
 		expect(await keysNamed("renamed")).toBe(0);
+	});
+});
+
+describe("api-key with a database-backed secondary storage inside an active transaction", async () => {
+	const store = new Map<string, string>();
+	const secondaryStorage: SecondaryStorage = {
+		get: (key) => store.get(key) ?? null,
+		set: (key, value) => {
+			store.set(key, value);
+		},
+		getAndDelete: (key) => {
+			const value = store.get(key) ?? null;
+			store.delete(key);
+			return value;
+		},
+		increment: (key) => {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, String(count));
+			return count;
+		},
+		delete: (key) => {
+			store.delete(key);
+		},
+	};
+	const options = {
+		database: new DatabaseSync(":memory:"),
+		secondaryStorage,
+		plugins: [
+			apiKey({ storage: "secondary-storage", fallbackToDatabase: true }),
+		],
+	};
+	await (await getMigrations(options)).runMigrations();
+	const auth = betterAuth(options);
+	const ctx = await auth.$context;
+	const user = await ctx.internalAdapter.createUser(
+		{ name: "Cached key owner", email: "cached-key-owner@example.com" },
+		{ method: "test" },
+	);
+	const createVerifiedKey = async () => {
+		const created = await auth.api.createApiKey({
+			body: { userId: user.id },
+		});
+		await auth.api.verifyApiKey({ body: { key: created.key } });
+		return created;
+	};
+
+	it("keeps serving a key whose disable rolled back", async () => {
+		const created = await createVerifiedKey();
+		await expect(
+			runWithTransaction(ctx.adapter, async () => {
+				await auth.api.updateApiKey({
+					body: { keyId: created.id, userId: user.id, enabled: false },
+				});
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+		const result = await auth.api.verifyApiKey({ body: { key: created.key } });
+		expect(result.valid).toBe(true);
+	});
+
+	it("keeps a committed update when the cache write fails afterwards", async () => {
+		const created = await createVerifiedKey();
+		const logError = vi.spyOn(ctx.logger, "error").mockImplementation(() => {});
+		const set = vi.spyOn(secondaryStorage, "set").mockImplementation(() => {
+			throw new Error("cache unavailable");
+		});
+		try {
+			await runWithTransaction(ctx.adapter, () =>
+				auth.api.updateApiKey({
+					body: { keyId: created.id, userId: user.id, name: "committed-name" },
+				}),
+			);
+			expect(logError).toHaveBeenCalledWith(
+				"Failed to update committed API key in secondary storage",
+				expect.any(Error),
+			);
+		} finally {
+			set.mockRestore();
+			logError.mockRestore();
+		}
+		const row = await ctx.adapter.findOne<{ name: string }>({
+			model: "apikey",
+			where: [{ field: "id", value: created.id }],
+		});
+		expect(row?.name).toBe("committed-name");
+	});
+
+	it("stops serving a key whose disable committed", async () => {
+		const created = await createVerifiedKey();
+		await runWithTransaction(ctx.adapter, () =>
+			auth.api.updateApiKey({
+				body: { keyId: created.id, userId: user.id, enabled: false },
+			}),
+		);
+		const result = await auth.api.verifyApiKey({ body: { key: created.key } });
+		expect(result.valid).toBe(false);
+	});
+
+	it("sees its own disable before the transaction commits", async () => {
+		const created = await createVerifiedKey();
+		const result = await runWithTransaction(ctx.adapter, async () => {
+			await auth.api.updateApiKey({
+				body: { keyId: created.id, userId: user.id, enabled: false },
+			});
+			return auth.api.verifyApiKey({ body: { key: created.key } });
+		});
+		expect(result.valid).toBe(false);
+	});
+
+	it("does not cache a key created in a transaction that rolls back", async () => {
+		let createdId = "";
+		await expect(
+			runWithTransaction(ctx.adapter, async () => {
+				const created = await auth.api.createApiKey({
+					body: { userId: user.id },
+				});
+				createdId = created.id;
+				await auth.api.verifyApiKey({ body: { key: created.key } });
+				throw new Error("rollback");
+			}),
+		).rejects.toThrow("rollback");
+		expect([...store.values()].some((value) => value.includes(createdId))).toBe(
+			false,
+		);
 	});
 });
