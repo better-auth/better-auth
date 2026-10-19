@@ -1,11 +1,42 @@
-import { decodeProtectedHeader, jwtVerify } from "jose";
+import type { JWTVerifyOptions } from "jose";
+import { jwtVerify } from "jose";
 import type { GenericEndpointContext } from "../types";
 import type { OAuthProvider, ProviderOptions } from "./oauth-provider";
 
 /**
  * Clock skew allowed on `exp`, `nbf`, and `iat`, matching openid-client and oauth4webapi.
  */
-export const ID_TOKEN_CLOCK_TOLERANCE_SECONDS = 30;
+const ID_TOKEN_CLOCK_TOLERANCE_SECONDS = 30;
+
+/**
+ * Claims every ID token must contain.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#IDToken
+ */
+const ID_TOKEN_REQUIRED_CLAIMS = ["iss", "sub", "aud", "exp", "iat"];
+
+/**
+ * Builds the jose options shared by every ID token verifier, so the required
+ * claims and clock tolerance stay the same across providers. Algorithms come
+ * from the caller's trusted configuration, never from the token header.
+ *
+ * @internal
+ */
+export function getIdTokenVerifyOptions(options: {
+	issuer?: (string | string[]) | undefined;
+	audience: string | string[];
+	algorithms?: string[] | undefined;
+	maxTokenAge?: (string | number) | undefined;
+}) {
+	return {
+		issuer: options.issuer,
+		audience: options.audience,
+		algorithms: options.algorithms,
+		maxTokenAge: options.maxTokenAge,
+		requiredClaims: ID_TOKEN_REQUIRED_CLAIMS,
+		clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
+	} satisfies JWTVerifyOptions;
+}
 
 type ProviderWithIdTokenConfig = Pick<OAuthProvider, "idToken" | "options">;
 
@@ -94,16 +125,12 @@ export async function verifyProviderIdToken(
 			return config.allowOpaqueToken === true;
 		}
 		// `kid` is optional in JWS: a JWKS resolver can still select a key by algorithm, so
-		// key selection is left to config.jwks. The token's `alg` only seeds the default
-		// allowed-algorithms list when the provider does not pin one.
-		const { alg } = decodeProtectedHeader(token);
-		const { payload } = await jwtVerify(token, config.jwks, {
-			issuer: config.issuer,
-			audience: config.audience,
-			algorithms: config.algorithms ?? (alg ? [alg] : undefined),
-			maxTokenAge: config.maxTokenAge,
-			clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
-		});
+		// key selection is left to config.jwks.
+		const { payload } = await jwtVerify(
+			token,
+			config.jwks,
+			getIdTokenVerifyOptions(config),
+		);
 		if (
 			nonce &&
 			!(await nonceMatches(payload.nonce, nonce, config.nonceComparison))
