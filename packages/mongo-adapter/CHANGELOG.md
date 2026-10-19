@@ -1,5 +1,7 @@
 # @better-auth/mongo-adapter
 
+## 1.7.11
+
 ## 1.7.10
 
 ### Patch Changes

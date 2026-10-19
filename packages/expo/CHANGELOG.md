@@ -1,5 +1,11 @@
 # @better-auth/expo
 
+## 1.7.11
+
+### Patch Changes
+
+- [#10207](https://github.com/better-auth/better-auth/pull/10207) [`5d3d5c4`](https://github.com/better-auth/better-auth/commit/5d3d5c4c701dd899894a842008d6bdda180cb048) Thanks [@noobnooc](https://github.com/noobnooc)! - Send the Expo origin header when linking social accounts with an ID token so native link flows that include a session cookie pass origin validation.
+
 ## 1.7.10
 
 ## 1.7.9
