@@ -231,6 +231,15 @@ export const createInternalAdapter = (
 		}
 	}
 
+	async function deleteExpiredVerifications() {
+		if (options.verification?.disableCleanup) return;
+		await deleteManyWithHooks(
+			[{ field: "expiresAt", value: new Date(), operator: "lt" }],
+			"verification",
+			undefined,
+		);
+	}
+
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
@@ -1365,19 +1374,7 @@ export const createInternalAdapter = (
 				verification = await findByIdentifier(identifier);
 			}
 
-			if (!options.verification?.disableCleanup) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "expiresAt",
-							value: new Date(),
-							operator: "lt",
-						},
-					],
-					"verification",
-					undefined,
-				);
-			}
+			await deleteExpiredVerifications();
 
 			return (verification[0] as Verification) || null;
 		},
@@ -1530,6 +1527,8 @@ export const createInternalAdapter = (
 						),
 					);
 				}
+				// Consume-only flows never call findVerificationValue, so sweep here too.
+				await deleteExpiredVerifications();
 			}
 
 			// Single expiry gate. A row past its `expiresAt` is treated as already
