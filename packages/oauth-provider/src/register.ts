@@ -3,7 +3,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { isLoopbackIP } from "@better-auth/core/utils/host";
+import { isLoopbackHost, isLoopbackIP } from "@better-auth/core/utils/host";
 import {
 	INSECURE_REDIRECT_URI_MESSAGE,
 	isNativePrivateUseRedirectUri,
@@ -264,11 +264,11 @@ function validateClientRedirectUri(
 			`redirect URI localhost must not include trailing dots: ${redirectUri}`,
 		);
 	}
-	if (isHttp && isInsecureRedirectUriAllowed(opts, url)) return;
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
 
 	if (applicationType === "web") {
+		if (isHttp && isInsecureRedirectUriAllowed(opts, url)) return;
 		if (!isHttps || isRedirectLoopback) {
 			invalidRedirectUri(
 				`web clients require https redirect URIs on non-loopback hosts: ${redirectUri}`,
@@ -286,12 +286,14 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isExactLoopbackHttpRedirectUri(redirectUri)) {
-			invalidRedirectUri(
-				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
-			);
+		if (isExactLoopbackHttpRedirectUri(redirectUri)) return;
+		// Loopback hosts keep the exact-host rule; the callback covers other hosts.
+		if (!isLoopbackHost(url.host) && isInsecureRedirectUriAllowed(opts, url)) {
+			return;
 		}
-		return;
+		invalidRedirectUri(
+			`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
+		);
 	}
 
 	if (!isNativePrivateUseRedirectUri(url)) {

@@ -131,7 +131,7 @@ export const SafeUrlSchema = RedirectUriSyntaxSchema.refine(
 			const u = new URL(val);
 			return u.protocol !== "http:" || isLoopbackHost(u.host);
 		} catch {
-			// RedirectUriSyntaxSchema already reports unparseable URLs.
+			// RedirectUriSyntaxSchema already reports URLs that fail to parse.
 			return true;
 		}
 	},

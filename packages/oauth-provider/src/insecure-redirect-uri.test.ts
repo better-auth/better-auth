@@ -114,9 +114,35 @@ async function setupProvider(input: {
 		);
 	}
 
+	function confirmEndSession(confirmation: Response) {
+		const requestHeaders = new Headers(headers);
+		const confirmationCookies = confirmation.headers
+			.getSetCookie()
+			.map((cookie) => cookie.split(";")[0]);
+		requestHeaders.set(
+			"cookie",
+			[requestHeaders.get("cookie"), ...confirmationCookies].join("; "),
+		);
+		requestHeaders.set("accept", "text/html");
+		requestHeaders.set("content-type", "application/x-www-form-urlencoded");
+		requestHeaders.set("origin", baseURL);
+		return auth.handler(
+			new Request(`${baseURL}/api/auth/oauth2/end-session/confirm`, {
+				method: "POST",
+				headers: requestHeaders,
+				body: new URLSearchParams({ action: "confirm" }),
+				redirect: "manual",
+			}),
+		);
+	}
+
 	async function replaceRegisteredUris(
 		clientId: string,
-		update: { redirectUris?: string[]; postLogoutRedirectUris?: string[] },
+		update: {
+			redirectUris?: string[];
+			postLogoutRedirectUris?: string[];
+			applicationType?: "web" | "native";
+		},
 	) {
 		const context = await auth.$context;
 		await context.adapter.update({
@@ -133,6 +159,7 @@ async function setupProvider(input: {
 		authorize,
 		exchangeCode,
 		endSession,
+		confirmEndSession,
 		replaceRegisteredUris,
 	};
 }
@@ -260,6 +287,57 @@ describe("http redirect URIs on private networks", () => {
 	});
 });
 
+describe("allowInsecureRedirectUri boundaries", () => {
+	it("rejects credentials in an http post-logout redirect URI the predicate allows", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: allowLanOrigin,
+		});
+
+		await expect(
+			provider.createClient({
+				redirect_uris: [lanRedirect],
+				post_logout_redirect_uris: [
+					"http://user:pass@192.168.1.50:8000/logged-out",
+				],
+			}),
+		).rejects.toThrow();
+	});
+
+	it("keeps the exact loopback host rule for native clients", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => url.origin === "http://127.0.0.1",
+		});
+
+		await expect(
+			provider.createClient({
+				redirect_uris: ["http://127.1/callback"],
+				application_type: "native",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("does not redirect to a stale logout confirmation after the predicate stops allowing it", async () => {
+		let allowed = true;
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => allowed && allowLanOrigin(url),
+		});
+		const client = await provider.createClient({
+			redirect_uris: [lanRedirect],
+			post_logout_redirect_uris: [lanLogoutRedirect],
+		});
+		const confirmation = await provider.endSession(
+			client.client_id,
+			lanLogoutRedirect,
+		);
+		expect(confirmation.status).toBe(200);
+
+		allowed = false;
+		const completed = await provider.confirmEndSession(confirmation);
+
+		expect(completed.headers.get("location")).toBeNull();
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/11445
  */
@@ -294,6 +372,45 @@ describe("web clients on localhost", () => {
 		expect(client.redirect_uris).toEqual([localhostRedirect]);
 		expect(`${location.origin}${location.pathname}`).toBe(localhostRedirect);
 		expect(location.searchParams.get("code")).toBeTypeOf("string");
+	});
+
+	it("rejects a changed port for a web client localhost redirect URI", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => url.origin === "http://localhost:5173",
+		});
+		const client = await provider.createClient({
+			redirect_uris: [localhostRedirect],
+			application_type: "web",
+		});
+
+		const { location } = await provider.authorize(
+			client.client_id,
+			"http://localhost:9999/auth/callback",
+		);
+
+		expect(location.origin).toBe(provider.baseURL);
+		expect(location.pathname).toBe("/api/auth/error");
+		expect(location.searchParams.has("code")).toBe(false);
+	});
+
+	it("rejects a stored web client localhost redirect URI without the predicate", async () => {
+		const provider = await setupProvider({});
+		const client = await provider.createClient({
+			redirect_uris: ["https://rp.example.com/callback"],
+			application_type: "web",
+		});
+		await provider.replaceRegisteredUris(client.client_id, {
+			redirectUris: [localhostRedirect],
+		});
+
+		const { location } = await provider.authorize(
+			client.client_id,
+			localhostRedirect,
+		);
+
+		expect(location.origin).toBe(provider.baseURL);
+		expect(location.pathname).toBe("/api/auth/error");
+		expect(location.searchParams.get("error")).toBe("invalid_request");
 	});
 });
 

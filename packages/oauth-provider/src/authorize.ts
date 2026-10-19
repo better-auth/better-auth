@@ -293,9 +293,10 @@ function stripLoopbackRedirectPort(uri: string): string | undefined {
 /**
  * Finds the matching entry in a client's registered redirect URIs.
  *
- * Registration limits loopback redirects to native-compatible HTTP forms.
- * Within that boundary, only the port may vary; every other character must
- * match the registered URI.
+ * For clients that are not `web`, registration limits loopback redirects to
+ * native-compatible HTTP forms. Within that boundary, only the port may vary;
+ * every other character must match the registered URI. Web clients, which
+ * reach loopback only through `allowInsecureRedirectUri`, must match exactly.
  *
  * @see https://www.rfc-editor.org/rfc/rfc9700.html#section-4.1.3
  * @see https://www.rfc-editor.org/rfc/rfc8252.html#section-8.3
@@ -303,6 +304,7 @@ function stripLoopbackRedirectPort(uri: string): string | undefined {
 function findRegisteredRedirectUri(
 	registered: readonly string[] | undefined,
 	requested: string | undefined,
+	isWebClient: boolean,
 ): string | undefined {
 	if (!registered || !requested) return undefined;
 
@@ -323,7 +325,9 @@ function findRegisteredRedirectUri(
 	if (hasFragment || hasUserinfo) {
 		return undefined;
 	}
-	const requestedWithoutPort = stripLoopbackRedirectPort(requested);
+	const requestedWithoutPort = isWebClient
+		? undefined
+		: stripLoopbackRedirectPort(requested);
 
 	return registered.find((url) => {
 		if (url === requested) return true;
@@ -357,7 +361,6 @@ async function resolveTrustedRedirectUri(
 	redirectUri: string | undefined,
 ): Promise<string | null> {
 	if (!clientId || !redirectUri) return null;
-	if (!isRedirectUriTransportAllowed(opts, redirectUri)) return null;
 	let client: Awaited<ReturnType<typeof getClient>> | undefined;
 	try {
 		client = await getClient(ctx, opts, clientId);
@@ -365,8 +368,16 @@ async function resolveTrustedRedirectUri(
 		return null;
 	}
 	if (!client || client.disabled) return null;
+	const isWebClient = client.applicationType === "web";
+	if (!isRedirectUriTransportAllowed(opts, redirectUri, isWebClient)) {
+		return null;
+	}
 	const registeredUris = client.redirectUris ?? [];
-	const matched = findRegisteredRedirectUri(registeredUris, redirectUri);
+	const matched = findRegisteredRedirectUri(
+		registeredUris,
+		redirectUri,
+		isWebClient,
+	);
 	if (opts.validateRedirectUri) {
 		if (!isSafeCustomRedirectUri(redirectUri)) return null;
 		try {
@@ -524,15 +535,6 @@ export async function authorizeEndpoint(
 	}
 	query = parsedQuery.data as OAuthAuthorizationQuery;
 	ctx.query = query;
-	if (
-		query.redirect_uri &&
-		!isRedirectUriTransportAllowed(opts, query.redirect_uri)
-	) {
-		return handleRedirect(
-			ctx,
-			getErrorURL(ctx, "invalid_request", INSECURE_REDIRECT_URI_MESSAGE),
-		);
-	}
 	await oAuthState.set({
 		query: serializeAuthorizationQuery(query).toString(),
 	});
@@ -599,11 +601,22 @@ export async function authorizeEndpoint(
 	}
 
 	const registeredUris = client.redirectUris ?? [];
+	const isWebClient = client.applicationType === "web";
 	let isValidRedirectUri = false;
 	if (query.redirect_uri) {
+		if (!isRedirectUriTransportAllowed(opts, query.redirect_uri, isWebClient)) {
+			return handleRedirect(
+				ctx,
+				getErrorURL(ctx, "invalid_request", INSECURE_REDIRECT_URI_MESSAGE),
+			);
+		}
 		// Default validation: exact match + native loopback port variance
 		const defaultResult = Boolean(
-			findRegisteredRedirectUri(registeredUris, query.redirect_uri),
+			findRegisteredRedirectUri(
+				registeredUris,
+				query.redirect_uri,
+				isWebClient,
+			),
 		);
 		if (
 			opts.validateRedirectUri &&

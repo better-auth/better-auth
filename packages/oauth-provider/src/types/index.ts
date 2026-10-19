@@ -572,12 +572,13 @@ export interface OAuthOptions<
 	/**
 	 * Allows `http:` redirect URIs that the default policy rejects.
 	 *
-	 * By default, redirect and post-logout redirect URIs must use HTTPS, except
-	 * on loopback hosts, and web clients cannot use loopback hosts at all. When
-	 * the default policy rejects an `http:` URI, this callback decides: return
-	 * `true` to accept it. It applies to client registration and updates, the
-	 * authorize endpoint, and the end-session endpoint. A callback that throws
-	 * rejects the URI.
+	 * By default, `http:` redirect and post-logout redirect URIs are accepted
+	 * only on loopback hosts, and web clients cannot use loopback hosts at all.
+	 * When the default policy rejects an `http:` URI, this callback decides:
+	 * return `true` to accept it. It applies to client registration and
+	 * updates, the authorize endpoint, and the end-session endpoint. A callback
+	 * that throws rejects the URI, and URIs with credentials are always
+	 * rejected. Web clients on loopback hosts must match the registered port.
 	 *
 	 * Use it for deployments served over plain HTTP on a private network, or
 	 * for web clients on `localhost` during development. Plain HTTP exposes

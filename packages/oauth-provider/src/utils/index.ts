@@ -1229,13 +1229,14 @@ export function isPKCERequired(
 }
 
 /**
- * Applies the redirect URI HTTPS policy: `http:` is allowed on loopback hosts,
- * or when `allowInsecureRedirectUri` accepts the URL. A throwing callback
- * rejects the URI.
+ * Applies the redirect URI HTTPS policy: `http:` is allowed on loopback hosts
+ * for clients that are not `web`, or when `allowInsecureRedirectUri` accepts
+ * the URL. A throwing callback rejects the URI.
  */
 export function isRedirectUriTransportAllowed(
 	opts: OAuthOptions<Scope[]>,
 	uri: string,
+	isWebClient = false,
 ): boolean {
 	let url: URL;
 	try {
@@ -1243,15 +1244,20 @@ export function isRedirectUriTransportAllowed(
 	} catch {
 		return false;
 	}
-	if (url.protocol !== "http:" || isLoopbackHost(url.host)) return true;
+	if (url.protocol !== "http:") return true;
+	if (!isWebClient && isLoopbackHost(url.host)) return true;
 	return isInsecureRedirectUriAllowed(opts, url);
 }
 
-/** Runs `allowInsecureRedirectUri` for an `http:` URL, failing closed. */
+/**
+ * Runs `allowInsecureRedirectUri` for an `http:` URL, failing closed. URLs
+ * with credentials are never accepted.
+ */
 export function isInsecureRedirectUriAllowed(
 	opts: OAuthOptions<Scope[]>,
 	url: URL,
 ): boolean {
+	if (url.username || url.password) return false;
 	try {
 		return opts.allowInsecureRedirectUri?.(url) === true;
 	} catch {

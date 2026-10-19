@@ -776,6 +776,10 @@ async function getConfirmedLogoutRedirect(
 	if (!state.clientId || !state.postLogoutRedirectUri) {
 		return { invalid: false };
 	}
+	// The policy may have changed since the confirmation state was issued.
+	if (!isRedirectUriTransportAllowed(opts, state.postLogoutRedirectUri)) {
+		return { invalid: true };
+	}
 	const client = await getLogoutClient(ctx, opts, state.clientId);
 	if (!client || client.disabled || !client.enableEndSession) {
 		return { invalid: true };
