@@ -6,7 +6,7 @@ API key database reads and writes now use the adapter of the active transaction.
 
 With `fallbackToDatabase: true`:
 
-- Keys touched inside a transaction are removed from secondary storage instead of cached, and are re-read from the database after the transaction commits.
+- Keys touched inside a transaction are removed from secondary storage instead of cached, so the next read after commit loads them from the database.
 - A failed secondary-storage write is logged instead of failing a request whose database change already succeeded.
 - Verification rejects a key disabled in the database, even if secondary storage still holds an enabled copy.
 
