@@ -170,16 +170,14 @@ function createOAuthClientProvider(options?: { clientMetadataUrl?: string }) {
 }
 
 describe("official SDK AuthInfo mapping", () => {
-	it.each([
-		{},
-		{ client_id: "" },
-		{ client_id: "   " },
-		{ client_id: 42 },
-	])("rejects a missing or malformed client_id claim: %j", (claims) => {
-		expect(() => requireAccessTokenClientId(claims)).toThrow(
-			new TypeError("MCP access token client_id must be a non-empty string"),
-		);
-	});
+	it.each([{}, { client_id: "" }, { client_id: "   " }, { client_id: 42 }])(
+		"rejects a missing or malformed client_id claim: %j",
+		(claims) => {
+			expect(() => requireAccessTokenClientId(claims)).toThrow(
+				new TypeError("MCP access token client_id must be a non-empty string"),
+			);
+		},
+	);
 
 	it.each([
 		undefined,
@@ -203,18 +201,18 @@ describe("official SDK AuthInfo mapping", () => {
 		);
 	});
 
-	it.each([
-		"Bearer",
-		"DPoP",
-	])("extracts the actual %s access token", (scheme) => {
-		expect(
-			extractPresentedAccessToken(
-				new Request(MCP_RESOURCE, {
-					headers: { authorization: `${scheme} presented-token` },
-				}),
-			),
-		).toBe("presented-token");
-	});
+	it.each(["Bearer", "DPoP"])(
+		"extracts the actual %s access token",
+		(scheme) => {
+			expect(
+				extractPresentedAccessToken(
+					new Request(MCP_RESOURCE, {
+						headers: { authorization: `${scheme} presented-token` },
+					}),
+				),
+			).toBe("presented-token");
+		},
+	);
 
 	it("deduplicates string scopes and treats other claim types as empty", () => {
 		expect(parseGrantedScopes("mcp:base greeting mcp:base")).toEqual([
@@ -268,27 +266,29 @@ describe("mcp", () => {
 			resource: `${apiServerBaseUrl}/resource1`,
 			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
 		},
-	])("provides the OAuth resource challenge for $resource", async ({
-		resource,
-		expected,
-	}) => {
-		try {
-			await apiClient.verifyBearerToken("bad_access_token", {
-				verifyOptions: {
-					issuer: AUTHORIZATION_SERVER,
-					audience: resource,
-				},
-				jwksUrl: `${AUTHORIZATION_SERVER}/api/auth/jwks`,
-			});
-			expect.unreachable();
-		} catch (error) {
-			const challenge = createResourceServerChallenge(error, resource);
-			expect(challenge?.statusCode).toBe(401);
-			expect(
-				new Headers(challenge?.headers as HeadersInit).get("www-authenticate"),
-			).toBe(expected);
-		}
-	});
+	])(
+		"provides the OAuth resource challenge for $resource",
+		async ({ resource, expected }) => {
+			try {
+				await apiClient.verifyBearerToken("bad_access_token", {
+					verifyOptions: {
+						issuer: AUTHORIZATION_SERVER,
+						audience: resource,
+					},
+					jwksUrl: `${AUTHORIZATION_SERVER}/api/auth/jwks`,
+				});
+				expect.unreachable();
+			} catch (error) {
+				const challenge = createResourceServerChallenge(error, resource);
+				expect(challenge?.statusCode).toBe(401);
+				expect(
+					new Headers(challenge?.headers as HeadersInit).get(
+						"www-authenticate",
+					),
+				).toBe(expected);
+			}
+		},
+	);
 
 	it("preserves the MCP challenge boundary", async () => {
 		const response = await createMcpProtectedRequestHandler(

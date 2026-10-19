@@ -56,3 +56,7 @@ description: Twitch provider setup and usage.
     </Callout>
   </Step>
 </Steps>
+
+### ID Token Validation
+
+The built-in provider checks the ID token's signature, issuer, audience, and expiration before mapping the profile. Custom `getUserInfo` overrides replace these checks.
