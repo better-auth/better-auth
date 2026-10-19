@@ -116,9 +116,9 @@ export type OAuthAccountSubject<Profile extends object = object> =
 export type OAuthMappedUser = {
 	/** Provider identity is defined by `accountSubject`, not local user mapping. */
 	id?: never;
-	name?: string;
-	email?: string | null;
-	image?: string;
+	name?: string | undefined;
+	email?: string | null | undefined;
+	image?: string | undefined;
 	emailVerified?: boolean;
 	[key: string]: unknown;
 };
