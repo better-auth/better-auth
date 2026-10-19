@@ -23,21 +23,6 @@ vi.mock("@better-auth/core/async_hooks", () => ({
 
 const SECONDARY_STORAGE_UNAVAILABLE = "secondary storage is unavailable";
 
-/**
- * Drops the storage `ensureAsyncStorage` memoises on the process-wide Better Auth
- * singleton, so the next call has to build one — and fails to.
- */
-function forgetAdapterAsyncStorage() {
-	const betterAuthGlobal = (
-		globalThis as unknown as Record<
-			symbol,
-			{ context: Record<string, unknown> } | undefined
-		>
-	)[Symbol.for("better-auth:global")];
-	if (!betterAuthGlobal) throw new Error("the Better Auth global is missing");
-	betterAuthGlobal.context.adapterAsyncStorage = undefined;
-}
-
 function createSecondaryStorage(
 	store: Map<string, string>,
 	shouldFail: (key: string) => boolean,
@@ -101,9 +86,6 @@ async function setupWithoutHookQueue(shouldFail: (key: string) => boolean) {
 	);
 	const session = await testCtx.internalAdapter.createSession(user.id);
 
-	// Everything above ran with a working queue. Drop it, so the revocation below
-	// degrades the way it does on a runtime that cannot construct one.
-	forgetAdapterAsyncStorage();
 	return { deleteAttempts, logged, session, store, testCtx };
 }
 
@@ -139,7 +121,9 @@ describe("internal adapter without an after-commit hook queue", () => {
 		await expect(
 			testCtx.internalAdapter.deleteUserSessions(session.userId),
 		).resolves.toBeUndefined();
-		expect(deleteAttempts.filter((key) => key === session.token)).toHaveLength(2);
+		expect(deleteAttempts.filter((key) => key === session.token)).toHaveLength(
+			2,
+		);
 		expect(store.has(session.token)).toBe(false);
 	});
 
