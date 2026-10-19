@@ -1,5 +1,15 @@
 # @better-auth/core
 
+## 1.7.11
+
+### Patch Changes
+
+- [#11623](https://github.com/better-auth/better-auth/pull/11623) [`ce96569`](https://github.com/better-auth/better-auth/commit/ce965696d1f8695e96e6b88490fc8ea2f8ab78ae) Thanks [@cpojer](https://github.com/cpojer)! - Reduce installation size by removing the semantic conventions production dependency while preserving all instrumentation attribute keys.
+
+- [#11907](https://github.com/better-auth/better-auth/pull/11907) [`2f6ca3f`](https://github.com/better-auth/better-auth/commit/2f6ca3f370e80081d911a5e95a39393920b6d22e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix plugins whose `init` returns `options: undefined`, such as `testUtils()`, failing to typecheck when `exactOptionalPropertyTypes` is enabled.
+
+- [#11884](https://github.com/better-auth/better-auth/pull/11884) [`dfd8dd2`](https://github.com/better-auth/better-auth/commit/dfd8dd287a4cfeb1d3541bb4e004e8f33edce15f) Thanks [@bytaesu](https://github.com/bytaesu)! - Twitch and Paybin sign-in now verify ID token signatures and identity claims before mapping profiles, with 30 seconds of clock tolerance. Custom Paybin issuers must expose RS256 signing keys at `<issuer>/.well-known/jwks.json`.
+
 ## 1.7.10
 
 ### Patch Changes
