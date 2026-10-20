@@ -147,11 +147,12 @@ export const auth = betterAuth({
 })
 ```
 
-KMS uses the deployment's current OIDC token to authorize signing and sets the JWT's `kid`, `iat`, `nbf`, and `exp`. Call it inside the callback, where a request context is available. The `iss` and `sub` claims must be the OAuth client ID, rather than the KMS issuer URL. Use a lifetime of at most 60 seconds. See [Vercel's KMS assertion example](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api#sign-the-assertion-with-vercel-kms).
+[KMS](https://vercel.com/docs/kms/ts-sdk-reference#signjwt) uses the deployment's current OIDC token to authorize signing and sets the JWT's `kid`, `iat`, `nbf`, and `exp`. Call it inside the callback, where a request context is available. The `iss` and `sub` claims must be the OAuth client ID, rather than the KMS issuer URL. Use a lifetime of at most 60 seconds. See [Vercel's KMS assertion example](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api#sign-the-assertion-with-vercel-kms).
 
 If you manage your own signing key, use Better Auth's `createPrivateKeyJwtClientAssertionGetter` instead. This helper accepts local key material; it does not call KMS. Set `expiresIn: 60` to override its 120-second default, and set `kid` to the matching public key's ID in your JWKS:
 
 ```ts
+import { betterAuth } from "better-auth"
 import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2"
 
 const getClientAssertion = createPrivateKeyJwtClientAssertionGetter({
@@ -161,11 +162,17 @@ const getClientAssertion = createPrivateKeyJwtClientAssertionGetter({
     expiresIn: 60,
 })
 
-// Use in socialProviders.vercel:
-const tokenEndpointAuth = {
-    method: "private_key_jwt" as const,
-    getClientAssertion,
-}
+export const auth = betterAuth({
+    socialProviders: {
+        vercel: {
+            clientId: process.env.VERCEL_CLIENT_ID as string,
+            tokenEndpointAuth: {
+                method: "private_key_jwt",
+                getClientAssertion,
+            },
+        },
+    },
+})
 ```
 
 Always include a matching `kid`; Vercel requires it when the JWKS contains more than one key. Keep private keys on the server and publish only public keys in the JWKS.
