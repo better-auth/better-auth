@@ -58,6 +58,7 @@ import {
 	getResourceURL,
 	SCIM_REQUEST_MEDIA_TYPES,
 } from "./scim-metadata";
+import type { SCIMCanonicalUserAttributesValidator } from "./user-attributes";
 import {
 	readSCIMUserAttributes,
 	serializeSCIMUserAttributes,
@@ -74,8 +75,9 @@ import {
 	createSCIMEmailValueIndex,
 	createSCIMEmailValueToken,
 } from "./user-profile";
+import type { SCIMUserSchemaContext } from "./user-schema-context";
 
-const { inputSchema: APIUserSchema, openAPISchema: OpenAPIUserResourceSchema } =
+const { openAPISchema: OpenAPIUserResourceSchema } =
 	SCIM_RESOURCE_SCHEMA_REGISTRY.User;
 
 function requireUserAttributeProjection(
@@ -162,11 +164,15 @@ function createUserCollectionWhere(
 	return where;
 }
 
-function createUserResource(baseURL: string, scimUser: SCIMUser) {
+function createUserResource(
+	baseURL: string,
+	scimUser: SCIMUser,
+	canonicalSchema?: SCIMCanonicalUserAttributesValidator,
+) {
 	const {
 		[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.canonicalAttribute]: enterprise,
 		...attributes
-	} = readSCIMUserAttributes(scimUser);
+	} = readSCIMUserAttributes(scimUser, canonicalSchema);
 	return {
 		...attributes,
 		id: scimUser.id,
@@ -190,6 +196,29 @@ function createUserResource(baseURL: string, scimUser: SCIMUser) {
 			),
 		},
 	};
+}
+
+/**
+ * Resolve the `user.additionalFields` values for the mapped custom attributes.
+ * Every mapped attribute is included so a full representation (create or PUT)
+ * clears an omitted value. Only the profile-source connection should apply the
+ * result, mirroring how `email`/`name` are written.
+ */
+function resolveMappedUserFields(
+	context: SCIMUserSchemaContext,
+	attributes: CanonicalSCIMUserProfile["attributes"],
+): Record<string, unknown> {
+	const fields: Record<string, unknown> = {};
+	const record = attributes as Record<string, unknown>;
+	for (const mapped of context.mappedAttributes) {
+		const extensionValue = record[mapped.urn];
+		const value =
+			extensionValue && typeof extensionValue === "object"
+				? (extensionValue as Record<string, unknown>)[mapped.name]
+				: undefined;
+		fields[mapped.mapTo] = value ?? null;
+	}
+	return fields;
 }
 
 async function findSCIMUser(
@@ -252,6 +281,7 @@ async function replaceSCIMUserSource(
 		connection: SCIMConnection;
 		identity: SCIMIdentityCoordinator;
 		projection: SCIMProjectionCoordinator;
+		context: SCIMUserSchemaContext;
 		source: SCIMUser;
 		sourceGuard?: Where[];
 		profile: CanonicalSCIMUserProfile;
@@ -261,7 +291,8 @@ async function replaceSCIMUserSource(
 		active: boolean;
 	},
 ): Promise<SCIMUser | null> {
-	const { auth, connection, identity, projection, source, profile } = input;
+	const { auth, connection, identity, projection, context, source, profile } =
+		input;
 	const updatedAt = new Date();
 	const subject = await identity.acquireSubject(trx, source.userId, updatedAt);
 	await assertSCIMUserKeysAvailable(trx, {
@@ -276,6 +307,7 @@ async function replaceSCIMUserSource(
 			email: profile.primaryEmail,
 			name: profile.displayName,
 			updatedAt,
+			additionalFields: resolveMappedUserFields(context, profile.attributes),
 		});
 	}
 
@@ -297,7 +329,10 @@ async function replaceSCIMUserSource(
 			givenName: profile.name.givenName ?? null,
 			familyName: profile.name.familyName ?? null,
 			serializedEmails: serializeSCIMEmails(profile.emails),
-			serializedAttributes: serializeSCIMUserAttributes(profile.attributes),
+			serializedAttributes: serializeSCIMUserAttributes(
+				profile.attributes,
+				context.canonicalSchema,
+			),
 			externalId: input.externalId ?? null,
 			externalIdKey: input.externalIdKey ?? null,
 			active: input.active,
@@ -535,6 +570,7 @@ async function updateManagedBetterAuthUser(
 		email: string;
 		name: string;
 		updatedAt: Date;
+		additionalFields?: Record<string, unknown>;
 	},
 ): Promise<User> {
 	const user = await adapter.findOne<User>({
@@ -551,6 +587,7 @@ async function updateManagedBetterAuthUser(
 		email: input.email,
 		name: input.name,
 		...(user.email !== input.email ? { emailVerified: false } : {}),
+		...(input.additionalFields ?? {}),
 		updatedAt: input.updatedAt,
 	});
 	if (!updatedUser) {
@@ -565,12 +602,13 @@ export function createSCIMUser(
 	authMiddleware: SCIMConnectionMiddleware,
 	identity: SCIMIdentityCoordinator,
 	projection: SCIMProjectionCoordinator,
+	context: SCIMUserSchemaContext,
 ) {
 	return createAuthEndpoint(
 		"/scim/v2/Users",
 		{
 			method: "POST",
-			body: APIUserSchema,
+			body: context.inputSchema,
 			query: scimAttributeProjectionQuerySchema.optional(),
 			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
@@ -581,7 +619,7 @@ export function createSCIMUser(
 						"201": {
 							description:
 								"SCIM User resource, created or reprovisioned from an inactive User with the same externalId",
-							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
+							content: createSCIMOpenAPIContent(context.openAPISchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
@@ -595,7 +633,14 @@ export function createSCIMUser(
 			const attributeProjection = requireUserAttributeProjection(
 				ctx.query ?? {},
 			);
-			const profile = createCanonicalSCIMUserProfile(ctx.body);
+			const profile = createCanonicalSCIMUserProfile(
+				ctx.body,
+				context.customDescriptors,
+			);
+			const mappedUserFields = resolveMappedUserFields(
+				context,
+				profile.attributes,
+			);
 			const active = ctx.body.active !== false;
 			const userNameKey = createUserNameKey(
 				connection.id,
@@ -613,6 +658,7 @@ export function createSCIMUser(
 						connection,
 						identity,
 						projection,
+						context,
 						profile,
 						userNameKey,
 						externalId: ctx.body.externalId,
@@ -624,6 +670,7 @@ export function createSCIMUser(
 				const completeResource = createUserResource(
 					ctx.context.baseURL,
 					reprovisionedSCIMUser,
+					context.canonicalSchema,
 				);
 				ctx.setStatus(201);
 				ctx.setHeader("location", completeResource.meta.location);
@@ -670,7 +717,11 @@ export function createSCIMUser(
 							if (resolution.action === "create") {
 								await assertBetterAuthEmailAvailable(trx, profile.primaryEmail);
 								user = await ctx.context.internalAdapter.createUser(
-									{ email: profile.primaryEmail, name: profile.displayName },
+									{
+										email: profile.primaryEmail,
+										name: profile.displayName,
+										...mappedUserFields,
+									},
 									{ method: "scim" },
 								);
 							} else {
@@ -717,6 +768,7 @@ export function createSCIMUser(
 									serializedEmails: serializeSCIMEmails(profile.emails),
 									serializedAttributes: serializeSCIMUserAttributes(
 										profile.attributes,
+										context.canonicalSchema,
 									),
 									externalId: ctx.body.externalId,
 									externalIdKey,
@@ -746,6 +798,7 @@ export function createSCIMUser(
 											email: profile.primaryEmail,
 											name: profile.displayName,
 											updatedAt: now,
+											additionalFields: mappedUserFields,
 										},
 									);
 								}
@@ -794,6 +847,7 @@ export function createSCIMUser(
 			const completeResource = createUserResource(
 				ctx.context.baseURL,
 				scimUser,
+				context.canonicalSchema,
 			);
 			const resource = projectSCIMResourceAttributes(
 				completeResource,
@@ -807,7 +861,10 @@ export function createSCIMUser(
 	);
 }
 
-export function getSCIMUser(authMiddleware: SCIMConnectionMiddleware) {
+export function getSCIMUser(
+	authMiddleware: SCIMConnectionMiddleware,
+	context: SCIMUserSchemaContext,
+) {
 	return createAuthEndpoint(
 		"/scim/v2/Users/:userId",
 		{
@@ -821,7 +878,7 @@ export function getSCIMUser(authMiddleware: SCIMConnectionMiddleware) {
 					responses: {
 						"200": {
 							description: "SCIM User resource",
-							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
+							content: createSCIMOpenAPIContent(context.openAPISchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
@@ -848,7 +905,11 @@ export function getSCIMUser(authMiddleware: SCIMConnectionMiddleware) {
 
 			return ctx.json(
 				projectSCIMResourceAttributes(
-					createUserResource(ctx.context.baseURL, scimUser),
+					createUserResource(
+						ctx.context.baseURL,
+						scimUser,
+						context.canonicalSchema,
+					),
 					attributeProjection,
 				),
 			);
@@ -856,7 +917,10 @@ export function getSCIMUser(authMiddleware: SCIMConnectionMiddleware) {
 	);
 }
 
-export function listSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
+export function listSCIMUsers(
+	authMiddleware: SCIMConnectionMiddleware,
+	context: SCIMUserSchemaContext,
+) {
 	return createAuthEndpoint(
 		"/scim/v2/Users",
 		{
@@ -928,7 +992,11 @@ export function listSCIMUsers(authMiddleware: SCIMConnectionMiddleware) {
 
 			const resources = scimUsers.map((scimUser) =>
 				projectSCIMResourceAttributes(
-					createUserResource(ctx.context.baseURL, scimUser),
+					createUserResource(
+						ctx.context.baseURL,
+						scimUser,
+						context.canonicalSchema,
+					),
 					attributeProjection,
 				),
 			);
@@ -948,12 +1016,13 @@ export function replaceSCIMUser(
 	authMiddleware: SCIMConnectionMiddleware,
 	identity: SCIMIdentityCoordinator,
 	projection: SCIMProjectionCoordinator,
+	context: SCIMUserSchemaContext,
 ) {
 	return createAuthEndpoint(
 		"/scim/v2/Users/:userId",
 		{
 			method: "PUT",
-			body: APIUserSchema,
+			body: context.inputSchema,
 			query: scimAttributeProjectionQuerySchema.optional(),
 			metadata: defineSCIMEndpointMetadata({
 				...HIDE_METADATA,
@@ -963,7 +1032,7 @@ export function replaceSCIMUser(
 					responses: {
 						"200": {
 							description: "SCIM User resource",
-							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
+							content: createSCIMOpenAPIContent(context.openAPISchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
@@ -988,7 +1057,10 @@ export function replaceSCIMUser(
 				});
 			}
 
-			const profile = createCanonicalSCIMUserProfile(ctx.body);
+			const profile = createCanonicalSCIMUserProfile(
+				ctx.body,
+				context.customDescriptors,
+			);
 			const userNameKey = createUserNameKey(
 				connection.id,
 				profile.userName.toLowerCase(),
@@ -1023,6 +1095,7 @@ export function replaceSCIMUser(
 							connection,
 							identity,
 							projection,
+							context,
 							source: currentSource,
 							profile,
 							userNameKey,
@@ -1050,6 +1123,7 @@ export function replaceSCIMUser(
 			const completeResource = createUserResource(
 				ctx.context.baseURL,
 				updatedSCIMUser,
+				context.canonicalSchema,
 			);
 			ctx.setHeader("location", completeResource.meta.location);
 			return ctx.json(
@@ -1063,6 +1137,7 @@ export function patchSCIMUser(
 	authMiddleware: SCIMConnectionMiddleware,
 	identity: SCIMIdentityCoordinator,
 	projection: SCIMProjectionCoordinator,
+	context: SCIMUserSchemaContext,
 ) {
 	return createAuthEndpoint(
 		"/scim/v2/Users/:userId",
@@ -1078,7 +1153,7 @@ export function patchSCIMUser(
 					responses: {
 						"200": {
 							description: "Updated SCIM User resource",
-							content: createSCIMOpenAPIContent(OpenAPIUserResourceSchema),
+							content: createSCIMOpenAPIContent(context.openAPISchema),
 						},
 						...SCIMErrorOpenAPISchemas,
 					},
@@ -1147,8 +1222,9 @@ export function patchSCIMUser(
 						const patch = applySCIMUserPatch(
 							currentSource,
 							ctx.body.Operations,
+							context,
 						);
-						if (!scimUserPatchChangesState(currentSource, patch)) {
+						if (!scimUserPatchChangesState(currentSource, patch, context)) {
 							await fenceActiveSCIMConnection(trx, connection.id);
 							return currentSource;
 						}
@@ -1182,6 +1258,10 @@ export function patchSCIMUser(
 									email: patch.primaryEmail,
 									name: patch.displayName,
 									updatedAt,
+									additionalFields: resolveMappedUserFields(
+										context,
+										patch.attributes,
+									),
 								},
 							);
 						}
@@ -1207,6 +1287,7 @@ export function patchSCIMUser(
 								serializedEmails: serializeSCIMEmails(patch.emails),
 								serializedAttributes: serializeSCIMUserAttributes(
 									patch.attributes,
+									context.canonicalSchema,
 								),
 								externalId: patch.externalId ?? null,
 								externalIdKey: externalIdKey ?? null,
@@ -1242,6 +1323,7 @@ export function patchSCIMUser(
 			const completeResource = createUserResource(
 				ctx.context.baseURL,
 				updatedSCIMUser,
+				context.canonicalSchema,
 			);
 			ctx.setHeader("location", completeResource.meta.location);
 			return ctx.json(

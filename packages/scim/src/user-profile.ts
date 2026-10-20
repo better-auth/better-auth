@@ -4,6 +4,7 @@ import type {
 	SCIMEmail,
 } from "./configuration";
 import { createScopedKey } from "./resource-key";
+import type { CompiledUserSchemaExtensionDescriptor } from "./schema-extensions";
 import type { APIUser, SCIMCanonicalUserAttributes } from "./user-schemas";
 import { SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR } from "./user-schemas";
 
@@ -54,6 +55,7 @@ export function normalizeSCIMEmails(
 /** Resolve the provider profile independently from the Better Auth User row. */
 export function createCanonicalSCIMUserProfile(
 	input: APIUser,
+	customDescriptors: readonly CompiledUserSchemaExtensionDescriptor[] = [],
 ): CanonicalSCIMUserProfile {
 	const userName = input.userName.trim();
 	const emails = normalizeSCIMEmails(userName, input.emails);
@@ -81,7 +83,15 @@ export function createCanonicalSCIMUserProfile(
 		...(honorificPrefix ? { honorificPrefix } : {}),
 		...(honorificSuffix ? { honorificSuffix } : {}),
 	};
-	const attributes: SCIMCanonicalUserAttributes = {
+	const inputRecord = input as Record<string, unknown>;
+	const customExtensionAttributes: Record<string, unknown> = {};
+	for (const descriptor of customDescriptors) {
+		const value = inputRecord[descriptor.id];
+		if (value !== undefined) {
+			customExtensionAttributes[descriptor.canonicalAttribute] = value;
+		}
+	}
+	const attributes = {
 		schemas: input.schemas,
 		name,
 		emails,
@@ -102,7 +112,8 @@ export function createCanonicalSCIMUserProfile(
 						input[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id],
 				}
 			: {}),
-	};
+		...customExtensionAttributes,
+	} as SCIMCanonicalUserAttributes;
 
 	return {
 		userName,

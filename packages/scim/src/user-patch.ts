@@ -18,9 +18,9 @@ import {
 	createCanonicalSCIMUserProfile,
 	normalizeSCIMEmails,
 } from "./user-profile";
+import type { SCIMUserSchemaContext } from "./user-schema-context";
 import type { SCIMCanonicalUserAttributes } from "./user-schemas";
 import {
-	APIUserSchema,
 	hasUniqueSCIMDefinedTypes,
 	SCIM_ENTERPRISE_USER_SCHEMA,
 	SCIMEnterpriseUserInputSchema,
@@ -92,8 +92,9 @@ function createComparableSCIMPatchValue(value: unknown): unknown {
 export function scimUserPatchChangesState(
 	user: SCIMUser,
 	state: SCIMUserPatchState,
+	context: SCIMUserSchemaContext,
 ): boolean {
-	const attributes = readSCIMUserAttributes(user);
+	const attributes = readSCIMUserAttributes(user, context.canonicalSchema);
 	return (
 		user.userName !== state.userName ||
 		user.primaryEmail !== state.primaryEmail ||
@@ -617,6 +618,124 @@ function removeEmptyEnterpriseExtension(
 	setEnterpriseSchemaDeclaration(document, false);
 }
 
+/** Add or remove a custom extension URN from the document's `schemas`. */
+function setExtensionSchemaDeclaration(
+	document: Record<string, unknown>,
+	urn: string,
+	declared: boolean,
+): void {
+	const schemas = Array.isArray(document.schemas)
+		? document.schemas.filter(
+				(schema): schema is string => typeof schema === "string",
+			)
+		: [];
+	const without = schemas.filter((schema) => schema !== urn);
+	document.schemas = declared ? [...without, urn] : without;
+}
+
+/**
+ * Apply a PATCH operation that targets a custom extension URN, either the whole
+ * extension object (`urn`) or one of its simple attributes (`urn:attribute`).
+ * Mutates `document` and returns `true` when the path belongs to a declared
+ * custom extension; returns `false` otherwise so core/enterprise handling runs.
+ */
+function applyCustomExtensionPatch(
+	document: Record<string, unknown>,
+	op: "add" | "remove" | "replace",
+	path: string,
+	value: unknown,
+	context: SCIMUserSchemaContext,
+): boolean {
+	const pathTrim = path.trim();
+	const pathLower = pathTrim.toLowerCase();
+	for (const descriptor of context.customDescriptors) {
+		const urn = descriptor.id;
+		const urnLower = urn.toLowerCase();
+		const isRoot = pathLower === urnLower;
+		const isSubAttribute = pathLower.startsWith(`${urnLower}:`);
+		if (!isRoot && !isSubAttribute) continue;
+
+		const container = isRecord(document[urn])
+			? { ...(document[urn] as Record<string, unknown>) }
+			: {};
+
+		if (isRoot) {
+			if (op === "remove") {
+				delete document[urn];
+				setExtensionSchemaDeclaration(document, urn, false);
+				return true;
+			}
+			if (!isRecord(value)) {
+				return invalidPatchValue(`${urn} must be an object`);
+			}
+			const parsed = descriptor.inputSchema.safeParse(value);
+			if (!parsed.success) {
+				const issue = parsed.error.issues[0];
+				return invalidPatchValue(
+					issue
+						? `${urn}.${issue.path.join(".")}: ${issue.message}`
+						: `${urn} is invalid`,
+				);
+			}
+			document[urn] = {
+				...container,
+				...(parsed.data as Record<string, unknown>),
+			};
+			setExtensionSchemaDeclaration(document, urn, true);
+			return true;
+		}
+
+		const attributeName = pathTrim.slice(urn.length + 1);
+		if (
+			!attributeName ||
+			attributeName.includes(":") ||
+			attributeName.includes(".")
+		) {
+			throw createSCIMError("BAD_REQUEST", {
+				detail: `User PATCH path ${path} is not supported`,
+				scimType: "invalidPath",
+			});
+		}
+		const declaredAttribute = descriptor.attributes.find(
+			(attribute) =>
+				attribute.name.toLowerCase() === attributeName.toLowerCase(),
+		);
+		const attributeSchema = declaredAttribute
+			? descriptor.attributeInputSchemas[declaredAttribute.name]
+			: undefined;
+		if (!declaredAttribute || !attributeSchema) {
+			throw createSCIMError("BAD_REQUEST", {
+				detail: `User PATCH path ${path} is not supported`,
+				scimType: "invalidPath",
+			});
+		}
+
+		if (op === "remove") {
+			delete container[declaredAttribute.name];
+			if (Object.keys(container).length === 0) {
+				delete document[urn];
+				setExtensionSchemaDeclaration(document, urn, false);
+			} else {
+				document[urn] = container;
+			}
+			return true;
+		}
+
+		const parsed = attributeSchema.safeParse(value);
+		if (!parsed.success) {
+			const issue = parsed.error.issues[0];
+			return invalidPatchValue(
+				issue ? `${path}: ${issue.message}` : `${path} is invalid`,
+			);
+		}
+		container[declaredAttribute.name] = parsed.data;
+		document[urn] = container;
+		setExtensionSchemaDeclaration(document, urn, true);
+		return true;
+	}
+	return false;
+}
+
 function mergePatchObject(
 	current: unknown,
 	value: unknown,
@@ -1031,6 +1150,7 @@ function createSCIMUserPatchDocument(
 function finalizeSCIMUserPatch(
 	state: SCIMUserPatchState,
 	document: Record<string, unknown>,
+	context: SCIMUserSchemaContext,
 ): SCIMUserPatchState {
 	document.userName = state.userName;
 	document.externalId = state.externalId;
@@ -1050,7 +1170,7 @@ function finalizeSCIMUserPatch(
 	};
 	document.emails = clonePatchValue(state.emails);
 
-	const parsed = APIUserSchema.safeParse(document);
+	const parsed = context.inputSchema.safeParse(document);
 	if (!parsed.success) {
 		const issue = parsed.error.issues[0];
 		return invalidPatchValue(
@@ -1059,7 +1179,10 @@ function finalizeSCIMUserPatch(
 				: "The patched User resource is invalid",
 		);
 	}
-	const profile = createCanonicalSCIMUserProfile(parsed.data);
+	const profile = createCanonicalSCIMUserProfile(
+		parsed.data,
+		context.customDescriptors,
+	);
 	return {
 		userName: profile.userName,
 		primaryEmail: profile.primaryEmail,
@@ -1081,8 +1204,9 @@ function finalizeSCIMUserPatch(
 export function applySCIMUserPatch(
 	user: SCIMUser,
 	operations: z.infer<typeof patchSCIMUserBodySchema>["Operations"],
+	context: SCIMUserSchemaContext,
 ): SCIMUserPatchState {
-	const attributes = readSCIMUserAttributes(user);
+	const attributes = readSCIMUserAttributes(user, context.canonicalSchema);
 	const document = createSCIMUserPatchDocument(user, attributes);
 	const state: SCIMUserPatchState = {
 		userName: user.userName,
@@ -1105,6 +1229,9 @@ export function applySCIMUserPatch(
 		path: string,
 		value: unknown,
 	): void {
+		if (applyCustomExtensionPatch(document, op, path, value, context)) {
+			return;
+		}
 		const schemaRelativePath = stripSCIMCoreAttributePrefix(
 			"User",
 			path.trim(),
@@ -1297,5 +1424,5 @@ export function applySCIMUserPatch(
 		}
 	}
 
-	return finalizeSCIMUserPatch(state, document);
+	return finalizeSCIMUserPatch(state, document, context);
 }
