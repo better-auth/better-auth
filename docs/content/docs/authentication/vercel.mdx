@@ -8,7 +8,7 @@ description: Vercel provider setup and usage.
   <Step>
     ### Get your Vercel credentials
 
-    To use Sign in with Vercel, create a Vercel App in the [Vercel Dashboard](https://vercel.com/dashboard) and get its client ID. The default configuration also uses a client secret. You can instead use [OIDC client authentication](#oidc-client-authentication) when your application runs on Vercel.
+    To use Sign in with Vercel, you need a client ID and client secret. You can get them from the [Vercel Dashboard](https://vercel.com/dashboard) by [creating a Vercel App](https://vercel.com/docs/sign-in-with-vercel/manage-from-dashboard).
 
     Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/vercel` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
