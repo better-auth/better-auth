@@ -18,6 +18,7 @@ export default defineConfig({
 		"./src/context/index.ts",
 		"./src/env/index.ts",
 		"./src/oauth2/index.ts",
+		"./src/oauth2/internal.ts",
 		"./src/api/index.ts",
 		"./src/social-providers/index.ts",
 		"./src/utils/*.ts",
