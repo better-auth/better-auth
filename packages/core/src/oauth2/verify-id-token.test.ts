@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { JWK } from "jose";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { logger } from "../env";
 import { apple } from "../social-providers/apple";
 import { cognito } from "../social-providers/cognito";
 import { facebook } from "../social-providers/facebook";
@@ -43,7 +44,7 @@ function providerWith(
 	idToken: OAuthIdTokenConfig | undefined,
 	options: Record<string, unknown> = {},
 ): ProviderWithIdTokenConfig {
-	return { idToken, options };
+	return { id: "test-provider", idToken, options };
 }
 
 const sha256Hex = (value: string) =>
@@ -257,6 +258,29 @@ describe("verifyProviderIdToken", () => {
 				expect(await verifyProviderIdToken(provider, token)).toBe(valid);
 			},
 		);
+	});
+
+	describe("without a configured audience", () => {
+		afterEach(() => {
+			vi.restoreAllMocks();
+		});
+
+		it.each<[string, string | string[]]>([
+			["an empty string", ""],
+			["an empty list", []],
+			["a list of empty strings", [""]],
+		])("rejects a token when the audience is %s", async (_, audience) => {
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+			const { jwks, sign } = await makeKeyset();
+			const provider = providerWith({ jwks, issuer: ISSUER, audience });
+
+			await expect(
+				verifyProviderIdToken(provider, await sign({ sub: "u1" })),
+			).resolves.toBe(false);
+			expect(error).toHaveBeenCalledWith(
+				expect.stringContaining("no client ID"),
+			);
+		});
 	});
 
 	describe("provider regressions", () => {

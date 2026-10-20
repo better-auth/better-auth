@@ -1,5 +1,6 @@
 import type { JWTVerifyOptions } from "jose";
 import { jwtVerify } from "jose";
+import { logger } from "../env";
 import type { GenericEndpointContext } from "../types";
 import type { OAuthProvider, ProviderOptions } from "./oauth-provider";
 
@@ -38,7 +39,10 @@ export function getIdTokenVerifyOptions(options: {
 	} satisfies JWTVerifyOptions;
 }
 
-type ProviderWithIdTokenConfig = Pick<OAuthProvider, "idToken" | "options">;
+type ProviderWithIdTokenConfig = Pick<
+	OAuthProvider,
+	"id" | "idToken" | "options"
+>;
 
 async function sha256Hex(value: string) {
 	const data = new TextEncoder().encode(value);
@@ -123,6 +127,14 @@ export async function verifyProviderIdToken(
 		// access-token-backed userinfo exchange (not the token itself) is the identity source.
 		if (token.split(".").length !== 3) {
 			return config.allowOpaqueToken === true;
+		}
+		// An empty audience would skip the audience check entirely.
+		const hasAudience = [config.audience].flat().some(Boolean);
+		if (!hasAudience) {
+			logger.error(
+				`[better-auth] Rejected an ID token for "${provider.id}" because the provider has no client ID to check its audience against. Set \`clientId\` on the provider.`,
+			);
+			return false;
 		}
 		// `kid` is optional in JWS: a JWKS resolver can still select a key by algorithm, so
 		// key selection is left to config.jwks.
