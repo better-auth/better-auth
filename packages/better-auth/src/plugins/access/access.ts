@@ -118,7 +118,16 @@ export function role<
 			for (const [requestedResource, requestedActions] of Object.entries(
 				request,
 			)) {
-				const allowedActions = statements[requestedResource];
+				// Guard against resource names that collide with Object.prototype
+				// members (e.g. `constructor`): without an own-property check the
+				// lookup returns an inherited member and the check below throws
+				// instead of denying.
+				const allowedActions = Object.prototype.hasOwnProperty.call(
+					statements,
+					requestedResource,
+				)
+					? statements[requestedResource]
+					: undefined;
 				if (!allowedActions) {
 					if (connector === "AND") {
 						return unknownResourceResponse(requestedResource);

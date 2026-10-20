@@ -74,18 +74,48 @@ describe("hasPermissionFn aggregates permissions across roles", () => {
 	it("handles resource names that collide with Object.prototype", () => {
 		const weirdAc = createAccessControl({
 			constructor: ["use-it"],
+			a: ["use-a"],
 		} as const);
 		const weirdRoles = {
 			weird: weirdAc.newRole({ constructor: ["use-it"] }),
 		};
+		// exact grant still works through the per-role path
+		expect(
+			hasPermissionFn(
+				{
+					role: "weird",
+					permissions: { constructor: ["use-it"] },
+					options,
+				},
+				weirdRoles,
+			),
+		).toBe(true);
+		// requesting an ungranted ordinary resource forces the null-prototype
+		// accumulator to process the `constructor` key — with a plain `{}`
+		// this throws instead of denying
+		expect(
+			hasPermissionFn(
+				{
+					role: "weird",
+					permissions: { constructor: ["use-it"], a: ["use-a"] },
+					options,
+				},
+				weirdRoles,
+			),
+		).toBe(false);
+	});
+
+	it("denies prototype-colliding resource names a role does not define", () => {
+		// `constructor` is not an own key of aUser's statements: this must
+		// deny, not throw on the inherited Object.prototype member
 		const result = hasPermissionFn(
 			{
-				role: "weird",
+				role: "aUser",
 				permissions: { constructor: ["use-it"] },
 				options,
 			},
-			weirdRoles,
+			acRoles,
 		);
-		expect(result).toBe(true);
+		expect(result).toBe(false);
 	});
 });
