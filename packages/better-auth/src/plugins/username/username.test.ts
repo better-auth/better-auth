@@ -772,6 +772,40 @@ describe("post normalization flow", async () => {
 		});
 		expect(res.available).toBe(true);
 	});
+
+	it("should check the length of the normalized username", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					validationOrder: {
+						username: "post-normalization",
+					},
+					usernameNormalization: (username) => {
+						return username.split(" ").join("").toLowerCase();
+					},
+				}),
+			],
+		});
+		await expect(
+			auth.api.isUsernameAvailable({
+				body: {
+					username: "a b",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { code: "USERNAME_TOO_SHORT" },
+		});
+		await expect(
+			auth.api.signInUsername({
+				body: {
+					username: "a b",
+					password: "test-password",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { code: "USERNAME_TOO_SHORT" },
+		});
+	});
 });
 
 describe("username email verification flow (no info leak)", async () => {
