@@ -53,4 +53,5 @@ setting are rated lower, not excluded. Denial of service is low.
 - Missing authorization checks in application code around `auth.api` calls
 - Reproductions that write sessions, roles, or accounts directly to the
   database instead of going through the endpoints
-- Hardcoded secrets in tests and `DEFAULT_SECRET`, a development fallback
+- Hardcoded secrets in tests, and the `DEFAULT_SECRET` fallback outside
+  production when no secret is set
