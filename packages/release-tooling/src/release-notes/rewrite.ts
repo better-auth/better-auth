@@ -136,7 +136,7 @@ function validationFeedback(
 	if (!entry)
 		throw new Error(`Release rewrite context ${rewrite.id} is missing`);
 	try {
-		validateGeneratedReleaseRewrite(rewrite, entry.changeType === "breaking");
+		validateGeneratedReleaseRewrite(rewrite, entry);
 		return null;
 	} catch (error) {
 		return error instanceof Error ? error.message : String(error);

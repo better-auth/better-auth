@@ -193,17 +193,15 @@ function readReleaseRewrites(
 		parsed.rewrites.map((rewrite) => [rewrite.id, rewrite]),
 	);
 
-	const breakingKeys = new Set(
-		manifest.entries
-			.filter((entry) => entry.breaking)
-			.map((entry) => entry.rewriteKey),
+	const entriesByKey = new Map(
+		manifest.entries.map((entry) => [entry.rewriteKey, entry]),
 	);
 	const rewrites: ReleaseRewrites = {};
 	for (const [key, value] of generatedByKey) {
 		try {
 			rewrites[key] = validateGeneratedReleaseRewrite(
 				value,
-				breakingKeys.has(key),
+				entriesByKey.get(key)!,
 			);
 		} catch (error) {
 			console.warn(
@@ -217,7 +215,10 @@ function readReleaseRewrites(
 
 export function validateGeneratedReleaseRewrite(
 	value: GeneratedReleaseRewrites[number],
-	breaking: boolean,
+	{
+		changeType,
+		changesetDescription,
+	}: Pick<ReleaseEntry, "changeType" | "changesetDescription">,
 ): ReleaseRewrites[string] {
 	const title = validateGeneratedCopy(value.title, "title", value.id, 300);
 	const migration =
@@ -225,7 +226,7 @@ export function validateGeneratedReleaseRewrite(
 			? undefined
 			: validateGeneratedCopy(value.migration, "migration", value.id, 500);
 
-	if (breaking && !migration) {
+	if (changeType === "breaking" && !migration) {
 		throw new Error(
 			`Breaking AI rewrite ${value.id} must have a single-line migration`,
 		);
