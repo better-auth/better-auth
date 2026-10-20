@@ -27,6 +27,7 @@ interface CommandResult {
 function renderReleaseRewrites(
 	rewrites: JSONValue,
 	breaking = false,
+	changesetDescription = "Avoid duplicate session requests.",
 ): CommandResult {
 	const directory = mkdtempSync(
 		resolve(tmpdir(), "better-auth-release-notes-"),
@@ -56,7 +57,7 @@ function renderReleaseRewrites(
 						id: "pr-10769:better-auth",
 						rewriteKey: "pr-10769",
 						title: "fix(client): avoid duplicate requests",
-						changesetDescription: "Avoid duplicate session requests.",
+						changesetDescription,
 						prNumber: 10769,
 						author: "bytaesu",
 						domain: "core",
@@ -143,8 +144,13 @@ describe("AI release-note rewrites", () => {
 			"- `Read [the migration guide](https://example.com) and notify @maintainers`",
 		);
 		expect(output).not.toContain("Read https://example.com before upgrading");
+		// A breaking change stays in the action list even when its changeset
+		// cannot be shown, and otherwise its changeset explains it.
 		expect(output).toContain(
-			"> **Migration:** Update custom session refresh integrations.",
+			"> - `Read [the migration guide](https://example.com) and notify @maintainers` ([#42](https://github.com/better-auth/better-auth/pull/42))\n",
+		);
+		expect(output).toContain(
+			"> - Changed session refresh behavior Injected paragraph ([#43](https://github.com/better-auth/better-auth/pull/43))\n>\n>   Update custom session refresh integrations.",
 		);
 		expect(output).toContain(
 			"- Changed session refresh behavior Injected paragraph",
@@ -243,21 +249,86 @@ describe("AI release-note rewrites", () => {
 		);
 	});
 
-	it("uses deterministic copy when a non-breaking rewrite has a migration", () => {
+	it("renders migration copy for a non-breaking change that asks users to act", () => {
+		const result = renderReleaseRewrites(
+			{
+				rewrites: [
+					{
+						id: "pr-10769",
+						title: "Fixed duplicate requests",
+						migration: "Set `clientId` on the provider.",
+					},
+				],
+			},
+			false,
+			"Set `clientId` on the provider.",
+		);
+
+		expect(result.status, result.stderr).toBe(0);
+		expect(result.output).toMatch(
+			/^> \[!IMPORTANT\]\n> \*\*Action required\*\*\n>\n> - Set `clientId` on the provider\. \(\[#10769\]/,
+		);
+		expect(result.output).toContain(
+			"- Fixed duplicate requests ([#10769](https://github.com/better-auth/better-auth/pull/10769))\n",
+		);
+	});
+
+	it("uses deterministic copy when a migration quotes code missing from the changeset", () => {
 		const result = renderReleaseRewrites({
 			rewrites: [
 				{
 					id: "pr-10769",
 					title: "Fixed duplicate requests",
-					migration: "Change an unrelated setting",
+					migration: "Run `npx unknown-package` before upgrading.",
 				},
 			],
 		});
 
 		expect(result.status).toBe(0);
 		expect(result.output).toContain("fix(client): avoid duplicate requests");
+		expect(result.output).not.toContain("unknown-package");
 		expect(result.stderr).toContain(
-			"Non-breaking AI rewrite pr-10769 cannot have a migration",
+			"AI rewrite pr-10769 migration quotes code that is not in the changeset",
+		);
+	});
+
+	it("uses deterministic copy when a migration hides code in doubled backticks", () => {
+		const result = renderReleaseRewrites({
+			rewrites: [
+				{
+					id: "pr-10769",
+					title: "Fixed duplicate requests",
+					migration: "Run ``npx unknown-package`` before upgrading.",
+				},
+			],
+		});
+
+		expect(result.status).toBe(0);
+		expect(result.output).not.toContain("unknown-package");
+		expect(result.stderr).toContain(
+			"AI rewrite pr-10769 migration quotes code that is not in the changeset",
+		);
+	});
+
+	it("uses deterministic copy when an escaped backtick shifts a code span", () => {
+		const result = renderReleaseRewrites(
+			{
+				rewrites: [
+					{
+						id: "pr-10769",
+						title: "Fixed duplicate requests",
+						migration: "Run \\`clientId`npx unknown-package`clientId` now.",
+					},
+				],
+			},
+			false,
+			"Set `clientId` on the provider.",
+		);
+
+		expect(result.status).toBe(0);
+		expect(result.output).not.toContain("unknown-package");
+		expect(result.stderr).toContain(
+			"AI rewrite pr-10769 migration quotes code that is not in the changeset",
 		);
 	});
 
@@ -298,8 +369,56 @@ describe("AI release-note rewrites", () => {
 
 		expect(result.status, result.stderr).toBe(0);
 		expect(result.output).toContain(
-			"> **Migration:** Update custom session refresh integrations.",
+			"> - Update custom session refresh integrations. ([#10769]",
 		);
+	});
+
+	it("lists an action shared by several packages once", () => {
+		const entry = {
+			rewriteKey: "pr-42",
+			title: "fix: require explicit migration",
+			changesetDescription: "Run `auth migrate` after upgrading.",
+			prNumber: 42,
+			author: "octocat",
+			domain: "core",
+			changeType: "fix",
+			breaking: false,
+		} as const;
+		const metadata = {
+			newPackage: false,
+			referenceLabel: "CHANGELOG",
+			referenceUrl:
+				"https://github.com/better-auth/better-auth/blob/0123456789abcdef0123456789abcdef01234567/CHANGELOG.md",
+		} as const;
+		const output = formatReleaseBody(
+			{
+				repository: "better-auth/better-auth",
+				version: "1.9.1",
+				commitRef: "0123456789abcdef0123456789abcdef01234567",
+				previousTag: "v1.9.0",
+				packageMetadata: {
+					"better-auth": metadata,
+					"@better-auth/sso": metadata,
+				},
+				entries: [
+					{ ...entry, id: "pr-42:better-auth", packageName: "better-auth" },
+					{
+						...entry,
+						id: "pr-42:@better-auth/sso",
+						packageName: "@better-auth/sso",
+					},
+				],
+			},
+			{
+				"pr-42": {
+					title: "Fixed missing migration",
+					migration: "Run `auth migrate` after upgrading.",
+				},
+			},
+		);
+
+		expect(output.match(/Run `auth migrate`/g)).toHaveLength(1);
+		expect(output.match(/- Fixed missing migration/g)).toHaveLength(2);
 	});
 
 	it("allows safe identifiers inside inline code", () => {

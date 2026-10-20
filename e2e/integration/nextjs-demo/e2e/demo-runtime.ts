@@ -34,11 +34,9 @@ export async function getAvailablePort(): Promise<number> {
 export async function stopProcess(
 	child: ChildProcessWithoutNullStreams | undefined,
 ): Promise<void> {
-	if (!child?.pid || child.exitCode !== null || child.signalCode !== null) {
-		return;
-	}
+	if (!child) return;
 	const { terminate } = await import("@better-auth-test/test-utils/playwright");
-	await terminate(child.pid);
+	await terminate(child);
 }
 
 /**
@@ -110,7 +108,7 @@ export async function startDemoProcess(input: {
 	let output = "";
 	const child = spawn(input.command, input.args, {
 		cwd: demoDirectory,
-		detached: true,
+		detached: process.platform !== "win32",
 		env: input.environment,
 		stdio: "pipe",
 	});

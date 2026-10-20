@@ -10,6 +10,14 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.12
+
+### Patch Changes
+
+- [#11935](https://github.com/better-auth/better-auth/pull/11935) [`f5ea731`](https://github.com/better-auth/better-auth/commit/f5ea731e6de511e1df793a190274e6bbca37206d) Thanks [@bytaesu](https://github.com/bytaesu)! - OIDC SSO sign-in now rejects ID tokens missing `exp` or `iat` and providers with an empty client ID, matching social sign-in.
+
+## 1.7.11
+
 ## 1.7.10
 
 ## 1.7.9

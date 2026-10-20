@@ -104,6 +104,11 @@
       "types": "./dist/oauth2/index.d.mts",
       "default": "./dist/oauth2/index.mjs"
     },
+    "./oauth2/internal": {
+      "dev-source": "./src/oauth2/internal.ts",
+      "types": "./dist/oauth2/internal.d.mts",
+      "default": "./dist/oauth2/internal.mjs"
+    },
     "./instrumentation": {
       "dev-source": "./src/instrumentation/index.ts",
       "types": "./dist/instrumentation/index.d.mts",
@@ -158,13 +163,15 @@
       "oauth2": [
         "dist/oauth2/index.d.mts"
       ],
+      "oauth2/internal": [
+        "dist/oauth2/internal.d.mts"
+      ],
       "instrumentation": [
         "dist/instrumentation/index.d.mts"
       ]
     }
   },
   "dependencies": {
-    "@opentelemetry/semantic-conventions": "^1.41.1",
     "@standard-schema/spec": "^1.1.0",
     "zod": "catalog:"
   },
@@ -175,6 +182,7 @@
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@opentelemetry/sdk-trace-node": "^2.10.0",
+    "@opentelemetry/semantic-conventions": "^1.41.1",
     "better-call": "catalog:",
     "jose": "^6.2.3",
     "kysely": "catalog:",
