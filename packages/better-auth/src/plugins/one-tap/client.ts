@@ -314,7 +314,8 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						if (!options.useIssuedNonce) return undefined;
 						const { data, error } = await $fetch<{ nonce: string }>(
 							"/id-token/nonce",
-							{ method: "POST", body: { provider: "google" } },
+							// `throw: false` keeps the `{ data, error }` shape when the app sets `throw: true`.
+							{ method: "POST", body: { provider: "google" }, throw: false },
 						);
 						// Without a nonce the server rejects the sign-in, so do not show Google.
 						if (!data?.nonce) {

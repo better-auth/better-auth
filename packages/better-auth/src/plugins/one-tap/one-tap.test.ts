@@ -1,6 +1,7 @@
 // cspell:ignore AQAB
-import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type { BetterFetch } from "@better-fetch/fetch";
 import type { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
@@ -1464,6 +1465,28 @@ describe("oneTapClient with useIssuedNonce", async () => {
 		await vi.advanceTimersByTimeAsync(10 * 1000);
 		expect(initialize).toHaveBeenCalledTimes(2);
 		error.mockRestore();
+	});
+
+	it("fetches the nonce when the auth client throws on errors", async () => {
+		// With `throw: true`, Better Fetch resolves to the body instead of `{ data, error }`.
+		const $fetch = vi.fn(async (_path: string, init?: { throw?: boolean }) =>
+			init?.throw === false
+				? { data: { nonce: "n".repeat(32) }, error: null }
+				: { nonce: "n".repeat(32) },
+		);
+		const { oneTap: run } = oneTapClient({
+			clientId: "test-client",
+			useIssuedNonce: true,
+		}).getActions(
+			$fetch as unknown as BetterFetch,
+			{} as ClientStore,
+			undefined,
+		);
+		stubBrowser();
+
+		await run({ fetchOptions: {} });
+
+		expect(initConfig(0).nonce).toBe("n".repeat(32));
 	});
 
 	it("ignores the deprecated nonce option and warns", async () => {
