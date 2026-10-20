@@ -1,5 +1,24 @@
 # better-auth
 
+## 1.7.12
+
+### Patch Changes
+
+- [#11925](https://github.com/better-auth/better-auth/pull/11925) [`fb48619`](https://github.com/better-auth/better-auth/commit/fb48619083d292639797eaa3c7168a010f1e3308) Thanks [@bytaesu](https://github.com/bytaesu)! - The JWT plugin now verifies JWTs and session cookie-cache JWTs with the algorithm of the stored key instead of the one named in the token header, and logs a warning when it signs or verifies a JWT without an issuer or audience.
+
+- [#11924](https://github.com/better-auth/better-auth/pull/11924) [`681aa5c`](https://github.com/better-auth/better-auth/commit/681aa5c4439a5845e027d41eda01b84acc9c58b6) Thanks [@bytaesu](https://github.com/bytaesu)! - `auth.api.getSession()` now keeps the original database error as `error.cause` when the session lookup fails, so server code can tell a transient failure from a bug.
+
+- [#11930](https://github.com/better-auth/better-auth/pull/11930) [`b18e3b8`](https://github.com/better-auth/better-auth/commit/b18e3b8fdfe3d6a03bfdf18b34ed8667459d85dd) Thanks [@bytaesu](https://github.com/bytaesu)! - OAuth callbacks completed through the OAuth proxy now run the same checks as the standard OAuth callback, including issuer and ID token nonce validation.
+
+- Updated dependencies [[`681aa5c`](https://github.com/better-auth/better-auth/commit/681aa5c4439a5845e027d41eda01b84acc9c58b6), [`4bc78ba`](https://github.com/better-auth/better-auth/commit/4bc78baa83aecea47ff30062d68820a578efeed3), [`876608d`](https://github.com/better-auth/better-auth/commit/876608da86036d9ca4b5c2a37ed0b01e29264e52), [`083a743`](https://github.com/better-auth/better-auth/commit/083a74329be51ed35c1981524f9c543984f08bd3), [`492134a`](https://github.com/better-auth/better-auth/commit/492134aeba6707bdfb371cf8ef817c945d6fb44f)]:
+  - @better-auth/core@1.7.12
+  - @better-auth/drizzle-adapter@1.7.12
+  - @better-auth/kysely-adapter@1.7.12
+  - @better-auth/memory-adapter@1.7.12
+  - @better-auth/mongo-adapter@1.7.12
+  - @better-auth/prisma-adapter@1.7.12
+  - @better-auth/telemetry@1.7.12
+
 ## 1.7.11
 
 ### Patch Changes
