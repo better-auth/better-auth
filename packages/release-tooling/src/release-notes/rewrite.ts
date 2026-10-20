@@ -21,7 +21,7 @@ const maxBatchEntries = 30;
 const maxBatchCharacters = 60_000;
 const maxContextCharacters = 500_000;
 const maxOutputTokensPerBatch = 32_000;
-const maxReviewOutputTokensPerBatch = 8_000;
+const maxReviewOutputTokensPerBatch = 32_000;
 const defaultFallbackReason = "The rewrite was not approved by review.";
 const invalidCopyFallbackReason =
 	"The rewrite did not pass deterministic copy validation.";
@@ -136,7 +136,7 @@ function validationFeedback(
 	if (!entry)
 		throw new Error(`Release rewrite context ${rewrite.id} is missing`);
 	try {
-		validateGeneratedReleaseRewrite(rewrite, entry.changeType === "breaking");
+		validateGeneratedReleaseRewrite(rewrite, entry);
 		return null;
 	} catch (error) {
 		return error instanceof Error ? error.message : String(error);

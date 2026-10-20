@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import {
 	containsUnsupportedGeneratedMarkdown,
 	formatUntrustedInlineMarkdown,
+	inlineCodeValues,
 } from "../ai/generated-copy.ts";
 import { FILTERED_DOMAINS } from "../change-classifier.ts";
 import type {
@@ -107,8 +108,8 @@ export function formatReleaseBody(
 
 				lines.push(`- ${title}${prLink}`);
 
-				if (changeType === "breaking" && rewrite?.migration) {
-					lines.push(`> **Migration:** ${rewrite.migration}`);
+				if (rewrite?.migration) {
+					lines.push(`> **Action required:** ${rewrite.migration}`);
 				} else if (
 					changeType === "breaking" &&
 					entry.changesetDescription &&
@@ -119,7 +120,7 @@ export function formatReleaseBody(
 				) {
 					const [migration, ...details] =
 						entry.changesetDescription.split("\n");
-					lines.push(`> **Migration:** ${migration}`);
+					lines.push(`> **Action required:** ${migration}`);
 					for (const line of details) {
 						lines.push(line ? `> ${line}` : ">");
 					}
@@ -193,17 +194,15 @@ function readReleaseRewrites(
 		parsed.rewrites.map((rewrite) => [rewrite.id, rewrite]),
 	);
 
-	const breakingKeys = new Set(
-		manifest.entries
-			.filter((entry) => entry.breaking)
-			.map((entry) => entry.rewriteKey),
+	const entriesByKey = new Map(
+		manifest.entries.map((entry) => [entry.rewriteKey, entry]),
 	);
 	const rewrites: ReleaseRewrites = {};
 	for (const [key, value] of generatedByKey) {
 		try {
 			rewrites[key] = validateGeneratedReleaseRewrite(
 				value,
-				breakingKeys.has(key),
+				entriesByKey.get(key)!,
 			);
 		} catch (error) {
 			console.warn(
@@ -217,7 +216,10 @@ function readReleaseRewrites(
 
 export function validateGeneratedReleaseRewrite(
 	value: GeneratedReleaseRewrites[number],
-	breaking: boolean,
+	{
+		changeType,
+		changesetDescription,
+	}: Pick<ReleaseEntry, "changeType" | "changesetDescription">,
 ): ReleaseRewrites[string] {
 	const title = validateGeneratedCopy(value.title, "title", value.id, 300);
 	const migration =
@@ -225,14 +227,17 @@ export function validateGeneratedReleaseRewrite(
 			? undefined
 			: validateGeneratedCopy(value.migration, "migration", value.id, 500);
 
-	if (breaking && !migration) {
+	if (changeType === "breaking" && !migration) {
 		throw new Error(
 			`Breaking AI rewrite ${value.id} must have a single-line migration`,
 		);
 	}
-	if (!breaking && migration !== undefined) {
+
+	// Users act on this line, so it may only quote code a maintainer approved.
+	const quotedCode = inlineCodeValues(migration ?? "");
+	if (quotedCode.some((code) => !changesetDescription?.includes(code))) {
 		throw new Error(
-			`Non-breaking AI rewrite ${value.id} cannot have a migration`,
+			`AI rewrite ${value.id} migration quotes code that is not in the changeset`,
 		);
 	}
 

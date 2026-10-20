@@ -8,11 +8,15 @@ Review every rewrite against its matching context. Approve it only when it:
 
 - preserves the direction and user-visible meaning of the change
 - makes no claim unsupported by the title or changeset description
-- keeps API names, compatibility conditions, security guarantees, and
-  migration requirements that users need to act on the change
+- keeps API names, compatibility conditions, security guarantees, migration
+  requirements, the affected case, and the restored version that users need
+  to judge or act on the change
 - is clear, grammatical, and concise
-- follows the requested change type and contains migration guidance only for a
-  breaking change
+- has migration guidance for a breaking change, and for any other change only
+  when the description says upgrading alone is not enough, such as when users
+  must change code or configuration or run a database migration
+- addresses migration guidance only to the affected users and quotes only code
+  that appears in the description
 
 Do not reject copy merely because it omits internal implementation details.
 
