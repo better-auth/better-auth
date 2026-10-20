@@ -10,6 +10,7 @@ import {
 	getCurrentAdapter,
 	getCurrentAuthEndpointContext,
 	queueAfterTransactionHook,
+	queueOnTransactionRollback,
 	runWithTransaction,
 	tryGetCurrentAuthEndpointContext,
 } from "@better-auth/core/context";
@@ -595,6 +596,25 @@ export const createInternalAdapter = (
 					? {
 							fn: async (sessionData) => {
 								if (!deferMirror) {
+									// The write is not part of the transaction, so a rollback or a
+									// retry must remove it.
+									await queueOnTransactionRollback(
+										() =>
+											deleteCachedUserSessions(userId, [
+												{
+													token: data.token,
+													expiresAt: data.expiresAt.getTime(),
+												},
+											]),
+										{
+											onError(error) {
+												logger.error(
+													"Failed to remove a rolled-back session from secondary storage",
+													error,
+												);
+											},
+										},
+									);
 									return mirrorSessionToSecondaryStorage(
 										sessionData as Session,
 									);

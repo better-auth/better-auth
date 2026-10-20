@@ -1303,6 +1303,88 @@ describe("internal adapter test", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11735
+	 */
+	describe("secondary-only session in a transaction that does not commit", () => {
+		async function setup() {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{ name: "rollback-user", email: "rollback-session@example.com" },
+				{ method: "test" },
+			);
+			return { testMap, testCtx, user };
+		}
+
+		it("removes the cached session and its index entry on rollback", async () => {
+			const { testMap, testCtx, user } = await setup();
+			const existing = await testCtx.internalAdapter.createSession(user.id);
+			let rolledBackToken = "";
+
+			await expect(
+				runWithTransaction(testCtx.adapter, async () => {
+					const session = await testCtx.internalAdapter.createSession(user.id);
+					rolledBackToken = session.token;
+					expect(testMap.has(session.token)).toBe(true);
+					throw new Error("rollback");
+				}),
+			).rejects.toThrow("rollback");
+
+			expect(testMap.has(rolledBackToken)).toBe(false);
+			expect(testMap.has(existing.token)).toBe(true);
+			const index = safeJSONParse<{ token: string }[]>(
+				testMap.get(`active-sessions-${user.id}`) ?? "",
+			);
+			expect(index?.map((entry) => entry.token)).toEqual([existing.token]);
+		});
+
+		it("keeps only the session of the attempt that commits when the adapter retries", async () => {
+			const { testMap, testCtx, user } = await setup();
+			const retryingAdapter = {
+				...testCtx.adapter,
+				transaction: async <R>(
+					callback: Parameters<typeof testCtx.adapter.transaction<R>>[0],
+				) => {
+					await testCtx.adapter
+						.transaction(async (trx) => {
+							await callback(trx);
+							throw new Error("transient abort");
+						})
+						.catch(() => {});
+					return testCtx.adapter.transaction(callback);
+				},
+			} as typeof testCtx.adapter;
+			const tokens: string[] = [];
+
+			await runWithTransaction(retryingAdapter, async () => {
+				const session = await testCtx.internalAdapter.createSession(user.id);
+				tokens.push(session.token);
+			});
+
+			expect(tokens).toHaveLength(2);
+			expect(testMap.has(tokens[0]!)).toBe(false);
+			expect(testMap.has(tokens[1]!)).toBe(true);
+			const index = safeJSONParse<{ token: string }[]>(
+				testMap.get(`active-sessions-${user.id}`) ?? "",
+			);
+			expect(index?.map((entry) => entry.token)).toEqual([tokens[1]]);
+		});
+
+		it("keeps the session when the transaction commits", async () => {
+			const { testMap, testCtx, user } = await setup();
+			const session = await runWithTransaction(testCtx.adapter, () =>
+				testCtx.internalAdapter.createSession(user.id),
+			);
+			expect(testMap.has(session.token)).toBe(true);
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
 	 */
 	it("preserves sessions created after user session deletion is requested", async () => {

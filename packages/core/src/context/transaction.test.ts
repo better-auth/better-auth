@@ -5,6 +5,7 @@ import { __getBetterAuthGlobal } from "./global";
 import {
 	getCurrentAdapter,
 	queueAfterTransactionHook,
+	queueOnTransactionRollback,
 	runWithAdapter,
 	runWithTransaction,
 } from "./transaction";
@@ -376,5 +377,37 @@ describe("runWithTransaction", () => {
 				currentAdapter === harnesses[index]?.transactionAdapter,
 		).length;
 		expect(transactionAdapterCount).toBe(harnesses.length);
+	});
+});
+
+describe("queueOnTransactionRollback", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11735
+	 */
+	it("runs on rollback and a retry, and is dropped on commit", async () => {
+		const { adapter } = createTransactionHarness();
+		const events: string[] = [];
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueOnTransactionRollback(async () => {
+					events.push("rollback");
+				});
+				throw new Error("fail");
+			}),
+		).rejects.toThrow("fail");
+		expect(events).toEqual(["rollback"]);
+
+		await runWithTransaction(adapter, async () => {
+			await queueOnTransactionRollback(async () => {
+				events.push("committed-rollback");
+			});
+		});
+		expect(events).toEqual(["rollback"]);
+
+		await queueOnTransactionRollback(async () => {
+			events.push("outside");
+		});
+		expect(events).toEqual(["rollback"]);
 	});
 });
