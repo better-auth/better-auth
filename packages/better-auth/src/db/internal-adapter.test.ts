@@ -2166,6 +2166,9 @@ describe("internal adapter test", async () => {
 		const testMap = new Map<string, string>();
 		let failingToken: string | null = null;
 		let failLogging = false;
+		const logSpy = vi.fn(() => {
+			if (failLogging) throw new Error("the logger is down");
+		});
 		const { deleteAttempts, storage } = createEvictableSecondaryStorage(
 			testMap,
 			(key) => key === failingToken,
@@ -2178,9 +2181,7 @@ describe("internal adapter test", async () => {
 				storeSessionInDatabase: true,
 			},
 			logger: {
-				log() {
-					if (failLogging) throw new Error("the logger is down");
-				},
+				log: logSpy,
 			},
 		} satisfies BetterAuthOptions;
 		await (await getMigrations(testOpts)).runMigrations();
@@ -2200,13 +2201,23 @@ describe("internal adapter test", async () => {
 
 		failingToken = session1.token;
 		failLogging = true;
+		logSpy.mockClear();
 
-		await expect(
-			runWithTransaction(testCtx.adapter, async () => {
+		let thrownError: unknown;
+		try {
+			await runWithTransaction(testCtx.adapter, async () => {
 				await testCtx.internalAdapter.deleteUserSessions(user1.id);
 				await testCtx.internalAdapter.deleteUserSessions(user2.id);
-			}),
-		).rejects.toThrow(`failed to delete ${session1.token}`);
+			});
+		} catch (error) {
+			thrownError = error;
+		}
+
+		expect(logSpy).toHaveBeenCalled();
+		expect(thrownError).toBeInstanceOf(Error);
+		expect((thrownError as Error).message).toBe(
+			`failed to delete ${session1.token}`,
+		);
 
 		expect(deleteAttempts).toContain(session1.token);
 		expect(deleteAttempts).toContain(session2.token);
