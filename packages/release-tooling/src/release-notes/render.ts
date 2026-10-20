@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import {
 	containsUnsupportedGeneratedMarkdown,
 	formatUntrustedInlineMarkdown,
+	inlineCodeValues,
 } from "../ai/generated-copy.ts";
 import { FILTERED_DOMAINS } from "../change-classifier.ts";
 import type {
@@ -229,6 +230,14 @@ export function validateGeneratedReleaseRewrite(
 	if (changeType === "breaking" && !migration) {
 		throw new Error(
 			`Breaking AI rewrite ${value.id} must have a single-line migration`,
+		);
+	}
+
+	// Users act on this line, so it may only quote code a maintainer approved.
+	const quotedCode = inlineCodeValues(migration ?? "");
+	if (quotedCode.some((code) => !changesetDescription?.includes(code))) {
+		throw new Error(
+			`AI rewrite ${value.id} migration quotes code that is not in the changeset`,
 		);
 	}
 

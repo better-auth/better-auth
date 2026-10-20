@@ -27,6 +27,7 @@ interface CommandResult {
 function renderReleaseRewrites(
 	rewrites: JSONValue,
 	breaking = false,
+	changesetDescription = "Avoid duplicate session requests.",
 ): CommandResult {
 	const directory = mkdtempSync(
 		resolve(tmpdir(), "better-auth-release-notes-"),
@@ -56,7 +57,7 @@ function renderReleaseRewrites(
 						id: "pr-10769:better-auth",
 						rewriteKey: "pr-10769",
 						title: "fix(client): avoid duplicate requests",
-						changesetDescription: "Avoid duplicate session requests.",
+						changesetDescription,
 						prNumber: 10769,
 						author: "bytaesu",
 						domain: "core",
@@ -244,20 +245,83 @@ describe("AI release-note rewrites", () => {
 	});
 
 	it("renders migration copy for a non-breaking change that asks users to act", () => {
-		const result = renderReleaseRewrites({
-			rewrites: [
-				{
-					id: "pr-10769",
-					title: "Fixed duplicate requests",
-					migration: "Set `clientId` on the provider.",
-				},
-			],
-		});
+		const result = renderReleaseRewrites(
+			{
+				rewrites: [
+					{
+						id: "pr-10769",
+						title: "Fixed duplicate requests",
+						migration: "Set `clientId` on the provider.",
+					},
+				],
+			},
+			false,
+			"Set `clientId` on the provider.",
+		);
 
 		expect(result.status, result.stderr).toBe(0);
 		expect(result.output).toContain("- Fixed duplicate requests");
 		expect(result.output).toContain(
 			"> **Action required:** Set `clientId` on the provider.",
+		);
+	});
+
+	it("uses deterministic copy when a migration quotes code missing from the changeset", () => {
+		const result = renderReleaseRewrites({
+			rewrites: [
+				{
+					id: "pr-10769",
+					title: "Fixed duplicate requests",
+					migration: "Run `npx unknown-package` before upgrading.",
+				},
+			],
+		});
+
+		expect(result.status).toBe(0);
+		expect(result.output).toContain("fix(client): avoid duplicate requests");
+		expect(result.output).not.toContain("unknown-package");
+		expect(result.stderr).toContain(
+			"AI rewrite pr-10769 migration quotes code that is not in the changeset",
+		);
+	});
+
+	it("uses deterministic copy when a migration hides code in doubled backticks", () => {
+		const result = renderReleaseRewrites({
+			rewrites: [
+				{
+					id: "pr-10769",
+					title: "Fixed duplicate requests",
+					migration: "Run ``npx unknown-package`` before upgrading.",
+				},
+			],
+		});
+
+		expect(result.status).toBe(0);
+		expect(result.output).not.toContain("unknown-package");
+		expect(result.stderr).toContain(
+			"AI rewrite pr-10769 migration quotes code that is not in the changeset",
+		);
+	});
+
+	it("uses deterministic copy when an escaped backtick shifts a code span", () => {
+		const result = renderReleaseRewrites(
+			{
+				rewrites: [
+					{
+						id: "pr-10769",
+						title: "Fixed duplicate requests",
+						migration: "Run \\`clientId`npx unknown-package`clientId` now.",
+					},
+				],
+			},
+			false,
+			"Set `clientId` on the provider.",
+		);
+
+		expect(result.status).toBe(0);
+		expect(result.output).not.toContain("unknown-package");
+		expect(result.stderr).toContain(
+			"AI rewrite pr-10769 migration quotes code that is not in the changeset",
 		);
 	});
 
