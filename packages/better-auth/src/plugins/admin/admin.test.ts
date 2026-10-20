@@ -2741,6 +2741,18 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 		});
 		type InferredCustomUser = typeof customAdmin.$Infer.User;
 		expectTypeOf<InferredCustomUser["role"]>().toEqualTypeOf<
+			"moderator" | "superadmin" | "user" | undefined
+		>();
+
+		const customWithDefault = admin({
+			roles: {
+				moderator: {},
+				superadmin: {},
+			},
+			defaultRole: "moderator",
+		});
+		type InferredWithDefaultUser = typeof customWithDefault.$Infer.User;
+		expectTypeOf<InferredWithDefaultUser["role"]>().toEqualTypeOf<
 			"moderator" | "superadmin" | undefined
 		>();
 	});
