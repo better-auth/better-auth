@@ -169,8 +169,11 @@ export const createInternalAdapter = (
 
 		const activeSessionsKey = `active-sessions-${userId}`;
 		// The storage has no compare-and-set, so re-read right before the write
-		// and recompute if another sign-in changed the list, which keeps the
-		// window for a lost concurrent addition to the final set call.
+		// and only write a list computed from a read that is still current.
+		// If it keeps changing, skip the write: a rolled-back token then stays
+		// in the list until its TTL, which is harmless, unlike dropping a sign-in.
+		const serialize = (value: unknown) =>
+			typeof value === "string" ? value : JSON.stringify(value);
 		for (let attempt = 0; attempt < 3; attempt++) {
 			const rawList = await secondaryStorage.get(activeSessionsKey);
 			const now = Date.now();
@@ -181,9 +184,8 @@ export const createInternalAdapter = (
 					session.expiresAt > now && !deletedTokens.has(session.token),
 			);
 			remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
-			const changed =
-				(await secondaryStorage.get(activeSessionsKey)) !== rawList;
-			if (changed && attempt < 2) continue;
+			const latestList = await secondaryStorage.get(activeSessionsKey);
+			if (serialize(latestList) !== serialize(rawList)) continue;
 			const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
 			if (furthestExpiration) {
 				await secondaryStorage.set(
