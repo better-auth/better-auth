@@ -384,7 +384,7 @@ describe("queueOnTransactionRollback", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11735
 	 */
-	it("runs on rollback and a retry, and is dropped on commit", async () => {
+	it("runs on rollback and is dropped on commit", async () => {
 		const { adapter } = createTransactionHarness();
 		const events: string[] = [];
 
@@ -409,5 +409,84 @@ describe("queueOnTransactionRollback", () => {
 			events.push("outside");
 		});
 		expect(events).toEqual(["rollback"]);
+	});
+
+	it("runs the hooks of an attempt the adapter retries, and keeps those of the commit", async () => {
+		const transactionAdapter = {} as DBTransactionAdapter;
+		const adapter = {
+			transaction: async <R>(
+				callback: (trx: DBTransactionAdapter) => Promise<R>,
+			) => {
+				try {
+					await callback(transactionAdapter);
+					throw new Error("transient abort");
+				} catch {
+					return callback(transactionAdapter);
+				}
+			},
+		} as DBAdapter;
+		const events: string[] = [];
+		let attempt = 0;
+
+		await runWithTransaction(adapter, async () => {
+			const current = ++attempt;
+			await queueOnTransactionRollback(async () => {
+				events.push(`undo-${current}`);
+			});
+		});
+
+		expect(attempt).toBe(2);
+		expect(events).toEqual(["undo-1"]);
+	});
+
+	it("reports a failing hook to onError and still runs later hooks", async () => {
+		const { adapter } = createTransactionHarness();
+		const events: string[] = [];
+		const onError = vi.fn();
+		const cleanupError = new Error("cleanup failed");
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueOnTransactionRollback(
+					async () => {
+						throw cleanupError;
+					},
+					{ onError },
+				);
+				await queueOnTransactionRollback(async () => {
+					events.push("second");
+				});
+				throw new Error("fail");
+			}),
+		).rejects.toThrow("fail");
+
+		expect(onError).toHaveBeenCalledWith(cleanupError);
+		expect(events).toEqual(["second"]);
+	});
+
+	it("keeps the original error when onError throws", async () => {
+		const { adapter } = createTransactionHarness();
+		const events: string[] = [];
+
+		await expect(
+			runWithTransaction(adapter, async () => {
+				await queueOnTransactionRollback(
+					async () => {
+						throw new Error("cleanup failed");
+					},
+					{
+						onError() {
+							throw new Error("onError failed");
+						},
+					},
+				);
+				await queueOnTransactionRollback(async () => {
+					events.push("second");
+				});
+				throw new Error("original");
+			}),
+		).rejects.toThrow("original");
+
+		expect(events).toEqual(["second"]);
 	});
 });

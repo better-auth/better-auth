@@ -1375,6 +1375,57 @@ describe("internal adapter test", async () => {
 			expect(index?.map((entry) => entry.token)).toEqual([tokens[1]]);
 		});
 
+		it("keeps a session added by a concurrent sign-in while the cleanup runs", async () => {
+			const testMap = new Map<string, string>();
+			const base = createStringSecondaryStorage(testMap);
+			const listKey = (id: string) => `active-sessions-${id}`;
+			let concurrent: { userId: string; token: string } | null = null;
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: {
+					...base,
+					get(key) {
+						const value = base.get(key);
+						// Another sign-in lands right after the cleanup read the list.
+						if (concurrent && key === listKey(concurrent.userId)) {
+							const { userId, token } = concurrent;
+							concurrent = null;
+							const list = safeJSONParse<
+								{ token: string; expiresAt: number }[]
+							>(testMap.get(listKey(userId)) ?? "");
+							testMap.set(
+								listKey(userId),
+								JSON.stringify([
+									...(list ?? []),
+									{ token, expiresAt: Date.now() + 60_000 },
+								]),
+							);
+						}
+						return value;
+					},
+				},
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{ name: "race-user", email: "rollback-race@example.com" },
+				{ method: "test" },
+			);
+
+			await expect(
+				runWithTransaction(testCtx.adapter, async () => {
+					await testCtx.internalAdapter.createSession(user.id);
+					concurrent = { userId: user.id, token: "concurrent-token" };
+					throw new Error("rollback");
+				}),
+			).rejects.toThrow("rollback");
+
+			const index = safeJSONParse<{ token: string }[]>(
+				testMap.get(listKey(user.id)) ?? "",
+			);
+			expect(index?.map((entry) => entry.token)).toEqual(["concurrent-token"]);
+		});
+
 		it("keeps the session when the transaction commits", async () => {
 			const { testMap, testCtx, user } = await setup();
 			const session = await runWithTransaction(testCtx.adapter, () =>
