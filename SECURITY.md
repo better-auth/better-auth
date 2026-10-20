@@ -6,8 +6,10 @@ If you believe you’ve found a security vulnerability, please follow these step
 
 1. Do not disclose the vulnerability publicly until it has been addressed by our
    team.
-2. Report the vulnerability via
-   [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories/new).
+2. Report the vulnerability through one of the following channels:
+    * GitHub: [Security Advisories](https://github.com/better-auth/better-auth/security/advisories/new)
+    * Email: [security@better-auth.com](mailto:security@better-auth.com)
+
    Include:
     * A description of the vulnerability
     * Steps to reproduce the vulnerability
