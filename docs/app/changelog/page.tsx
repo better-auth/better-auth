@@ -38,7 +38,10 @@ function getContributorAvatarLinks(usernames: string[]) {
 }
 
 function getContent(content: string) {
-	const lines = content.split("\n");
+	// remark-gfm has no GitHub alerts, so drop the marker and keep a plain quote.
+	const lines = content
+		.split("\n")
+		.filter((line) => !/^>\s*\[!\w+\]\s*$/.test(line.trim()));
 	let inContributorsSection = false;
 	const newContext = lines.map((line) => {
 		if (line.trim().startsWith("## ") || line.trim().startsWith("### ")) {
