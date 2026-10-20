@@ -2022,6 +2022,249 @@ describe("internal adapter test", async () => {
 		expect(await testCtx.internalAdapter.findSession(session.token)).toBeNull();
 	});
 
+	/**
+	 * When multiple users' sessions are queued for eviction within a transaction
+	 * (e.g. SCIM connection decommissioning or batch user operations) and one user's
+	 * eviction throws, subsequent users' evictions must still be attempted and
+	 * executed, and the first eviction error is rethrown.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("attempts all queued user evictions when an earlier user's eviction throws in a transaction", async () => {
+		const testMap = new Map<string, string>();
+		let failingToken: string | null = null;
+		const { deleteAttempts, storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => key === failingToken,
+			(key) => new Error(`failed to delete ${key}`),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+
+		const user1 = await testCtx.internalAdapter.createUser(
+			{ name: "batch-user-1", email: "batch-user-1@example.com" },
+			{ method: "test" },
+		);
+		const user2 = await testCtx.internalAdapter.createUser(
+			{ name: "batch-user-2", email: "batch-user-2@example.com" },
+			{ method: "test" },
+		);
+		const user3 = await testCtx.internalAdapter.createUser(
+			{ name: "batch-user-3", email: "batch-user-3@example.com" },
+			{ method: "test" },
+		);
+
+		const session1 = await testCtx.internalAdapter.createSession(user1.id);
+		const session2 = await testCtx.internalAdapter.createSession(user2.id);
+		const session3 = await testCtx.internalAdapter.createSession(user3.id);
+
+		expect(testMap.has(session1.token)).toBe(true);
+		expect(testMap.has(session2.token)).toBe(true);
+		expect(testMap.has(session3.token)).toBe(true);
+
+		// First user's session token will fail eviction
+		failingToken = session1.token;
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				await testCtx.internalAdapter.deleteUserSessions(user1.id);
+				await testCtx.internalAdapter.deleteUserSessions(user2.id);
+				await testCtx.internalAdapter.deleteUserSessions(user3.id);
+			}),
+		).rejects.toThrow(`failed to delete ${session1.token}`);
+
+		// Crucial verification: all users' session deletions were attempted!
+		expect(deleteAttempts).toContain(session1.token);
+		expect(deleteAttempts).toContain(session2.token);
+		expect(deleteAttempts).toContain(session3.token);
+
+		// session1 failed to delete, so it remains in cache
+		expect(testMap.has(session1.token)).toBe(true);
+		// session2 and session3 succeeded, so they were removed from cache
+		expect(testMap.has(session2.token)).toBe(false);
+		expect(testMap.has(session3.token)).toBe(false);
+	});
+
+	/**
+	 * When multiple users fail eviction in a single transaction, every queued user
+	 * is attempted and the first eviction error is rethrown.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("reports the first eviction error and attempts all users when multiple users fail eviction in a transaction", async () => {
+		const testMap = new Map<string, string>();
+		const failingTokens = new Set<string>();
+		const { deleteAttempts, storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => failingTokens.has(key),
+			(key) => new Error(`failed to delete ${key}`),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+
+		const user1 = await testCtx.internalAdapter.createUser(
+			{ name: "multi-fail-1", email: "multi-fail-1@example.com" },
+			{ method: "test" },
+		);
+		const user2 = await testCtx.internalAdapter.createUser(
+			{ name: "multi-fail-2", email: "multi-fail-2@example.com" },
+			{ method: "test" },
+		);
+		const user3 = await testCtx.internalAdapter.createUser(
+			{ name: "multi-fail-3", email: "multi-fail-3@example.com" },
+			{ method: "test" },
+		);
+
+		const session1 = await testCtx.internalAdapter.createSession(user1.id);
+		const session2 = await testCtx.internalAdapter.createSession(user2.id);
+		const session3 = await testCtx.internalAdapter.createSession(user3.id);
+
+		// Fail user 1 and user 3
+		failingTokens.add(session1.token);
+		failingTokens.add(session3.token);
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				await testCtx.internalAdapter.deleteUserSessions(user1.id);
+				await testCtx.internalAdapter.deleteUserSessions(user2.id);
+				await testCtx.internalAdapter.deleteUserSessions(user3.id);
+			}),
+		).rejects.toThrow(`failed to delete ${session1.token}`);
+
+		// All 3 were attempted
+		expect(deleteAttempts).toContain(session1.token);
+		expect(deleteAttempts).toContain(session2.token);
+		expect(deleteAttempts).toContain(session3.token);
+
+		// user 1 and 3 failed; user 2 succeeded
+		expect(testMap.has(session1.token)).toBe(true);
+		expect(testMap.has(session2.token)).toBe(false);
+		expect(testMap.has(session3.token)).toBe(true);
+	});
+
+	/**
+	 * When a logger throws while logging a user's eviction error, subsequent users
+	 * in the batch are still evicted and the original eviction error is rethrown.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("attempts all queued user evictions when logger throws during a user eviction failure", async () => {
+		const testMap = new Map<string, string>();
+		let failingToken: string | null = null;
+		let failLogging = false;
+		const { deleteAttempts, storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => key === failingToken,
+			(key) => new Error(`failed to delete ${key}`),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+			logger: {
+				log() {
+					if (failLogging) throw new Error("the logger is down");
+				},
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+
+		const user1 = await testCtx.internalAdapter.createUser(
+			{ name: "failing-logger-batch-1", email: "fl-batch-1@example.com" },
+			{ method: "test" },
+		);
+		const user2 = await testCtx.internalAdapter.createUser(
+			{ name: "failing-logger-batch-2", email: "fl-batch-2@example.com" },
+			{ method: "test" },
+		);
+
+		const session1 = await testCtx.internalAdapter.createSession(user1.id);
+		const session2 = await testCtx.internalAdapter.createSession(user2.id);
+
+		failingToken = session1.token;
+		failLogging = true;
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				await testCtx.internalAdapter.deleteUserSessions(user1.id);
+				await testCtx.internalAdapter.deleteUserSessions(user2.id);
+			}),
+		).rejects.toThrow(`failed to delete ${session1.token}`);
+
+		expect(deleteAttempts).toContain(session1.token);
+		expect(deleteAttempts).toContain(session2.token);
+		expect(testMap.has(session1.token)).toBe(true);
+		expect(testMap.has(session2.token)).toBe(false);
+	});
+
+	/**
+	 * When multiple users are deleted via deleteUser in a single transaction,
+	 * every queued eviction is attempted even if one user's eviction throws.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11326
+	 */
+	it("attempts all queued user evictions when deleteUser is called for multiple users in a transaction", async () => {
+		const testMap = new Map<string, string>();
+		let failingToken: string | null = null;
+		const { deleteAttempts, storage } = createEvictableSecondaryStorage(
+			testMap,
+			(key) => key === failingToken,
+			(key) => new Error(`failed to delete ${key}`),
+		);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: storage,
+			session: {
+				storeSessionInDatabase: true,
+			},
+		} satisfies BetterAuthOptions;
+		await (await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+
+		const user1 = await testCtx.internalAdapter.createUser(
+			{ name: "delete-user-batch-1", email: "dub-1@example.com" },
+			{ method: "test" },
+		);
+		const user2 = await testCtx.internalAdapter.createUser(
+			{ name: "delete-user-batch-2", email: "dub-2@example.com" },
+			{ method: "test" },
+		);
+
+		const session1 = await testCtx.internalAdapter.createSession(user1.id);
+		const session2 = await testCtx.internalAdapter.createSession(user2.id);
+
+		failingToken = session1.token;
+
+		await expect(
+			runWithTransaction(testCtx.adapter, async () => {
+				await testCtx.internalAdapter.deleteUser(user1.id);
+				await testCtx.internalAdapter.deleteUser(user2.id);
+			}),
+		).rejects.toThrow(`failed to delete ${session1.token}`);
+
+		expect(deleteAttempts).toContain(session1.token);
+		expect(deleteAttempts).toContain(session2.token);
+		expect(testMap.has(session1.token)).toBe(true);
+		expect(testMap.has(session2.token)).toBe(false);
+	});
+
 	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {
 		const testMap = new Map<string, string>();
 

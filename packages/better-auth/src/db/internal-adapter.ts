@@ -51,6 +51,11 @@ type ActiveSessionReference = {
 	readonly expiresAt: number;
 };
 
+type QueuedEviction = {
+	readonly userId: string;
+	readonly references: readonly ActiveSessionReference[];
+};
+
 /**
  * Marks "no eviction failed" for `deleteCachedUserSessions`. A secondary storage
  * can reject with any value, including a falsy one, so the failure cannot be
@@ -241,6 +246,11 @@ export const createInternalAdapter = (
 		if (evictionError !== NO_EVICTION_FAILURE) throw evictionError;
 	}
 
+	const queuedEvictionsByTransaction = new WeakMap<
+		Array<() => Promise<void>>,
+		QueuedEviction[]
+	>();
+
 	/**
 	 * Queues the removal of a user's sessions from secondary storage, running it
 	 * once the surrounding database work commits.
@@ -265,6 +275,20 @@ export const createInternalAdapter = (
 		// returned, outside the scope that owns the queue, so the hook below cannot
 		// look it up again from inside the drain.
 		const pendingHooks = await getPendingTransactionHooks();
+
+		if (pendingHooks) {
+			const existing = queuedEvictionsByTransaction.get(pendingHooks);
+			if (existing) {
+				existing.push({ userId, references });
+				return;
+			}
+		}
+
+		const evictions: QueuedEviction[] = [{ userId, references }];
+		if (pendingHooks) {
+			queuedEvictionsByTransaction.set(pendingHooks, evictions);
+		}
+
 		// The eviction reports its failure by throwing, and a throwing after-commit
 		// hook ends the drain, so it must not run while hooks are still queued
 		// behind it. On its first turn it re-queues itself and returns. Holding a
@@ -280,6 +304,11 @@ export const createInternalAdapter = (
 		// ahead of it that throws — a `databaseHooks.*.delete.after` the user wrote,
 		// for instance — still ends the drain before the eviction's turn comes
 		// round. See https://github.com/better-auth/better-auth/issues/11735.
+		//
+		// When multiple users are queued for eviction in the same transaction
+		// (such as during SCIM connection decommissioning), a failure evicting
+		// one user must not skip subsequent users. Every queued eviction is
+		// attempted before the first error is rethrown.
 		let deferred = false;
 		const evict = async () => {
 			if (pendingHooks && !deferred) {
@@ -287,20 +316,29 @@ export const createInternalAdapter = (
 				pendingHooks.push(evict);
 				return;
 			}
-			try {
-				await deleteCachedUserSessions(userId, references);
-			} catch (error) {
-				// Surfaced to the caller as well: the cache is still serving a
-				// session they were told was revoked.
+			let firstError: unknown = NO_EVICTION_FAILURE;
+			for (let i = 0; i < evictions.length; i++) {
+				const { userId: uid, references: refs } = evictions[i]!;
 				try {
-					logger.error(
-						"Failed to delete committed user sessions from secondary storage",
-						error,
-					);
-				} catch {
-					// A failing logger must not replace the eviction error.
+					await deleteCachedUserSessions(uid, refs);
+				} catch (error) {
+					// Surfaced to the caller as well: the cache is still serving a
+					// session they were told was revoked.
+					try {
+						logger.error(
+							"Failed to delete committed user sessions from secondary storage",
+							error,
+						);
+					} catch {
+						// A failing logger must not replace the eviction error.
+					}
+					if (firstError === NO_EVICTION_FAILURE) {
+						firstError = error;
+					}
 				}
-				throw error;
+			}
+			if (firstError !== NO_EVICTION_FAILURE) {
+				throw firstError;
 			}
 		};
 		await queueAfterTransactionHook(evict);
