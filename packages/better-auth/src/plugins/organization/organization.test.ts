@@ -1925,6 +1925,47 @@ describe("dynamic access control should merge DB permissions with built-in roles
 		});
 		expect(orgDelete.success).toBe(true);
 	});
+
+	it("should deny (not throw) when DB permissions include a prototype-colliding key", async () => {
+		// Clean up previous test data
+		await db.delete({
+			model: "organizationRole",
+			where: [{ field: "organizationId", value: org.id }],
+		});
+
+		// `constructor` collides with Object.prototype: the DB merge must set
+		// it as an own property instead of throwing on the inherited member.
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					constructor: ["create"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		// `delete` was never granted for `constructor` -> must deny, not throw.
+		// (`as any`: `constructor` is intentionally outside the declared
+		// statement keys, which is exactly what makes it collide.)
+		const res = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					constructor: ["delete"],
+				} as any,
+			},
+		});
+		expect(res.success).toBe(false);
+
+		// Clean up so subsequent tests start fresh
+		await db.delete({
+			model: "organizationRole",
+			where: [{ field: "organizationId", value: org.id }],
+		});
+	});
 });
 
 describe("invitation limit", async () => {
