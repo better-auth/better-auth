@@ -72,7 +72,7 @@ The `custom` strategy owns client authentication: it must set `client_id` and th
 
 For an application deployed on Vercel, use its workload OIDC token instead of a long-lived client secret:
 
-1. In your Vercel App's **Authentication** settings, enable **OpenID Connect (`oidc_token`)** and configure the trusted issuer and claims. Match the deployment token's issuer and audience, and restrict access to the intended team, project, and environments. See the [Vercel OIDC reference](https://vercel.com/docs/oidc/reference) for the claims.
+1. In your Vercel App's **Authentication** settings, enable **OpenID Connect (`oidc_token`)** and configure the trusted issuer and claims. Match the deployment token's issuer and audience, and restrict access to the intended team, project, and environments. See [Vercel's OIDC client authentication guide](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api#authenticate-with-an-oidc-token) and [OIDC claim reference](https://vercel.com/docs/oidc/reference).
 2. Install `@vercel/oidc` in your application.
 3. Configure an async token request hook:
 
@@ -107,9 +107,68 @@ Retrieve the OIDC token inside the hook so each exchange uses the current token.
 
 This authenticates your application's workload. The person signing in still uses the normal Sign in with Vercel flow, and Better Auth still needs its session secret.
 
-For `private_key_jwt`, use `tokenEndpointAuth: { method: "private_key_jwt", getClientAssertion }`. The callback receives the client ID, token endpoint, and grant type, and returns a signed assertion. Configure the corresponding public keys on your Vercel App and use an assertion lifetime of at most 60 seconds. Omit `clientSecret` when using this strategy.
+#### Private key JWT client authentication
 
-If you use Better Auth's `createPrivateKeyJwtClientAssertionGetter` helper, configure it as `createPrivateKeyJwtClientAssertionGetter({ ...keyOptions, expiresIn: 60 })`; its default lifetime is 120 seconds. For a managed signing service, set the same lifetime in the signing request.
+Enable `private_key_jwt` on your Vercel App and configure its **JWKS URL**. Better Auth calls `getClientAssertion` for each token exchange with the client ID, token endpoint, and grant type. Omit `clientSecret` when using this strategy. See [Vercel's private key JWT guide](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api#authenticate-with-a-jwt-assertion).
+
+For an application running on Vercel, [Vercel KMS](https://vercel.com/docs/kms) can sign assertions without storing a private key in the deployment:
+
+1. Create a KMS issuer in your team's **Key Management** settings.
+2. Add a [project grant](https://vercel.com/docs/kms/concepts/project-grants) for the intended project and environments.
+3. Set the Vercel App's JWKS URL to `https://kms.vercel.com/<issuerId>/jwks.json` and install `@vercel/kms`.
+4. Sign a fresh assertion inside `getClientAssertion`:
+
+```ts title="auth.ts"
+import { signJWT } from "@vercel/kms"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        vercel: {
+            clientId: process.env.VERCEL_CLIENT_ID as string,
+            tokenEndpointAuth: {
+                method: "private_key_jwt",
+                async getClientAssertion({ clientId, tokenEndpoint }) {
+                    const { token } = await signJWT({
+                        issuerId: process.env.VERCEL_KMS_ISSUER_ID as string,
+                        claims: {
+                            iss: clientId,
+                            sub: clientId,
+                            aud: tokenEndpoint,
+                            jti: crypto.randomUUID(),
+                        },
+                        ttl: 60,
+                    })
+                    return token
+                },
+            },
+        },
+    },
+})
+```
+
+KMS uses the deployment's current OIDC token to authorize signing and sets the JWT's `kid`, `iat`, `nbf`, and `exp`. Call it inside the callback, where a request context is available. The `iss` and `sub` claims must be the OAuth client ID, rather than the KMS issuer URL. Use a lifetime of at most 60 seconds. See [Vercel's KMS assertion example](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api#sign-the-assertion-with-vercel-kms).
+
+If you manage your own signing key, use Better Auth's `createPrivateKeyJwtClientAssertionGetter` instead. This helper accepts local key material; it does not call KMS. Set `expiresIn: 60` to override its 120-second default, and set `kid` to the matching public key's ID in your JWKS:
+
+```ts
+import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2"
+
+const getClientAssertion = createPrivateKeyJwtClientAssertionGetter({
+    privateKeyPem: process.env.VERCEL_APP_PRIVATE_KEY as string,
+    algorithm: "RS256",
+    kid: process.env.VERCEL_APP_KEY_ID as string,
+    expiresIn: 60,
+})
+
+// Use in socialProviders.vercel:
+const tokenEndpointAuth = {
+    method: "private_key_jwt" as const,
+    getClientAssertion,
+}
+```
+
+Always include a matching `kid`; Vercel requires it when the JWKS contains more than one key. Keep private keys on the server and publish only public keys in the JWKS.
 
 ### Available Scopes
 
