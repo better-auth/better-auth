@@ -21,7 +21,7 @@ const maxBatchEntries = 30;
 const maxBatchCharacters = 60_000;
 const maxContextCharacters = 500_000;
 const maxOutputTokensPerBatch = 32_000;
-const maxReviewOutputTokensPerBatch = 8_000;
+const maxReviewOutputTokensPerBatch = 32_000;
 const defaultFallbackReason = "The rewrite was not approved by review.";
 const invalidCopyFallbackReason =
 	"The rewrite did not pass deterministic copy validation.";
