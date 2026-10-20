@@ -2437,3 +2437,91 @@ describe("oauth-proxy current URL trust", () => {
 		}
 	});
 });
+
+describe("oauth-proxy callback binding", () => {
+	const googleOptions = {
+		socialProviders: { google: { clientId: "test", clientSecret: "test" } },
+	};
+
+	async function startProxiedFlow() {
+		const production = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				plugins: [oAuthProxy()],
+				...googleOptions,
+			},
+			{ disableTestUser: true },
+		);
+		const preview = await getTestInstance(
+			{
+				baseURL: "http://preview.example.com",
+				plugins: [oAuthProxy({ productionURL: "http://localhost:3000" })],
+				...googleOptions,
+			},
+			{ disableTestUser: true },
+		);
+		const isGoogle = (provider: { id: string }) => provider.id === "google";
+		const productionGoogle = (
+			await production.auth.$context
+		).socialProviders.find(isGoogle)!;
+		const previewGoogle = (await preview.auth.$context).socialProviders.find(
+			isGoogle,
+		)!;
+
+		const callback = async (query = "") => {
+			const response = await preview.client.signIn.social(
+				{ provider: "google", callbackURL: "/dashboard" },
+				{ throw: true },
+			);
+			const state = new URL(response.url!).searchParams.get("state");
+			const redirect: { location: URL | null } = { location: null };
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}${query}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location) redirect.location = new URL(location);
+					},
+				},
+			);
+			if (!redirect.location) {
+				throw new Error("OAuth proxy callback did not redirect");
+			}
+			return redirect.location;
+		};
+
+		return { productionGoogle, previewGoogle, callback };
+	}
+
+	it("rejects a callback whose iss does not match the provider issuer", async () => {
+		const { productionGoogle, callback } = await startProxiedFlow();
+		productionGoogle.issuer = "https://accounts.google.com";
+
+		const location = await callback("&iss=https://attacker.example");
+
+		expect(location.searchParams.get("error")).toBe("issuer_mismatch");
+	});
+
+	it("rejects a callback when the provider requires a nonce the state lacks", async () => {
+		const { productionGoogle, callback } = await startProxiedFlow();
+		productionGoogle.requiresIdTokenNonce = true;
+
+		const location = await callback();
+
+		expect(location.searchParams.get("error")).toBe("nonce_binding_missing");
+	});
+
+	it("passes the nonce from state to the provider's getUserInfo", async () => {
+		const { productionGoogle, previewGoogle, callback } =
+			await startProxiedFlow();
+		previewGoogle.requiresIdTokenNonce = true;
+		productionGoogle.requiresIdTokenNonce = true;
+		const getUserInfo = vi.spyOn(productionGoogle, "getUserInfo");
+
+		await callback();
+
+		expect(getUserInfo).toHaveBeenCalledWith(
+			expect.objectContaining({ expectedIdTokenNonce: expect.any(String) }),
+		);
+	});
+});
