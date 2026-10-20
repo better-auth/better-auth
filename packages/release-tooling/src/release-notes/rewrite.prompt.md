@@ -24,6 +24,8 @@ the final Markdown deterministically.
 - Start with a past-tense verb such as "Fixed", "Added", or "Improved"
 - Keep each title to one sentence and one line
 - Describe the user-visible impact, not the internal implementation
+- Keep the affected case, the security check, or the restored version when the
+  description states it, because most users read only the title
 - Wrap code identifiers in backticks, but not general concepts
 - Do not include PR numbers or author attribution in titles
 - Do not include links, HTML, images, bold or italic emphasis, or `@mentions`
@@ -31,13 +33,23 @@ the final Markdown deterministically.
 - If a title remains unclear, preserve its factual meaning without inventing
   behavior that is not present in the supplied context
 
-For a change whose `changeType` is `breaking`, also write a single-line
-`migration` explaining what users must change. Do not add `migration` to any
-other change type.
+Write a single-line `migration` when upgrading alone is not enough, such as
+when users must change code or configuration or run a database migration:
+always for a `breaking` change, otherwise only when the changeset description
+says so. Use `migration: null` for every other change.
+It renders as "Action required", so start with an imperative verb, or with an
+"If you ..." clause when only some users are affected.
+
+For example, a fix whose description tells users to add an origin:
+
+```json
+{
+  "title": "Fixed magic link verification to reject links opened from an untrusted origin",
+  "migration": "If you open magic links from another domain, add it to `trustedOrigins`."
+}
+```
 
 ## Output rules
 
 - Include every input change ID exactly once
 - Do not add unknown change IDs
-- Use `migration: null` for non-breaking changes
-- Use a migration string for breaking changes

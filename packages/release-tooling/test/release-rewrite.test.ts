@@ -483,8 +483,8 @@ describe("release-note rewriting", () => {
 							rewrites: [
 								{
 									id,
-									title: "Preserved safe output",
-									migration: "Change an unrelated setting.",
+									title: "Preserved [safe output](https://example.com)",
+									migration: null,
 								},
 							],
 						}

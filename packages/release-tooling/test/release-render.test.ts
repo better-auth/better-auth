@@ -144,7 +144,7 @@ describe("AI release-note rewrites", () => {
 		);
 		expect(output).not.toContain("Read https://example.com before upgrading");
 		expect(output).toContain(
-			"> **Migration:** Update custom session refresh integrations.",
+			"> **Action required:** Update custom session refresh integrations.",
 		);
 		expect(output).toContain(
 			"- Changed session refresh behavior Injected paragraph",
@@ -243,21 +243,21 @@ describe("AI release-note rewrites", () => {
 		);
 	});
 
-	it("uses deterministic copy when a non-breaking rewrite has a migration", () => {
+	it("renders migration copy for a non-breaking change that asks users to act", () => {
 		const result = renderReleaseRewrites({
 			rewrites: [
 				{
 					id: "pr-10769",
 					title: "Fixed duplicate requests",
-					migration: "Change an unrelated setting",
+					migration: "Set `clientId` on the provider.",
 				},
 			],
 		});
 
-		expect(result.status).toBe(0);
-		expect(result.output).toContain("fix(client): avoid duplicate requests");
-		expect(result.stderr).toContain(
-			"Non-breaking AI rewrite pr-10769 cannot have a migration",
+		expect(result.status, result.stderr).toBe(0);
+		expect(result.output).toContain("- Fixed duplicate requests");
+		expect(result.output).toContain(
+			"> **Action required:** Set `clientId` on the provider.",
 		);
 	});
 
@@ -298,7 +298,7 @@ describe("AI release-note rewrites", () => {
 
 		expect(result.status, result.stderr).toBe(0);
 		expect(result.output).toContain(
-			"> **Migration:** Update custom session refresh integrations.",
+			"> **Action required:** Update custom session refresh integrations.",
 		);
 	});
 

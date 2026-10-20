@@ -107,8 +107,8 @@ export function formatReleaseBody(
 
 				lines.push(`- ${title}${prLink}`);
 
-				if (changeType === "breaking" && rewrite?.migration) {
-					lines.push(`> **Migration:** ${rewrite.migration}`);
+				if (rewrite?.migration) {
+					lines.push(`> **Action required:** ${rewrite.migration}`);
 				} else if (
 					changeType === "breaking" &&
 					entry.changesetDescription &&
@@ -119,7 +119,7 @@ export function formatReleaseBody(
 				) {
 					const [migration, ...details] =
 						entry.changesetDescription.split("\n");
-					lines.push(`> **Migration:** ${migration}`);
+					lines.push(`> **Action required:** ${migration}`);
 					for (const line of details) {
 						lines.push(line ? `> ${line}` : ">");
 					}
@@ -228,11 +228,6 @@ export function validateGeneratedReleaseRewrite(
 	if (breaking && !migration) {
 		throw new Error(
 			`Breaking AI rewrite ${value.id} must have a single-line migration`,
-		);
-	}
-	if (!breaking && migration !== undefined) {
-		throw new Error(
-			`Non-breaking AI rewrite ${value.id} cannot have a migration`,
 		);
 	}
 
