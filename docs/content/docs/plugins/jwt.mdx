@@ -545,6 +545,8 @@ jwt({
 
 If none is given, the `BASE_URL` is used as the issuer and the audience is set to the `BASE_URL`. The expiration time is set to 15 minutes.
 
+Without a configured `baseURL`, direct `auth.api` calls have no issuer or audience to use, and the plugin logs a warning. Set `baseURL`, or set `issuer` and `audience` here.
+
 ```ts title="auth.ts"
 jwt({
   jwt: {

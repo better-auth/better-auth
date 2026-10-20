@@ -1,13 +1,11 @@
-import { errors as joseErrors } from "jose";
+import { decodeJwt } from "jose";
 import { logger } from "../env";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
-	validateToken,
 } from "../oauth2";
-import { ID_TOKEN_CLOCK_TOLERANCE_SECONDS } from "../oauth2/verify-id-token";
 
 /**
  * @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#requesting-claims
@@ -97,46 +95,7 @@ export const twitch = (options: TwitchOptions) => {
 				logger.error("No idToken found in token");
 				return null;
 			}
-			let profile: TwitchProfile;
-			try {
-				const { payload } = await validateToken<TwitchProfile>(
-					idToken,
-					"https://id.twitch.tv/oauth2/keys",
-					{
-						issuer: "https://id.twitch.tv/oauth2",
-						audience: options.clientId,
-						algorithms: ["RS256"],
-						requiredClaims: ["iss", "sub", "aud", "exp", "iat"],
-						clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
-					},
-				);
-				if (
-					typeof payload.sub !== "string" ||
-					!payload.sub ||
-					!Number.isFinite(payload.iat) ||
-					!Number.isFinite(payload.exp) ||
-					(Array.isArray(payload.aud) &&
-						payload.aud.some((audience) => audience !== options.clientId))
-				) {
-					throw new joseErrors.JWTClaimValidationFailed(
-						"Invalid ID token identity claims",
-						payload,
-					);
-				}
-				profile = payload;
-			} catch (error) {
-				try {
-					logger.warn("Twitch ID token verification failed", {
-						code:
-							error instanceof joseErrors.JOSEError
-								? error.code
-								: "JWKS_FETCH_FAILED",
-					});
-				} catch {
-					// Preserve the rejected result if a custom logger throws.
-				}
-				return null;
-			}
+			const profile = decodeJwt(idToken) as TwitchProfile;
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
