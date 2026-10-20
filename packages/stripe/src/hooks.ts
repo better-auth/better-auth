@@ -188,11 +188,42 @@ export async function onSubscriptionCreated(
 			});
 		if (existingSubscription) {
 			// The row was pre-created by checkout or written by an earlier delivery of this event.
-			// Apply the event as an update so retries and out-of-order deliveries still converge.
+			// Apply Stripe's current state rather than this event's snapshot, which may be older than the row.
 			ctx.context.logger.info(
-				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), applying as update`,
+				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), applying current Stripe state`,
 			);
-			await onSubscriptionUpdated(ctx, options, event);
+			const currentStripeSubscription =
+				await options.stripeClient.subscriptions.retrieve(
+					stripeSubscriptionCreated.id,
+				);
+			await onSubscriptionUpdated(
+				ctx,
+				options,
+				event,
+				currentStripeSubscription,
+			);
+			if (subscriptionId) {
+				return;
+			}
+
+			// A redelivery of a dashboard-created subscription: the first attempt's onSubscriptionCreated may have failed.
+			const resolvedCurrent = await resolvePlanItem(
+				options,
+				currentStripeSubscription.items.data,
+			);
+			const refreshedSubscription =
+				await ctx.context.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "id", value: existingSubscription.id }],
+				});
+			if (resolvedCurrent?.plan && refreshedSubscription) {
+				await options.subscription.onSubscriptionCreated?.({
+					event,
+					subscription: refreshedSubscription,
+					stripeSubscription: currentStripeSubscription,
+					plan: resolvedCurrent.plan,
+				});
+			}
 			return;
 		}
 
@@ -284,12 +315,12 @@ export async function onSubscriptionUpdated(
 	ctx: GenericEndpointContext,
 	options: StripeOptions,
 	event: Stripe.Event,
+	stripeSubscriptionUpdated = event.data.object as Stripe.Subscription,
 ) {
 	try {
 		if (!options.subscription?.enabled) {
 			return;
 		}
-		const stripeSubscriptionUpdated = event.data.object as Stripe.Subscription;
 		const resolved = await resolvePlanItem(
 			options,
 			stripeSubscriptionUpdated.items.data,
@@ -403,10 +434,23 @@ export async function onSubscriptionUpdated(
 			);
 		}
 
+		// Stripe's state before this event. A redelivery sees the row already
+		// updated, so transitions are also read from the event's previous_attributes.
+		const stripeSubscriptionBefore: Stripe.Subscription = {
+			...stripeSubscriptionUpdated,
+			...(event.type === "customer.subscription.updated"
+				? event.data.previous_attributes
+				: {}),
+		};
+		const wasTrialing =
+			subscription.status === "trialing" ||
+			stripeSubscriptionBefore.status === "trialing";
+
 		const isNewCancellation =
 			stripeSubscriptionUpdated.status === "active" &&
 			isStripePendingCancel(stripeSubscriptionUpdated) &&
-			!isPendingCancel(subscription);
+			(!isPendingCancel(subscription) ||
+				!isStripePendingCancel(stripeSubscriptionBefore));
 		if (isNewCancellation) {
 			await options.subscription.onSubscriptionCancel?.({
 				event,
@@ -424,7 +468,7 @@ export async function onSubscriptionUpdated(
 		if (plan) {
 			if (
 				stripeSubscriptionUpdated.status === "active" &&
-				subscription.status === "trialing" &&
+				wasTrialing &&
 				plan.freeTrial?.onTrialEnd
 			) {
 				await plan.freeTrial.onTrialEnd(
@@ -434,7 +478,7 @@ export async function onSubscriptionUpdated(
 			}
 			if (
 				stripeSubscriptionUpdated.status === "incomplete_expired" &&
-				subscription.status === "trialing" &&
+				wasTrialing &&
 				plan.freeTrial?.onTrialExpired
 			) {
 				await plan.freeTrial.onTrialExpired(subscriptionUpdated, ctx);
