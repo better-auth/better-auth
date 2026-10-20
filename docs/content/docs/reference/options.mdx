@@ -460,7 +460,7 @@ export const auth = betterAuth({
 * `expiresIn`: Expiration time for the session token in seconds (default: `604800` - 7 days)
 * `updateAge`: How often the session should be refreshed in seconds (default: `86400` - 1 day)
 * `additionalFields`: Additional fields for the session table
-* `storeSessionInDatabase`: Store session in both secondary storage and the database when secondary storage is provided, falling back to the database on secondary-storage miss unless `preserveSessionInDatabase` is set (default: `false`)
+* `storeSessionInDatabase`: Store session in both secondary storage and the database when secondary storage is provided, falling back to the database on secondary-storage miss unless `preserveSessionInDatabase` is set as enabled(default: `false`)
 * `preserveSessionInDatabase`: Preserve session records in database when deleted from secondary storage (default: `false`)
 * `cookieCache`: Enable caching session in cookie
 
