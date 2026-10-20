@@ -158,6 +158,14 @@ export async function validateAuthorizationCode({
 	return tokens;
 }
 
+/**
+ * Verifies a JWT's signature against the key set at `jwksEndpoint`.
+ *
+ * Beyond the signature, only `exp` and `nbf` (when present) and the claims named
+ * in `options` are checked. Without `audience` and `issuer`, a token the same key
+ * set signed for another client or issuer also verifies, so pass both whenever
+ * the token proves identity.
+ */
 export async function validateToken<PayloadType = JWTPayload>(
 	token: string,
 	jwksEndpoint: string,

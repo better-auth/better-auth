@@ -1,5 +1,7 @@
 # @better-auth/oauth-provider
 
+## 1.7.12
+
 ## 1.7.11
 
 ### Patch Changes
