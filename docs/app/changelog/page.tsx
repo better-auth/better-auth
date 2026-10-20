@@ -55,8 +55,9 @@ function getContent(content: string) {
 			}
 		}
 		if (line.trim().startsWith("- ")) {
-			const [mainContent, , context] = line.split(";");
-			const cleanedContent = (mainContent || line).replace(/&nbsp/g, "");
+			// Older release notes put the author after "&nbsp;-&nbsp;".
+			const [mainContent, context] = line.split("&nbsp;-&nbsp;");
+			const cleanedContent = mainContent.replaceAll("&nbsp;", "");
 			const usernames = context ? getMentionUsernames(context) : [];
 			if (usernames.length === 0) {
 				return cleanedContent;
