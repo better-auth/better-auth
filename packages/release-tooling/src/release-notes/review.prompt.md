@@ -12,9 +12,11 @@ Review every rewrite against its matching context. Approve it only when it:
   requirements, the affected case, and the restored version that users need
   to judge or act on the change
 - is clear, grammatical, and concise
-- has migration guidance exactly when upgrading alone is not enough, such as
-  when users must change code or configuration or run a database migration,
-  always for a breaking change, and addresses only the affected users
+- has migration guidance for a breaking change, and for any other change only
+  when the description says upgrading alone is not enough, such as when users
+  must change code or configuration or run a database migration
+- addresses migration guidance only to the affected users and quotes only code
+  that appears in the description
 
 Do not reject copy merely because it omits internal implementation details.
 

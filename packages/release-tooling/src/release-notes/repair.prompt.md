@@ -14,8 +14,9 @@ Keep every title to one clear sentence and one line. Start with a past-tense
 verb. Wrap code identifiers in backticks. Do not include links, HTML, images,
 bold or italic emphasis, `@mentions`, PR numbers, or author attribution.
 
-Return every input ID exactly once. Write a single-line `migration` only when
+Return every input ID exactly once. Write a single-line `migration` for a
+breaking change, and for any other change only when the description says
 upgrading alone is not enough, such as when users must change code or
-configuration or run a database migration, always for a breaking change,
-starting with an imperative verb or an "If you ..." clause. Otherwise use
-`migration: null`.
+configuration or run a database migration. Start it with an imperative verb or
+an "If you ..." clause, and quote only code that appears in the description.
+Otherwise use `migration: null`.

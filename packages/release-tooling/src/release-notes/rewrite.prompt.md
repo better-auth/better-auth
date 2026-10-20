@@ -33,14 +33,16 @@ the final Markdown deterministically.
 - If a title remains unclear, preserve its factual meaning without inventing
   behavior that is not present in the supplied context
 
-Write a single-line `migration` when upgrading alone is not enough, such as
-when users must change code or configuration or run a database migration:
-always for a `breaking` change, otherwise only when the changeset description
-says so. Use `migration: null` for every other change.
-It renders as "Action required", so start with an imperative verb, or with an
-"If you ..." clause when only some users are affected.
+Write a single-line `migration` for a `breaking` change, and for any other
+change whose description says upgrading alone is not enough, such as when
+users must change code or configuration or run a database migration. Use
+`migration: null` for every other change. It renders as "Action required", so
+start with an imperative verb, or with an "If you ..." clause when only some
+users are affected. Quote only code that appears in the changeset description,
+because users run what this line tells them to.
 
-For example, a fix whose description tells users to add an origin:
+For example, a fix whose description tells users to add the domain to
+`trustedOrigins`:
 
 ```json
 {
