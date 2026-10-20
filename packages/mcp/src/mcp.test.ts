@@ -635,7 +635,8 @@ describe("requireMcpAuth access token profile", async () => {
 				}),
 			},
 		);
-		const { access_token } = await tokenResponse.json();
+		expect(tokenResponse.status).toBe(200);
+		const { access_token: accessToken } = await tokenResponse.json();
 		vi.stubGlobal("fetch", instance.customFetchImpl);
 		const handler = vi.fn(() => Response.json({ ok: true }));
 
@@ -644,7 +645,7 @@ describe("requireMcpAuth access token profile", async () => {
 			handler,
 		)(
 			new Request(MCP_RESOURCE, {
-				headers: { Authorization: `Bearer ${access_token}` },
+				headers: { Authorization: `Bearer ${accessToken}` },
 			}),
 		);
 
