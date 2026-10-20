@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import type {
+	OAuthProvider,
+	ProviderOptions,
+	TokenEndpointAuth,
+} from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
 export interface VercelProfile {
@@ -14,6 +18,13 @@ export interface VercelProfile {
 
 export interface VercelOptions extends ProviderOptions<VercelProfile> {
 	clientId: string;
+	/**
+	 * Authentication strategy for authorization code exchanges.
+	 * Use a custom strategy for Vercel OIDC tokens or `private_key_jwt` for
+	 * signed client assertions. When omitted, `clientSecret` is sent in the
+	 * request body if configured.
+	 */
+	tokenEndpointAuth?: TokenEndpointAuth | undefined;
 }
 
 export const vercel = (options: VercelOptions) => {
@@ -57,6 +68,7 @@ export const vercel = (options: VercelOptions) => {
 				redirectURI,
 				options,
 				tokenEndpoint: "https://api.vercel.com/login/oauth/token",
+				tokenEndpointAuth: options.tokenEndpointAuth,
 			});
 		},
 		async getUserInfo(token) {
