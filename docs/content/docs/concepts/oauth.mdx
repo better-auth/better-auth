@@ -535,7 +535,7 @@ export const auth = betterAuth({
 
 ### disableSignUp
 
-Disables sign-up for new users.
+Disables sign-up for new users. This also applies to ID-token sign-ins: when enabled, a new user signing in with an ID token is rejected instead of having an account created.
 
 ### disableIdTokenSignIn
 
