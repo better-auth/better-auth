@@ -143,20 +143,34 @@ describe("Vercel token endpoint authentication", () => {
 		).not.toContain("authorization");
 	});
 
-	it("rejects private key authentication combined with a client secret", async () => {
-		const getClientAssertion = vi.fn(async () => "signed-client-assertion");
-		const provider = vercel({
-			clientId,
-			clientSecret: "client-secret",
-			tokenEndpointAuth: { method: "private_key_jwt", getClientAssertion },
-		});
+	it.each(["private_key_jwt", "none"] as const)(
+		"rejects %s combined with a client secret when the provider is created",
+		(method) => {
+			const getClientAssertion = vi.fn(async () => "signed-client-assertion");
+			expect(() =>
+				vercel({
+					clientId,
+					clientSecret: "client-secret",
+					tokenEndpointAuth:
+						method === "none" ? { method } : { method, getClientAssertion },
+				}),
+			).toThrow(
+				`Vercel ${method} token endpoint authentication cannot be combined with clientSecret`,
+			);
+			expect(getClientAssertion).not.toHaveBeenCalled();
+			expect(mockedBetterFetch).not.toHaveBeenCalled();
+		},
+	);
 
-		await expect(provider.validateAuthorizationCode(callback)).rejects.toThrow(
-			"private_key_jwt token endpoint authentication cannot be combined with clientSecret",
-		);
-		expect(getClientAssertion).not.toHaveBeenCalled();
-		expect(mockedBetterFetch).not.toHaveBeenCalled();
-	});
+	it.each(["client_secret_basic", "client_secret_post"] as const)(
+		"requires a secret for explicit %s authentication when the provider is created",
+		(method) => {
+			expect(() => vercel({ clientId, tokenEndpointAuth: { method } })).toThrow(
+				`Vercel ${method} token endpoint authentication requires clientSecret`,
+			);
+			expect(mockedBetterFetch).not.toHaveBeenCalled();
+		},
+	);
 
 	it("rejects incomplete custom assertion parameters before sending the request", async () => {
 		const provider = vercel({

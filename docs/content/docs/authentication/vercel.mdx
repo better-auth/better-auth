@@ -107,6 +107,8 @@ This authenticates your application's workload. The person signing in still uses
 
 For `private_key_jwt`, use `tokenEndpointAuth: { method: "private_key_jwt", getClientAssertion }`. The callback receives the client ID, token endpoint, and grant type, and returns a signed assertion. Configure the corresponding public keys on your Vercel App and use an assertion lifetime of at most 60 seconds. Omit `clientSecret` when using this strategy.
 
+If you use Better Auth's `createPrivateKeyJwtClientAssertionGetter` helper, configure it as `createPrivateKeyJwtClientAssertionGetter({ ...keyOptions, expiresIn: 60 })`; its default lifetime is 120 seconds. For a managed signing service, set the same lifetime in the signing request.
+
 ### Available Scopes
 
 Vercel supports the following OpenID Connect scopes:

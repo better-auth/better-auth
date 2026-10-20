@@ -28,6 +28,25 @@ export interface VercelOptions extends ProviderOptions<VercelProfile> {
 }
 
 export const vercel = (options: VercelOptions) => {
+	const authMethod = options.tokenEndpointAuth?.method;
+	if (
+		options.clientSecret &&
+		(authMethod === "private_key_jwt" || authMethod === "none")
+	) {
+		throw new BetterAuthError(
+			`Vercel ${authMethod} token endpoint authentication cannot be combined with clientSecret`,
+		);
+	}
+	if (
+		!options.clientSecret &&
+		(authMethod === "client_secret_basic" ||
+			authMethod === "client_secret_post")
+	) {
+		throw new BetterAuthError(
+			`Vercel ${authMethod} token endpoint authentication requires clientSecret`,
+		);
+	}
+
 	return {
 		id: "vercel",
 		name: "Vercel",
