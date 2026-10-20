@@ -425,8 +425,8 @@ export async function validateOIDCIdToken(
 	token: string,
 	jwksEndpoint: string,
 	options: {
-		audience?: string | string[];
-		issuer?: string | string[];
+		audience: string;
+		issuer: string;
 	},
 	isTrustedOrigin: (url: string) => boolean,
 ) {
@@ -438,9 +438,7 @@ export async function validateOIDCIdToken(
 		audience: options.audience,
 		issuer: options.issuer,
 	});
-	if (typeof options.audience === "string") {
-		assertOIDCAuthorizedParty(verified.payload, options.audience);
-	}
+	assertOIDCAuthorizedParty(verified.payload, options.audience);
 	return verified;
 }
 
