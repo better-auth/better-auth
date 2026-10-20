@@ -1,8 +1,11 @@
 import type { JWTVerifyOptions } from "jose";
 import { jwtVerify } from "jose";
-import { logger } from "../env";
 import type { GenericEndpointContext } from "../types";
-import type { OAuthProvider, ProviderOptions } from "./oauth-provider";
+import type {
+	OAuthIdTokenConfig,
+	OAuthProvider,
+	ProviderOptions,
+} from "./oauth-provider";
 
 /**
  * Clock skew allowed on `exp`, `nbf`, and `iat`, matching openid-client and oauth4webapi.
@@ -70,6 +73,44 @@ async function nonceMatches(
 }
 
 /**
+ * Verifies an ID token's signature and claims against a verification config,
+ * and its `nonce` when one is expected. Throws when the token is not valid.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+ * @internal
+ */
+export async function verifyIdToken(
+	token: string,
+	config: Extract<OAuthIdTokenConfig, { jwks: unknown }>,
+	nonce?: string,
+) {
+	// An empty audience would skip the audience check entirely.
+	if (![config.audience].flat().some(Boolean)) {
+		throw new Error("ID token audience is not configured");
+	}
+	// `kid` is optional in JWS: a JWKS resolver can still select a key by algorithm, so
+	// key selection is left to config.jwks.
+	const verified = await jwtVerify(
+		token,
+		config.jwks,
+		getIdTokenVerifyOptions(config),
+	);
+	if (
+		nonce &&
+		!(await nonceMatches(verified.payload.nonce, nonce, config.nonceComparison))
+	) {
+		throw new Error("ID token nonce does not match");
+	}
+	// Provider-specific claim check on the now-verified payload (e.g. Google's
+	// hosted-domain `hd`). Standard checks have already passed, so a token that
+	// fails here is authentic but does not meet the provider's extra constraint.
+	if (config.verifyClaims && !config.verifyClaims(verified.payload)) {
+		throw new Error("ID token claims were rejected");
+	}
+	return verified;
+}
+
+/**
  * Whether a provider can verify a client-submitted id_token.
  *
  * A provider supports id_token sign-in when it declares an {@link OAuthProvider.idToken}
@@ -128,33 +169,7 @@ export async function verifyProviderIdToken(
 		if (token.split(".").length !== 3) {
 			return config.allowOpaqueToken === true;
 		}
-		// An empty audience would skip the audience check entirely.
-		const hasAudience = [config.audience].flat().some(Boolean);
-		if (!hasAudience) {
-			logger.error(
-				`[better-auth] Rejected an ID token for "${provider.id}" because the provider has no client ID to check its audience against. Set \`clientId\` on the provider.`,
-			);
-			return false;
-		}
-		// `kid` is optional in JWS: a JWKS resolver can still select a key by algorithm, so
-		// key selection is left to config.jwks.
-		const { payload } = await jwtVerify(
-			token,
-			config.jwks,
-			getIdTokenVerifyOptions(config),
-		);
-		if (
-			nonce &&
-			!(await nonceMatches(payload.nonce, nonce, config.nonceComparison))
-		) {
-			return false;
-		}
-		// Provider-specific claim check on the now-verified payload (e.g. Google's
-		// hosted-domain `hd`). Standard checks have already passed, so a token that
-		// fails here is authentic but does not meet the provider's extra constraint.
-		if (config.verifyClaims && !config.verifyClaims(payload)) {
-			return false;
-		}
+		await verifyIdToken(token, config, nonce);
 		return true;
 	} catch {
 		return false;
