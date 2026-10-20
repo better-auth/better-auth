@@ -3,6 +3,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
+import type { SCIMUserSchemaExtensionAttribute } from "./configuration";
 
 const BASE_URL = "http://localhost:3000";
 const SCIM_USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
@@ -298,8 +299,210 @@ describe("SCIM custom User schema extensions", () => {
 		expect(response.status).toBe(201);
 		const created = await readJSON<CustomUserResponse>(response);
 		expect(created.schemas).toContain(ACME_URN);
-		expect(created[ACME_URN]).toEqual({ sapUserId: "E-42", costCenter: "CC-9" });
+		expect(created[ACME_URN]).toEqual({
+			sapUserId: "E-42",
+			costCenter: "CC-9",
+		});
 		expect(data.user[0]?.sapUserId).toBe("E-42");
+	});
+});
+
+function createCustomFixture(options: {
+	attributes: readonly SCIMUserSchemaExtensionAttribute[];
+	additionalFields?: Record<
+		string,
+		{
+			type: "string" | "number" | "boolean" | "date";
+			required?: boolean;
+			input?: boolean;
+		}
+	>;
+}) {
+	const data = {
+		user: [] as Array<User & Record<string, unknown>>,
+		session: [] as { id: string }[],
+		verification: [] as { id: string }[],
+		account: [] as { id: string }[],
+		scimConnectionBinding: [] as { id: string }[],
+		scimIdentityTombstone: [] as { id: string }[],
+		scimSubject: [] as { id: string; userId: string }[],
+		scimUser: [] as { id: string; serializedAttributes: string }[],
+		scimGroup: [] as { id: string }[],
+		scimGroupMember: [] as { id: string }[],
+		scimProjectionGrant: [] as { id: string }[],
+	};
+	const auth = betterAuth({
+		baseURL: BASE_URL,
+		database: memoryAdapter(data),
+		...(options.additionalFields
+			? { user: { additionalFields: options.additionalFields } }
+			: {}),
+		plugins: [
+			scim({
+				connections: [
+					{
+						id: "workforce",
+						credentials: [
+							{ type: "bearer", id: "token", token: "workforce-token" },
+						],
+					},
+				],
+				userSchemaExtensions: [
+					{ urn: ACME_URN, name: "AcmeUser", attributes: options.attributes },
+				],
+			}),
+		],
+	});
+	return { auth, data };
+}
+
+const PATCH_BODY = (operations: unknown[]) => ({
+	schemas: [SCIM_PATCH_SCHEMA],
+	Operations: operations,
+});
+
+describe("SCIM custom extension review fixes", () => {
+	it("canonicalizes case-variant custom attribute names on create", async () => {
+		const { auth } = createFixture();
+		const response = await auth.handler(
+			scimRequest("/scim/v2/Users", {
+				method: "POST",
+				body: {
+					...createBody,
+					[ACME_URN]: { SAPUSERID: "E-7", CostCenter: "CC-2" },
+				},
+			}),
+		);
+		expect(response.status).toBe(201);
+		const created = await readJSON<CustomUserResponse>(response);
+		expect(created[ACME_URN]).toEqual({ sapUserId: "E-7", costCenter: "CC-2" });
+	});
+
+	it("replaces the whole extension object on a root PATCH replace", async () => {
+		const { auth, data } = createFixture();
+		const created = await readJSON<CustomUserResponse>(
+			await auth.handler(
+				scimRequest("/scim/v2/Users", { method: "POST", body: createBody }),
+			),
+		);
+		const response = await auth.handler(
+			scimRequest(`/scim/v2/Users/${created.id}`, {
+				method: "PATCH",
+				body: PATCH_BODY([
+					{ op: "replace", path: ACME_URN, value: { sapUserId: "E-9" } },
+				]),
+			}),
+		);
+		expect(response.status).toBe(200);
+		const patched = await readJSON<CustomUserResponse>(response);
+		// costCenter was omitted, so replace clears it.
+		expect(patched[ACME_URN]).toEqual({ sapUserId: "E-9" });
+		expect(data.user[0]?.sapUserId).toBe("E-9");
+	});
+
+	it("clears a custom attribute via a null PATCH value", async () => {
+		const { auth, data } = createFixture();
+		const created = await readJSON<CustomUserResponse>(
+			await auth.handler(
+				scimRequest("/scim/v2/Users", { method: "POST", body: createBody }),
+			),
+		);
+		const response = await auth.handler(
+			scimRequest(`/scim/v2/Users/${created.id}`, {
+				method: "PATCH",
+				body: PATCH_BODY([
+					{ op: "replace", path: `${ACME_URN}:sapUserId`, value: null },
+				]),
+			}),
+		);
+		expect(response.status).toBe(200);
+		const patched = await readJSON<CustomUserResponse>(response);
+		expect(patched[ACME_URN]).toEqual({ costCenter: "CC-9" });
+		expect(data.user[0]?.sapUserId ?? null).toBeNull();
+	});
+
+	it("keeps a returned:never attribute out of responses", async () => {
+		const { auth } = createCustomFixture({
+			attributes: [
+				{ name: "sapUserId", type: "string" },
+				{ name: "secret", type: "string", returned: "never" },
+			],
+		});
+		const response = await auth.handler(
+			scimRequest("/scim/v2/Users", {
+				method: "POST",
+				body: {
+					schemas: [SCIM_USER_SCHEMA, ACME_URN],
+					userName: "b@example.com",
+					emails: [{ value: "b@example.com", primary: true }],
+					[ACME_URN]: { sapUserId: "E-1", secret: "s3cr3t" },
+				},
+			}),
+		);
+		expect(response.status).toBe(201);
+		const created = await readJSON<
+			CustomUserResponse & { [k: string]: unknown }
+		>(response);
+		expect(created[ACME_URN]).toEqual({ sapUserId: "E-1" });
+	});
+
+	it("writes a dateTime mapped attribute as a Date", async () => {
+		const { auth, data } = createCustomFixture({
+			attributes: [{ name: "hiredAt", type: "dateTime", mapTo: "hiredAt" }],
+			additionalFields: {
+				hiredAt: { type: "date", required: false, input: false },
+			},
+		});
+		const response = await auth.handler(
+			scimRequest("/scim/v2/Users", {
+				method: "POST",
+				body: {
+					schemas: [SCIM_USER_SCHEMA, ACME_URN],
+					userName: "b@example.com",
+					emails: [{ value: "b@example.com", primary: true }],
+					[ACME_URN]: { hiredAt: "2024-01-02T03:04:05Z" },
+				},
+			}),
+		);
+		expect(response.status).toBe(201);
+		expect(data.user[0]?.hiredAt).toBeInstanceOf(Date);
+	});
+
+	it("accepts a partial root PATCH when another attribute is required", async () => {
+		const { auth } = createCustomFixture({
+			attributes: [
+				{ name: "a", type: "string", required: true },
+				{ name: "b", type: "string" },
+			],
+		});
+		const created = await readJSON<
+			CustomUserResponse & { [k: string]: unknown }
+		>(
+			await auth.handler(
+				scimRequest("/scim/v2/Users", {
+					method: "POST",
+					body: {
+						schemas: [SCIM_USER_SCHEMA, ACME_URN],
+						userName: "b@example.com",
+						emails: [{ value: "b@example.com", primary: true }],
+						[ACME_URN]: { a: "1", b: "2" },
+					},
+				}),
+			),
+		);
+		// A partial `add` that omits the required `a` must not 400.
+		const response = await auth.handler(
+			scimRequest(`/scim/v2/Users/${created.id}`, {
+				method: "PATCH",
+				body: PATCH_BODY([
+					{ op: "add", path: ACME_URN, value: { b: "updated" } },
+				]),
+			}),
+		);
+		expect(response.status).toBe(200);
+		const patched =
+			await readJSON<Record<string, { a?: string; b?: string }>>(response);
+		expect(patched[ACME_URN]).toEqual({ a: "1", b: "updated" });
 	});
 });
 

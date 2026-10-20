@@ -667,8 +667,21 @@ export function buildAPIUserSchema(
 				(descriptor) => descriptor.id,
 				context,
 			);
+			// Account for the custom extension URNs the transform below auto-declares
+			// into `schemas`, so an oversized payload is a 400 here rather than a 500
+			// when the enlarged canonical payload is later serialized.
+			const record = user as Record<string, unknown>;
+			const autoDeclaredLength = custom.reduce(
+				(total, descriptor) =>
+					record[descriptor.id] !== undefined &&
+					!user.schemas.includes(descriptor.id)
+						? total + descriptor.id.length + 3
+						: total,
+				0,
+			);
 			if (
-				JSON.stringify(user).length > SCIM_MAX_SERIALIZED_USER_ATTRIBUTES_LENGTH
+				JSON.stringify(user).length + autoDeclaredLength >
+				SCIM_MAX_SERIALIZED_USER_ATTRIBUTES_LENGTH
 			) {
 				context.addIssue({
 					code: "custom",

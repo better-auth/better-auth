@@ -9,6 +9,8 @@ import { SCIM_ENTERPRISE_USER_SCHEMA, SCIM_USER_SCHEMA } from "./user-schemas";
 
 const SCIM_SCHEMA_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Schema";
 const SCIM_GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
+const SCIM_RESOURCE_TYPE_SCHEMA =
+	"urn:ietf:params:scim:schemas:core:2.0:ResourceType";
 
 /** Schema URNs an application-defined extension must not redeclare. */
 const RESERVED_SCHEMA_URNS: ReadonlySet<string> = new Set([
@@ -16,7 +18,12 @@ const RESERVED_SCHEMA_URNS: ReadonlySet<string> = new Set([
 	SCIM_ENTERPRISE_USER_SCHEMA,
 	SCIM_GROUP_SCHEMA,
 	SCIM_SCHEMA_SCHEMA,
+	SCIM_RESOURCE_TYPE_SCHEMA,
 ]);
+
+/** RFC 3339 date-time, as SCIM requires for the `dateTime` attribute type. */
+const SCIM_RFC3339_PATTERN =
+	/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 /** Permitted SCIM attribute names: a letter or `$`, then letters/digits/`-`/`_`. */
 const SCIM_ATTRIBUTE_NAME_PATTERN = /^[A-Za-z$][A-Za-z0-9$_-]*$/;
@@ -39,6 +46,8 @@ export interface CompiledUserSchemaExtensionAttribute {
 	name: string;
 	type: SCIMUserSchemaExtensionAttributeType;
 	required: boolean;
+	/** When the attribute is returned in a response. */
+	returned: "default" | "always" | "never";
 	/** The `user.additionalFields` key this attribute is written to, if any. */
 	mapTo?: string;
 }
@@ -105,8 +114,8 @@ function scalarSchemaFor(
 				.string()
 				.trim()
 				.min(1)
-				.refine((value) => !Number.isNaN(Date.parse(value)), {
-					message: "must be a valid dateTime",
+				.refine((value) => SCIM_RFC3339_PATTERN.test(value), {
+					message: "must be an RFC 3339 dateTime",
 				});
 		case "string":
 			return z.string().trim().min(1).max(SCIM_EXTENSION_STRING_MAX_LENGTH);
@@ -142,7 +151,7 @@ function discoveryAttributeFor(
 		description: attribute.description ?? "",
 		required: attribute.required ?? false,
 		caseExact: attribute.caseExact ?? false,
-		mutability: attribute.mutability ?? "readWrite",
+		mutability: "readWrite",
 		returned: attribute.returned ?? "default",
 		uniqueness: "none",
 	};
@@ -213,6 +222,7 @@ export function compileUserSchemaExtension(
 			name,
 			type,
 			required: attribute.required ?? false,
+			returned: attribute.returned ?? "default",
 			...(attribute.mapTo === undefined
 				? {}
 				: { mapTo: attribute.mapTo.trim() }),
@@ -256,6 +266,13 @@ export function compileUserSchemaExtension(
 					openAPISchemaFor(attribute.type),
 				]),
 			),
+			...(compiledAttributes.some((attribute) => attribute.required)
+				? {
+						required: compiledAttributes
+							.filter((attribute) => attribute.required)
+							.map((attribute) => attribute.name),
+					}
+				: {}),
 		},
 		attributes: compiledAttributes,
 		attributeInputSchemas: Object.fromEntries(

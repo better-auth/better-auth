@@ -424,9 +424,10 @@ export interface SCIMUserSchemaExtensionAttribute {
 	required?: boolean;
 	/** Whether string comparisons are case sensitive. Defaults to `false`. */
 	caseExact?: boolean;
-	/** Whether a client may modify the attribute. Defaults to `"readWrite"`. */
-	mutability?: "readOnly" | "readWrite";
-	/** When the attribute is returned in a response. Defaults to `"default"`. */
+	/**
+	 * When the attribute is returned in a response. Defaults to `"default"`.
+	 * `"never"` keeps a stored value out of SCIM responses.
+	 */
 	returned?: "default" | "always" | "never";
 	/** Human readable description advertised through discovery. */
 	description?: string;

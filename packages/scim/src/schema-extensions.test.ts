@@ -32,9 +32,15 @@ describe("compileUserSchemaExtension", () => {
 				name: "sapUserId",
 				type: "string",
 				required: false,
+				returned: "default",
 				mapTo: "sapUserId",
 			},
-			{ name: "costCenter", type: "string", required: false },
+			{
+				name: "costCenter",
+				type: "string",
+				required: false,
+				returned: "default",
+			},
 		]);
 	});
 
@@ -111,6 +117,7 @@ describe("compileUserSchemaExtension", () => {
 				{ name: "count", type: "integer" },
 				{ name: "ratio", type: "decimal" },
 				{ name: "hiredAt", type: "dateTime" },
+				{ name: "manager", type: "reference" },
 			],
 		});
 
@@ -120,6 +127,7 @@ describe("compileUserSchemaExtension", () => {
 				count: 3,
 				ratio: 1.5,
 				hiredAt: "2024-01-01T00:00:00Z",
+				manager: "https://example.com/scim/v2/Users/42",
 			}).success,
 		).toBe(true);
 		expect(descriptor.inputSchema.safeParse({ count: 1.5 }).success).toBe(
@@ -131,23 +139,27 @@ describe("compileUserSchemaExtension", () => {
 		expect(
 			descriptor.inputSchema.safeParse({ hiredAt: "not-a-date" }).success,
 		).toBe(false);
+		// Strict RFC 3339: Date.parse would accept this, the SCIM validator must not.
+		expect(
+			descriptor.inputSchema.safeParse({ hiredAt: "January 1, 2024" }).success,
+		).toBe(false);
 	});
 
 	it("rejects a reserved built-in schema URN", () => {
-		expect(() =>
-			compileUserSchemaExtension({
-				urn: "urn:ietf:params:scim:schemas:core:2.0:User",
-				name: "Nope",
-				attributes: [{ name: "x" }],
-			}),
-		).toThrow(/built-in SCIM schema/);
-		expect(() =>
-			compileUserSchemaExtension({
-				urn: "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
-				name: "Nope",
-				attributes: [{ name: "x" }],
-			}),
-		).toThrow(/built-in SCIM schema/);
+		for (const urn of [
+			"urn:ietf:params:scim:schemas:core:2.0:User",
+			"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+			"urn:ietf:params:scim:schemas:core:2.0:Group",
+			"urn:ietf:params:scim:schemas:core:2.0:ResourceType",
+		]) {
+			expect(() =>
+				compileUserSchemaExtension({
+					urn,
+					name: "Nope",
+					attributes: [{ name: "x" }],
+				}),
+			).toThrow(/built-in SCIM schema/);
+		}
 	});
 
 	it("rejects an empty attribute list", () => {

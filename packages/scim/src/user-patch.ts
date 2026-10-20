@@ -648,12 +648,31 @@ function applyCustomExtensionPatch(
 ): boolean {
 	const pathTrim = path.trim();
 	const pathLower = pathTrim.toLowerCase();
-	for (const descriptor of context.customDescriptors) {
+	// Longest URN first, so a URN that is a prefix of another does not win.
+	const descriptors = [...context.customDescriptors].sort(
+		(left, right) => right.id.length - left.id.length,
+	);
+	for (const descriptor of descriptors) {
 		const urn = descriptor.id;
 		const urnLower = urn.toLowerCase();
 		const isRoot = pathLower === urnLower;
 		const isSubAttribute = pathLower.startsWith(`${urnLower}:`);
 		if (!isRoot && !isSubAttribute) continue;
+
+		const findAttribute = (name: string) =>
+			descriptor.attributes.find(
+				(attribute) => attribute.name.toLowerCase() === name.toLowerCase(),
+			);
+		const persist = (next: Record<string, unknown>) => {
+			if (Object.keys(next).length === 0) {
+				delete document[urn];
+				setExtensionSchemaDeclaration(document, urn, false);
+			} else {
+				document[urn] = next;
+				setExtensionSchemaDeclaration(document, urn, true);
+			}
+			return true;
+		};
 
 		const container = isRecord(document[urn])
 			? { ...(document[urn] as Record<string, unknown>) }
@@ -668,57 +687,60 @@ function applyCustomExtensionPatch(
 			if (!isRecord(value)) {
 				return invalidPatchValue(`${urn} must be an object`);
 			}
-			const parsed = descriptor.inputSchema.safeParse(value);
-			if (!parsed.success) {
-				const issue = parsed.error.issues[0];
-				return invalidPatchValue(
-					issue
-						? `${urn}.${issue.path.join(".")}: ${issue.message}`
-						: `${urn} is invalid`,
-				);
+			// `replace` on the extension root replaces the whole object, so omitted
+			// attributes are cleared; `add` merges into the stored value. Each
+			// attribute is validated on its own, so an unrelated required attribute
+			// does not force a 400 on a partial update.
+			const next: Record<string, unknown> = op === "replace" ? {} : container;
+			for (const [key, raw] of Object.entries(value)) {
+				const attribute = findAttribute(key);
+				const attributeSchema = attribute
+					? descriptor.attributeInputSchemas[attribute.name]
+					: undefined;
+				if (!attribute || !attributeSchema) {
+					throw createSCIMError("BAD_REQUEST", {
+						detail: `User PATCH path ${urn}:${key} is not supported`,
+						scimType: "invalidPath",
+					});
+				}
+				if (raw === null) {
+					delete next[attribute.name];
+					continue;
+				}
+				const parsed = attributeSchema.safeParse(raw);
+				if (!parsed.success) {
+					const issue = parsed.error.issues[0];
+					return invalidPatchValue(
+						issue
+							? `${urn}:${attribute.name}: ${issue.message}`
+							: `${urn}:${attribute.name} is invalid`,
+					);
+				}
+				next[attribute.name] = parsed.data;
 			}
-			document[urn] = {
-				...container,
-				...(parsed.data as Record<string, unknown>),
-			};
-			setExtensionSchemaDeclaration(document, urn, true);
-			return true;
+			return persist(next);
 		}
 
 		const attributeName = pathTrim.slice(urn.length + 1);
-		if (
-			!attributeName ||
-			attributeName.includes(":") ||
-			attributeName.includes(".")
-		) {
-			throw createSCIMError("BAD_REQUEST", {
-				detail: `User PATCH path ${path} is not supported`,
-				scimType: "invalidPath",
-			});
-		}
-		const declaredAttribute = descriptor.attributes.find(
-			(attribute) =>
-				attribute.name.toLowerCase() === attributeName.toLowerCase(),
-		);
-		const attributeSchema = declaredAttribute
-			? descriptor.attributeInputSchemas[declaredAttribute.name]
+		const attribute =
+			attributeName &&
+			!attributeName.includes(":") &&
+			!attributeName.includes(".")
+				? findAttribute(attributeName)
+				: undefined;
+		const attributeSchema = attribute
+			? descriptor.attributeInputSchemas[attribute.name]
 			: undefined;
-		if (!declaredAttribute || !attributeSchema) {
+		if (!attribute || !attributeSchema) {
 			throw createSCIMError("BAD_REQUEST", {
 				detail: `User PATCH path ${path} is not supported`,
 				scimType: "invalidPath",
 			});
 		}
 
-		if (op === "remove") {
-			delete container[declaredAttribute.name];
-			if (Object.keys(container).length === 0) {
-				delete document[urn];
-				setExtensionSchemaDeclaration(document, urn, false);
-			} else {
-				document[urn] = container;
-			}
-			return true;
+		if (op === "remove" || value === null) {
+			delete container[attribute.name];
+			return persist(container);
 		}
 
 		const parsed = attributeSchema.safeParse(value);
@@ -728,10 +750,8 @@ function applyCustomExtensionPatch(
 				issue ? `${path}: ${issue.message}` : `${path} is invalid`,
 			);
 		}
-		container[declaredAttribute.name] = parsed.data;
-		document[urn] = container;
-		setExtensionSchemaDeclaration(document, urn, true);
-		return true;
+		container[attribute.name] = parsed.data;
+		return persist(container);
 	}
 	return false;
 }

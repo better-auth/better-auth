@@ -46,10 +46,7 @@ import {
 	createSCIMUserExternalIdKey,
 	createScopedKey,
 } from "./resource-key";
-import {
-	SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR,
-	SCIM_RESOURCE_SCHEMA_REGISTRY,
-} from "./resource-schema-registry";
+import { SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR } from "./resource-schema-registry";
 import { runSCIMWriteWithUniquenessCheck } from "./resource-uniqueness";
 import { createSCIMError, SCIMErrorOpenAPISchemas } from "./scim-error";
 import {
@@ -58,7 +55,6 @@ import {
 	getResourceURL,
 	SCIM_REQUEST_MEDIA_TYPES,
 } from "./scim-metadata";
-import type { SCIMCanonicalUserAttributesValidator } from "./user-attributes";
 import {
 	readSCIMUserAttributes,
 	serializeSCIMUserAttributes,
@@ -76,9 +72,6 @@ import {
 	createSCIMEmailValueToken,
 } from "./user-profile";
 import type { SCIMUserSchemaContext } from "./user-schema-context";
-
-const { openAPISchema: OpenAPIUserResourceSchema } =
-	SCIM_RESOURCE_SCHEMA_REGISTRY.User;
 
 function requireUserAttributeProjection(
 	input: SCIMCollectionQueryInput,
@@ -164,16 +157,52 @@ function createUserCollectionWhere(
 	return where;
 }
 
+/**
+ * Remove custom extension attributes declared `returned: "never"` from a
+ * response resource. When an extension loses all of its attributes it is
+ * dropped from the resource and from `schemas`.
+ */
+function stripNeverReturnedCustomAttributes(
+	resource: Record<string, unknown>,
+	context: SCIMUserSchemaContext,
+): void {
+	const schemas = Array.isArray(resource.schemas)
+		? [...(resource.schemas as string[])]
+		: undefined;
+	let schemasChanged = false;
+	for (const descriptor of context.customDescriptors) {
+		const neverReturned = descriptor.attributes
+			.filter((attribute) => attribute.returned === "never")
+			.map((attribute) => attribute.name);
+		if (neverReturned.length === 0) continue;
+		const extension = resource[descriptor.id];
+		if (!extension || typeof extension !== "object") continue;
+		const next = { ...(extension as Record<string, unknown>) };
+		for (const name of neverReturned) delete next[name];
+		if (Object.keys(next).length === 0) {
+			delete resource[descriptor.id];
+			const index = schemas?.indexOf(descriptor.id) ?? -1;
+			if (schemas && index >= 0) {
+				schemas.splice(index, 1);
+				schemasChanged = true;
+			}
+		} else {
+			resource[descriptor.id] = next;
+		}
+	}
+	if (schemasChanged && schemas) resource.schemas = schemas;
+}
+
 function createUserResource(
 	baseURL: string,
 	scimUser: SCIMUser,
-	canonicalSchema?: SCIMCanonicalUserAttributesValidator,
+	context: SCIMUserSchemaContext,
 ) {
 	const {
 		[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.canonicalAttribute]: enterprise,
 		...attributes
-	} = readSCIMUserAttributes(scimUser, canonicalSchema);
-	return {
+	} = readSCIMUserAttributes(scimUser, context.canonicalSchema);
+	const resource = {
 		...attributes,
 		id: scimUser.id,
 		...(scimUser.externalId ? { externalId: scimUser.externalId } : {}),
@@ -196,12 +225,18 @@ function createUserResource(
 			),
 		},
 	};
+	stripNeverReturnedCustomAttributes(
+		resource as unknown as Record<string, unknown>,
+		context,
+	);
+	return resource;
 }
 
 /**
  * Resolve the `user.additionalFields` values for the mapped custom attributes.
  * Every mapped attribute is included so a full representation (create or PUT)
- * clears an omitted value. Only the profile-source connection should apply the
+ * clears an omitted value. `dateTime` values are converted to `Date` for the
+ * Better Auth `date` field. Only the profile-source connection should apply the
  * result, mirroring how `email`/`name` are written.
  */
 function resolveMappedUserFields(
@@ -216,7 +251,14 @@ function resolveMappedUserFields(
 			extensionValue && typeof extensionValue === "object"
 				? (extensionValue as Record<string, unknown>)[mapped.name]
 				: undefined;
-		fields[mapped.mapTo] = value ?? null;
+		if (value === undefined || value === null) {
+			fields[mapped.mapTo] = null;
+			continue;
+		}
+		fields[mapped.mapTo] =
+			mapped.type === "dateTime" && typeof value === "string"
+				? new Date(value)
+				: value;
 	}
 	return fields;
 }
@@ -670,7 +712,7 @@ export function createSCIMUser(
 				const completeResource = createUserResource(
 					ctx.context.baseURL,
 					reprovisionedSCIMUser,
-					context.canonicalSchema,
+					context,
 				);
 				ctx.setStatus(201);
 				ctx.setHeader("location", completeResource.meta.location);
@@ -847,7 +889,7 @@ export function createSCIMUser(
 			const completeResource = createUserResource(
 				ctx.context.baseURL,
 				scimUser,
-				context.canonicalSchema,
+				context,
 			);
 			const resource = projectSCIMResourceAttributes(
 				completeResource,
@@ -905,11 +947,7 @@ export function getSCIMUser(
 
 			return ctx.json(
 				projectSCIMResourceAttributes(
-					createUserResource(
-						ctx.context.baseURL,
-						scimUser,
-						context.canonicalSchema,
-					),
+					createUserResource(ctx.context.baseURL, scimUser, context),
 					attributeProjection,
 				),
 			);
@@ -942,7 +980,7 @@ export function listSCIMUsers(
 									startIndex: { type: "number" },
 									Resources: {
 										type: "array",
-										items: OpenAPIUserResourceSchema,
+										items: context.openAPISchema,
 									},
 								},
 							}),
@@ -992,11 +1030,7 @@ export function listSCIMUsers(
 
 			const resources = scimUsers.map((scimUser) =>
 				projectSCIMResourceAttributes(
-					createUserResource(
-						ctx.context.baseURL,
-						scimUser,
-						context.canonicalSchema,
-					),
+					createUserResource(ctx.context.baseURL, scimUser, context),
 					attributeProjection,
 				),
 			);
@@ -1123,7 +1157,7 @@ export function replaceSCIMUser(
 			const completeResource = createUserResource(
 				ctx.context.baseURL,
 				updatedSCIMUser,
-				context.canonicalSchema,
+				context,
 			);
 			ctx.setHeader("location", completeResource.meta.location);
 			return ctx.json(
@@ -1323,7 +1357,7 @@ export function patchSCIMUser(
 			const completeResource = createUserResource(
 				ctx.context.baseURL,
 				updatedSCIMUser,
-				context.canonicalSchema,
+				context,
 			);
 			ctx.setHeader("location", completeResource.meta.location);
 			return ctx.json(

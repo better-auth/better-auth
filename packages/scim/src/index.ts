@@ -254,6 +254,16 @@ function validateConnections(options: SCIMOptions): void {
  */
 function createSCIMPlugin(options: SCIMOptions) {
 	const userSchemaContext = buildSCIMUserSchemaContext(options);
+	// Attribute names of the custom User extensions, so the ingress canonicalizer
+	// can rewrite case-variant keys (SCIM names are case-insensitive).
+	const userExtensionAttributeNames = userSchemaContext.customDescriptors.map(
+		(descriptor) => ({
+			id: descriptor.id,
+			attributes: descriptor.attributes.map((attribute) => ({
+				name: attribute.name,
+			})),
+		}),
+	);
 	const connectionMiddleware = createSCIMConnectionMiddleware(options);
 	const identity = createSCIMIdentityCoordinator(options);
 	const projection = createSCIMProjectionCoordinator(options);
@@ -349,6 +359,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 									canonicalizeSCIMResourceAttributeNames(
 										isUserMutation ? "User" : "Group",
 										body,
+										isUserMutation ? userExtensionAttributeNames : [],
 									),
 								);
 				} catch (error) {
