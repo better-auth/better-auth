@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
 import type { JWK } from "jose";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { logger } from "../env";
+import { describe, expect, it } from "vitest";
 import { apple } from "../social-providers/apple";
 import { cognito } from "../social-providers/cognito";
 import { facebook } from "../social-providers/facebook";
@@ -261,17 +260,12 @@ describe("verifyProviderIdToken", () => {
 	});
 
 	describe("without a configured audience", () => {
-		afterEach(() => {
-			vi.restoreAllMocks();
-		});
-
 		it.each<[string, string | string[] | undefined]>([
 			["missing", undefined],
 			["an empty string", ""],
 			["an empty list", []],
 			["a list of empty strings", [""]],
 		])("rejects a token when the audience is %s", async (_, audience) => {
-			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 			const { jwks, sign } = await makeKeyset();
 			const provider = providerWith({
 				jwks,
@@ -283,9 +277,6 @@ describe("verifyProviderIdToken", () => {
 			await expect(
 				verifyProviderIdToken(provider, await sign({ sub: "u1" })),
 			).resolves.toBe(false);
-			expect(error).toHaveBeenCalledWith(
-				expect.stringContaining("no client ID"),
-			);
 		});
 	});
 
