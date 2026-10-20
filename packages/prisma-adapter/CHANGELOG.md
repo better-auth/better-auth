@@ -1,5 +1,7 @@
 # @better-auth/prisma-adapter
 
+## 1.7.12
+
 ## 1.7.11
 
 ## 1.7.10
