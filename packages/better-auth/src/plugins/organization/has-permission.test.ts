@@ -118,4 +118,41 @@ describe("hasPermissionFn aggregates permissions across roles", () => {
 		);
 		expect(result).toBe(false);
 	});
+
+	it("does not let the union override a custom authorize() denial", () => {
+		// The role's statements claim `member: ["delete"]`, but its custom
+		// authorize() denies it. The union fallback must not rebuild the
+		// check from statements and grant it anyway.
+		const strictRole = {
+			statements: { member: ["delete"] },
+			authorize: () => ({ success: false as const, error: "denied" }),
+		};
+		const result = hasPermissionFn(
+			{
+				role: "strict",
+				permissions: { member: ["delete"] },
+				options,
+			},
+			{ strict: strictRole as any },
+		);
+		expect(result).toBe(false);
+	});
+
+	it("preserves custom authorize() grants", () => {
+		// A custom authorize() looser than its statements keeps working
+		// exactly as before through the per-role path.
+		const lenientRole = {
+			statements: {},
+			authorize: () => ({ success: true as const }),
+		};
+		const result = hasPermissionFn(
+			{
+				role: "lenient",
+				permissions: { member: ["delete"] },
+				options,
+			},
+			{ lenient: lenientRole as any },
+		);
+		expect(result).toBe(true);
+	});
 });

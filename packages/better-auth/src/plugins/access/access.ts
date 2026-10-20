@@ -103,63 +103,77 @@ function isResourceAuthorized(
 	);
 }
 
+/**
+ * Identifies `authorize` functions created by the `role()` factory.
+ * Lets callers distinguish statement-derived authorization from custom
+ * implementations.
+ */
+export const standardAuthorizeTag = Symbol.for(
+	"better-auth.standard-authorize",
+);
+
 export function role<
 	const TRoleStatements extends Statements,
 	TAuthorizeStatements extends Statements = TRoleStatements,
 >(
 	statements: TRoleStatements,
 ): Role<ExactRoleStatements<TRoleStatements>, TAuthorizeStatements> {
-	return {
-		authorize(
-			request: RoleAuthorizeRequest<TAuthorizeStatements>,
-			connector: "OR" | "AND" = "AND",
-		): AuthorizeResponse {
-			let hasAuthorizedResource = false;
-			for (const [requestedResource, requestedActions] of Object.entries(
-				request,
-			)) {
-				// Guard against resource names that collide with Object.prototype
-				// members (e.g. `constructor`): without an own-property check the
-				// lookup returns an inherited member and the check below throws
-				// instead of denying.
-				const allowedActions = Object.prototype.hasOwnProperty.call(
-					statements,
-					requestedResource,
-				)
-					? statements[requestedResource]
-					: undefined;
-				if (!allowedActions) {
-					if (connector === "AND") {
-						return unknownResourceResponse(requestedResource);
-					}
-					continue;
+	const authorize = (
+		request: RoleAuthorizeRequest<TAuthorizeStatements>,
+		connector: "OR" | "AND" = "AND",
+	): AuthorizeResponse => {
+		let hasAuthorizedResource = false;
+		for (const [requestedResource, requestedActions] of Object.entries(
+			request,
+		)) {
+			// Guard against resource names that collide with Object.prototype
+			// members (e.g. `constructor`): without an own-property check the
+			// lookup returns an inherited member and the check below throws
+			// instead of denying.
+			const allowedActions = Object.prototype.hasOwnProperty.call(
+				statements,
+				requestedResource,
+			)
+				? statements[requestedResource]
+				: undefined;
+			if (!allowedActions) {
+				if (connector === "AND") {
+					return unknownResourceResponse(requestedResource);
 				}
-
-				const isAuthorized = isResourceAuthorized(
-					allowedActions,
-					normalizeActionRequest(requestedActions),
-				);
-				if (isAuthorized) {
-					hasAuthorizedResource = true;
-				}
-
-				if (isAuthorized && connector === "OR") {
-					return { success: true };
-				}
-				if (!isAuthorized && connector === "AND") {
-					return unauthorizedResourceResponse(requestedResource);
-				}
+				continue;
 			}
-			if (hasAuthorizedResource) {
-				return {
-					success: true,
-				};
+
+			const isAuthorized = isResourceAuthorized(
+				allowedActions,
+				normalizeActionRequest(requestedActions),
+			);
+			if (isAuthorized) {
+				hasAuthorizedResource = true;
 			}
+
+			if (isAuthorized && connector === "OR") {
+				return { success: true };
+			}
+			if (!isAuthorized && connector === "AND") {
+				return unauthorizedResourceResponse(requestedResource);
+			}
+		}
+		if (hasAuthorizedResource) {
 			return {
-				success: false,
-				error: "Not authorized",
+				success: true,
 			};
-		},
+		}
+		return {
+			success: false,
+			error: "Not authorized",
+		};
+	};
+	// Tag statement-derived authorize functions so aggregated permission
+	// checks can distinguish them from custom implementations. Aggregating
+	// statements across roles must never silently bypass custom logic.
+	(authorize as any)[standardAuthorizeTag] = true;
+	return {
+		authorize,
 		statements,
 	};
 }

@@ -1,5 +1,5 @@
 import type { Role } from "../access";
-import { role } from "../access";
+import { role, standardAuthorizeTag } from "../access";
 import type { OrganizationOptions } from "./types";
 
 export const hasPermissionFn = (
@@ -26,16 +26,36 @@ export const hasPermissionFn = (
 		}
 	}
 
-	// Aggregate the statements of every role the user holds before authorizing.
-	// Evaluating each role independently against the full requested permission set
-	// wrongly denies users whose permissions are split across multiple roles
-	// (e.g. role A grants `a:use-a` and role B grants `b:use-b`, but a check for
-	// both together fails because no single role grants everything).
+	// Fallback: evaluate the requested permissions against the union of the
+	// held roles' statements. Evaluating each role independently against the
+	// full requested set wrongly denies users whose permissions are split
+	// across multiple roles (e.g. role A grants `a:use-a` and role B grants
+	// `b:use-b`, but a check for both together fails because no single role
+	// grants everything).
+	//
+	// This fallback rebuilds the check from `statements` alone, which would
+	// silently bypass any custom authorize() logic — including custom denials
+	// stricter than a role's statements. So it only runs when every held role
+	// uses the standard statement-derived authorize; if any role is custom,
+	// the previous per-role behavior above is the final answer.
+	const roleObjects = roles
+		.map((r) => acRoles[r as keyof typeof acRoles])
+		.filter((r) => r !== undefined);
+	if (roleObjects.length === 0) {
+		return false;
+	}
+	const allStandard = roleObjects.every(
+		(r) => (r.authorize as any)[standardAuthorizeTag] === true,
+	);
+	if (!allStandard) {
+		return false;
+	}
+
 	// Uses a null-prototype object so resource names like `constructor` can't
 	// collide with Object.prototype members.
 	const aggregatedStatements: Record<string, string[]> = Object.create(null);
-	for (const role of roles) {
-		const statements = acRoles[role as keyof typeof acRoles]?.statements as
+	for (const _role of roleObjects) {
+		const statements = _role.statements as
 			| Record<string, string[]>
 			| undefined;
 		if (!statements) {
