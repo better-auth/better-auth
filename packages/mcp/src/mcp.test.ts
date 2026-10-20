@@ -22,7 +22,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { decodeJwt } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createMcpProtectedRequestHandler, mcp } from "./index";
+import { createMcpProtectedRequestHandler, mcp, requireMcpAuth } from "./index";
 
 const AUTHORIZATION_SERVER = "https://auth.example.test";
 const MCP_RESOURCE = "https://resource.example.test/mcp";
@@ -584,5 +584,91 @@ describe("MCP SDK v2 explicit DCR flow", async () => {
 		expect(JSON.stringify(requestedRegistrationDocuments)).not.toContain(
 			wrongIssuerClient.client_secret,
 		);
+	});
+});
+
+describe("requireMcpAuth access token profile", async () => {
+	const baseURL = `${AUTHORIZATION_SERVER}/api/auth`;
+	const instance = await getTestInstance({
+		baseURL: AUTHORIZATION_SERVER,
+		advanced: { useSecureCookies: false },
+		plugins: [
+			// Session JWTs share the signing keys of OAuth access tokens. With this
+			// override they also share the issuer and audience.
+			jwt({ jwt: { issuer: baseURL, audience: baseURL } }),
+			mcp({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resource: baseURL,
+				scopes: ["mcp:base"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("accepts an OAuth access token issued by the provider", async () => {
+		const { headers } = await instance.signInWithTestUser();
+		const client = await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				redirect_uris: [REDIRECT_URI],
+				client_credentials_scopes: ["mcp:base"],
+			},
+		});
+		const tokenResponse = await instance.customFetchImpl(
+			`${baseURL}/oauth2/token`,
+			{
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: client.client_id,
+					client_secret: client.client_secret!,
+					scope: "mcp:base",
+					resource: baseURL,
+				}),
+			},
+		);
+		expect(tokenResponse.status).toBe(200);
+		const { access_token: accessToken } = await tokenResponse.json();
+		vi.stubGlobal("fetch", instance.customFetchImpl);
+		const handler = vi.fn(() => Response.json({ ok: true }));
+
+		const response = await requireMcpAuth(
+			instance.auth,
+			handler,
+		)(
+			new Request(MCP_RESOURCE, {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		expect(handler).toHaveBeenCalledOnce();
+	});
+
+	it("rejects a session JWT that is not an OAuth access token", async () => {
+		const { headers } = await instance.signInWithTestUser();
+		const { token } = await instance.auth.api.getToken({ headers });
+		vi.stubGlobal("fetch", instance.customFetchImpl);
+		const handler = vi.fn(() => Response.json({ ok: true }));
+
+		const response = await requireMcpAuth(
+			instance.auth,
+			handler,
+		)(
+			new Request(MCP_RESOURCE, {
+				headers: { Authorization: `Bearer ${token}` },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(handler).not.toHaveBeenCalled();
 	});
 });
