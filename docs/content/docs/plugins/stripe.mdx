@@ -588,6 +588,8 @@ The plugin automatically handles common webhook events:
 * `customer.subscription.updated`: Updates subscription details when changed
 * `customer.subscription.deleted`: Marks subscription as canceled
 
+If saving the subscription or a lifecycle hook (such as `onSubscriptionComplete` or `onSubscriptionUpdate`) throws, the webhook responds with an error and `onEvent` is not called, so Stripe retries the event. Stripe can deliver an event more than once, so keep lifecycle hooks idempotent.
+
 You can also handle custom events:
 
 ```ts title="auth.ts"

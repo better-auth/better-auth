@@ -147,6 +147,7 @@ export async function onCheckoutSessionCompleted(
 		}
 	} catch (e: any) {
 		ctx.context.logger.error(`Stripe webhook failed. Error: ${e.message}`);
+		throw e;
 	}
 }
 
@@ -186,9 +187,12 @@ export async function onSubscriptionCreated(
 						], // Probably won't match since it's not set yet
 			});
 		if (existingSubscription) {
+			// The row was pre-created by checkout or written by an earlier delivery of this event.
+			// Apply the event as an update so retries and out-of-order deliveries still converge.
 			ctx.context.logger.info(
-				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), skipping creation`,
+				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), applying as update`,
 			);
+			await onSubscriptionUpdated(ctx, options, event);
 			return;
 		}
 
@@ -272,6 +276,7 @@ export async function onSubscriptionCreated(
 		});
 	} catch (error: any) {
 		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
+		throw error;
 	}
 }
 
@@ -393,10 +398,9 @@ export async function onSubscriptionUpdated(
 		});
 		// Practically unreachable. A null here means the row was deleted between the read above and this update.
 		if (!subscriptionUpdated) {
-			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently), skipping callbacks`,
+			throw new Error(
+				`Subscription ${subscription.id} update returned no row (likely deleted concurrently)`,
 			);
-			return;
 		}
 
 		const isNewCancellation =
@@ -438,6 +442,7 @@ export async function onSubscriptionUpdated(
 		}
 	} catch (error: any) {
 		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
+		throw error;
 	}
 }
 
@@ -500,10 +505,9 @@ export async function onSubscriptionDeleted(
 				});
 			// Practically unreachable. A null here means the row was deleted between the read above and this update.
 			if (!subscriptionUpdated) {
-				ctx.context.logger.warn(
-					`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently), skipping callbacks`,
+				throw new Error(
+					`Subscription ${subscription.id} update returned no row (likely deleted concurrently)`,
 				);
-				return;
 			}
 			await options.subscription.onSubscriptionDeleted?.({
 				event,
@@ -517,5 +521,6 @@ export async function onSubscriptionDeleted(
 		}
 	} catch (error: any) {
 		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
+		throw error;
 	}
 }
