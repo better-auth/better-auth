@@ -335,6 +335,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@amank-root/better-auth-razorpay",
+		url: "https://github.com/Amank-root/better-auth-razorpay",
+		description:
+			"Full Razorpay integration plugin for Better Auth — subscriptions, one-time payments, invoices, refunds, customers, add-ons, items, and webhook handling.",
+		author: {
+			name: "Aman Kushwaha",
+			github: "Amank-root",
+			avatar: "https://github.com/Amank-root.png",
+		},
+	},
+	{
 		name: "better-auth-instagram",
 		url: "https://github.com/rajatsandeepsen/better-auth-instagram",
 		description: "Instagram Provider for Better Auth",
