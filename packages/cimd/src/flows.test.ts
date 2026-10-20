@@ -958,6 +958,67 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 		await authorize();
 		expect(await sectorOf()).toBeNull();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11830
+	 */
+	it("keeps admin changes made while the refresh fetch is in flight", async () => {
+		const inFlightUrl =
+			"https://mcp-client-refresh-race.example.com/client-metadata.json";
+		const document = { ...metadataDocument, client_id: inFlightUrl };
+		stubMetadataFetch(inFlightUrl, document);
+		const { headers } = await signInWithTestUser();
+		const authorize = () =>
+			customFetchImpl(
+				buildAuthorizeUrl(authServerBaseUrl, inFlightUrl, redirectUri),
+				{ headers },
+			);
+		await authorize();
+
+		// The refresh reads the client before fetching. An administrator writes
+		// during the fetch, and the refresh must not restore what it read.
+		const ctx = await authorizationServer.$context;
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested !== inFlightUrl) return originalFetch(input, init);
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: inFlightUrl }],
+					update: {
+						disabled: true,
+						skipConsent: true,
+						enableEndSession: true,
+						clientCredentialsScopes: ["service:read"],
+					},
+				});
+				return new Response(JSON.stringify(document), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
+			}),
+		);
+		await authorize();
+
+		const afterRefresh = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: inFlightUrl }],
+		});
+		expect(afterRefresh).toMatchObject({
+			disabled: true,
+			skipConsent: true,
+			enableEndSession: true,
+			clientCredentialsScopes: ["service:read"],
+		});
+	});
 });
 
 describe("CIMD - metadata document URL policy", async () => {

@@ -16,6 +16,22 @@
   - @better-auth/oauth-provider@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.12
+
+### Patch Changes
+
+- [#11934](https://github.com/better-auth/better-auth/pull/11934) [`2a576f3`](https://github.com/better-auth/better-auth/commit/2a576f39dc6a3c278e28b6ee004c40396b4bab7c) Thanks [@bytaesu](https://github.com/bytaesu)! - `requireMcpAuth` now accepts only OAuth access tokens and rejects session JWTs from the JWT plugin, even when they share the issuer and audience.
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- Updated dependencies [[`a1f6f0b`](https://github.com/better-auth/better-auth/commit/a1f6f0bf19ba1be85e977d891d0f0ca43723c0a3), [`37debaa`](https://github.com/better-auth/better-auth/commit/37debaa8a17d11d05f8eeabdb94877a4b1575a1d)]:
+  - @better-auth/oauth-provider@1.7.11
+
 ## 1.7.10
 
 ### Patch Changes
