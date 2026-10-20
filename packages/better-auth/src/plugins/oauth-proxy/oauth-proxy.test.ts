@@ -2516,12 +2516,18 @@ describe("oauth-proxy callback binding", () => {
 			await startProxiedFlow();
 		previewGoogle.requiresIdTokenNonce = true;
 		productionGoogle.requiresIdTokenNonce = true;
+		const createAuthorizationURL = vi.spyOn(
+			previewGoogle,
+			"createAuthorizationURL",
+		);
 		const getUserInfo = vi.spyOn(productionGoogle, "getUserInfo");
 
 		await callback();
 
+		const issuedNonce = createAuthorizationURL.mock.calls[0]?.[0].idTokenNonce;
+		expect(issuedNonce).toEqual(expect.any(String));
 		expect(getUserInfo).toHaveBeenCalledWith(
-			expect.objectContaining({ expectedIdTokenNonce: expect.any(String) }),
+			expect.objectContaining({ expectedIdTokenNonce: issuedNonce }),
 		);
 	});
 });

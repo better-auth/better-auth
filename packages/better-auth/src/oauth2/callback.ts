@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { OAuthProvider } from "@better-auth/core/oauth2";
+import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { resolveOAuthAccountKey, toOAuthProfileRecord } from "./account-key";
 import { OAUTH_CALLBACK_ERROR_CODES } from "./errors";
@@ -51,17 +51,20 @@ export async function exchangeOAuthCallback(
 		return { error: OAUTH_CALLBACK_ERROR_CODES.NONCE_BINDING_MISSING };
 	}
 
-	const tokens = await provider
-		.validateAuthorizationCode({
+	// A custom provider can throw before returning a promise, so await inside
+	// `try` to catch both.
+	let tokens: OAuth2Tokens | null;
+	try {
+		tokens = await provider.validateAuthorizationCode({
 			code: callback.code,
 			codeVerifier: callback.codeVerifier,
 			deviceId: callback.deviceId,
 			redirectURI: `${ctx.context.baseURL}${getOAuthCallbackPath(provider)}`,
-		})
-		.catch((error) => {
-			ctx.context.logger.error("Failed to validate authorization code", error);
-			return null;
 		});
+	} catch (error) {
+		ctx.context.logger.error("Failed to validate authorization code", error);
+		return { error: OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE };
+	}
 	if (!tokens) {
 		return { error: OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE };
 	}
