@@ -3093,5 +3093,52 @@ describe("stripe webhook", () => {
 			expect((await send()).status).toBe(200);
 			expect((await findRow(id))?.status).toBe("canceled");
 		});
+
+		test("should leave trial and cancellation callbacks to customer.subscription.updated", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const createdEvent = createSubscriptionEvent(
+				"customer.subscription.created",
+				{
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "trialing",
+					items: subscriptionItems,
+				},
+			);
+			// The trial has since ended and cancellation is scheduled
+			const currentStripeSubscription = createSubscription({
+				id: "sub_propagation",
+				customer: "cus_propagation",
+				status: "active",
+				cancel_at_period_end: true,
+				items: subscriptionItems,
+			});
+			const onTrialEnd = vi.fn();
+			const onSubscriptionCancel = vi.fn();
+			const { createRow, findRow, send } = await setup(
+				memory,
+				stripeOptions,
+				[createdEvent],
+				{
+					onSubscriptionCancel,
+					plans: [
+						{
+							priceId: TEST_PRICES.starter,
+							name: "starter",
+							freeTrial: { days: 7, onTrialEnd },
+						},
+					],
+				},
+				currentStripeSubscription,
+			);
+			const { id } = await createRow({ status: "trialing" });
+
+			expect((await send()).status).toBe(200);
+			expect((await findRow(id))?.status).toBe("active");
+			expect(onTrialEnd).not.toHaveBeenCalled();
+			expect(onSubscriptionCancel).not.toHaveBeenCalled();
+		});
 	});
 });

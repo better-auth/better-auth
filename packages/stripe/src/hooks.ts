@@ -434,19 +434,21 @@ export async function onSubscriptionUpdated(
 			);
 		}
 
-		// Stripe's state before this event. A redelivery sees the row already
-		// updated, so transitions are also read from the event's previous_attributes.
+		// Transition callbacks follow customer.subscription.updated, which Stripe sends for every
+		// trial end and cancellation. A redelivery sees the row already updated, so transitions
+		// are also read from the event's previous_attributes.
+		const isUpdateEvent = event.type === "customer.subscription.updated";
 		const stripeSubscriptionBefore: Stripe.Subscription = {
 			...stripeSubscriptionUpdated,
-			...(event.type === "customer.subscription.updated"
-				? event.data.previous_attributes
-				: {}),
+			...(isUpdateEvent ? event.data.previous_attributes : {}),
 		};
 		const wasTrialing =
-			subscription.status === "trialing" ||
-			stripeSubscriptionBefore.status === "trialing";
+			isUpdateEvent &&
+			(subscription.status === "trialing" ||
+				stripeSubscriptionBefore.status === "trialing");
 
 		const isNewCancellation =
+			isUpdateEvent &&
 			stripeSubscriptionUpdated.status === "active" &&
 			isStripePendingCancel(stripeSubscriptionUpdated) &&
 			(!isPendingCancel(subscription) ||
