@@ -265,14 +265,20 @@ describe("verifyProviderIdToken", () => {
 			vi.restoreAllMocks();
 		});
 
-		it.each<[string, string | string[]]>([
+		it.each<[string, string | string[] | undefined]>([
+			["missing", undefined],
 			["an empty string", ""],
 			["an empty list", []],
 			["a list of empty strings", [""]],
 		])("rejects a token when the audience is %s", async (_, audience) => {
 			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 			const { jwks, sign } = await makeKeyset();
-			const provider = providerWith({ jwks, issuer: ISSUER, audience });
+			const provider = providerWith({
+				jwks,
+				issuer: ISSUER,
+				// Providers pass `clientId` through, which is undefined when it is not set.
+				audience: audience as string | string[],
+			});
 
 			await expect(
 				verifyProviderIdToken(provider, await sign({ sub: "u1" })),
