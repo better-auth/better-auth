@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
@@ -536,6 +536,9 @@ describe("email-otp", async () => {
 		expect(res.error?.code).toBe("INVALID_EMAIL");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/<ISSUE>
+	 */
 	it.for([
 		{
 			endpoint: "requestPasswordReset",
@@ -554,12 +557,12 @@ describe("email-otp", async () => {
 				ctx.internalAdapter,
 				"createVerificationValue",
 			);
+			onTestFinished(() => createVerificationValue.mockRestore());
 
 			const res = await request("invalid-email");
+			expect(createVerificationValue).not.toHaveBeenCalled();
 			expect(res.error?.status).toBe(400);
 			expect(res.error?.code).toBe("INVALID_EMAIL");
-			expect(createVerificationValue).not.toHaveBeenCalled();
-			createVerificationValue.mockRestore();
 		},
 	);
 
