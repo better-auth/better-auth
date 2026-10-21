@@ -2111,6 +2111,49 @@ kBGIJYs=
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11207
 		 */
+		it("rejects an optimistic guarded no-op update when the provider changed", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, { guardProviderMutation() {} });
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "noop-contended");
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			interceptSSOProviderMutationWrite(context.adapter, async () => {
+				await context.adapter.update({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "noop-contended" }],
+					update: { domain: "concurrent.example.com" },
+				});
+			});
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "noop-contended",
+						domain: "example.com",
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "CONFLICT",
+				body: {
+					code: "SSO_PROVIDER_CHANGED",
+				},
+			});
+			expect(
+				data.ssoProvider.find(
+					(provider) => provider.providerId === "noop-contended",
+				)?.domain,
+			).toBe("concurrent.example.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
 		it("rejects an optimistic guarded update to a non-scalar additional field", async () => {
 			const options = {
 				guardProviderMutation() {},
