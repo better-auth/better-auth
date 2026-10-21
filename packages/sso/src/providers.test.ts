@@ -2057,6 +2057,60 @@ kBGIJYs=
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11207
 		 */
+		it("accepts an optimistic guarded update that does not change the provider", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, { guardProviderMutation() {} });
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "unchanged-update");
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "unchanged-update",
+			)!;
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			const updateMany = context.adapter.updateMany.bind(context.adapter);
+			context.adapter.updateMany = (async (input) => {
+				if (input.model === "ssoProvider") {
+					const current = await context.adapter.findOne<
+						Record<string, unknown>
+					>({
+						model: "ssoProvider",
+						where: [{ field: "id", value: provider.id }],
+					});
+					if (
+						current &&
+						Object.entries(input.update).every(
+							([field, value]) => current[field] === value,
+						)
+					) {
+						// MongoDB reports modifiedCount, so an unchanged write returns 0.
+						return 0;
+					}
+				}
+				return updateMany(input);
+			}) as typeof context.adapter.updateMany;
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "unchanged-update",
+					domain: "example.com",
+				},
+				headers,
+			});
+
+			expect(updated.domain).toBe("example.com");
+			expect(
+				data.ssoProvider.find((row) => row.providerId === "unchanged-update")
+					?.domain,
+			).toBe("example.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
 		it("rejects an optimistic guarded update that changes the identity boundary", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider, data } =
 				createTestAuth(false, false, { guardProviderMutation() {} });

@@ -1770,7 +1770,7 @@ Optimistic mode cannot serialize account linking with the provider write. For th
 * Changing provider identity fields returns `501` with `SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS`. Use an adapter with native transactions to change the issuer, OIDC identity fields, or SAML identity fields.
 * Deleting a provider that still has linked accounts returns `501` with `SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS`. Remove the linked accounts first, or use an adapter with native transactions. Deletion of a provider with no linked accounts is supported.
 
-Updates that do not change the identity boundary, such as domain, client-secret, and signing-certificate changes, and deletion of providers without linked accounts remain available.
+Updates that do not change the identity boundary, such as domain, client-secret, and signing-certificate changes, and deletion of providers without linked accounts remain available. A deletion checks linked accounts before deleting the provider row. A concurrent account link that already passed its own provider check can still complete after that check; fully closing this window requires accounts bound to an immutable provider instance, so use an adapter with native transactions when that guarantee is required.
 
 export const ssoOptionsType = {
 	provisionUser: {
