@@ -578,6 +578,60 @@ describe("CIMD metadata fetch governor", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11949
 	 */
+	it("does not return a pre-refresh client after a slower caller's URL policy resolves", async () => {
+		let now = 1_800_000_000_000;
+		vi.spyOn(Date, "now").mockImplementation(() => now);
+		const clientId = "https://refreshed-policy.example/client.json";
+		const policyDecisions: Array<ReturnType<typeof deferred<boolean>>> = [];
+		const isMetadataDocumentUrlAllowed = vi.fn(() => {
+			const decision = deferred<boolean>();
+			policyDecisions.push(decision);
+			return decision.promise;
+		});
+		const harness = await createGovernorHarness(
+			{ minimumFetchInterval: 0 },
+			8,
+			isMetadataDocumentUrlAllowed,
+		);
+		let redirectUris = [REDIRECT_URI];
+		harness.responders.set(clientId, () =>
+			Response.json(
+				{ ...metadata(clientId), redirect_uris: redirectUris },
+				{ headers: { "cache-control": "max-age=60" } },
+			),
+		);
+
+		const initial = harness.authorize(clientId);
+		await vi.waitFor(() => expect(policyDecisions).toHaveLength(1));
+		policyDecisions[0]?.resolve(true);
+		expect((await initial).location).toContain("/consent");
+
+		// The cached document expires and the published metadata drops the
+		// redirect URI.
+		now += 61_000;
+		redirectUris = ["http://127.0.0.1:5199/other-callback"];
+		const first = harness.authorize(clientId);
+		const second = harness.authorize(clientId);
+		await vi.waitFor(() => expect(policyDecisions).toHaveLength(3));
+		policyDecisions[1]?.resolve(true);
+		const firstResult = await first;
+		policyDecisions[2]?.resolve(true);
+		const secondResult = await second;
+
+		expect({
+			firstReachedConsent: firstResult.location.includes("/consent"),
+			secondReachedConsent: secondResult.location.includes("/consent"),
+			fetches: harness.fetchClientMetadataResource.mock.calls.length,
+		}).toEqual({
+			firstReachedConsent: false,
+			secondReachedConsent: false,
+			fetches: 2,
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11949
+	 */
 	it("refuses a concurrent caller denied by the URL policy while another caller's fetch is in flight", async () => {
 		const clientId = "https://per-caller-policy.example/client.json";
 		const policyDecisions: Array<ReturnType<typeof deferred<boolean>>> = [];

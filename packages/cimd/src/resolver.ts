@@ -499,9 +499,23 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
 
 		// Another caller may have cached or started a fetch while the policy ran.
+		// A refresh in that window may have updated the stored client, so read it
+		// again instead of returning the caller's earlier snapshot.
 		const cachedEntry = readCacheEntry(clientId);
 		if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
-			return resolveFromCache(cachedEntry);
+			if (!existingClient) return resolveFromCache(cachedEntry);
+			const storedClient = await ctx.context.adapter.findOne<
+				SchemaClient<Scope[]>
+			>({
+				model: oauthOptions.schema?.oauthClient?.modelName ?? "oauthClient",
+				where: [{ field: "clientId", value: clientId }],
+			});
+			if (
+				!storedClient ||
+				storedClient.clientDiscoveryId !== existingClient.clientDiscoveryId
+			)
+				throw invalidClient("client no longer exists");
+			return storedClient;
 		}
 
 		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
