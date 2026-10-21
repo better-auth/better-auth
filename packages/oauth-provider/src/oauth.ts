@@ -65,6 +65,7 @@ import {
 	removePromptFromQuery,
 	searchParamsToQuery,
 	signedQueryIssuedAtParam,
+	signedQueryParameterNameParam,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -674,6 +675,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						queryParams.delete("sig");
 						queryParams.delete("exp");
 						queryParams.delete(signedQueryIssuedAtParam);
+						queryParams.delete(signedQueryParameterNameParam);
 						queryParams.delete(postLoginClearedParam);
 						await oAuthState.set({
 							query: queryParams.toString(),
@@ -827,6 +829,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						claims: claimsRequestParameterSchema.optional().meta({
 							description:
 								"Accepted OIDC claims request object. If none is provided, then all originally requested claims are accepted.",
+						}),
+						reference_id: z.string().min(1).optional().meta({
+							description:
+								"The reference the user chose for this consent, such as an organization ID. postLogin.consentReferenceId receives it and decides whether to accept it.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",

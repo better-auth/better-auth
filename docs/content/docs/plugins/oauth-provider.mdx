@@ -737,6 +737,10 @@ Accept or deny user consent for a set of scopes. Note that when denying scopes, 
      * Accepted OIDC claims request object. If not provided, the originally requested claims are accepted.
      */
     claims?: string | Record<string, unknown>,
+    /**
+     * The reference the user chose for this consent, such as an organization ID. `postLogin.consentReferenceId` receives it as `consent.referenceId` and decides whether to accept it. Rejected with `invalid_request` when `postLogin` is not configured.
+     */
+    reference_id?: string,
   }
   ```
 </APIMethod>
@@ -1332,6 +1336,60 @@ await authClient.oauth2.continue({
   postLogin: true,
 });
 ```
+
+##### Organization from the Request or the Consent Page
+
+`shouldRedirect` and `consentReferenceId` receive `query`, the authorization request this server validated, as `URLSearchParams`. It includes parameters the client adds, so a client can name the organization it needs, such as `organization=org_123`. The client chooses that value, so check that the user belongs to the organization before returning it.
+
+Your consent page can also ask which organization the consent is for and send its ID as `reference_id` to `/oauth2/consent`. `consentReferenceId` receives it as `consent.referenceId`, then returns the reference to store or throws to refuse it. `consent` is set only while `/oauth2/consent` records the user's acceptance, so before then, an authorization without an organization can return `undefined` to let the consent page ask. A client with `skip_consent` never reaches the consent page, so throw instead when such a client must name the organization.
+
+```ts title="auth.ts"
+oauthProvider({
+  scopes: ["openid", "profile", "email", "read:organization"],
+  postLogin: {
+    page: "/select-organization",
+    // The consent page asks for the organization instead.
+    shouldRedirect: () => false,
+    consentReferenceId: async ({ user, scopes, query, consent }) => {
+      if (!scopes.includes("read:organization")) return undefined;
+      const named = query.get("organization") ?? undefined;
+      const chosen = consent?.referenceId;
+      if (named && chosen && named !== chosen) {
+        throw new APIError("FORBIDDEN", {
+          error: "access_denied",
+          error_description: "the client requested another organization",
+        });
+      }
+      const organizationId = named ?? chosen;
+      if (!organizationId) {
+        if (!consent) return undefined;
+        throw new APIError("BAD_REQUEST", {
+          error: "invalid_request",
+          error_description: "choose an organization",
+        });
+      }
+      if (!(await isOrganizationMember(user.id, organizationId))) {
+        throw new APIError("FORBIDDEN", {
+          error: "access_denied",
+          error_description: "not a member of this organization",
+        });
+      }
+      return organizationId;
+    },
+  },
+})
+```
+
+```ts title="consent-page.ts"
+import { authClient } from "@/lib/auth-client"
+
+await authClient.oauth2.consent({
+  accept: true,
+  reference_id: organizationId,
+});
+```
+
+The authorization code and its tokens carry the reference stored with the consent.
 
 ### Cached Trusted Clients
 
@@ -2208,7 +2266,7 @@ oauthProvider({
 })
 ```
 
-The client record stays the same for every organization, so this works for clients that register themselves, including open [dynamic client registration](#dynamic-client-registration) and CIMD.
+The client record stays the same for every organization, so this works for clients that register themselves, including open [dynamic client registration](#dynamic-client-registration) and CIMD. A client can also name the organization in its authorization request, or your consent page can ask for it, as shown in [Organization from the Request or the Consent Page](#organization-from-the-request-or-the-consent-page).
 
 ##### An Organization Owns the Client
 

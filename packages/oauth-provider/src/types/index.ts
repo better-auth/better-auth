@@ -1311,6 +1311,20 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * The authorization request this server validated, including
+			 * parameters the client added, such as `organization`. Changing it
+			 * does not change the request.
+			 */
+			query: URLSearchParams;
+			/**
+			 * Set only while `/oauth2/consent` records the user's acceptance.
+			 * `referenceId` is the `reference_id` the consent page sent. The
+			 * user chose it, so check they may consent for it before returning it.
+			 */
+			consent?: {
+				referenceId?: string;
+			};
 		}) => Awaitable<string | undefined>;
 		/**
 		 * After login and before consent, request the user to
@@ -1330,6 +1344,12 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * The authorization request this server validated, including
+			 * parameters the client added, such as `organization`. Changing it
+			 * does not change the request.
+			 */
+			query: URLSearchParams;
 			/**
 			 * `true` when the user returns from `page` through `/oauth2/continue`.
 			 * The client chooses to send that request, so it does not prove a

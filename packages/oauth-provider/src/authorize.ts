@@ -463,6 +463,8 @@ export type AuthorizeEndpointSettings = {
 	isPostLoginContinuation?: boolean;
 	/** Set only by the consent endpoint, in the request where the user accepts. */
 	consentAccepted?: boolean;
+	/** With `consentAccepted`: the reference the accepted consent was stored under. */
+	consentReferenceId?: string;
 };
 
 export async function authorizeEndpoint(
@@ -994,6 +996,7 @@ async function runAuthorizationInteraction(
 			user: session.user,
 			session: session.session,
 			scopes,
+			query: serializeAuthorizationQuery(query),
 			isContinuation: settings?.isPostLoginContinuation ?? false,
 		});
 		if (postLoginRedirect) {
@@ -1021,11 +1024,14 @@ async function runAuthorizationInteraction(
 		});
 	}
 
-	const referenceId = await getConsentReferenceId(opts, {
-		user: session.user,
-		session: session.session,
-		scopes,
-	});
+	const referenceId = settings?.consentAccepted
+		? settings.consentReferenceId
+		: await getConsentReferenceId(opts, {
+				user: session.user,
+				session: session.session,
+				scopes,
+				query: serializeAuthorizationQuery(query),
+			});
 	const approve = async () => {
 		let authenticationContext: OAuthAuthenticationContext;
 		try {
@@ -1115,7 +1121,7 @@ async function runAuthorizationInteraction(
 	return approve();
 }
 
-function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
+function serializeAuthorizationQuery(query: OAuthInteractionQuery) {
 	const params = new URLSearchParams();
 	for (const [key, value] of Object.entries(query)) {
 		if (value == null) continue;

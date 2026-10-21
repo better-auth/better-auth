@@ -35,6 +35,7 @@ export {
 	getSignedQueryIssuedAt,
 	postLoginClearedParam,
 	signedQueryIssuedAtParam,
+	signedQueryParameterNameParam,
 } from "../signed-query";
 
 /**
