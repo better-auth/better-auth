@@ -49,6 +49,18 @@ describe("Polar userinfo profiles", () => {
 		expect(result?.data).toEqual(profile);
 	});
 
+	it.each([undefined, null])(
+		"uses an empty local name when name is %s",
+		async (name) => {
+			const profile = { sub: "polar-user", name } satisfies PolarProfile;
+			mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
+			const result = await polar(options).getUserInfo({ accessToken: "token" });
+
+			expect(result?.user.name).toBe("");
+			expect(result?.data).toEqual(profile);
+		},
+	);
+
 	it("lets profile mapping supply an email for a subject-only response", async () => {
 		const profile = { sub: "polar-user" } satisfies PolarProfile;
 		mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
