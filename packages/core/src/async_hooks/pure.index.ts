@@ -26,21 +26,27 @@ class AsyncLocalStoragePolyfill<T> {
 	}
 }
 
-const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage | null> =
-	Promise.resolve().then(() => {
-		if ("AsyncLocalStorage" in globalThis) {
-			return (globalThis as any).AsyncLocalStorage;
-		}
-		return AsyncLocalStoragePolyfill;
-	});
+let cachedAsyncLocalStorageConstructor: typeof AsyncLocalStorage | undefined;
 
 export async function getAsyncLocalStorage(): Promise<
 	typeof AsyncLocalStorage
 > {
-	const mod = await AsyncLocalStoragePromise;
-	if (mod === null) {
-		throw new Error("getAsyncLocalStorage is only available in server code");
-	} else {
-		return mod;
+	if (cachedAsyncLocalStorageConstructor) {
+		return cachedAsyncLocalStorageConstructor;
 	}
+	const constructor =
+		"AsyncLocalStorage" in globalThis
+			? (
+					globalThis as typeof globalThis & {
+						AsyncLocalStorage?: typeof AsyncLocalStorage | null;
+					}
+				).AsyncLocalStorage
+			: (AsyncLocalStoragePolyfill as unknown as typeof AsyncLocalStorage);
+	if (typeof constructor !== "function") {
+		throw new Error(
+			`Invalid globalThis.AsyncLocalStorage: expected a function, received ${typeof constructor}.`,
+		);
+	}
+	cachedAsyncLocalStorageConstructor ??= constructor;
+	return cachedAsyncLocalStorageConstructor;
 }

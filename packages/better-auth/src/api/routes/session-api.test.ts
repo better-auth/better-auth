@@ -82,6 +82,41 @@ describe("session", async () => {
 		expect(response.data).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11327
+	 */
+	it("should keep the store failure as a server-only cause", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			logger: { disabled: true },
+		});
+		const { headers } = await signInWithTestUser();
+		const { adapter } = await auth.$context;
+		const findOne = adapter.findOne.bind(adapter);
+		const cause = {
+			code: "STORE_UNAVAILABLE",
+			detail: "Private store details",
+		};
+		vi.spyOn(adapter, "findOne").mockImplementation(async (input) => {
+			if (input.model === "session") throw cause;
+			return findOne(input);
+		});
+
+		await expect(auth.api.getSession({ headers })).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+			body: { code: "FAILED_TO_GET_SESSION", message: "Failed to get session" },
+			cause,
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", { headers }),
+		);
+		expect(response.status).toBe(500);
+		await expect(response.json()).resolves.toEqual({
+			code: "FAILED_TO_GET_SESSION",
+			message: "Failed to get session",
+		});
+	});
+
 	it("should require a fresh session based on session creation time", async () => {
 		vi.useFakeTimers();
 		const now = new Date("2026-01-01T00:00:00.000Z");
@@ -2540,19 +2575,18 @@ describe("updateSession plugin authority fields", async () => {
 		plugins: [organization({ teams: { enabled: true } }), admin()],
 	});
 
-	it.each([
-		"activeOrganizationId",
-		"activeTeamId",
-		"impersonatedBy",
-	])("should reject forging the %s session field", async (field) => {
-		const { runWithUser } = await signInWithTestUser();
-		await runWithUser(async () => {
-			const res = await client.updateSession({
-				[field]: "forged-value",
-			} as any);
-			expect(res.error?.status).toBe(400);
-		});
-	});
+	it.each(["activeOrganizationId", "activeTeamId", "impersonatedBy"])(
+		"should reject forging the %s session field",
+		async (field) => {
+			const { runWithUser } = await signInWithTestUser();
+			await runWithUser(async () => {
+				const res = await client.updateSession({
+					[field]: "forged-value",
+				} as any);
+				expect(res.error?.status).toBe(400);
+			});
+		},
+	);
 });
 
 describe("update-session cookie cache revocation", async () => {

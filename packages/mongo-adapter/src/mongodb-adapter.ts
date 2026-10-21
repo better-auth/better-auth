@@ -8,8 +8,9 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
+import { logger } from "@better-auth/core/env";
 import type { ClientSession, Db, MongoClient } from "mongodb";
-import { ObjectId, UUID } from "mongodb";
+import { MongoError, MongoErrorLabel, ObjectId, UUID } from "mongodb";
 import {
 	escapeForMongoRegex,
 	insensitiveContains,
@@ -28,6 +29,52 @@ class MongoAdapterError extends Error {
 	) {
 		super(message);
 		this.name = "MongoAdapterError";
+	}
+}
+
+/**
+ * NoSuchTransaction (251) and TransactionCommitted (256) both mean the server
+ * has nothing left open, so the abort has already achieved what it was for.
+ */
+const ABORT_SETTLED_CODES = new Set([251, 256]);
+
+/**
+ * Abort a transaction whose commit did not complete, as a command on its own
+ * session.
+ *
+ * `session.abortTransaction()` is retried by the driver on a transient error;
+ * a raw command is not, and giving up after one attempt would leave the
+ * transaction open until `transactionLifetimeLimitSeconds` — the leak this is
+ * here to close. So a retryable write is tried once more.
+ *
+ * The abort is best-effort either way: the caller's original error is the one
+ * that must surface, so a failure here is only logged.
+ */
+async function abortTransactionCommand(
+	client: MongoClient,
+	session: ClientSession,
+): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			await client.db("admin").command({ abortTransaction: 1 }, { session });
+			return;
+		} catch (abortError) {
+			const code = (abortError as { code?: number })?.code;
+			if (code !== undefined && ABORT_SETTLED_CODES.has(code)) {
+				return;
+			}
+			const retryable =
+				abortError instanceof MongoError &&
+				abortError.hasErrorLabel(MongoErrorLabel.RetryableWriteError);
+			if (retryable && attempt === 0) {
+				continue;
+			}
+			logger.error(
+				"Failed to abort a MongoDB transaction whose commit did not complete",
+				abortError,
+			);
+			return;
+		}
 	}
 }
 
@@ -122,7 +169,7 @@ export const mongodbAdapter = (
 						]);
 						const existingIndexSetup =
 							indexSetupByDefinition.get(indexDefinition);
-						if (existingIndexSetup) return existingIndexSetup;
+						if (existingIndexSetup !== undefined) return existingIndexSetup;
 
 						const indexFields = Object.fromEntries(
 							physicalFieldNames.map((field) => [field, 1] as const),
@@ -621,9 +668,13 @@ export const mongodbAdapter = (
 					}
 
 					if (sortBy) {
+						const sortField = getFieldName({
+							field: sortBy.field,
+							model: modelKey,
+						});
 						pipeline.push({
 							$sort: {
-								[getFieldName({ field: sortBy.field, model: modelKey })]:
+								[sortField === "id" ? "_id" : sortField]:
 									sortBy.direction === "desc" ? -1 : 1,
 							},
 						});
@@ -764,10 +815,9 @@ export const mongodbAdapter = (
 							}
 
 							const session = config.client.startSession();
+							let commitAttempted = false;
 
 							try {
-								session.startTransaction();
-
 								const adapter = createAdapterFactory({
 									config: {
 										...adapterOptions!.config,
@@ -776,12 +826,24 @@ export const mongodbAdapter = (
 									adapter: createCustomAdapter(db, session),
 								})(lazyOptions!);
 
-								const result = await cb(adapter);
-
-								await session.commitTransaction();
-								return result;
+								// `withTransaction` retries a `TransientTransactionError` (such as a
+								// WriteConflict between concurrent transactions) and an unknown
+								// commit result, so `cb` can run more than once.
+								return await session.withTransaction(async () => {
+									commitAttempted = false;
+									const result = await cb(adapter);
+									// `withTransaction` commits as soon as the callback resolves.
+									commitAttempted = true;
+									return result;
+								});
 							} catch (err) {
-								await session.abortTransaction();
+								// `withTransaction` aborts when the callback fails, but not when the
+								// commit fails in flight: the driver then no longer reports the
+								// session as being in a transaction, while the server keeps it open
+								// until `transactionLifetimeLimitSeconds`. Abort it with a command.
+								if (commitAttempted) {
+									await abortTransactionCommand(config.client, session);
+								}
 								throw err;
 							} finally {
 								await session.endSession();
