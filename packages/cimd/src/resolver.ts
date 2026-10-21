@@ -716,7 +716,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		return inFlight.isDiscarded() ? undefined : fetched;
 	};
 
-	const pendingPolicies = new Map<string, Promise<void>>();
 	// Resolves to `undefined` when the fetch was retired before it settled and
 	// its outcome, a document or a failure, is not used.
 	const startFetch = async (
@@ -725,18 +724,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		cachedEntry: CimdMetadataCacheEntry | undefined,
 		extensionFields: ReadonlySet<string>,
 	): Promise<FetchedMetadata | undefined> => {
-		let policy = pendingPolicies.get(clientId);
-		if (!policy) {
-			policy = assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
-			pendingPolicies.set(clientId, policy);
-		}
-		try {
-			await policy;
-		} finally {
-			if (pendingPolicies.get(clientId) === policy) pendingPolicies.delete(clientId);
-		}
-		const pending = inFlightMetadataByClientId.get(clientId);
-		if (pending) return joinFetch(clientId, pending);
 		const startedAtMs = Date.now();
 		const previousFetchStartAtMs = lastFetchStartAtMsByClientId.get(clientId);
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(
@@ -946,6 +933,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		// fresh cache entry found then came from a later fetch, so the stored
 		// client the request started with can be older than it.
 		let resolvingAgain = false;
+		let checkedUrl = false;
 		while (true) {
 			const cachedEntry = readCacheEntry(clientId);
 			if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
@@ -959,6 +947,14 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 					metadata: cachedEntry.metadata,
 					nextEntry: cachedEntry,
 				});
+			}
+
+			if (!checkedUrl) {
+				// Policy may depend on this request. Check it before joining another
+				// fetch, spending a permit, or serving a stored client during an outage.
+				await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+				checkedUrl = true;
+				continue;
 			}
 
 			const transientFailure = transientFailureByClientId.get(clientId);
