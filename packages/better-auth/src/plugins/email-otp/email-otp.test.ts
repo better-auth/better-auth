@@ -441,7 +441,8 @@ describe("email-otp", async () => {
 					email: instance.testUser.email,
 					password,
 				});
-			return { ctx, findUser, resetWith, signInWith };
+			const oldPassword = instance.testUser.password;
+			return { ctx, findUser, resetWith, signInWith, oldPassword };
 		}
 
 		it("still marks the email verified when onPasswordReset throws", async () => {
@@ -460,13 +461,15 @@ describe("email-otp", async () => {
 		});
 
 		it("keeps the old password and the OTP when marking the email verified fails", async () => {
-			const { ctx, findUser, resetWith, signInWith } = await setup();
+			const { ctx, findUser, resetWith, signInWith, oldPassword } =
+				await setup();
 			vi.spyOn(ctx.internalAdapter, "updateUser").mockRejectedValueOnce(
 				new Error("database unavailable"),
 			);
 
 			expect((await resetWith("new-password")).error?.status).toBe(500);
 			expect((await signInWith("new-password")).error?.status).toBe(401);
+			expect((await signInWith(oldPassword)).data).not.toBeNull();
 			expect((await resetWith("new-password")).data?.success).toBe(true);
 			expect((await findUser())?.user.emailVerified).toBe(true);
 		});
