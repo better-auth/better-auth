@@ -494,14 +494,14 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
 		if (inFlightResolution !== undefined) return inFlightResolution;
 
-		// Refuse invalid or disallowed client_id URLs before taking a permit, so
-		// they never spend the global or per-origin fetch budget.
-		await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
-		const coalescedResolution = inFlightResolutionByClientId.get(clientId);
-		if (coalescedResolution !== undefined) return coalescedResolution;
-
-		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
+		let releaseMetadataFetchPermit: (() => void) | undefined;
 		const resolution = (async () => {
+			// Refuse invalid or disallowed client_id URLs before taking a permit, so
+			// they never spend the global or per-origin fetch budget. The gate runs
+			// inside the coalesced resolution, so concurrent same-client callers
+			// share one policy call and one fetch.
+			await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+			releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
 				clientId,
@@ -560,14 +560,17 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		try {
 			return await resolution;
 		} catch (error) {
-			lastFetchStartAtMsByClientId.delete(clientId);
-			lastFetchStartAtMsByClientId.set(clientId, Date.now());
+			// Pace retries only after a fetch was actually attempted.
+			if (releaseMetadataFetchPermit !== undefined) {
+				lastFetchStartAtMsByClientId.delete(clientId);
+				lastFetchStartAtMsByClientId.set(clientId, Date.now());
+			}
 			throw error;
 		} finally {
 			if (inFlightResolutionByClientId.get(clientId) === resolution) {
 				inFlightResolutionByClientId.delete(clientId);
 			}
-			releaseMetadataFetchPermit();
+			releaseMetadataFetchPermit?.();
 		}
 	};
 }

@@ -155,7 +155,7 @@ export const cimdOptionsType = {
 		type: "(clientIdUrl, context) => boolean | Promise<boolean>",
 		default: "always allow",
 		description:
-			"Optional application policy evaluated before the required transport runs.",
+			"Optional application policy evaluated before the required transport runs and before any fetch budget is consumed. Concurrent requests for the same client_id share one call; keep it cheap or cache its decisions if it consults an external service.",
 	},
 	onClientCreated: {
 		type: "(event: CimdClientCreatedEvent) => void | Promise<void>",

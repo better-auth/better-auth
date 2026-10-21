@@ -493,6 +493,50 @@ describe("CIMD metadata fetch governor", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11949
 	 */
+	it("coalesces concurrent same-client resolutions through an async URL policy", async () => {
+		const clientId = "https://async-policy.example/client.json";
+		const policyDecisions: Array<ReturnType<typeof deferred<boolean>>> = [];
+		const isMetadataDocumentUrlAllowed = vi.fn(() => {
+			const decision = deferred<boolean>();
+			policyDecisions.push(decision);
+			return decision.promise;
+		});
+		const harness = await createGovernorHarness(
+			{ minimumFetchInterval: 0, maximumFetchesPerOriginPerMinute: 1 },
+			8,
+			isMetadataDocumentUrlAllowed,
+		);
+		harness.responders.set(clientId, () => noStoreMetadata(clientId));
+
+		const first = harness.authorize(clientId);
+		await vi.waitFor(() => {
+			expect(isMetadataDocumentUrlAllowed).toHaveBeenCalled();
+		});
+		const second = harness.authorize(clientId);
+		// Let the second request reach the resolver before the first policy
+		// decision completes the fetch.
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		policyDecisions[0]?.resolve(true);
+		const firstResult = await first;
+		for (const decision of policyDecisions) decision.resolve(true);
+		const secondResult = await second;
+
+		expect({
+			firstStatus: firstResult.status,
+			secondStatus: secondResult.status,
+			policyCalls: isMetadataDocumentUrlAllowed.mock.calls.length,
+			fetches: harness.fetchClientMetadataResource.mock.calls.length,
+		}).toEqual({
+			firstStatus: 302,
+			secondStatus: 302,
+			policyCalls: 1,
+			fetches: 1,
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11949
+	 */
 	it("does not spend the fetch budget or per-client state on invalid client ID URLs", async () => {
 		let now = 1_800_000_000_000;
 		vi.spyOn(Date, "now").mockImplementation(() => now);
