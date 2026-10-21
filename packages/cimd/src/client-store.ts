@@ -124,18 +124,14 @@ function readResponseCacheHeaders(
 }
 
 /**
- * Fetch and validate one Client ID Metadata Document.
- *
- * Conditional validators are accepted only from the resolver's previously
- * validated cache entry. A 304 response therefore carries no metadata and must
- * be joined with that entry by the caller.
+ * Run the pre-fetch gate for a client_id URL: the draft-02 §3 URL checks and
+ * the application's `isMetadataDocumentUrlAllowed` policy.
  */
-export async function fetchClientMetadataDocument(
+export async function assertClientIdUrlFetchable(
 	ctx: GenericEndpointContext,
 	clientIdUrl: string,
 	cimdOptions: CimdOptions,
-	validators?: { etag?: string; lastModified?: string },
-): Promise<ClientMetadataDocumentResult> {
+): Promise<void> {
 	const urlError = validateClientIdUrl(clientIdUrl);
 	if (urlError) throw invalidClient(urlError);
 
@@ -150,6 +146,26 @@ export async function fetchClientMetadataDocument(
 			);
 		}
 	}
+}
+
+/**
+ * Fetch and validate one Client ID Metadata Document.
+ *
+ * Callers must run {@link assertClientIdUrlFetchable} first, before taking a
+ * fetch permit, so refused URLs never spend the fetch budget.
+ *
+ * Conditional validators are accepted only from the resolver's previously
+ * validated cache entry. A 304 response therefore carries no metadata and must
+ * be joined with that entry by the caller.
+ */
+export async function fetchClientMetadataDocument(
+	ctx: GenericEndpointContext,
+	clientIdUrl: string,
+	cimdOptions: CimdOptions,
+	validators?: { etag?: string; lastModified?: string },
+): Promise<ClientMetadataDocumentResult> {
+	const urlError = validateClientIdUrl(clientIdUrl);
+	if (urlError) throw invalidClient(urlError);
 
 	const requestHeaders = new Headers({ Accept: "application/json" });
 	if (validators?.etag) requestHeaders.set("If-None-Match", validators.etag);

@@ -10,6 +10,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
+	assertClientIdUrlFetchable,
 	fetchClientMetadataDocument,
 	persistMetadataDocumentClient,
 } from "./client-store";
@@ -492,6 +493,12 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 
 		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
 		if (inFlightResolution !== undefined) return inFlightResolution;
+
+		// Refuse invalid or disallowed client_id URLs before taking a permit, so
+		// they never spend the global or per-origin fetch budget.
+		await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+		const coalescedResolution = inFlightResolutionByClientId.get(clientId);
+		if (coalescedResolution !== undefined) return coalescedResolution;
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
 		const resolution = (async () => {
