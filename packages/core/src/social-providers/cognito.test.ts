@@ -37,6 +37,8 @@ describe("Cognito profile verification", () => {
 	});
 
 	it.each([
+		[true, true],
+		[false, false],
 		["true", true],
 		["false", false],
 		[undefined, false],
@@ -58,6 +60,8 @@ describe("Cognito profile verification", () => {
 	it.each([
 		[true, true],
 		[false, false],
+		["true", true],
+		["false", false],
 		[undefined, false],
 	] as const)("normalizes ID-token verification %s", async (raw, verified) => {
 		const profile = {
