@@ -374,6 +374,43 @@ function isSnapshotScalar(
 	);
 }
 
+function isPlainSnapshotObject(
+	value: unknown,
+): value is Record<string, unknown> {
+	if (typeof value !== "object" || value === null) return false;
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
+}
+
+function snapshotValuesEqual(a: unknown, b: unknown): boolean {
+	if (a === b) return true;
+	if (a instanceof Date && b instanceof Date) {
+		return a.getTime() === b.getTime();
+	}
+	if (Array.isArray(a) && Array.isArray(b)) {
+		return (
+			a.length === b.length &&
+			a.every((value, index) => snapshotValuesEqual(value, b[index]))
+		);
+	}
+	if (isPlainSnapshotObject(a) && isPlainSnapshotObject(b)) {
+		const keys = Object.keys(a);
+		if (keys.length !== Object.keys(b).length) return false;
+		return keys.every((key) => key in b && snapshotValuesEqual(a[key], b[key]));
+	}
+	return false;
+}
+
+function isProviderUpdateNoOp(
+	provider: SSOProviderRecord,
+	update: Partial<SSOProviderRecord>,
+): boolean {
+	const current = provider as Record<string, unknown>;
+	return Object.entries(update).every(([field, value]) =>
+		snapshotValuesEqual(current[field], value),
+	);
+}
+
 /**
  * Predicates that fence an optimistic provider mutation against concurrent
  * changes to the exact row the guard evaluated. Only scalar columns can be
@@ -1138,6 +1175,18 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				}
 
 				if (mutationMode === "optimistic") {
+					// Equality predicates can only fence scalar columns. Refuse to
+					// write a non-scalar additional field, because a concurrent change
+					// to that field would not participate in the compare-and-swap.
+					const nonScalarUpdate = Object.entries(updateData).find(
+						([, value]) => value !== undefined && !isSnapshotScalar(value),
+					);
+					if (nonScalarUpdate) {
+						throw new APIError("NOT_IMPLEMENTED", {
+							code: "SSO_PROVIDER_NON_SCALAR_UPDATE_REQUIRES_NATIVE_TRANSACTIONS",
+							message: `Changing non-scalar SSO provider field "${nonScalarUpdate[0]}" requires a database adapter with native transaction support`,
+						});
+					}
 					// The guard evaluated this exact snapshot. Apply the update only
 					// while the row still matches it. Use `updateMany` because its
 					// affected-row count is reliable across adapters; Drizzle MySQL
@@ -1149,17 +1198,23 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						update: updateData,
 					});
 					if (updatedCount === 0) {
-						// MySQL can report changed rows rather than matched rows, so a
-						// no-op update legitimately reports zero. Treat an unchanged
-						// snapshot as success and everything else as a conflict.
-						const unchangedProvider = await database.findOne<SSOProviderRecord>(
-							{
-								model: "ssoProvider",
-								where: getProviderMutationSnapshotWhere(existingProvider),
-							},
-						);
-						if (unchangedProvider) return unchangedProvider;
-						throw providerMutationConflict();
+						// MySQL reports changed rows and MongoDB reports modified rows,
+						// so a genuine no-op also reports zero. Accept it only when the
+						// proposed values already equal the approved snapshot; a
+						// concurrent change that later restores the same values must not
+						// make an unsaved update look successful.
+						if (!isProviderUpdateNoOp(existingProvider, updateData)) {
+							throw providerMutationConflict();
+						}
+						const currentProvider = await database.findOne<SSOProviderRecord>({
+							model: "ssoProvider",
+							where: [
+								{ field: "id", value: existingProvider.id },
+								{ field: "providerId", value: providerId },
+							],
+						});
+						if (!currentProvider) throw providerMutationConflict();
+						return currentProvider;
 					}
 					if (updatedCount !== 1) throw providerMutationConflict();
 					// `updateMany` does not return the row. Build the response from the

@@ -442,8 +442,11 @@ export interface SSOOptions {
 	 * `SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS`, and rejects
 	 * deletion when linked accounts exist with
 	 * `SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS`.
-	 * Remove the linked accounts first, or use an adapter with native
-	 * transactions for those operations.
+	 * It also rejects updates to non-scalar additional fields with
+	 * `SSO_PROVIDER_NON_SCALAR_UPDATE_REQUIRES_NATIVE_TRANSACTIONS`, because
+	 * equality predicates can only fence scalar columns. Remove the linked
+	 * accounts first, or use an adapter with native transactions for those
+	 * operations.
 	 */
 	guardProviderMutation?:
 		| ((
