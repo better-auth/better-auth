@@ -1231,15 +1231,16 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						if (!isProviderUpdateNoOp(existingProvider, updateData)) {
 							throw providerMutationConflict();
 						}
-						const currentProvider = await database.findOne<SSOProviderRecord>({
-							model: "ssoProvider",
-							where: [
-								{ field: "id", value: existingProvider.id },
-								{ field: "providerId", value: providerId },
-							],
-						});
-						if (!currentProvider) throw providerMutationConflict();
-						return currentProvider;
+						// The write was a true no-op, but a concurrent request may
+						// still have changed the row. Only accept the unchanged row.
+						const unchangedProvider = await database.findOne<SSOProviderRecord>(
+							{
+								model: "ssoProvider",
+								where: getProviderMutationSnapshotWhere(existingProvider),
+							},
+						);
+						if (!unchangedProvider) throw providerMutationConflict();
+						return unchangedProvider;
 					}
 					if (updatedCount !== 1) throw providerMutationConflict();
 					// `updateMany` does not return the row. Re-read only while the
