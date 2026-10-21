@@ -477,31 +477,38 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			);
 		}
 		const oauthOptions = provider.options as OAuthOptions<Scope[]>;
-		const cachedEntry = readCacheEntry(clientId);
-		const nowMs = Date.now();
-
-		if (cachedEntry && cachedEntry.expiresAt > nowMs) {
+		const resolveFromCache = (entry: CimdMetadataCacheEntry) => {
 			if (existingClient) return existingClient;
 			return persistMetadataDocumentClient(
 				ctx,
 				clientId,
-				cachedEntry.metadata,
+				entry.metadata,
 				cimdOptions,
 				oauthOptions,
 			);
+		};
+
+		const initialEntry = readCacheEntry(clientId);
+		if (initialEntry && initialEntry.expiresAt > Date.now()) {
+			return resolveFromCache(initialEntry);
+		}
+
+		// Every caller that would fetch or join a fetch evaluates the URL policy
+		// itself, before any permit is taken: refused URLs never spend the fetch
+		// budget, and a context-dependent policy is never skipped by coalescing.
+		await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+
+		// Another caller may have cached or started a fetch while the policy ran.
+		const cachedEntry = readCacheEntry(clientId);
+		if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+			return resolveFromCache(cachedEntry);
 		}
 
 		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
 		if (inFlightResolution !== undefined) return inFlightResolution;
 
-		let releaseMetadataFetchPermit: (() => void) | undefined;
+		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
 		const resolution = (async () => {
-			// Refuse invalid or disallowed client_id URLs before taking a permit, so
-			// they never spend the global or per-origin fetch budget. The gate runs
-			// inside the coalesced resolution, so concurrent same-client callers
-			// share one policy call and one fetch.
-			await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
-			releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
 			const fetched = await fetchClientMetadataDocument(
 				ctx,
 				clientId,
@@ -560,17 +567,14 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		try {
 			return await resolution;
 		} catch (error) {
-			// Pace retries only after a fetch was actually attempted.
-			if (releaseMetadataFetchPermit !== undefined) {
-				lastFetchStartAtMsByClientId.delete(clientId);
-				lastFetchStartAtMsByClientId.set(clientId, Date.now());
-			}
+			lastFetchStartAtMsByClientId.delete(clientId);
+			lastFetchStartAtMsByClientId.set(clientId, Date.now());
 			throw error;
 		} finally {
 			if (inFlightResolutionByClientId.get(clientId) === resolution) {
 				inFlightResolutionByClientId.delete(clientId);
 			}
-			releaseMetadataFetchPermit?.();
+			releaseMetadataFetchPermit();
 		}
 	};
 }
