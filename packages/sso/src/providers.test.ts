@@ -2160,6 +2160,54 @@ kBGIJYs=
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11207
 		 */
+		it("returns adapter-updated fields from an optimistic guarded update", async () => {
+			const reviewedAt = new Date("2030-01-01T00:00:00.000Z");
+			const options = {
+				guardProviderMutation() {},
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							reviewedAt: {
+								type: "date",
+								required: false,
+								onUpdate: () => reviewedAt,
+							},
+						},
+					},
+				},
+			} satisfies SSOOptions;
+			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
+				false,
+				false,
+				options,
+			);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "canonical-update", undefined, {
+				reviewedAt: new Date("2020-01-01T00:00:00.000Z"),
+			});
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "canonical-update",
+					domain: "updated.example.com",
+				},
+				headers,
+			});
+
+			expect((updated as { reviewedAt?: Date }).reviewedAt?.toISOString()).toBe(
+				reviewedAt.toISOString(),
+			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
 		it("rejects an optimistic guarded update that changes the identity boundary", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider, data } =
 				createTestAuth(false, false, { guardProviderMutation() {} });

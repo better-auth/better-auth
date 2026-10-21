@@ -435,6 +435,31 @@ function getProviderMutationSnapshotWhere(
 	return where;
 }
 
+/**
+ * Predicates for reading back a committed optimistic write without accepting
+ * another request's value for any field this write changed.
+ */
+function getProviderMutationWriteWhere(
+	provider: SSOProviderRecord,
+	update: Partial<SSOProviderRecord>,
+): Where[] {
+	const where: Where[] = [
+		{ field: "id", value: provider.id },
+		{ field: "providerId", value: provider.providerId },
+	];
+	const current = provider as Record<string, unknown>;
+	for (const [field, value] of Object.entries(update)) {
+		if (field === "id" || field === "providerId") continue;
+		if (value === undefined || !isSnapshotScalar(value)) continue;
+		// Optional model fields (for example domainVerified when domain
+		// verification is disabled) are absent from the row and must not be
+		// used as predicates.
+		if (current[field] === undefined) continue;
+		where.push({ field, value });
+	}
+	return where;
+}
+
 function providerMutationConflict(): APIError {
 	return new APIError("CONFLICT", {
 		code: "SSO_PROVIDER_CHANGED",
@@ -1217,11 +1242,16 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						return currentProvider;
 					}
 					if (updatedCount !== 1) throw providerMutationConflict();
-					// `updateMany` does not return the row. Build the response from the
-					// snapshot we just wrote instead of re-reading: a concurrent write
-					// must not make a committed update return another request's data or
-					// report a conflict after the commit.
-					return { ...existingProvider, ...updateData };
+					// `updateMany` does not return the row. Re-read only while the
+					// fields this request wrote still hold the written values, so a
+					// concurrent writer cannot substitute its values. Fall back to the
+					// committed snapshot if the row moved or disappeared instead of
+					// reporting a conflict after the commit.
+					const writtenProvider = await database.findOne<SSOProviderRecord>({
+						model: "ssoProvider",
+						where: getProviderMutationWriteWhere(existingProvider, updateData),
+					});
+					return writtenProvider ?? { ...existingProvider, ...updateData };
 				}
 
 				await database.update({
