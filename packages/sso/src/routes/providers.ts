@@ -1148,6 +1148,19 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						where: getProviderMutationSnapshotWhere(existingProvider),
 						update: updateData,
 					});
+					if (updatedCount === 0) {
+						// MySQL can report changed rows rather than matched rows, so a
+						// no-op update legitimately reports zero. Treat an unchanged
+						// snapshot as success and everything else as a conflict.
+						const unchangedProvider = await database.findOne<SSOProviderRecord>(
+							{
+								model: "ssoProvider",
+								where: getProviderMutationSnapshotWhere(existingProvider),
+							},
+						);
+						if (unchangedProvider) return unchangedProvider;
+						throw providerMutationConflict();
+					}
 					if (updatedCount !== 1) throw providerMutationConflict();
 					const updatedProvider = await database.findOne<SSOProviderRecord>({
 						model: "ssoProvider",
