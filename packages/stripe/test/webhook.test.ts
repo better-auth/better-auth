@@ -3046,14 +3046,62 @@ describe("stripe webhook", () => {
 					items: subscriptionItems,
 				},
 			);
-			const { createRow, findRow, send } = await setup(memory, stripeOptions, [
-				createdEvent,
-			]);
+			const onSubscriptionCreated = vi.fn();
+			const { createRow, findRow, send } = await setup(
+				memory,
+				stripeOptions,
+				[createdEvent],
+				{ onSubscriptionCreated },
+			);
 			// customer.subscription.deleted was already processed
 			const { id } = await createRow({ status: "canceled" });
 
 			expect((await send()).status).toBe(200);
 			expect((await findRow(id))?.status).toBe("canceled");
+			expect(onSubscriptionCreated).not.toHaveBeenCalled();
+		});
+
+		test("should retry an update that arrives before customer.subscription.created", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const createdEvent = createSubscriptionEvent(
+				"customer.subscription.created",
+				{
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "active",
+					items: subscriptionItems,
+				},
+			);
+			const updatedEvent = createSubscriptionEvent(
+				"customer.subscription.updated",
+				{
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "past_due",
+					items: subscriptionItems,
+				},
+			);
+			const onSubscriptionUpdate = vi.fn();
+			const { ctx, send } = await setup(
+				memory,
+				stripeOptions,
+				[updatedEvent, createdEvent, updatedEvent],
+				{ onSubscriptionUpdate },
+			);
+
+			expect((await send()).status).toBe(400);
+			expect((await send()).status).toBe(200);
+			expect((await send()).status).toBe(200);
+
+			const rows = await ctx.adapter.findMany<Subscription>({
+				model: "subscription",
+				where: [{ field: "stripeSubscriptionId", value: "sub_propagation" }],
+			});
+			expect(rows).toHaveLength(1);
+			expect(rows[0]?.status).toBe("past_due");
+			expect(onSubscriptionUpdate).toHaveBeenCalledTimes(1);
 		});
 
 		test("should acknowledge customer.subscription.updated when no subscription row exists", async ({

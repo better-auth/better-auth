@@ -198,6 +198,15 @@ export async function onSubscriptionCreated(
 			// A redelivery of this event after its row was written: the first attempt's
 			// onSubscriptionCreated may have failed. The row is left as is so an older
 			// event can't overwrite newer state.
+			if (
+				existingSubscription.status === "canceled" ||
+				existingSubscription.status === "incomplete_expired"
+			) {
+				ctx.context.logger.info(
+					`Stripe webhook: Subscription ${existingSubscription.id} has already ended, skipping onSubscriptionCreated`,
+				);
+				return;
+			}
 			ctx.context.logger.info(
 				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), re-running onSubscriptionCreated`,
 			);
@@ -357,6 +366,16 @@ export async function onSubscriptionUpdated(
 			} else if (subs[0]) {
 				subscription = subs[0];
 			} else {
+				// An update can arrive before customer.subscription.created. Retry it while the
+				// customer belongs to a user or organization, so it applies once the row exists.
+				const reference = customerId
+					? await findReferenceByStripeCustomerId(ctx, options, customerId)
+					: null;
+				if (reference) {
+					throw new Error(
+						`No subscription row yet for ${stripeSubscriptionUpdated.id} (${reference.customerType} ${reference.referenceId})`,
+					);
+				}
 				ctx.context.logger.warn(
 					`Stripe webhook warning: No subscription found for subscriptionId: ${stripeSubscriptionUpdated.id} or customerId: ${customerId}`,
 				);
