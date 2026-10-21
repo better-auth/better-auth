@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Naver profile callbacks now accept responses containing only the user identifier when other profile information is not shared. Profile mappings must handle omitted personal details.
+`NaverProfile.response` personal fields are now optional. Profile mappings must handle omitted details and supply an email when Naver does not share one.
