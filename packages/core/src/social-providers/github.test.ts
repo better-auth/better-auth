@@ -1,6 +1,22 @@
-import { assertType, describe, expect, expectTypeOf, it } from "vitest";
+import {
+	afterEach,
+	assertType,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import type { GithubProfile } from "./github";
 import { github } from "./github";
+
+const mockedFetch = vi.fn<typeof fetch>();
+beforeEach(() => {
+	mockedFetch.mockReset();
+	vi.stubGlobal("fetch", mockedFetch);
+});
+afterEach(() => vi.unstubAllGlobals());
 
 const publicProfile = {
 	login: "octocat",
@@ -69,21 +85,30 @@ describe("github profile", () => {
 	it.each([
 		{ kind: "public", profile: publicProfile },
 		{ kind: "private", profile: privateProfile },
-	])("accepts a raw $kind response from getUserInfo", async ({ profile }) => {
-		const provider = github({
-			clientId: "github-app",
-			getUserInfo: async () => ({
-				user: {
-					name: profile.name ?? profile.login,
-					email: profile.email,
-					emailVerified: false,
+	])("maps a $kind API response", async ({ profile }) => {
+		mockedFetch.mockImplementation(async (input, init) => {
+			const request = new Request(input, init);
+			expect(request.headers.get("authorization")).toBe("Bearer access-token");
+			if (request.url === "https://api.github.com/user")
+				return Response.json(profile);
+			expect(request.url).toBe("https://api.github.com/user/emails");
+			return Response.json([
+				{
+					email: "octocat@example.com",
+					primary: true,
+					verified: true,
+					visibility: null,
 				},
-				data: profile,
-			}),
+			]);
 		});
-
+		const provider = github({ clientId: "github-app" });
 		const result = await provider.getUserInfo({ accessToken: "access-token" });
-		expect(result?.data).toBe(profile);
+		expect(result?.data).toEqual({ ...profile, email: "octocat@example.com" });
+		expect(result?.user).toMatchObject({
+			name: "octocat",
+			email: "octocat@example.com",
+			emailVerified: true,
+		});
 	});
 });
 

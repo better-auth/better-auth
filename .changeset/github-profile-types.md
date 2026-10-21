@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-GitHub profile mappings now accept the documented numeric, nullable, private-account, and enterprise fields. Handle nullable fields and omitted scope-dependent fields in custom mappings.
+`GithubProfile.id` and account counters are now numbers. Profile mappings must handle nullable details and omitted scope-dependent fields, including `twitter_username`. Private-account and enterprise fields are available when returned by GitHub.
