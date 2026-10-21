@@ -929,15 +929,13 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			return storedClient;
 		};
 
-		// A request resolves again only after a fetch it waited on was retired. A
-		// fresh cache entry found then came from a later fetch, so the stored
-		// client the request started with can be older than it.
-		let resolvingAgain = false;
+		// A document cached while the policy ran or a retired fetch was pending
+		// can be newer than the stored client this request started with.
 		let checkedUrl = false;
 		while (true) {
 			const cachedEntry = readCacheEntry(clientId);
 			if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
-				if (existingClient && cachedEntry.saved && !resolvingAgain) {
+				if (existingClient && cachedEntry.saved && !checkedUrl) {
 					return existingClient;
 				}
 				// The stored client can be missing or older than this entry. Later
@@ -1012,7 +1010,6 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			// would put the stored client behind a fresh cache entry that later
 			// requests trust, so this request resolves again instead.
 			if (fetched) return persistFetchedMetadata(fetched);
-			resolvingAgain = true;
 		}
 	};
 }
