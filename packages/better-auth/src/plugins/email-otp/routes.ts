@@ -54,24 +54,34 @@ async function resolveOTP(
 		opts.generateOTP({ email, type }, ctx) || defaultOTPGenerator(opts);
 	const storedOTP = await storeOTP(ctx, opts, otp);
 
-	await ctx.context.internalAdapter
-		.createVerificationValue({
+	await writeOTP(ctx, opts, identifier, storedOTP);
+
+	return otp;
+}
+
+/**
+ * Stores a fresh OTP row, replacing a pending one on a unique identifier.
+ *
+ * @internal
+ */
+export async function writeOTP(
+	ctx: GenericEndpointContext,
+	opts: RequiredEmailOTPOptions,
+	identifier: string,
+	storedOTP: string,
+) {
+	const create = () =>
+		ctx.context.internalAdapter.createVerificationValue({
 			value: `${storedOTP}:0`,
 			identifier,
 			expiresAt: getDate(opts.expiresIn, "sec"),
-		})
-		.catch(async () => {
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-				identifier,
-			);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier,
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
 		});
-
-	return otp;
+	await create().catch(async () => {
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			identifier,
+		);
+		await create();
+	});
 }
 
 const sendVerificationOTPBodySchema = z.object({
@@ -205,12 +215,12 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);
-			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier: toOTPIdentifier(ctx.body.type, email),
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
+			await writeOTP(
+				ctx,
+				opts,
+				toOTPIdentifier(ctx.body.type, email),
+				await storeOTP(ctx, opts, otp),
+			);
 			return otp;
 		},
 	);
@@ -1093,12 +1103,12 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp =
 				opts.generateOTP({ email: newEmail, type: "change-email" }, ctx) ||
 				defaultOTPGenerator(opts);
-			const storedOTP = await storeOTP(ctx, opts, otp);
-			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${storedOTP}:0`,
-				identifier: toOTPIdentifier("change-email", `${email}-${newEmail}`),
-				expiresAt: getDate(opts.expiresIn, "sec"),
-			});
+			await writeOTP(
+				ctx,
+				opts,
+				toOTPIdentifier("change-email", `${email}-${newEmail}`),
+				await storeOTP(ctx, opts, otp),
+			);
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (user) {
