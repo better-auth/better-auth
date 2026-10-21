@@ -1,0 +1,18 @@
+{
+  "title": "Databases",
+  "icon": "databases",
+  "pages": [
+    "mysql",
+    "sqlite",
+    "postgresql",
+    "mssql",
+    "other-relational-databases",
+    "---Adapters---",
+    "drizzle",
+    "prisma",
+    "mongo",
+    "---Others---",
+    "community-adapters",
+    "..."
+  ]
+}

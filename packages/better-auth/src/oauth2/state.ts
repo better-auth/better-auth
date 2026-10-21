@@ -100,7 +100,7 @@ export async function parseState(c: GenericEndpointContext) {
 				error.code === "state_security_mismatch"
 					? "state_mismatch"
 					: error.code;
-			redirectErrorURL = error.errorURL ?? errorURL;
+			redirectErrorURL = error.errorURL || errorURL;
 		}
 		redirectOnError(c, redirectErrorURL, code);
 	}

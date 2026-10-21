@@ -108,7 +108,6 @@ export const facebook = (options: FacebookOptions) => {
 		name: "Facebook",
 		accountSubject: ({ profile }) =>
 			"sub" in profile ? profile.sub : profile.id,
-		accountIssuer: "https://www.facebook.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -177,6 +176,19 @@ export const facebook = (options: FacebookOptions) => {
 				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
+				// On the client sign-in path the access token, or an opaque `idToken`, reaches
+				// here unverified, so bind it to this app before a custom getUserInfo resolves
+				// identity from it.
+				const isOpaqueIdToken =
+					!!token.idToken && token.idToken.split(".").length !== 3;
+				const clientToken =
+					token.accessToken || (isOpaqueIdToken ? token.idToken : undefined);
+				if (
+					clientToken &&
+					!(await verifyFacebookAccessToken(clientToken, options))
+				) {
+					return null;
+				}
 				return options.getUserInfo(token);
 			}
 

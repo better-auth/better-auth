@@ -17,6 +17,7 @@ import {
 	organizationClient,
 	twoFactorClient,
 } from "./plugins";
+import type { ReactAuthClient } from "./react";
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
@@ -419,6 +420,19 @@ describe("run time proxy", async () => {
 });
 
 describe("type", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10897
+	 */
+	it("keeps a client with more plugins assignable to a client type with fewer plugins", () => {
+		type EmailOtpClient = ReactAuthClient<{
+			plugins: [ReturnType<typeof emailOTPClient>];
+		}>;
+		const client = createReactClient({
+			plugins: [emailOTPClient(), adminClient()],
+		});
+		expectTypeOf(client).toMatchTypeOf<EmailOtpClient>();
+	});
+
 	it("should not infer non-action endpoints", () => {
 		const client = createReactClient({
 			plugins: [testClientPlugin()],

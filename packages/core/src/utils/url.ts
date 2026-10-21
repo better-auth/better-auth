@@ -48,6 +48,49 @@ export function normalizePathname(
 	return pathname;
 }
 
+const URL_REFERENCE_ORIGIN = "https://better-auth.invalid";
+
+/**
+ * Appends query parameters before the fragment of an absolute or root-relative URL.
+ * Existing query text is retained without parsing it into name-value pairs.
+ *
+ * This function only composes URLs. Callers must validate untrusted input.
+ *
+ * @throws TypeError if parsing fails or a relative input changes authority.
+ */
+export function appendQueryParams(
+	input: string,
+	params: URLSearchParams,
+): string {
+	const relative = input.startsWith("/");
+	const hasAuthorityPrefix = input.startsWith("//") || input.startsWith("/\\");
+	if (hasAuthorityPrefix) {
+		throw new TypeError("Expected an absolute or root-relative URL");
+	}
+
+	const parsedURL = relative
+		? new URL(input, URL_REFERENCE_ORIGIN)
+		: new URL(input);
+
+	if (relative && parsedURL.origin !== URL_REFERENCE_ORIGIN) {
+		throw new TypeError("Expected an absolute or root-relative URL");
+	}
+
+	const query = params.toString();
+	if (!query) {
+		return input;
+	}
+
+	const separator = parsedURL.search.endsWith("&") ? "" : "&";
+	parsedURL.search = parsedURL.search
+		? `${parsedURL.search}${separator}${query}`
+		: query;
+
+	return relative
+		? parsedURL.href.slice(parsedURL.origin.length)
+		: parsedURL.href;
+}
+
 /**
  * Schemes that execute or embed code when navigated to or accepted as a
  * redirect target. These are never safe as an OAuth `redirect_uri` or as a

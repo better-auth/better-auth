@@ -1,3 +1,5 @@
+import type { LLMsOptions } from "fumadocs-core/mdx-plugins/remark-llms";
+import { pageSchema } from "fumadocs-core/source/schema";
 import {
 	defineCollections,
 	defineConfig,
@@ -10,22 +12,58 @@ import {
 	remarkAutoTypeTable,
 } from "fumadocs-typescript";
 import * as z from "zod";
+import packageMetadata from "../packages/better-auth/package.json" with {
+	type: "json",
+};
+import { docsVersionSources } from "./lib/docs-version-sources";
+import type { DocsVersion } from "./lib/docs-versions";
+import { docsVersions } from "./lib/docs-versions";
+
+const docsPageSchema = pageSchema.extend({
+	sidebarBadge: z.string().min(1).optional(),
+	sidebarTitle: z.string().min(1).optional(),
+});
+
+const processedMarkdownOptions = {
+	mdxAsPlaceholder: ["APIMethod"],
+} satisfies LLMsOptions;
+
+function getContentDirectory(version: DocsVersion) {
+	return packageMetadata.version.startsWith(`${version.releaseLine}.`)
+		? "./content/docs"
+		: `./content/${docsVersionSources[version.id].contentDirectory}`;
+}
+
+const [betaVersion, latestVersion, version16] = docsVersions;
 
 export const docs = defineDocs({
-	dir: "./content/docs",
+	dir: getContentDirectory(latestVersion),
 	docs: {
+		schema: docsPageSchema,
 		postprocess: {
-			includeProcessedMarkdown: true,
+			includeProcessedMarkdown: processedMarkdownOptions,
+		},
+		async: true,
+	},
+});
+
+export const docsV16 = defineDocs({
+	dir: getContentDirectory(version16),
+	docs: {
+		schema: docsPageSchema,
+		postprocess: {
+			includeProcessedMarkdown: processedMarkdownOptions,
 		},
 		async: true,
 	},
 });
 
 export const docsBeta = defineDocs({
-	dir: "./content/docs-beta",
+	dir: getContentDirectory(betaVersion),
 	docs: {
+		schema: docsPageSchema,
 		postprocess: {
-			includeProcessedMarkdown: true,
+			includeProcessedMarkdown: processedMarkdownOptions,
 		},
 		async: true,
 	},

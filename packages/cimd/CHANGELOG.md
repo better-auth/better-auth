@@ -1,5 +1,60 @@
 # @better-auth/cimd
 
+## 1.8.0-beta.1
+
+## 1.8.0-beta.0
+
+### Minor Changes
+
+- [#11767](https://github.com/better-auth/better-auth/pull/11767) [`2417879`](https://github.com/better-auth/better-auth/commit/2417879cf6b2cb5c97ab679b83df0038760e045d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Metadata documents can now carry registration fields that an OAuth provider extension declares, such as CIBA's `backchannel_token_delivery_mode`. They are stored in the client's `metadata` and validated by the extension. A refresh replaces them, so a field removed from the document is removed from the client. Other unknown members are still ignored. Setups without such an extension are unaffected.
+
+### Patch Changes
+
+- Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`94907fd`](https://github.com/better-auth/better-auth/commit/94907fd5ffc10ad8263b77b49dd7539f5fa72651), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`296133c`](https://github.com/better-auth/better-auth/commit/296133cc414ac24283ed8e33501e2e4e501ab5e0), [`cd404a0`](https://github.com/better-auth/better-auth/commit/cd404a0b46abb929ccaea0129ecdff23fb074a8f), [`ed71a21`](https://github.com/better-auth/better-auth/commit/ed71a211e803f9f336ebfa83c4ef96610e621fd1), [`c750fc5`](https://github.com/better-auth/better-auth/commit/c750fc5ad2cccf42d3bc6de9820c510a8cdb2cd4), [`2417879`](https://github.com/better-auth/better-auth/commit/2417879cf6b2cb5c97ab679b83df0038760e045d), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`c750fc5`](https://github.com/better-auth/better-auth/commit/c750fc5ad2cccf42d3bc6de9820c510a8cdb2cd4), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`9f53222`](https://github.com/better-auth/better-auth/commit/9f532221bee7cd99a5c4e6593313dead87bf8f0d), [`c7c8331`](https://github.com/better-auth/better-auth/commit/c7c83314009540df912fb608b746fad3c02214ee), [`0d4609f`](https://github.com/better-auth/better-auth/commit/0d4609f4a904d919353acae7ef04d2e68ff1be15), [`6e5a88e`](https://github.com/better-auth/better-auth/commit/6e5a88e57b0b5253bc49797cede415ff27a82931)]:
+  - better-auth@1.8.0-beta.0
+  - @better-auth/oauth-provider@1.8.0-beta.0
+  - @better-auth/core@1.8.0-beta.0
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#10956](https://github.com/better-auth/better-auth/pull/10956) [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78) Thanks [@disbell](https://github.com/disbell)! - Native OAuth clients and Client ID Metadata Documents can now use custom-scheme redirect URIs with a host and a path, such as Cursor's `cursor://anysphere.cursor-mcp/oauth/callback`. Previously, only the authority-free reverse-domain form, such as `com.example.app:/callback`, was accepted, and these registrations failed with `invalid_redirect_uri`.
+
+  Cursor also omits `application_type` when it registers, so the `web` default still rejects it. To accept Cursor, set the new `clientRegistrationDefaultApplicationType` option to `"infer"`. A dynamic registration that omits `application_type` then becomes `native` when any of its redirect URIs uses a custom scheme, and every redirect URI must pass the native rules. Setting `"native"` treats every registration that omits the field as `native`. The default remains `"web"`, and an `application_type` the client sends is never overridden.
+
+  Pairwise clients (`subject_type: "pairwise"`) cannot use these host-bearing custom-scheme redirect URIs. Web clients are unaffected: they still accept only `https` redirect URIs on non-loopback hosts.
+
+## 1.7.7
+
+## 1.7.6
+
+## 1.7.5
+
+### Patch Changes
+
+- [#11161](https://github.com/better-auth/better-auth/pull/11161) [`753c2d1`](https://github.com/better-auth/better-auth/commit/753c2d19f77c07749f24f0dcacab2f88dc88484c) Thanks [@bytaesu](https://github.com/bytaesu)! - Allow CIMD clients with valid metadata that cannot be cached to make consecutive OAuth requests while retaining failed-fetch backoff and origin/global fetch limits.
+
+## 1.7.4
+
+## 1.7.3
+
+### Patch Changes
+
+- [#10730](https://github.com/better-auth/better-auth/pull/10730) [`1d9b55c`](https://github.com/better-auth/better-auth/commit/1d9b55cfdb789224b545ae317b4bca6b5621d755) Thanks [@erikpr1994](https://github.com/erikpr1994)! - Fix CIMD client metadata discovery failing with `ERR_INVALID_IP_ADDRESS` on supported Node.js versions.
+
+## 1.7.2
+
+## 1.7.1
+
 ## 1.7.0
 
 ### Minor Changes

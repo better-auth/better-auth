@@ -3,6 +3,7 @@ import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { generateDrizzleSchema } from "./drizzle";
 import { generateKyselySchema } from "./kysely";
 import { generatePrismaSchema } from "./prisma";
+import type { SchemaGeneratorResult } from "./types";
 
 export const adapters = {
 	prisma: generatePrismaSchema,
@@ -14,7 +15,7 @@ export const generateSchema = async (opts: {
 	adapter: DBAdapter;
 	file?: string;
 	options: BetterAuthOptions;
-}) => {
+}): Promise<SchemaGeneratorResult> => {
 	const adapter = opts.adapter;
 
 	// Adapter-provided createSchema takes priority over built-in generators.

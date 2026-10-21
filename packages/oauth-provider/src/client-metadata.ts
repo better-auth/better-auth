@@ -30,6 +30,8 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 	postLogoutRedirectUris: true,
 	backchannelLogoutUri: true,
 	backchannelLogoutSessionRequired: true,
+	frontchannelLogoutUri: true,
+	frontchannelLogoutSessionRequired: true,
 	tokenEndpointAuthMethod: true,
 	grantTypes: true,
 	responseTypes: true,
@@ -41,6 +43,7 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 	skipConsent: true,
 	enableEndSession: true,
 	subjectType: true,
+	sectorIdentifier: true,
 	referenceId: true,
 	metadata: true,
 } as const satisfies Record<keyof SchemaClient, true>;
@@ -75,6 +78,8 @@ const OAUTH_CLIENT_WIRE_FIELD_NAMES = [
 	"post_logout_redirect_uris",
 	"backchannel_logout_uri",
 	"backchannel_logout_session_required",
+	"frontchannel_logout_uri",
+	"frontchannel_logout_session_required",
 	"token_endpoint_auth_method",
 	"grant_types",
 	"response_types",
@@ -110,6 +115,7 @@ const CIMD_FORBIDDEN_SERVER_FIELD_NAMES = new Set([
 	"resources",
 	"clientSecret",
 	"clientDiscoveryId",
+	"sectorIdentifier",
 	"skipConsent",
 	"enableEndSession",
 	"requirePKCE",
@@ -138,6 +144,10 @@ const CIMD_FORBIDDEN_SERVER_FIELD_NAMES = new Set([
 
 export function isForbiddenCimdClientMetadataField(field: string): boolean {
 	return CIMD_FORBIDDEN_SERVER_FIELD_NAMES.has(field);
+}
+
+export function isReservedOAuthClientMetadataField(field: string): boolean {
+	return OPAQUE_METADATA_RESERVED_FIELDS.has(field);
 }
 
 export function stripReservedOAuthClientMetadataExtensions(

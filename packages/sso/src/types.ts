@@ -132,6 +132,9 @@ export interface SAMLConfig {
 	/**
 	 * Provider-level post-auth redirect URL for IdP-initiated or fallback SAML
 	 * flows when no RelayState callback URL is available.
+	 *
+	 * Not the Assertion Consumer Service (ACS) URL. To accept responses
+	 * addressed to another ACS URL, list it in `spMetadata.metadata`.
 	 */
 	callbackUrl?: string | undefined;
 	/**

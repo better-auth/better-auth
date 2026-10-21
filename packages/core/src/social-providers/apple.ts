@@ -83,7 +83,6 @@ export const apple = (options: AppleOptions) => {
 		id: "apple",
 		name: "Apple",
 		accountSubject: ({ profile }) => profile.sub,
-		accountIssuer: "https://appleid.apple.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -126,6 +125,7 @@ export const apple = (options: AppleOptions) => {
 		idToken: {
 			jwks: (header) => getApplePublicKey(header.kid!),
 			issuer: "https://appleid.apple.com",
+			algorithms: ["RS256"],
 			audience:
 				options.audience && options.audience.length
 					? options.audience

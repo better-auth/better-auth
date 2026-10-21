@@ -4,7 +4,7 @@ import {
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
 } from "@better-auth/core/oauth2";
 import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
-import { LEVEL_0_ACR } from "./authentication-context";
+import { getAcrValuesSupported } from "./authentication-context";
 import { validateIssuerUrl } from "./authorize";
 import {
 	applyOAuthProviderMetadataExtensions,
@@ -102,6 +102,11 @@ export function authServerMetadata(
 			([...DPOP_SIGNING_ALGORITHMS] as JWSAlgorithms[]),
 		backchannel_logout_supported: backchannelSupported,
 		backchannel_logout_session_supported: backchannelSupported,
+		// Front-channel logout renders iframes carrying plain `iss`/`sid` query
+		// parameters — no signed artifact — so support is independent of the
+		// JWT plugin.
+		frontchannel_logout_supported: true,
+		frontchannel_logout_session_supported: true,
 	};
 	return metadata;
 }
@@ -178,7 +183,7 @@ export function oidcServerMetadata(
 		subject_types_supported: opts.pairwiseSecret
 			? ["public", "pairwise"]
 			: ["public"],
-		acr_values_supported: [LEVEL_0_ACR],
+		acr_values_supported: getAcrValuesSupported(opts),
 		id_token_signing_alg_values_supported: (() => {
 			if (opts.disableJwtPlugin) return ["HS256" as const];
 			// Advertise every algorithm the plugin can sign with: the primary

@@ -4,22 +4,26 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
-import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
-import { validatePublicClientJwks } from "./client-jwks";
+import { assertValidClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
+	getExtensionClientMetadataFields,
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
+	hasExtensionClientMetadata,
 	isExtensionTokenEndpointAuthMethod,
+	validateExtensionClientMetadata,
 } from "./extensions";
 import {
 	normalizeClientCredentialsScopes,
 	validateClientCredentialsScopes,
 } from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
+import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
 import type {
 	ClientRegistrationRequest,
@@ -31,7 +35,12 @@ import type {
 	Scope,
 } from "./types";
 import type { GrantType, OAuthClient } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import { clientRegistrationRequestSchema } from "./types/zod";
+import {
+	deriveSectorIdentifier,
+	parseClientMetadata,
+	storeClientSecret,
+} from "./utils";
 import { isPrivateHostname } from "./utils/client-assertion";
 import { authorizeInitialAccessToken } from "./utils/initial-access-token";
 
@@ -80,9 +89,32 @@ function resolveRegistrationResponseTypes(
 	return grantTypes.includes("authorization_code") ? ["code"] : undefined;
 }
 
+/**
+ * The requested grants this server supports. Clients such as MCP connectors
+ * send one grant union to every server, so a metadata document or a dynamic
+ * registration may list grants this server does not issue. Throws when the
+ * request shares no grant with the server.
+ */
+function resolveMutuallySupportedGrantTypes(
+	opts: OAuthOptions<Scope[]>,
+	grantTypes: GrantType[],
+): GrantType[] {
+	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+	const mutualGrantTypes = grantTypes.filter((grantType) =>
+		supportedGrantTypes.has(grantType),
+	);
+	if (mutualGrantTypes.length === 0) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
+		});
+	}
+	return mutualGrantTypes;
+}
+
 function applyOAuthClientRegistrationDefaults(
 	client: OAuthClientRegistrationMetadata,
-	defaultApplicationType: "web" | null = "web",
+	defaultApplicationType: "web" | "native" | null = "web",
 ): OAuthClientRegistrationMetadata {
 	const grantTypes = resolveRegistrationGrantTypes(client);
 	return {
@@ -97,14 +129,42 @@ function applyOAuthClientRegistrationDefaults(
 	};
 }
 
-const FORBIDDEN_NATIVE_REDIRECT_SCHEMES = new Set([
-	"file:",
-	"ftp:",
-	"mailto:",
-	"javascript:",
-	"data:",
-	"vbscript:",
-]);
+function isCustomSchemeWithHost(redirectUri: string): boolean {
+	const url = new URL(redirectUri);
+	return (
+		url.protocol !== "http:" && url.protocol !== "https:" && url.host !== ""
+	);
+}
+
+function isNonHttpRedirectUri(redirectUri: string): boolean {
+	try {
+		const protocol = new URL(redirectUri).protocol;
+		return protocol !== "http:" && protocol !== "https:";
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Server-owned default for dynamic registrations that omit `application_type`.
+ * `"infer"` classifies as native when any redirect URI uses a non-http(s)
+ * scheme or http on an exact loopback host, because a web client can never
+ * register either. Every URI is then validated against the native rules. A
+ * sent `application_type` is never overridden because
+ * `applyOAuthClientRegistrationDefaults` only fills the absent field.
+ */
+function resolveDynamicRegistrationDefaultApplicationType(
+	opts: OAuthOptions<Scope[]>,
+	client: OAuthClientRegistrationMetadata,
+): "web" | "native" {
+	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
+	if (configured !== "infer") return configured;
+	return (client.redirect_uris ?? []).some(
+		(uri) => isNonHttpRedirectUri(uri) || isExactLoopbackHttpRedirectUri(uri),
+	)
+		? "native"
+		: "web";
+}
 
 function invalidRedirectUri(description: string): never {
 	throw new APIError("BAD_REQUEST", {
@@ -126,14 +186,19 @@ function getRawHttpHostname(redirectUri: string): string | null {
 	return (hostAndPort.split(":")[0] ?? "").toLowerCase();
 }
 
-async function resolveClientRegistrationResources(
-	ctx: GenericEndpointContext,
+function isExactLoopbackHttpRedirectUri(redirectUri: string): boolean {
+	const hostname = getRawHttpHostname(redirectUri);
+	return (
+		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+	);
+}
+
+function assertDynamicRegistrationResourcesAllowed(
 	opts: OAuthOptions<Scope[]>,
 	requestedResources: readonly string[],
-): Promise<string[]> {
-	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
+) {
 	const allowedResources = new Set([
-		...defaultResources,
+		...(opts.clientRegistrationDefaultResources ?? []),
 		...(opts.clientRegistrationAllowedResources ?? []),
 	]);
 	for (const identifier of requestedResources) {
@@ -144,7 +209,14 @@ async function resolveClientRegistrationResources(
 			});
 		}
 	}
+}
 
+async function resolveClientRegistrationResources(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	requestedResources: readonly string[],
+): Promise<string[]> {
+	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
 	const resources = [...new Set([...defaultResources, ...requestedResources])];
 	for (const identifier of resources) {
 		const row = await getResource(ctx, opts, identifier);
@@ -193,11 +265,6 @@ function validateClientRedirectUri(
 	}
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
-	const rawHttpHostname = getRawHttpHostname(redirectUri);
-	const isAllowedNativeHttpLoopback =
-		rawHttpHostname === "localhost" ||
-		rawHttpHostname === "127.0.0.1" ||
-		rawHttpHostname === "[::1]";
 
 	if (applicationType === "web") {
 		if (!isHttps || isRedirectLoopback) {
@@ -217,7 +284,7 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isAllowedNativeHttpLoopback) {
+		if (!isExactLoopbackHttpRedirectUri(redirectUri)) {
 			invalidRedirectUri(
 				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
 			);
@@ -225,31 +292,93 @@ function validateClientRedirectUri(
 		return;
 	}
 
-	if (
-		FORBIDDEN_NATIVE_REDIRECT_SCHEMES.has(url.protocol) ||
-		!isReverseDomainPrivateUseRedirectUri(url)
-	) {
+	if (!isNativePrivateUseRedirectUri(url)) {
 		invalidRedirectUri(
-			`native private-use redirect URI schemes must be well-formed reverse-domain names, omit the naming authority, and must not use a reserved scheme: ${redirectUri}`,
+			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with a host and a path: ${redirectUri}`,
 		);
 	}
 }
 
-function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
-	const result = validatePublicClientJwks(jwks);
-	if (!result.valid) {
+/**
+ * Rejects a URI the server will POST to unless it is an absolute https URL
+ * with no fragment or credentials on a publicly routable host. Back-channel
+ * endpoints use it as an SSRF guard, since the server, not the browser, calls
+ * them.
+ */
+export function assertPublicRoutableHttpsUri(field: string, uri: string): void {
+	const reject = (description: string): never => {
 		throw new APIError("BAD_REQUEST", {
 			error: "invalid_client_metadata",
-			error_description: result.error,
+			error_description: `${field} ${description}`,
 		});
+	};
+	let url: URL;
+	try {
+		url = new URL(uri);
+	} catch {
+		return reject("must be an absolute URL");
 	}
+	// Check the raw value rather than `url.hash`, which is empty for a bare
+	// trailing `#` and would let that fragment delimiter through.
+	if (uri.includes("#")) reject("must not include a fragment component");
+	if (url.protocol !== "https:") reject("must use https");
+	if (url.username || url.password) reject("must not contain credentials");
+	if (isPrivateHostname(url.hostname)) {
+		reject("must not point to a private or reserved address");
+	}
+}
+
+const REGISTRATION_REQUEST_FIELDS = new Set(
+	Object.keys(clientRegistrationRequestSchema.shape),
+);
+
+/**
+ * Splits a dynamic registration request into its core fields and the fields
+ * extensions define, which are stored in the client's `metadata`. Any other
+ * unrecognized field is ignored (RFC 7591 §2), so a registrant cannot set
+ * server-only fields or arbitrary `metadata`.
+ */
+function splitRegistrationRequest(
+	input: Record<string, unknown>,
+	opts: OAuthOptions<Scope[]>,
+): {
+	body: ClientRegistrationRequest;
+	metadata: Record<string, unknown> | undefined;
+} {
+	const body = Object.fromEntries(
+		Object.entries(input).filter(([field]) =>
+			REGISTRATION_REQUEST_FIELDS.has(field),
+		),
+	);
+	return {
+		body: body as ClientRegistrationRequest,
+		metadata: pickExtensionClientMetadata(input, opts),
+	};
+}
+
+/**
+ * The top-level fields of a registration that extensions declare, which are
+ * stored in the client's `metadata`.
+ */
+function pickExtensionClientMetadata(
+	input: object,
+	opts: OAuthOptions<Scope[]>,
+): Record<string, unknown> | undefined {
+	const extensionFields = getExtensionClientMetadataFields(opts);
+	const metadata = Object.fromEntries(
+		Object.entries(input).filter(([field]) => extensionFields.has(field)),
+	);
+	return Object.keys(metadata).length ? metadata : undefined;
 }
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<OAuthClientRegistrationResponse> {
-	const body = ctx.body as ClientRegistrationRequest;
+	const { body, metadata } = splitRegistrationRequest(
+		ctx.body as Record<string, unknown>,
+		opts,
+	);
 
 	if (!opts.allowDynamicClientRegistration) {
 		throw new APIError("FORBIDDEN", {
@@ -294,8 +423,24 @@ export async function registerEndpoint(
 		);
 	}
 
+	// RFC 7591 §3.2.1 lets the server replace requested metadata: register the
+	// supported grants and return them, instead of rejecting the whole request.
+	const grantTypes = body.grant_types?.length
+		? resolveMutuallySupportedGrantTypes(opts, body.grant_types)
+		: body.grant_types;
+	const droppedAuthorizationCode =
+		body.grant_types?.includes("authorization_code") &&
+		!grantTypes?.includes("authorization_code");
+	const registrationMetadata = {
+		...body,
+		grant_types: grantTypes,
+		// `code`, the only response type, goes with `authorization_code`; the
+		// defaults derive response_types from the registered grants instead.
+		response_types: droppedAuthorizationCode ? undefined : body.response_types,
+	};
+
 	if (!session && !isTokenAuthorized) {
-		if (body.grant_types?.includes("client_credentials")) {
+		if (registrationMetadata.grant_types?.includes("client_credentials")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
@@ -322,12 +467,24 @@ export async function registerEndpoint(
 					session: session.session,
 				})
 			: undefined);
+	// Only the server's own token check can grant machine scopes; the request
+	// body never sets them.
+	const clientCredentialsScopes = normalizeClientCredentialsScopes(
+		tokenAuthorization?.clientCredentialsScopes ?? [],
+	);
+	validateClientCredentialsScopes(
+		clientCredentialsScopes,
+		resolveRegistrationGrantTypes(registrationMetadata),
+		registrationMetadata.token_endpoint_auth_method,
+		opts,
+	);
 	const response = await createOAuthClientRegistration(ctx, opts, {
-		metadata: body,
+		metadata: { ...registrationMetadata, metadata },
 		registrationSource: "dynamic",
 		userId: referenceId ? undefined : session?.session.userId,
 		referenceId,
 		requestedResources,
+		clientCredentialsScopes,
 	});
 	ctx.setStatus(201);
 	return ctx.json(response);
@@ -339,13 +496,22 @@ export async function checkOAuthClient(
 	settings?: {
 		registrationSource?: "dynamic" | "managed" | "clientMetadataDocument";
 		ctx?: GenericEndpointContext;
+		/**
+		 * Skip extension validators because the caller runs them on the
+		 * metadata it saves, as a metadata document refresh does.
+		 */
+		skipExtensionValidation?: boolean;
 	},
 ) {
 	const isClientMetadataDocument =
 		settings?.registrationSource === "clientMetadataDocument";
 	const clientWithDefaults = applyOAuthClientRegistrationDefaults(
 		client,
-		isClientMetadataDocument ? null : "web",
+		isClientMetadataDocument
+			? null
+			: settings?.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(opts, client)
+				: "web",
 	);
 	const tokenEndpointAuthMethod =
 		clientWithDefaults.token_endpoint_auth_method ?? "client_secret_basic";
@@ -399,7 +565,8 @@ export async function checkOAuthClient(
 		// A CIMD document may omit application_type. Preserve that absence in
 		// storage while validating against the safe union of web and native
 		// redirect forms. The native validator is that union: non-loopback HTTPS,
-		// exact loopback HTTP, or an authority-free private-use scheme.
+		// exact loopback HTTP, an authority-free reverse-domain private-use
+		// scheme, or a host-bearing non-reserved custom scheme.
 		validateClientRedirectUri(
 			uri,
 			(applicationType as "web" | "native" | undefined) ??
@@ -408,18 +575,16 @@ export async function checkOAuthClient(
 	}
 
 	// Validate correlation between grant_types and response_types
-	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 	if (isClientMetadataDocument) {
 		// One metadata document serves every authorization server the client talks
 		// to, so it declares a grant union; require one mutual grant and let the
 		// token endpoint refuse the rest.
-		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
-			});
-		}
+		resolveMutuallySupportedGrantTypes(opts, grantTypes);
 	} else {
+		// Dynamic registration drops unsupported requested grants before this
+		// check, so this rejects managed clients, client updates, and a defaulted
+		// grant the server does not support.
+		const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 		for (const grantType of grantTypes) {
 			if (!supportedGrantTypes.has(grantType)) {
 				throw new APIError("BAD_REQUEST", {
@@ -469,6 +634,20 @@ export async function checkOAuthClient(
 				error: "invalid_client_metadata",
 				error_description:
 					"pairwise subject_type requires server pairwiseSecret configuration",
+			});
+		}
+		// A client stored without a sector still uses its redirect URI host as
+		// the pairwise sector, and this check cannot tell those clients apart.
+		// Any app can register a custom scheme, so the host in
+		// `app://rp.example.com/callback` does not identify the client.
+		if (
+			clientWithDefaults.subject_type === "pairwise" &&
+			clientWithDefaults.redirect_uris?.some(isCustomSchemeWithHost)
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"pairwise clients cannot use custom-scheme redirect URIs that include a host",
 			});
 		}
 		// Per OIDC Core §8.1, when multiple redirect_uris have different hosts,
@@ -593,7 +772,7 @@ export async function checkOAuthClient(
 			}
 		}
 		if (clientWithDefaults.jwks) {
-			assertValidRegistrationJwks(clientWithDefaults.jwks);
+			assertValidClientJwks(clientWithDefaults.jwks);
 		}
 	}
 	// private_key_jwt requires key material; other methods may still register
@@ -617,47 +796,68 @@ export async function checkOAuthClient(
 					"backchannel_logout_uri requires the jwt plugin (disableJwtPlugin must be false)",
 			});
 		}
+		assertPublicRoutableHttpsUri(
+			"backchannel_logout_uri",
+			clientWithDefaults.backchannel_logout_uri,
+		);
+	}
+
+	// The browser, not the OP, requests this URI, so the back-channel SSRF
+	// guard does not apply and private or loopback hosts are allowed. Its trust
+	// comes from Front-Channel Logout 1.0 §2 instead: the URI must share the
+	// scheme, host, and port of a registered redirect URI, so it inherits that
+	// URI's scheme policy. Nothing is signed, so the JWT plugin is not required.
+	if (clientWithDefaults.frontchannel_logout_uri !== undefined) {
 		let url: URL;
 		try {
-			url = new URL(clientWithDefaults.backchannel_logout_uri);
+			url = new URL(clientWithDefaults.frontchannel_logout_uri);
 		} catch {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
-				error_description: "backchannel_logout_uri must be an absolute URL",
+				error_description: "frontchannel_logout_uri must be an absolute URL",
 			});
 		}
-		// Spec §2.2: "The backchannel_logout_uri MUST NOT include a fragment
-		// component." Check the raw value rather than `url.hash`, which is empty
-		// for a bare trailing `#` and would let that fragment delimiter through.
-		if (clientWithDefaults.backchannel_logout_uri.includes("#")) {
+		// Spec §2: the URI MUST NOT include a fragment. Check the raw value
+		// rather than `url.hash`, which is empty for a bare trailing `#`.
+		if (clientWithDefaults.frontchannel_logout_uri.includes("#")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
-					"backchannel_logout_uri must not include a fragment component",
-			});
-		}
-		if (url.protocol !== "https:") {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: "backchannel_logout_uri must use https",
+					"frontchannel_logout_uri must not include a fragment component",
 			});
 		}
 		if (url.username || url.password) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
-					"backchannel_logout_uri must not contain credentials",
+					"frontchannel_logout_uri must not contain credentials",
 			});
 		}
-		// SSRF guard: the OP issues an outbound POST to this URI on every
-		// session end, so every target must be publicly routable.
-		if (isPrivateHostname(url.hostname)) {
+		const isHttpOrHttps = url.protocol === "https:" || url.protocol === "http:";
+		const sharesRedirectOrigin = (clientWithDefaults.redirect_uris ?? []).some(
+			(redirectUri) => {
+				try {
+					return new URL(redirectUri).origin === url.origin;
+				} catch {
+					return false;
+				}
+			},
+		);
+		if (!isHttpOrHttps || !sharesRedirectOrigin) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
-					"backchannel_logout_uri must not point to a private or reserved address",
+					"frontchannel_logout_uri must use the scheme, host, and port of a registered redirect_uri",
 			});
 		}
+	}
+
+	if (!settings?.skipExtensionValidation) {
+		await validateExtensionClientMetadata(
+			opts,
+			clientWithDefaults,
+			client.metadata,
+		);
 	}
 }
 
@@ -676,10 +876,16 @@ export type CreateOAuthClientRegistrationInput =
 			registrationSource: "dynamic";
 			/** Client-requested DCR resources resolved and linked by the operation. */
 			requestedResources?: string[];
+			/** Scope ceiling granted by the initial access token check. */
+			clientCredentialsScopes?: Scope[];
 	  })
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
-			requestedResources?: never;
+			/**
+			 * Resources to link to the new client. The caller must authorize the
+			 * `link` resource privilege for each one before persisting.
+			 */
+			requestedResources?: string[];
 			/** Server-owned scope ceiling configured by an administrator. */
 			clientCredentialsScopes?: Scope[];
 	  });
@@ -760,7 +966,14 @@ async function persistOAuthClientRegistration(
 			: input.metadata;
 	const body = applyOAuthClientRegistrationDefaults(
 		registrationMetadata,
-		input.registrationSource === "clientMetadataDocument" ? null : "web",
+		input.registrationSource === "clientMetadataDocument"
+			? null
+			: input.registrationSource === "dynamic"
+				? resolveDynamicRegistrationDefaultApplicationType(
+						opts,
+						registrationMetadata,
+					)
+				: "web",
 	);
 
 	// Determine whether registration request for public client
@@ -776,6 +989,10 @@ async function persistOAuthClientRegistration(
 	await checkOAuthClient(body, opts, {
 		registrationSource: input.registrationSource,
 		ctx,
+		// A refresh validates the merge with the current row before saving.
+		skipExtensionValidation:
+			input.registrationSource === "clientMetadataDocument" &&
+			Boolean(input.existingClient),
 	});
 
 	// Generate clientId and clientSecret based on its type
@@ -836,28 +1053,36 @@ async function persistOAuthClientRegistration(
 		user_id: owner?.referenceId ? undefined : owner?.userId,
 		reference_id: owner?.referenceId,
 	});
+	// A discovery refresh leaves the stored ceiling alone (see the update below).
 	schema.clientCredentialsScopes =
 		input.registrationSource === "clientMetadataDocument"
-			? (input.existingClient?.clientCredentialsScopes ?? [])
-			: input.registrationSource === "managed"
-				? (input.clientCredentialsScopes ?? [])
-				: [];
+			? []
+			: (input.clientCredentialsScopes ?? []);
 	schema.clientDiscoveryId =
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
 			: null;
+	schema.sectorIdentifier = deriveSectorIdentifier(
+		clientId,
+		body.redirect_uris,
+	);
 	if (
 		input.registrationSource === "clientMetadataDocument" &&
 		body.application_type === undefined
 	) {
 		schema.applicationType = null;
 	}
+	const requestedResources =
+		input.registrationSource === "clientMetadataDocument"
+			? []
+			: (input.requestedResources ?? []);
+	if (input.registrationSource === "dynamic") {
+		assertDynamicRegistrationResourcesAllowed(opts, requestedResources);
+	}
 	const resources = await resolveClientRegistrationResources(
 		ctx,
 		opts,
-		input.registrationSource === "dynamic"
-			? (input.requestedResources ?? [])
-			: [],
+		requestedResources,
 	);
 	const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
 	const clientResourceModel =
@@ -877,6 +1102,42 @@ async function persistOAuthClientRegistration(
 			let storedClient: SchemaClient<Scope[]>;
 			let created = false;
 			if (existingClient) {
+				// Merge with the row as it is now, inside the transaction, rather
+				// than as read before the document fetch, so admin changes made
+				// meanwhile are kept, and validate the result before saving it.
+				// Without extensions, a refresh leaves metadata alone.
+				let metadata: string | null | undefined;
+				if (hasExtensionClientMetadata(opts)) {
+					const extensionFields = getExtensionClientMetadataFields(opts);
+					const currentClient = await adapter.findOne<SchemaClient<Scope[]>>({
+						model: clientModel,
+						where: [{ field: "clientId", value: clientId }],
+					});
+					const merged = stripReservedOAuthClientMetadataExtensions(
+						mergeDocumentExtensionMetadata(
+							extensionFields,
+							currentClient?.metadata,
+							body.metadata,
+						),
+					);
+					await validateExtensionClientMetadata(opts, body, merged);
+					if (extensionFields.size > 0) {
+						metadata =
+							merged && Object.keys(merged).length > 0
+								? JSON.stringify(merged)
+								: null;
+					}
+				}
+				// Server-owned fields (disabled, consent and logout settings, the
+				// ceiling) can change while this refresh fetches metadata, so the
+				// refresh never writes them.
+				const {
+					clientCredentialsScopes: _ceiling,
+					disabled: _disabled,
+					skipConsent: _skipConsent,
+					enableEndSession: _enableEndSession,
+					...refreshed
+				} = schema;
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -887,10 +1148,12 @@ async function persistOAuthClientRegistration(
 						},
 					],
 					update: {
-						...schema,
-						disabled: existingClient.disabled,
-						skipConsent: existingClient.skipConsent,
-						enableEndSession: existingClient.enableEndSession,
+						...refreshed,
+						metadata,
+						// A client stored without a sector keeps the host-derived one.
+						sectorIdentifier: existingClient.sectorIdentifier
+							? schema.sectorIdentifier
+							: null,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},
@@ -1039,6 +1302,29 @@ function assertClientDiscoveryOwnership(
 }
 
 /**
+ * The `metadata` a metadata document registration stores. The document owns the
+ * fields extensions declare, so a refresh replaces them, including removing
+ * ones it no longer declares. Other stored keys, such as ones an admin set, are
+ * kept.
+ */
+function mergeDocumentExtensionMetadata(
+	extensionFields: ReadonlySet<string>,
+	storedMetadata: SchemaClient<Scope[]>["metadata"] | undefined,
+	documentMetadata: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+	const owned = ([field]: [string, unknown]) => extensionFields.has(field);
+	const metadata = {
+		...Object.fromEntries(
+			Object.entries(parseClientMetadata(storedMetadata) ?? {}).filter(
+				(entry) => !owned(entry),
+			),
+		),
+		...Object.fromEntries(Object.entries(documentMetadata ?? {}).filter(owned)),
+	};
+	return Object.keys(metadata).length ? metadata : undefined;
+}
+
+/**
  * First-party persistence seam for a validated Client ID Metadata Document.
  *
  * This operation owns both initial creation and atomic replacement. It never
@@ -1074,19 +1360,29 @@ export async function registerClientMetadataDocument(
 				"Client ID Metadata Document clients cannot use a shared secret",
 		});
 	}
-	const registrationInput = {
+	const toRegistrationInput = (
+		existingClient: SchemaClient<Scope[]> | undefined,
+	) => ({
 		...input,
+		existingClient,
 		metadata: {
 			...input.metadata,
+			// Only the declared fields; a refresh merges them with the current
+			// row when it saves.
+			metadata: pickExtensionClientMetadata(input.metadata, opts),
 			token_endpoint_auth_method:
 				input.metadata.token_endpoint_auth_method ?? "none",
 			client_secret: undefined,
 			client_secret_expires_at: undefined,
 		},
 		registrationSource: "clientMetadataDocument" as const,
-	};
+	});
 	try {
-		return await persistOAuthClientRegistration(ctx, opts, registrationInput);
+		return await persistOAuthClientRegistration(
+			ctx,
+			opts,
+			toRegistrationInput(input.existingClient),
+		);
 	} catch (error) {
 		if (!isClientRegistrationCollision(error)) throw error;
 		const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
@@ -1116,10 +1412,11 @@ export async function registerClientMetadataDocument(
 			if (!exactLink) throw error.cause;
 		}
 		try {
-			return await persistOAuthClientRegistration(ctx, opts, {
-				...registrationInput,
-				existingClient: currentClient,
-			});
+			return await persistOAuthClientRegistration(
+				ctx,
+				opts,
+				toRegistrationInput(currentClient),
+			);
 		} catch (retryError) {
 			if (isClientRegistrationCollision(retryError)) {
 				throw retryError.cause;
@@ -1207,12 +1504,17 @@ export async function createOAuthClientEndpoint(
 			"configure-client-credentials-scopes",
 		);
 	}
+	const requestedResources = settings?.admin ? metadata.resources : undefined;
+	for (const identifier of new Set(requestedResources ?? [])) {
+		await assertResourcePrivileges(ctx, session, opts, "link", identifier);
+	}
 	const registrationInput: CreateOAuthClientRegistrationInput = {
 		metadata,
 		registrationSource: "managed",
 		userId: referenceId ? undefined : session.session.userId,
 		referenceId,
 		clientCredentialsScopes,
+		...(requestedResources ? { requestedResources } : {}),
 	};
 	const responseBody = settings?.admin
 		? await createOAuthClientAdministrativeRegistration(
@@ -1271,6 +1573,8 @@ export function oauthToSchema(
 		post_logout_redirect_uris: postLogoutRedirectUris,
 		backchannel_logout_uri: backchannelLogoutUri,
 		backchannel_logout_session_required: backchannelLogoutSessionRequired,
+		frontchannel_logout_uri: frontchannelLogoutUri,
+		frontchannel_logout_session_required: frontchannelLogoutSessionRequired,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
 		response_types: responseTypes,
@@ -1326,6 +1630,8 @@ export function oauthToSchema(
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
+		frontchannelLogoutUri,
+		frontchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -1378,6 +1684,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		postLogoutRedirectUris,
 		backchannelLogoutUri,
 		backchannelLogoutSessionRequired,
+		frontchannelLogoutUri,
+		frontchannelLogoutSessionRequired,
 		tokenEndpointAuthMethod,
 		grantTypes,
 		responseTypes,
@@ -1440,6 +1748,9 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		backchannel_logout_uri: backchannelLogoutUri ?? undefined,
 		backchannel_logout_session_required:
 			backchannelLogoutSessionRequired ?? undefined,
+		frontchannel_logout_uri: frontchannelLogoutUri ?? undefined,
+		frontchannel_logout_session_required:
+			frontchannelLogoutSessionRequired ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
 		response_types: responseTypes ?? undefined,

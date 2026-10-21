@@ -22,6 +22,7 @@ import type {
 	ClientDiscovery,
 	Confirmation,
 	GrantType,
+	OAuthConsent,
 	OAuthOptions,
 	Prompt,
 	SchemaClient,
@@ -221,6 +222,11 @@ function getTrustedClientCache(
 	return cache;
 }
 
+/**
+ * Verify the signature and expiration of an OAuth query issued by this provider.
+ * Use the provider's current auth secret on the server before displaying a
+ * consent page. A valid signature does not replace client or session checks.
+ */
 export async function verifyOAuthQueryParams(
 	oauth_query: string,
 	secret: string,
@@ -240,6 +246,22 @@ export async function verifyOAuthQueryParams(
 		constantTimeEqual(sig, verifySig) &&
 		new Date(exp * 1000) >= new Date()
 	);
+}
+
+/**
+ * Rejects changes to a client listed in `cachedTrustedClients`. Cached trusted
+ * clients are immutable through the client management endpoints.
+ */
+export function assertNotTrustedClient(
+	opts: OAuthOptions<Scope[]>,
+	clientId: string,
+) {
+	if (opts.cachedTrustedClients?.has(clientId)) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description: "trusted clients must be updated manually",
+		});
+	}
 }
 
 /**
@@ -530,6 +552,67 @@ function throwInvalidAuthenticationRequest(errorDescription: string): never {
 }
 
 /**
+ * Re-reads a request's raw `application/x-www-form-urlencoded` body, keeping
+ * every value of a repeated key. better-call's form-body parser keeps only the
+ * last one, so `resource=https://a&resource=https://b` reaches the handler as
+ * `{ resource: "https://b" }`. Query strings are unaffected: the router keeps
+ * repeated query keys as arrays.
+ *
+ * Returns `undefined` for other media types or an unreadable or empty body.
+ * The endpoint MUST set `cloneRequest: true`, because the body stream is read
+ * a second time.
+ *
+ * @internal
+ */
+export async function readFormParams(
+	request: Request,
+): Promise<URLSearchParams | undefined> {
+	const contentType = request.headers.get("content-type")?.toLowerCase() ?? "";
+	if (!contentType.includes("application/x-www-form-urlencoded")) {
+		return undefined;
+	}
+	let text: string;
+	try {
+		text = await request.clone().text();
+	} catch {
+		return undefined;
+	}
+	return text ? new URLSearchParams(text) : undefined;
+}
+
+/**
+ * Applies RFC 6749 §3.2 to a form body the parser collapsed to one value per
+ * key: a parameter sent without a value counts as omitted, and a parameter
+ * sent more than once is rejected with `invalid_request`. A name in
+ * `repeatable`, such as RFC 8707 `resource`, keeps every value as an array
+ * when it repeats. A value a `before` hook replaced is left as the hook set it.
+ *
+ * @internal
+ */
+export function applyFormParams(
+	params: URLSearchParams,
+	body: Record<string, unknown>,
+	repeatable: readonly string[] = [],
+): Record<string, unknown> {
+	const merged = { ...body };
+	for (const name of new Set(params.keys())) {
+		const raw = params.getAll(name);
+		const values = raw.filter(Boolean);
+		if (values.length > 1 && !repeatable.includes(name)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_request",
+				error_description: `${name} must not be repeated`,
+			});
+		}
+		// The parser kept the last raw value; anything else came from a hook.
+		if (merged[name] !== raw.at(-1)) continue;
+		if (values.length === 0) delete merged[name];
+		else merged[name] = values.length === 1 ? values[0] : values;
+	}
+	return merged;
+}
+
+/**
  * Normalizes client identification and authentication parameters while
  * enforcing RFC 6749 §2.3 and RFC 8628 §3.1 cardinality. Empty values are
  * omitted. Client identification remains separate from authentication-method
@@ -665,6 +748,51 @@ export function clientAllowsGrant(
 }
 
 /**
+ * Throws an OAuth error response (RFC 6749 §5.2).
+ *
+ * @internal
+ */
+export function tokenError(
+	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
+	error: string,
+	errorDescription: string,
+): never {
+	throw new APIError(status, {
+		error,
+		error_description: errorDescription,
+	});
+}
+
+/**
+ * Splits a space-delimited OAuth `scope` value (RFC 6749 §3.3).
+ *
+ * @internal
+ */
+export function parseScopes(scope: string | null | undefined): string[] {
+	const normalized = scope?.trim();
+	return normalized ? normalized.split(/\s+/) : [];
+}
+
+/**
+ * Whether a stored consent covers every requested scope and resource. Shared by
+ * authorization and grants that need prior consent, so the coverage rule cannot
+ * drift between them. Each caller still chooses which consent rows to check.
+ *
+ * @internal
+ */
+export function consentCovers(
+	consent: Pick<OAuthConsent<Scope[]>, "scopes" | "resources">,
+	scopes: readonly string[],
+	resources: readonly string[],
+): boolean {
+	const consentedResources = consent.resources ?? [];
+	return (
+		scopes.every((scope) => consent.scopes.includes(scope)) &&
+		resources.every((resource) => consentedResources.includes(resource))
+	);
+}
+
+/**
  * Validates requested scopes against a registered client's allowed scopes.
  *
  * @internal
@@ -728,7 +856,7 @@ export async function validateClientCredentials(
 ) {
 	const client = await getClient(ctx, options, clientId);
 	if (!client) {
-		throwInvalidClient("missing client", { method: authMethod });
+		throwInvalidClient("client not found", { method: authMethod });
 	}
 	if (client.disabled) {
 		throwInvalidClient("client is disabled", { method: authMethod });
@@ -987,12 +1115,40 @@ export function parsePrompt(prompt: string) {
 }
 
 /**
- * Extracts the sector identifier (hostname) from a client's first redirect URI.
+ * Derives the pairwise sector to store for a client.
+ *
+ * Only an `https` host identifies who controls a redirect URI, so clients
+ * whose redirect URIs are all `https` share the sector of that host. Any app
+ * can register a custom scheme, and any local process can listen on a
+ * loopback port, so every other client gets a sector of its own. `/` cannot
+ * appear in a URL host, so a client sector never equals a host sector.
+ *
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+ * @internal
+ */
+export function deriveSectorIdentifier(
+	clientId: string,
+	redirectUris: readonly string[] | undefined,
+): string {
+	// Callers validate every redirect URI first, so parsing cannot throw.
+	const urls = (redirectUris ?? []).map((uri) => new URL(uri));
+	const first = urls[0];
+	return first && urls.every((url) => url.protocol === "https:")
+		? first.host
+		: `client/${clientId}`;
+}
+
+/**
+ * Returns the client's stored pairwise sector, or for a client created before
+ * sectors were stored, the host of its first redirect URI.
  *
  * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
  * @internal
  */
 function getSectorIdentifier(client: SchemaClient<Scope[]>): string {
+	if (client.sectorIdentifier) {
+		return client.sectorIdentifier;
+	}
 	const uri = client.redirectUris?.[0];
 	if (!uri) {
 		throw new BetterAuthError(
@@ -1032,6 +1188,57 @@ export async function resolveSubjectIdentifier(
 		return computePairwiseSub(userId, client, opts.pairwiseSecret);
 	}
 	return userId;
+}
+
+/**
+ * Resolves `postLogin.consentReferenceId`, treating an empty value as no reference.
+ *
+ * @internal
+ */
+export async function getConsentReferenceId(
+	opts: OAuthOptions<Scope[]>,
+	context: Parameters<
+		NonNullable<OAuthOptions<Scope[]>["postLogin"]>["consentReferenceId"]
+	>[0],
+): Promise<string | undefined> {
+	return (await opts.postLogin?.consentReferenceId?.(context)) || undefined;
+}
+
+/**
+ * Finds the consent stored for exactly this reference. Without a reference,
+ * only consent stored without one (missing, null, or empty) matches.
+ *
+ * @internal
+ */
+export async function findConsent(
+	ctx: GenericEndpointContext,
+	clientId: string,
+	userId: string,
+	referenceId: string | undefined,
+): Promise<OAuthConsent<Scope[]> | null> {
+	const where = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+	];
+	if (referenceId) {
+		return ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [...where, { field: "referenceId", value: referenceId }],
+		});
+	}
+	// Matched in code: Prisma on MongoDB leaves an omitted referenceId unset, and `eq null` skips unset fields.
+	const pageSize = 100;
+	for (let offset = 0; ; offset += pageSize) {
+		const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where,
+			limit: pageSize,
+			offset,
+			sortBy: { field: "id", direction: "asc" },
+		});
+		const consent = consents.find((row) => !row.referenceId);
+		if (consent || consents.length < pageSize) return consent ?? null;
+	}
 }
 
 /**

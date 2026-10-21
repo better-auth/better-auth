@@ -130,10 +130,32 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@alexasomba/better-auth-paystack",
+		name: "better-auth-paystack",
 		url: "https://github.com/alexasomba/better-auth-paystack",
 		description:
-			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
+			"Production-ready Paystack billing plugin for Better Auth with native and locally managed subscriptions, one-time payments, organization billing, trials, secure webhooks, automated limits, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-flutterwave",
+		url: "https://github.com/alexasomba/better-auth-flutterwave",
+		description:
+			"Flutterwave plugin for Better Auth — integrates Flutterwave payments, subscriptions, organization billing, marketplace split payments, webhooks, refunds, reconciliation, and more.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
+		name: "better-auth-solana-payments",
+		url: "https://github.com/alexasomba/better-auth-solana-payments",
+		description:
+			"One-time Solana payment integration for Better Auth with Solana Pay checkout, server-side transfer verification, payment tracking, organization payments, and more.",
 		author: {
 			name: "alexasomba",
 			github: "alexasomba",
@@ -213,6 +235,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "iamjasonkendrick",
 			github: "iamjasonkendrick",
 			avatar: "https://github.com/iamjasonkendrick.png",
+		},
+	},
+	{
+		name: "@agentaos/better-auth",
+		url: "https://github.com/AgentaOS/agentaos/tree/main/packages/better-auth",
+		description:
+			"Better Auth plugin for AgentaOS merchant-of-record checkouts, subscriptions, and verified webhooks.",
+		author: {
+			name: "AgentaOS",
+			github: "AgentaOS",
+			avatar: "https://github.com/AgentaOS.png",
 		},
 	},
 	{
@@ -302,6 +335,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@amank-root/better-auth-razorpay",
+		url: "https://github.com/Amank-root/better-auth-razorpay",
+		description:
+			"Full Razorpay integration plugin for Better Auth — subscriptions, one-time payments, invoices, refunds, customers, add-ons, items, and webhook handling.",
+		author: {
+			name: "Aman Kushwaha",
+			github: "Amank-root",
+			avatar: "https://github.com/Amank-root.png",
+		},
+	},
+	{
 		name: "better-auth-instagram",
 		url: "https://github.com/rajatsandeepsen/better-auth-instagram",
 		description: "Instagram Provider for Better Auth",
@@ -340,6 +384,94 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "stewartjarod",
 			github: "stewartjarod",
 			avatar: "https://github.com/stewartjarod.png",
+		},
+	},
+	{
+		name: "better-auth-email-challenge",
+		url: "https://github.com/lapluviosilla/better-auth-email-challenge",
+		description:
+			"Passwordless, multi-device email challenge — one challenge completable by an approval link or OTP, with browser-bound session issuance for safe cross-device sign-in.",
+		author: {
+			name: "lapluviosilla",
+			github: "lapluviosilla",
+			avatar: "https://github.com/lapluviosilla.png",
+		},
+	},
+	{
+		name: "@better-geetest/better-auth-plugin-gt4",
+		url: "https://github.com/typed-sigterm/better-geetest/tree/main/packages/better-auth-plugin-gt4",
+		description:
+			"Integrate GeeTest gt4 bot protection by adding captcha verification for key endpoints.",
+		author: {
+			name: "Typed SIGTERM",
+			github: "typed-sigterm",
+			avatar: "https://github.com/typed-sigterm.png",
+		},
+	},
+	{
+		name: "better-auth-evp",
+		url: "https://github.com/qamarq/better-auth-evp",
+		description:
+			"Email Verification Protocol (Chrome origin trial) plugin - lets a supporting browser verify mailbox ownership in the background and sign the user in, with automatic fallback to any other sign-in method when unsupported.",
+		author: {
+			name: "qamarq",
+			github: "qamarq",
+			avatar: "https://github.com/qamarq.png",
+		},
+	},
+	{
+		name: "@eusend_dev/better-auth",
+		url: "https://github.com/eusend-dev/eusend-better-auth",
+		description:
+			"Auth emails (verification, password reset, OTP, magic link, organization invitations) through eusend, an EU-hosted email API, with brandable templates, non-blocking sends, and optional contact sync for verified users.",
+		author: {
+			name: "eusend",
+			github: "eusend-dev",
+			avatar: "https://github.com/eusend-dev.png",
+		},
+	},
+	{
+		name: "@stellartools/betterauth-adapter",
+		url: "https://github.com/payrouteshq/stellartools",
+		description:
+			"Integrate Stellar blockchain payments to your Better Auth setup.",
+		author: {
+			name: "Emmanuel Odii",
+			github: "devodii",
+			avatar: "https://github.com/devodii.png",
+		},
+	},
+	{
+		name: "@octopi-ai/better-enrollment",
+		url: "https://github.com/OctopiAI/better-enrollment",
+		description:
+			"Invite-only sign-ups, role-merging invite links, and organization invites. Supports private (email-bound) and public (shareable, capped, revocable) invites, organization seat limits, and an append-only audit trail.",
+		author: {
+			name: "Talat Mahmud",
+			github: "FalconiZzare",
+			avatar: "https://github.com/FalconiZzare.png",
+		},
+	},
+	{
+		name: "good-webhooks",
+		url: "https://github.com/pplytas/good-webhooks",
+		description:
+			"Authenticated webhook endpoint management with typed client APIs, scoped permissions, signing-secret rotation, and optional self-hosted delivery.",
+		author: {
+			name: "Panagiotis Plytas",
+			github: "pplytas",
+			avatar: "https://github.com/pplytas.png",
+		},
+	},
+	{
+		name: "better-auth-saml-idp",
+		url: "https://github.com/mmcintosh/better-auth-saml-idp",
+		description:
+			"Turn Better Auth into a SAML 2.0 identity provider for Microsoft 365, Google Workspace, Okta, Salesforce, AWS and other service providers. SP registry with metadata import, signed and encrypted assertions, Single Logout, and step-up MFA.",
+		author: {
+			name: "Mark McIntosh",
+			github: "mmcintosh",
+			avatar: "https://github.com/mmcintosh.png",
 		},
 	},
 ];

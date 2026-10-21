@@ -19,8 +19,13 @@
     },
     "docs#build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/better-auth/package.json",
+        ".env*"
+      ],
+      "outputs": [".next/**", "!.next/cache/**", "content/_generated/docs/**"],
+      "env": ["DOCS_SYNC_REPO"],
       "passThroughEnv": [
         "ENABLE_EXPERIMENTAL_COREPACK",
         "ORAMA_PRIVATE_API_KEY",
@@ -128,6 +133,7 @@
         "test-results/**",
         "playwright-report/**"
       ],
+      "passThroughEnv": ["PLAYWRIGHT_CROSS_BROWSER"],
       "cache": false
     },
     "deploy": {

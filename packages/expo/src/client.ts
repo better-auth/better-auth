@@ -12,24 +12,20 @@ import {
 } from "better-auth/cookies/utils";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
-import type * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import type { ExpoClientStorage } from "./client-storage";
+import { createManagedStorage } from "./client-storage";
 import { setupExpoFocusManager } from "./focus-manager";
 import { setupExpoOnlineManager } from "./online-manager";
 import { PACKAGE_VERSION } from "./version";
+
+export type { ExpoClientStorage } from "./client-storage";
+export { normalizeCookieName, storageAdapter } from "./client-storage";
 
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
 	setupExpoOnlineManager();
 }
-
-/**
- * Storage used by the Expo client for cookies and cached session data.
- */
-export type ExpoClientStorage = Pick<
-	typeof SecureStore,
-	"setItem" | "setItemAsync" | "getItem" | "getItemAsync"
->;
 
 interface ExpoClientOptions {
 	scheme?: string | undefined;
@@ -250,144 +246,12 @@ export function hasBetterAuthCookies(
 	return false;
 }
 
-/**
- * Expo secure store does not support colons in the keys.
- * This function replaces colons with underscores.
- *
- * @see https://github.com/better-auth/better-auth/issues/5426
- *
- * @param name cookie name to be saved in the storage
- * @returns normalized cookie name
- */
-export function normalizeCookieName(name: string) {
-	return name.replace(/:/g, "_");
-}
-
-/**
- * Max characters written per `setItem`. Native secure stores silently reject
- * oversized writes (iOS Keychain refuses values above ~2KB), losing the cookie,
- * so a larger value is split across keys here. Mirrors the server's
- * `chunkCookie`/`joinChunks` in `session-store.ts`; keep the two in sync.
- *
- * @see https://github.com/better-auth/better-auth/issues/9151
- */
-const STORAGE_VALUE_LIMIT = 1800;
-
-/**
- * Marks a base key whose value is split across `<key>.0..N` chunks. The leading
- * control char can't start a JSON value (so it never collides) and, unlike NUL,
- * survives the native storage bridge without C-string truncation.
- */
-const CHUNK_MARKER = "\u0001ba-chunks:";
-
-function getStorageWrites(key: string, value: string): [string, string][] {
-	if (value.length <= STORAGE_VALUE_LIMIT) {
-		return [[key, value]];
-	}
-
-	const count = Math.ceil(value.length / STORAGE_VALUE_LIMIT);
-	const writes: [string, string][] = [[key, ""]];
-	for (let i = 0; i < count; i++) {
-		const start = i * STORAGE_VALUE_LIMIT;
-		writes.push([
-			`${key}.${i}`,
-			value.slice(start, start + STORAGE_VALUE_LIMIT),
-		]);
-	}
-	writes.push([key, `${CHUNK_MARKER}${count}`]);
-	return writes;
-}
-
-export function storageAdapter(storage: ExpoClientStorage) {
-	return {
-		/**
-		 * Reads a value, reassembling it if it was split across chunk keys. A value
-		 * that fit is returned as-is (values written before chunking still read
-		 * back); a missing chunk returns `null` so a torn write fails closed.
-		 */
-		getItem: (name: string): string | null => {
-			const key = normalizeCookieName(name);
-			const stored = storage.getItem(key);
-			if (stored == null || !stored.startsWith(CHUNK_MARKER)) {
-				return stored;
-			}
-			const count = Number(stored.slice(CHUNK_MARKER.length));
-			if (!Number.isInteger(count) || count < 1) {
-				return null;
-			}
-			let value = "";
-			for (let i = 0; i < count; i++) {
-				const chunk = storage.getItem(`${key}.${i}`);
-				if (chunk == null) {
-					return null;
-				}
-				value += chunk;
-			}
-			return value;
-		},
-		getItemAsync: async (name: string): Promise<string | null> => {
-			const key = normalizeCookieName(name);
-			const stored = await storage.getItemAsync(key);
-			if (stored == null || !stored.startsWith(CHUNK_MARKER)) {
-				return stored;
-			}
-			const count = Number(stored.slice(CHUNK_MARKER.length));
-			if (!Number.isInteger(count) || count < 1) {
-				return null;
-			}
-			let value = "";
-			for (let i = 0; i < count; i++) {
-				const chunk = await storage.getItemAsync(`${key}.${i}`);
-				if (chunk == null) {
-					return null;
-				}
-				value += chunk;
-			}
-			return value;
-		},
-		/**
-		 * Stores `value`, splitting it across chunk keys when it exceeds the
-		 * per-write limit. The base key is cleared before the chunks are rewritten
-		 * and set to the marker last, as the commit point, so a write interrupted
-		 * partway through reads as absent rather than a mix of old and new chunks.
-		 * Failures are logged, not thrown: persistence is best-effort and must not
-		 * break the request.
-		 */
-		setItem: (name: string, value: string): void => {
-			const key = normalizeCookieName(name);
-			try {
-				for (const [writeKey, writeValue] of getStorageWrites(key, value)) {
-					storage.setItem(writeKey, writeValue);
-				}
-			} catch (error) {
-				console.error(
-					`[better-auth/expo] failed to persist "${key}" to storage`,
-					error,
-				);
-			}
-		},
-		setItemAsync: async (name: string, value: string): Promise<void> => {
-			const key = normalizeCookieName(name);
-			try {
-				for (const [writeKey, writeValue] of getStorageWrites(key, value)) {
-					await storage.setItemAsync(writeKey, writeValue);
-				}
-			} catch (error) {
-				console.error(
-					`[better-auth/expo] failed to persist "${key}" to storage`,
-					error,
-				);
-			}
-		},
-	};
-}
-
 export const expoClient = (opts: ExpoClientOptions) => {
 	let store: ClientStore | null = null;
 	const storagePrefix = opts?.storagePrefix || "better-auth";
 	const cookieName = `${storagePrefix}_cookie`;
 	const localCacheName = `${storagePrefix}_session_data`;
-	const storage = storageAdapter(opts.storage);
+	const storage = createManagedStorage(opts.storage);
 	const isWeb = Platform.OS === "web";
 	const cookiePrefix = opts?.cookiePrefix || "better-auth";
 	let sessionCacheHydration: Promise<void> | undefined;
@@ -444,8 +308,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
 	const scheme = Array.isArray(rawScheme) ? rawScheme[0] : rawScheme;
+	const nativeScheme = isWeb ? undefined : scheme;
 
-	if (!scheme && !isWeb) {
+	if (!nativeScheme && !isWeb) {
 		throw new Error(
 			"Scheme not found in app.json. Please provide a scheme in the options.",
 		);
@@ -488,19 +353,18 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
 							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
-								const prevCookie = await storage.getItemAsync(cookieName);
-								const toSetCookie = getSetCookie(
-									setCookie || "",
-									prevCookie ?? undefined,
+								const update = await storage.updateItemAsync(
+									cookieName,
+									(currentValue) =>
+										getSetCookie(setCookie, currentValue ?? undefined),
 								);
 								// Only notify $sessionSignal if the session cookie values actually changed
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
-								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
-									await storage.setItemAsync(cookieName, toSetCookie);
+								if (
+									update &&
+									hasSessionCookieChanged(update.previousValue, update.value)
+								) {
 									store?.notify("$sessionSignal");
-								} else {
-									// Still update the storage to refresh expiry times, but don't trigger refetch
-									await storage.setItemAsync(cookieName, toSetCookie);
 								}
 							}
 						}
@@ -568,15 +432,19 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							const url = new URL(result.url);
 							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
-							const prevCookie = await storage.getItemAsync(cookieName);
-							const toSetCookie = getSetCookie(cookie, prevCookie ?? undefined);
-							await storage.setItemAsync(cookieName, toSetCookie);
-							store?.notify("$sessionSignal");
+							const update = await storage.updateItemAsync(
+								cookieName,
+								(currentValue) =>
+									getSetCookie(cookie, currentValue ?? undefined),
+							);
+							if (update) {
+								store?.notify("$sessionSignal");
+							}
 						}
 					},
 				},
 				async init(url, options) {
-					if (isWeb) {
+					if (!nativeScheme) {
 						return {
 							url,
 							options: options as ClientFetchOption,
@@ -588,25 +456,23 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					options = options || {};
 					options.credentials = "omit";
-					/**
-					 * ID token flow (native sign-in) doesn't need cookie-based auth.
-					 * The ID token itself is cryptographically signed by the provider
-					 * and validated server-side, so no session cookies or origin
-					 * validation is required.
-					 *
-					 * Sending cookie/expo-origin headers for ID token requests triggers
-					 * unnecessary origin checks that fail for custom URL schemes.
-					 */
 					const isIdTokenRequest = options.body?.idToken !== undefined;
 
 					if (isIdTokenRequest) {
-						const storedCookie = pathname.endsWith("/link-social")
+						const isLinkSocial = pathname.endsWith("/link-social");
+						// ID token sign-in validates the provider token directly. Link-social
+						// still needs the current session cookie, so it also needs an origin
+						// header for the server-side CSRF check.
+						const storedCookie = isLinkSocial
 							? await storage.getItemAsync(cookieName)
 							: null;
 						const cookie = getCookie(storedCookie);
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
+							...(isLinkSocial
+								? { "expo-origin": getOrigin(nativeScheme) }
+								: {}),
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
@@ -615,7 +481,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
-							"expo-origin": getOrigin(scheme!),
+							"expo-origin": getOrigin(nativeScheme),
 							"x-skip-oauth-proxy": "true",
 						};
 						if (options.body?.callbackURL) {

@@ -25,7 +25,10 @@ export type OAuthIdTokenConfig =
 			issuer?: (string | string[]) | undefined;
 			/** Expected `aud`, usually the client ID. */
 			audience: string | string[];
-			/** Permitted JWS algorithms. Defaults to the token's `alg` header. */
+			/**
+			 * Permitted JWS algorithms. Set this to the algorithms the provider signs with.
+			 * When omitted, jose accepts any algorithm the resolved key supports.
+			 */
 			algorithms?: string[] | undefined;
 			/** Maximum token age passed to jose (e.g. `"1h"`). */
 			maxTokenAge?: string | undefined;
@@ -116,9 +119,9 @@ export type OAuthAccountSubject<Profile extends object = object> =
 export type OAuthMappedUser = {
 	/** Provider identity is defined by `accountSubject`, not local user mapping. */
 	id?: never;
-	name?: string;
-	email?: string | null;
-	image?: string;
+	name?: string | undefined;
+	email?: string | null | undefined;
+	image?: string | undefined;
 	emailVerified?: boolean;
 	[key: string]: unknown;
 };
@@ -251,16 +254,6 @@ export interface OAuthProvider<
 	 * against this value to prevent authorization server mix-up attacks.
 	 */
 	issuer?: string | undefined;
-	/**
-	 * Stable issuer used with the provider subject to recognize an account.
-	 *
-	 * Use the validated OpenID Connect issuer for OIDC providers. A resolver is
-	 * supported for tenant-specific issuers and receives only provider-verified
-	 * data. OAuth providers without an issuer omit this property and are scoped
-	 * to the synthetic `local:oauth:<encoded providerId>` issuer, where the
-	 * provider ID segment is percent-encoded.
-	 */
-	accountIssuer?: string | OAuthAccountKeyResolver<T, string> | undefined;
 	/**
 	 * Require shared OAuth redirect routes to bind ID-token verification to an
 	 * authorization request nonce. When true, routes generate `idTokenNonce`,

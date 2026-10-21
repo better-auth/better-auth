@@ -18,9 +18,22 @@ import { resetSeedStateForTests } from "./resources";
 import type { OAuthOptions } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
+const makeRegister =
+	(fetchImpl: typeof fetch, baseURL = "http://localhost:3000") =>
+	(body: Record<string, unknown>, headers?: HeadersInit) => {
+		const requestHeaders = new Headers(headers);
+		requestHeaders.set("content-type", "application/json");
+		return fetchImpl(`${baseURL}/api/auth/oauth2/register`, {
+			method: "POST",
+			headers: requestHeaders,
+			body: JSON.stringify(body),
+		});
+	};
+
 describe("oauth register", async () => {
 	const baseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
+	const fcBaseUrl = "https://rp.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		plugins: [
@@ -564,11 +577,11 @@ describe("oauth register", async () => {
 			});
 		});
 
-		it("still rejects a dynamic registration declaring an unsupported grant", async () => {
+		it("keeps managed registration strict about unsupported grants", async () => {
 			await expect(
 				checkOAuthClient(
 					{
-						client_id: "dcr-client",
+						client_id: "managed-client",
 						redirect_uris: [redirectUri],
 						grant_types: [
 							"authorization_code",
@@ -580,7 +593,7 @@ describe("oauth register", async () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 					},
-					{ registrationSource: "dynamic" },
+					{ registrationSource: "managed" },
 				),
 			).rejects.toMatchObject({
 				body: {
@@ -697,6 +710,199 @@ describe("oauth register", async () => {
 			expect(response.error?.status).toBe(400);
 		}
 	});
+
+	it("round-trips frontchannel_logout_uri and frontchannel_logout_session_required", async () => {
+		const frontchannelUri = `${fcBaseUrl}/logout/frontchannel`;
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: frontchannelUri,
+			frontchannel_logout_session_required: true,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.frontchannel_logout_uri).toBe(frontchannelUri);
+		expect(response.data?.frontchannel_logout_session_required).toBe(true);
+	});
+
+	it("rejects frontchannel_logout_uri with a fragment", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel#section`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects frontchannel_logout_uri ending with a bare fragment delimiter", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel#`,
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects credentials in frontchannel_logout_uri", async () => {
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [redirectUri],
+			frontchannel_logout_uri:
+				"https://user:password@rp.example.com/logout/frontchannel",
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-frontchannel-1_0.html#RPLogout
+	 */
+	it("rejects frontchannel_logout_uri outside every registered redirect_uri origin", async () => {
+		const targets = [
+			"https://other.example.com/logout/frontchannel",
+			"http://rp.example.com/logout/frontchannel",
+			"https://rp.example.com:8443/logout/frontchannel",
+		];
+		for (const frontchannel_logout_uri of targets) {
+			const response = await serverClient.oauth2.register({
+				redirect_uris: [redirectUri],
+				frontchannel_logout_uri,
+			});
+			expect(response.error?.status).toBe(400);
+		}
+	});
+
+	it("allows a loopback frontchannel_logout_uri that matches a loopback redirect_uri", async () => {
+		// The browser loads this URI, not the OP, so the back-channel SSRF guard
+		// does not apply; local development works like it does for redirects.
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+		});
+		expect(response.data?.frontchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/frontchannel`,
+		);
+	});
+
+	it("rejects a loopback frontchannel_logout_uri on a port no redirect_uri uses", async () => {
+		// Both values are fixed at registration, so the runtime port variance
+		// RFC 8252 §7.3 allows for loopback redirects does not apply here.
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			frontchannel_logout_uri: "http://localhost:6000/logout/frontchannel",
+		});
+		expect(response.error?.status).toBe(400);
+	});
+
+	it("rejects a redirect_uris update that leaves frontchannel_logout_uri without a matching origin", async () => {
+		const created = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				frontchannel_logout_uri: `${fcBaseUrl}/logout/frontchannel`,
+			},
+		});
+		await expect(
+			auth.api.adminUpdateOAuthClient({
+				headers,
+				body: {
+					client_id: created.client_id,
+					update: {
+						redirect_uris: ["https://other.example.com/callback"],
+					},
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { error: "invalid_client_metadata" },
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11081
+ */
+describe("oauth register - dynamic registration grant narrowing", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const instanceWithGrants = async (grantTypes: OAuthOptions["grantTypes"]) => {
+		const { customFetchImpl, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					allowUnauthenticatedClientRegistration: true,
+					grantTypes,
+				}),
+			],
+		});
+		return {
+			register: makeRegister(customFetchImpl as typeof fetch),
+			signInWithTestUser,
+		};
+	};
+	const { register } = await instanceWithGrants([
+		"authorization_code",
+		"refresh_token",
+	]);
+
+	it("registers Claude's connector with only the grants the server supports", async () => {
+		const response = await register({
+			redirect_uris: ["https://claude.ai/api/mcp/auth_callback"],
+			token_endpoint_auth_method: "none",
+			grant_types: [
+				"authorization_code",
+				"refresh_token",
+				"urn:ietf:params:oauth:grant-type:jwt-bearer",
+			],
+			response_types: ["code"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.grant_types).toEqual(["authorization_code", "refresh_token"]);
+	});
+
+	it("drops an unsupported client_credentials grant from unauthenticated registration", async () => {
+		const response = await register({
+			redirect_uris: ["https://rp.example.com/callback"],
+			token_endpoint_auth_method: "none",
+			grant_types: ["authorization_code", "client_credentials"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.grant_types).toEqual(["authorization_code"]);
+		expect(body.response_types).toEqual(["code"]);
+	});
+
+	it("rejects a registration that shares no grant with the server", async () => {
+		const response = await register({
+			redirect_uris: ["https://rp.example.com/callback"],
+			token_endpoint_auth_method: "none",
+			grant_types: ["urn:ietf:params:oauth:grant-type:jwt-bearer"],
+		});
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "invalid_client_metadata",
+		});
+	});
+
+	it("drops the code response type along with an unsupported authorization_code grant", async () => {
+		const machineServer = await instanceWithGrants(["client_credentials"]);
+		const { headers } = await machineServer.signInWithTestUser();
+		for (const responseTypes of [undefined, ["code"]]) {
+			const response = await machineServer.register(
+				{
+					token_endpoint_auth_method: "client_secret_basic",
+					grant_types: ["authorization_code", "client_credentials"],
+					response_types: responseTypes,
+				},
+				headers,
+			);
+			const body = (await response.json()) as OAuthClient;
+			expect(response.status, JSON.stringify(body)).toBe(201);
+			expect(body.grant_types).toEqual(["client_credentials"]);
+			expect(body.response_types ?? []).toEqual([]);
+		}
+	});
 });
 
 describe("oauth register - disableJwtPlugin", async () => {
@@ -726,6 +932,22 @@ describe("oauth register - disableJwtPlugin", async () => {
 			backchannel_logout_uri: `${rpBaseUrl}/logout/backchannel`,
 		});
 		expect(response.error?.status).toBe(400);
+	});
+
+	it("allows frontchannel_logout_uri when jwt plugin is disabled", async () => {
+		// Unlike back-channel logout, front-channel logout involves no signed
+		// Logout Token, so it has no dependency on the jwt plugin.
+		const response = await serverClient.oauth2.register({
+			redirect_uris: [`${rpBaseUrl}/callback`],
+			// http loopback redirects are native-only; web clients need https.
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			frontchannel_logout_uri: `${rpBaseUrl}/logout/frontchannel`,
+		});
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.frontchannel_logout_uri).toBe(
+			`${rpBaseUrl}/logout/frontchannel`,
+		);
 	});
 });
 
@@ -1084,6 +1306,87 @@ describe("oauth register - skip_consent blocked", async () => {
 			redirect_uris: ["https://rp.example.com/callback"],
 		});
 		expect(res.data?.client_id).toBeDefined();
+	});
+});
+
+describe("oauth register - client_credentials scopes from an initial access token", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "https://erp.example.com/oauth/callback";
+	const grantedScopes = new Map<string, string[]>([
+		["grant-invoices", ["invoices:write"]],
+		["grant-unknown", ["not-configured"]],
+	]);
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				scopes: ["openid", "invoices:write"],
+				validateInitialAccessToken: ({ initialAccessToken }) => {
+					const scopes = grantedScopes.get(initialAccessToken);
+					if (!scopes) return false;
+					return { referenceId: "org_1", clientCredentialsScopes: scopes };
+				},
+			}),
+		],
+	});
+
+	const register = (token: string, body: Record<string, unknown> = {}) =>
+		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/register`, {
+			method: "POST",
+			headers: {
+				authorization: `Bearer ${token}`,
+				"content-type": "application/json",
+			},
+			body: JSON.stringify({
+				client_name: "Self-hosted connector",
+				redirect_uris: [redirectUri],
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				...body,
+			}),
+		});
+	const clientCredentials = (clientId: string, clientSecret: string) =>
+		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/token`, {
+			method: "POST",
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				client_id: clientId,
+				client_secret: clientSecret,
+				scope: "invoices:write",
+			}),
+		});
+
+	it("gives the client the machine scopes the token authorizes", async () => {
+		const response = await register("grant-invoices");
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.reference_id).toBe("org_1");
+		expect(body).not.toHaveProperty("client_credentials_scopes");
+
+		const token = await clientCredentials(body.client_id, body.client_secret!);
+		expect(token.status).toBe(200);
+	});
+
+	it("rejects a scope the provider does not offer", async () => {
+		const response = await register("grant-unknown");
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ error: "invalid_scope" });
+	});
+
+	it("rejects machine scopes for a client that cannot hold them", async () => {
+		const withoutGrant = await register("grant-invoices", {
+			grant_types: ["authorization_code"],
+		});
+		expect(withoutGrant.status).toBe(400);
+		const publicClient = await register("grant-invoices", {
+			token_endpoint_auth_method: "none",
+		});
+		expect(publicClient.status).toBe(400);
 	});
 });
 
@@ -1611,12 +1914,7 @@ describe("oauth register - application_type", async () => {
 		],
 	});
 
-	const register = (body: Record<string, unknown>) =>
-		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/register`, {
-			method: "POST",
-			headers: { "content-type": "application/json" },
-			body: JSON.stringify(body),
-		});
+	const register = makeRegister(customFetchImpl as typeof fetch);
 
 	it("maps applicationType as a first-class field without hiding it in metadata", () => {
 		const stored = oauthToSchema({
@@ -1801,6 +2099,8 @@ describe("oauth register - application_type", async () => {
 		"file:///callback",
 		"ftp://example.com/callback",
 		"mailto:oauth@example.com",
+		"ws://host/callback",
+		"wss://host/callback",
 		"myapp:/callback",
 		"com.example.app:callback",
 		"com.example.app:///callback",
@@ -1808,7 +2108,6 @@ describe("oauth register - application_type", async () => {
 		"com.example..app:/callback",
 		"com.example.-app:/callback",
 		"com.example.app-:/callback",
-		"com.example.app://host/callback",
 		"https://localhost/callback",
 		"https://localhost./callback",
 		"https://localhost../callback",
@@ -1835,6 +2134,7 @@ describe("oauth register - application_type", async () => {
 		"http://127.0.0.1:54921/callback",
 		"http://[::1]:61234/callback",
 		"com.example.app:/callback",
+		"com.example.app://host/callback",
 		"https://app.example.com/callback",
 	])("accepts valid native redirect URI %s", async (redirectUri) => {
 		const response = await register({
@@ -1857,5 +2157,268 @@ describe("oauth register - application_type", async () => {
 		expect(accepted.status).toBe(201);
 		const body = (await accepted.json()) as OAuthClient;
 		expect(body.application_type).toBe("web");
+	});
+
+	/**
+	 * Cursor's MCP OAuth client registers `cursor://…` as a native private-use
+	 * redirect. Host-bearing custom schemes are valid native URIs (RFC 8252 §7.1
+	 * recommends, but does not require, the authority-free reverse-domain form).
+	 * A `web` registration with the same URI still fails — this is not a
+	 * `web`→`native` coercion.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10946
+	 */
+	it("registers Cursor's host-bearing cursor:// redirect for native clients only", async () => {
+		const native = await register({
+			application_type: "native",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(native.status).toBe(201);
+		const nativeBody = (await native.json()) as OAuthClient;
+		expect(nativeBody.application_type).toBe("native");
+		expect(nativeBody.redirect_uris).toEqual([
+			"cursor://anysphere.cursor-mcp/oauth/callback",
+		]);
+
+		const web = await register({
+			application_type: "web",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(web.status).toBe(400);
+		const webBody = (await web.json()) as { error?: string };
+		expect(webBody.error).toBe("invalid_redirect_uri");
+	});
+});
+
+/**
+ * Current Cursor builds (observed on 3.13.25) OMIT `application_type` in DCR,
+ * so the OIDC `web` default rejects their `cursor://` redirect before the
+ * native validator is consulted. `clientRegistrationDefaultApplicationType`
+ * is server-owned policy for that absent field only — a sent value is never
+ * overridden.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10946
+ */
+describe("oauth register - clientRegistrationDefaultApplicationType", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const instanceWithDefault = async (
+		defaultApplicationType: "web" | "native" | "infer" | undefined,
+	) => {
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					allowUnauthenticatedClientRegistration: true,
+					clientRegistrationDefaultApplicationType: defaultApplicationType,
+				}),
+			],
+		});
+		return makeRegister(customFetchImpl as typeof fetch);
+	};
+
+	it("infers native when a redirect URI uses a custom scheme", async () => {
+		const register = await instanceWithDefault("infer");
+		const response = await register({
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("native");
+		expect(body.token_endpoint_auth_method).toBe("none");
+		expect(body.redirect_uris).toEqual([
+			"cursor://anysphere.cursor-mcp/oauth/callback",
+		]);
+	});
+
+	/**
+	 * @see https://github.com/croffasia/itsaplan/issues/563
+	 */
+	it.each([
+		"http://127.0.0.1:33418/callback",
+		"http://localhost:33418/callback",
+		"http://[::1]:33418/callback",
+	])(
+		"infers native for an http loopback redirect URI: %s",
+		async (redirectUri) => {
+			const register = await instanceWithDefault("infer");
+			const response = await register({
+				token_endpoint_auth_method: "none",
+				redirect_uris: [redirectUri],
+			});
+			expect(response.status).toBe(201);
+			const body = (await response.json()) as OAuthClient;
+			expect(body.application_type).toBe("native");
+		},
+	);
+
+	it("keeps the web classification under infer when every redirect URI is https", async () => {
+		const register = await instanceWithDefault("infer");
+		const https = await register({
+			redirect_uris: ["https://rp.example.com/callback"],
+		});
+		expect(https.status).toBe(201);
+		const httpsBody = (await https.json()) as OAuthClient;
+		expect(httpsBody.application_type).toBe("web");
+	});
+
+	it("infers native for Cursor's mixed redirect URI registration", async () => {
+		const register = await instanceWithDefault("infer");
+		const response = await register({
+			client_name: "Cursor",
+			redirect_uris: [
+				"cursor://anysphere.cursor-mcp/oauth/callback",
+				"https://www.cursor.com/agents/mcp/oauth/callback",
+				"http://localhost:8787/callback",
+			],
+			grant_types: ["authorization_code", "refresh_token"],
+			response_types: ["code"],
+			token_endpoint_auth_method: "none",
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("native");
+	});
+
+	it("applies native redirect rules to every URI of an inferred native client", async () => {
+		const register = await instanceWithDefault("infer");
+		const response = await register({
+			token_endpoint_auth_method: "none",
+			redirect_uris: [
+				"cursor://anysphere.cursor-mcp/oauth/callback",
+				"http://rp.example.com/callback",
+			],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("never overrides an application_type the client actually sent", async () => {
+		const register = await instanceWithDefault("infer");
+		const response = await register({
+			application_type: "web",
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
+	});
+
+	it("applies a configured native default to omitted application_type", async () => {
+		const register = await instanceWithDefault("native");
+		const response = await register({
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.application_type).toBe("native");
+	});
+
+	it("completes authorization and token exchange for an inferred Cursor client", async () => {
+		const cursorRedirect = "cursor://anysphere.cursor-mcp/oauth/callback";
+		const { client, customFetchImpl, signInWithTestUser } =
+			await getTestInstance(
+				{
+					baseURL: authServerBaseUrl,
+					plugins: [
+						jwt(),
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							allowDynamicClientRegistration: true,
+							allowUnauthenticatedClientRegistration: true,
+							clientRegistrationDefaultApplicationType: "infer",
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [oauthProviderClient()] } },
+			);
+		const register = makeRegister(customFetchImpl as typeof fetch);
+		const registration = await register({
+			client_name: "Cursor",
+			redirect_uris: [
+				cursorRedirect,
+				"https://www.cursor.com/agents/mcp/oauth/callback",
+				"http://localhost:8787/callback",
+			],
+			grant_types: ["authorization_code", "refresh_token"],
+			response_types: ["code"],
+			token_endpoint_auth_method: "none",
+		});
+		expect(registration.status).toBe(201);
+		const { client_id: clientId } = (await registration.json()) as OAuthClient;
+
+		const { headers } = await signInWithTestUser();
+		const codeVerifier = generateRandomString(64);
+		const authUrl = await createAuthorizationURL({
+			id: "cursor",
+			options: { clientId, redirectURI: cursorRedirect },
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "cursor-state",
+			scopes: ["openid"],
+			codeVerifier,
+		});
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			headers,
+			onError(ctx) {
+				consentRedirectUrl = ctx.response.headers.get("Location") || "";
+			},
+		});
+		expect(consentRedirectUrl).toContain("/consent");
+
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUrl, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+		const consentRes = await client.oauth2.consent(
+			{ accept: true },
+			{ headers, throw: true },
+		);
+		const callback = new URL(consentRes.url);
+		expect(`${callback.protocol}//${callback.host}${callback.pathname}`).toBe(
+			cursorRedirect,
+		);
+		const code = callback.searchParams.get("code");
+		expect(code).toEqual(expect.any(String));
+
+		const { body: tokenBody, headers: tokenHeaders } =
+			await authorizationCodeRequest({
+				code: code!,
+				codeVerifier,
+				redirectURI: cursorRedirect,
+				options: { clientId, redirectURI: cursorRedirect },
+			});
+		const tokenRes = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/oauth2/token`,
+			{ method: "POST", body: tokenBody.toString(), headers: tokenHeaders },
+		);
+		expect(tokenRes.status).toBe(200);
+		const tokens = (await tokenRes.json()) as { access_token?: string };
+		expect(tokens.access_token).toEqual(expect.any(String));
+	});
+
+	it("keeps the strict web default when the option is unset", async () => {
+		const register = await instanceWithDefault(undefined);
+		const response = await register({
+			token_endpoint_auth_method: "none",
+			redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback"],
+		});
+		expect(response.status).toBe(400);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("invalid_redirect_uri");
 	});
 });

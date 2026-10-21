@@ -10,6 +10,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { getIdTokenVerifyOptions } from "../oauth2/verify-id-token";
 
 export interface GoogleProfile {
 	aud: string;
@@ -107,12 +108,16 @@ export const verifyGoogleIdToken = async ({
 		const publicKeys = await getGooglePublicKeys(kid);
 		for (const publicKey of publicKeys) {
 			try {
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
-					issuer: ["https://accounts.google.com", "accounts.google.com"],
-					audience,
-					maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
-				});
+				const { payload: jwtClaims } = await jwtVerify(
+					token,
+					publicKey,
+					getIdTokenVerifyOptions({
+						issuer: ["https://accounts.google.com", "accounts.google.com"],
+						audience,
+						algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
+						maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+					}),
+				);
 
 				if (nonce && jwtClaims.nonce !== nonce) {
 					return null;
@@ -151,7 +156,6 @@ export const google = (options: GoogleOptions) => {
 		id: "google",
 		name: "Google",
 		accountSubject: ({ profile }) => profile.sub,
-		accountIssuer: "https://accounts.google.com",
 		async createAuthorizationURL({
 			state,
 			scopes,
@@ -224,6 +228,7 @@ export const google = (options: GoogleOptions) => {
 			jwks: (header) => getGooglePublicKey(header.kid!),
 			issuer: ["https://accounts.google.com", "accounts.google.com"],
 			audience: options.clientId,
+			algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
 			maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
 			// Google's `hd` authorization parameter is only a UI hint and can be
 			// removed or changed by the user. When a hosted domain is configured,

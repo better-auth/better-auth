@@ -1,5 +1,53 @@
 # @better-auth/expo
 
+## 1.8.0-beta.1
+
+## 1.8.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1)]:
+  - better-auth@1.8.0-beta.0
+  - @better-auth/core@1.8.0-beta.0
+
+## 1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- [#10207](https://github.com/better-auth/better-auth/pull/10207) [`5d3d5c4`](https://github.com/better-auth/better-auth/commit/5d3d5c4c701dd899894a842008d6bdda180cb048) Thanks [@noobnooc](https://github.com/noobnooc)! - Send the Expo origin header when linking social accounts with an ID token so native link flows that include a session cookie pass origin validation.
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+## 1.7.7
+
+## 1.7.6
+
+## 1.7.5
+
+## 1.7.4
+
+### Patch Changes
+
+- [#11200](https://github.com/better-auth/better-auth/pull/11200) [`9b1be99`](https://github.com/better-auth/better-auth/commit/9b1be996a5a30537db12f2e6712e08acf86203c6) Thanks [@bytaesu](https://github.com/bytaesu)! - Clear leftover session data from secure storage after upgrades or sign-out, and prevent corrupted cookies during concurrent updates.
+
+- [#11238](https://github.com/better-auth/better-auth/pull/11238) [`ada6b44`](https://github.com/better-auth/better-auth/commit/ada6b4436de1195876e964b1967d8aef6f163c43) Thanks [@bytaesu](https://github.com/bytaesu)! - Store multibyte session data safely in Expo secure storage.
+
+## 1.7.3
+
+### Patch Changes
+
+- [#11099](https://github.com/better-auth/better-auth/pull/11099) [`fb7c018`](https://github.com/better-auth/better-auth/commit/fb7c018608bdc019c1685e70a878a084602c2fd3) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent Expo apps from sending unauthenticated requests while large stored cookies are being updated, and recover the previous cookie value when an update is interrupted or incomplete.
+
+## 1.7.2
+
+## 1.7.1
+
 ## 1.7.0
 
 ### Minor Changes

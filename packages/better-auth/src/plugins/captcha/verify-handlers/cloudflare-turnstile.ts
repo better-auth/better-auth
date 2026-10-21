@@ -1,3 +1,4 @@
+import type { InternalLogger } from "@better-auth/core/env";
 import { betterFetch } from "@better-fetch/fetch";
 import { middlewareResponse } from "../../../utils/middleware-response";
 import { CAPTCHA_VERIFY_TIMEOUT_MS } from "../constants";
@@ -7,6 +8,7 @@ type Params = {
 	siteVerifyURL: string;
 	secretKey: string;
 	captchaResponse: string;
+	logger: InternalLogger;
 	remoteIP?: string | undefined;
 	expectedAction?: string | undefined;
 	allowedHostnames?: string[] | undefined;
@@ -31,6 +33,7 @@ export const cloudflareTurnstile = async ({
 	siteVerifyURL,
 	captchaResponse,
 	secretKey,
+	logger,
 	remoteIP,
 	expectedAction,
 	allowedHostnames,
@@ -50,22 +53,37 @@ export const cloudflareTurnstile = async ({
 		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE.message);
 	}
 
-	const verificationFailed = () =>
-		middlewareResponse({
+	const verificationFailed = (details: Record<string, unknown>) => {
+		logger.warn("Cloudflare Turnstile verification failed", {
+			provider: "cloudflare-turnstile",
+			...details,
+		});
+
+		return middlewareResponse({
 			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.message,
 			code: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.code,
 			status: 403,
 		});
+	};
 
 	if (!response.data.success) {
-		return verificationFailed();
+		return verificationFailed({
+			reason: "siteverify_rejected",
+			errorCodes: response.data["error-codes"] ?? [],
+			...(response.data.hostname && { hostname: response.data.hostname }),
+			...(response.data.action && { action: response.data.action }),
+		});
 	}
 
 	// When configured, bind the token to the expected action and to an
 	// allow-list of hostnames so a token issued for a different action or host
 	// (e.g. under a shared widget or "Any Hostname") cannot be reused here.
 	if (expectedAction && response.data.action !== expectedAction) {
-		return verificationFailed();
+		return verificationFailed({
+			reason: "action_mismatch",
+			expectedAction,
+			actualAction: response.data.action,
+		});
 	}
 	if (
 		allowedHostnames &&
@@ -75,7 +93,11 @@ export const cloudflareTurnstile = async ({
 			allowedHostnames.includes(response.data.hostname)
 		)
 	) {
-		return verificationFailed();
+		return verificationFailed({
+			reason: "hostname_mismatch",
+			allowedHostnames,
+			actualHostname: response.data.hostname,
+		});
 	}
 
 	return undefined;

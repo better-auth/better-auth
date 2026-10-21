@@ -1,9 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { getCurrentAuthContext } from "@better-auth/core/context";
+import { getCurrentAuthEndpointContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import type { JWTPayload } from "jose";
 import { importJWK, jwtVerify } from "jose";
-import { getJwksAdapter } from "./adapter";
+import { getDefaultKeyAlg, getJwksAdapter } from "./adapter";
 import type { JwtOptions } from "./types";
 
 /**
@@ -14,7 +14,7 @@ export async function verifyJWT<T extends JWTPayload = JWTPayload>(
 	token: string,
 	options?: JwtOptions,
 ): Promise<(T & Required<Pick<JWTPayload, "sub" | "aud">>) | null> {
-	const ctx = await getCurrentAuthContext();
+	const ctx = getCurrentAuthEndpointContext();
 	try {
 		const parts = token.split(".");
 		if (parts.length !== 3) {
@@ -46,16 +46,24 @@ export async function verifyJWT<T extends JWTPayload = JWTPayload>(
 		}
 
 		const publicKey = JSON.parse(key.publicKey);
-		const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+		const alg = key.alg ?? getDefaultKeyAlg(options);
 		const cryptoKey = await importJWK(publicKey, alg);
 
 		const baseURLOrigin =
 			typeof ctx.context.options.baseURL === "string"
 				? ctx.context.options.baseURL
 				: undefined;
+		const issuer = options?.jwt?.issuer ?? baseURLOrigin;
+		const audience = options?.jwt?.audience ?? baseURLOrigin;
+		if (!issuer || !audience) {
+			ctx.context.logger.warn(
+				"[better-auth] The JWT plugin is verifying a JWT without checking its issuer or audience because no base URL was resolved for this call. Set `baseURL`, or `jwt.issuer` and `jwt.audience` in the JWT plugin options.",
+			);
+		}
 		const { payload } = await jwtVerify(token, cryptoKey, {
-			issuer: options?.jwt?.issuer ?? baseURLOrigin,
-			audience: options?.jwt?.audience ?? baseURLOrigin,
+			issuer,
+			audience,
+			algorithms: [alg],
 		});
 
 		if (!payload.sub || !payload.aud) {
