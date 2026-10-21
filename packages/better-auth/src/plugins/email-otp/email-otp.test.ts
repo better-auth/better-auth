@@ -405,7 +405,7 @@ describe("email-otp", async () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11597
+	 * @see https://github.com/better-auth/better-auth/issues/11974
 	 */
 	describe("when a step after the password write fails", () => {
 		async function setup(onPasswordReset?: () => Promise<void>) {
