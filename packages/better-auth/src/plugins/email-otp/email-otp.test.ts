@@ -537,7 +537,7 @@ describe("email-otp", async () => {
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/<ISSUE>
+	 * @see https://github.com/better-auth/better-auth/issues/11972
 	 */
 	it.for([
 		{
