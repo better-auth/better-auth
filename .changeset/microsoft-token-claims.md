@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Microsoft profile callbacks now accept numeric token timestamps, claim arrays, boolean corporate-network flags, and omitted conditional or opaque claims and profile photos. Profile mappings must handle these corrected values instead of treating timestamps as `Date` objects or all claims as present.
+**Breaking:** `MicrosoftEntraIDProfile` timestamps are numbers, `groups`, `acrs`, and `xms_cc` are string arrays, `in_corp` is boolean, and conditional claims and profile photos can be omitted. Update profile mappings to handle these types and missing values.
