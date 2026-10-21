@@ -1545,3 +1545,153 @@ describe("passkey expirationTime per-request", () => {
 		expect(expiresAt).toBeGreaterThan(currentTime);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11929
+ */
+describe("passkey requireUserVerification", () => {
+	const setup = async (options?: { requireUserVerification?: boolean }) => {
+		const instance = await getTestInstance({
+			plugins: [passkey(options)],
+		});
+
+		const register = async () => {
+			const { headers } = await instance.signInWithTestUser();
+			headers.set("origin", "http://localhost:3000");
+			serverMocks.verifyRegistrationResponse.mockResolvedValueOnce(
+				mockRegistrationVerification,
+			);
+			await instance.client.$fetch("/passkey/generate-register-options", {
+				method: "GET",
+				headers,
+				onResponse: instance.cookieSetter(headers),
+			});
+			return instance.auth.api.verifyPasskeyRegistration({
+				headers,
+				body: { response: mockRegistrationResponse },
+			});
+		};
+
+		const authenticate = async () => {
+			const { headers, user } = await instance.signInWithTestUser();
+			const context = await instance.auth.$context;
+			await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+				model: "passkey",
+				data: {
+					userId: user.id,
+					publicKey: "mockPublicKey",
+					counter: 0,
+					deviceType: "singleDevice",
+					credentialID: "uv-credential-id",
+					createdAt: new Date(),
+					backedUp: false,
+				} satisfies Omit<Passkey, "id">,
+			});
+			headers.set("origin", "http://localhost:3000");
+			await instance.client.$fetch("/passkey/generate-authenticate-options", {
+				method: "GET",
+				headers,
+				onResponse: instance.cookieSetter(headers),
+			});
+			serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
+				verified: true,
+				authenticationInfo: { newCounter: 1 },
+			});
+			return instance.auth.api.verifyPasskeyAuthentication({
+				headers,
+				body: {
+					response: {
+						id: "uv-credential-id",
+						rawId: "uv-credential-id",
+						response: {
+							clientDataJSON: "mockClientDataJSON",
+							authenticatorData: "mockAuthenticatorData",
+							signature: "mockSignature",
+							userHandle: "mockUserHandle",
+						},
+						type: "public-key",
+						clientExtensionResults: {},
+					},
+				},
+			});
+		};
+
+		return { ...instance, register, authenticate };
+	};
+
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+		serverMocks.verifyAuthenticationResponse.mockReset();
+	});
+
+	it("does not require user verification by default", async () => {
+		const { auth, signInWithTestUser, register, authenticate } = await setup();
+		const { headers } = await signInWithTestUser();
+
+		const registrationOptions =
+			await auth.api.generatePasskeyRegistrationOptions({ headers });
+		expect(registrationOptions.authenticatorSelection?.userVerification).toBe(
+			"preferred",
+		);
+		const authenticationOptions =
+			await auth.api.generatePasskeyAuthenticationOptions({ headers });
+		expect(authenticationOptions.userVerification).toBe("preferred");
+
+		await register();
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({ requireUserVerification: false }),
+		);
+		await authenticate();
+		expect(serverMocks.verifyAuthenticationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({ requireUserVerification: false }),
+		);
+	});
+
+	it("requests user verification in generated options when enabled", async () => {
+		const { auth, signInWithTestUser } = await setup({
+			requireUserVerification: true,
+		});
+		const { headers } = await signInWithTestUser();
+
+		const registrationOptions =
+			await auth.api.generatePasskeyRegistrationOptions({ headers });
+		expect(registrationOptions.authenticatorSelection?.userVerification).toBe(
+			"required",
+		);
+		const authenticationOptions =
+			await auth.api.generatePasskeyAuthenticationOptions({ headers });
+		expect(authenticationOptions.userVerification).toBe("required");
+	});
+
+	it("overrides a weaker authenticatorSelection.userVerification when enabled", async () => {
+		const instance = await getTestInstance({
+			plugins: [
+				passkey({
+					requireUserVerification: true,
+					authenticatorSelection: { userVerification: "discouraged" },
+				}),
+			],
+		});
+		const { headers } = await instance.signInWithTestUser();
+
+		const options = await instance.auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+		expect(options.authenticatorSelection?.userVerification).toBe("required");
+	});
+
+	it("enforces user verification on the server when enabled", async () => {
+		const { register, authenticate } = await setup({
+			requireUserVerification: true,
+		});
+
+		await register();
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({ requireUserVerification: true }),
+		);
+		await authenticate();
+		expect(serverMocks.verifyAuthenticationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({ requireUserVerification: true }),
+		);
+	});
+});

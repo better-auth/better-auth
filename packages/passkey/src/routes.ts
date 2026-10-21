@@ -318,6 +318,9 @@ export const generatePasskeyRegistrationOptions = (
 					residentKey: "preferred",
 					userVerification: "preferred",
 					...(opts.authenticatorSelection || {}),
+					...(opts.requireUserVerification
+						? { userVerification: "required" as const }
+						: {}),
 					...(ctx.query?.authenticatorAttachment
 						? {
 								authenticatorAttachment: ctx.query.authenticatorAttachment,
@@ -485,7 +488,9 @@ export const generatePasskeyAuthenticationOptions = (
 			);
 			const options = await generateAuthenticationOptions({
 				rpID: getRpID(opts, baseURLString),
-				userVerification: "preferred",
+				userVerification: opts.requireUserVerification
+					? "required"
+					: "preferred",
 				extensions: authenticationExtensions,
 				...(userPasskeys.length
 					? {
@@ -655,7 +660,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					expectedChallenge,
 					expectedOrigin: origin,
 					expectedRPID: getRpID(options, verifyBaseURL),
-					requireUserVerification: false,
+					requireUserVerification: options.requireUserVerification === true,
 				});
 				const { verified, registrationInfo } = verification;
 				if (!verified || !registrationInfo) {
@@ -906,7 +911,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 							",",
 						) as AuthenticatorTransportFuture[],
 					},
-					requireUserVerification: false,
+					requireUserVerification: options.requireUserVerification === true,
 				});
 				const { verified } = verification;
 				if (!verified)
