@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-GitLab profile mappings now handle nullable details and omitted conditional fields, and expose the boolean account lock. Missing avatars preserve stored images when profile updates are enabled.
+GitLab profile mappings must handle nullable details and omitted conditional fields. `locked` is now a required boolean; null avatars leave stored images unchanged when profile updates are enabled.
