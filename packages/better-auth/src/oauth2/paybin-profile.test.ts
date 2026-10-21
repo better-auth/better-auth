@@ -1,154 +1,150 @@
-import { supportsIdTokenSignIn } from "@better-auth/core/oauth2";
-import { paybin } from "@better-auth/core/social-providers";
-import { exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
+import { getTestInstance } from "better-auth/test";
+import { generateKeyPair, jwtVerify, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, assert, beforeAll, expect, it } from "vitest";
 
+const providerId = "paybin" as const;
 const issuer = "https://idp.paybin.io";
-const clientId = "paybin-app";
-const { publicKey, privateKey } = await generateKeyPair("RS256", {
-	extractable: true,
-});
-const otherKeys = await generateKeyPair("RS256");
-const key = {
-	...(await exportJWK(publicKey)),
-	kid: "provider-key",
-	alg: "RS256",
-	use: "sig",
+const tokenEndpoint = "https://idp.paybin.io/oauth/token";
+const profileEndpoint = "https://idp.paybin.io/oauth/userinfo";
+const clientId = "profile-client";
+const profile = {
+	sub: "provider-user",
+	name: "Provider User",
+	email: "user@example.com",
+	email_verified: true,
+	picture: "https://example.com/avatar.png",
 };
+const { publicKey, privateKey } = await generateKeyPair("RS256");
 const server = setupServer(
-	http.get(`${issuer}/.well-known/jwks.json`, () =>
-		HttpResponse.json({ keys: [key] }),
-	),
+	http.get(profileEndpoint, () => HttpResponse.json(profile)),
 );
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-async function tokenFor(kind = "valid", tokenIssuer = issuer) {
-	const now = Math.floor(Date.now() / 1000);
-	const claims = {
-		sub: "provider-user",
-		...(kind === "no email"
-			? {}
-			: {
-					email: kind === "unverified email" ? null : "user@example.com",
-					email_verified: kind !== "unverified email",
-				}),
-		iss: kind === "issuer" ? "https://other.example.com" : tokenIssuer,
-		aud: kind === "audience" ? "other-app" : clientId,
-		iat: now,
-		...(kind === "missing expiration"
-			? {}
-			: { exp: kind === "expired" ? now - 120 : now + 3600 }),
-	};
-	if (kind === "unsigned") return new UnsecuredJWT(claims).encode();
-	return new SignJWT(claims)
-		.setProtectedHeader({ alg: "RS256", kid: "provider-key" })
-		.sign(kind === "signature" ? otherKeys.privateKey : privateKey);
+async function createIdToken(expiresAt: number) {
+	return new SignJWT({
+		sub: profile.sub,
+		email: "id-token@example.com",
+		email_verified: true,
+	})
+		.setProtectedHeader({ alg: "RS256" })
+		.setIssuer(issuer)
+		.setAudience(clientId)
+		.setIssuedAt(Math.floor(Date.now() / 1000) - 3600)
+		.setExpirationTime(expiresAt)
+		.sign(privateKey);
 }
 
 /**
- * @see https://developers.paybin.io/knowledge-center/oidc#token-management
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+ * @see https://idp.paybin.io/.well-known/openid-configuration
  */
-describe("paybin ID-token profiles", () => {
-	it("maps a verified token without optional display claims", async () => {
-		const provider = paybin({ clientId });
-		const result = await provider.getUserInfo({ idToken: await tokenFor() });
-		expect(result?.user).toMatchObject({
-			email: "user@example.com",
-			emailVerified: true,
-			image: undefined,
+it.each([
+	{ includeAccessToken: true, matchingSubject: true, accepted: true },
+	{ includeAccessToken: false, matchingSubject: true, accepted: false },
+	{ includeAccessToken: true, matchingSubject: false, accepted: false },
+])(
+	"ID-token sign-in with accessToken=$includeAccessToken and matching subject=$matchingSubject",
+	async ({ includeAccessToken, matchingSubject, accepted }) => {
+		if (!matchingSubject) {
+			server.use(
+				http.get(profileEndpoint, () =>
+					HttpResponse.json({
+						...profile,
+						sub: "different-user",
+						email: "different@example.com",
+					}),
+				),
+			);
+		}
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				[providerId]: {
+					clientId,
+					clientSecret: "secret",
+					async verifyIdToken(token) {
+						try {
+							await jwtVerify(token, publicKey, { issuer, audience: clientId });
+							return true;
+						} catch {
+							return false;
+						}
+					},
+				},
+			},
 		});
-		expect(result?.data.sub).toBe("provider-user");
-		expect(supportsIdTokenSignIn(provider)).toBe(false);
-	});
-
-	it.each([
-		"issuer",
-		"audience",
-		"expired",
-		"unsigned",
-		"signature",
-		"missing expiration",
-	])("rejects %s tokens", async (kind) => {
-		const result = await paybin({ clientId }).getUserInfo({
-			idToken: await tokenFor(kind),
+		const response = auth.api.signInSocial({
+			body: {
+				provider: providerId,
+				idToken: {
+					token: await createIdToken(Math.floor(Date.now() / 1000) + 3600),
+					...(includeAccessToken ? { accessToken: "access-token" } : {}),
+				},
+			},
 		});
-		expect(result).toBeNull();
-	});
-});
-
-/**
- * @see https://developers.paybin.io/knowledge-center/oidc#authorization-flow
- */
-it.each(["https://idp.paybin.io", "https://paybin.example.com/"])(
-	"uses the documented endpoints for %s",
-	async (configuredIssuer) => {
-		const base = configuredIssuer.replace(/\/+$/, "");
-		const provider = paybin({
-			clientId,
-			clientSecret: "secret",
-			issuer: configuredIssuer,
-		});
-		const url = await provider.createAuthorizationURL({
-			state: "state",
-			redirectURI: "https://example.com/callback",
-			codeVerifier: "code-verifier",
-		});
-		expect(url.origin + url.pathname).toBe(`${base}/connect/authorize`);
-		server.use(
-			http.post(`${base}/connect/token`, async ({ request }) => {
-				const body = new URLSearchParams(await request.text());
-				expect(["authorization_code", "refresh_token"]).toContain(
-					body.get("grant_type"),
-				);
-				return HttpResponse.json({
-					access_token: "access-token",
-					token_type: "Bearer",
-				});
-			}),
-		);
-		expect(
-			(
-				await provider.validateAuthorizationCode({
-					code: "code",
-					redirectURI: "https://example.com/callback",
-					codeVerifier: "code-verifier",
-				})
-			)?.accessToken,
-		).toBe("access-token");
-		expect(
-			(await provider.refreshAccessToken("refresh-token")).accessToken,
-		).toBe("access-token");
+		if (accepted) {
+			const result = await response;
+			assert("user" in result);
+			expect(result.user.email).toBe(profile.email);
+		} else
+			await expect(response).rejects.toMatchObject({
+				body: { code: "FAILED_TO_GET_USER_INFO" },
+			});
 	},
 );
 
 /**
- * @see https://developers.paybin.io/knowledge-center/oidc#available-scopes
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
  */
-it("maps the provider's limited email claims", async () => {
-	const result = await paybin({ clientId }).getUserInfo({
-		idToken: await tokenFor("no email"),
-	});
-	expect(result?.user.email).toBeUndefined();
-	expect(result?.user.emailVerified).toBe(false);
-});
-
-/**
- * @see https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
- */
-it("preserves the configured issuer's trailing slash", async () => {
-	const configuredIssuer = "https://paybin.example.com/";
+it("reads account info after refresh omits a replacement ID token", async () => {
 	server.use(
-		http.get("https://paybin.example.com/.well-known/jwks.json", () =>
-			HttpResponse.json({ keys: [key] }),
-		),
+		http.post(tokenEndpoint, async ({ request }) => {
+			const body = new URLSearchParams(await request.text());
+			expect(body.get("grant_type")).toBe("refresh_token");
+			expect(body.get("refresh_token")).toBe("old-refresh-token");
+			return HttpResponse.json({
+				access_token: "refreshed-access-token",
+				token_type: "Bearer",
+				expires_in: 3600,
+			});
+		}),
+		http.get(profileEndpoint, ({ request }) => {
+			expect(request.headers.get("authorization")).toBe(
+				"Bearer refreshed-access-token",
+			);
+			return HttpResponse.json(profile);
+		}),
 	);
-	const result = await paybin({
-		clientId,
-		issuer: configuredIssuer,
-	}).getUserInfo({ idToken: await tokenFor("valid", configuredIssuer) });
-	expect(result?.data.sub).toBe("provider-user");
+	const { auth } = await getTestInstance({
+		socialProviders: { [providerId]: { clientId, clientSecret: "secret" } },
+		account: { encryptOAuthTokens: false },
+	});
+	const ctx = await auth.$context;
+	const user = await ctx.internalAdapter.createUser(
+		{ name: "Stored User", email: profile.email },
+		{ method: "test" },
+	);
+	const account = await ctx.internalAdapter.createAccount({
+		userId: user.id,
+		providerId,
+		accountId: profile.sub,
+		accessToken: "old-access-token",
+		refreshToken: "old-refresh-token",
+		accessTokenExpiresAt: new Date(Date.now() - 60000),
+		idToken: await createIdToken(Math.floor(Date.now() / 1000) - 120),
+	});
+	const result = await auth.api.accountInfo({
+		query: { accountId: account.id, userId: user.id },
+	});
+
+	expect(result.user.email).toBe(profile.email);
+	expect(result.data).toEqual(profile);
+	expect(result.account).toEqual({
+		id: account.id,
+		providerId,
+		accountId: profile.sub,
+	});
 });

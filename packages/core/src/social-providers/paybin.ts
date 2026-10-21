@@ -1,3 +1,5 @@
+import { betterFetch } from "@better-fetch/fetch";
+import { decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
@@ -5,7 +7,6 @@ import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
-	validateToken,
 } from "../oauth2";
 
 export interface PaybinProfile {
@@ -30,9 +31,10 @@ export interface PaybinOptions extends ProviderOptions<PaybinProfile> {
 
 export const paybin = (options: PaybinOptions) => {
 	const issuer = options.issuer || "https://idp.paybin.io";
-	const endpointBase = issuer.replace(/\/+$/, "");
-	const authorizationEndpoint = `${endpointBase}/connect/authorize`;
-	const tokenEndpoint = `${endpointBase}/connect/token`;
+	const issuerBaseURL = issuer.endsWith("/") ? issuer : `${issuer}/`;
+	const authorizationEndpoint = new URL("oauth/authorize", issuerBaseURL).href;
+	const tokenEndpoint = new URL("oauth/token", issuerBaseURL).href;
+	const userInfoEndpoint = new URL("oauth/userinfo", issuerBaseURL).href;
 
 	return {
 		id: "paybin",
@@ -100,25 +102,27 @@ export const paybin = (options: PaybinOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			if (!token.idToken) {
+			if (!token.accessToken) {
 				return null;
 			}
-			let user: PaybinProfile;
-			try {
-				const { payload } = await validateToken<PaybinProfile>(
-					token.idToken,
-					`${endpointBase}/.well-known/jwks.json`,
-					{
-						issuer,
-						audience: options.clientId,
-						algorithms: ["RS256"],
-						requiredClaims: ["iss", "sub", "aud", "exp", "iat"],
-					},
-				);
-				user = payload;
-			} catch {
+			const { data: user } = await betterFetch<PaybinProfile>(
+				userInfoEndpoint,
+				{
+					headers: { Authorization: `Bearer ${token.accessToken}` },
+				},
+			);
+			if (typeof user?.sub !== "string" || !user.sub) {
 				return null;
 			}
+			// Keep the fetched account bound to a supplied ID token.
+			if (token.idToken) {
+				try {
+					if (decodeJwt(token.idToken).sub !== user.sub) return null;
+				} catch {
+					return null;
+				}
+			}
+
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
