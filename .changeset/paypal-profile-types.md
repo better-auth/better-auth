@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-PayPal profile callbacks now accept identities without personal profile permissions. Missing email verification defaults to `false`; profile mappings must handle omitted names, email, and verification claims.
+PayPal profile types now reflect omitted names, email, and verification claims when personal permissions are not granted. Missing email verification defaults to false; profile mappings must supply an email when the provider omits it.
