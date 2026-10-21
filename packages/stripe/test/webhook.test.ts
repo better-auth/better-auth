@@ -3123,5 +3123,28 @@ describe("stripe webhook", () => {
 			expect(onSubscriptionUpdate).not.toHaveBeenCalled();
 			expect(onEvent).toHaveBeenCalledTimes(1);
 		});
+
+		test("should acknowledge an update for a known customer's subscription with no configured plan", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const event = createSubscriptionEvent("customer.subscription.updated", {
+				id: "sub_other_product",
+				customer: "cus_propagation",
+				status: "active",
+				items: {
+					...subscriptionItems,
+					data: [
+						createSubscriptionItem({
+							price: createPrice({ id: "price_not_configured" }),
+						}),
+					],
+				},
+			});
+			const { onEvent, send } = await setup(memory, stripeOptions, [event]);
+
+			expect((await send()).status).toBe(200);
+			expect(onEvent).toHaveBeenCalledTimes(1);
+		});
 	});
 });
