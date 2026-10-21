@@ -906,3 +906,163 @@ describe("invitation teamId must belong to the invitation's organization", async
 		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11275
+ */
+describe("accept invitation refreshes the session cookie cache", async () => {
+	const INVITEE_EMAIL = "invitee@example.com";
+	const PASSWORD = "test-password-123";
+
+	async function setupInvite(
+		withTeam: boolean,
+		authOptions?: Partial<BetterAuthOptions>,
+	) {
+		const helpers = await getTestInstance(
+			{
+				...authOptions,
+				session: { cookieCache: { enabled: true } },
+				plugins: [organization({ teams: { enabled: true } })],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient({ teams: { enabled: true } })],
+				},
+			},
+		);
+		const { client, signInWithTestUser, cookieSetter } = helpers;
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Acme",
+			slug: "acme",
+			fetchOptions: {
+				headers: ownerHeaders,
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		});
+		const orgId = org.data!.id;
+		const team = withTeam
+			? await client.organization.createTeam({
+					name: "Team A",
+					organizationId: orgId,
+					fetchOptions: { headers: ownerHeaders },
+				})
+			: null;
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: INVITEE_EMAIL,
+			role: "member",
+			teamId: team?.data?.id,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		await client.signUp.email({
+			email: INVITEE_EMAIL,
+			password: PASSWORD,
+			name: "Invitee",
+		});
+		// Signing in primes the cookie cache with a null active organization.
+		const inviteeHeaders = new Headers();
+		await client.signIn.email({
+			email: INVITEE_EMAIL,
+			password: PASSWORD,
+			fetchOptions: { onSuccess: cookieSetter(inviteeHeaders) },
+		});
+		expect(inviteeHeaders.get("cookie")).toContain("session_data");
+
+		return {
+			...helpers,
+			orgId,
+			teamId: team?.data?.id,
+			invitationId: invite.data!.id,
+			inviteeHeaders,
+		};
+	}
+
+	it("carries the accepted organization in the cached session", async () => {
+		const { client, cookieSetter, orgId, invitationId, inviteeHeaders } =
+			await setupInvite(false);
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: {
+				headers: inviteeHeaders,
+				onSuccess: cookieSetter(inviteeHeaders),
+			},
+		});
+		expect(accept.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: { headers: inviteeHeaders },
+		});
+		expect(session.data?.session.activeOrganizationId).toBe(orgId);
+	});
+
+	it("carries the accepted organization and team in the cached session", async () => {
+		const {
+			client,
+			cookieSetter,
+			orgId,
+			teamId,
+			invitationId,
+			inviteeHeaders,
+		} = await setupInvite(true);
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: {
+				headers: inviteeHeaders,
+				onSuccess: cookieSetter(inviteeHeaders),
+			},
+		});
+		expect(accept.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: { headers: inviteeHeaders },
+		});
+		expect(session.data?.session.activeOrganizationId).toBe(orgId);
+		expect(session.data?.session.activeTeamId).toBe(teamId);
+	});
+
+	it("accepts when a database hook skips the session update", async () => {
+		const { client, invitationId, inviteeHeaders } = await setupInvite(false, {
+			databaseHooks: {
+				session: { update: { before: async () => false } },
+			},
+		});
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: { headers: inviteeHeaders },
+		});
+		expect(accept.error).toBeNull();
+		expect(accept.data?.invitation.status).toBe("accepted");
+	});
+
+	it("carries the active team when a hook skips only the organization update", async () => {
+		const { client, cookieSetter, teamId, invitationId, inviteeHeaders } =
+			await setupInvite(true, {
+				databaseHooks: {
+					session: {
+						update: {
+							before: async (data) => !("activeOrganizationId" in data),
+						},
+					},
+				},
+			});
+
+		const accept = await client.organization.acceptInvitation({
+			invitationId,
+			fetchOptions: {
+				headers: inviteeHeaders,
+				onSuccess: cookieSetter(inviteeHeaders),
+			},
+		});
+		expect(accept.error).toBeNull();
+
+		const session = await client.getSession({
+			fetchOptions: { headers: inviteeHeaders },
+		});
+		expect(session.data?.session.activeTeamId).toBe(teamId);
+	});
+});
