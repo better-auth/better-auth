@@ -1555,12 +1555,18 @@ describe("passkey requireUserVerification", () => {
 			plugins: [passkey(options)],
 		});
 
-		const register = async () => {
+		const register = async (opts?: { rejectWith?: Error }) => {
 			const { headers } = await instance.signInWithTestUser();
 			headers.set("origin", "http://localhost:3000");
-			serverMocks.verifyRegistrationResponse.mockResolvedValueOnce(
-				mockRegistrationVerification,
-			);
+			if (opts?.rejectWith) {
+				serverMocks.verifyRegistrationResponse.mockRejectedValueOnce(
+					opts.rejectWith,
+				);
+			} else {
+				serverMocks.verifyRegistrationResponse.mockResolvedValueOnce(
+					mockRegistrationVerification,
+				);
+			}
 			await instance.client.$fetch("/passkey/generate-register-options", {
 				method: "GET",
 				headers,
@@ -1572,7 +1578,7 @@ describe("passkey requireUserVerification", () => {
 			});
 		};
 
-		const authenticate = async () => {
+		const authenticate = async (opts?: { rejectWith?: Error }) => {
 			const { headers, user } = await instance.signInWithTestUser();
 			const context = await instance.auth.$context;
 			await context.adapter.create<Omit<Passkey, "id">, Passkey>({
@@ -1593,10 +1599,16 @@ describe("passkey requireUserVerification", () => {
 				headers,
 				onResponse: instance.cookieSetter(headers),
 			});
-			serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
-				verified: true,
-				authenticationInfo: { newCounter: 1 },
-			});
+			if (opts?.rejectWith) {
+				serverMocks.verifyAuthenticationResponse.mockRejectedValueOnce(
+					opts.rejectWith,
+				);
+			} else {
+				serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
+					verified: true,
+					authenticationInfo: { newCounter: 1 },
+				});
+			}
 			return instance.auth.api.verifyPasskeyAuthentication({
 				headers,
 				body: {
@@ -1693,5 +1705,59 @@ describe("passkey requireUserVerification", () => {
 		expect(serverMocks.verifyAuthenticationResponse).toHaveBeenCalledWith(
 			expect.objectContaining({ requireUserVerification: true }),
 		);
+	});
+	// SimpleWebAuthn throws (rather than returning `verified: false`) when
+	// `requireUserVerification` is set and the UV flag is missing.
+	const userVerificationError = () =>
+		new Error("User verification required, but user could not be verified");
+
+	it("rejects a registration without user verification and stores no passkey", async () => {
+		const { auth, register } = await setup({ requireUserVerification: true });
+
+		const error = await register({ rejectWith: userVerificationError() }).catch(
+			(e: unknown) => e,
+		);
+
+		expect(error).toBeInstanceOf(APIError);
+		expect(((error as APIError).body as { code?: string }).code).toBe(
+			"FAILED_TO_VERIFY_REGISTRATION",
+		);
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({ requireUserVerification: true }),
+		);
+		const context = await auth.$context;
+		const passkeys = await context.adapter.findMany<Passkey>({
+			model: "passkey",
+		});
+		expect(passkeys).toHaveLength(0);
+	});
+
+	it("rejects an authentication without user verification and creates no session", async () => {
+		const { auth, authenticate } = await setup({
+			requireUserVerification: true,
+		});
+		const context = await auth.$context;
+		const sessionsBefore = await context.adapter.count({ model: "session" });
+
+		const error = await authenticate({
+			rejectWith: userVerificationError(),
+		}).catch((e: unknown) => e);
+
+		expect(error).toBeInstanceOf(APIError);
+		expect(((error as APIError).body as { code?: string }).code).toBe(
+			"AUTHENTICATION_FAILED",
+		);
+		expect(serverMocks.verifyAuthenticationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({ requireUserVerification: true }),
+		);
+		const passkey = await context.adapter.findOne<Passkey>({
+			model: "passkey",
+			where: [{ field: "credentialID", value: "uv-credential-id" }],
+		});
+		assert(passkey);
+		expect(passkey.counter).toBe(0);
+		// Only the session from `signInWithTestUser` inside `authenticate` is new.
+		const sessionsAfter = await context.adapter.count({ model: "session" });
+		expect(sessionsAfter).toBe(sessionsBefore + 1);
 	});
 });
