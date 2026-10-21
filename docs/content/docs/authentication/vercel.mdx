@@ -8,7 +8,7 @@ description: Vercel provider setup and usage.
   <Step>
     ### Get your Vercel credentials
 
-    To use Sign in with Vercel, you need a client ID and client secret. You can get them from the [Vercel Dashboard](https://vercel.com/dashboard) by [creating a Vercel App](https://vercel.com/docs/sign-in-with-vercel/manage-from-dashboard).
+    To use Sign in with Vercel, [create a Vercel App](https://vercel.com/docs/sign-in-with-vercel/manage-from-dashboard) to obtain its client ID. The default configuration also requires a client secret. Applications deployed on Vercel can instead use [OIDC client authentication](#oidc-client-authentication) without a client secret.
 
     Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/vercel` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
@@ -104,6 +104,10 @@ export const auth = betterAuth({
 ```
 
 Retrieve the OIDC token inside the hook so each exchange uses the current token. Do not store a token at module initialization or pass it as `clientSecret`. If the hook throws, Better Auth stops the exchange. Local development also needs a valid workload token and matching trust configuration to use this method.
+
+<Callout type="info">
+  When using [OAuth Proxy](/docs/plugins/oauth-proxy) with `productionURL`, preview sign-ins exchange their authorization code on the production deployment. The OIDC token therefore identifies that production deployment. Configure trust for its team, project, and `production` environment; trusting only `preview` will reject these exchanges.
+</Callout>
 
 This authenticates your application's workload. The person signing in still uses the normal Sign in with Vercel flow, and Better Auth still needs its session secret.
 
