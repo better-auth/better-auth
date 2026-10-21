@@ -1,5 +1,29 @@
 # @better-auth/expo
 
+## 1.8.0-beta.1
+
+## 1.8.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1)]:
+  - better-auth@1.8.0-beta.0
+  - @better-auth/core@1.8.0-beta.0
+
+## 1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- [#10207](https://github.com/better-auth/better-auth/pull/10207) [`5d3d5c4`](https://github.com/better-auth/better-auth/commit/5d3d5c4c701dd899894a842008d6bdda180cb048) Thanks [@noobnooc](https://github.com/noobnooc)! - Send the Expo origin header when linking social accounts with an ID token so native link flows that include a session cookie pass origin validation.
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
 ## 1.7.7
 
 ## 1.7.6

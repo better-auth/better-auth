@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.7.7",
+  "version": "1.8.0-beta.1",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -231,6 +231,11 @@
       "types": "./dist/plugins/bearer/index.d.mts",
       "default": "./dist/plugins/bearer/index.mjs"
     },
+    "./plugins/captcha": {
+      "dev-source": "./src/plugins/captcha/index.ts",
+      "types": "./dist/plugins/captcha/index.d.mts",
+      "default": "./dist/plugins/captcha/index.mjs"
+    },
     "./plugins/custom-session": {
       "dev-source": "./src/plugins/custom-session/index.ts",
       "types": "./dist/plugins/custom-session/index.d.mts",
@@ -285,6 +290,16 @@
       "dev-source": "./src/plugins/one-time-token/index.ts",
       "types": "./dist/plugins/one-time-token/index.d.mts",
       "default": "./dist/plugins/one-time-token/index.mjs"
+    },
+    "./plugins/one-tap": {
+      "dev-source": "./src/plugins/one-tap/index.ts",
+      "types": "./dist/plugins/one-tap/index.d.mts",
+      "default": "./dist/plugins/one-tap/index.mjs"
+    },
+    "./plugins/open-api": {
+      "dev-source": "./src/plugins/open-api/index.ts",
+      "types": "./dist/plugins/open-api/index.d.mts",
+      "default": "./dist/plugins/open-api/index.mjs"
     },
     "./plugins/phone-number": {
       "dev-source": "./src/plugins/phone-number/index.ts",
@@ -365,6 +380,9 @@
       "api": [
         "./dist/api/index.d.mts"
       ],
+      "test": [
+        "./dist/test-utils/index.d.mts"
+      ],
       "db": [
         "./dist/db/index.d.mts"
       ],
@@ -425,6 +443,9 @@
       "plugins/bearer": [
         "./dist/plugins/bearer/index.d.mts"
       ],
+      "plugins/captcha": [
+        "./dist/plugins/captcha/index.d.mts"
+      ],
       "plugins/custom-session": [
         "./dist/plugins/custom-session/index.d.mts"
       ],
@@ -443,11 +464,20 @@
       "plugins/one-time-token": [
         "./dist/plugins/one-time-token/index.d.mts"
       ],
+      "plugins/one-tap": [
+        "./dist/plugins/one-tap/index.d.mts"
+      ],
+      "plugins/open-api": [
+        "./dist/plugins/open-api/index.d.mts"
+      ],
       "plugins/jwt": [
         "./dist/plugins/jwt/index.d.mts"
       ],
       "plugins/magic-link": [
         "./dist/plugins/magic-link/index.d.mts"
+      ],
+      "plugins/multi-session": [
+        "./dist/plugins/multi-session/index.d.mts"
       ],
       "plugins/organization": [
         "./dist/plugins/organization/index.d.mts"
@@ -521,7 +551,7 @@
   "peerDependencies": {
     "@lynx-js/react": "*",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
-    "@sveltejs/kit": "^2.0.0",
+    "@sveltejs/kit": "^2.0.0 || ^3.0.0",
     "@tanstack/react-start": "^1.0.0",
     "@tanstack/solid-start": "^1.0.0",
     "drizzle-kit": ">=0.31.4 || >=1.0.0-beta.1",

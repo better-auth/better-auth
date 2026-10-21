@@ -20,7 +20,7 @@ jobs:
   smoke:
     name: Smoke test (${{ matrix.node-version }})
     timeout-minutes: 30
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
@@ -81,11 +81,14 @@ jobs:
   integration:
     name: Integration test
     timeout-minutes: 60
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
     permissions:
       contents: read
     env:
       COMPOSE_SERVICES: postgres
+      # Playwright 1.58 has no Ubuntu 26.04 browser build (support starts in 1.61), so use the
+      # Ubuntu 24.04 build. Remove this once Playwright is 1.61 or later.
+      PLAYWRIGHT_HOST_PLATFORM_OVERRIDE: ubuntu24.04-x64
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
@@ -105,8 +108,27 @@ jobs:
       - name: Install Next.js demo
         run: pnpm --dir demo/nextjs install --frozen-lockfile
 
+      # Firefox and WebKit run the front-channel logout spec only when the code
+      # it depends on changes; Chromium runs it on every change.
+      - name: Detect front-channel logout changes
+        id: frontchannel
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}
+        run: |
+          if git diff --quiet "$BASE_SHA"...HEAD -- \
+            packages/oauth-provider/src/logout.ts \
+            packages/better-auth/src/cookies \
+            e2e/integration/vanilla-node/e2e/frontchannel-logout.spec.ts \
+            e2e/integration/playwright.config.ts; then
+            echo "cross-browser=" >> "$GITHUB_OUTPUT"
+          else
+            echo "cross-browser=1" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install Playwright Browsers
         uses: ./.github/actions/setup-playwright
+        with:
+          browsers: ${{ steps.frontchannel.outputs.cross-browser && 'chromium firefox webkit' || 'chromium' }}
 
       - name: Reset Docker Containers
         run: docker compose down --volumes --remove-orphans
@@ -117,6 +139,8 @@ jobs:
           docker compose up -d --wait --wait-timeout 60 "${compose_services[@]}"
 
       - name: Integration
+        env:
+          PLAYWRIGHT_CROSS_BROWSER: ${{ steps.frontchannel.outputs.cross-browser }}
         run: pnpm e2e:integration --filter=./e2e/integration
 
       - name: Build Next.js demo
@@ -153,7 +177,7 @@ jobs:
         run: docker compose down --volumes --remove-orphans
   adapter-integration:
     name: ${{ matrix.packages }} Integration Test
-    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-24.04' || 'ubuntu-24.04' }}
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
       contents: read

@@ -387,106 +387,112 @@ describe("assignOrganizationByDomain", () => {
 	it.for([
 		{ insertionOrder: ["unverified", "verified"] },
 		{ insertionOrder: ["verified", "unverified"] },
-	])("should only find the verified provider when multiple providers claim the same domain ($insertionOrder)", async ({
-		insertionOrder,
-	}) => {
-		const { data, createContext } = createTestContext();
+	])(
+		"should only find the verified provider when multiple providers claim the same domain ($insertionOrder)",
+		async ({ insertionOrder }) => {
+			const { data, createContext } = createTestContext();
 
-		const legitOrg = createOrg({
-			id: "legit-org",
-			name: "Legit Org",
-			slug: "legit-org",
-		});
-		const attackerOrg = createOrg({
-			id: "attacker-org",
-			name: "Attacker Org",
-			slug: "attacker-org",
-		});
-		data.organization.push(legitOrg, attackerOrg);
+			const legitOrg = createOrg({
+				id: "legit-org",
+				name: "Legit Org",
+				slug: "legit-org",
+			});
+			const attackerOrg = createOrg({
+				id: "attacker-org",
+				name: "Attacker Org",
+				slug: "attacker-org",
+			});
+			data.organization.push(legitOrg, attackerOrg);
 
-		const providers = {
-			unverified: createProvider({
-				id: "attacker-provider",
-				providerId: "attacker-provider",
-				issuer: "https://attacker.com",
-				domainVerified: false,
-				organizationId: attackerOrg.id,
-			}),
-			verified: createProvider({
-				id: "legit-provider",
-				providerId: "legit-provider",
-				domainVerified: true,
-				organizationId: legitOrg.id,
-			}),
-		};
-		data.ssoProvider.push(
-			...insertionOrder.map((key) => providers[key as keyof typeof providers]),
-		);
+			const providers = {
+				unverified: createProvider({
+					id: "attacker-provider",
+					providerId: "attacker-provider",
+					issuer: "https://attacker.com",
+					domainVerified: false,
+					organizationId: attackerOrg.id,
+				}),
+				verified: createProvider({
+					id: "legit-provider",
+					providerId: "legit-provider",
+					domainVerified: true,
+					organizationId: legitOrg.id,
+				}),
+			};
+			data.ssoProvider.push(
+				...insertionOrder.map(
+					(key) => providers[key as keyof typeof providers],
+				),
+			);
 
-		const user = createUser();
-		data.user.push(user);
+			const user = createUser();
+			data.user.push(user);
 
-		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, {
-			user,
-			domainVerification: { enabled: true },
-		});
+			const ctx = (await createContext()) as GenericEndpointContext;
+			await assignOrganizationByDomain(ctx, {
+				user,
+				domainVerification: { enabled: true },
+			});
 
-		const members = data.member.filter((m) => m.userId === user.id);
-		expect(members).toHaveLength(1);
-		expect(members[0]?.organizationId).toBe(legitOrg.id);
-	});
+			const members = data.member.filter((m) => m.userId === user.id);
+			expect(members).toHaveLength(1);
+			expect(members[0]?.organizationId).toBe(legitOrg.id);
+		},
+	);
 
 	it.for([
 		{ insertionOrder: ["first", "second"] },
 		{ insertionOrder: ["second", "first"] },
-	])("should NOT assign user when verified providers map one domain to different organizations ($insertionOrder)", async ({
-		insertionOrder,
-	}) => {
-		const { data, createContext } = createTestContext();
+	])(
+		"should NOT assign user when verified providers map one domain to different organizations ($insertionOrder)",
+		async ({ insertionOrder }) => {
+			const { data, createContext } = createTestContext();
 
-		const firstOrg = createOrg({
-			id: "first-org",
-			name: "First Org",
-			slug: "first-org",
-		});
-		const secondOrg = createOrg({
-			id: "second-org",
-			name: "Second Org",
-			slug: "second-org",
-		});
-		data.organization.push(firstOrg, secondOrg);
+			const firstOrg = createOrg({
+				id: "first-org",
+				name: "First Org",
+				slug: "first-org",
+			});
+			const secondOrg = createOrg({
+				id: "second-org",
+				name: "Second Org",
+				slug: "second-org",
+			});
+			data.organization.push(firstOrg, secondOrg);
 
-		const firstProvider = createProvider({
-			id: "first-provider",
-			providerId: "first-provider",
-			domainVerified: true,
-			organizationId: firstOrg.id,
-		});
-		const secondProvider = createProvider({
-			id: "second-provider",
-			providerId: "second-provider",
-			domainVerified: true,
-			organizationId: secondOrg.id,
-		});
-		const providers = { first: firstProvider, second: secondProvider };
-		data.ssoProvider.push(
-			...insertionOrder.map((key) => providers[key as keyof typeof providers]),
-		);
+			const firstProvider = createProvider({
+				id: "first-provider",
+				providerId: "first-provider",
+				domainVerified: true,
+				organizationId: firstOrg.id,
+			});
+			const secondProvider = createProvider({
+				id: "second-provider",
+				providerId: "second-provider",
+				domainVerified: true,
+				organizationId: secondOrg.id,
+			});
+			const providers = { first: firstProvider, second: secondProvider };
+			data.ssoProvider.push(
+				...insertionOrder.map(
+					(key) => providers[key as keyof typeof providers],
+				),
+			);
 
-		const user = createUser();
-		data.user.push(user);
+			const user = createUser();
+			data.user.push(user);
 
-		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationByDomain(ctx, {
-			user,
-			domainVerification: { enabled: true },
-		});
+			const ctx = (await createContext()) as GenericEndpointContext;
+			await assignOrganizationByDomain(ctx, {
+				user,
+				domainVerification: { enabled: true },
+			});
 
-		expect(
-			data.member.filter((member) => member.userId === user.id),
-		).toHaveLength(0);
-	});
+			expect(
+				data.member.filter((member) => member.userId === user.id),
+			).toHaveLength(0);
+		},
+	);
 
 	it("should assign once when verified providers map one domain to the same organization", async () => {
 		const { data, createContext } = createTestContext();
@@ -660,47 +666,47 @@ describe("assignOrganizationByDomain", () => {
 });
 
 describe("assignOrganizationFromProvider", () => {
-	it.for([
-		"oidc",
-		"saml",
-	] as const)("should preserve direct %s organization provisioning without domain verification", async (providerType) => {
-		const { data, createContext } = createTestContext(false);
+	it.for(["oidc", "saml"] as const)(
+		"should preserve direct %s organization provisioning without domain verification",
+		async (providerType) => {
+			const { data, createContext } = createTestContext(false);
 
-		const user = createUser();
-		const organizationRecord = createOrg({
-			name: "Enterprise",
-			slug: "enterprise",
-		});
-		const provider = {
-			...createProvider({
-				providerId: "enterprise-provider",
-				userId: "owner-1",
-			}),
-			organizationId: organizationRecord.id,
-		};
-		data.user.push(user);
-		data.organization.push(organizationRecord);
-		data.ssoProvider.push(provider);
+			const user = createUser();
+			const organizationRecord = createOrg({
+				name: "Enterprise",
+				slug: "enterprise",
+			});
+			const provider = {
+				...createProvider({
+					providerId: "enterprise-provider",
+					userId: "owner-1",
+				}),
+				organizationId: organizationRecord.id,
+			};
+			data.user.push(user);
+			data.organization.push(organizationRecord);
+			data.ssoProvider.push(provider);
 
-		const organizationId = organizationRecord.id;
-		const ctx = (await createContext()) as GenericEndpointContext;
-		await assignOrganizationFromProvider(ctx, {
-			user,
-			provider,
-			profile: {
-				providerType,
-				providerId: provider.providerId,
-				accountId: "enterprise-account",
-				email: user.email,
-				emailVerified: true,
-			},
-		});
+			const organizationId = organizationRecord.id;
+			const ctx = (await createContext()) as GenericEndpointContext;
+			await assignOrganizationFromProvider(ctx, {
+				user,
+				provider,
+				profile: {
+					providerType,
+					providerId: provider.providerId,
+					accountId: "enterprise-account",
+					email: user.email,
+					emailVerified: true,
+				},
+			});
 
-		expect(data.member).toHaveLength(1);
-		expect(data.member[0]).toMatchObject({
-			organizationId,
-			role: "member",
-			userId: user.id,
-		});
-	});
+			expect(data.member).toHaveLength(1);
+			expect(data.member[0]).toMatchObject({
+				organizationId,
+				role: "member",
+				userId: user.id,
+			});
+		},
+	);
 });

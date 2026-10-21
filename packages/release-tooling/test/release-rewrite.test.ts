@@ -282,51 +282,67 @@ describe("release-note rewriting", () => {
 			}),
 		);
 
+		const instructionsByRequest = new Map<string, string>();
 		await rewriteReleaseNotes(
 			releaseFiles.contextPath,
 			releaseFiles.outputPath,
-			generatorFor((request) => {
-				switch (request.name) {
-					case "release_note_rewrites":
-						return {
-							rewrites: [
-								{
-									id: "pr-42",
-									title: "Fixed clients with plugins being assignable",
-									migration: null,
-								},
-							],
-						};
-					case "release_note_reviews":
-						return {
-							reviews: [
-								{
-									id: "pr-42",
-									approved: true,
-									feedback:
-										"State that assignability was restored for clients using additional plugins.",
-								},
-							],
-						};
-					case "release_note_repairs":
-						return {
-							rewrites: [
-								{
-									id: "pr-42",
-									title:
-										"Restored client assignability when using additional plugins",
-									migration: null,
-								},
-							],
-						};
-					case "release_note_repair_reviews":
-						return {
-							reviews: [{ id: "pr-42", approved: true, feedback: null }],
-						};
-				}
-				throw new Error(`Unexpected request ${request.name}`);
-			}),
+			generatorFor(
+				(request) => {
+					switch (request.name) {
+						case "release_note_rewrites":
+							return {
+								rewrites: [
+									{
+										id: "pr-42",
+										title: "Fixed clients with plugins being assignable",
+										migration: null,
+									},
+								],
+							};
+						case "release_note_reviews":
+							return {
+								reviews: [
+									{
+										id: "pr-42",
+										approved: true,
+										feedback:
+											"State that assignability was restored for clients using additional plugins.",
+									},
+								],
+							};
+						case "release_note_repairs":
+							return {
+								rewrites: [
+									{
+										id: "pr-42",
+										title:
+											"Restored client assignability when using additional plugins",
+										migration: null,
+									},
+								],
+							};
+						case "release_note_repair_reviews":
+							return {
+								reviews: [{ id: "pr-42", approved: true, feedback: null }],
+							};
+					}
+					throw new Error(`Unexpected request ${request.name}`);
+				},
+				(request) =>
+					instructionsByRequest.set(request.name, request.instructions),
+			),
 		);
+
+		// The writer, reviewer, and repairer must judge copy by the same rules.
+		expect([...instructionsByRequest.keys()].sort()).toEqual([
+			"release_note_repair_reviews",
+			"release_note_repairs",
+			"release_note_reviews",
+			"release_note_rewrites",
+		]);
+		for (const instructions of instructionsByRequest.values()) {
+			expect(instructions).toContain("## Entry rules");
+		}
 
 		expect(JSON.parse(readFileSync(releaseFiles.outputPath, "utf-8"))).toEqual({
 			rewrites: [
@@ -483,8 +499,8 @@ describe("release-note rewriting", () => {
 							rewrites: [
 								{
 									id,
-									title: "Preserved safe output",
-									migration: "Change an unrelated setting.",
+									title: "Preserved [safe output](https://example.com)",
+									migration: null,
 								},
 							],
 						}

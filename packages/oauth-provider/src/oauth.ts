@@ -22,10 +22,11 @@ import { consentEndpoint } from "./consent";
 import { continueEndpoint } from "./continue";
 import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
-import type { BackchannelLogoutPlan } from "./logout";
+import type { SessionLogoutPlan } from "./logout";
 import {
-	applyBackchannelLogoutPlan,
-	prepareBackchannelLogoutPlan,
+	applySessionLogoutPlan,
+	prepareSessionLogoutPlan,
+	recordFrontchannelLogoutUris,
 	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
@@ -40,9 +41,9 @@ import * as oauthConsentEndpoints from "./oauthConsent";
 import * as oauthResourceEndpoints from "./oauthResource";
 import { registerEndpoint } from "./register";
 import {
-	extractRepeatedResourceFromForm,
 	logEnforcePerClientResourcesResolution,
-	seedResources,
+	logStartupSeedFailure,
+	seedResourcesOnce,
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
@@ -112,9 +113,9 @@ export const oAuthState = defineRequestState<{
 	postLoginClearedForSession?: string;
 } | null>(() => null);
 export const getOAuthProviderState = oAuthState.get;
-const backchannelLogoutPlansByContext = new WeakMap<
+const sessionLogoutPlansByContext = new WeakMap<
 	GenericEndpointContext,
-	Map<string, BackchannelLogoutPlan>
+	Map<string, SessionLogoutPlan>
 >();
 const signedQueryIssuedAtMsKey = "signedQueryIssuedAtMs";
 
@@ -162,6 +163,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 		}
+	}
+	const acrValuesSupported = options.authenticationContext?.acrValuesSupported;
+	if (
+		acrValuesSupported &&
+		(acrValuesSupported.length === 0 || acrValuesSupported.includes(""))
+	) {
+		throw new BetterAuthError(
+			"authenticationContext.acrValuesSupported must list at least one non-empty acr value",
+		);
 	}
 	for (const sc of options.advertisedMetadata?.scopes_supported ?? []) {
 		if (!scopes?.has(sc)) {
@@ -371,11 +381,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "OAuth 2.1 response type (e.g., 'code')",
 						},
 						{
+							name: "user_code",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description:
+								"Device user code to approve instead of an authorization request (requires oauthDeviceAuthorization())",
+						},
+						{
 							name: "client_id",
 							in: "query",
-							required: true,
+							required: false,
 							schema: { type: "string" },
-							description: "OAuth 2.1 client ID",
+							description:
+								"OAuth 2.1 client ID, required for authorization requests (not for user_code)",
 						},
 						{
 							name: "redirect_uri",
@@ -519,11 +538,33 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
-			// Seed `oauthResource` rows from plugin config. Idempotent and
-			// race-safe (UNIQUE constraint on identifier). No-op when `resources`
-			// is empty. Tolerates
-			// "table not yet created" errors and defers to lazy-seed.
-			await seedResources(ctx, opts);
+			// A replayed rotation assertion would hand over a client's keys, so
+			// rotation needs the jti tombstone to be single-use. The memory adapter
+			// does not enforce primary keys, and "serial" ids replace the derived id.
+			// shortcut: lists the known built-in gaps only; replace with a core check
+			// when the FIXME(serial-derived-ids) in get-id-field.ts is resolved.
+			if (opts.allowClientKeyRotation) {
+				const gap =
+					ctx.adapter.id === "memory"
+						? "the memory adapter"
+						: ctx.options.advanced?.database?.generateId === "serial"
+							? '`advanced.database.generateId: "serial"`'
+							: undefined;
+				if (gap) {
+					throw new BetterAuthError(
+						`\`allowClientKeyRotation\` requires single-use client assertions, which ${gap} does not enforce`,
+					);
+				}
+			}
+
+			// Seed `oauthResource` rows from plugin config. A failure must not
+			// reject init (a failed init is cached and breaks every route);
+			// `getResource` retries the seed on first resource access.
+			// TODO(#11725): remove database I/O from init. Resolve configured
+			// resources at lookup time and create a row only when a link needs one.
+			await seedResourcesOnce(ctx, opts).catch((error: unknown) =>
+				logStartupSeedFailure(ctx, error),
+			);
 
 			// Record which default applied to `enforcePerClientResources` so
 			// admins can see it in startup logs. Pure resolution lives in
@@ -559,20 +600,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							delete: {
 								async before(session, hookCtx) {
 									if (!hookCtx) return;
-									const plan = await prepareBackchannelLogoutPlan(
-										hookCtx,
-										opts,
-										{
-											sessionId: session.id,
-											userId: session.userId,
-										},
-									);
+									const plan = await prepareSessionLogoutPlan(hookCtx, opts, {
+										sessionId: session.id,
+										userId: session.userId,
+									});
 									if (!plan) return;
 									const logoutPlanBySessionId =
-										backchannelLogoutPlansByContext.get(hookCtx) ??
-										new Map<string, BackchannelLogoutPlan>();
+										sessionLogoutPlansByContext.get(hookCtx) ??
+										new Map<string, SessionLogoutPlan>();
 									logoutPlanBySessionId.set(session.id, plan);
-									backchannelLogoutPlansByContext.set(
+									sessionLogoutPlansByContext.set(
 										hookCtx,
 										logoutPlanBySessionId,
 									);
@@ -580,20 +617,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								async after(session, hookCtx) {
 									if (!hookCtx) return;
 									const logoutPlanBySessionId =
-										backchannelLogoutPlansByContext.get(hookCtx);
+										sessionLogoutPlansByContext.get(hookCtx);
 									if (!logoutPlanBySessionId) return;
 									const plan = logoutPlanBySessionId.get(session.id);
 									logoutPlanBySessionId.delete(session.id);
 									if (logoutPlanBySessionId.size === 0) {
-										backchannelLogoutPlansByContext.delete(hookCtx);
+										sessionLogoutPlansByContext.delete(hookCtx);
 									}
 									if (!plan) return;
-									const logoutTask = applyBackchannelLogoutPlan(
+									// Recorded synchronously so the logout page of this request
+									// can render the iframes; delivery below may run after the
+									// response.
+									await recordFrontchannelLogoutUris(
+										plan.frontchannelLogoutUris,
+									);
+									const logoutTask = applySessionLogoutPlan(
 										hookCtx,
 										plan,
 									).catch((error) => {
 										hookCtx.context.logger.error(
-											"Back-channel logout failed after session deletion",
+											"Logout notification failed after session deletion",
 											error,
 										);
 									});
@@ -801,14 +844,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
+													redirect: {
+														type: "boolean",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"Always true. Indicates the caller should redirect to `url`.",
+														enum: [true],
+													},
+													url: {
+														type: "string",
+														format: "uri-reference",
+														description:
+															"The absolute or relative URI to redirect to next.",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
@@ -834,7 +883,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Confirms an account was registered",
 						}),
 						postLogin: z.boolean().optional().meta({
-							description: "Confirms organization and/or team selection.",
+							description:
+								"Resumes after the post login page. postLogin.shouldRedirect runs again with isContinuation: true.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
@@ -846,20 +896,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Continues OAuth2 authorization flow",
 							responses: {
 								"200": {
-									description: "Consent processed successfully",
+									description: "Authorization flow continued successfully",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
+													redirect: {
+														type: "boolean",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"Always true. Indicates the caller should redirect to `url`.",
+														enum: [true],
+													},
+													url: {
+														type: "string",
+														format: "uri-reference",
+														description:
+															"The absolute or relative URI to redirect to next.",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
@@ -876,14 +932,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/token",
 				{
 					method: "POST",
-					// RFC 8707 §2 allows the client to repeat the `resource`
-					// parameter. better-call's form-body parser collapses
-					// repeated keys (last-write-wins) so we re-parse the raw
-					// body in the handler to recover the full list. That
-					// requires the underlying request body to be readable a
-					// second time, which only works when better-call clones
-					// the request before its own parse.
-					cloneRequest: true,
+					// RFC 8707 §2 and RFC 8693 §2.1 let these repeat.
+					formParams: { repeatable: ["resource", "audience"] },
 					body: z
 						.object({
 							grant_type: z.string().trim().min(1),
@@ -1051,20 +1101,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					},
 				},
 				async (ctx) => {
-					// RFC 8707 §2 conformance — recover repeated `resource`
-					// values from the raw body before delegating to the token
-					// pipeline. Only patches `ctx.body.resource` when the raw
-					// form actually carried multiple entries; the
-					// single-value path (and the in-process auth.api.* call
-					// path where there is no Request body to re-read) is left
-					// untouched. See `extractRepeatedResourceFromForm` in
-					// resources.ts for rationale.
-					if (ctx.request) {
-						const repeated = await extractRepeatedResourceFromForm(ctx.request);
-						if (repeated && repeated.length > 1) {
-							ctx.body.resource = repeated;
-						}
-					}
 					return tokenEndpoint(ctx, opts);
 				},
 			),
@@ -1072,8 +1108,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/introspect",
 				{
 					method: "POST",
-					// Credential cardinality is enforced from the raw form body.
-					cloneRequest: true,
+					formParams: {},
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
@@ -1213,8 +1248,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/revoke",
 				{
 					method: "POST",
-					// Credential cardinality is enforced from the raw form body.
-					cloneRequest: true,
+					formParams: {},
 					body: z.object({
 						client_id: z.string().optional(),
 						client_secret: z.string().optional(),
@@ -1452,7 +1486,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							responses: {
 								"200": {
 									description:
-										"Logout completed, or an HTML confirmation page was returned for browser navigation. A redirect is used only for an exact registered post_logout_redirect_uri.",
+										"Logout completed, or an HTML page was returned for browser navigation — a confirmation page, or the OIDC front-channel logout page when clients with a registered frontchannel_logout_uri hold tokens on the session. A redirect is used only for an exact registered post_logout_redirect_uri.",
 									content: {
 										"application/json": {
 											schema: {
@@ -1472,7 +1506,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											},
 										},
 										"text/html": {
-											schema: { type: "string" },
+											schema: {
+												type: "string",
+												description:
+													"Logout confirmation page, or the OIDC Front-Channel Logout page with one hidden iframe per registered RP",
+											},
 										},
 									},
 								},
@@ -1505,7 +1543,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: clientRegistrationRequestSchema,
+					// Loose so extension-defined fields reach the handler, which keeps
+					// those and drops every other unrecognized field (RFC 7591 §2).
+					// The declared type stays strict.
+					body: clientRegistrationRequestSchema.loose() as unknown as typeof clientRegistrationRequestSchema,
 					errorCodesByField: {
 						redirect_uris: "invalid_redirect_uri",
 						post_logout_redirect_uris: "invalid_redirect_uri",
@@ -1625,6 +1666,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 														description:
 															"Whether the RP requires a `sid` claim in every Logout Token",
 													},
+													frontchannel_logout_uri: {
+														type: "string",
+														format: "uri",
+														description:
+															"RP URL rendered in a hidden iframe on the OP's logout page when the end-user's OP session terminates",
+													},
+													frontchannel_logout_session_required: {
+														type: "boolean",
+														description:
+															"Whether the RP requires `iss` and `sid` query parameters on its front-channel logout URI. The OP always sends both.",
+													},
 													token_endpoint_auth_method: {
 														type: "string",
 														description:
@@ -1690,6 +1742,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
 			rotateClientSecret: oauthClientEndpoints.rotateClientSecret(opts),
+			rotateClientKeys: oauthClientEndpoints.rotateClientKeys(opts),
 			deleteOAuthClient: oauthClientEndpoints.deleteOAuthClient(opts),
 			getOAuthConsent: oauthConsentEndpoints.getOAuthConsent(opts),
 			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
@@ -1761,6 +1814,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							pathMatcher: (path: string) => path === "/oauth2/register",
 							window: opts.rateLimit?.register?.window ?? 60,
 							max: opts.rateLimit?.register?.max ?? 5,
+						},
+					]
+				: []),
+			// Client key rotation - replaces credentials, so keep it tight
+			...(opts.rateLimit?.rotateClientKeys !== false
+				? [
+						{
+							pathMatcher: (path: string) =>
+								path === "/oauth2/client/rotate-keys",
+							window: opts.rateLimit?.rotateClientKeys?.window ?? 60,
+							max: opts.rateLimit?.rotateClientKeys?.max ?? 5,
 						},
 					]
 				: []),

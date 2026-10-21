@@ -1,6 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	queueAfterTransactionHook,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -305,12 +308,23 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						 * between existing and non-existing emails.
 						 */
 						await ctx.context.password.hash(password);
-						if (ctx.context.options.emailAndPassword?.onExistingUserSignUp) {
-							await ctx.context.runInBackgroundOrAwait(
-								ctx.context.options.emailAndPassword.onExistingUserSignUp(
-									{ user: dbUser.user },
-									safeCloneRequest(ctx.request),
-								),
+						const onExistingUserSignUp =
+							ctx.context.options.emailAndPassword?.onExistingUserSignUp;
+						if (onExistingUserSignUp) {
+							const request = safeCloneRequest(ctx.request);
+							await queueAfterTransactionHook(
+								async () => {
+									await ctx.context.runInBackgroundOrAwait(
+										onExistingUserSignUp({ user: dbUser.user }, request),
+									);
+								},
+								{
+									onError: (error) =>
+										ctx.context.logger.error(
+											"Failed to run onExistingUserSignUp after sign-up",
+											error,
+										),
+								},
 							);
 						}
 						return buildGenericDuplicateResponse();
@@ -381,30 +395,38 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const shouldSendVerificationEmail =
 					ctx.context.options.emailVerification?.sendOnSignUp ??
 					ctx.context.options.emailAndPassword.requireEmailVerification;
-				if (shouldSendVerificationEmail) {
-					const token = await createEmailVerificationToken(
-						ctx.context.secret,
-						createdUser.email,
-						undefined,
-						ctx.context.options.emailVerification?.expiresIn,
-					);
+				const sendVerificationEmail =
+					ctx.context.options.emailVerification?.sendVerificationEmail;
+				if (shouldSendVerificationEmail && sendVerificationEmail) {
+					// The transaction can roll back or, on MongoDB, run again, so the
+					// email waits for the commit. The token is minted then, so the wait
+					// doesn't use up its expiry. A throw after the commit is logged.
+					const user = createdUser;
 					const callbackURL = body.callbackURL
 						? encodeURIComponent(body.callbackURL)
 						: encodeURIComponent("/");
-					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-
-					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
-						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-								safeCloneRequest(ctx.request),
-							),
-						);
-					}
+					const request = safeCloneRequest(ctx.request);
+					await queueAfterTransactionHook(
+						async () => {
+							const token = await createEmailVerificationToken(
+								ctx.context.secret,
+								user.email,
+								undefined,
+								ctx.context.options.emailVerification?.expiresIn,
+							);
+							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
+							await ctx.context.runInBackgroundOrAwait(
+								sendVerificationEmail({ user, url, token }, request),
+							);
+						},
+						{
+							onError: (error) =>
+								ctx.context.logger.error(
+									"Failed to send the sign-up verification email",
+									error,
+								),
+						},
+					);
 				}
 
 				if (shouldSkipAutoSignIn) {
@@ -420,6 +442,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const session = await ctx.context.internalAdapter.createSession(
 					createdUser.id,
 					rememberMe === false,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
 				);
 				if (!session) {
 					throw APIError.from(

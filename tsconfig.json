@@ -19,6 +19,9 @@
       "path": "./packages/cli/tsconfig.json"
     },
     {
+      "path": "./packages/ciba/tsconfig.json"
+    },
+    {
       "path": "./packages/cimd/tsconfig.json"
     },
     {
@@ -83,6 +86,9 @@
     },
     {
       "path": "./e2e/adapter/tsconfig.json"
+    },
+    {
+      "path": "./e2e/integration/test-utils/tsconfig.json"
     },
     {
       "path": "./test/tsconfig.json"

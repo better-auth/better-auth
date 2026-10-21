@@ -133,6 +133,7 @@
         "test-results/**",
         "playwright-report/**"
       ],
+      "passThroughEnv": ["PLAYWRIGHT_CROSS_BROWSER"],
       "cache": false
     },
     "deploy": {
