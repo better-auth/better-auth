@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
@@ -971,14 +972,21 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			await resetCredentialPassword(
-				ctx,
-				user.user.id,
-				passwordHash,
-				otpConsumed
-					? undefined
-					: () => atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp),
-			);
+			await runWithTransaction(ctx.context.adapter, async () => {
+				await resetCredentialPassword(
+					ctx,
+					user.user.id,
+					passwordHash,
+					otpConsumed
+						? undefined
+						: () => atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp),
+				);
+				if (!user.user.emailVerified) {
+					await ctx.context.internalAdapter.updateUser(user.user.id, {
+						emailVerified: true,
+					});
+				}
+			});
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 				await ctx.context.options.emailAndPassword.onPasswordReset(
@@ -987,12 +995,6 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					},
 					ctx.request,
 				);
-			}
-
-			if (!user.user.emailVerified) {
-				await ctx.context.internalAdapter.updateUser(user.user.id, {
-					emailVerified: true,
-				});
 			}
 
 			return ctx.json({
