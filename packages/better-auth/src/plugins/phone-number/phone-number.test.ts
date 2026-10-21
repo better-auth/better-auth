@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { symmetricDecrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
+import { defaultOTPHasher } from "./otp-storage";
 
 describe("phone-number", async () => {
 	let otp = "";
@@ -1685,5 +1687,286 @@ describe("phone-number sign-in password length", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11297
+ */
+describe("phone-number storeOTP", async () => {
+	describe("hashed", async () => {
+		let otp = "";
+		let resetOtp = "";
+		const { auth, client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							otp = code;
+						},
+						sendPasswordResetOTP({ code }) {
+							resetOtp = code;
+						},
+						requireVerification: true,
+						storeOTP: "hashed",
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+		const authCtx = await auth.$context;
+
+		it("stores a hash instead of the OTP", async () => {
+			const phoneNumber = "+251911131401";
+			await client.phoneNumber.sendOtp({ phoneNumber });
+
+			const stored =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			expect(stored).not.toBeNull();
+			const [storedOtp, attempts] = stored!.value.split(":");
+			expect(stored!.value).not.toContain(otp);
+			expect(storedOtp).toBe(await defaultOTPHasher(otp));
+			expect(attempts).toBe("0");
+
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: otp,
+			});
+			expect(res.error).toBe(null);
+			expect(res.data?.status).toBe(true);
+			expect(
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber),
+			).toBeNull();
+		});
+
+		it("keeps the hash and counts a wrong attempt", async () => {
+			const phoneNumber = "+251911131402";
+			await client.phoneNumber.sendOtp({ phoneNumber });
+			const stored =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			const [storedOtp] = stored!.value.split(":");
+
+			const wrong = await client.phoneNumber.verify({
+				phoneNumber,
+				code: "000000",
+			});
+			expect(wrong.error?.status).toBe(400);
+			expect(wrong.error?.message).toBe("Invalid OTP");
+
+			const afterWrong =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			expect(afterWrong!.value).toBe(`${storedOtp}:1`);
+
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: otp,
+			});
+			expect(res.error).toBe(null);
+		});
+
+		it("resets the password with a hashed OTP", async () => {
+			const phoneNumber = "+251911131403";
+			await client.phoneNumber.sendOtp({ phoneNumber });
+			await client.phoneNumber.verify({ phoneNumber, code: otp });
+
+			await client.phoneNumber.requestPasswordReset({ phoneNumber });
+			const storedReset = await authCtx.internalAdapter.findVerificationValue(
+				`${phoneNumber}-request-password-reset`,
+			);
+			expect(storedReset).not.toBeNull();
+			expect(storedReset!.value).not.toContain(resetOtp);
+			expect(storedReset!.value.split(":")[0]).toBe(
+				await defaultOTPHasher(resetOtp),
+			);
+
+			const res = await client.phoneNumber.resetPassword({
+				phoneNumber,
+				otp: resetOtp,
+				newPassword: "password",
+			});
+			expect(res.error).toBe(null);
+			expect(res.data?.status).toBe(true);
+		});
+
+		it("stores a hash when an unverified user signs in with a password", async () => {
+			const phoneNumber = "+251911131404";
+			const password = "password123";
+			await client.signUp.email({
+				email: "store-otp-hashed@test.com",
+				password,
+				name: "test",
+				phoneNumber,
+			});
+
+			const signInRes = await client.signIn.phoneNumber({
+				phoneNumber,
+				password,
+			});
+			expect(signInRes.error?.code).toMatch("PHONE_NUMBER_NOT_VERIFIED");
+
+			const stored =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			expect(stored).not.toBeNull();
+			expect(stored!.value).not.toContain(otp);
+			expect(stored!.value).toBe(await defaultOTPHasher(otp));
+
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: otp,
+			});
+			expect(res.error).toBe(null);
+		});
+	});
+
+	describe("encrypted", async () => {
+		let otp = "";
+		const { auth, client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							otp = code;
+						},
+						storeOTP: "encrypted",
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+		const authCtx = await auth.$context;
+
+		it("stores an encrypted OTP and verifies it", async () => {
+			const phoneNumber = "+251911131405";
+			await client.phoneNumber.sendOtp({ phoneNumber });
+
+			const stored =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			expect(stored).not.toBeNull();
+			expect(stored!.value).not.toContain(otp);
+			const [storedOtp, attempts] = stored!.value.split(":");
+			expect(attempts).toBe("0");
+			expect(
+				await symmetricDecrypt({
+					key: authCtx.secretConfig,
+					data: storedOtp!,
+				}),
+			).toBe(otp);
+
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: otp,
+			});
+			expect(res.error).toBe(null);
+			expect(res.data?.status).toBe(true);
+		});
+	});
+
+	describe("custom hasher", async () => {
+		let otp = "";
+		const hasher = vi.fn(async (value: string) => `custom-${value}`);
+		const { auth, client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							otp = code;
+						},
+						storeOTP: { hash: hasher },
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+		const authCtx = await auth.$context;
+
+		it("stores a custom hash and verifies it", async () => {
+			const phoneNumber = "+251911131406";
+			await client.phoneNumber.sendOtp({ phoneNumber });
+
+			const stored =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			expect(stored!.value).toBe(`custom-${otp}:0`);
+			expect(hasher).toHaveBeenCalledWith(otp);
+
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: otp,
+			});
+			expect(res.error).toBe(null);
+			expect(hasher).toHaveBeenCalledTimes(2);
+		});
+	});
+
+	describe("custom encryptor", async () => {
+		let otp = "";
+		const encrypt = vi.fn(async (value: string) => `enc-${value}`);
+		const decrypt = vi.fn(async (value: string) => value.replace(/^enc-/, ""));
+		const { auth, client } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							otp = code;
+						},
+						storeOTP: { encrypt, decrypt },
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+		const authCtx = await auth.$context;
+
+		it("stores a custom ciphertext and verifies it", async () => {
+			const phoneNumber = "+251911131407";
+			await client.phoneNumber.sendOtp({ phoneNumber });
+
+			const stored =
+				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			expect(stored!.value).toBe(`enc-${otp}:0`);
+			expect(encrypt).toHaveBeenCalledWith(otp);
+
+			const res = await client.phoneNumber.verify({
+				phoneNumber,
+				code: otp,
+			});
+			expect(res.error).toBe(null);
+			expect(decrypt).toHaveBeenCalledWith(`enc-${otp}`);
+		});
 	});
 });

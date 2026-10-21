@@ -15,6 +15,7 @@ import {
 	resetCredentialPassword,
 } from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
+import { splitStoredOTP, storeOTP, verifyStoredOTP } from "./otp-storage";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
 export type RequiredPhoneNumberOptions = PhoneNumberOptions & {
@@ -128,7 +129,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				if (!user.phoneNumberVerified) {
 					const otp = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
-						value: otp,
+						value: await storeOTP(ctx, opts, otp),
 						identifier: phoneNumber,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
@@ -286,8 +287,9 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 			}
 
 			const code = generateOTP(opts.otpLength);
+			const storedCode = await storeOTP(ctx, opts, code);
 			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${code}:0`,
+				value: `${storedCode}:0`,
 				identifier: ctx.body.phoneNumber,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
@@ -734,8 +736,9 @@ export const requestPasswordResetPhoneNumber = (
 				],
 			});
 			const code = generateOTP(opts.otpLength);
+			const storedCode = await storeOTP(ctx, opts, code);
 			await ctx.context.internalAdapter.createVerificationValue({
-				value: `${code}:0`,
+				value: `${storedCode}:0`,
 				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
@@ -920,9 +923,8 @@ async function verifyPhoneNumberOTP(
 	}
 
 	const allowedAttempts = opts?.allowedAttempts ?? 3;
-	const peekedAttempts = parseVerificationAttempts(
-		existing.value.split(":")[1],
-	);
+	const [, peekedRawAttempts] = splitStoredOTP(existing.value);
+	const peekedAttempts = parseVerificationAttempts(peekedRawAttempts);
 	if (peekedAttempts >= allowedAttempts) {
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 			identifier,
@@ -939,7 +941,7 @@ async function verifyPhoneNumberOTP(
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
 
-	const [otpValue, rawAttempts] = consumed.value.split(":");
+	const [storedOTP, rawAttempts] = splitStoredOTP(consumed.value);
 	const attempts = parseVerificationAttempts(rawAttempts);
 	if (attempts >= allowedAttempts) {
 		throw APIError.from(
@@ -947,9 +949,9 @@ async function verifyPhoneNumberOTP(
 			PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 		);
 	}
-	if (otpValue !== providedCode) {
+	if (!(await verifyStoredOTP(ctx, opts, storedOTP, providedCode))) {
 		await ctx.context.internalAdapter.createVerificationValue({
-			value: `${otpValue}:${attempts + 1}`,
+			value: `${storedOTP}:${attempts + 1}`,
 			identifier,
 			expiresAt: consumed.expiresAt,
 		});
@@ -970,11 +972,11 @@ async function matchesUsableStoredPhoneNumberOTP(
 	const existing =
 		await ctx.context.internalAdapter.findVerificationValue(identifier);
 	if (!existing || existing.expiresAt < new Date()) return false;
-	const [otpValue, rawAttempts] = existing.value.split(":");
+	const [storedOTP, rawAttempts] = splitStoredOTP(existing.value);
 	if (parseVerificationAttempts(rawAttempts) >= (opts?.allowedAttempts ?? 3)) {
 		return false;
 	}
-	return otpValue === providedCode;
+	return await verifyStoredOTP(ctx, opts, storedOTP, providedCode);
 }
 
 function parseVerificationAttempts(value: string | undefined) {
