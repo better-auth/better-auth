@@ -536,6 +536,33 @@ describe("email-otp", async () => {
 		expect(res.error?.code).toBe("INVALID_EMAIL");
 	});
 
+	it.for([
+		{
+			endpoint: "requestPasswordReset",
+			request: (email: string) =>
+				client.emailOtp.requestPasswordReset({ email }),
+		},
+		{
+			endpoint: "forgetPassword",
+			request: (email: string) => client.forgetPassword.emailOtp({ email }),
+		},
+	])(
+		"should fail on invalid email for $endpoint without storing an OTP",
+		async ({ request }) => {
+			const ctx = await auth.$context;
+			const createVerificationValue = vi.spyOn(
+				ctx.internalAdapter,
+				"createVerificationValue",
+			);
+
+			const res = await request("invalid-email");
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.code).toBe("INVALID_EMAIL");
+			expect(createVerificationValue).not.toHaveBeenCalled();
+			createVerificationValue.mockRestore();
+		},
+	);
+
 	it("should reject change-email type", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
