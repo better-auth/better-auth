@@ -1162,15 +1162,11 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						throw providerMutationConflict();
 					}
 					if (updatedCount !== 1) throw providerMutationConflict();
-					const updatedProvider = await database.findOne<SSOProviderRecord>({
-						model: "ssoProvider",
-						where: [
-							{ field: "id", value: existingProvider.id },
-							{ field: "providerId", value: providerId },
-						],
-					});
-					if (!updatedProvider) throw providerMutationConflict();
-					return updatedProvider;
+					// `updateMany` does not return the row. Build the response from the
+					// snapshot we just wrote instead of re-reading: a concurrent write
+					// must not make a committed update return another request's data or
+					// report a conflict after the commit.
+					return { ...existingProvider, ...updateData };
 				}
 
 				await database.update({
@@ -1277,7 +1273,10 @@ export const deleteSSOProvider = (options?: SSOOptions) => {
 						});
 					}
 					// The provider row is the commit point: remove it only while it
-					// still matches the snapshot the guard approved.
+					// still matches the snapshot the guard approved. A link that
+					// already passed its own provider check can still create an
+					// account after this point; closing that residual window needs
+					// immutable provider-instance account bindings or a transaction.
 					const deleted = await database.deleteMany({
 						model: "ssoProvider",
 						where: getProviderMutationSnapshotWhere(existingProvider),
