@@ -62,6 +62,12 @@ describe("Roblox userinfo claims", () => {
 				return {};
 			},
 		});
+		const authorizationURL = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/callback",
+			codeVerifier: "verifier",
+		});
+		expect(authorizationURL.searchParams.get("scope")).toBe("openid");
 		const result = await provider.getUserInfo({ accessToken: "access-token" });
 
 		expect(result?.user).toEqual({
