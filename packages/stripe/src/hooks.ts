@@ -403,11 +403,12 @@ export async function onSubscriptionUpdated(
 			} else {
 				const [onlySub] = subs;
 				if (!onlySub) {
-					// An update can arrive before customer.subscription.created. Retry it while the
-					// customer belongs to a user or organization, so it applies once the row exists.
-					const reference = customerId
-						? await findReferenceByStripeCustomerId(ctx, options, customerId)
-						: null;
+					// An update can arrive before customer.subscription.created. Retry it when that
+					// event would create the row: a configured plan and a known user or organization.
+					const reference =
+						plan && customerId
+							? await findReferenceByStripeCustomerId(ctx, options, customerId)
+							: null;
 					if (reference) {
 						throw new Error(
 							`No subscription row yet for ${stripeSubscriptionUpdated.id} (${reference.customerType} ${reference.referenceId})`,
