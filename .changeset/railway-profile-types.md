@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Railway profile callbacks now accept identities without email or profile access. Profile mappings must handle omitted email, name, and picture claims.
+`RailwayProfile.email`, `name`, and `picture` are now optional to reflect granted scopes. Profile mappings must supply an email when the provider omits it.
