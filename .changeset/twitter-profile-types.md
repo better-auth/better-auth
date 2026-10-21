@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-X profile mappings now handle partial and null entity details, including description cashtags, mentions, and URLs with preview metadata. Request `user.fields` on the users endpoint when fetching additional fields in a custom `getUserInfo`.
+**Breaking:** Nested `TwitterProfile` entity objects, arrays, and URL details can now be omitted or `null`; update typed reads to handle both. The types also include description cashtags, mentions, and URL preview metadata; request extra `user.fields` on `/2/users/me` in custom profile lookups.
