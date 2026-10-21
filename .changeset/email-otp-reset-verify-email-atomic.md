@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-`/email-otp/reset-password` now marks the email verified in the same transaction as the new password, so a throwing `onPasswordReset` no longer leaves the email unverified and a failed verification write no longer keeps the new password.
+Resetting a password with an email OTP now verifies the email even when `onPasswordReset` throws, and, with adapter transactions enabled, a failed verification no longer leaves the new password in place. `onPasswordReset` receives the user with `emailVerified: true`.
