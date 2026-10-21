@@ -356,7 +356,7 @@ function createCustomFixture(options: {
 	return { auth, data };
 }
 
-const PATCH_BODY = (operations: unknown[]) => ({
+const createPatchBody = (operations: unknown[]) => ({
 	schemas: [SCIM_PATCH_SCHEMA],
 	Operations: operations,
 });
@@ -388,7 +388,7 @@ describe("SCIM custom extension review fixes", () => {
 		const response = await auth.handler(
 			scimRequest(`/scim/v2/Users/${created.id}`, {
 				method: "PATCH",
-				body: PATCH_BODY([
+				body: createPatchBody([
 					{ op: "replace", path: ACME_URN, value: { sapUserId: "E-9" } },
 				]),
 			}),
@@ -410,7 +410,7 @@ describe("SCIM custom extension review fixes", () => {
 		const response = await auth.handler(
 			scimRequest(`/scim/v2/Users/${created.id}`, {
 				method: "PATCH",
-				body: PATCH_BODY([
+				body: createPatchBody([
 					{ op: "replace", path: `${ACME_URN}:sapUserId`, value: null },
 				]),
 			}),
@@ -494,7 +494,7 @@ describe("SCIM custom extension review fixes", () => {
 		const response = await auth.handler(
 			scimRequest(`/scim/v2/Users/${created.id}`, {
 				method: "PATCH",
-				body: PATCH_BODY([
+				body: createPatchBody([
 					{ op: "add", path: ACME_URN, value: { b: "updated" } },
 				]),
 			}),

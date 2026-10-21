@@ -114,9 +114,12 @@ function scalarSchemaFor(
 				.string()
 				.trim()
 				.min(1)
-				.refine((value) => SCIM_RFC3339_PATTERN.test(value), {
-					message: "must be an RFC 3339 dateTime",
-				});
+				.refine(
+					(value) =>
+						SCIM_RFC3339_PATTERN.test(value) &&
+						!Number.isNaN(new Date(value).getTime()),
+					{ message: "must be a valid RFC 3339 dateTime" },
+				);
 		case "string":
 			return z.string().trim().min(1).max(SCIM_EXTENSION_STRING_MAX_LENGTH);
 	}

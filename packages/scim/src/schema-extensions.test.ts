@@ -143,6 +143,12 @@ describe("compileUserSchemaExtension", () => {
 		expect(
 			descriptor.inputSchema.safeParse({ hiredAt: "January 1, 2024" }).success,
 		).toBe(false);
+		// Shape-valid but impossible date — rejected so it never becomes an Invalid
+		// Date that throws on toISOString() when mapped to a user `date` field.
+		expect(
+			descriptor.inputSchema.safeParse({ hiredAt: "2024-13-01T00:00:00Z" })
+				.success,
+		).toBe(false);
 	});
 
 	it("rejects a reserved built-in schema URN", () => {
