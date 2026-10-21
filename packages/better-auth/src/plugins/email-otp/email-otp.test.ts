@@ -2963,7 +2963,7 @@ describe("email-otp kept code rows on a unique verification identifier", async (
 		},
 	} satisfies BetterAuthPlugin;
 	const otps: string[] = [];
-	const { client, testUser, runWithUser } = await getTestInstance(
+	const { auth, client, testUser, runWithUser } = await getTestInstance(
 		{
 			plugins: [
 				uniqueVerificationIdentifier,
@@ -3019,5 +3019,15 @@ describe("email-otp kept code rows on a unique verification identifier", async (
 			}
 		});
 		expect(errors).toEqual([null, null]);
+	});
+
+	it("should replace a pending code on a repeated createVerificationOTP", async () => {
+		const body = { email: testUser.email, type: "email-verification" as const };
+		await auth.api.createVerificationOTP({ body });
+		const otp = await auth.api.createVerificationOTP({ body });
+		const check = await auth.api.checkVerificationOTP({
+			body: { ...body, otp },
+		});
+		expect(check.success).toBe(true);
 	});
 });
