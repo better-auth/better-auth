@@ -389,7 +389,14 @@ export type SSOProviderMutationGuardInput =
 			action: "delete";
 	  });
 
-/** Transaction-bound context for guarding a persisted provider mutation. */
+/**
+ * Context for guarding a persisted provider mutation.
+ *
+ * `database` is a transaction adapter when the underlying adapter supports
+ * native interactive transactions. Otherwise it is the plain adapter the guard
+ * read the provider snapshot from, and writes made through it are not rolled
+ * back.
+ */
 export interface SSOProviderMutationGuardContext {
 	database: DBTransactionAdapter;
 }
@@ -415,11 +422,20 @@ export interface SSOOptions {
 	/**
 	 * Guards updates and deletion of an exact persisted SSO provider.
 	 *
-	 * The callback runs after the provider row is locked and before any provider
-	 * or linked Account mutation. Update inputs disclose only whether the
-	 * validated proposal changes the authentication boundary; proposed secrets
-	 * and configuration values are never exposed. Throw to reject the mutation.
+	 * With an adapter that supports native interactive transactions, the
+	 * callback runs after the provider row is locked and before any provider or
+	 * linked Account mutation. Update inputs disclose only whether the validated
+	 * proposal changes the authentication boundary; proposed secrets and
+	 * configuration values are never exposed. Throw to reject the mutation.
 	 * Better Auth converts callback failures into a stable conflict response.
+	 *
+	 * Adapters without native interactive transactions, such as Drizzle on
+	 * Cloudflare D1, use optimistic concurrency instead. The callback runs
+	 * against a provider row snapshot, and the mutation is applied only while
+	 * the provider's scalar columns are unchanged. A concurrent change fails the
+	 * request with `SSO_PROVIDER_CHANGED`. In this mode the guard's `database`
+	 * handle is not transactional, so writes made by the callback are not rolled
+	 * back.
 	 */
 	guardProviderMutation?:
 		| ((
