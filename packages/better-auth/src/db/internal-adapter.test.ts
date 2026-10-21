@@ -1644,6 +1644,301 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
 	});
 
+	it("should skip active-sessions rewrite when updateSession omits expiresAt", async () => {
+		const testMap = new Map<string, string>();
+		const ops: string[] = [];
+		const base = createStringSecondaryStorage(testMap);
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				get(key: string) {
+					ops.push(`get:${key}`);
+					return base.get(key);
+				},
+				set(key: string, value: string, ttl?: number) {
+					ops.push(`set:${key}`);
+					return base.set(key, value, ttl);
+				},
+				delete(key: string) {
+					ops.push(`delete:${key}`);
+					return base.delete(key);
+				},
+				getAndDelete(key: string) {
+					return base.getAndDelete?.(key) ?? null;
+				},
+				increment(key: string, ttl?: number) {
+					return base.increment?.(key, ttl ?? 0) ?? 1;
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		await (await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-meta-update",
+				email: "test-meta-update@email.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testInternalAdapter.createSession(user.id);
+		const listKey = `active-sessions-${user.id}`;
+		const listBefore = testMap.get(listKey);
+
+		ops.length = 0;
+		await testInternalAdapter.updateSession(session.token, {
+			ipAddress: "10.0.0.1",
+		});
+
+		expect(ops.filter((op) => op === `get:${listKey}`)).toHaveLength(0);
+		expect(ops.filter((op) => op === `set:${listKey}`)).toHaveLength(0);
+		expect(ops.filter((op) => op === `set:${session.token}`)).toHaveLength(1);
+		expect(testMap.get(listKey)).toBe(listBefore);
+
+		const stored = safeJSONParse<{ session: Session }>(
+			testMap.get(session.token)!,
+		);
+		expect(stored?.session.ipAddress).toBe("10.0.0.1");
+
+		// Explicit expiresAt still rewrites the list even when it matches the
+		// payload, so a retry can repair active-sessions after a partial failure.
+		ops.length = 0;
+		await testInternalAdapter.updateSession(session.token, {
+			expiresAt: session.expiresAt,
+			ipAddress: "10.0.0.2",
+		});
+
+		expect(ops.filter((op) => op === `get:${listKey}`)).toHaveLength(1);
+		expect(ops.filter((op) => op === `set:${listKey}`)).toHaveLength(1);
+		expect(ops.filter((op) => op === `set:${session.token}`)).toHaveLength(1);
+
+		const storedAgain = safeJSONParse<{ session: Session }>(
+			testMap.get(session.token)!,
+		);
+		expect(storedAgain?.session.ipAddress).toBe("10.0.0.2");
+	});
+
+	/**
+	 * Expiry extension writes the session payload before the active-sessions
+	 * index. If the index write fails, a retry with the same expiresAt must
+	 * still reconcile the list—otherwise listSessions / deleteUserSessions
+	 * lose the live session once the stale index TTL elapses.
+	 */
+	it("should repair active-sessions on retry after a failed index write", async () => {
+		const testMap = new Map<string, string>();
+		const testExpirationMap = new Map<string, number>();
+		const base = createStringSecondaryStorage(testMap, testExpirationMap);
+		let failNextListWrite = false;
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			// Secondary-only: listSessions / deleteUserSessions rely on the index.
+			session: { storeSessionInDatabase: false },
+			secondaryStorage: {
+				get(key: string) {
+					return base.get(key);
+				},
+				set(key: string, value: string, ttl?: number) {
+					if (failNextListWrite && key.startsWith("active-sessions-")) {
+						failNextListWrite = false;
+						throw new Error("secondary-storage index write failed");
+					}
+					return base.set(key, value, ttl);
+				},
+				delete(key: string) {
+					return base.delete(key);
+				},
+				getAndDelete(key: string) {
+					return base.getAndDelete?.(key) ?? null;
+				},
+				increment(key: string, ttl?: number) {
+					return base.increment?.(key, ttl ?? 0) ?? 1;
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		await (await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-index-retry",
+				email: "test-index-retry@email.com",
+			},
+			{ method: "test" },
+		);
+		const session = await testInternalAdapter.createSession(user.id);
+		const listKey = `active-sessions-${user.id}`;
+		const initialList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			testMap.get(listKey)!,
+		);
+		const initialExpiresAt = initialList![0]!.expiresAt;
+		const newExpiresAt = new Date(initialExpiresAt + 60 * 60 * 1000);
+
+		failNextListWrite = true;
+		await expect(
+			testInternalAdapter.updateSession(session.token, {
+				expiresAt: newExpiresAt,
+			}),
+		).rejects.toThrow("secondary-storage index write failed");
+
+		// Payload was written; index still has the old expiry/TTL.
+		const partialPayload = safeJSONParse<{ session: Session }>(
+			testMap.get(session.token)!,
+		);
+		expect(new Date(partialPayload!.session.expiresAt).getTime()).toBe(
+			newExpiresAt.getTime(),
+		);
+		const staleList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			testMap.get(listKey)!,
+		);
+		expect(staleList![0]!.expiresAt).toBe(initialExpiresAt);
+
+		// Identical retry must reconcile the index even though the payload
+		// already carries the new expiresAt.
+		await testInternalAdapter.updateSession(session.token, {
+			expiresAt: newExpiresAt,
+		});
+
+		const repairedList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			testMap.get(listKey)!,
+		);
+		expect(repairedList).toEqual([
+			{ token: session.token, expiresAt: newExpiresAt.getTime() },
+		]);
+		const repairedTTL = testExpirationMap.get(listKey);
+		const expectedTTL = Math.floor(
+			(newExpiresAt.getTime() - Date.now()) / 1000,
+		);
+		expect(repairedTTL).toBeDefined();
+		expect(repairedTTL! - expectedTTL).toBeLessThanOrEqual(1);
+		expect(repairedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
+
+		const listed = await testInternalAdapter.listSessions(user.id);
+		expect(listed.map((s) => s.token)).toEqual([session.token]);
+	});
+
+	/**
+	 * @see storeSessionInDatabase dual-write: a failed cache delete must not
+	 * remove the DB row, or listSessions (DB-backed) loses a still-live cache session
+	 */
+	it("deleteSessions should keep DB rows when secondary delete fails under storeSessionInDatabase", async () => {
+		const testMap = new Map<string, string>();
+		const base = createStringSecondaryStorage(testMap);
+		const failingToken = { current: "" as string };
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			session: { storeSessionInDatabase: true },
+			secondaryStorage: {
+				get(key: string) {
+					return base.get(key);
+				},
+				set(key: string, value: string, ttl?: number) {
+					return base.set(key, value, ttl);
+				},
+				delete(key: string) {
+					if (key === failingToken.current) {
+						throw new Error("secondary-storage delete failed");
+					}
+					return base.delete(key);
+				},
+				getAndDelete(key: string) {
+					return base.getAndDelete?.(key) ?? null;
+				},
+				increment(key: string, ttl?: number) {
+					return base.increment?.(key, ttl ?? 0) ?? 1;
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		await (await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-dual-write-revoke",
+				email: "test-dual-write-revoke@email.com",
+			},
+			{ method: "test" },
+		);
+		const keepSession = await testInternalAdapter.createSession(user.id);
+		const dropSession = await testInternalAdapter.createSession(user.id);
+		failingToken.current = keepSession.token;
+
+		await expect(
+			testInternalAdapter.deleteSessions([
+				keepSession.token,
+				dropSession.token,
+			]),
+		).rejects.toThrow("secondary-storage delete failed");
+
+		expect(testMap.has(keepSession.token)).toBe(true);
+		expect(testMap.has(dropSession.token)).toBe(false);
+
+		const found = await testInternalAdapter.findSession(keepSession.token);
+		expect(found?.session.token).toBe(keepSession.token);
+
+		const listed = await testInternalAdapter.listSessions(user.id);
+		expect(listed.map((session) => session.token)).toEqual([keepSession.token]);
+	});
+
+	it("deleteUserSessions should keep list entries for tokens whose delete failed", async () => {
+		const testMap = new Map<string, string>();
+		const base = createStringSecondaryStorage(testMap);
+		const failingToken = { current: "" as string };
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				get(key: string) {
+					return base.get(key);
+				},
+				set(key: string, value: string, ttl?: number) {
+					return base.set(key, value, ttl);
+				},
+				delete(key: string) {
+					if (key === failingToken.current) {
+						throw new Error("secondary-storage delete failed");
+					}
+					return base.delete(key);
+				},
+				getAndDelete(key: string) {
+					return base.getAndDelete?.(key) ?? null;
+				},
+				increment(key: string, ttl?: number) {
+					return base.increment?.(key, ttl ?? 0) ?? 1;
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		await (await getMigrations(testOpts)).runMigrations();
+		const testInternalAdapter = (await init(testOpts)).internalAdapter;
+
+		const user = await testInternalAdapter.createUser(
+			{
+				name: "test-user-revoke-list",
+				email: "test-revoke-list@email.com",
+			},
+			{ method: "test" },
+		);
+		const sessionA = await testInternalAdapter.createSession(user.id);
+		const sessionB = await testInternalAdapter.createSession(user.id);
+		const sessionC = await testInternalAdapter.createSession(user.id);
+		failingToken.current = sessionB.token;
+
+		// Queued cache deletion reports via onError and still applies partial
+		// revoke: successful deletes drop off the list; the failed token stays.
+		await testInternalAdapter.deleteUserSessions(user.id);
+
+		expect(testMap.has(sessionA.token)).toBe(false);
+		expect(testMap.has(sessionB.token)).toBe(true);
+		expect(testMap.has(sessionC.token)).toBe(false);
+
+		const list = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			testMap.get(`active-sessions-${user.id}`)!,
+		);
+		expect(list?.map((entry) => entry.token)).toEqual([sessionB.token]);
+	});
+
 	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
