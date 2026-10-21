@@ -1,90 +1,175 @@
-import { supportsIdTokenSignIn } from "@better-auth/core/oauth2";
-import { twitch } from "@better-auth/core/social-providers";
-import { exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
+import { getTestInstance } from "better-auth/test";
+import { generateKeyPair, jwtVerify, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, assert, beforeAll, expect, it } from "vitest";
 
+const providerId = "twitch" as const;
 const issuer = "https://id.twitch.tv/oauth2";
-const clientId = "twitch-app";
-const { publicKey, privateKey } = await generateKeyPair("RS256", {
-	extractable: true,
-});
-const otherKeys = await generateKeyPair("RS256");
-const key = {
-	...(await exportJWK(publicKey)),
-	kid: "provider-key",
-	alg: "RS256",
-	use: "sig",
+const tokenEndpoint = "https://id.twitch.tv/oauth2/token";
+const profileEndpoint = "https://api.twitch.tv/helix/users";
+const clientId = "profile-client";
+const profile = {
+	sub: "provider-user",
+	preferred_username: "Provider User",
+	email: "user@example.com",
+	email_verified: true,
+	picture: "https://example.com/avatar.png",
 };
+const { publicKey, privateKey } = await generateKeyPair("RS256");
 const server = setupServer(
-	http.get(`${issuer}/keys`, () => HttpResponse.json({ keys: [key] })),
+	http.get(profileEndpoint, () =>
+		HttpResponse.json({
+			data: [
+				{
+					id: profile.sub,
+					display_name: profile.preferred_username,
+					email: profile.email,
+					profile_image_url: profile.picture,
+				},
+			],
+		}),
+	),
 );
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
-async function tokenFor(kind = "valid") {
-	const now = Math.floor(Date.now() / 1000);
-	const claims = {
-		sub: "provider-user",
-		...(kind === "no email"
-			? {}
-			: {
-					email: kind === "unverified email" ? null : "user@example.com",
-					email_verified: kind !== "unverified email",
-				}),
-		iss: kind === "issuer" ? "https://other.example.com" : issuer,
-		aud: kind === "audience" ? "other-app" : clientId,
-		iat: now,
-		...(kind === "missing expiration"
-			? {}
-			: { exp: kind === "expired" ? now - 120 : now + 3600 }),
-	};
-	if (kind === "unsigned") return new UnsecuredJWT(claims).encode();
-	return new SignJWT(claims)
-		.setProtectedHeader({ alg: "RS256", kid: "provider-key" })
-		.sign(kind === "signature" ? otherKeys.privateKey : privateKey);
+async function createIdToken(expiresAt: number) {
+	return new SignJWT({
+		sub: profile.sub,
+		email: "id-token@example.com",
+		email_verified: true,
+	})
+		.setProtectedHeader({ alg: "RS256" })
+		.setIssuer(issuer)
+		.setAudience(clientId)
+		.setIssuedAt(Math.floor(Date.now() / 1000) - 3600)
+		.setExpirationTime(expiresAt)
+		.sign(privateKey);
 }
 
 /**
- * @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#validating-an-id-token
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+ * @see https://dev.twitch.tv/docs/api/reference/#get-users
  */
-describe("twitch ID-token profiles", () => {
-	it("maps a verified token without optional display claims", async () => {
-		const provider = twitch({ clientId });
-		const result = await provider.getUserInfo({ idToken: await tokenFor() });
-		expect(result?.user).toMatchObject({
-			email: "user@example.com",
-			emailVerified: true,
-			image: undefined,
+it.each([
+	{ includeAccessToken: true, matchingSubject: true, accepted: true },
+	{ includeAccessToken: false, matchingSubject: true, accepted: false },
+	{ includeAccessToken: true, matchingSubject: false, accepted: false },
+])(
+	"ID-token sign-in with accessToken=$includeAccessToken and matching subject=$matchingSubject",
+	async ({ includeAccessToken, matchingSubject, accepted }) => {
+		if (!matchingSubject) {
+			server.use(
+				http.get(profileEndpoint, () =>
+					HttpResponse.json({
+						data: [
+							{
+								id: "different-user",
+								display_name: "Different User",
+								email: "different@example.com",
+								profile_image_url: "https://example.com/other.png",
+							},
+						],
+					}),
+				),
+			);
+		}
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				[providerId]: {
+					clientId,
+					clientSecret: "secret",
+					async verifyIdToken(token) {
+						try {
+							await jwtVerify(token, publicKey, { issuer, audience: clientId });
+							return true;
+						} catch {
+							return false;
+						}
+					},
+				},
+			},
 		});
-		expect(result?.data.sub).toBe("provider-user");
-		expect(supportsIdTokenSignIn(provider)).toBe(false);
-	});
-
-	it.each([
-		"issuer",
-		"audience",
-		"expired",
-		"unsigned",
-		"signature",
-		"missing expiration",
-	])("rejects %s tokens", async (kind) => {
-		const result = await twitch({ clientId }).getUserInfo({
-			idToken: await tokenFor(kind),
+		const response = auth.api.signInSocial({
+			body: {
+				provider: providerId,
+				idToken: {
+					token: await createIdToken(Math.floor(Date.now() / 1000) + 3600),
+					...(includeAccessToken ? { accessToken: "access-token" } : {}),
+				},
+			},
 		});
-		expect(result).toBeNull();
-	});
-});
+		if (accepted) {
+			const result = await response;
+			assert("user" in result);
+			expect(result.user.email).toBe(profile.email);
+		} else
+			await expect(response).rejects.toMatchObject({
+				body: { code: "FAILED_TO_GET_USER_INFO" },
+			});
+	},
+);
 
 /**
- * @see https://dev.twitch.tv/docs/authentication/getting-tokens-oidc/#requesting-claims
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
  */
-it("maps the provider's limited email claims", async () => {
-	const result = await twitch({ clientId }).getUserInfo({
-		idToken: await tokenFor("unverified email"),
+it("reads account info after refresh omits a replacement ID token", async () => {
+	server.use(
+		http.post(tokenEndpoint, async ({ request }) => {
+			const body = new URLSearchParams(await request.text());
+			expect(body.get("grant_type")).toBe("refresh_token");
+			expect(body.get("refresh_token")).toBe("old-refresh-token");
+			return HttpResponse.json({
+				access_token: "refreshed-access-token",
+				token_type: "Bearer",
+				expires_in: 3600,
+			});
+		}),
+		http.get(profileEndpoint, ({ request }) => {
+			expect(request.headers.get("authorization")).toBe(
+				"Bearer refreshed-access-token",
+			);
+			return HttpResponse.json({
+				data: [
+					{
+						id: profile.sub,
+						display_name: profile.preferred_username,
+						email: profile.email,
+						profile_image_url: profile.picture,
+					},
+				],
+			});
+		}),
+	);
+	const { auth } = await getTestInstance({
+		socialProviders: { [providerId]: { clientId, clientSecret: "secret" } },
+		account: { encryptOAuthTokens: false },
 	});
-	expect(result?.user.email).toBeNull();
-	expect(result?.user.emailVerified).toBe(false);
+	const ctx = await auth.$context;
+	const user = await ctx.internalAdapter.createUser(
+		{ name: "Stored User", email: profile.email },
+		{ method: "test" },
+	);
+	const account = await ctx.internalAdapter.createAccount({
+		userId: user.id,
+		providerId,
+		accountId: profile.sub,
+		accessToken: "old-access-token",
+		refreshToken: "old-refresh-token",
+		accessTokenExpiresAt: new Date(Date.now() - 60000),
+		idToken: await createIdToken(Math.floor(Date.now() / 1000) - 120),
+	});
+	const result = await auth.api.accountInfo({
+		query: { accountId: account.id, userId: user.id },
+	});
+
+	expect(result.user.email).toBe(profile.email);
+	expect(result.data).toEqual(profile);
+	expect(result.account).toEqual({
+		id: account.id,
+		providerId,
+		accountId: profile.sub,
+	});
 });
