@@ -2111,6 +2111,55 @@ kBGIJYs=
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11207
 		 */
+		it("rejects an optimistic guarded update to a non-scalar additional field", async () => {
+			const options = {
+				guardProviderMutation() {},
+				schema: {
+					ssoProvider: {
+						additionalFields: {
+							labels: {
+								type: "string[]",
+								required: false,
+							},
+						},
+					},
+				},
+			} satisfies SSOOptions;
+			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
+				false,
+				false,
+				options,
+			);
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "non-scalar-update", undefined, {
+				labels: ["one"],
+			});
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "non-scalar-update",
+						labels: ["two"],
+					} as any,
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "NOT_IMPLEMENTED",
+				body: {
+					code: "SSO_PROVIDER_NON_SCALAR_UPDATE_REQUIRES_NATIVE_TRANSACTIONS",
+				},
+			});
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
 		it("rejects an optimistic guarded update that changes the identity boundary", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider, data } =
 				createTestAuth(false, false, { guardProviderMutation() {} });
@@ -2187,6 +2236,65 @@ kBGIJYs=
 					(provider) => provider.providerId === "contended-update",
 				)?.domain,
 			).toBe("concurrent.example.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("rejects an optimistic guarded update when a concurrent change restores the snapshot", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, { guardProviderMutation() {} });
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "restored-update");
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			const updateMany = context.adapter.updateMany.bind(context.adapter);
+			context.adapter.updateMany = (async (input) => {
+				if (
+					input.model === "ssoProvider" &&
+					input.update.domain === "updated.example.com"
+				) {
+					// The CAS observed A -> B, so it affected zero rows. Restore A
+					// before the route can inspect the row: the proposed C was still
+					// never written, so this must not look like a no-op success.
+					await context.adapter.update({
+						model: "ssoProvider",
+						where: [{ field: "providerId", value: "restored-update" }],
+						update: { domain: "concurrent.example.com" },
+					});
+					await context.adapter.update({
+						model: "ssoProvider",
+						where: [{ field: "providerId", value: "restored-update" }],
+						update: { domain: "example.com" },
+					});
+					return 0;
+				}
+				return updateMany(input);
+			}) as typeof context.adapter.updateMany;
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "restored-update",
+						domain: "updated.example.com",
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "CONFLICT",
+				body: {
+					code: "SSO_PROVIDER_CHANGED",
+				},
+			});
+			expect(
+				data.ssoProvider.find(
+					(provider) => provider.providerId === "restored-update",
+				)?.domain,
+			).toBe("example.com");
 		});
 
 		/**
