@@ -99,7 +99,7 @@ export interface TwitterProfile {
 		/**
 		 * Unique identifier of this user's pinned Tweet.
 		 *
-		 *  You can obtain the expanded object in `includes.tweets` by adding `expansions=pinned_tweet_id` in the `/2/users/me` query parameters of a custom `getUserInfo` request.
+		 *  You can obtain the expanded object in `includes.tweets` by adding `user.fields=pinned_tweet_id` and `expansions=pinned_tweet_id` in the `/2/users/me` query parameters of a custom `getUserInfo` request.
 		 */
 		pinned_tweet_id?: string | undefined;
 		created_at?: string | undefined;
