@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
@@ -2798,6 +2799,9 @@ describe("email-otp send origin/CSRF protection", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/<ISSUE>
+ */
 describe("email-otp attempt budget for unknown addresses", async () => {
 	const { client, testUser, runWithUser } = await getTestInstance(
 		{
@@ -2841,6 +2845,35 @@ describe("email-otp attempt budget for unknown addresses", async () => {
 						type: "email-verification",
 						otp: "000000",
 					}),
+				),
+			);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
+	});
+
+	it("should lock out verify-email for an unknown address like a known one", async () => {
+		const results = [];
+		for (const email of [testUser.email, unknownEmail]) {
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "email-verification",
+			});
+			results.push(
+				await fourthWrongCode(() =>
+					client.emailOtp.verifyEmail({ email, otp: "000000" }),
+				),
+			);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
+	});
+
+	it("should lock out sign-in under disableSignUp for an unknown address like a known one", async () => {
+		const results = [];
+		for (const email of [testUser.email, unknownEmail]) {
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+			results.push(
+				await fourthWrongCode(() =>
+					client.signIn.emailOtp({ email, otp: "000000" }),
 				),
 			);
 		}
@@ -2913,5 +2946,78 @@ describe("email-otp attempt budget for unknown addresses", async () => {
 			});
 			expect(change.error?.message).toBe("Email already in use");
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/<ISSUE>
+ */
+describe("email-otp kept code rows on a unique verification identifier", async () => {
+	const uniqueVerificationIdentifier = {
+		id: "unique-verification-identifier",
+		schema: {
+			verification: {
+				fields: {},
+				indexes: [{ fields: ["identifier"], unique: true }],
+			},
+		},
+	} satisfies BetterAuthPlugin;
+	const otps: string[] = [];
+	const { client, testUser, runWithUser } = await getTestInstance(
+		{
+			plugins: [
+				uniqueVerificationIdentifier,
+				emailOTP({
+					sendVerificationOnSignUp: true,
+					changeEmail: { enabled: true },
+					async sendVerificationOTP({ otp }) {
+						otps.push(otp);
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should sign up an address that already has a kept code row", async () => {
+		const email = "kept-row-sign-up@test.com";
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "email-verification",
+		});
+		const signUp = await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Kept",
+		});
+		expect(signUp.error).toBeNull();
+		const verify = await client.emailOtp.verifyEmail({
+			email,
+			otp: otps.at(-1)!,
+		});
+		expect(verify.error).toBeNull();
+	});
+
+	it("should accept a repeated email change request for a free or taken address", async () => {
+		const takenEmail = "kept-row-taken@test.com";
+		await client.signUp.email({
+			email: takenEmail,
+			password: "password123",
+			name: "Taken",
+		});
+		const errors: unknown[] = [];
+		await runWithUser(testUser.email, testUser.password, async () => {
+			for (const newEmail of ["kept-row-free@test.com", takenEmail]) {
+				await client.emailOtp.requestEmailChange({ newEmail });
+				errors.push(
+					(await client.emailOtp.requestEmailChange({ newEmail })).error,
+				);
+			}
+		});
+		expect(errors).toEqual([null, null]);
 	});
 });
