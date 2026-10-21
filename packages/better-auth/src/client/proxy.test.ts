@@ -84,6 +84,40 @@ describe("request method options", () => {
 		);
 	});
 
+	/**
+	 * @see https://fetch.spec.whatwg.org/#concept-method-normalize
+	 */
+	it.each([
+		["FoO", false],
+		["FoO", true],
+		["post", false],
+		["post", true],
+		["POST", false],
+		["POST", true],
+	] as const)("preserves %s for fetch plugin initialization (nested: %s)", async (method, nested) => {
+		const methods: (string | undefined)[] = [];
+		const options: ClientFetchOption = {
+			method,
+			plugins: [
+				{
+					id: "method-observer",
+					name: "Method observer",
+					init(url, initOptions) {
+						methods.push(initOptions?.method);
+						return { url, options: initOptions };
+					},
+				},
+			],
+		};
+		const { proxy } = getProxy();
+		if (nested) {
+			await proxy.test({ value: "test", fetchOptions: options });
+		} else {
+			await proxy.test({ value: "test" }, options);
+		}
+		expect(methods).toEqual([method]);
+	});
+
 	it.each([
 		"GET",
 		"POST",
