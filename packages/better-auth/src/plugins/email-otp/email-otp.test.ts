@@ -445,11 +445,16 @@ describe("email-otp", async () => {
 		}
 
 		it("still marks the email verified when onPasswordReset throws", async () => {
-			const { findUser, resetWith, signInWith } = await setup(async () => {
+			const onPasswordReset = vi.fn(async () => {
 				throw new Error("hook failed");
 			});
+			const { findUser, resetWith, signInWith } = await setup(onPasswordReset);
 
 			expect((await resetWith("new-password")).error?.status).toBe(500);
+			expect(onPasswordReset).toHaveBeenCalledWith(
+				{ user: expect.objectContaining({ emailVerified: true }) },
+				expect.anything(),
+			);
 			expect((await findUser())?.user.emailVerified).toBe(true);
 			expect((await signInWith("new-password")).data).not.toBeNull();
 		});
