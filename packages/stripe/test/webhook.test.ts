@@ -599,10 +599,6 @@ describe("stripe webhook", () => {
 
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
-			subscriptions: {
-				...stripeOptions.stripeClient.subscriptions,
-				retrieve: vi.fn(),
-			},
 			webhooks: {
 				constructEventAsync: vi.fn(),
 			},
@@ -676,9 +672,6 @@ describe("stripe webhook", () => {
 		};
 
 		stripeForTest.webhooks.constructEventAsync.mockResolvedValue(mockEvent);
-		stripeForTest.subscriptions.retrieve.mockResolvedValue(
-			mockEvent.data.object,
-		);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -892,16 +885,12 @@ describe("stripe webhook", () => {
 		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
 	});
 
-	test("should apply customer.subscription.created to the row referenced by metadata.subscriptionId", async ({
+	test("should skip creating subscription when metadata.subscriptionId exists", async ({
 		memory,
 		stripeOptions,
 	}) => {
 		const stripeForTest = {
 			...stripeOptions.stripeClient,
-			subscriptions: {
-				...stripeOptions.stripeClient.subscriptions,
-				retrieve: vi.fn(),
-			},
 			webhooks: {
 				constructEventAsync: vi.fn(),
 			},
@@ -1007,9 +996,6 @@ describe("stripe webhook", () => {
 		};
 
 		stripeForTest.webhooks.constructEventAsync.mockResolvedValue(mockEvent);
-		stripeForTest.subscriptions.retrieve.mockResolvedValue(
-			mockEvent.data.object,
-		);
 
 		const mockRequest = new Request(
 			"http://localhost:3000/api/auth/stripe/webhook",
@@ -1031,11 +1017,6 @@ describe("stripe webhook", () => {
 			where: [{ field: "referenceId", value: userId }],
 		});
 		expect(allSubscriptions.length).toBe(1);
-		expect(allSubscriptions[0]).toMatchObject({
-			id: incompleteSubscription.id,
-			status: "active",
-			stripeSubscriptionId: "sub_new_from_checkout",
-		});
 	});
 
 	test("should execute subscription event handlers", async ({
@@ -2822,24 +2803,16 @@ describe("stripe webhook", () => {
 			subscriptionOverrides: Partial<
 				NonNullable<StripeOptions["subscription"]>
 			> = {},
-			currentStripeSubscription?: Stripe.Subscription,
 		) {
 			const onEvent = vi.fn();
 			const constructEventAsync = vi.fn();
 			for (const event of events) {
 				constructEventAsync.mockResolvedValueOnce(event);
 			}
-			const retrieve = vi
-				.fn()
-				.mockResolvedValue(currentStripeSubscription ?? events[0]?.data.object);
 			const testOptions = {
 				...stripeOptions,
 				stripeClient: {
 					...stripeOptions.stripeClient,
-					subscriptions: {
-						...stripeOptions.stripeClient.subscriptions,
-						retrieve,
-					},
 					webhooks: { constructEventAsync },
 				} as unknown as Stripe,
 				stripeWebhookSecret: "test_secret",
@@ -3073,20 +3046,9 @@ describe("stripe webhook", () => {
 					items: subscriptionItems,
 				},
 			);
-			const currentStripeSubscription = createSubscription({
-				id: "sub_propagation",
-				customer: "cus_propagation",
-				status: "canceled",
-				ended_at: Math.floor(Date.now() / 1000),
-				items: subscriptionItems,
-			});
-			const { createRow, findRow, send } = await setup(
-				memory,
-				stripeOptions,
-				[createdEvent],
-				{},
-				currentStripeSubscription,
-			);
+			const { createRow, findRow, send } = await setup(memory, stripeOptions, [
+				createdEvent,
+			]);
 			// customer.subscription.deleted was already processed
 			const { id } = await createRow({ status: "canceled" });
 
@@ -3094,51 +3056,24 @@ describe("stripe webhook", () => {
 			expect((await findRow(id))?.status).toBe("canceled");
 		});
 
-		test("should leave trial and cancellation callbacks to customer.subscription.updated", async ({
+		test("should acknowledge customer.subscription.updated when no subscription row exists", async ({
 			memory,
 			stripeOptions,
 		}) => {
-			const createdEvent = createSubscriptionEvent(
-				"customer.subscription.created",
-				{
-					id: "sub_propagation",
-					customer: "cus_propagation",
-					status: "trialing",
-					items: subscriptionItems,
-				},
-			);
-			// The trial has since ended and cancellation is scheduled
-			const currentStripeSubscription = createSubscription({
-				id: "sub_propagation",
-				customer: "cus_propagation",
+			const event = createSubscriptionEvent("customer.subscription.updated", {
+				id: "sub_unknown",
+				customer: "cus_unknown",
 				status: "active",
-				cancel_at_period_end: true,
 				items: subscriptionItems,
 			});
-			const onTrialEnd = vi.fn();
-			const onSubscriptionCancel = vi.fn();
-			const { createRow, findRow, send } = await setup(
-				memory,
-				stripeOptions,
-				[createdEvent],
-				{
-					onSubscriptionCancel,
-					plans: [
-						{
-							priceId: TEST_PRICES.starter,
-							name: "starter",
-							freeTrial: { days: 7, onTrialEnd },
-						},
-					],
-				},
-				currentStripeSubscription,
-			);
-			const { id } = await createRow({ status: "trialing" });
+			const onSubscriptionUpdate = vi.fn();
+			const { onEvent, send } = await setup(memory, stripeOptions, [event], {
+				onSubscriptionUpdate,
+			});
 
 			expect((await send()).status).toBe(200);
-			expect((await findRow(id))?.status).toBe("active");
-			expect(onTrialEnd).not.toHaveBeenCalled();
-			expect(onSubscriptionCancel).not.toHaveBeenCalled();
+			expect(onSubscriptionUpdate).not.toHaveBeenCalled();
+			expect(onEvent).toHaveBeenCalledTimes(1);
 		});
 	});
 });
