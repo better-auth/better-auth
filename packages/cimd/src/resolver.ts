@@ -12,6 +12,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
+	assertClientIdUrlFetchable,
 	FETCH_TIMEOUT_MS,
 	fetchClientMetadataDocument,
 	isMetadataFetchCapacityRefusal,
@@ -24,9 +25,7 @@ import { isCimdClientIdUrlCandidate } from "./validate-metadata-document";
 
 const FETCH_BUDGET_WINDOW_MS = 60_000;
 // A request that joins a fetch stops waiting for it after twice the fetch
-// timeout. The request that started the fetch enforces that timeout on the
-// network fetch only, so a URL policy callback that runs longer than the wait
-// counts as a stuck fetch.
+// timeout, even if the transport never settles.
 const JOINED_FETCH_WAIT_MS = FETCH_TIMEOUT_MS * 2;
 // A fetch holds its concurrency permit on a lease of the same length. Only the
 // fetch's own request or a request for the same client can otherwise return
@@ -725,6 +724,9 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		cachedEntry: CimdMetadataCacheEntry | undefined,
 		extensionFields: ReadonlySet<string>,
 	): Promise<FetchedMetadata | undefined> => {
+		await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+		const pending = inFlightMetadataByClientId.get(clientId);
+		if (pending) return joinFetch(clientId, pending);
 		const startedAtMs = Date.now();
 		const previousFetchStartAtMs = lastFetchStartAtMsByClientId.get(clientId);
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(
