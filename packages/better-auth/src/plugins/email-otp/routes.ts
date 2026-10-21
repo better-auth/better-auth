@@ -150,34 +150,39 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 					message: "Invalid OTP type",
 				});
 			}
+			const identifier = toOTPIdentifier(ctx.body.type, email);
+			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
 			/**
 			 * An already verified address is only re-verified as a step-up by its
 			 * owner (`changeEmail.verifyCurrentEmail`). Any other caller gets the
-			 * same response as for an unknown address, so the endpoint cannot be
-			 * used to mail a code to someone else's verified email. Server-side
-			 * calls that carry no request or headers are trusted, as elsewhere.
-			 * The session is resolved before the user lookup so the reply does not
-			 * differ between verified, unverified and unknown addresses.
+			 * same response as for an unverified address and the code is stored
+			 * but not mailed, so the endpoint cannot be used to mail a code to
+			 * someone else's verified email, and wrong codes count against the
+			 * same attempt limit. Server-side calls that carry no request or
+			 * headers are trusted, as elsewhere. The session is resolved for every
+			 * address so the reply does not differ between them.
 			 */
 			const ownerOnlyIfVerified =
 				ctx.body.type === "email-verification" &&
 				!!(ctx.request || ctx.headers);
 			const session = ownerOnlyIfVerified ? await getSessionFromCtx(ctx) : null;
+
+			const shouldSendOTP = ctx.body.type === "sign-in" && !opts.disableSignUp;
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (!user) {
-				const canSignUp = ctx.body.type === "sign-in" && !opts.disableSignUp;
-				if (!canSignUp) {
-					return ctx.json({ success: true });
-				}
-			} else if (
+			if (!user && !shouldSendOTP) {
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					identifier,
+				);
+				return ctx.json({ success: true });
+			}
+			if (
 				ownerOnlyIfVerified &&
-				user.user.emailVerified &&
+				user?.user.emailVerified &&
 				session?.user.id !== user.user.id
 			) {
 				return ctx.json({ success: true });
 			}
 
-			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendVerificationOTP({ email, otp, type: ctx.body.type }, ctx),
 			);
