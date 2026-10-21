@@ -421,6 +421,27 @@ describe("SCIM custom extension review fixes", () => {
 		expect(data.user[0]?.sapUserId ?? null).toBeNull();
 	});
 
+	it("clears one attribute via a pathless null and keeps the rest", async () => {
+		const { auth } = createFixture();
+		const created = await readJSON<CustomUserResponse>(
+			await auth.handler(
+				scimRequest("/scim/v2/Users", { method: "POST", body: createBody }),
+			),
+		);
+		const response = await auth.handler(
+			scimRequest(`/scim/v2/Users/${created.id}`, {
+				method: "PATCH",
+				body: createPatchBody([
+					{ op: "replace", value: { [ACME_URN]: { sapUserId: null } } },
+				]),
+			}),
+		);
+		expect(response.status).toBe(200);
+		const patched = await readJSON<CustomUserResponse>(response);
+		// Pathless op merges: sapUserId cleared, costCenter retained.
+		expect(patched[ACME_URN]).toEqual({ costCenter: "CC-9" });
+	});
+
 	it("keeps a returned:never attribute out of responses", async () => {
 		const { auth } = createCustomFixture({
 			attributes: [

@@ -645,6 +645,7 @@ function applyCustomExtensionPatch(
 	path: string,
 	value: unknown,
 	context: SCIMUserSchemaContext,
+	pathless = false,
 ): boolean {
 	const pathTrim = path.trim();
 	const pathLower = pathTrim.toLowerCase();
@@ -687,11 +688,14 @@ function applyCustomExtensionPatch(
 			if (!isRecord(value)) {
 				return invalidPatchValue(`${urn} must be an object`);
 			}
-			// `replace` on the extension root replaces the whole object, so omitted
-			// attributes are cleared; `add` merges into the stored value. Each
-			// attribute is validated on its own, so an unrelated required attribute
-			// does not force a 400 on a partial update.
-			const next: Record<string, unknown> = op === "replace" ? {} : container;
+			// A path-targeted `replace` on the extension root replaces the whole
+			// object, so omitted attributes are cleared. A pathless op (the URN is a
+			// key in a no-path value) merges per SCIM semantics, so `add` and a
+			// pathless `replace` both merge into the stored value. Each attribute is
+			// validated on its own, so an unrelated required attribute does not force
+			// a 400 on a partial update, and a `null` value clears that attribute.
+			const next: Record<string, unknown> =
+				op === "replace" && !pathless ? {} : container;
 			for (const [key, raw] of Object.entries(value)) {
 				const attribute = findAttribute(key);
 				const attributeSchema = attribute
@@ -1248,8 +1252,11 @@ export function applySCIMUserPatch(
 		op: "add" | "remove" | "replace",
 		path: string,
 		value: unknown,
+		pathless = false,
 	): void {
-		if (applyCustomExtensionPatch(document, op, path, value, context)) {
+		if (
+			applyCustomExtensionPatch(document, op, path, value, context, pathless)
+		) {
 			return;
 		}
 		const schemaRelativePath = stripSCIMCoreAttributePrefix(
@@ -1440,7 +1447,7 @@ export function applySCIMUserPatch(
 			invalidPatchValue("A pathless User PATCH value must be an object");
 		}
 		for (const [attribute, value] of Object.entries(operation.value)) {
-			applyAttribute(operation.op, attribute, value);
+			applyAttribute(operation.op, attribute, value, true);
 		}
 	}
 
