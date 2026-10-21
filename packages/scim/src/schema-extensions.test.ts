@@ -149,6 +149,10 @@ describe("compileUserSchemaExtension", () => {
 			descriptor.inputSchema.safeParse({ hiredAt: "2024-13-01T00:00:00Z" })
 				.success,
 		).toBe(false);
+		// reference rejects an empty value.
+		expect(descriptor.inputSchema.safeParse({ manager: "" }).success).toBe(
+			false,
+		);
 	});
 
 	it("rejects a reserved built-in schema URN", () => {
