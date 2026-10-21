@@ -2753,6 +2753,9 @@ describe("email-otp send-verification-otp for an already verified address", asyn
 		);
 	const ctx = await auth.$context;
 	const identifier = toOTPIdentifier("email-verification", testUser.email);
+	afterEach(() =>
+		ctx.internalAdapter.deleteVerificationByIdentifier(identifier),
+	);
 
 	const sendWithoutSession = (email: string, cookie?: string) =>
 		auth.handler(
@@ -2807,12 +2810,7 @@ describe("email-otp send-verification-otp for an already verified address", asyn
 		expect(sendVerificationOTP).not.toHaveBeenCalled();
 		expect(
 			await ctx.internalAdapter.findVerificationValue(identifier),
-		).toBeFalsy();
-		expect(
-			await ctx.internalAdapter.findVerificationValue(
-				toOTPIdentifier("email-verification", "nobody@test.com"),
-			),
-		).toBeFalsy();
+		).toBeTruthy();
 	});
 
 	it("should return the same headers for verified, unverified and unknown addresses", async () => {
@@ -2859,7 +2857,7 @@ describe("email-otp send-verification-otp for an already verified address", asyn
 		expect(sendVerificationOTP).not.toHaveBeenCalled();
 		expect(
 			await ctx.internalAdapter.findVerificationValue(identifier),
-		).toBeFalsy();
+		).toBeTruthy();
 	});
 
 	it("should still send to the owner and accept the code as the change-email step-up", async () => {
@@ -2904,7 +2902,54 @@ describe("email-otp send-verification-otp for an already verified address", asyn
 		expect(sendVerificationOTP).not.toHaveBeenCalled();
 		expect(
 			await ctx.internalAdapter.findVerificationValue(identifier),
-		).toBeFalsy();
+		).toBeTruthy();
+	});
+
+	async function fourthWrongCode(
+		submit: () => Promise<{ error: { code?: string } | null }>,
+	) {
+		for (let i = 0; i < 3; i++) {
+			expect((await submit()).error?.code).toBe("INVALID_OTP");
+		}
+		return (await submit()).error?.code;
+	}
+
+	it("should lock out check-verification-otp for a verified address like an unverified one", async () => {
+		const email = "lockout-check@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "lockout-check" },
+		});
+		const results = [];
+		for (const address of [testUser.email, email]) {
+			await sendWithoutSession(address);
+			results.push(
+				await fourthWrongCode(() =>
+					client.emailOtp.checkVerificationOtp({
+						email: address,
+						type: "email-verification",
+						otp: "wrong-otp",
+					}),
+				),
+			);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
+	});
+
+	it("should lock out verify-email for a verified address like an unverified one", async () => {
+		const email = "lockout-verify@test.com";
+		await auth.api.signUpEmail({
+			body: { email, password: "password", name: "lockout-verify" },
+		});
+		const results = [];
+		for (const address of [testUser.email, email]) {
+			await sendWithoutSession(address);
+			results.push(
+				await fourthWrongCode(() =>
+					client.emailOtp.verifyEmail({ email: address, otp: "wrong-otp" }),
+				),
+			);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
 	});
 
 	it("should treat a differently cased verified address the same", async () => {
@@ -2917,7 +2962,7 @@ describe("email-otp send-verification-otp for an already verified address", asyn
 		expect(sendVerificationOTP).not.toHaveBeenCalled();
 		expect(
 			await ctx.internalAdapter.findVerificationValue(identifier),
-		).toBeFalsy();
+		).toBeTruthy();
 
 		const { headers } = await signInWithTestUser();
 		const owned = await client.emailOtp.sendVerificationOtp(
@@ -3076,7 +3121,21 @@ describe("email-otp sendVerificationOnSignUp for an existing email", async () =>
 			await ctx.internalAdapter.findVerificationValue(
 				toOTPIdentifier("email-verification", testUser.email),
 			),
-		).toBeFalsy();
+		).toBeTruthy();
+	});
+
+	it("should lock out verify-email after sign-up with a verified email like a new one", async () => {
+		const results = [];
+		for (const email of [testUser.email, "lockout-signup@test.com"]) {
+			await client.signUp.email({ email, password: "password", name: "x" });
+			let code: string | undefined;
+			for (let i = 0; i < 4; i++) {
+				code = (await client.emailOtp.verifyEmail({ email, otp: "wrong-otp" }))
+					.error?.code;
+			}
+			results.push(code);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
 	});
 });
 
@@ -3139,6 +3198,54 @@ describe("email-otp overrideDefaultEmailVerification for a verified address", as
 			await ctx.internalAdapter.findVerificationValue(
 				toOTPIdentifier("email-verification", testUser.email),
 			),
-		).toBeFalsy();
+		).toBeTruthy();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11395
+ */
+describe("email-otp reuse of a code kept for a verified address", async () => {
+	const otps: string[] = [];
+	const { auth, client, testUser, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp }) {
+						otps.push(otp);
+					},
+					resendStrategy: "reuse",
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [emailOTPClient()] } },
+	);
+
+	it("should mail the kept code only to its owner, and it verifies", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+		});
+		await client.emailOtp.verifyEmail({ email: testUser.email, otp: otps[0]! });
+		otps.length = 0;
+
+		await auth.api.sendVerificationOTP({
+			body: { email: testUser.email, type: "email-verification" },
+			headers: new Headers({ "user-agent": "test" }),
+		});
+		expect(otps).toEqual([]);
+
+		const { headers } = await signInWithTestUser();
+		await client.emailOtp.sendVerificationOtp(
+			{ email: testUser.email, type: "email-verification" },
+			{ headers },
+		);
+		expect(otps).toHaveLength(1);
+		const check = await client.emailOtp.checkVerificationOtp({
+			email: testUser.email,
+			type: "email-verification",
+			otp: otps[0]!,
+		});
+		expect(check.data?.success).toBe(true);
 	});
 });
