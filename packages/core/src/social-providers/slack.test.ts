@@ -1,15 +1,25 @@
-import { betterFetch } from "@better-fetch/fetch";
-import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import type { SlackProfile } from "./slack";
 import { slack } from "./slack";
 
-vi.mock(import("@better-fetch/fetch"), () => ({ betterFetch: vi.fn() }));
-const mockedBetterFetch = vi.mocked(betterFetch);
+const mockedFetch = vi.fn<typeof fetch>();
 const credentials = {
 	clientId: "provider-client",
 	clientSecret: "provider-secret",
 };
-beforeEach(() => mockedBetterFetch.mockReset());
+beforeEach(() => {
+	mockedFetch.mockReset();
+	vi.stubGlobal("fetch", mockedFetch);
+});
+afterEach(() => vi.unstubAllGlobals());
 
 /**
  * @see https://docs.slack.dev/authentication/sign-in-with-slack/
@@ -24,7 +34,13 @@ describe("slack optional profile claims", () => {
 			"https://slack.com/user_id": "U123",
 			"https://slack.com/team_id": "T123",
 		} satisfies SlackProfile;
-		mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
+		mockedFetch.mockImplementationOnce(async (input, init) => {
+			const request = new Request(input, init);
+			expect(request.url).toBe("https://slack.com/api/openid.connect.userInfo");
+			expect(request.method).toBe("POST");
+			expect(request.headers.get("authorization")).toBe("Bearer slack-token");
+			return Response.json(profile);
+		});
 		const provider = slack({
 			...credentials,
 			disableDefaultScope: true,
@@ -68,7 +84,7 @@ describe("slack optional profile claims", () => {
 				email_verified: verified,
 				"https://slack.com/user_image_512": "https://example.com/avatar.png",
 			} satisfies SlackProfile;
-			mockedBetterFetch.mockResolvedValueOnce({ data: profile, error: null });
+			mockedFetch.mockResolvedValueOnce(Response.json(profile));
 			const result = await slack(credentials).getUserInfo({
 				accessToken: "token",
 			});
@@ -78,4 +94,17 @@ describe("slack optional profile claims", () => {
 			expect(result?.data).toEqual(profile);
 		},
 	);
+
+	it("rejects HTTP 200 platform errors before profile mapping", async () => {
+		mockedFetch.mockResolvedValueOnce(
+			Response.json({ ok: false, error: "invalid_auth" }),
+		);
+		const mapProfileToUser = vi.fn(() => ({}));
+		expect(
+			await slack({ ...credentials, mapProfileToUser }).getUserInfo({
+				accessToken: "slack-token",
+			}),
+		).toBeNull();
+		expect(mapProfileToUser).not.toHaveBeenCalled();
+	});
 });
