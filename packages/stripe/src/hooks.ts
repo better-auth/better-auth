@@ -251,12 +251,15 @@ export async function onSubscriptionCreated(
 				referenceId,
 				stripeCustomerId,
 				stripeSubscriptionId: stripeSubscriptionCreated.id,
-				status: stripeSubscriptionCreated.status,
+				// Stripe's enums are open since stripe-node 22.5 (they include `OtherString`);
+				// store the value as-is, as the update paths already do.
+				status: stripeSubscriptionCreated.status as Subscription["status"],
 				plan: plan.name.toLowerCase(),
 				periodStart,
 				periodEnd,
 				seats,
-				billingInterval: subscriptionItem.price.recurring?.interval,
+				billingInterval: subscriptionItem.price.recurring
+					?.interval as Subscription["billingInterval"],
 			},
 		});
 
