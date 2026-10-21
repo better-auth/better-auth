@@ -3100,6 +3100,22 @@ describe("Additional Fields", async () => {
 			teamOptionalField?: string | undefined;
 			teamHiddenField?: string | undefined;
 		}[];
+		type ExpectedTeamsWithMembers = {
+			id: string;
+			name: string;
+			organizationId: string;
+			createdAt: Date;
+			updatedAt?: Date | undefined;
+			teamRequiredField: string;
+			teamOptionalField?: string | undefined;
+			teamHiddenField?: string | undefined;
+			members: {
+				id: string;
+				teamId: string;
+				userId: string;
+				createdAt: Date;
+			}[];
+		}[];
 
 		type O = typeof orgOptions;
 		type Members = PrettifyDeep<InferMember<O, false>>[];
@@ -3122,7 +3138,7 @@ describe("Additional Fields", async () => {
 			someHiddenField?: string | undefined;
 			members: ExpectedMembers;
 			invitations: ExpectedInvitations;
-			teams: ExpectedTeams;
+			teams: ExpectedTeamsWithMembers;
 		}>();
 	});
 

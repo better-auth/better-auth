@@ -64,6 +64,7 @@ import type {
 	InferMember,
 	InferOrganization,
 	InferTeam,
+	InferTeamWithMembers,
 	OrganizationSchema,
 	TeamMember,
 } from "./schema";
@@ -97,7 +98,7 @@ export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 			? {
 					members: InferMember<Options, false>[];
 					invitations: InferInvitation<Options, false>[];
-					teams: InferTeam<Options, false>[];
+					teams: InferTeamWithMembers<Options, false>[];
 				} & InferOrganization<Options, false>
 			: {
 					members: InferMember<Options, false>[];
@@ -312,7 +313,7 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 			? {
 					members: InferMember<O, false>[];
 					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
+					teams: InferTeamWithMembers<O, false>[];
 				} & InferOrganization<O, false>
 			: {
 					members: InferMember<O, false>[];
@@ -364,7 +365,7 @@ export function organization<
 			? {
 					members: InferMember<O, false>[];
 					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
+					teams: InferTeamWithMembers<O, false>[];
 				} & InferOrganization<O, false>
 			: {
 					members: InferMember<O, false>[];
@@ -398,7 +399,7 @@ export function organization<
 			? {
 					members: InferMember<O, false>[];
 					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
+					teams: InferTeamWithMembers<O, false>[];
 				} & InferOrganization<O, false>
 			: {
 					members: InferMember<O, false>[];
@@ -430,7 +431,7 @@ export function organization<
 			? {
 					members: InferMember<O, false>[];
 					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
+					teams: InferTeamWithMembers<O, false>[];
 				} & InferOrganization<O, false>
 			: {
 					members: InferMember<O, false>[];
@@ -1305,7 +1306,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 				? {
 						members: InferMember<O, false>[];
 						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
+						teams: InferTeamWithMembers<O, false>[];
 					} & InferOrganization<O, false>
 				: {
 						members: InferMember<O, false>[];
