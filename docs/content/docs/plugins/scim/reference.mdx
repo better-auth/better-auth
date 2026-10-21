@@ -314,7 +314,7 @@ Rules and behavior:
 * **Profile source only.** When several connections provision one user, only the profile-source connection writes custom attributes, matching `email` and `name`.
 * **PATCH.** `add`, `replace`, and `remove` work against the extension URN (`urn:ietf:params:scim:schemas:extension:acme:2.0:User`) and a single attribute path (`urn:ietf:params:scim:schemas:extension:acme:2.0:User:sapUserId`). `replace` on the extension URN replaces the whole object (omitted attributes are cleared); `add` merges. `remove`, or a `null` value, clears an attribute and its mapped user field. A single-element array value is unwrapped.
 * **Deprovision.** Mapped values are retained on the Better Auth user when the SCIM user is deactivated or deleted.
-* **Attribute selection (limitation).** Custom extension attributes are always included on a full-resource `GET`, but per-attribute selection via `attributes=<urn>:<attribute>` or `excludedAttributes` does not yet resolve custom schema-qualified paths. Requesting a custom attribute by path omits it from the narrowed response; full representations are unaffected.
+* **Attribute selection (limitation).** Custom extension attributes not configured with `returned: "never"` are always included on a full-resource `GET`, but per-attribute selection via `attributes=<urn>:<attribute>` or `excludedAttributes` does not yet resolve custom schema-qualified paths. Requesting a custom attribute by path omits it from the narrowed response; full representations are unaffected.
 
 ```json title="Create User"
 {
