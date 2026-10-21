@@ -202,6 +202,49 @@ function interceptSSOProviderLockUpdate<Options extends BetterAuthOptions>(
 		});
 }
 
+function disableNativeTransactions<Options extends BetterAuthOptions>(
+	adapter: DBAdapter<Options>,
+): void {
+	if (!adapter.options) {
+		throw new Error("Expected adapter options");
+	}
+	(
+		adapter.options.adapterConfig as {
+			transaction?: unknown;
+		}
+	).transaction = false;
+}
+
+/**
+ * Runs `onBeforeWrite` immediately before the next `ssoProvider` mutation on
+ * this adapter, letting a test interpose on the optimistic concurrency check.
+ */
+function interceptSSOProviderMutationWrite<Options extends BetterAuthOptions>(
+	adapter: DBAdapter<Options>,
+	onBeforeWrite: () => void | Promise<void>,
+): void {
+	let interposed = false;
+	const interpose = async () => {
+		if (interposed) return;
+		interposed = true;
+		await onBeforeWrite();
+	};
+	const update = adapter.update.bind(adapter);
+	adapter.update = (async (
+		input: Parameters<DBAdapter<Options>["update"]>[0],
+	) => {
+		if (input.model === "ssoProvider") await interpose();
+		return update(input);
+	}) as typeof adapter.update;
+	const deleteMany = adapter.deleteMany.bind(adapter);
+	adapter.deleteMany = (async (
+		input: Parameters<DBAdapter<Options>["deleteMany"]>[0],
+	) => {
+		if (input.model === "ssoProvider") await interpose();
+		return deleteMany(input);
+	}) as typeof adapter.deleteMany;
+}
+
 function storeCookies(response: Response, cookies: Map<string, string>): void {
 	for (const setCookie of response.headers.getSetCookie()) {
 		const cookie = setCookie.split(";", 1)[0];
@@ -1951,12 +1994,30 @@ kBGIJYs=
 			expect(isAuthenticationBoundaryChange).toBe(false);
 		});
 
-		it("rejects a guarded update when the adapter has no native transaction", async () => {
-			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
-				false,
-				false,
-				{ guardProviderMutation() {} },
-			);
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("runs a guarded update with optimistic concurrency when the adapter has no native transaction", async () => {
+			const observations: {
+				guardCalls: number;
+				observedDomain: string | undefined;
+			} = {
+				guardCalls: 0,
+				observedDomain: undefined,
+			};
+			const options = {
+				async guardProviderMutation(input, context) {
+					observations.guardCalls += 1;
+					observations.observedDomain = (
+						await context.database.findOne<{ domain: string }>({
+							model: "ssoProvider",
+							where: [{ field: "id", value: input.provider.id }],
+						})
+					)?.domain;
+				},
+			} satisfies SSOOptions;
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, options);
 			const headers = await getAuthHeaders({
 				email: "owner@example.com",
 				password: "password123",
@@ -1964,29 +2025,110 @@ kBGIJYs=
 			});
 			await registerSAMLProvider(headers, "fallback-update");
 			const context = await auth.$context;
-			if (!context.adapter.options) {
-				throw new Error("Expected adapter options");
-			}
-			(
-				context.adapter.options.adapterConfig as {
-					transaction?: unknown;
-				}
-			).transaction = false;
+			disableNativeTransactions(context.adapter);
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "fallback-update",
+					domain: "updated.example.com",
+				},
+				headers,
+			});
+
+			expect(updated.domain).toBe("updated.example.com");
+			expect(observations).toEqual({
+				guardCalls: 1,
+				observedDomain: "example.com",
+			});
+			expect(
+				data.ssoProvider.find(
+					(provider) => provider.providerId === "fallback-update",
+				)?.domain,
+			).toBe("updated.example.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("rejects an optimistic guarded update when the provider changes before the write", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, { guardProviderMutation() {} });
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "contended-update");
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			interceptSSOProviderMutationWrite(context.adapter, async () => {
+				await context.adapter.update({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "contended-update" }],
+					update: { domain: "concurrent.example.com" },
+				});
+			});
 
 			await expect(
 				auth.api.updateSSOProvider({
 					body: {
-						providerId: "fallback-update",
+						providerId: "contended-update",
 						domain: "updated.example.com",
 					},
 					headers,
 				}),
 			).rejects.toMatchObject({
-				status: "NOT_IMPLEMENTED",
+				status: "CONFLICT",
 				body: {
-					code: "SSO_PROVIDER_MUTATION_GUARD_REQUIRES_NATIVE_TRANSACTIONS",
+					code: "SSO_PROVIDER_CHANGED",
 				},
 			});
+			expect(
+				data.ssoProvider.find(
+					(provider) => provider.providerId === "contended-update",
+				)?.domain,
+			).toBe("concurrent.example.com");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("rejects an optimistic guarded update without writing", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, {
+					guardProviderMutation() {
+						throw new Error("denied");
+					},
+				});
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "rejected-update");
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "rejected-update",
+						domain: "updated.example.com",
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "CONFLICT",
+				body: {
+					code: "SSO_PROVIDER_MUTATION_REJECTED",
+					message: "SSO provider mutation is not allowed",
+				},
+			});
+			expect(
+				data.ssoProvider.find(
+					(provider) => provider.providerId === "rejected-update",
+				)?.domain,
+			).toBe("example.com");
 		});
 
 		it("should return 401 when not authenticated", async () => {
@@ -3085,39 +3227,201 @@ kBGIJYs=
 			);
 		});
 
-		it("rejects a guarded delete when the adapter has no native transaction", async () => {
-			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
-				false,
-				false,
-				{ guardProviderMutation() {} },
-			);
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("runs a guarded delete with optimistic concurrency when the adapter has no native transaction", async () => {
+			let observedProviderId: string | undefined;
+			const options = {
+				async guardProviderMutation(input, context) {
+					observedProviderId = (
+						await context.database.findOne<{ providerId: string }>({
+							model: "ssoProvider",
+							where: [{ field: "id", value: input.provider.id }],
+						})
+					)?.providerId;
+				},
+			} satisfies SSOOptions;
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, options);
 			const headers = await getAuthHeaders({
 				email: "owner@example.com",
 				password: "password123",
 				name: "Owner",
 			});
 			await registerSAMLProvider(headers, "fallback-delete");
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "fallback-delete",
+			)!;
+			data.account.push({
+				id: "fallback-delete-account",
+				userId: provider.userId,
+				providerId: provider.providerId,
+				accountId: "subject",
+			});
 			const context = await auth.$context;
-			if (!context.adapter.options) {
-				throw new Error("Expected adapter options");
-			}
-			(
-				context.adapter.options.adapterConfig as {
-					transaction?: unknown;
-				}
-			).transaction = false;
+			disableNativeTransactions(context.adapter);
+
+			await auth.api.deleteSSOProvider({
+				body: { providerId: "fallback-delete" },
+				headers,
+			});
+
+			expect(observedProviderId).toBe("fallback-delete");
+			expect(
+				data.ssoProvider.find((row) => row.providerId === "fallback-delete"),
+			).toBeUndefined();
+			expect(
+				data.account.find(
+					(row) =>
+						(row as { providerId?: string }).providerId === "fallback-delete",
+				),
+			).toBeUndefined();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("rejects an optimistic guarded delete when the provider changes before the write", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, { guardProviderMutation() {} });
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "contended-delete");
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "contended-delete",
+			)!;
+			data.account.push({
+				id: "contended-delete-account",
+				userId: provider.userId,
+				providerId: provider.providerId,
+				accountId: "subject",
+			});
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+			interceptSSOProviderMutationWrite(context.adapter, async () => {
+				await context.adapter.update({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "contended-delete" }],
+					update: { domain: "concurrent.example.com" },
+				});
+			});
 
 			await expect(
 				auth.api.deleteSSOProvider({
-					body: { providerId: "fallback-delete" },
+					body: { providerId: "contended-delete" },
 					headers,
 				}),
 			).rejects.toMatchObject({
-				status: "NOT_IMPLEMENTED",
+				status: "CONFLICT",
 				body: {
-					code: "SSO_PROVIDER_MUTATION_GUARD_REQUIRES_NATIVE_TRANSACTIONS",
+					code: "SSO_PROVIDER_CHANGED",
 				},
 			});
+			expect(
+				data.ssoProvider.find((row) => row.providerId === "contended-delete")
+					?.domain,
+			).toBe("concurrent.example.com");
+			expect(
+				data.account.find(
+					(row) =>
+						(row as { providerId?: string }).providerId === "contended-delete",
+				),
+			).toBeDefined();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("guards provider updates and deletion on a SQL adapter without native transactions", async ({
+			onTestFinished,
+		}) => {
+			const sqlite = new DatabaseSync(":memory:");
+			onTestFinished(() => sqlite.close());
+			let guardCalls = 0;
+			const auth = betterAuth({
+				baseURL: "http://localhost:3000",
+				secret: "optimistic-sso-guard-secret-at-least-32-characters",
+				database: {
+					dialect: new NodeSqliteDialect({ database: sqlite }),
+					type: "sqlite",
+					transaction: false,
+				},
+				emailAndPassword: { enabled: true },
+				plugins: [
+					sso({
+						guardProviderMutation() {
+							guardCalls += 1;
+						},
+					}),
+				],
+			});
+			await (await getMigrations(auth.options)).runMigrations();
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl: async (url, init) =>
+						await auth.handler(new Request(url, init)),
+				},
+			});
+			const headers = new Headers();
+			await client.signUp.email({
+				email: "optimistic-owner@example.com",
+				password: "password123",
+				name: "Optimistic Owner",
+			});
+			await client.signIn.email(
+				{
+					email: "optimistic-owner@example.com",
+					password: "password123",
+				},
+				{ throw: true, onSuccess: setCookieToHeader(headers) },
+			);
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "optimistic-provider",
+					issuer: "https://idp.example.com",
+					domain: "example.com",
+					samlConfig: {
+						entryPoint: "https://idp.example.com/sso",
+						cert: TEST_CERT,
+						audience: "my-audience",
+						wantAssertionsSigned: true,
+						idpMetadata: { entityID: "https://idp.example.com" },
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+			const context = await auth.$context;
+			expect(context.adapter.options?.adapterConfig.transaction).toBe(false);
+
+			const updated = await auth.api.updateSSOProvider({
+				body: {
+					providerId: "optimistic-provider",
+					domain: "optimistic.example.com",
+				},
+				headers,
+			});
+			expect(updated.domain).toBe("optimistic.example.com");
+
+			await expect(
+				auth.api.deleteSSOProvider({
+					body: { providerId: "optimistic-provider" },
+					headers,
+				}),
+			).resolves.toEqual({ success: true });
+
+			expect(guardCalls).toBe(2);
+			expect(
+				await context.adapter.findOne({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: "optimistic-provider" }],
+				}),
+			).toBeNull();
 		});
 
 		it("serializes a concurrent account link before deleting the provider and its account", async ({

@@ -4,7 +4,7 @@ import {
 } from "@better-auth/core/context";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import { filterOutputFields } from "@better-auth/core/utils/db";
-import type { AuthContext } from "better-auth";
+import type { AuthContext, Where } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -32,10 +32,7 @@ import type {
 	SAMLIdentityProviderMetadata,
 	SSOOptions,
 } from "../types";
-import {
-	assertSSOAsyncContextSupport,
-	assertSSONativeTransactionSupport,
-} from "../user-resolution";
+import { assertSSOAsyncContextSupport } from "../user-resolution";
 import {
 	maskClientId,
 	normalizePem,
@@ -328,20 +325,101 @@ async function guardSSOProviderMutation(
 	}
 }
 
-async function assertProviderMutationGuardCapabilities(
+type ProviderMutationMode = "transactional" | "optimistic";
+
+/**
+ * Picks how a guarded provider mutation is applied. Adapters with a native
+ * transaction callback run the guard and the write in one transaction.
+ * Adapters without one, such as Drizzle on Cloudflare D1, use optimistic
+ * concurrency: the guard approves a provider row snapshot and the write is a
+ * compare-and-swap against that snapshot.
+ */
+async function resolveProviderMutationMode(
 	options: SSOOptions | undefined,
 	adapter: AuthContext["adapter"],
-): Promise<void> {
-	if (!options?.guardProviderMutation) return;
-	assertSSONativeTransactionSupport(adapter, {
-		code: "SSO_PROVIDER_MUTATION_GUARD_REQUIRES_NATIVE_TRANSACTIONS",
-		message:
-			"SSO provider mutation guards require a database adapter with native transaction support",
-	});
+): Promise<ProviderMutationMode> {
+	if (!options?.guardProviderMutation) return "transactional";
+	if (typeof adapter.options?.adapterConfig.transaction !== "function") {
+		return "optimistic";
+	}
 	await assertSSOAsyncContextSupport({
 		code: "SSO_PROVIDER_MUTATION_GUARD_REQUIRES_ASYNC_CONTEXT",
 		message:
 			"SSO provider mutation guards require database transaction async context support",
+	});
+	return "transactional";
+}
+
+const PROVIDER_MUTATION_SNAPSHOT_FIELDS = [
+	"id",
+	"issuer",
+	"oidcConfig",
+	"samlConfig",
+	"userId",
+	"providerId",
+	"organizationId",
+	"domain",
+	"domainVerified",
+] as const;
+
+function isSnapshotScalar(
+	value: unknown,
+): value is string | number | boolean | Date | null {
+	return (
+		value === null ||
+		typeof value === "string" ||
+		typeof value === "number" ||
+		typeof value === "boolean" ||
+		value instanceof Date
+	);
+}
+
+/**
+ * Predicates that fence an optimistic provider mutation against concurrent
+ * changes to the exact row the guard evaluated. Only scalar columns can be
+ * expressed as equality predicates; `oidcConfig` and `samlConfig` are stored
+ * as strings, so they participate in the fence. The adapters Better Auth ships
+ * evaluate the predicate and the write atomically and report a zero-row write
+ * as `null`, which makes the guarded write a compare-and-swap.
+ */
+function getProviderMutationSnapshotWhere(
+	provider: SSOProviderRecord,
+): Where[] {
+	const fields = new Set<string>(PROVIDER_MUTATION_SNAPSHOT_FIELDS);
+	for (const field of Object.keys(provider)) {
+		if (isSnapshotScalar(provider[field])) fields.add(field);
+	}
+	const where: Where[] = [];
+	for (const field of fields) {
+		const value = provider[field];
+		if (value === undefined || !isSnapshotScalar(value)) continue;
+		where.push({ field, value });
+	}
+	return where;
+}
+
+function providerMutationConflict(): APIError {
+	return new APIError("CONFLICT", {
+		code: "SSO_PROVIDER_CHANGED",
+		message: "SSO provider changed while the mutation was in progress",
+	});
+}
+
+async function readProviderForMutation(
+	ctx: { context: AuthContext },
+	provider: Pick<SSOProviderRecord, "id" | "providerId">,
+	mode: ProviderMutationMode,
+): Promise<SSOProviderRecord | null> {
+	if (mode === "transactional") {
+		return lockSSOProviderRow(ctx.context, provider);
+	}
+	const database = await getCurrentAdapter(ctx.context.adapter);
+	return database.findOne<SSOProviderRecord>({
+		model: "ssoProvider",
+		where: [
+			{ field: "id", value: provider.id },
+			{ field: "providerId", value: provider.providerId },
+		],
 	});
 }
 
@@ -869,208 +947,223 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			}
 
 			const authorizedProvider = await checkProviderAccess(ctx, providerId);
-			await assertProviderMutationGuardCapabilities(
+			const mutationMode = await resolveProviderMutationMode(
 				options,
 				ctx.context.adapter,
 			);
 
-			const fullProvider = await runWithTransaction(
-				ctx.context.adapter,
-				async () => {
-					const trx = await getCurrentAdapter(ctx.context.adapter);
-					const existingProvider = await lockSSOProviderRow(ctx.context, {
-						id: authorizedProvider.id,
-						providerId,
+			const performProviderUpdate = async () => {
+				const database = await getCurrentAdapter(ctx.context.adapter);
+				const existingProvider = await readProviderForMutation(
+					ctx,
+					{ id: authorizedProvider.id, providerId },
+					mutationMode,
+				);
+				if (!existingProvider) {
+					throw new APIError("NOT_FOUND", {
+						message: "Provider not found",
 					});
-					if (!existingProvider) {
-						throw new APIError("NOT_FOUND", {
-							message: "Provider not found",
-						});
+				}
+				const updateData: Partial<SSOProviderRecord> = {
+					...additionalFields,
+				};
+				let providerIdentityBoundaryChanged =
+					body.issuer !== undefined && body.issuer !== existingProvider.issuer;
+				let trustAnchorsChanged = false;
+
+				if (body.issuer !== undefined) {
+					updateData.issuer = body.issuer;
+				}
+
+				if (body.domain !== undefined) {
+					updateData.domain = body.domain;
+					if (body.domain !== existingProvider.domain) {
+						updateData.domainVerified = false;
 					}
-					const updateData: Partial<SSOProviderRecord> = {
-						...additionalFields,
-					};
-					let providerIdentityBoundaryChanged =
-						body.issuer !== undefined &&
-						body.issuer !== existingProvider.issuer;
-					let trustAnchorsChanged = false;
+				}
 
-					if (body.issuer !== undefined) {
-						updateData.issuer = body.issuer;
-					}
-
-					if (body.domain !== undefined) {
-						updateData.domain = body.domain;
-						if (body.domain !== existingProvider.domain) {
-							updateData.domainVerified = false;
-						}
-					}
-
-					if (body.samlConfig) {
-						const maxMetadataSize =
-							options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
-						assertSAMLMetadataSize(
-							body.samlConfig.idpMetadata?.metadata,
-							"IdP",
-							maxMetadataSize,
-						);
-						assertSAMLMetadataSize(
-							body.samlConfig.spMetadata?.metadata,
-							"SP",
-							maxMetadataSize,
-						);
-
-						if (
-							body.samlConfig.signatureAlgorithm !== undefined ||
-							body.samlConfig.digestAlgorithm !== undefined
-						) {
-							validateConfigAlgorithms(
-								{
-									signatureAlgorithm: body.samlConfig.signatureAlgorithm,
-									digestAlgorithm: body.samlConfig.digestAlgorithm,
-								},
-								options?.saml?.algorithms,
-							);
-						}
-
-						const currentSamlConfig = parseAndValidateConfig<SAMLConfig>(
-							existingProvider.samlConfig,
-							"SAML",
-						);
-
-						const updatedSamlConfig = mergeSAMLConfig(
-							currentSamlConfig,
-							body.samlConfig,
-							updateData.issuer ||
-								currentSamlConfig.issuer ||
-								existingProvider.issuer,
-						);
-
-						validateCertSources(updatedSamlConfig);
-						assertSAMLIdentityProviderAuthority(updatedSamlConfig);
-						assertSAMLServiceProviderMetadataPolicy(updatedSamlConfig);
-						const changes = samlBoundaryChanges(
-							currentSamlConfig,
-							updatedSamlConfig,
-						);
-						if (changes.identity) {
-							providerIdentityBoundaryChanged = true;
-						}
-						trustAnchorsChanged = changes.trustAnchors;
-
-						updateData.samlConfig = JSON.stringify(updatedSamlConfig);
-					}
-
-					if (body.oidcConfig) {
-						try {
-							validateOIDCEndpointUrls(body.oidcConfig, (url) =>
-								ctx.context.isTrustedOrigin(url),
-							);
-						} catch (error) {
-							if (error instanceof DiscoveryError) {
-								throw mapDiscoveryErrorToAPIError(error);
-							}
-							throw error;
-						}
-
-						const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
-							existingProvider.oidcConfig,
-							"OIDC",
-						);
-
-						const updatedOidcConfig = mergeOIDCConfig(
-							currentOidcConfig,
-							body.oidcConfig,
-							updateData.issuer ||
-								currentOidcConfig.issuer ||
-								existingProvider.issuer,
-						);
-
-						// Validate: clientSecret is required for non-private_key_jwt auth
-						if (
-							updatedOidcConfig.tokenEndpointAuthentication !==
-								"private_key_jwt" &&
-							!updatedOidcConfig.clientSecret
-						) {
-							throw new APIError("BAD_REQUEST", {
-								message:
-									"clientSecret is required when using client_secret_basic or client_secret_post authentication",
-							});
-						}
-						// Validate: private_key_jwt requires a key source at runtime
-						if (
-							updatedOidcConfig.tokenEndpointAuthentication ===
-								"private_key_jwt" &&
-							!options?.resolvePrivateKey &&
-							!options?.defaultSSO?.some(
-								(p: Record<string, unknown>) =>
-									p.providerId === providerId &&
-									"privateKey" in p &&
-									p.privateKey,
-							)
-						) {
-							throw new APIError("BAD_REQUEST", {
-								message:
-									"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
-							});
-						}
-
-						if (
-							oidcIdentityBoundaryChanged(currentOidcConfig, updatedOidcConfig)
-						) {
-							providerIdentityBoundaryChanged = true;
-						}
-
-						updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
-					}
-
-					await guardSSOProviderMutation(
-						options,
-						{
-							action: "update",
-							isAuthenticationBoundaryChange:
-								providerIdentityBoundaryChanged || trustAnchorsChanged,
-						},
-						existingProvider,
-						trx,
-						ctx.context.logger,
+				if (body.samlConfig) {
+					const maxMetadataSize =
+						options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+					assertSAMLMetadataSize(
+						body.samlConfig.idpMetadata?.metadata,
+						"IdP",
+						maxMetadataSize,
+					);
+					assertSAMLMetadataSize(
+						body.samlConfig.spMetadata?.metadata,
+						"SP",
+						maxMetadataSize,
 					);
 
-					if (providerIdentityBoundaryChanged) {
-						const linkedAccount = await trx.findOne<{ id: string }>({
-							model: "account",
-							where: [{ field: "providerId", value: providerId }],
-						});
-						if (linkedAccount) {
-							// TODO(next): move SSO account links to immutable provider instance
-							// ids, then expose explicit relinking for identity-boundary changes.
-							throw new APIError("CONFLICT", {
-								message:
-									"Cannot change SSO provider identity fields while linked accounts exist",
-							});
-						}
+					if (
+						body.samlConfig.signatureAlgorithm !== undefined ||
+						body.samlConfig.digestAlgorithm !== undefined
+					) {
+						validateConfigAlgorithms(
+							{
+								signatureAlgorithm: body.samlConfig.signatureAlgorithm,
+								digestAlgorithm: body.samlConfig.digestAlgorithm,
+							},
+							options?.saml?.algorithms,
+						);
 					}
 
-					await trx.update({
-						model: "ssoProvider",
+					const currentSamlConfig = parseAndValidateConfig<SAMLConfig>(
+						existingProvider.samlConfig,
+						"SAML",
+					);
+
+					const updatedSamlConfig = mergeSAMLConfig(
+						currentSamlConfig,
+						body.samlConfig,
+						updateData.issuer ||
+							currentSamlConfig.issuer ||
+							existingProvider.issuer,
+					);
+
+					validateCertSources(updatedSamlConfig);
+					assertSAMLIdentityProviderAuthority(updatedSamlConfig);
+					assertSAMLServiceProviderMetadataPolicy(updatedSamlConfig);
+					const changes = samlBoundaryChanges(
+						currentSamlConfig,
+						updatedSamlConfig,
+					);
+					if (changes.identity) {
+						providerIdentityBoundaryChanged = true;
+					}
+					trustAnchorsChanged = changes.trustAnchors;
+
+					updateData.samlConfig = JSON.stringify(updatedSamlConfig);
+				}
+
+				if (body.oidcConfig) {
+					try {
+						validateOIDCEndpointUrls(body.oidcConfig, (url) =>
+							ctx.context.isTrustedOrigin(url),
+						);
+					} catch (error) {
+						if (error instanceof DiscoveryError) {
+							throw mapDiscoveryErrorToAPIError(error);
+						}
+						throw error;
+					}
+
+					const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
+						existingProvider.oidcConfig,
+						"OIDC",
+					);
+
+					const updatedOidcConfig = mergeOIDCConfig(
+						currentOidcConfig,
+						body.oidcConfig,
+						updateData.issuer ||
+							currentOidcConfig.issuer ||
+							existingProvider.issuer,
+					);
+
+					// Validate: clientSecret is required for non-private_key_jwt auth
+					if (
+						updatedOidcConfig.tokenEndpointAuthentication !==
+							"private_key_jwt" &&
+						!updatedOidcConfig.clientSecret
+					) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"clientSecret is required when using client_secret_basic or client_secret_post authentication",
+						});
+					}
+					// Validate: private_key_jwt requires a key source at runtime
+					if (
+						updatedOidcConfig.tokenEndpointAuthentication ===
+							"private_key_jwt" &&
+						!options?.resolvePrivateKey &&
+						!options?.defaultSSO?.some(
+							(p: Record<string, unknown>) =>
+								p.providerId === providerId &&
+								"privateKey" in p &&
+								p.privateKey,
+						)
+					) {
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"private_key_jwt authentication requires either a resolvePrivateKey callback or a privateKey in defaultSSO",
+						});
+					}
+
+					if (
+						oidcIdentityBoundaryChanged(currentOidcConfig, updatedOidcConfig)
+					) {
+						providerIdentityBoundaryChanged = true;
+					}
+
+					updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
+				}
+
+				await guardSSOProviderMutation(
+					options,
+					{
+						action: "update",
+						isAuthenticationBoundaryChange:
+							providerIdentityBoundaryChanged || trustAnchorsChanged,
+					},
+					existingProvider,
+					database,
+					ctx.context.logger,
+				);
+
+				if (providerIdentityBoundaryChanged) {
+					const linkedAccount = await database.findOne<{ id: string }>({
+						model: "account",
 						where: [{ field: "providerId", value: providerId }],
+					});
+					if (linkedAccount) {
+						// TODO(next): move SSO account links to immutable provider instance
+						// ids, then expose explicit relinking for identity-boundary changes.
+						throw new APIError("CONFLICT", {
+							message:
+								"Cannot change SSO provider identity fields while linked accounts exist",
+						});
+					}
+				}
+
+				if (mutationMode === "optimistic") {
+					// The guard evaluated this exact snapshot. Apply the update only
+					// while the row still matches it; a concurrent change makes the
+					// write affect zero rows and is reported as a stable conflict.
+					const updatedProvider = await database.update<SSOProviderRecord>({
+						model: "ssoProvider",
+						where: getProviderMutationSnapshotWhere(existingProvider),
 						update: updateData,
 					});
-
-					const updatedProvider = await trx.findOne<SSOProviderRecord>({
-						model: "ssoProvider",
-						where: [{ field: "providerId", value: providerId }],
-					});
-
-					if (!updatedProvider) {
-						throw new APIError("NOT_FOUND", {
-							message: "Provider not found after update",
-						});
-					}
-
+					if (!updatedProvider) throw providerMutationConflict();
 					return updatedProvider;
-				},
-			);
+				}
+
+				await database.update({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: providerId }],
+					update: updateData,
+				});
+
+				const updatedProvider = await database.findOne<SSOProviderRecord>({
+					model: "ssoProvider",
+					where: [{ field: "providerId", value: providerId }],
+				});
+
+				if (!updatedProvider) {
+					throw new APIError("NOT_FOUND", {
+						message: "Provider not found after update",
+					});
+				}
+
+				return updatedProvider;
+			};
+
+			const fullProvider =
+				mutationMode === "transactional"
+					? await runWithTransaction(ctx.context.adapter, performProviderUpdate)
+					: await performProviderUpdate();
 
 			return ctx.json(
 				sanitizeProvider(fullProvider, ctx.context.baseURL, options),
@@ -1111,17 +1204,18 @@ export const deleteSSOProvider = (options?: SSOOptions) => {
 			const { providerId } = ctx.body;
 
 			const authorizedProvider = await checkProviderAccess(ctx, providerId);
-			await assertProviderMutationGuardCapabilities(
+			const mutationMode = await resolveProviderMutationMode(
 				options,
 				ctx.context.adapter,
 			);
 
-			await runWithTransaction(ctx.context.adapter, async () => {
-				const trx = await getCurrentAdapter(ctx.context.adapter);
-				const existingProvider = await lockSSOProviderRow(ctx.context, {
-					id: authorizedProvider.id,
-					providerId,
-				});
+			const performProviderDelete = async () => {
+				const database = await getCurrentAdapter(ctx.context.adapter);
+				const existingProvider = await readProviderForMutation(
+					ctx,
+					{ id: authorizedProvider.id, providerId },
+					mutationMode,
+				);
 				if (!existingProvider) {
 					throw new APIError("NOT_FOUND", {
 						message: "Provider not found",
@@ -1131,21 +1225,42 @@ export const deleteSSOProvider = (options?: SSOOptions) => {
 					options,
 					{ action: "delete" },
 					existingProvider,
-					trx,
+					database,
 					ctx.context.logger,
 				);
-				await trx.deleteMany({
+				if (mutationMode === "optimistic") {
+					// The provider row is the commit point: remove it only while it
+					// still matches the snapshot the guard approved, then clean up
+					// linked account rows.
+					const deleted = await database.deleteMany({
+						model: "ssoProvider",
+						where: getProviderMutationSnapshotWhere(existingProvider),
+					});
+					if (deleted !== 1) throw providerMutationConflict();
+					await database.deleteMany({
+						model: "account",
+						where: [{ field: "providerId", value: providerId }],
+					});
+					return;
+				}
+				await database.deleteMany({
 					model: "account",
 					where: [{ field: "providerId", value: providerId }],
 				});
-				await trx.delete({
+				await database.delete({
 					model: "ssoProvider",
 					where: [
 						{ field: "id", value: existingProvider.id },
 						{ field: "providerId", value: providerId },
 					],
 				});
-			});
+			};
+
+			if (mutationMode === "transactional") {
+				await runWithTransaction(ctx.context.adapter, performProviderDelete);
+			} else {
+				await performProviderDelete();
+			}
 
 			return ctx.json({ success: true });
 		},
