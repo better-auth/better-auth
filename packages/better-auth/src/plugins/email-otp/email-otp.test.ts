@@ -2800,7 +2800,7 @@ describe("email-otp send origin/CSRF protection", async () => {
 });
 
 /**
- * @see https://github.com/better-auth/better-auth/issues/<ISSUE>
+ * @see https://github.com/better-auth/better-auth/issues/11970
  */
 describe("email-otp attempt budget for unknown addresses", async () => {
 	const { client, testUser, runWithUser } = await getTestInstance(
@@ -2950,7 +2950,7 @@ describe("email-otp attempt budget for unknown addresses", async () => {
 });
 
 /**
- * @see https://github.com/better-auth/better-auth/issues/<ISSUE>
+ * @see https://github.com/better-auth/better-auth/issues/11970
  */
 describe("email-otp kept code rows on a unique verification identifier", async () => {
 	const uniqueVerificationIdentifier = {
