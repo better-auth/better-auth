@@ -3,4 +3,4 @@
 "better-auth": minor
 ---
 
-Slack profile mappings now handle scope-dependent claims in the built-in provider and Generic OAuth helper. Both use the documented POST request and reject Slack error responses, including errors returned with HTTP 200.
+**Breaking:** `SlackProfile` email and profile claims are now optional, and custom claims are `unknown`; update profile mappings accordingly. The built-in provider and Generic OAuth helper use POST for userinfo and reject Slack errors returned with HTTP 200.
