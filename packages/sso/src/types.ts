@@ -435,7 +435,15 @@ export interface SSOOptions {
 	 * the provider's scalar columns are unchanged. A concurrent change fails the
 	 * request with `SSO_PROVIDER_CHANGED`. In this mode the guard's `database`
 	 * handle is not transactional, so writes made by the callback are not rolled
-	 * back.
+	 * back; keep the callback read-only.
+	 *
+	 * Because account linking cannot be serialized with the guarded write,
+	 * optimistic mode rejects identity-boundary changes with
+	 * `SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS`, and rejects
+	 * deletion when linked accounts exist with
+	 * `SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS`.
+	 * Remove the linked accounts first, or use an adapter with native
+	 * transactions for those operations.
 	 */
 	guardProviderMutation?:
 		| ((

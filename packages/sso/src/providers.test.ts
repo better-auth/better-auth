@@ -236,6 +236,13 @@ function interceptSSOProviderMutationWrite<Options extends BetterAuthOptions>(
 		if (input.model === "ssoProvider") await interpose();
 		return update(input);
 	}) as typeof adapter.update;
+	const updateMany = adapter.updateMany.bind(adapter);
+	adapter.updateMany = (async (
+		input: Parameters<DBAdapter<Options>["updateMany"]>[0],
+	) => {
+		if (input.model === "ssoProvider") await interpose();
+		return updateMany(input);
+	}) as typeof adapter.updateMany;
 	const deleteMany = adapter.deleteMany.bind(adapter);
 	adapter.deleteMany = (async (
 		input: Parameters<DBAdapter<Options>["deleteMany"]>[0],
@@ -2050,6 +2057,44 @@ kBGIJYs=
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11207
 		 */
+		it("rejects an optimistic guarded update that changes the identity boundary", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, { guardProviderMutation() {} });
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "identity-update");
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "identity-update",
+			)!;
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+
+			await expect(
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "identity-update",
+						issuer: "https://other-idp.example.com",
+					},
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "NOT_IMPLEMENTED",
+				body: {
+					code: "SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS",
+				},
+			});
+			expect(
+				data.ssoProvider.find((row) => row.providerId === "identity-update")
+					?.issuer,
+			).toBe(provider.issuer);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
 		it("rejects an optimistic guarded update when the provider changes before the write", async () => {
 			const { auth, getAuthHeaders, registerSAMLProvider, data } =
 				createTestAuth(false, false, { guardProviderMutation() {} });
@@ -3250,15 +3295,6 @@ kBGIJYs=
 				name: "Owner",
 			});
 			await registerSAMLProvider(headers, "fallback-delete");
-			const provider = data.ssoProvider.find(
-				(row) => row.providerId === "fallback-delete",
-			)!;
-			data.account.push({
-				id: "fallback-delete-account",
-				userId: provider.userId,
-				providerId: provider.providerId,
-				accountId: "subject",
-			});
 			const context = await auth.$context;
 			disableNativeTransactions(context.adapter);
 
@@ -3271,12 +3307,51 @@ kBGIJYs=
 			expect(
 				data.ssoProvider.find((row) => row.providerId === "fallback-delete"),
 			).toBeUndefined();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11207
+		 */
+		it("rejects an optimistic guarded delete when the provider has linked accounts", async () => {
+			const { auth, getAuthHeaders, registerSAMLProvider, data } =
+				createTestAuth(false, false, { guardProviderMutation() {} });
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			await registerSAMLProvider(headers, "linked-delete");
+			const provider = data.ssoProvider.find(
+				(row) => row.providerId === "linked-delete",
+			)!;
+			data.account.push({
+				id: "linked-delete-account",
+				userId: provider.userId,
+				providerId: provider.providerId,
+				accountId: "subject",
+			});
+			const context = await auth.$context;
+			disableNativeTransactions(context.adapter);
+
+			await expect(
+				auth.api.deleteSSOProvider({
+					body: { providerId: "linked-delete" },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				status: "NOT_IMPLEMENTED",
+				body: {
+					code: "SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS",
+				},
+			});
+			expect(
+				data.ssoProvider.find((row) => row.providerId === "linked-delete"),
+			).toBeDefined();
 			expect(
 				data.account.find(
-					(row) =>
-						(row as { providerId?: string }).providerId === "fallback-delete",
+					(row) => (row as { id?: string }).id === "linked-delete-account",
 				),
-			).toBeUndefined();
+			).toBeDefined();
 		});
 
 		/**
@@ -3291,15 +3366,6 @@ kBGIJYs=
 				name: "Owner",
 			});
 			await registerSAMLProvider(headers, "contended-delete");
-			const provider = data.ssoProvider.find(
-				(row) => row.providerId === "contended-delete",
-			)!;
-			data.account.push({
-				id: "contended-delete-account",
-				userId: provider.userId,
-				providerId: provider.providerId,
-				accountId: "subject",
-			});
 			const context = await auth.$context;
 			disableNativeTransactions(context.adapter);
 			interceptSSOProviderMutationWrite(context.adapter, async () => {
@@ -3325,12 +3391,6 @@ kBGIJYs=
 				data.ssoProvider.find((row) => row.providerId === "contended-delete")
 					?.domain,
 			).toBe("concurrent.example.com");
-			expect(
-				data.account.find(
-					(row) =>
-						(row as { providerId?: string }).providerId === "contended-delete",
-				),
-			).toBeDefined();
 		});
 
 		/**

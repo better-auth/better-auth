@@ -1113,6 +1113,16 @@ export const updateSSOProvider = (options: SSOOptions) => {
 				);
 
 				if (providerIdentityBoundaryChanged) {
+					if (mutationMode === "optimistic") {
+						// The linked-account check cannot be serialized with account
+						// linking without a native transaction. Refuse identity changes
+						// rather than allowing a link to race the check and the write.
+						throw new APIError("NOT_IMPLEMENTED", {
+							code: "SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS",
+							message:
+								"Changing SSO provider identity fields requires a database adapter with native transaction support",
+						});
+					}
 					const linkedAccount = await database.findOne<{ id: string }>({
 						model: "account",
 						where: [{ field: "providerId", value: providerId }],
@@ -1129,12 +1139,22 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 				if (mutationMode === "optimistic") {
 					// The guard evaluated this exact snapshot. Apply the update only
-					// while the row still matches it; a concurrent change makes the
-					// write affect zero rows and is reported as a stable conflict.
-					const updatedProvider = await database.update<SSOProviderRecord>({
+					// while the row still matches it. Use `updateMany` because its
+					// affected-row count is reliable across adapters; Drizzle MySQL
+					// cannot return the updated row or report a zero-row update from
+					// `update` without rewriting the snapshot predicate.
+					const updatedCount = await database.updateMany({
 						model: "ssoProvider",
 						where: getProviderMutationSnapshotWhere(existingProvider),
 						update: updateData,
+					});
+					if (updatedCount !== 1) throw providerMutationConflict();
+					const updatedProvider = await database.findOne<SSOProviderRecord>({
+						model: "ssoProvider",
+						where: [
+							{ field: "id", value: existingProvider.id },
+							{ field: "providerId", value: providerId },
+						],
 					});
 					if (!updatedProvider) throw providerMutationConflict();
 					return updatedProvider;
@@ -1229,18 +1249,27 @@ export const deleteSSOProvider = (options?: SSOOptions) => {
 					ctx.context.logger,
 				);
 				if (mutationMode === "optimistic") {
+					// Account cleanup cannot be atomic with provider deletion without
+					// a native transaction, and a failed cleanup would leave accounts
+					// usable by a later provider that reuses this providerId.
+					const linkedAccount = await database.findOne<{ id: string }>({
+						model: "account",
+						where: [{ field: "providerId", value: providerId }],
+					});
+					if (linkedAccount) {
+						throw new APIError("NOT_IMPLEMENTED", {
+							code: "SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS",
+							message:
+								"Deleting an SSO provider with linked accounts requires a database adapter with native transaction support",
+						});
+					}
 					// The provider row is the commit point: remove it only while it
-					// still matches the snapshot the guard approved, then clean up
-					// linked account rows.
+					// still matches the snapshot the guard approved.
 					const deleted = await database.deleteMany({
 						model: "ssoProvider",
 						where: getProviderMutationSnapshotWhere(existingProvider),
 					});
 					if (deleted !== 1) throw providerMutationConflict();
-					await database.deleteMany({
-						model: "account",
-						where: [{ field: "providerId", value: providerId }],
-					});
 					return;
 				}
 				await database.deleteMany({

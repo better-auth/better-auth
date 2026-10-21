@@ -1753,9 +1753,10 @@ Applications can use `guardProviderMutation` to coordinate SSO changes with a pa
 
 ```ts title="auth.ts"
 sso({
-    guardProviderMutation: async ({ action, provider, providerReference, ...change }, { database }) => {
+    guardProviderMutation: async ({ action, provider, providerReference }, { database }) => {
         // Read the current provider state or your own policy tables.
-        // Throw to reject the update or deletion.
+        // For updates, inspect isAuthenticationBoundaryChange through the
+        // discriminated union before deciding. Throw to reject the mutation.
     },
 })
 ```
@@ -1763,6 +1764,13 @@ sso({
 When the database adapter supports native interactive transactions, the guard runs after the provider row is locked and before any provider or linked account write, so those writes commit or roll back together.
 
 Adapters that cannot run an interactive transaction callback, such as Drizzle on Cloudflare D1, use optimistic concurrency instead. Leave the adapter's transaction capability disabled (the Drizzle default) so Better Auth selects this path. The guard runs against a snapshot of the provider row, and the update or deletion is applied only while the provider's scalar columns are unchanged. If another request changes the provider in the meantime, the endpoint responds with `409` and the `SSO_PROVIDER_CHANGED` code without applying the mutation; retry the request to evaluate the guard against the new state. In this mode the guard's `database` handle is not transactional, so keep guards read-only: writes made by the guard before a lost concurrency check are not rolled back.
+
+Optimistic mode cannot serialize account linking with the provider write. For that reason it rejects operations whose safety depends on the linked-account check:
+
+* Changing provider identity fields returns `501` with `SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS`. Use an adapter with native transactions to change the issuer, OIDC identity fields, or SAML identity fields.
+* Deleting a provider that still has linked accounts returns `501` with `SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS`. Remove the linked accounts first, or use an adapter with native transactions. Deletion of a provider with no linked accounts is supported.
+
+Updates that do not change the identity boundary, such as domain, client-secret, and signing-certificate changes, and deletion of providers without linked accounts remain available.
 
 export const ssoOptionsType = {
 	provisionUser: {
