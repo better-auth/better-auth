@@ -38,16 +38,23 @@ export interface DropboxProfile {
 		};
 		office_addin_policy: { ".tag": "disabled" | "enabled" | "other" };
 		top_level_content_policy: { ".tag": "everyone" | "admin_only" | "other" };
-	};
+	} | null;
 	team_member_id?: string;
 	is_paired: boolean;
 	account_type: { ".tag": "basic" | "pro" | "business" };
-	root_info: {
-		root_namespace_id: string;
-		home_namespace_id: string;
-		".tag": "team" | "user";
-		home_path?: string;
-	};
+	root_info:
+		| {
+				".tag": "team";
+				root_namespace_id: string;
+				home_namespace_id: string;
+				home_path: string;
+		  }
+		| {
+				".tag": "user";
+				root_namespace_id: string;
+				home_namespace_id: string;
+				home_path?: string;
+		  };
 }
 
 export interface DropboxOptions extends ProviderOptions<DropboxProfile> {

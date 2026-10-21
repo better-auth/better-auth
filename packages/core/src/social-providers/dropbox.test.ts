@@ -1,49 +1,68 @@
-import { assertType, expect, expectTypeOf, it } from "vitest";
+import {
+	afterEach,
+	assertType,
+	beforeEach,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import type { DropboxProfile } from "./dropbox";
 import { dropbox } from "./dropbox";
 
-/**
- * @see https://github.com/dropbox/dropbox-api-spec/blob/404afad5c508a45ea9004c9d8c0cd4a56f0fbf22/users.stone#L123-L181
- */
-it("accepts Dropbox accounts without a profile photo", async () => {
-	const profile = {
-		account_id: "dropbox-user",
-		name: {
-			given_name: "Jane",
-			surname: "Doe",
-			familiar_name: "Jane",
-			display_name: "Jane Doe",
-			abbreviated_name: "JD",
-		},
-		email: "jane@example.com",
-		email_verified: true,
-		disabled: false,
-		locale: "en",
-		referral_link: "https://db.tt/example",
-		is_paired: false,
-		account_type: { ".tag": "basic" as const },
-		root_info: {
-			".tag": "user" as const,
-			root_namespace_id: "123",
-			home_namespace_id: "123",
-		},
-	};
-	assertType<DropboxProfile>(profile);
-	const provider = dropbox({
-		clientId: "dropbox-app",
-		getUserInfo: async () => ({
-			user: {
-				name: profile.name.display_name,
-				email: profile.email,
-				emailVerified: true,
-			},
-			data: profile,
-		}),
+const profile = {
+	account_id: "dropbox-user",
+	name: {
+		given_name: "Jane",
+		surname: "Doe",
+		familiar_name: "Jane",
+		display_name: "Jane Doe",
+		abbreviated_name: "JD",
+	},
+	email: "jane@example.com",
+	email_verified: true,
+	disabled: false,
+	locale: "en",
+	referral_link: "https://db.tt/example",
+	is_paired: false,
+	team: null,
+	account_type: { ".tag": "basic" as const },
+	root_info: {
+		".tag": "user" as const,
+		root_namespace_id: "123",
+		home_namespace_id: "123",
+	},
+};
+const mockedFetch = vi.fn<typeof fetch>();
+beforeEach(() => {
+	mockedFetch.mockImplementation(async (input, init) => {
+		const request = new Request(input, init);
+		expect(request.url).toBe(
+			"https://api.dropboxapi.com/2/users/get_current_account",
+		);
+		expect(request.method).toBe("POST");
+		expect(request.headers.get("authorization")).toBe("Bearer access-token");
+		return Response.json(profile);
 	});
+	vi.stubGlobal("fetch", mockedFetch);
+});
+afterEach(() => vi.unstubAllGlobals());
 
-	const result = await provider.getUserInfo({ accessToken: "access-token" });
-
-	expect(result?.data.account_id).toBe("dropbox-user");
+/**
+ * @see https://github.com/dropbox/dropbox-api-spec/blob/3c363a594dafbe0f4646e73352b62a4767540d25/users.stone#L179-L230
+ */
+it("maps a personal Dropbox account without a photo or team", async () => {
+	assertType<DropboxProfile>(profile);
+	const result = await dropbox({ clientId: "dropbox-app" }).getUserInfo({
+		accessToken: "access-token",
+	});
+	expect(result?.data).toEqual(profile);
+	expect(result?.user).toEqual({
+		name: "Jane Doe",
+		email: "jane@example.com",
+		emailVerified: true,
+		image: undefined,
+	});
 });
 
 /**
@@ -58,5 +77,24 @@ it("types the current Dropbox account", () => {
 		root_namespace_id: "123",
 		home_namespace_id: "456",
 		home_path: "/Jane",
+	});
+});
+
+/**
+ * @see https://github.com/dropbox/dropbox-api-spec/blob/3c363a594dafbe0f4646e73352b62a4767540d25/common.stone#L49-L59
+ */
+it("distinguishes team and user root paths", () => {
+	assertType<DropboxProfile["team"]>(null);
+	assertType<DropboxProfile["root_info"]>({
+		".tag": "user",
+		root_namespace_id: "123",
+		home_namespace_id: "123",
+		home_path: "/Jane",
+	});
+	// @ts-expect-error Team roots require a home path.
+	assertType<DropboxProfile["root_info"]>({
+		".tag": "team",
+		root_namespace_id: "123",
+		home_namespace_id: "456",
 	});
 });
