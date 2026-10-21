@@ -972,26 +972,32 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			await runWithTransaction(ctx.context.adapter, async () => {
-				await resetCredentialPassword(
-					ctx,
-					user.user.id,
-					passwordHash,
-					otpConsumed
-						? undefined
-						: () => atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp),
-				);
-				if (!user.user.emailVerified) {
-					await ctx.context.internalAdapter.updateUser(user.user.id, {
-						emailVerified: true,
-					});
-				}
-			});
+			const resetUser = await runWithTransaction(
+				ctx.context.adapter,
+				async () => {
+					await resetCredentialPassword(
+						ctx,
+						user.user.id,
+						passwordHash,
+						otpConsumed
+							? undefined
+							: () => atomicVerifyOTP(ctx, opts, identifier, ctx.body.otp),
+					);
+					if (user.user.emailVerified) {
+						return user.user;
+					}
+					return (
+						(await ctx.context.internalAdapter.updateUser(user.user.id, {
+							emailVerified: true,
+						})) ?? user.user
+					);
+				},
+			);
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 				await ctx.context.options.emailAndPassword.onPasswordReset(
 					{
-						user: user.user,
+						user: resetUser,
 					},
 					ctx.request,
 				);
