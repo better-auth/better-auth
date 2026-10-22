@@ -721,6 +721,91 @@ describe("post normalization flow", async () => {
 		expect(session?.user.username).toBe("test_username");
 		expect(session?.user.displayUsername).toBe("Test Username");
 	});
+
+	it("should sign in with the username entered at sign-up", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					validationOrder: {
+						username: "post-normalization",
+					},
+					usernameNormalization: (username) => {
+						return username.split(" ").join("_").toLowerCase();
+					},
+				}),
+			],
+		});
+		await auth.api.signUpEmail({
+			body: {
+				email: "post-normalization-sign-in@email.com",
+				username: "Test Username",
+				password: "test-password",
+				name: "test-name",
+			},
+		});
+		const res = await auth.api.signInUsername({
+			body: {
+				username: "Test Username",
+				password: "test-password",
+			},
+		});
+		expect(res?.user.username).toBe("test_username");
+	});
+
+	it("should check the normalized username for availability", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					validationOrder: {
+						username: "post-normalization",
+					},
+					usernameNormalization: (username) => {
+						return username.split(" ").join("_").toLowerCase();
+					},
+				}),
+			],
+		});
+		const res = await auth.api.isUsernameAvailable({
+			body: {
+				username: "Other Name",
+			},
+		});
+		expect(res.available).toBe(true);
+	});
+
+	it("should check the length of the normalized username", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					validationOrder: {
+						username: "post-normalization",
+					},
+					usernameNormalization: (username) => {
+						return username.split(" ").join("").toLowerCase();
+					},
+				}),
+			],
+		});
+		await expect(
+			auth.api.isUsernameAvailable({
+				body: {
+					username: "a b",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { code: "USERNAME_TOO_SHORT" },
+		});
+		await expect(
+			auth.api.signInUsername({
+				body: {
+					username: "a b",
+					password: "test-password",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: { code: "USERNAME_TOO_SHORT" },
+		});
+	});
 });
 
 describe("username email verification flow (no info leak)", async () => {
