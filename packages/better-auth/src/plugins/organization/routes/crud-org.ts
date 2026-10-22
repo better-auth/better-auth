@@ -1,15 +1,16 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import {
-	getAuthoritativeSessionFromCtx,
-	requestOnlySessionMiddleware,
-} from "../../../api";
+import { requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
+import {
+	getOrgSessionFromCtx,
+	orgMiddleware,
+	orgSessionMiddleware,
+} from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type {
@@ -101,7 +102,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			const session = await getAuthoritativeSessionFromCtx(ctx);
+			const session = await getOrgSessionFromCtx(ctx);
 
 			if (!session && (ctx.request || ctx.headers)) {
 				throw APIError.fromStatus("UNAUTHORIZED");

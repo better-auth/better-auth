@@ -17,6 +17,7 @@ async function setup() {
 		fetchOptions: { headers, onSuccess: cookieSetter(headers) },
 	});
 	expect(cached.data).not.toBeNull();
+	expect(headers.get("cookie")).toContain("session_data");
 
 	const org = await client.$fetch<{ id: string }>("/organization/create", {
 		method: "POST",

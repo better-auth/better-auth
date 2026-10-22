@@ -3,15 +3,15 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import {
-	getAuthoritativeSessionFromCtx,
-	sensitiveSessionMiddleware,
-} from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
+import {
+	getOrgSessionFromCtx,
+	orgMiddleware,
+	orgSessionMiddleware,
+} from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
@@ -80,11 +80,7 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 		},
 		async (ctx) => {
 			const session = ctx.body.userId
-				? await getAuthoritativeSessionFromCtx<{
-						session: {
-							activeOrganizationId?: string | undefined;
-						};
-					}>(ctx).catch((e) => null)
+				? await getOrgSessionFromCtx(ctx).catch((e) => null)
 				: null;
 			const orgId =
 				ctx.body.organizationId || session?.session.activeOrganizationId;
@@ -878,7 +874,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			method: "POST",
 			body: leaveOrganizationBodySchema,
 			requireHeaders: true,
-			use: [sensitiveSessionMiddleware, orgMiddleware],
+			use: [orgSessionMiddleware, orgMiddleware],
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
