@@ -34,13 +34,21 @@ import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { oauthPopup } from "../oauth-popup";
-import { genericOAuth } from ".";
+import type { GenericOAuthConfig } from ".";
+import { discoveryCache, genericOAuth, remoteJwksCache } from ".";
 import { auth0 } from "./providers/auth0";
 import { keycloak } from "./providers/keycloak";
 import { microsoftEntraId } from "./providers/microsoft-entra-id";
 import { okta } from "./providers/okta";
 import { slack } from "./providers/slack";
 import { yandex } from "./providers/yandex";
+
+// Discovery documents and JWKS resolvers are shared across auth instances, so a
+// test must not observe what an earlier test cached for the same URL.
+afterEach(() => {
+	discoveryCache.clear();
+	remoteJwksCache.clear();
+});
 
 describe("oauth2", async () => {
 	const providerId = "test";
@@ -5684,5 +5692,181 @@ describe("redirect_uri composition under dynamic baseURL", async () => {
 				callbackPath: "callback/custom-oauth-test",
 			}),
 		).toBe("/callback/custom-oauth-test");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10999
+ */
+describe("discovery caching and timeouts", () => {
+	const servers: ReturnType<typeof createServer>[] = [];
+	const clientId = "cached-client-id";
+	const clientSecret = "cached-client-secret";
+
+	afterEach(() => {
+		for (const server of servers.splice(0)) {
+			server.closeAllConnections();
+			server.close();
+		}
+	});
+
+	async function startDiscoveryServer(
+		options: { delayMs?: number; hang?: boolean; jwks?: boolean } = {},
+	) {
+		const state = { fetches: 0, aborted: 0 };
+		const server = createServer((req, res) => {
+			state.fetches++;
+			req.on("aborted", () => {
+				state.aborted++;
+			});
+			if (options.hang) return;
+			setTimeout(() => {
+				const origin = `http://localhost:${(server.address() as AddressInfo).port}`;
+				res.setHeader("content-type", "application/json");
+				res.end(
+					JSON.stringify({
+						issuer: origin,
+						authorization_endpoint: `${origin}/authorize`,
+						token_endpoint: `${origin}/token`,
+						...(options.jwks
+							? {
+									jwks_uri: `${origin}/keys`,
+									id_token_signing_alg_values_supported: ["RS256"],
+								}
+							: {}),
+					}),
+				);
+			}, options.delayMs ?? 0);
+		});
+		servers.push(server);
+		await new Promise<void>((resolve) => server.listen(0, resolve));
+		const port = (server.address() as AddressInfo).port;
+		return {
+			state,
+			discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+		};
+	}
+
+	function createAuth(
+		discoveryUrl: string,
+		config: Partial<GenericOAuthConfig> = {},
+	) {
+		return getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "cached-idp",
+								clientId,
+								clientSecret,
+								discoveryUrl,
+								...config,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+	}
+
+	it("fetches a discovery document once for several auth instances", async () => {
+		const { state, discoveryUrl } = await startDiscoveryServer();
+		const first = await createAuth(discoveryUrl);
+		const second = await createAuth(discoveryUrl);
+
+		const providerIds = await Promise.all(
+			[first, second].map(async ({ auth }) =>
+				(await auth.$context).socialProviders.map((provider) => provider.id),
+			),
+		);
+		expect(providerIds[0]).toContain("cached-idp");
+		expect(providerIds[1]).toContain("cached-idp");
+		expect(state.fetches).toBe(1);
+	});
+
+	it("keys the discovery cache by discovery headers", async () => {
+		const { state, discoveryUrl } = await startDiscoveryServer();
+		await (
+			await createAuth(discoveryUrl, {
+				discoveryHeaders: { "x-tenant": "a" },
+			})
+		).auth.$context;
+		await (
+			await createAuth(discoveryUrl, {
+				discoveryHeaders: { "x-tenant": "b" },
+			})
+		).auth.$context;
+
+		expect(state.fetches).toBe(2);
+
+		await (
+			await createAuth(discoveryUrl, {
+				discoveryHeaders: { "x-tenant": "a" },
+			})
+		).auth.$context;
+		expect(state.fetches).toBe(2);
+	});
+
+	it("reuses one JWKS resolver across auth instances", async () => {
+		const { discoveryUrl } = await startDiscoveryServer({ jwks: true });
+		const [first, second] = await Promise.all([
+			createAuth(discoveryUrl),
+			createAuth(discoveryUrl),
+		]);
+		const jwksOf = async ({ auth }: typeof first) => {
+			const provider = (await auth.$context).socialProviders.find(
+				(provider) => provider.id === "cached-idp",
+			);
+			const idToken = provider?.idToken;
+			return idToken && "jwks" in idToken ? idToken.jwks : undefined;
+		};
+
+		expect(await jwksOf(first)).toBeDefined();
+		expect(await jwksOf(second)).toBe(await jwksOf(first));
+	});
+
+	it("shares one in-flight discovery fetch across concurrent auth instances", async () => {
+		const { state, discoveryUrl } = await startDiscoveryServer({
+			delayMs: 200,
+		});
+		const [first, second] = await Promise.all([
+			createAuth(discoveryUrl),
+			createAuth(discoveryUrl),
+		]);
+		await Promise.all([first.auth.$context, second.auth.$context]);
+
+		expect(state.fetches).toBe(1);
+	});
+
+	it("refetches a discovery document after the cache expires", async () => {
+		const { state, discoveryUrl } = await startDiscoveryServer();
+		await (await createAuth(discoveryUrl)).auth.$context;
+		expect(state.fetches).toBe(1);
+
+		const clock = vi
+			.spyOn(Date, "now")
+			.mockReturnValue(Date.now() + 6 * 60 * 1000);
+		try {
+			await (await createAuth(discoveryUrl)).auth.$context;
+		} finally {
+			clock.mockRestore();
+		}
+
+		expect(state.fetches).toBe(2);
+	});
+
+	it("aborts discovery that exceeds discoveryTimeout", async () => {
+		const { state, discoveryUrl } = await startDiscoveryServer({ hang: true });
+		const startedAt = Date.now();
+		const { auth } = await createAuth(discoveryUrl, { discoveryTimeout: 100 });
+		const context = await auth.$context;
+
+		expect(Date.now() - startedAt).toBeLessThan(2000);
+		expect(
+			context.socialProviders.map((provider) => provider.id),
+		).not.toContain("cached-idp");
+		await vi.waitFor(() => expect(state.aborted).toBe(1));
 	});
 });

@@ -15,6 +15,7 @@ import {
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
+import type { JWTVerifyGetKey } from "jose";
 import { createRemoteJWKSet, decodeJwt } from "jose";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
@@ -87,8 +88,81 @@ function isClientSecretTokenEndpointAuth(
 	);
 }
 
-/** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
-const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
+/** Default upper bound for a discovery request (the SSO plugin uses 10s too). */
+const DEFAULT_DISCOVERY_TIMEOUT_MS = 10_000;
+
+/**
+ * How long a discovered document is reused before it is fetched again. Matches
+ * the JWKS cache TTL in `@better-auth/core`.
+ */
+const DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Bound on cached discovery documents and JWKS resolvers so a process that
+ * constructs many providers cannot grow either cache without limit. URLs are
+ * normally static, so only dynamic configuration or tests reach these limits.
+ */
+const DISCOVERY_CACHE_MAX_ENTRIES = 50;
+const REMOTE_JWKS_CACHE_MAX_ENTRIES = 50;
+
+type DiscoveryCacheEntry = {
+	document?: DiscoveryDocument | undefined;
+	fetchedAt: number;
+	pending?:
+		| {
+				promise: Promise<DiscoveryDocument | null>;
+				startedAt: number;
+				timeout: number;
+		  }
+		| undefined;
+};
+
+/**
+ * Discovery documents shared across auth instances. Runtimes that construct an
+ * auth instance per request (Cloudflare Workers) would otherwise fetch the same
+ * document on every request.
+ *
+ * @internal
+ */
+export const discoveryCache = new Map<string, DiscoveryCacheEntry>();
+
+/**
+ * JWKS resolvers shared across auth instances, so ID-token verification does
+ * not refetch the key set per auth instance. jose keeps the keys fresh and
+ * handles rotation inside the resolver.
+ *
+ * @internal
+ */
+export const remoteJwksCache = new Map<string, JWTVerifyGetKey>();
+
+function evictOldest<K, V>(cache: Map<K, V>, maxEntries: number) {
+	if (cache.size < maxEntries) return;
+	const oldest = cache.keys().next().value;
+	if (oldest !== undefined) {
+		cache.delete(oldest);
+	}
+}
+
+function discoveryCacheKey(url: string, headers?: Record<string, string>) {
+	if (!headers) return url;
+	// Discovery documents are client-independent, so the URL and the headers
+	// that can change the response identify one. Keying by clientId would only
+	// split the cache into identical entries.
+	const sortedHeaders = Object.entries(headers).sort(([a], [b]) =>
+		a < b ? -1 : a > b ? 1 : 0,
+	);
+	return `${url}\n${JSON.stringify(sortedHeaders)}`;
+}
+
+function getRemoteJwks(url: URL) {
+	const key = url.href;
+	const cached = remoteJwksCache.get(key);
+	if (cached) return cached;
+	evictOldest(remoteJwksCache, REMOTE_JWKS_CACHE_MAX_ENTRIES);
+	const jwks = createRemoteJWKSet(url);
+	remoteJwksCache.set(key, jwks);
+	return jwks;
+}
 
 type PendingDiscovery = Map<
 	string,
@@ -105,16 +179,16 @@ const getPendingDiscovery = (ctx: AuthContext) =>
 	(ctx as AuthContext & { genericOAuthPendingDiscovery?: PendingDiscovery })
 		.genericOAuthPendingDiscovery;
 
-async function fetchDiscovery(
+async function requestDiscovery(
 	url: string,
-	headers?: Record<string, string>,
-	timeout?: number,
+	headers: Record<string, string> | undefined,
+	timeout: number,
 ): Promise<DiscoveryDocument | null> {
 	const result = await betterFetch<DiscoveryDocument>(url, {
 		method: "GET",
 		headers,
 		// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
-		signal: timeout ? AbortSignal.timeout(timeout) : undefined,
+		signal: AbortSignal.timeout(timeout),
 	});
 	if (result.error || !result.data) {
 		return null;
@@ -128,6 +202,55 @@ async function fetchDiscovery(
 		}
 	}
 	return result.data;
+}
+
+async function fetchDiscovery(
+	url: string,
+	headers?: Record<string, string>,
+	timeout = DEFAULT_DISCOVERY_TIMEOUT_MS,
+): Promise<DiscoveryDocument | null> {
+	const key = discoveryCacheKey(url, headers);
+	const now = Date.now();
+	const cached = discoveryCache.get(key);
+
+	if (cached?.document && now - cached.fetchedAt < DISCOVERY_CACHE_TTL_MS) {
+		return cached.document;
+	}
+
+	// A fetch can outlive the request that started it (runtimes cancel I/O when
+	// the request ends), so only join one that is still within its own bound.
+	if (
+		cached?.pending &&
+		now - cached.pending.startedAt <= cached.pending.timeout
+	) {
+		return cached.pending.promise;
+	}
+
+	const entry: DiscoveryCacheEntry = cached ?? { fetchedAt: 0 };
+	if (!cached) {
+		evictOldest(discoveryCache, DISCOVERY_CACHE_MAX_ENTRIES);
+		discoveryCache.set(key, entry);
+	}
+
+	const pending = {
+		startedAt: now,
+		timeout,
+		promise: requestDiscovery(url, headers, timeout)
+			.then((document) => {
+				// Ignore a fetch a newer one replaced, so a stale response cannot
+				// overwrite a fresher document.
+				if (document && entry.pending === pending) {
+					entry.document = document;
+					entry.fetchedAt = Date.now();
+				}
+				return document;
+			})
+			.finally(() => {
+				if (entry.pending === pending) entry.pending = undefined;
+			}),
+	};
+	entry.pending = pending;
+	return pending.promise;
 }
 
 async function fetchUserInfo(
@@ -220,7 +343,6 @@ export const genericOAuth = <const ID extends string>(
 	const buildProviders = async (
 		configs: GenericOAuthConfig[],
 		ctx: AuthContext,
-		discoveryTimeout?: number,
 	): Promise<OAuthProvider[]> => {
 		const genericProviders: OAuthProvider[] = [];
 		for (const c of configs) {
@@ -237,7 +359,7 @@ export const genericOAuth = <const ID extends string>(
 				const discovered = await fetchDiscovery(
 					c.discoveryUrl,
 					c.discoveryHeaders,
-					discoveryTimeout,
+					c.discoveryTimeout,
 				).catch((err) => {
 					ctx.logger.error(
 						`Discovery fetch failed for "${c.providerId}": ${err}`,
@@ -263,7 +385,7 @@ export const genericOAuth = <const ID extends string>(
 							continue;
 						}
 						idTokenConfig = {
-							jwks: createRemoteJWKSet(jwksUrl),
+							jwks: getRemoteJwks(jwksUrl),
 							issuer: discovered.issuer,
 							audience: c.clientId,
 							algorithms: isOidc ? signingAlgs : undefined,
@@ -527,11 +649,7 @@ export const genericOAuth = <const ID extends string>(
 		const pendingDiscovery = getPendingDiscovery(ctx);
 		const pending = pendingDiscovery?.get(providerId);
 		if (!pending) return;
-		pending.attempt ??= buildProviders(
-			[pending.config],
-			ctx,
-			DISCOVERY_RETRY_TIMEOUT_MS,
-		)
+		pending.attempt ??= buildProviders([pending.config], ctx)
 			.then(([provider]) => {
 				if (!provider) return;
 				pendingDiscovery?.delete(providerId);
