@@ -61,6 +61,9 @@ async function setup() {
 	};
 }
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10232
+ */
 describe("organization routes with an API-key session", () => {
 	it("accepts a valid API key sent without a session cookie", async () => {
 		const { auth, apiKey, organizationId } = await setup();
@@ -98,6 +101,9 @@ describe("organization routes with an API-key session", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10232
+ */
 describe("organization routes with a bearer token", () => {
 	it("accepts a valid bearer token", async () => {
 		const { auth, bearerToken, organizationId } = await setup();

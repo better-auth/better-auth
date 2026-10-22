@@ -32,6 +32,9 @@ async function setup() {
 	return { client, headers, organizationId: org.data!.id };
 }
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10232
+ */
 describe("organization routes with a revoked session behind the cookie cache", () => {
 	it.each([
 		[
