@@ -62,6 +62,8 @@ overrides:
   sharp: '>=0.35.5 <0.36'
   # better-sqlite3 12.10.0 added Node 26 support.
   'better-sqlite3@>=12 <12.10.0': '>=12.10.0 <13'
+  # chromium-edge-launcher depends on @types/node "*". Keep it on the root version so peer variants stay aligned with demo/nextjs.
+  chromium-edge-launcher>@types/node: 25.9.4
 
 catalog:
   '@better-auth/utils': 0.5.0
