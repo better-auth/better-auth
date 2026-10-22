@@ -1,4 +1,15 @@
+import {
+	createHash,
+	generateKeyPairSync,
+	randomBytes,
+	sign,
+} from "node:crypto";
 import { APIError } from "@better-auth/core/error";
+import {
+	isoBase64URL,
+	isoCBOR,
+	isoUint8Array,
+} from "@simplewebauthn/server/helpers";
 import type { Verification } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
@@ -1555,18 +1566,12 @@ describe("passkey requireUserVerification", () => {
 			plugins: [passkey(options)],
 		});
 
-		const register = async (opts?: { rejectWith?: Error }) => {
+		const register = async () => {
 			const { headers } = await instance.signInWithTestUser();
 			headers.set("origin", "http://localhost:3000");
-			if (opts?.rejectWith) {
-				serverMocks.verifyRegistrationResponse.mockRejectedValueOnce(
-					opts.rejectWith,
-				);
-			} else {
-				serverMocks.verifyRegistrationResponse.mockResolvedValueOnce(
-					mockRegistrationVerification,
-				);
-			}
+			serverMocks.verifyRegistrationResponse.mockResolvedValueOnce(
+				mockRegistrationVerification,
+			);
 			await instance.client.$fetch("/passkey/generate-register-options", {
 				method: "GET",
 				headers,
@@ -1578,7 +1583,7 @@ describe("passkey requireUserVerification", () => {
 			});
 		};
 
-		const authenticate = async (opts?: { rejectWith?: Error }) => {
+		const authenticate = async () => {
 			const { headers, user } = await instance.signInWithTestUser();
 			const context = await instance.auth.$context;
 			await context.adapter.create<Omit<Passkey, "id">, Passkey>({
@@ -1599,16 +1604,10 @@ describe("passkey requireUserVerification", () => {
 				headers,
 				onResponse: instance.cookieSetter(headers),
 			});
-			if (opts?.rejectWith) {
-				serverMocks.verifyAuthenticationResponse.mockRejectedValueOnce(
-					opts.rejectWith,
-				);
-			} else {
-				serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
-					verified: true,
-					authenticationInfo: { newCounter: 1 },
-				});
-			}
+			serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
+				verified: true,
+				authenticationInfo: { newCounter: 1 },
+			});
 			return instance.auth.api.verifyPasskeyAuthentication({
 				headers,
 				body: {
@@ -1706,58 +1705,231 @@ describe("passkey requireUserVerification", () => {
 			expect.objectContaining({ requireUserVerification: true }),
 		);
 	});
-	// SimpleWebAuthn throws (rather than returning `verified: false`) when
-	// `requireUserVerification` is set and the UV flag is missing.
-	const userVerificationError = () =>
-		new Error("User verification required, but user could not be verified");
+});
 
-	it("rejects a registration without user verification and stores no passkey", async () => {
-		const { auth, register } = await setup({ requireUserVerification: true });
+/**
+ * Runs the real SimpleWebAuthn verification against responses signed by a
+ * software authenticator, so the UV flag check itself is exercised.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11929
+ */
+describe("passkey requireUserVerification (real WebAuthn verification)", () => {
+	const origin = "http://localhost:3000";
+	const rpID = "localhost";
+	const FLAG_USER_PRESENT = 0x01;
+	const FLAG_USER_VERIFIED = 0x04;
+	const FLAG_ATTESTED_CREDENTIAL_DATA = 0x40;
 
-		const error = await register({ rejectWith: userVerificationError() }).catch(
-			(e: unknown) => e,
-		);
+	const sha256 = (data: string | Uint8Array) =>
+		new Uint8Array(createHash("sha256").update(data).digest());
 
-		expect(error).toBeInstanceOf(APIError);
-		expect(((error as APIError).body as { code?: string }).code).toBe(
-			"FAILED_TO_VERIFY_REGISTRATION",
-		);
-		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
-			expect.objectContaining({ requireUserVerification: true }),
-		);
-		const context = await auth.$context;
-		const passkeys = await context.adapter.findMany<Passkey>({
-			model: "passkey",
+	const createSoftwareAuthenticator = () => {
+		const { privateKey, publicKey } = generateKeyPairSync("ec", {
+			namedCurve: "P-256",
 		});
-		expect(passkeys).toHaveLength(0);
+		const jwk = publicKey.export({ format: "jwk" });
+		assert(jwk.x && jwk.y);
+		const cosePublicKey = isoCBOR.encode(
+			new Map<number, number | Uint8Array>([
+				[1, 2], // kty: EC2
+				[3, -7], // alg: ES256
+				[-1, 1], // crv: P-256
+				[-2, isoBase64URL.toBuffer(jwk.x)],
+				[-3, isoBase64URL.toBuffer(jwk.y)],
+			]),
+		);
+		const rawCredentialID = new Uint8Array(randomBytes(16));
+		const credentialID = isoBase64URL.fromBuffer(rawCredentialID);
+		const rpIdHash = sha256(rpID);
+		const signCount = new Uint8Array(4);
+		const encodeClientData = (type: string, challenge: string) =>
+			isoBase64URL.fromUTF8String(
+				JSON.stringify({ type, challenge, origin, crossOrigin: false }),
+			);
+
+		const createAttestation = (challenge: string, userVerified: boolean) => {
+			const flags =
+				FLAG_USER_PRESENT |
+				FLAG_ATTESTED_CREDENTIAL_DATA |
+				(userVerified ? FLAG_USER_VERIFIED : 0);
+			const authData = isoUint8Array.concat([
+				rpIdHash,
+				Uint8Array.of(flags),
+				signCount,
+				new Uint8Array(16), // AAGUID
+				Uint8Array.of(0, rawCredentialID.length),
+				rawCredentialID,
+				cosePublicKey,
+			]);
+			const attestationObject = isoCBOR.encode(
+				new Map<string, string | Uint8Array | Map<string, never>>([
+					["fmt", "none"],
+					["attStmt", new Map<string, never>()],
+					["authData", authData],
+				]),
+			);
+			return {
+				id: credentialID,
+				rawId: credentialID,
+				type: "public-key" as const,
+				response: {
+					clientDataJSON: encodeClientData("webauthn.create", challenge),
+					attestationObject: isoBase64URL.fromBuffer(attestationObject),
+					transports: ["internal"],
+				},
+				clientExtensionResults: {},
+			};
+		};
+
+		const createAssertion = (challenge: string, userVerified: boolean) => {
+			const flags = FLAG_USER_PRESENT | (userVerified ? FLAG_USER_VERIFIED : 0);
+			const authData = isoUint8Array.concat([
+				rpIdHash,
+				Uint8Array.of(flags),
+				signCount,
+			]);
+			const clientDataJSON = encodeClientData("webauthn.get", challenge);
+			const signature = sign(
+				"sha256",
+				isoUint8Array.concat([
+					authData,
+					sha256(isoBase64URL.toBuffer(clientDataJSON)),
+				]),
+				privateKey,
+			);
+			return {
+				id: credentialID,
+				rawId: credentialID,
+				type: "public-key" as const,
+				response: {
+					clientDataJSON,
+					authenticatorData: isoBase64URL.fromBuffer(authData),
+					signature: isoBase64URL.fromBuffer(new Uint8Array(signature)),
+				},
+				clientExtensionResults: {},
+			};
+		};
+
+		return { createAttestation, createAssertion };
+	};
+
+	const setup = async (requireUserVerification: boolean) => {
+		const { auth, client, cookieSetter, signInWithTestUser } =
+			await getTestInstance({
+				plugins: [passkey({ rpID, requireUserVerification })],
+			});
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", origin);
+		const context = await auth.$context;
+		const authenticator = createSoftwareAuthenticator();
+
+		const fetchChallenge = async (path: string) => {
+			const { data } = await client.$fetch<{ challenge: string }>(path, {
+				method: "GET",
+				headers,
+				onResponse: cookieSetter(headers),
+			});
+			assert(data);
+			return data.challenge;
+		};
+
+		const register = async ({ userVerified }: { userVerified: boolean }) => {
+			const challenge = await fetchChallenge(
+				"/passkey/generate-register-options",
+			);
+			return auth.api.verifyPasskeyRegistration({
+				headers,
+				body: {
+					response: authenticator.createAttestation(challenge, userVerified),
+				},
+			});
+		};
+
+		const authenticate = async ({
+			userVerified,
+		}: {
+			userVerified: boolean;
+		}) => {
+			const challenge = await fetchChallenge(
+				"/passkey/generate-authenticate-options",
+			);
+			return auth.api.verifyPasskeyAuthentication({
+				headers,
+				body: {
+					response: authenticator.createAssertion(challenge, userVerified),
+				},
+			});
+		};
+
+		return {
+			register,
+			authenticate,
+			countPasskeys: () => context.adapter.count({ model: "passkey" }),
+			countSessions: () => context.adapter.count({ model: "session" }),
+		};
+	};
+
+	const errorCode = (error: unknown) => {
+		expect(error).toBeInstanceOf(APIError);
+		return ((error as APIError).body as { code?: string } | undefined)?.code;
+	};
+
+	beforeEach(async () => {
+		const actual = await vi.importActual<
+			typeof import("@simplewebauthn/server")
+		>("@simplewebauthn/server");
+		serverMocks.verifyRegistrationResponse.mockImplementation(
+			actual.verifyRegistrationResponse,
+		);
+		serverMocks.verifyAuthenticationResponse.mockImplementation(
+			actual.verifyAuthenticationResponse,
+		);
 	});
 
-	it("rejects an authentication without user verification and creates no session", async () => {
-		const { auth, authenticate } = await setup({
-			requireUserVerification: true,
-		});
-		const context = await auth.$context;
-		const sessionsBefore = await context.adapter.count({ model: "session" });
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+		serverMocks.verifyAuthenticationResponse.mockReset();
+	});
 
-		const error = await authenticate({
-			rejectWith: userVerificationError(),
-		}).catch((e: unknown) => e);
+	it("accepts responses without user verification when not required", async () => {
+		const { register, authenticate, countPasskeys, countSessions } =
+			await setup(false);
 
-		expect(error).toBeInstanceOf(APIError);
-		expect(((error as APIError).body as { code?: string }).code).toBe(
-			"AUTHENTICATION_FAILED",
+		await register({ userVerified: false });
+		expect(await countPasskeys()).toBe(1);
+
+		const sessionsBefore = await countSessions();
+		const result = await authenticate({ userVerified: false });
+		expect(result.session).toBeDefined();
+		expect(await countSessions()).toBe(sessionsBefore + 1);
+	});
+
+	it("rejects a registration without user verification when required", async () => {
+		const { register, countPasskeys } = await setup(true);
+
+		const error = await register({ userVerified: false }).catch(
+			(e: unknown) => e,
 		);
-		expect(serverMocks.verifyAuthenticationResponse).toHaveBeenCalledWith(
-			expect.objectContaining({ requireUserVerification: true }),
+		expect(errorCode(error)).toBe("FAILED_TO_VERIFY_REGISTRATION");
+		expect(await countPasskeys()).toBe(0);
+
+		await register({ userVerified: true });
+		expect(await countPasskeys()).toBe(1);
+	});
+
+	it("rejects an authentication without user verification when required", async () => {
+		const { register, authenticate, countSessions } = await setup(true);
+		await register({ userVerified: true });
+		const sessionsBefore = await countSessions();
+
+		const error = await authenticate({ userVerified: false }).catch(
+			(e: unknown) => e,
 		);
-		const passkey = await context.adapter.findOne<Passkey>({
-			model: "passkey",
-			where: [{ field: "credentialID", value: "uv-credential-id" }],
-		});
-		assert(passkey);
-		expect(passkey.counter).toBe(0);
-		// Only the session from `signInWithTestUser` inside `authenticate` is new.
-		const sessionsAfter = await context.adapter.count({ model: "session" });
-		expect(sessionsAfter).toBe(sessionsBefore + 1);
+		expect(errorCode(error)).toBe("AUTHENTICATION_FAILED");
+		expect(await countSessions()).toBe(sessionsBefore);
+
+		const result = await authenticate({ userVerified: true });
+		expect(result.session).toBeDefined();
+		expect(await countSessions()).toBe(sessionsBefore + 1);
 	});
 });
