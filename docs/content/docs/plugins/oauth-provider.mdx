@@ -738,7 +738,7 @@ Accept or deny user consent for a set of scopes. Note that when denying scopes, 
      */
     claims?: string | Record<string, unknown>,
     /**
-     * The reference the user chose for this consent, such as an organization ID. `postLogin.consentReferenceId` receives it as `consent.referenceId` and decides whether to accept it. Rejected with `invalid_request` when `postLogin` is not configured.
+     * The reference the user chose for this consent, such as an organization ID. `postLogin.consentReferenceId` receives it as `consent.referenceId` and decides whether to accept it. When the user accepts without `postLogin` configured, the request is rejected with `invalid_request`. A denial ignores it.
      */
     reference_id?: string,
   }
@@ -1341,9 +1341,12 @@ await authClient.oauth2.continue({
 
 `shouldRedirect` and `consentReferenceId` receive `query`, the authorization request this server validated, as `URLSearchParams`. It includes parameters the client adds, so a client can name the organization it needs, such as `organization=org_123`. The client chooses that value, so check that the user belongs to the organization before returning it.
 
-Your consent page can also ask which organization the consent is for and send its ID as `reference_id` to `/oauth2/consent`. `consentReferenceId` receives it as `consent.referenceId`, then returns the reference to store or throws to refuse it. `consent` is set only while `/oauth2/consent` records the user's acceptance, so before then, an authorization without an organization can return `undefined` to let the consent page ask. A client with `skip_consent` never reaches the consent page, so throw instead when such a client must name the organization.
+Your consent page can also ask which organization the consent is for and send its ID as `reference_id` to `/oauth2/consent`. `consentReferenceId` receives it as `consent.referenceId`, then returns the reference to store or throws to refuse it. `consent` is set only while `/oauth2/consent` records the user's acceptance, so before then, an authorization without an organization can return `undefined` to let the consent page ask. A client with `skip_consent` skips the consent page unless its request sends `prompt=consent`, and the authorization is approved with whatever the callback returns. Throw for such a client when it does not name the organization, as the example does with `skipConsentClientIds`.
 
 ```ts title="auth.ts"
+// Clients created with `skip_consent`
+const skipConsentClientIds = new Set(["internal-dashboard"]);
+
 oauthProvider({
   scopes: ["openid", "profile", "email", "read:organization"],
   postLogin: {
@@ -1362,7 +1365,10 @@ oauthProvider({
       }
       const organizationId = named ?? chosen;
       if (!organizationId) {
-        if (!consent) return undefined;
+        // Let the consent page ask, unless the client skips it.
+        if (!consent && !skipConsentClientIds.has(query.get("client_id") ?? "")) {
+          return undefined;
+        }
         throw new APIError("BAD_REQUEST", {
           error: "invalid_request",
           error_description: "choose an organization",
