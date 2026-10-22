@@ -1129,9 +1129,9 @@
 
   ```ts
   idToken: {
-  	jwks: createRemoteJWKSet(new URL("https://issuer.example/.well-known/jwks.json")),
-  	issuer: "https://issuer.example",
-  	audience: clientId,
+	jwks: createRemoteJWKSet(new URL("https://issuer.example/.well-known/jwks.json")),
+	issuer: "https://issuer.example",
+	audience: clientId,
   },
   ```
 
