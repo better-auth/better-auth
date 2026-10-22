@@ -7,9 +7,6 @@
   "references": [
     {
       "path": "../core/tsconfig.json"
-    },
-    {
-      "path": "./tsconfig.test.json"
     }
   ]
 }

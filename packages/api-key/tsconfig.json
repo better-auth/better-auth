@@ -6,10 +6,10 @@
   "include": ["./src", "./package.json"],
   "references": [
     {
-      "path": "../core/tsconfig.json"
+      "path": "../better-auth/tsconfig.json"
     },
     {
-      "path": "./tsconfig.test.json"
+      "path": "../core/tsconfig.json"
     }
   ]
 }
