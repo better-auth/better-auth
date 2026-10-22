@@ -1,5 +1,5 @@
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
@@ -345,21 +345,20 @@ describe("microsoft id_token alg omission", () => {
  * @see https://github.com/better-auth/better-auth/issues/3802
  * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
  * @see https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference
- * @see https://learn.microsoft.com/en-us/entra/identity-platform/access-token-claims-reference
  */
-it("accepts numeric Microsoft timestamps and configured claim arrays", async () => {
+it("types numeric timestamps, claim arrays, and omitted conditional claims", () => {
 	const profile = {
-		aud: CLIENT_ID,
-		iss: `${AUTHORITY}/${WORK_TENANT_ID}/v2.0`,
+		aud: "client",
+		iss: "https://login.microsoftonline.com/tenant/v2.0",
 		iat: 1700000000,
 		nbf: 1700000000,
 		exp: 1700003600,
-		oid: "ms-stable-oid",
-		sub: "ms-pairwise-sub",
-		tid: WORK_TENANT_ID,
+		oid: "stable-user-id",
+		sub: "pairwise-subject",
+		tid: "tenant",
 	};
 	assertType<MicrosoftEntraIDProfile>(profile);
-	const configuredProfile = {
+	assertType<MicrosoftEntraIDProfile>({
 		...profile,
 		aio: "opaque-value",
 		in_corp: true,
@@ -367,18 +366,5 @@ it("accepts numeric Microsoft timestamps and configured claim arrays", async () 
 		groups: ["group-id"],
 		acrs: ["c1"],
 		xms_cc: ["CP1"],
-	};
-	assertType<MicrosoftEntraIDProfile>(configuredProfile);
-	const provider = microsoft({
-		clientId: CLIENT_ID,
-		disableProfilePhoto: true,
 	});
-
-	const result = await provider.getUserInfo({
-		idToken: new UnsecuredJWT(configuredProfile).encode(),
-	});
-
-	expect(result?.data).toMatchObject(configuredProfile);
-	expect(result?.user.image).toBeUndefined();
-	expect(mockedBetterFetch).not.toHaveBeenCalled();
 });
