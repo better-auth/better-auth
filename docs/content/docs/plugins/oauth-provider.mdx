@@ -1151,6 +1151,8 @@ During the OAuth flow, users are likely redirected between pages. For example, a
 
 To process each redirect step in the login flow, we verify the signed query provided in the initial `/oauth2/authorize` redirect. All parameters sent to the authorize endpoint (including any custom ones), are signed and verified.
 
+The `shouldRedirect` hooks of `signup`, `selectAccount`, and `postLogin`, and `postLogin.consentReferenceId`, receive this request as `query`, a `URLSearchParams` copy, once the provider has validated it. Read a parameter the client added with `query.get`, and a repeatable one with `query.getAll`, such as `query.getAll("resource")` for the [resources](#resources) a request targets.
+
 If your sign-in pages include custom page query parameters, they may coexist in the URL, but they should not be added to the signed `oauth_query`. The client plugin forwards only the parameters declared by the signed redirect.
 
 If you utilize the Client Plugin `oauthProviderClient`, then the `oauth_query` parameter is automatically sent to every endpoint that requires it. If you have custom sign-in endpoints, you would need to manually add the window's signed query in the request body `oauth_query`. This should only include the signed query parameters.

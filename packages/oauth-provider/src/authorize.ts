@@ -951,6 +951,7 @@ async function runAuthorizationInteraction(
 			user: session.user,
 			session: session.session,
 			scopes,
+			query: serializeAuthorizationQuery(query),
 		});
 		if (selectedAccountRedirect) {
 			if (promptNone) {
@@ -973,6 +974,7 @@ async function runAuthorizationInteraction(
 			user: session.user,
 			session: session.session,
 			scopes,
+			query: serializeAuthorizationQuery(query),
 		});
 		if (signupRedirect) {
 			if (promptNone) {

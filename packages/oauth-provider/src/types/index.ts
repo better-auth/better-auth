@@ -1261,6 +1261,12 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * The authorization request this server validated, including
+			 * parameters the client added, such as `organization`. Changing it
+			 * does not change the request.
+			 */
+			query: URLSearchParams;
 		}) => Awaitable<boolean | string>;
 	};
 	/**
@@ -1290,6 +1296,12 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/**
+			 * The authorization request this server validated, including
+			 * parameters the client added, such as `organization`. Changing it
+			 * does not change the request.
+			 */
+			query: URLSearchParams;
 		}) => Awaitable<boolean>;
 	};
 	/**

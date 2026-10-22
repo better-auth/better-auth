@@ -631,3 +631,75 @@ it("rejects a chosen reference when no callback can verify it", async () => {
 	expect(result.error?.status).toBe(400);
 	expect(result.error).toMatchObject({ error: "invalid_request" });
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11039
+ */
+it("gives every interaction hook the validated request, including repeated resources", async () => {
+	type Options = OAuthOptions<Scope[]>;
+	const resources = ["https://api.example.com", "https://mcp.example.com"];
+	const selectAccount =
+		vi.fn<NonNullable<Options["selectAccount"]>["shouldRedirect"]>();
+	const signup =
+		vi.fn<NonNullable<NonNullable<Options["signup"]>["shouldRedirect"]>>();
+	const postLogin =
+		vi.fn<NonNullable<Options["postLogin"]>["shouldRedirect"]>();
+	const consentReferenceId =
+		vi.fn<NonNullable<Options["postLogin"]>["consentReferenceId"]>();
+	selectAccount.mockReturnValue(false);
+	signup.mockReturnValue(false);
+	postLogin.mockReturnValue(false);
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+					resources,
+					enforcePerClientResources: false,
+					selectAccount: {
+						page: "/select-account",
+						shouldRedirect: selectAccount,
+					},
+					signup: { shouldRedirect: signup },
+					postLogin: {
+						page: "/select-organization",
+						shouldRedirect: postLogin,
+						consentReferenceId,
+					},
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: { redirect_uris: [redirectURI] },
+	});
+	const query = new URLSearchParams({
+		client_id: oauthClient.client_id,
+		redirect_uri: redirectURI,
+		response_type: "code",
+		scope: "openid",
+		code_challenge: "a".repeat(43),
+		code_challenge_method: "S256",
+		organization: "org_1",
+	});
+	for (const resource of resources) query.append("resource", resource);
+	const response = await auth.handler(
+		new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, { headers }),
+	);
+
+	expect(
+		new URL(response.headers.get("location") ?? "", baseURL).pathname,
+	).toBe("/consent");
+	for (const hook of [selectAccount, signup, postLogin, consentReferenceId]) {
+		const context = hook.mock.lastCall?.[0];
+		expect(context?.query.getAll("resource")).toEqual(resources);
+		expect(context?.query.get("organization")).toBe("org_1");
+	}
+});
