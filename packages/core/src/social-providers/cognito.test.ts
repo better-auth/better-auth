@@ -1,5 +1,5 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
 import {
 	assertType,
 	beforeEach,
@@ -69,15 +69,7 @@ describe("Cognito profile verification", () => {
 			email: "user@example.com",
 			email_verified: raw,
 		} satisfies CognitoProfile;
-		const idToken = await new SignJWT(profile)
-			.setProtectedHeader({ alg: "HS256" })
-			.setIssuer(
-				`https://cognito-idp.us-east-1.amazonaws.com/${options.userPoolId}`,
-			)
-			.setAudience(options.clientId)
-			.setIssuedAt()
-			.setExpirationTime("1h")
-			.sign(new TextEncoder().encode("cognito-signing-key"));
+		const idToken = new UnsecuredJWT(profile).encode();
 		const result = await cognito(options).getUserInfo({ idToken });
 
 		expect(result?.user.emailVerified).toBe(verified);
@@ -144,11 +136,11 @@ it.each([
 		"legacy-name",
 	],
 ])("uses the ID-token username fallback %j", async (claims, name) => {
-	const token = await new SignJWT({ sub: "user", token_use: "id", ...claims })
-		.setProtectedHeader({ alg: "HS256" })
-		.setIssuedAt()
-		.setExpirationTime("1h")
-		.sign(new TextEncoder().encode("cognito-signing-key"));
+	const token = new UnsecuredJWT({
+		sub: "user",
+		token_use: "id",
+		...claims,
+	}).encode();
 	const result = await cognito(options).getUserInfo({ idToken: token });
 	expect(result?.user.name).toBe(name);
 });
