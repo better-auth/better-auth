@@ -461,10 +461,11 @@ export type AuthorizeEndpointSettings = {
 	isAuthorize?: boolean;
 	postLogin?: boolean;
 	isPostLoginContinuation?: boolean;
-	/** Set only by the consent endpoint, in the request where the user accepts. */
-	consentAccepted?: boolean;
-	/** With `consentAccepted`: the reference the accepted consent was stored under. */
-	consentReferenceId?: string;
+	/**
+	 * Set only by the consent endpoint, in the request where the user accepts:
+	 * the reference the consent was stored under.
+	 */
+	acceptedConsent?: { referenceId?: string };
 };
 
 export async function authorizeEndpoint(
@@ -935,6 +936,13 @@ async function runAuthorizationInteraction(
 		query = removeMaxAgeFromAuthorizationQuery(query);
 		ctx.query = query;
 	}
+	// Each hook gets its own copy of the query.
+	const hookContext = () => ({
+		user: session.user,
+		session: session.session,
+		scopes,
+		query: serializeAuthorizationQuery(query),
+	});
 
 	// Force account selection (eg. multi-session)
 	if (settings?.isAuthorize && promptSet?.has("select_account")) {
@@ -948,10 +956,7 @@ async function runAuthorizationInteraction(
 	) {
 		const selectedAccountRedirect = await opts.selectAccount.shouldRedirect({
 			headers,
-			user: session.user,
-			session: session.session,
-			scopes,
-			query: serializeAuthorizationQuery(query),
+			...hookContext(),
 		});
 		if (selectedAccountRedirect) {
 			if (promptNone) {
@@ -971,10 +976,7 @@ async function runAuthorizationInteraction(
 	if (opts.signup?.shouldRedirect) {
 		const signupRedirect = await opts.signup.shouldRedirect({
 			headers,
-			user: session.user,
-			session: session.session,
-			scopes,
-			query: serializeAuthorizationQuery(query),
+			...hookContext(),
 		});
 		if (signupRedirect) {
 			if (promptNone) {
@@ -995,10 +997,7 @@ async function runAuthorizationInteraction(
 	if (!settings?.postLogin && opts.postLogin) {
 		const postLoginRedirect = await opts.postLogin.shouldRedirect({
 			headers,
-			user: session.user,
-			session: session.session,
-			scopes,
-			query: serializeAuthorizationQuery(query),
+			...hookContext(),
 			isContinuation: settings?.isPostLoginContinuation ?? false,
 		});
 		if (postLoginRedirect) {
@@ -1019,21 +1018,16 @@ async function runAuthorizationInteraction(
 	// the request where the user accepts it, never from a resumed signed query.
 	if (
 		promptSet?.has("consent") ||
-		(request.requireConsent && !settings?.consentAccepted)
+		(request.requireConsent && !settings?.acceptedConsent)
 	) {
 		return redirectWithPromptCode(ctx, opts, "consent", {
 			sessionId: session.session.id,
 		});
 	}
 
-	const referenceId = settings?.consentAccepted
-		? settings.consentReferenceId
-		: await getConsentReferenceId(opts, {
-				user: session.user,
-				session: session.session,
-				scopes,
-				query: serializeAuthorizationQuery(query),
-			});
+	const referenceId = settings?.acceptedConsent
+		? settings.acceptedConsent.referenceId
+		: await getConsentReferenceId(opts, hookContext());
 	const approve = async () => {
 		let authenticationContext: OAuthAuthenticationContext;
 		try {

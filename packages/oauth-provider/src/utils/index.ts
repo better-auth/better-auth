@@ -31,13 +31,6 @@ import type {
 	TokenEndpointAuthMethod,
 } from "../types";
 
-export {
-	getSignedQueryIssuedAt,
-	postLoginClearedParam,
-	signedQueryIssuedAtParam,
-	signedQueryParameterNameParam,
-} from "../signed-query";
-
 /**
  * Extracts the credentials from an `Authorization: Bearer <token>` header.
  *

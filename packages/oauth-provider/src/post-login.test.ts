@@ -1,9 +1,9 @@
+import { generateCodeChallenge } from "@better-auth/core/oauth2";
 import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
-import { base64url } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
@@ -12,6 +12,28 @@ import type { OAuthOptions, Scope } from "./types";
 
 const baseURL = "http://localhost:3000";
 const redirectURI = "https://client.example.com/callback";
+
+/** Sends an authorization request and returns where the provider redirects. */
+async function authorizeRedirect(
+	auth: { handler: (request: Request) => Promise<Response> },
+	headers: Headers,
+	params: Record<string, string | string[]>,
+) {
+	const query = new URLSearchParams({
+		redirect_uri: redirectURI,
+		response_type: "code",
+		code_challenge: "a".repeat(43),
+		code_challenge_method: "S256",
+	});
+	for (const [key, value] of Object.entries(params)) {
+		query.delete(key);
+		for (const item of [value].flat()) query.append(key, item);
+	}
+	const response = await auth.handler(
+		new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, { headers }),
+	);
+	return new URL(response.headers.get("location") ?? "", baseURL);
+}
 
 async function createPostLoginTestInstance() {
 	const shouldRedirect =
@@ -75,23 +97,13 @@ async function createPostLoginTestInstance() {
 		headers,
 		body: { redirect_uris: [redirectURI] },
 	});
-	const query = new URLSearchParams({
-		client_id: oauthClient.client_id,
-		redirect_uri: redirectURI,
-		response_type: "code",
-		scope: "openid read:organization",
-		state: "organization-selection",
-		code_challenge: "a".repeat(43),
-		code_challenge_method: "S256",
-	});
 
-	async function authorize(requestHeaders = headers) {
-		const response = await auth.handler(
-			new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, {
-				headers: requestHeaders,
-			}),
-		);
-		return new URL(response.headers.get("location") ?? "", baseURL);
+	function authorize(requestHeaders = headers) {
+		return authorizeRedirect(auth, requestHeaders, {
+			client_id: oauthClient.client_id,
+			scope: "openid read:organization",
+			state: "organization-selection",
+		});
 	}
 
 	return { ...instance, headers, organizations, shouldRedirect, authorize };
@@ -214,22 +226,12 @@ describe.each([
 		}
 		await storeConsent("org_1", ["read"]);
 
-		async function authorize(scope: string) {
-			const query = new URLSearchParams({
+		function authorize(scope: string) {
+			return authorizeRedirect(auth, headers, {
 				client_id: oauthClient.client_id,
-				redirect_uri: redirectURI,
-				response_type: "code",
 				scope,
 				state: "no-reference",
-				code_challenge: "a".repeat(43),
-				code_challenge_method: "S256",
 			});
-			const response = await auth.handler(
-				new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, {
-					headers,
-				}),
-			);
-			return new URL(response.headers.get("location") ?? "", baseURL);
 		}
 
 		async function findConsents() {
@@ -341,7 +343,7 @@ describe.each(["sqlite", "postgres", "mongodb"] as const)(
 					clientOptions: { plugins: [oauthProviderClient()] },
 				},
 			);
-			const { auth, client, signInWithTestUser, signInWithUser } = instance;
+			const { auth, client, signInWithTestUser } = instance;
 			const { headers, user } = await signInWithTestUser();
 			const { adapter } = await auth.$context;
 
@@ -374,27 +376,24 @@ describe.each(["sqlite", "postgres", "mongodb"] as const)(
 				},
 			);
 
-			async function createOrganization(name: string, ownerHeaders: Headers) {
+			async function createOrganization(name: string, userId: string) {
 				const slug = `${name}-${generateRandomString(8, "a-z")}`;
 				const organization = await auth.api.createOrganization({
-					headers: ownerHeaders,
-					body: { name, slug, keepCurrentActiveOrganization: true },
+					body: { name, slug, userId },
 				});
 				if (!organization) throw new Error("Organization was not created");
 				return organization.id;
 			}
-			const first = await createOrganization("first", headers);
-			const second = await createOrganization("second", headers);
-			const outsiderEmail = `${generateRandomString(12)}@test.com`;
-			await auth.api.signUpEmail({
+			const first = await createOrganization("first", user.id);
+			const second = await createOrganization("second", user.id);
+			const { user: outsider } = await auth.api.signUpEmail({
 				body: {
-					email: outsiderEmail,
+					email: `${generateRandomString(12)}@test.com`,
 					password: "outsider-password",
 					name: "Outsider",
 				},
 			});
-			const outsider = await signInWithUser(outsiderEmail, "outsider-password");
-			const notMine = await createOrganization("not-mine", outsider.headers);
+			const notMine = await createOrganization("not-mine", outsider.id);
 
 			const oauthClient = await auth.api.adminCreateOAuthClient({
 				headers,
@@ -404,32 +403,16 @@ describe.each(["sqlite", "postgres", "mongodb"] as const)(
 				},
 			});
 			const codeVerifier = generateRandomString(43, "a-z", "A-Z", "0-9");
-			const codeChallenge = base64url.encode(
-				new Uint8Array(
-					await crypto.subtle.digest(
-						"SHA-256",
-						new TextEncoder().encode(codeVerifier),
-					),
-				),
-			);
+			const codeChallenge = await generateCodeChallenge(codeVerifier);
 
-			async function authorize(scope: string, organizationId?: string) {
-				const query = new URLSearchParams({
+			function authorize(scope: string, organizationId?: string) {
+				return authorizeRedirect(auth, headers, {
 					client_id: oauthClient.client_id,
-					redirect_uri: redirectURI,
-					response_type: "code",
 					scope,
 					state: "organization-consent",
 					code_challenge: codeChallenge,
-					code_challenge_method: "S256",
+					...(organizationId ? { organization: organizationId } : {}),
 				});
-				if (organizationId) query.set("organization", organizationId);
-				const response = await auth.handler(
-					new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, {
-						headers,
-					}),
-				);
-				return new URL(response.headers.get("location") ?? "", baseURL);
 			}
 
 			function accept(consentPage: URL, referenceId?: string) {
@@ -609,18 +592,10 @@ it("rejects a chosen reference when no callback can verify it", async () => {
 		headers,
 		body: { redirect_uris: [redirectURI] },
 	});
-	const query = new URLSearchParams({
+	const consentPage = await authorizeRedirect(auth, headers, {
 		client_id: oauthClient.client_id,
-		redirect_uri: redirectURI,
-		response_type: "code",
 		scope: "openid",
-		code_challenge: "a".repeat(43),
-		code_challenge_method: "S256",
 	});
-	const response = await auth.handler(
-		new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, { headers }),
-	);
-	const consentPage = new URL(response.headers.get("location") ?? "", baseURL);
 	const result = await client.oauth2.consent({
 		accept: true,
 		reference_id: "org_1",
@@ -680,21 +655,12 @@ it("gives every interaction hook the validated request, including repeated resou
 		headers,
 		body: { redirect_uris: [redirectURI] },
 	});
-	const query = new URLSearchParams({
+	const consentPage = await authorizeRedirect(auth, headers, {
 		client_id: oauthClient.client_id,
-		redirect_uri: redirectURI,
-		response_type: "code",
 		scope: "openid",
-		code_challenge: "a".repeat(43),
-		code_challenge_method: "S256",
 		organization: "org_1",
+		resource: resources,
 	});
-	for (const resource of resources) query.append("resource", resource);
-	const response = await auth.handler(
-		new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, { headers }),
-	);
-
-	const consentPage = new URL(response.headers.get("location") ?? "", baseURL);
 
 	expect(consentPage.pathname).toBe("/consent");
 	// Authorize resolves the consent reference before it looks up stored consent.

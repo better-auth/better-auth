@@ -219,7 +219,6 @@ export async function consentEndpoint<Result>(
 		oauthRequest.postLoginClearedForSession === session?.session.id;
 	return await authorize(ctx, {
 		postLogin: postLoginClearedForThisSession,
-		consentAccepted: true,
-		consentReferenceId: referenceId,
+		acceptedConsent: { referenceId },
 	});
 }
