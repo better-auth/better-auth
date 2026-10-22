@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getOrgAdapter } from "./adapter";
 
 type Row = Record<string, unknown>;
@@ -10,7 +10,15 @@ type Where = { field: string; value: unknown; operator?: string }[];
  * Mimics Postgres: after a failed statement every later statement in the
  * same transaction fails with 25P02 until the transaction ends.
  */
-function createAbortingAdapter(insertError: Error) {
+function createAbortingAdapter(
+	insertError: Error | null,
+	opts: {
+		transaction?: boolean;
+		failIncrement?: (args: { where: Where }) => Error | undefined;
+	} = {},
+) {
+	const transactional = opts.transaction ?? true;
+	const logger = { error: vi.fn() };
 	const teamMembers: Row[] = [];
 	const team: Row = { id: "team-1", memberCount: 0 };
 	let aborted = false;
@@ -43,6 +51,8 @@ function createAbortingAdapter(insertError: Error) {
 			set?: Record<string, unknown>;
 		}) {
 			guard();
+			const failure = opts.failIncrement?.(args);
+			if (failure) throw failure;
 			const limit = args.where.find((w) => w.operator === "lt");
 			const gte = args.where.find((w) => w.operator === "gte");
 			const current = team.memberCount as number;
@@ -53,20 +63,25 @@ function createAbortingAdapter(insertError: Error) {
 		},
 		async create(_args: { model: string; data: Row }) {
 			guard();
-			aborted = true;
+			if (!insertError) {
+				const row = { id: "tm-new", ..._args.data };
+				teamMembers.push(row);
+				return row;
+			}
+			aborted = transactional;
 			if (racingRow) teamMembers.push(racingRow);
 			throw insertError;
 		},
 	};
 	const adapter = {
 		...trx,
-		options: { adapterConfig: { transaction: true } },
+		options: { adapterConfig: { transaction: transactional } },
 		async transaction<R>(cb: (t: typeof trx) => Promise<R>) {
 			const snapshot = team.memberCount;
 			try {
 				return await cb(trx);
 			} catch (error) {
-				team.memberCount = snapshot;
+				if (transactional) team.memberCount = snapshot;
 				throw error;
 			} finally {
 				aborted = false;
@@ -75,12 +90,14 @@ function createAbortingAdapter(insertError: Error) {
 	};
 	return {
 		team,
+		logger,
 		adapter,
 		raceWith(row: Row) {
 			racingRow = row;
 		},
 		orgAdapter: getOrgAdapter({
 			adapter: adapter as unknown as DBAdapter,
+			logger,
 		} as unknown as AuthContext),
 	};
 }
@@ -132,5 +149,55 @@ describe("team member insert failure inside an aborted transaction", () => {
 		await expect(
 			orgAdapter.addTeamMemberWithLimit({ ...data, maximumMembersPerTeam: 5 }),
 		).rejects.toBe(deadlock);
+	});
+
+	describe("without transactions", () => {
+		const insertFailure = Object.assign(new Error("insert failed"), {
+			code: "40P01",
+		});
+
+		it("rejects when a step after the insert fails", async () => {
+			const counterError = new Error("counter failed");
+			const { orgAdapter } = createAbortingAdapter(null, {
+				transaction: false,
+				failIncrement: ({ where }) =>
+					where.every((w) => !w.operator) ? counterError : undefined,
+			});
+			await expect(orgAdapter.findOrCreateTeamMember(data)).rejects.toBe(
+				counterError,
+			);
+		});
+
+		it("releases the seat after a failed insert and keeps the insert error", async () => {
+			const { orgAdapter, team } = createAbortingAdapter(insertFailure, {
+				transaction: false,
+			});
+			await expect(
+				orgAdapter.addTeamMemberWithLimit({
+					...data,
+					maximumMembersPerTeam: 5,
+				}),
+			).rejects.toBe(insertFailure);
+			expect(team.memberCount).toBe(0);
+		});
+
+		it("logs a failed seat release without hiding the insert error", async () => {
+			const releaseError = new Error("release failed");
+			const { orgAdapter, logger } = createAbortingAdapter(insertFailure, {
+				transaction: false,
+				failIncrement: ({ where }) =>
+					where.some((w) => w.operator === "gte") ? releaseError : undefined,
+			});
+			await expect(
+				orgAdapter.addTeamMemberWithLimit({
+					...data,
+					maximumMembersPerTeam: 5,
+				}),
+			).rejects.toBe(insertFailure);
+			expect(logger.error).toHaveBeenCalledWith(
+				expect.stringContaining("release team seat"),
+				releaseError,
+			);
+		});
 	});
 });
