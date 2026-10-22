@@ -1,5 +1,29 @@
 # @better-auth/core
 
+## 1.8.0-beta.2
+
+### Minor Changes
+
+- [#11866](https://github.com/better-auth/better-auth/pull/11866) [`19850f2`](https://github.com/better-auth/better-auth/commit/19850f27fdbc2356ca9d4f658b184d79dc84899c) Thanks [@bytaesu](https://github.com/bytaesu)! - `RobloxProfile` scoped fields are now optional, `picture` also permits `null`, and custom claims are `unknown`; update profile mappings accordingly. Missing avatars preserve stored images when profile updates are enabled.
+
+- [#11840](https://github.com/better-auth/better-auth/pull/11840) [`73f87f6`](https://github.com/better-auth/better-auth/commit/73f87f6f19173b1a9bc3946aa0591b6ca6392fd5) Thanks [@bytaesu](https://github.com/bytaesu)! - Identify Polar accounts by their userinfo subject and expose the scoped, nullable userinfo claims in `mapProfileToUser` instead of unrelated user profile fields.
+
+- [#11845](https://github.com/better-auth/better-auth/pull/11845) [`9acad1f`](https://github.com/better-auth/better-auth/commit/9acad1fb6a5a4eee85663a5adbe5f1452367532c) Thanks [@bytaesu](https://github.com/bytaesu)! - Hugging Face profile mappings must iterate over organization arrays and can read optional plan and security restrictions. Organization roles are strings; use `securityRestrictions` instead of the deprecated SSO and MFA flags.
+
+- [#11857](https://github.com/better-auth/better-auth/pull/11857) [`d46e6ca`](https://github.com/better-auth/better-auth/commit/d46e6cad47e957d4807d54003270400c6c16ba0b) Thanks [@bytaesu](https://github.com/bytaesu)! - `KakaoProfile.kakao_account` is now optional, so profile mappings must handle its absence. Authorization requests separate consent scopes with commas as documented by Kakao.
+
+- [#11841](https://github.com/better-auth/better-auth/pull/11841) [`1f46266`](https://github.com/better-auth/better-auth/commit/1f462662b99e0d74b3501301c0a2fe685be3ac6f) Thanks [@bytaesu](https://github.com/bytaesu)! - `KickProfile.user_id` is now a number. Update custom profile mappings and `getUserInfo` callbacks that previously treated it as a string.
+
+- [#11844](https://github.com/better-auth/better-auth/pull/11844) [`3ddca15`](https://github.com/better-auth/better-auth/commit/3ddca15ecc7fd8affed72d07f64e560499298a83) Thanks [@bytaesu](https://github.com/bytaesu)! - LinkedIn profile callbacks now accept locale language tags such as `en-US`. Profile mappings must read `locale` as a string instead of a country/language object.
+
+- [#11858](https://github.com/better-auth/better-auth/pull/11858) [`badd3a0`](https://github.com/better-auth/better-auth/commit/badd3a01ff7313dcf147cf79f3df38f2633591e9) Thanks [@bytaesu](https://github.com/bytaesu)! - `NaverProfile.response` personal fields are now optional. Profile mappings must handle omitted details and supply an email when Naver does not share one.
+
+- [#11847](https://github.com/better-auth/better-auth/pull/11847) [`1904e6f`](https://github.com/better-auth/better-auth/commit/1904e6f9bbd80a483ef8bbca4da7052b6ce4d75a) Thanks [@bytaesu](https://github.com/bytaesu)! - Reflect Google's optional ID token claims in `GoogleProfile` and treat an absent email verification claim as unverified.
+
+- [#11849](https://github.com/better-auth/better-auth/pull/11849) [`be4ca72`](https://github.com/better-auth/better-auth/commit/be4ca72155f4c57ca6fa81e7d0dfb42869e279bb) Thanks [@bytaesu](https://github.com/bytaesu)! - VK profile callbacks now accept phone numbers as strings. Profile mappings must treat `user.phone` as a string instead of a number.
+
+- [#11850](https://github.com/better-auth/better-auth/pull/11850) [`98fed80`](https://github.com/better-auth/better-auth/commit/98fed8094453b2004271a81f0df770e694279d8c) Thanks [@bytaesu](https://github.com/bytaesu)! - Zoom profiles now support phone number, WeChat, and Alipay login types (`11`, `21`, and `23`). Profile mappings with exhaustive login-type checks must handle these values.
+
 ## 1.8.0-beta.1
 
 ## 1.8.0-beta.0
