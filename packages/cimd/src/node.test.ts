@@ -72,7 +72,11 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 						};
 						response.statusCode = options.status ?? 200;
 						response.statusMessage = "OK";
-						onResponse(response);
+						if (response.statusCode === 101) {
+							request.emit("upgrade", response);
+						} else {
+							onResponse(response);
+						}
 					},
 				);
 			};
@@ -85,6 +89,43 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 }
 
 describe("Node CIMD metadata transport", () => {
+	it.each([600, 999])("rejects an out-of-range status %i instead of hanging", async (status) => {
+		// @see https://github.com/better-auth/better-auth/issues/11422
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		mockHttpsResponse({ status });
+
+		const destroyedResponse = vi.spyOn(Readable.prototype, "destroy");
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).rejects.toThrow(`invalid HTTP status (${status})`);
+		expect(destroyedResponse).toHaveBeenCalled();
+	});
+
+	it("rejects a 101 upgrade and closes its socket", async () => {
+		// @see https://github.com/better-auth/better-auth/issues/11422
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		mockHttpsResponse({ status: 101 });
+
+		const destroyedResponse = vi.spyOn(Readable.prototype, "destroy");
+		await expect(
+			fetchClientMetadataResource("https://client.example.com/client.json"),
+		).rejects.toThrow("invalid HTTP status (101)");
+		expect(destroyedResponse).toHaveBeenCalled();
+	});
+
+	it.each([
+		200, 404, 500, 599,
+	])("accepts a valid %i response status", async (status) => {
+		// @see https://github.com/better-auth/better-auth/issues/11422
+		mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+		mockHttpsResponse({ status });
+
+		const response = await fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+		);
+		expect(response.status).toBe(status);
+	});
+
 	it("rejects private DNS answers before opening a connection", async () => {
 		mocks.lookup.mockResolvedValue([
 			{ address: "93.184.216.34", family: 4 },
