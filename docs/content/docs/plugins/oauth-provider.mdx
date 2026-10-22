@@ -1339,7 +1339,7 @@ await authClient.oauth2.continue({
 
 ##### Organization from the Request or the Consent Page
 
-`shouldRedirect` and `consentReferenceId` receive `query`, the authorization request this server validated, as `URLSearchParams`. It includes parameters the client adds, so a client can name the organization it needs, such as `organization=org_123`. The client chooses that value, so check that the user belongs to the organization before returning it.
+`shouldRedirect` and `consentReferenceId` receive `query`, the authorization request this server validated, as `URLSearchParams`. It includes parameters the client adds, so a client can name the organization it needs, such as `organization=org_123`. The client chooses that value, so check that the user belongs to the organization before returning it. OAuth forbids repeating a parameter, but the provider does not reject repeats, so read the value with `getAll` and refuse more than one. Otherwise your callback and your consent page could read different values.
 
 Your consent page can also ask which organization the consent is for and send its ID as `reference_id` to `/oauth2/consent`. `consentReferenceId` receives it as `consent.referenceId`, then returns the reference to store or throws to refuse it. `consent` is set only while `/oauth2/consent` records the user's acceptance, so before then, an authorization without an organization can return `undefined` to let the consent page ask. A client with `skip_consent` skips the consent page unless its request sends `prompt=consent`, and the authorization is approved with whatever the callback returns. Throw for such a client when it does not name the organization, as the example does with `skipConsentClientIds`.
 
@@ -1355,7 +1355,13 @@ oauthProvider({
     shouldRedirect: () => false,
     consentReferenceId: async ({ user, scopes, query, consent }) => {
       if (!scopes.includes("read:organization")) return undefined;
-      const named = query.get("organization") ?? undefined;
+      const [named, ...repeated] = query.getAll("organization");
+      if (repeated.length > 0) {
+        throw new APIError("BAD_REQUEST", {
+          error: "invalid_request",
+          error_description: "name one organization",
+        });
+      }
       const chosen = consent?.referenceId;
       if (named && chosen && named !== chosen) {
         throw new APIError("FORBIDDEN", {
@@ -1386,8 +1392,14 @@ oauthProvider({
 })
 ```
 
+Your consent page must show the organization the consent is for: the one the request names, or the one the user picks when the request names none. A client can name any organization the user belongs to, and the consent page is the only place the user can see which one they are approving. Read it from the query the page received, as described in [Consent Screen](#consent-screen).
+
 ```ts title="consent-page.ts"
 import { authClient } from "@/lib/auth-client"
+
+// Show `named` as the organization being approved, or let the user pick one.
+const [named] = new URLSearchParams(window.location.search).getAll("organization");
+const organizationId = named ?? pickedOrganizationId;
 
 await authClient.oauth2.consent({
   accept: true,
