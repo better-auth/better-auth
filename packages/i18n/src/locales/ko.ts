@@ -9,6 +9,7 @@ export const ko: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "세션 생성에 실패했습니다",
 	FAILED_TO_UPDATE_USER: "사용자 업데이트에 실패했습니다",
 	FAILED_TO_GET_SESSION: "세션을 가져오는 데 실패했습니다",
+	FAILED_TO_DELETE_SESSION: "세션 삭제에 실패했습니다",
 	INVALID_PASSWORD: "유효하지 않은 비밀번호",
 	INVALID_EMAIL: "유효하지 않은 이메일",
 	INVALID_EMAIL_OR_PASSWORD: "유효하지 않은 이메일 또는 비밀번호",
