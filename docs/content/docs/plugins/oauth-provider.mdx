@@ -1352,6 +1352,7 @@ A client can name the organization it needs in its authorization request, such a
 const skipConsentClientIds = new Set(["internal-dashboard"]);
 
 oauthProvider({
+  scopes: ["openid", "profile", "email", "read:organization"],
   postLogin: {
     page: "/select-organization",
     shouldRedirect: () => false, // the consent page asks instead
