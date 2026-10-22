@@ -4,6 +4,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type {
+	DBAdapter,
 	DBTransactionAdapter,
 	WhereOperator,
 } from "@better-auth/core/db/adapter";
@@ -158,12 +159,38 @@ async function createTeamMemberWithKey(
 		});
 		return { status: "created" as const, member };
 	} catch (error) {
-		const existing = await findTeamMemberByKeyOrPair(adapter, data);
+		// Postgres rejects reads in a failed transaction; keep the insert error.
+		const existing = await findTeamMemberByKeyOrPair(adapter, data).catch(
+			() => null,
+		);
 		if (existing) {
 			return { status: "existing" as const, member: existing };
 		}
 		throw error;
 	}
+}
+
+/**
+ * Re-reads the membership once the failed transaction has rolled back, so a
+ * lost duplicate-add race still resolves to the existing member.
+ */
+async function recoverExistingTeamMember(
+	baseAdapter: DBAdapter,
+	data: { teamId: string; userId: string },
+	error: unknown,
+) {
+	try {
+		const adapter = await getCurrentAdapter(baseAdapter);
+		const membershipKey = await computeTeamMembershipKey(data);
+		const existing = await findTeamMemberByKeyOrPair(adapter, {
+			...data,
+			membershipKey,
+		});
+		if (existing) return existing;
+	} catch {
+		// Still inside an aborted outer transaction.
+	}
+	throw error;
 }
 
 function stripTeamMembershipKey(member: StoredTeamMember): TeamMember {
@@ -1060,25 +1087,31 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			teamId: string;
 			userId: string;
 		}) => {
-			return runWithTransaction(baseAdapter, async () => {
-				const adapter = await getCurrentAdapter(baseAdapter);
-				const membershipKey = await computeTeamMembershipKey(data);
-				const existing = await findTeamMemberByKeyOrPair(adapter, {
-					...data,
-					membershipKey,
-				});
-				if (existing) return stripTeamMembershipKey(existing);
+			try {
+				return await runWithTransaction(baseAdapter, async () => {
+					const adapter = await getCurrentAdapter(baseAdapter);
+					const membershipKey = await computeTeamMembershipKey(data);
+					const existing = await findTeamMemberByKeyOrPair(adapter, {
+						...data,
+						membershipKey,
+					});
+					if (existing) return stripTeamMembershipKey(existing);
 
-				await syncTeamMemberCount(adapter, data.teamId);
-				const result = await createTeamMemberWithKey(adapter, {
-					...data,
-					membershipKey,
+					await syncTeamMemberCount(adapter, data.teamId);
+					const result = await createTeamMemberWithKey(adapter, {
+						...data,
+						membershipKey,
+					});
+					if (result.status === "created") {
+						await incrementTeamMemberCount(adapter, data.teamId);
+					}
+					return stripTeamMembershipKey(result.member);
 				});
-				if (result.status === "created") {
-					await incrementTeamMemberCount(adapter, data.teamId);
-				}
-				return stripTeamMembershipKey(result.member);
-			});
+			} catch (error) {
+				return stripTeamMembershipKey(
+					await recoverExistingTeamMember(baseAdapter, data, error),
+				);
+			}
 		},
 		/**
 		 * Adds a user to a team by reserving capacity on the team row before
@@ -1093,44 +1126,57 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		}): Promise<
 			{ status: "added"; member: TeamMember } | { status: "limitReached" }
 		> => {
-			return runWithTransaction(baseAdapter, async () => {
-				const adapter = await getCurrentAdapter(baseAdapter);
-				const membershipKey = await computeTeamMembershipKey(data);
-				const existing = await findTeamMemberByKeyOrPair(adapter, {
-					teamId: data.teamId,
-					userId: data.userId,
-					membershipKey,
-				});
-				if (existing) {
-					return { status: "added", member: stripTeamMembershipKey(existing) };
-				}
-				await syncTeamMemberCount(adapter, data.teamId);
-				const reserved = await reserveTeamSeat(adapter, {
-					teamId: data.teamId,
-					maximumMembersPerTeam: data.maximumMembersPerTeam,
-				});
-				if (!reserved) {
-					return { status: "limitReached" };
-				}
-				let result: Awaited<ReturnType<typeof createTeamMemberWithKey>>;
-				try {
-					result = await createTeamMemberWithKey(adapter, {
+			try {
+				return await runWithTransaction(baseAdapter, async () => {
+					const adapter = await getCurrentAdapter(baseAdapter);
+					const membershipKey = await computeTeamMembershipKey(data);
+					const existing = await findTeamMemberByKeyOrPair(adapter, {
 						teamId: data.teamId,
 						userId: data.userId,
 						membershipKey,
 					});
-				} catch (error) {
-					await releaseTeamSeats(adapter, data.teamId, 1);
-					throw error;
-				}
-				if (result.status === "existing") {
-					await releaseTeamSeats(adapter, data.teamId, 1);
-				}
-				return {
-					status: "added",
-					member: stripTeamMembershipKey(result.member),
-				};
-			});
+					if (existing) {
+						return {
+							status: "added",
+							member: stripTeamMembershipKey(existing),
+						};
+					}
+					await syncTeamMemberCount(adapter, data.teamId);
+					const reserved = await reserveTeamSeat(adapter, {
+						teamId: data.teamId,
+						maximumMembersPerTeam: data.maximumMembersPerTeam,
+					});
+					if (!reserved) {
+						return { status: "limitReached" };
+					}
+					let result: Awaited<ReturnType<typeof createTeamMemberWithKey>>;
+					try {
+						result = await createTeamMemberWithKey(adapter, {
+							teamId: data.teamId,
+							userId: data.userId,
+							membershipKey,
+						});
+					} catch (error) {
+						// The transaction is aborted on Postgres; it rolls back the seat anyway.
+						await releaseTeamSeats(adapter, data.teamId, 1).catch(() => {});
+						throw error;
+					}
+					if (result.status === "existing") {
+						await releaseTeamSeats(adapter, data.teamId, 1);
+					}
+					return {
+						status: "added",
+						member: stripTeamMembershipKey(result.member),
+					};
+				});
+			} catch (error) {
+				const existing = await recoverExistingTeamMember(
+					baseAdapter,
+					data,
+					error,
+				);
+				return { status: "added", member: stripTeamMembershipKey(existing) };
+			}
 		},
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
