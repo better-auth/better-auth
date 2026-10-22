@@ -1,9 +1,15 @@
+import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
-import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import { generateDrizzleSchema } from "./generate-drizzle-schema";
 
 const TYPE_CHECK_TIMEOUT_MS = 15_000;
+const tscPath = path.resolve(
+	import.meta.dirname,
+	"../../node_modules/.bin/tsc",
+);
 
 /** Run compiler-backed tests with their dedicated synchronous-work timeout. */
 function test(name: string, callback: () => Promise<void>): void {
@@ -32,30 +38,40 @@ const generateFor = (
  * module-resolution errors for `drizzle-orm` (not resolvable in this sandbox).
  * Without that module, TypeScript cannot infer the callback parameter types
  * supplied by Drizzle, so implicit-any diagnostics are disabled explicitly.
- *
- * @see https://github.com/dotansimha/graphql-code-generator/blob/2784ada257836190ded7ca8be290970e3c30fd69/packages/utils/graphql-codegen-testing/src/typescript.ts
  */
 function typeErrors(code: string): string[] {
-	const fileName = "schema.ts";
-	const host = ts.createCompilerHost({});
-	const program = ts.createProgram(
-		[fileName],
+	// Inside the package so `drizzle-orm` resolves from its node_modules.
+	const cacheDir = path.join(import.meta.dirname, "../../node_modules/.cache");
+	fs.mkdirSync(cacheDir, { recursive: true });
+	const dir = fs.mkdtempSync(path.join(cacheDir, "drizzle-schema-"));
+	fs.writeFileSync(path.join(dir, "schema.ts"), code);
+	const { stdout, stderr } = spawnSync(
+		tscPath,
+		[
+			"--ignoreConfig",
+			"--noEmit",
+			"--noImplicitAny",
+			"false",
+			"--skipLibCheck",
+			"--pretty",
+			"false",
+			"schema.ts",
+		],
 		{
-			noEmit: true,
-			noImplicitAny: false,
-			skipLibCheck: true,
-		},
-		{
-			...host,
-			getSourceFile: (name, languageVersion, onError, shouldCreate) =>
-				name === fileName
-					? ts.createSourceFile(name, code, ts.ScriptTarget.ESNext)
-					: host.getSourceFile(name, languageVersion, onError, shouldCreate),
+			cwd: dir,
+			encoding: "utf8",
 		},
 	);
-	return ts
-		.getPreEmitDiagnostics(program)
-		.map((d) => ts.flattenDiagnosticMessageText(d.messageText, "\n"))
+	fs.rmSync(dir, { recursive: true, force: true });
+	// A crashed compiler prints nothing to stdout, which would read as no errors.
+	if (stderr) {
+		throw new Error(stderr);
+	}
+	// Each diagnostic starts unindented; chained messages follow indented.
+	return stdout
+		.split(/\n(?=\S)/)
+		.filter(Boolean)
+		.map((diagnostic) => diagnostic.replace(/^.*?error TS\d+: /, "").trimEnd())
 		.filter(
 			(message) =>
 				!message.includes("Cannot find module") &&
