@@ -318,7 +318,7 @@ export const generatePasskeyRegistrationOptions = (
 					residentKey: "preferred",
 					userVerification: "preferred",
 					...(opts.authenticatorSelection || {}),
-					...(opts.requireUserVerification
+					...(opts.requireUserVerification === true
 						? { userVerification: "required" as const }
 						: {}),
 					...(ctx.query?.authenticatorAttachment
@@ -488,9 +488,8 @@ export const generatePasskeyAuthenticationOptions = (
 			);
 			const options = await generateAuthenticationOptions({
 				rpID: getRpID(opts, baseURLString),
-				userVerification: opts.requireUserVerification
-					? "required"
-					: "preferred",
+				userVerification:
+					opts.requireUserVerification === true ? "required" : "preferred",
 				extensions: authenticationExtensions,
 				...(userPasskeys.length
 					? {
