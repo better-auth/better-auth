@@ -55,8 +55,15 @@ it("uses the access-token response instead of ID-token contents", async () => {
 	expect(result?.data).toEqual(profile);
 });
 
-it("returns null without an access token", async () => {
-	expect(await paybin(options).getUserInfo({})).toBeNull();
+/**
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfo
+ */
+it("requires an access token even when an ID token is supplied", async () => {
+	expect(
+		await paybin(options).getUserInfo({
+			idToken: new UnsecuredJWT(profile).encode(),
+		}),
+	).toBeNull();
 	expect(mockedFetch).not.toHaveBeenCalled();
 });
 
@@ -152,11 +159,17 @@ it.each([
 /**
  * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
  */
-it("rejects a malformed supplied ID token", async () => {
+it.each([
+	{ kind: "malformed", token: "invalid-id-token" },
+	{
+		kind: "mismatched",
+		token: new UnsecuredJWT({ sub: "different-user" }).encode(),
+	},
+])("rejects a $kind supplied ID token", async ({ token }) => {
 	expect(
 		await paybin(options).getUserInfo({
 			accessToken: "access-token",
-			idToken: "invalid-id-token",
+			idToken: token,
 		}),
 	).toBeNull();
 });
