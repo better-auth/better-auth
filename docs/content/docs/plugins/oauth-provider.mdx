@@ -737,6 +737,10 @@ Accept or deny user consent for a set of scopes. Note that when denying scopes, 
      * Accepted OIDC claims request object. If not provided, the originally requested claims are accepted.
      */
     claims?: string | Record<string, unknown>,
+    /**
+     * The reference the user chose, such as an organization ID. `postLogin.consentReferenceId` receives it as `consent.referenceId` and decides whether to accept it; without that callback, accepting with it fails with `invalid_request`.
+     */
+    reference_id?: string,
   }
   ```
 </APIMethod>
@@ -1147,6 +1151,8 @@ During the OAuth flow, users are likely redirected between pages. For example, a
 
 To process each redirect step in the login flow, we verify the signed query provided in the initial `/oauth2/authorize` redirect. All parameters sent to the authorize endpoint (including any custom ones), are signed and verified.
 
+The `shouldRedirect` hooks of `signup`, `selectAccount`, and `postLogin`, and `postLogin.consentReferenceId`, receive this request as `query`, a `URLSearchParams` copy, once the provider has validated it. Read a parameter the client added with `query.get`, and a repeatable one with `query.getAll`, such as `query.getAll("resource")` for the [resources](#resources) a request targets.
+
 If your sign-in pages include custom page query parameters, they may coexist in the URL, but they should not be added to the signed `oauth_query`. The client plugin forwards only the parameters declared by the signed redirect.
 
 If you utilize the Client Plugin `oauthProviderClient`, then the `oauth_query` parameter is automatically sent to every endpoint that requires it. If you have custom sign-in endpoints, you would need to manually add the window's signed query in the request body `oauth_query`. This should only include the signed query parameters.
@@ -1205,7 +1211,9 @@ const res = await authClient.oauth2.consent({
   // optional scopes accepted (if not sent, accepted scopes matches the original request)
   scope: "openid profile email",
   // optional claims accepted (if not sent, accepted claims match the original request)
-  claims: requestedClaims
+  claims: requestedClaims,
+  // optional reference the user picked, such as an organization ID
+  reference_id: pickedOrganizationId,
 });
 ```
 
@@ -1332,6 +1340,48 @@ await authClient.oauth2.continue({
   postLogin: true,
 });
 ```
+
+##### Organization from the Request or the Consent Page
+
+A client can name the organization it needs in its authorization request, such as `organization=org_123`, and `consentReferenceId` reads it from `query`. Your consent page can instead let the user pick one and send it as `reference_id` to `/oauth2/consent`, which `consentReferenceId` receives as `consent.referenceId`. Neither value comes from your server, so check that the user belongs to the organization before returning it.
+
+`consent` is set only when the user accepts. Until then, return `undefined` while no organization is known, so the consent page can ask. A client with `skip_consent` gets no consent page unless its request sends `prompt=consent`, so refuse it instead. The provider accepts repeated parameters, because some such as `resource` can repeat, so refuse a request whose organizations disagree.
+
+```ts title="auth.ts"
+// Clients created with `skip_consent` never reach the consent page.
+const skipConsentClientIds = new Set(["internal-dashboard"]);
+
+oauthProvider({
+  scopes: ["openid", "profile", "email", "read:organization"],
+  postLogin: {
+    page: "/select-organization",
+    shouldRedirect: () => false, // the consent page asks instead
+    consentReferenceId: async ({ user, scopes, query, consent }) => {
+      if (!scopes.includes("read:organization")) return undefined;
+
+      // The request and the consent page must agree on one organization.
+      const named = new Set(
+        [...query.getAll("organization"), consent?.referenceId].filter(Boolean),
+      );
+      if (named.size > 1) {
+        throw new APIError("BAD_REQUEST", { error: "invalid_request" });
+      }
+      const [organizationId] = named;
+      const skipsConsent = skipConsentClientIds.has(query.get("client_id") ?? "");
+      // Not chosen yet: let the consent page ask.
+      if (!organizationId && !consent && !skipsConsent) return undefined;
+
+      // `isMember` stands for your own membership lookup.
+      if (!organizationId || !(await isMember(user.id, organizationId))) {
+        throw new APIError("FORBIDDEN", { error: "access_denied" });
+      }
+      return organizationId;
+    },
+  },
+})
+```
+
+Your consent page must show the organization being approved: the one the request names, or the one the user picks and sends as `reference_id`, as in the [Consent Screen](#consent-screen) example.
 
 ### Cached Trusted Clients
 
@@ -2208,7 +2258,7 @@ oauthProvider({
 })
 ```
 
-The client record stays the same for every organization, so this works for clients that register themselves, including open [dynamic client registration](#dynamic-client-registration) and CIMD.
+The client record stays the same for every organization, so this works for clients that register themselves, including open [dynamic client registration](#dynamic-client-registration) and CIMD. A client can also name the organization in its authorization request, or your consent page can ask for it, as shown in [Organization from the Request or the Consent Page](#organization-from-the-request-or-the-consent-page).
 
 ##### An Organization Owns the Client
 
