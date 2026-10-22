@@ -35,18 +35,28 @@ type OrgSession = {
  * Reads the session from the authoritative source. A session an earlier hook
  * built in memory (an API key session) is kept when the request carries no
  * session cookie, because there is nothing in the session store to re-read.
+ * When the request carries a session cookie for a different user than that
+ * hook session, no session is returned instead of silently picking one.
  */
 export const getOrgSessionFromCtx = async (ctx: GenericEndpointContext) => {
-	if (isStateful(ctx) && ctx.context.session) {
+	const hookSession = ctx.context.session as OrgSession | null;
+	if (isStateful(ctx) && hookSession) {
 		const sessionToken = await ctx.getSignedCookie(
 			ctx.context.authCookies.sessionToken.name,
 			ctx.context.secret,
 		);
 		if (!sessionToken) {
-			return ctx.context.session as OrgSession;
+			return hookSession;
 		}
 	}
-	return (await getAuthoritativeSessionFromCtx(ctx)) as OrgSession | null;
+	const session = (await getAuthoritativeSessionFromCtx(
+		ctx,
+	)) as OrgSession | null;
+	if (hookSession && session && hookSession.user.id !== session.user.id) {
+		ctx.context.session = null;
+		return null;
+	}
+	return session;
 };
 
 /**

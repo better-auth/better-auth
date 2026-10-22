@@ -99,6 +99,36 @@ describe("organization routes with an API-key session", () => {
 		});
 		expect(res.status).toBe(401);
 	});
+
+	it("accepts a session cookie and an API key that belong to the same user", async () => {
+		const { auth, userHeaders, apiKey, organizationId } = await setup();
+		const headers = new Headers(userHeaders);
+		headers.set("x-api-key", apiKey);
+		const res = await auth.api.listMembers({
+			query: { organizationId },
+			headers,
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+	});
+
+	it("rejects a session cookie and an API key that belong to different users", async () => {
+		const { auth, userHeaders, organizationId } = await setup();
+		const other = await auth.api.signUpEmail({
+			body: { email: "other@test.com", password: "password1234", name: "O" },
+		});
+		const otherKey = await auth.api.createApiKey({
+			body: { userId: other.user.id },
+		});
+		const headers = new Headers(userHeaders);
+		headers.set("x-api-key", otherKey.key);
+		const res = await auth.api.listMembers({
+			query: { organizationId },
+			headers,
+			asResponse: true,
+		});
+		expect(res.status).toBe(401);
+	});
 });
 
 /**
