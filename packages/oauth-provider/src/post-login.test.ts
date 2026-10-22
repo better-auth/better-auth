@@ -649,7 +649,7 @@ it("gives every interaction hook the validated request, including repeated resou
 	selectAccount.mockReturnValue(false);
 	signup.mockReturnValue(false);
 	postLogin.mockReturnValue(false);
-	const { auth, signInWithTestUser } = await getTestInstance(
+	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
 			baseURL,
 			plugins: [
@@ -694,12 +694,25 @@ it("gives every interaction hook the validated request, including repeated resou
 		new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, { headers }),
 	);
 
-	expect(
-		new URL(response.headers.get("location") ?? "", baseURL).pathname,
-	).toBe("/consent");
+	const consentPage = new URL(response.headers.get("location") ?? "", baseURL);
+
+	expect(consentPage.pathname).toBe("/consent");
+	// Authorize resolves the consent reference before it looks up stored consent.
 	for (const hook of [selectAccount, signup, postLogin, consentReferenceId]) {
-		const context = hook.mock.lastCall?.[0];
-		expect(context?.query.getAll("resource")).toEqual(resources);
-		expect(context?.query.get("organization")).toBe("org_1");
+		expect(hook).toHaveBeenCalledOnce();
+		const [context] = hook.mock.lastCall!;
+		expect(context.query.getAll("resource")).toEqual(resources);
+		expect(context.query.get("organization")).toBe("org_1");
 	}
+
+	consentReferenceId.mockClear();
+	await client.oauth2.consent({
+		accept: true,
+		oauth_query: consentPage.search.slice(1),
+		fetchOptions: { headers, throw: true },
+	});
+	expect(consentReferenceId).toHaveBeenCalledOnce();
+	const [accepted] = consentReferenceId.mock.lastCall!;
+	expect(accepted.consent).toBeDefined();
+	expect(accepted.query.getAll("resource")).toEqual(resources);
 });
