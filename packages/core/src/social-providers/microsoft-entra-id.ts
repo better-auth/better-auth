@@ -15,6 +15,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { appendURLPath, appendURLSegments } from "../utils/url";
 
 /**
  * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
@@ -170,8 +171,12 @@ export const microsoft = (options: MicrosoftOptions) => {
 	while (authority.endsWith("/")) {
 		authority = authority.slice(0, -1);
 	}
-	const authorizationEndpoint = `${authority}/${tenant}/oauth2/v2.0/authorize`;
-	const tokenEndpoint = `${authority}/${tenant}/oauth2/v2.0/token`;
+	const tenantURL = appendURLSegments(authority, tenant);
+	const authorizationEndpoint = appendURLPath(
+		tenantURL,
+		"/oauth2/v2.0/authorize",
+	);
+	const tokenEndpoint = appendURLPath(tenantURL, "/oauth2/v2.0/token");
 	if (options.clientSecret && options.clientAssertion) {
 		throw new BetterAuthError(
 			"Microsoft Entra ID clientAssertion cannot be combined with clientSecret",
@@ -379,7 +384,9 @@ export const getMicrosoftPublicKey = async (
 			x5c?: string[];
 			x5t?: string;
 		}>;
-	}>(`${authority}/${tenant}/discovery/v2.0/keys`);
+	}>(
+		appendURLPath(appendURLSegments(authority, tenant), "/discovery/v2.0/keys"),
+	);
 
 	if (!data?.keys) {
 		throw new APIError("BAD_REQUEST", {
