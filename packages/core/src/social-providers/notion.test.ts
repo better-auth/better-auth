@@ -12,8 +12,7 @@ const credentials = {
 beforeEach(() => mockedBetterFetch.mockReset());
 
 /**
- * @see https://github.com/makenotion/notion-sdk-js/blob/v2.2.15/src/api-endpoints.ts
- * @see https://github.com/makenotion/notion-sdk-js/blob/v2.2.15/src/Client.ts
+ * @see https://github.com/makenotion/notion-sdk-js/blob/0ffdbba3004b27438ca72df769412268e4fdede1/src/api-endpoints/common.ts#L79
  * @see https://developers.notion.com/page/changelog#new-identity-fields-in-oauth-token-responses
  */
 describe("notion owner profiles", () => {
@@ -29,19 +28,7 @@ describe("notion owner profiles", () => {
 				person: { email: "owner@example.com", email_verified: true },
 			} satisfies NotionProfile;
 			mockedBetterFetch.mockResolvedValueOnce({
-				data: {
-					object: "user",
-					type: "bot",
-					id: "notion-bot",
-					name: "Integration Bot",
-					avatar_url: "https://example.com/bot.png",
-					bot: {
-						owner: { type: "user", user: owner },
-						workspace_name: "Workspace",
-						workspace_icon: null,
-						workspace_id: "workspace-id",
-					},
-				},
+				data: { bot: { owner: { user: owner } } },
 				error: null,
 			});
 			const mapProfileToUser = vi.fn((profile: NotionProfile) => {
@@ -84,19 +71,7 @@ describe("notion owner profiles", () => {
 			id: "notion-owner",
 		} satisfies NotionProfile;
 		mockedBetterFetch.mockResolvedValueOnce({
-			data: {
-				object: "user",
-				id: "notion-bot",
-				type: "bot",
-				name: "Integration Bot",
-				avatar_url: null,
-				bot: {
-					owner: { type: "user", user: owner },
-					workspace_name: "Workspace",
-					workspace_icon: null,
-					workspace_id: "workspace-id",
-				},
-			},
+			data: { bot: { owner: { user: owner } } },
 			error: null,
 		});
 		const provider = notion({
