@@ -58,12 +58,11 @@ function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
  * propagation blips only. A store that lags longer than a moment still fails
  * closed, and its durable answer is `verification.storeInDatabase: true`.
  * Worst-case added sleep: 500ms on find (50+150+300 across 1 initial +
- * 3 retried reads); 200ms per key on consume (50+150), up to 400ms stacked
- * across the hashed + plain key pair. Each attempt also pays its own
- * secondary read(s) — up to 8 gets on find and 6 getAndDeletes on consume
- * when the hashed + plain fallback both apply — so these are sleep budgets,
- * not full totals. A verify request that consumes the attempt counter and
- * then reads the challenge can stack both budgets.
+ * 3 retried reads); 200ms total on consume (50+150 across the whole identifiersToTry pass).
+ * Each attempt also pays its own secondary read(s) — up to 8 gets on find
+ * and 6 getAndDeletes on consume when the hashed + plain fallback both apply —
+ * so these are sleep budgets, not full totals. A verify request that consumes
+ * the attempt counter and then reads the challenge can stack both budgets.
  * The arrays are fixed, so the total is always bounded — no unbounded loops.
  */
 const TWO_FACTOR_SECONDARY_FIND_RETRY_DELAYS_MS = [50, 150, 300] as const;
@@ -72,8 +71,9 @@ const TWO_FACTOR_SECONDARY_FIND_RETRY_DELAYS_MS = [50, 150, 300] as const;
  * of a genuine race (double submit, already-consumed challenge) pays the
  * full sleep before failing. A miss deletes nothing, so re-issuing the
  * atomic `getAndDelete` stays single-use safe (see `SecondaryStorage`
- * contract) while capping the race-loser sleep at 200ms per key — 400ms
- * stacked when the hashed + plain fallback both miss.
+ * contract). The retry loops over the whole `identifiersToTry` pass per
+ * round — not per key — so the budget caps at 200ms total regardless of
+ * whether the hashed or plain key holds the value.
  */
 const TWO_FACTOR_SECONDARY_CONSUME_RETRY_DELAYS_MS = [50, 150] as const;
 
@@ -1530,32 +1530,35 @@ export const createInternalAdapter = (
 				// value, and a permanent miss still returns null (fail
 				// closed). Other verification flows keep the single attempt
 				// below.
-				const retryTwoFactorConsume =
-					isTwoFactorChallengeIdentifier(identifier);
-				const consumeCacheKeyWithRetry = async (key: string) => {
-					const first = await consumeCacheKey(key);
-					if (first || !retryTwoFactorConsume) return first;
+				//
+				// Mirrors the find path: one call tries all identifiers in the
+				// pass so the retry budget covers the whole key set, not each
+				// key independently.
+				const consumeFromSecondary =
+					async (): Promise<Verification | null> => {
+						for (const stored of identifiersToTry) {
+							const cacheKey = `verification:${stored}`;
+							const cached = await consumeCacheKey(cacheKey);
+							if (!cached) continue;
+							await Promise.all(
+								identifiersToTry
+									.filter((candidate) => candidate !== stored)
+									.map((candidate) =>
+										secondaryStorage.delete(`verification:${candidate}`),
+									),
+							);
+							return cached;
+						}
+						return null;
+					};
+
+				consumed = await consumeFromSecondary();
+				if (!consumed && isTwoFactorChallengeIdentifier(identifier)) {
 					for (const delayMs of TWO_FACTOR_SECONDARY_CONSUME_RETRY_DELAYS_MS) {
 						await sleepMs(delayMs);
-						const retried = await consumeCacheKey(key);
-						if (retried) return retried;
+						consumed = await consumeFromSecondary();
+						if (consumed) break;
 					}
-					return null;
-				};
-
-				for (const stored of identifiersToTry) {
-					const cacheKey = `verification:${stored}`;
-					const cached = await consumeCacheKeyWithRetry(cacheKey);
-					if (!cached) continue;
-					await Promise.all(
-						identifiersToTry
-							.filter((candidate) => candidate !== stored)
-							.map((candidate) =>
-								secondaryStorage.delete(`verification:${candidate}`),
-							),
-					);
-					consumed = cached;
-					break;
 				}
 			} else {
 				const consumeByIdentifier = async (

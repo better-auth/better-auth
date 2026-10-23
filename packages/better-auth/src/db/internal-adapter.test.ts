@@ -1872,6 +1872,59 @@ describe("internal adapter test", async () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/11344
 		 */
+		it("falls back from hashed to plain key in round 1 without per-key retry sleep", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let deletes = 0;
+
+			const flaky: SecondaryStorage = {
+				...base,
+				getAndDelete(key: string) {
+					deletes += 1;
+					// Reject the hashed key on every call.
+					if (key !== "verification:2fa-hash-test") {
+						return null;
+					}
+					return base.getAndDelete(key);
+				},
+			};
+
+			const hashedOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: flaky,
+				verification: {
+					storeIdentifier: "hashed" as const,
+				},
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(hashedOpts)).runMigrations();
+			const ctx = await init(hashedOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-hash-test",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			await flaky.set(
+				"verification:2fa-hash-test",
+				JSON.stringify({
+					identifier: "2fa-hash-test",
+					value: "user-id",
+					expiresAt: new Date(Date.now() + 60000).toISOString(),
+				}),
+			);
+
+			const consumed =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-hash-test");
+			expect(consumed).not.toBeNull();
+			expect(consumed?.value).toBe("user-id");
+			expect(deletes).toBe(2);
+			expect(store.size).toBe(0);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
 		it("fails closed after bounded retries on a permanent secondary miss for 2fa-*", async () => {
 			const store = new Map<string, string>();
 			const base = createStringSecondaryStorage(store);

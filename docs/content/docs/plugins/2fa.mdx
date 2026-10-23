@@ -142,7 +142,7 @@ If your app needs to require 2FA for those sign-in methods, add custom hook hand
 </Callout>
 
 <Callout type="warn">
-  The 2FA challenge is a verification record. If you use [secondary storage](/docs/concepts/database#secondary-storage) with an eventually consistent store, transient read misses are retried automatically (a read sleeps up to \~500ms across its retries, a consume up to \~200ms per key and \~400ms worst case across the hashed + plain key pair, only when the first read misses) — but if the store lags for longer than a moment, set [`verification.storeInDatabase: true`](/docs/reference/options#verification) so verification falls back to the database, otherwise sign-in verification can fail with `INVALID_TWO_FACTOR_COOKIE`.
+  The 2FA challenge is a verification record. If you use [secondary storage](/docs/concepts/database#secondary-storage) with an eventually consistent store, transient read misses are retried automatically (a read sleeps up to \~500ms across its retries, a consume up to \~200ms total across the whole candidate key pass, only when the first read misses) — but if the store lags for longer than a moment, set [`verification.storeInDatabase: true`](/docs/reference/options#verification) so verification falls back to the database, otherwise sign-in verification can fail with `INVALID_TWO_FACTOR_COOKIE`.
 </Callout>
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
