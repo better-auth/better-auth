@@ -146,6 +146,18 @@ Before starting the migration process, set up Better Auth in your project. Follo
         plugins: [admin(), twoFactor(), phoneNumber(), username()], // [!code highlight]
     })
     ```
+
+    If you want new TOTP setups to use the same Base32 format as the secrets imported from Clerk, set `totpOptions.secretEncoding` to `"base32"`:
+
+    ```ts
+    twoFactor({
+        totpOptions: {
+            secretEncoding: "base32" // [!code highlight]
+        }
+    })
+    ```
+
+    Existing Better Auth secrets keep their stored encoding. See [TOTP Secret Encoding](/docs/plugins/2fa#totp-secret-encoding) for more details.
   </Step>
 
   <Step>
@@ -176,6 +188,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
     Create a new file called `migrate-clerk.ts` in the `scripts` folder and add the following code:
 
     ```ts title="scripts/migrate-clerk.ts"
+    import type { SecretConfig } from "better-auth/crypto";
     import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
 
     import { auth } from "@/lib/auth"; // import your auth instance
@@ -258,7 +271,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
 
     export async function generateBackupCodes(
-      secret: string,
+      secret: string | SecretConfig,
     ) {
       const key = secret;
       const backupCodes = Array.from({ length: 10 })
@@ -321,7 +334,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                   updatedAt: safeDateConversion(clerkUser?.updated_at),
                   // # Two Factor (if you enabled two factor plugin)
                   ...(isTwoFactorEnabled ? {
-                      twoFactorEnabled: clerkUser?.two_factor_enabled
+                      twoFactorEnabled: Boolean(clerkUser?.totp_enabled && totp_secret)
                   } : {}),
                   // # Admin (if you enabled admin plugin)
                   ...(isAdminEnabled ? {
@@ -395,13 +408,18 @@ Before starting the migration process, set up Better Auth in your project. Follo
           }
 
           //two factor
-          if (isTwoFactorEnabled) {
+          if (isTwoFactorEnabled && clerkUser?.totp_enabled && totp_secret) {
               await ctx.adapter.create({
                   model: "twoFactor",
                   data: {
                       userId: createdUser.id,
-                      secret: totp_secret,
-                      backupCodes: await generateBackupCodes(totp_secret)
+                      secret: await symmetricEncrypt({
+                          key: ctx.secretConfig,
+                          data: totp_secret,
+                      }),
+                      secretEncoding: "base32",
+                      verified: true,
+                      backupCodes: await generateBackupCodes(ctx.secretConfig)
                   }
               })
           }
@@ -420,6 +438,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
     ```
 
     Make sure to replace the `process.env.CLERK_SECRET_KEY` with your own Clerk secret key. Feel free to customize the script to your needs.
+
+    If you're migrating two-factor authentication, make sure your schema includes the `secretEncoding` column before running the script. The script encrypts Clerk's TOTP secrets with your Better Auth secret and sets `secretEncoding: "base32"`, so users can keep using their existing authenticator apps. It doesn't migrate SMS-based two-factor authentication.
   </Step>
 
   <Step>

@@ -84,6 +84,7 @@ describe("two factor", async () => {
 		});
 		expect(dbUser?.twoFactorEnabled).toBe(false);
 		expect(twoFactor?.secret).toBeDefined();
+		expect(twoFactor?.secretEncoding).toBe("utf8");
 		expect(twoFactor?.backupCodes).toBeDefined();
 		expect(twoFactor?.verified).toBe(false);
 	});

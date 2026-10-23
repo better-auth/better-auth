@@ -510,6 +510,12 @@ export const twoFactorTableFields = [
 		description: "The secret used to generate the TOTP code.",
 	},
 	{
+		name: "secretEncoding",
+		type: "string",
+		description: 'The encoding of the decrypted secret: "utf8" or "base32". Missing or null values use "utf8".',
+		isOptional: true,
+	},
+	{
 		name: "backupCodes",
 		type: "string",
 		description:
@@ -536,6 +542,32 @@ export const twoFactorTableFields = [
 ];
 
 <DatabaseTable name="twoFactor" fields={twoFactorTableFields} />
+
+### TOTP Secret Encoding
+
+The `secretEncoding` field specifies how the plugin reads the secret after decryption:
+
+* `"utf8"` (default): Uses the UTF-8 bytes of the secret.
+* `"base32"`: Decodes the Base32 secret into raw bytes.
+* Missing or `null` values are treated as `"utf8"`.
+
+To use Base32 secrets when users enable TOTP, set `totpOptions.secretEncoding` to `"base32"`:
+
+```ts
+twoFactor({
+    totpOptions: {
+        secretEncoding: "base32" // [!code highlight]
+    }
+})
+```
+
+This setting is used when a user starts TOTP setup or restarts setup before verifying their code. Users who have already set up TOTP keep using the encoding stored with their secret.
+
+The plugin encrypts secrets in both formats and uses the stored encoding to verify codes and generate TOTP URIs. Base32 secrets can be uppercase or lowercase, with or without padding.
+
+Run a database migration to add the optional `secretEncoding` column. You don't need to update existing secrets. To import a Base32 secret, encrypt the Base32 string with `symmetricEncrypt` and set `secretEncoding: "base32"` on the `twoFactor` record.
+
+You can pass `secretEncoding` alongside the unencrypted `secret` in the body of `auth.api.generateTOTP` on the server. This helper defaults to `"utf8"`, regardless of the `totpOptions.secretEncoding` setting.
 
 ## Options
 
@@ -565,6 +597,11 @@ export const twoFactorTotpOptionsType = {
     description: "The period for totp in seconds.",
     type: "number",
     default: 30,
+  },
+  secretEncoding: {
+    description: "The encoding used for new TOTP secrets. Existing secrets keep their stored encoding.",
+    type: '"utf8" | "base32"',
+    default: "utf8",
   },
 }
 
