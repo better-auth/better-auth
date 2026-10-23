@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/passkey",
-  "version": "1.7.10",
+  "version": "1.7.12",
   "description": "Passkey plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -59,7 +59,7 @@
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
-    "@simplewebauthn/server": "^13.3.1",
+    "@simplewebauthn/server": "^13.3.2",
     "zod": "catalog:"
   },
   "devDependencies": {

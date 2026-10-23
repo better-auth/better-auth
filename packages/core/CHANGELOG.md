@@ -1,5 +1,29 @@
 # @better-auth/core
 
+## 1.7.12
+
+### Patch Changes
+
+- [#11924](https://github.com/better-auth/better-auth/pull/11924) [`681aa5c`](https://github.com/better-auth/better-auth/commit/681aa5c4439a5845e027d41eda01b84acc9c58b6) Thanks [@bytaesu](https://github.com/bytaesu)! - `APIError.from()` accepts `{ cause }` as a third argument to keep the underlying error for server-side callers without exposing it in the response.
+
+- [#11931](https://github.com/better-auth/better-auth/pull/11931) [`4bc78ba`](https://github.com/better-auth/better-auth/commit/4bc78baa83aecea47ff30062d68820a578efeed3) Thanks [@bytaesu](https://github.com/bytaesu)! - ID token sign-in now rejects tokens when the provider has no client ID, because their audience cannot be checked and a token issued to another app would otherwise be accepted. Set `clientId` on the provider to every client ID your apps sign in with.
+
+- [#11919](https://github.com/better-auth/better-auth/pull/11919) [`876608d`](https://github.com/better-auth/better-auth/commit/876608da86036d9ca4b5c2a37ed0b01e29264e52) Thanks [@bytaesu](https://github.com/bytaesu)! - A custom Facebook `getUserInfo` no longer receives client-submitted access tokens issued to another Facebook app, and ID tokens missing `exp` or `iat` are now rejected.
+
+- [#11918](https://github.com/better-auth/better-auth/pull/11918) [`083a743`](https://github.com/better-auth/better-auth/commit/083a74329be51ed35c1981524f9c543984f08bd3) Thanks [@alpcanaydin](https://github.com/alpcanaydin)! - Fix `mapProfileToUser` failing to typecheck under `exactOptionalPropertyTypes` when it returns `undefined` for `name`, `email` or `image`, for example to drop the provider's profile picture.
+
+- [#11920](https://github.com/better-auth/better-auth/pull/11920) [`492134a`](https://github.com/better-auth/better-auth/commit/492134aeba6707bdfb371cf8ef817c945d6fb44f) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore the Twitch and Paybin ID token handling from before 1.7.11, which made account info fail once the ID token stored at sign-in expired.
+
+## 1.7.11
+
+### Patch Changes
+
+- [#11623](https://github.com/better-auth/better-auth/pull/11623) [`ce96569`](https://github.com/better-auth/better-auth/commit/ce965696d1f8695e96e6b88490fc8ea2f8ab78ae) Thanks [@cpojer](https://github.com/cpojer)! - Reduce installation size by removing the semantic conventions production dependency while preserving all instrumentation attribute keys.
+
+- [#11907](https://github.com/better-auth/better-auth/pull/11907) [`2f6ca3f`](https://github.com/better-auth/better-auth/commit/2f6ca3f370e80081d911a5e95a39393920b6d22e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix plugins whose `init` returns `options: undefined`, such as `testUtils()`, failing to typecheck when `exactOptionalPropertyTypes` is enabled.
+
+- [#11884](https://github.com/better-auth/better-auth/pull/11884) [`dfd8dd2`](https://github.com/better-auth/better-auth/commit/dfd8dd287a4cfeb1d3541bb4e004e8f33edce15f) Thanks [@bytaesu](https://github.com/bytaesu)! - Twitch and Paybin sign-in now verify ID token signatures and identity claims before mapping profiles, with 30 seconds of clock tolerance. Custom Paybin issuers must expose RS256 signing keys at `<issuer>/.well-known/jwks.json`.
+
 ## 1.7.10
 
 ### Patch Changes

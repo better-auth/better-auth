@@ -3,7 +3,6 @@ import type {
 	JSONWebKeySet,
 	JWTPayload,
 	JWTVerifyOptions,
-	JWTVerifyResult,
 	ProtectedHeaderParameters,
 } from "jose";
 import {
@@ -325,6 +324,40 @@ export function requestToResourceInput(request: Request): ResourceRequestInput {
 const defaultDpopReplayStore = createInMemoryDpopReplayStore();
 
 /**
+ * @internal
+ */
+export async function verifyJwsToken<PayloadType = JWTPayload>(
+	token: string,
+	opts: JwksFetchOptions & {
+		verifyOptions: JWTVerifyOptions;
+	},
+) {
+	if (token.split(".").length !== 3) {
+		throw new joseErrors.JWSInvalid("Invalid Compact JWS");
+	}
+	const resolved = await getJwksForVerification(token, opts);
+	let jwks = resolved.jwks;
+	// Retry with a newer cached key set, then await a fetch already in progress.
+	// Allow at most two retries.
+	for (let refreshes = 0; ; refreshes++) {
+		try {
+			return await jwtVerify<PayloadType>(
+				token,
+				createLocalJWKSet(jwks),
+				opts.verifyOptions,
+			);
+		} catch (error) {
+			const refreshed =
+				refreshes < 2 && shouldRefetchCachedJwksWithoutKid(error, resolved)
+					? await resolved.refresh?.(jwks)
+					: undefined;
+			if (!refreshed) throw error;
+			jwks = refreshed;
+		}
+	}
+}
+
+/**
  * Performs local verification of an access token for your APIs.
  *
  * Can also be configured for remote verification.
@@ -338,26 +371,7 @@ export async function verifyJwsAccessToken(
 	},
 ) {
 	try {
-		const resolved = await getJwksForVerification(token, opts);
-		let jwks = resolved.jwks;
-		let jwt: JWTVerifyResult<JWTPayload> | undefined;
-		// Two refreshes at most: a newer cached set, then a fetch still in flight.
-		for (let refreshes = 0; !jwt; refreshes++) {
-			try {
-				jwt = await jwtVerify<JWTPayload>(
-					token,
-					createLocalJWKSet(jwks),
-					opts.verifyOptions,
-				);
-			} catch (error) {
-				const refreshed =
-					refreshes < 2 && shouldRefetchCachedJwksWithoutKid(error, resolved)
-						? await resolved.refresh?.(jwks)
-						: undefined;
-				if (!refreshed) throw error;
-				jwks = refreshed;
-			}
-		}
+		const jwt = await verifyJwsToken(token, opts);
 		// Return the JWT payload in introspection format
 		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 		if (jwt.payload.azp) {

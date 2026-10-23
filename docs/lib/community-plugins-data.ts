@@ -238,6 +238,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@agentaos/better-auth",
+		url: "https://github.com/AgentaOS/agentaos/tree/main/packages/better-auth",
+		description:
+			"Better Auth plugin for AgentaOS merchant-of-record checkouts, subscriptions, and verified webhooks.",
+		author: {
+			name: "AgentaOS",
+			github: "AgentaOS",
+			avatar: "https://github.com/AgentaOS.png",
+		},
+	},
+	{
 		name: "better-invite",
 		url: "https://github.com/better-invite/better-invite",
 		description:
@@ -321,6 +332,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "Shivam Gupta",
 			github: "shivamrun",
 			avatar: "https://github.com/shivamrun.png",
+		},
+	},
+	{
+		name: "@amank-root/better-auth-razorpay",
+		url: "https://github.com/Amank-root/better-auth-razorpay",
+		description:
+			"Full Razorpay integration plugin for Better Auth — subscriptions, one-time payments, invoices, refunds, customers, add-ons, items, and webhook handling.",
+		author: {
+			name: "Aman Kushwaha",
+			github: "Amank-root",
+			avatar: "https://github.com/Amank-root.png",
 		},
 	},
 	{
@@ -434,11 +456,33 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "good-webhooks",
 		url: "https://github.com/pplytas/good-webhooks",
 		description:
-			"Authenticated webhook endpoint management with typed client APIs, scoped permissions, signing-secret rotation, and optional self-hosted delivery. Currently in beta with a frozen public API.",
+			"Authenticated webhook endpoint management with typed client APIs, scoped permissions, signing-secret rotation, and optional self-hosted delivery.",
 		author: {
 			name: "Panagiotis Plytas",
 			github: "pplytas",
 			avatar: "https://github.com/pplytas.png",
+		},
+	},
+	{
+		name: "better-auth-saml-idp",
+		url: "https://github.com/mmcintosh/better-auth-saml-idp",
+		description:
+			"Turn Better Auth into a SAML 2.0 identity provider for Microsoft 365, Google Workspace, Okta, Salesforce, AWS and other service providers. SP registry with metadata import, signed and encrypted assertions, Single Logout, and step-up MFA.",
+		author: {
+			name: "Mark McIntosh",
+			github: "mmcintosh",
+			avatar: "https://github.com/mmcintosh.png",
+		},
+	},
+	{
+		name: "better-auth-multi-tenant",
+		url: "https://github.com/Weesofficial/better-auth-multi-tenant",
+		description:
+			"Subdomain-based multi-tenancy: resolves the tenant from the request host, binds each session to its tenant, and rejects cross-tenant requests and unbound sessions.",
+		author: {
+			name: "Weesofficial",
+			github: "Weesofficial",
+			avatar: "https://github.com/Weesofficial.png",
 		},
 	},
 ];

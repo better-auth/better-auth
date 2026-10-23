@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import { testAdapter } from "@better-auth/test-utils/adapter";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -12,6 +11,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { pushDrizzleSchema } from "../drizzle-adapter/push-drizzle-schema";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
 const dbName = "better_auth";
@@ -51,16 +51,14 @@ const { execute } = await testAdapter({
 			"pg",
 		);
 
-		const command = `npx drizzle-kit push --dialect=postgresql --schema=${fileName}.ts --url=postgres://user:password@localhost:5432/${dbName}`;
-		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
-			// wait for the above console.log to be printed
-			await new Promise((resolve) => setTimeout(resolve, 10));
-			execSync(command, {
-				cwd: import.meta.dirname,
-				stdio: "inherit",
-			});
+			await pushDrizzleSchema(
+				import.meta.dirname,
+				"postgresql",
+				`${fileName}.ts`,
+				`postgres://user:password@localhost:5432/${dbName}`,
+			);
 		} catch (error) {
 			console.error("Failed to push drizzle schema (pg):", error);
 			throw error;
