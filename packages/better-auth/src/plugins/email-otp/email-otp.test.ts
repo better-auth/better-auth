@@ -405,6 +405,77 @@ describe("email-otp", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11974
+	 */
+	describe("when a step after the password write fails", () => {
+		async function setup(onPasswordReset?: () => Promise<void>) {
+			const instance = await getTestInstance(
+				{
+					plugins: [
+						emailOTP({
+							async sendVerificationOTP({ otp: _otp }) {
+								otp = _otp;
+							},
+						}),
+					],
+					emailAndPassword: { enabled: true, onPasswordReset },
+				},
+				{ clientOptions: { plugins: [emailOTPClient()] } },
+			);
+			const ctx = await instance.auth.$context;
+			const findUser = () =>
+				ctx.internalAdapter.findUserByEmail(instance.testUser.email);
+			expect((await findUser())?.user.emailVerified).toBe(false);
+			await instance.client.emailOtp.sendVerificationOtp({
+				email: instance.testUser.email,
+				type: "forget-password",
+			});
+			const resetWith = (password: string) =>
+				instance.client.emailOtp.resetPassword({
+					email: instance.testUser.email,
+					otp,
+					password,
+				});
+			const signInWith = (password: string) =>
+				instance.client.signIn.email({
+					email: instance.testUser.email,
+					password,
+				});
+			const oldPassword = instance.testUser.password;
+			return { ctx, findUser, resetWith, signInWith, oldPassword };
+		}
+
+		it("still marks the email verified when onPasswordReset throws", async () => {
+			const onPasswordReset = vi.fn(async () => {
+				throw new Error("hook failed");
+			});
+			const { findUser, resetWith, signInWith } = await setup(onPasswordReset);
+
+			expect((await resetWith("new-password")).error?.status).toBe(500);
+			expect(onPasswordReset).toHaveBeenCalledWith(
+				{ user: expect.objectContaining({ emailVerified: true }) },
+				expect.anything(),
+			);
+			expect((await findUser())?.user.emailVerified).toBe(true);
+			expect((await signInWith("new-password")).data).not.toBeNull();
+		});
+
+		it("keeps the old password and the OTP when marking the email verified fails", async () => {
+			const { ctx, findUser, resetWith, signInWith, oldPassword } =
+				await setup();
+			vi.spyOn(ctx.internalAdapter, "updateUser").mockRejectedValueOnce(
+				new Error("database unavailable"),
+			);
+
+			expect((await resetWith("new-password")).error?.status).toBe(500);
+			expect((await signInWith("new-password")).error?.status).toBe(401);
+			expect((await signInWith(oldPassword)).data).not.toBeNull();
+			expect((await resetWith("new-password")).data?.success).toBe(true);
+			expect((await findUser())?.user.emailVerified).toBe(true);
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10632
 	 */
 	it("leaves the OTP usable when the new password is rejected", async () => {
