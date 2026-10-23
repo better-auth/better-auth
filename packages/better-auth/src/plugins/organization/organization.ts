@@ -3,14 +3,13 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
 import { shimContext } from "../../utils/shim";
 import { PACKAGE_VERSION } from "../../version";
 import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
 import { defaultRoles } from "./access";
 import { getOrgAdapter } from "./adapter";
-import { orgSessionMiddleware } from "./call";
+import { getOrgSessionFromCtx, orgSessionMiddleware } from "./call";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
 import {
@@ -1240,7 +1239,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		roles,
 		getSession: async (context: AuthContext) => {
 			//@ts-expect-error
-			return await getSessionFromCtx(context);
+			return await getOrgSessionFromCtx(context);
 		},
 	});
 
