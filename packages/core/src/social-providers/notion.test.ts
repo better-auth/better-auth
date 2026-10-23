@@ -12,6 +12,7 @@ const credentials = {
 beforeEach(() => mockedBetterFetch.mockReset());
 
 /**
+ * @see https://developers.notion.com/reference/user
  * @see https://github.com/makenotion/notion-sdk-js/blob/0ffdbba3004b27438ca72df769412268e4fdede1/src/api-endpoints/common.ts#L79
  * @see https://developers.notion.com/page/changelog#new-identity-fields-in-oauth-token-responses
  */
@@ -77,7 +78,9 @@ describe("notion owner profiles", () => {
 		const provider = notion({
 			...credentials,
 			mapProfileToUser(profile) {
-				expectTypeOf(profile.type).toEqualTypeOf<"person" | undefined>();
+				expectTypeOf(profile.type).toEqualTypeOf<
+					"person" | "bot" | undefined
+				>();
 				return {
 					name: profile.name ?? "Mapped Owner",
 					email: profile.person?.email ?? `${profile.id}@example.com`,

@@ -7,12 +7,12 @@ import {
 } from "../oauth2";
 
 /**
- * Full or partial owner-user profile returned by Notion.
+ * Full or partial user profile returned by Notion.
  */
 export interface NotionProfile {
 	object: "user";
 	id: string;
-	type?: "person" | undefined;
+	type?: "person" | "bot" | undefined;
 	name?: string | null | undefined;
 	avatar_url?: string | null | undefined;
 	person?:

@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-Notion profile mappings now handle partial person owners, nullable names and avatars, and the optional email verification claim. Missing avatars preserve stored images when profile updates are enabled; the default email trust policy is unchanged.
+`NotionProfile` now accepts partial users with an omitted `type`, nullable names and avatars, and the optional email verification claim while retaining both `person` and `bot` variants. Missing avatars preserve stored images during enabled profile updates.
