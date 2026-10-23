@@ -775,6 +775,99 @@ describe("private_key_jwt authentication", async () => {
 				error_description: "client assertion signature verification failed",
 			},
 		});
+
+		await expect(
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience,
+					clientId,
+					key: keyPair.privateKey as CryptoKey,
+					keyId,
+					exp: now - 5,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audience,
+			),
+		).resolves.toMatchObject({ clientId });
+
+		await expect(
+			verifyClientAssertion(
+				provider.ctx,
+				provider.opts,
+				await signDiscoveredClientAssertion({
+					audience,
+					clientId,
+					key: keyPair.privateKey as CryptoKey,
+					keyId,
+					exp: now - 60,
+				}),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audience,
+			),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion signature verification failed",
+			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12005
+	 */
+	it("keeps the jti tombstone until exp plus assertionClockTolerance", async () => {
+		const assertionClockTolerance = 30;
+		const opts = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			assertionClockTolerance,
+		} satisfies OAuthOptions<Scope[]>;
+		const instance = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [jwt(), oauthProvider(opts)],
+		});
+		const ctx = {
+			context: await instance.auth.$context,
+		} as GenericEndpointContext;
+		const now = Math.floor(Date.now() / 1000);
+		const expWithin = now - 5;
+		await consumeClientAssertion(ctx, opts, {
+			namespace: "private_key_jwt:clock-tolerance-client",
+			payload: {
+				aud: tokenEndpoint,
+				exp: expWithin,
+				jti: crypto.randomUUID(),
+			},
+			expectedAudience: tokenEndpoint,
+		});
+		const rows = await ctx.context.adapter.findMany({
+			model: "oauthClientAssertion",
+		});
+		expect(rows).toHaveLength(1);
+		expect(new Date(rows[0]!.expiresAt).getTime()).toBe(
+			(expWithin + assertionClockTolerance) * 1000,
+		);
+
+		await expect(
+			consumeClientAssertion(ctx, opts, {
+				namespace: "private_key_jwt:clock-tolerance-client",
+				payload: {
+					aud: tokenEndpoint,
+					exp: now - 60,
+					jti: crypto.randomUUID(),
+				},
+				expectedAudience: tokenEndpoint,
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client assertion has expired",
+			},
+		});
 	});
 
 	it("should reject expired assertion", async () => {

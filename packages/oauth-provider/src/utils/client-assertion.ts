@@ -432,7 +432,7 @@ export async function consumeClientAssertion(
 			model: "oauthClientAssertion",
 			data: {
 				id: jtiId,
-				expiresAt: new Date(payload.exp * 1000),
+				expiresAt: new Date((payload.exp + clockTolerance) * 1000),
 			},
 			forceAllowId: true,
 		});
