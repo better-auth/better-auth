@@ -474,4 +474,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/mmcintosh.png",
 		},
 	},
+	{
+		name: "better-auth-multi-tenant",
+		url: "https://github.com/Weesofficial/better-auth-multi-tenant",
+		description:
+			"Subdomain-based multi-tenancy: resolves the tenant from the request host, binds each session to its tenant, and rejects cross-tenant requests and unbound sessions.",
+		author: {
+			name: "Weesofficial",
+			github: "Weesofficial",
+			avatar: "https://github.com/Weesofficial.png",
+		},
+	},
 ];
