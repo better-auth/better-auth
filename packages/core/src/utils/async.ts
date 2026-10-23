@@ -51,3 +51,57 @@ export async function mapConcurrent<T, R>(
 	await Promise.all(Array.from({ length: width }, worker));
 	return results;
 }
+
+/**
+ * How long a caller waits on a pending cached result, such as initialization
+ * or a schema lookup, before it evicts that result as abandoned.
+ *
+ * A runtime that ends I/O with the request that started it, such as the
+ * Workers runtime, drops a pending promise once that request responds. It
+ * neither resolves nor rejects it, so a cached promise would otherwise stall
+ * every later caller in the isolate.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/10315
+ */
+export const EVICTION_TIMEOUT_MS = 30_000;
+
+/**
+ * Settles like `promise`, unless `deadlineMs` (a `Date.now()` timestamp)
+ * passes first. Then it settles like `onDeadline`.
+ *
+ * A runtime that refuses the timer leaves `promise` unbounded.
+ */
+export function settleByDeadline<T>(
+	promise: Promise<T>,
+	deadlineMs: number,
+	onDeadline: () => T,
+): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		try {
+			timer = setTimeout(
+				() => {
+					try {
+						resolve(onDeadline());
+					} catch (error) {
+						reject(error);
+					}
+				},
+				Math.max(0, deadlineMs - Date.now()),
+			);
+		} catch {
+			// The Workers runtime refuses timers at global scope. No request
+			// exists there to abandon the promise, so it needs no bound.
+		}
+		promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error: unknown) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}

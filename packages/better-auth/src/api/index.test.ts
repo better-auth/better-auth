@@ -55,6 +55,50 @@ describe("getEndpoints", () => {
 			customProp: "value",
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10315
+	 */
+	it("should call a function-based context before passing it to middleware", async () => {
+		const mockContext = {
+			baseURL: "http://localhost:3000",
+			options: {},
+		} as unknown as AuthContext;
+
+		const middlewareFn = vi.fn().mockResolvedValue({});
+
+		const testPlugin: BetterAuthPlugin = {
+			id: "test-plugin",
+			middlewares: [
+				{
+					path: "/test",
+					middleware: createAuthMiddleware(async (ctx) => {
+						middlewareFn(ctx);
+						return {};
+					}),
+				},
+			],
+		};
+
+		const { middlewares } = getEndpoints(async () => mockContext, {
+			plugins: [testPlugin],
+		});
+
+		const testCtx = {
+			request: new Request("http://localhost:3000/test"),
+			context: { customProp: "value" },
+		};
+
+		await middlewares[0]!.middleware(testCtx);
+
+		expect(middlewareFn).toHaveBeenCalled();
+		const call = middlewareFn.mock.calls[0]![0];
+		expect(call.context).toMatchObject({
+			baseURL: "http://localhost:3000",
+			options: {},
+			customProp: "value",
+		});
+	});
 });
 
 describe("onRequest chain", () => {

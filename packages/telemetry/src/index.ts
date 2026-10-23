@@ -28,6 +28,7 @@ export async function createTelemetry(
 	if (!telemetryEndpoint && !context?.customTrack) {
 		return {
 			publish: noop,
+			reportInstall: async () => {},
 		};
 	}
 	const track = async (event: TelemetryEvent) => {
@@ -57,14 +58,15 @@ export async function createTelemetry(
 	};
 
 	const enabled = await isEnabled();
-	let anonymousId: string | undefined;
-
-	if (enabled) {
-		anonymousId = await getProjectId(
+	let anonymousId: Promise<string> | undefined;
+	const getAnonymousId = () =>
+		(anonymousId ??= getProjectId(
 			typeof options.baseURL === "string" ? options.baseURL : undefined,
-		);
+		));
 
-		const payload = {
+	const createInitEvent = async (): Promise<TelemetryEvent> => ({
+		type: "init",
+		payload: {
 			config: await getTelemetryAuthConfig(options, context),
 			runtime: detectRuntime(),
 			database: await detectDatabase(),
@@ -72,23 +74,28 @@ export async function createTelemetry(
 			environment: detectEnvironment(),
 			systemInfo: await detectSystemInfo(),
 			packageManager: detectPackageManager(),
-		};
+		},
+		anonymousId: await getAnonymousId(),
+	});
 
-		void track({ type: "init", payload, anonymousId });
-	}
+	/**
+	 * Sends the init event. Settles once the event is sent, so a background
+	 * task handler such as `waitUntil` keeps the request alive until then.
+	 */
+	const reportInstall = async () => {
+		if (enabled) await track(await createInitEvent());
+	};
+
+	if (enabled && !context?.deferInitEvent) void track(await createInitEvent());
 
 	return {
+		reportInstall,
 		publish: async (event: TelemetryEvent) => {
 			if (!enabled) return;
-			if (!anonymousId) {
-				anonymousId = await getProjectId(
-					typeof options.baseURL === "string" ? options.baseURL : undefined,
-				);
-			}
 			await track({
 				type: event.type,
 				payload: event.payload,
-				anonymousId,
+				anonymousId: await getAnonymousId(),
 			});
 		},
 	};
