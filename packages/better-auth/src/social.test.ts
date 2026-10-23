@@ -2954,6 +2954,9 @@ describe("Microsoft Provider", async () => {
 	});
 });
 
+/**
+ * @see https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/#choose-a-flow
+ */
 describe("Cloudflare Provider", () => {
 	let userInfoRequestCount = 0;
 
@@ -3176,7 +3179,23 @@ describe("Cloudflare Provider", () => {
 		expect(accounts[0]?.accountId).toBe("cloudflare_user_123");
 	});
 
-	it("should support client_secret_post token authentication", async () => {
+	it.each([
+		{
+			name: "deprecated option",
+			authentication: { tokenEndpointAuthMethod: "client_secret_post" },
+		},
+		{
+			name: "new option",
+			authentication: { tokenEndpointAuth: { method: "client_secret_post" } },
+		},
+		{
+			name: "new option precedence",
+			authentication: {
+				tokenEndpointAuthMethod: "client_secret_basic",
+				tokenEndpointAuth: { method: "client_secret_post" },
+			},
+		},
+	] as const)("uses $name authentication", async ({ authentication }) => {
 		mswServer.use(
 			http.post(
 				"https://dash.cloudflare.com/oauth2/token",
@@ -3206,7 +3225,7 @@ describe("Cloudflare Provider", () => {
 					cloudflare: {
 						clientId: "cloudflare-post-client-id",
 						clientSecret: "cloudflare-post-client-secret",
-						tokenEndpointAuthMethod: "client_secret_post",
+						...authentication,
 					},
 				},
 			},
