@@ -77,6 +77,7 @@ export const createInternalAdapter = (
 		deleteWithHooks,
 		deleteManyWithHooks,
 		consumeOneWithHooks,
+		runDeleteBeforeHooks,
 	} = getWithHooks(adapter, ctx);
 
 	/**
@@ -449,7 +450,108 @@ export const createInternalAdapter = (
 		},
 		deleteUser: async (userId: string) => {
 			const sessionReferences = await getActiveSessionReferences(userId);
-			if (!secondaryStorage || options.session?.storeSessionInDatabase) {
+			let isDeleted = false;
+			await runWithTransaction(adapter, async () => {
+				const currentAdapter = await getCurrentAdapter(adapter);
+				const users = await currentAdapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: userId }],
+					limit: 1,
+				});
+				const user = users[0] || null;
+				if (!user) {
+					return;
+				}
+
+				const shouldDeleteSessionsFromDb =
+					!secondaryStorage || options.session?.storeSessionInDatabase;
+
+				const sessions: Session[] = [];
+				if (shouldDeleteSessionsFromDb) {
+					let offset = 0;
+					const batchSize = 100;
+					while (true) {
+						const batch = await currentAdapter.findMany<Session>({
+							model: "session",
+							where: [{ field: "userId", value: userId }],
+							limit: batchSize,
+							offset,
+							sortBy: { field: "id", direction: "asc" },
+						});
+						sessions.push(...batch);
+						if (batch.length < batchSize) break;
+						offset += batch.length;
+					}
+				}
+
+				const accounts: Account[] = [];
+				{
+					let offset = 0;
+					const batchSize = 100;
+					while (true) {
+						const batch = await currentAdapter.findMany<Account>({
+							model: "account",
+							where: [{ field: "userId", value: userId }],
+							limit: batchSize,
+							offset,
+							sortBy: { field: "id", direction: "asc" },
+						});
+						accounts.push(...batch);
+						if (batch.length < batchSize) break;
+						offset += batch.length;
+					}
+				}
+
+				for (const session of sessions) {
+					const allowed = await runDeleteBeforeHooks(session, "session");
+					if (!allowed) {
+						return;
+					}
+				}
+
+				for (const account of accounts) {
+					const allowed = await runDeleteBeforeHooks(account, "account");
+					if (!allowed) {
+						return;
+					}
+				}
+
+				const userAllowed = await runDeleteBeforeHooks(user, "user");
+				if (!userAllowed) {
+					return;
+				}
+
+				// Queue the cache eviction BEFORE any child after-hooks, guarded by isDeleted
+				await queueAfterTransactionHook(
+					async () => {
+						if (isDeleted) {
+							await deleteCachedUserSessions(userId, sessionReferences);
+						}
+					},
+					{
+						onError(error) {
+							logger.error(
+								`Failed to delete cached user sessions for user ${userId}`,
+								error,
+							);
+						},
+					},
+				);
+
+				if (shouldDeleteSessionsFromDb) {
+					await deleteManyWithHooks(
+						[
+							{
+								field: "userId",
+								value: userId,
+							},
+						],
+						"session",
+						undefined,
+						{ preloadedEntities: sessions, skipBeforeHooks: true },
+					);
+				}
+
 				await deleteManyWithHooks(
 					[
 						{
@@ -457,34 +559,25 @@ export const createInternalAdapter = (
 							value: userId,
 						},
 					],
-					"session",
+					"account",
 					undefined,
+					{ preloadedEntities: accounts, skipBeforeHooks: true },
 				);
-			}
-			await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"account",
-				undefined,
-			);
 
-			const deletedUser = await deleteWithHooks(
-				[
-					{
-						field: "id",
-						value: userId,
-					},
-				],
-				"user",
-				undefined,
-			);
-			if (deletedUser !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
-			}
+				await deleteWithHooks(
+					[
+						{
+							field: "id",
+							value: userId,
+						},
+					],
+					"user",
+					undefined,
+					{ preloadedEntity: user, skipBeforeHooks: true },
+				);
+
+				isDeleted = true;
+			});
 		},
 		createSession: async (
 			userId: string,
