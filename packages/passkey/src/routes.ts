@@ -35,7 +35,7 @@ import type {
 	PasskeyRegistrationUser,
 	WebAuthnChallengeValue,
 } from "./types";
-import { getRpID } from "./utils";
+import { resolveExpectedRPID, resolveRpID } from "./utils";
 
 type PasskeyCeremony = "registration" | "authentication";
 
@@ -46,6 +46,12 @@ type PasskeyCeremony = "registration" | "authentication";
  */
 type StoredChallengeValue = WebAuthnChallengeValue & {
 	type?: PasskeyCeremony;
+	/**
+	 * The RP ID sent in the options, so verification checks the RP ID the
+	 * authenticator was asked to use even if a per-request `rpID` resolver
+	 * would pick another one for the verify request.
+	 */
+	rpID?: string;
 };
 
 type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
@@ -297,13 +303,10 @@ export const generatePasskeyRegistrationOptions = (
 			const userID = new TextEncoder().encode(
 				generateRandomString(32, "a-z", "0-9"),
 			);
-			const baseURLString =
-				typeof ctx.context.options.baseURL === "string"
-					? ctx.context.options.baseURL
-					: undefined;
+			const rpID = await resolveRpID(opts, ctx);
 			const options = await generateRegistrationOptions({
 				rpName: opts.rpName || ctx.context.appName,
-				rpID: getRpID(opts, baseURLString),
+				rpID,
 				userID,
 				userName: ctx.query?.name || user.name || user.id,
 				userDisplayName: user.displayName || user.name || user.id,
@@ -345,6 +348,7 @@ export const generatePasskeyRegistrationOptions = (
 				value: JSON.stringify({
 					type: "registration",
 					expectedChallenge: options.challenge,
+					rpID,
 					userData: {
 						id: user.id,
 						name: user.name,
@@ -475,16 +479,13 @@ export const generatePasskeyAuthenticationOptions = (
 					],
 				});
 			}
-			const baseURLString =
-				typeof ctx.context.options.baseURL === "string"
-					? ctx.context.options.baseURL
-					: undefined;
 			const authenticationExtensions = await resolveExtensions(
 				opts.authentication?.extensions,
 				ctx,
 			);
+			const rpID = await resolveRpID(opts, ctx);
 			const options = await generateAuthenticationOptions({
-				rpID: getRpID(opts, baseURLString),
+				rpID,
 				userVerification: "preferred",
 				extensions: authenticationExtensions,
 				...(userPasskeys.length
@@ -501,6 +502,7 @@ export const generatePasskeyAuthenticationOptions = (
 			const data = {
 				type: "authentication",
 				expectedChallenge: options.challenge,
+				rpID,
 				userData: {
 					id: session?.user.id || "",
 				},
@@ -627,6 +629,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				expectedChallenge,
 				userData,
 				context,
+				rpID,
 			} = JSON.parse(data.value) as StoredChallengeValue;
 			if (ceremony !== "registration") {
 				throw APIError.from(
@@ -646,15 +649,11 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			}
 
 			try {
-				const verifyBaseURL =
-					typeof ctx.context.options.baseURL === "string"
-						? ctx.context.options.baseURL
-						: undefined;
 				const verification = await verifyRegistrationResponse({
 					response: resp,
 					expectedChallenge,
 					expectedOrigin: origin,
-					expectedRPID: getRpID(options, verifyBaseURL),
+					expectedRPID: await resolveExpectedRPID(options, ctx, rpID),
 					requireUserVerification: false,
 				});
 				const { verified, registrationInfo } = verification;
@@ -864,9 +863,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
 				);
 			}
-			const { type: ceremony, expectedChallenge } = JSON.parse(
-				data.value,
-			) as StoredChallengeValue;
+			const {
+				type: ceremony,
+				expectedChallenge,
+				rpID,
+			} = JSON.parse(data.value) as StoredChallengeValue;
 			if (ceremony !== "authentication") {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -889,15 +890,11 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			}
 			try {
-				const authBaseURL =
-					typeof ctx.context.options.baseURL === "string"
-						? ctx.context.options.baseURL
-						: undefined;
 				const verification = await verifyAuthenticationResponse({
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
 					expectedOrigin: origin,
-					expectedRPID: getRpID(options, authBaseURL),
+					expectedRPID: await resolveExpectedRPID(options, ctx, rpID),
 					credential: {
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),
