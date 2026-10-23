@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
@@ -2795,5 +2796,238 @@ describe("email-otp send origin/CSRF protection", async () => {
 		const response = await auth.handler(legitimateRequest);
 		expect(response.status).toBe(200);
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11970
+ */
+describe("email-otp attempt budget for unknown addresses", async () => {
+	const { client, testUser, runWithUser } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					generateOTP: () => "123456",
+					async sendVerificationOTP() {},
+					changeEmail: { enabled: true },
+					disableSignUp: true,
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+	const unknownEmail = "unknown-address@test.com";
+
+	async function fourthWrongCode(
+		submit: () => Promise<{ error: { code?: string } | null }>,
+	) {
+		for (let i = 0; i < 3; i++) {
+			expect((await submit()).error?.code).toBe("INVALID_OTP");
+		}
+		return (await submit()).error?.code;
+	}
+
+	it("should lock out check-verification-otp for an unknown address like a known one", async () => {
+		const results = [];
+		for (const email of [testUser.email, unknownEmail]) {
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "email-verification",
+			});
+			results.push(
+				await fourthWrongCode(() =>
+					client.emailOtp.checkVerificationOtp({
+						email,
+						type: "email-verification",
+						otp: "000000",
+					}),
+				),
+			);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
+	});
+
+	it("should lock out verify-email for an unknown address like a known one", async () => {
+		const results = [];
+		for (const email of [testUser.email, unknownEmail]) {
+			await client.emailOtp.sendVerificationOtp({
+				email,
+				type: "email-verification",
+			});
+			results.push(
+				await fourthWrongCode(() =>
+					client.emailOtp.verifyEmail({ email, otp: "000000" }),
+				),
+			);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
+	});
+
+	it("should lock out sign-in under disableSignUp for an unknown address like a known one", async () => {
+		const results = [];
+		for (const email of [testUser.email, unknownEmail]) {
+			await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+			results.push(
+				await fourthWrongCode(() =>
+					client.signIn.emailOtp({ email, otp: "000000" }),
+				),
+			);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
+	});
+
+	it("should lock out reset-password for an unknown address like a known one", async () => {
+		const results = [];
+		for (const email of [testUser.email, unknownEmail]) {
+			await client.emailOtp.requestPasswordReset({ email });
+			results.push(
+				await fourthWrongCode(() =>
+					client.emailOtp.resetPassword({
+						email,
+						otp: "000000",
+						password: "new-password-123",
+					}),
+				),
+			);
+		}
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
+	});
+
+	it("should lock out change-email for a taken address like a free one", async () => {
+		const takenEmail = "taken-address@test.com";
+		await client.signUp.email({
+			email: takenEmail,
+			password: "password123",
+			name: "Taken",
+		});
+		const results: (string | undefined)[] = [];
+		await runWithUser(testUser.email, testUser.password, async () => {
+			for (const newEmail of ["free-address@test.com", takenEmail]) {
+				await client.emailOtp.requestEmailChange({ newEmail });
+				results.push(
+					await fourthWrongCode(() =>
+						client.emailOtp.changeEmail({ newEmail, otp: "000000" }),
+					),
+				);
+			}
+		});
+		expect(results).toEqual(["TOO_MANY_ATTEMPTS", "TOO_MANY_ATTEMPTS"]);
+	});
+
+	it("should not redeem the real code of a row kept for an unknown or taken address", async () => {
+		const email = "never-registered@test.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const signIn = await client.signIn.emailOtp({ email, otp: "123456" });
+		expect(signIn.error?.code).toBe("INVALID_OTP");
+
+		await client.emailOtp.requestPasswordReset({ email });
+		const reset = await client.emailOtp.resetPassword({
+			email,
+			otp: "123456",
+			password: "new-password-123",
+		});
+		expect(reset.error?.code).toBe("USER_NOT_FOUND");
+
+		const takenEmail = "taken-by-other@test.com";
+		await client.signUp.email({
+			email: takenEmail,
+			password: "password123",
+			name: "Other",
+		});
+		await runWithUser(testUser.email, testUser.password, async () => {
+			await client.emailOtp.requestEmailChange({ newEmail: takenEmail });
+			const change = await client.emailOtp.changeEmail({
+				newEmail: takenEmail,
+				otp: "123456",
+			});
+			expect(change.error?.message).toBe("Email already in use");
+		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11970
+ */
+describe("email-otp kept code rows on a unique verification identifier", async () => {
+	const uniqueVerificationIdentifier = {
+		id: "unique-verification-identifier",
+		schema: {
+			verification: {
+				fields: {},
+				indexes: [{ fields: ["identifier"], unique: true }],
+			},
+		},
+	} satisfies BetterAuthPlugin;
+	const otps: string[] = [];
+	const { auth, client, testUser, runWithUser } = await getTestInstance(
+		{
+			plugins: [
+				uniqueVerificationIdentifier,
+				emailOTP({
+					sendVerificationOnSignUp: true,
+					changeEmail: { enabled: true },
+					async sendVerificationOTP({ otp }) {
+						otps.push(otp);
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should sign up an address that already has a kept code row", async () => {
+		const email = "kept-row-sign-up@test.com";
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "email-verification",
+		});
+		const signUp = await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Kept",
+		});
+		expect(signUp.error).toBeNull();
+		const verify = await client.emailOtp.verifyEmail({
+			email,
+			otp: otps.at(-1)!,
+		});
+		expect(verify.error).toBeNull();
+	});
+
+	it("should accept a repeated email change request for a free or taken address", async () => {
+		const takenEmail = "kept-row-taken@test.com";
+		await client.signUp.email({
+			email: takenEmail,
+			password: "password123",
+			name: "Taken",
+		});
+		const errors: unknown[] = [];
+		await runWithUser(testUser.email, testUser.password, async () => {
+			for (const newEmail of ["kept-row-free@test.com", takenEmail]) {
+				await client.emailOtp.requestEmailChange({ newEmail });
+				errors.push(
+					(await client.emailOtp.requestEmailChange({ newEmail })).error,
+				);
+			}
+		});
+		expect(errors).toEqual([null, null]);
+	});
+
+	it("should replace a pending code on a repeated createVerificationOTP", async () => {
+		const body = { email: testUser.email, type: "email-verification" as const };
+		await auth.api.createVerificationOTP({ body });
+		const otp = await auth.api.createVerificationOTP({ body });
+		const check = await auth.api.checkVerificationOTP({
+			body: { ...body, otp },
+		});
+		expect(check.success).toBe(true);
 	});
 });

@@ -1,7 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { generateRandomString } from "../../crypto";
-import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { PACKAGE_VERSION } from "../../version";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
@@ -18,6 +17,7 @@ import {
 	sendVerificationOTP,
 	signInEmailOTP,
 	verifyEmailOTP,
+	writeOTP,
 } from "./routes";
 import type { EmailOTPOptions } from "./types";
 import { toOTPIdentifier } from "./utils";
@@ -105,12 +105,12 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							const otp =
 								opts.generateOTP({ email, type: "email-verification" }, ctx) ||
 								defaultOTPGenerator(opts);
-							const storedOTP = await storeOTP(ctx, opts, otp);
-							await ctx.context.internalAdapter.createVerificationValue({
-								value: `${storedOTP}:0`,
-								identifier: toOTPIdentifier("email-verification", email),
-								expiresAt: getDate(opts.expiresIn, "sec"),
-							});
+							await writeOTP(
+								ctx,
+								opts,
+								toOTPIdentifier("email-verification", email),
+								await storeOTP(ctx, opts, otp),
+							);
 							await ctx.context.runInBackgroundOrAwait(
 								options.sendVerificationOTP(
 									{
