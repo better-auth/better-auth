@@ -18,9 +18,9 @@ import {
 	createCanonicalSCIMUserProfile,
 	normalizeSCIMEmails,
 } from "./user-profile";
+import type { SCIMUserSchemaContext } from "./user-schema-context";
 import type { SCIMCanonicalUserAttributes } from "./user-schemas";
 import {
-	APIUserSchema,
 	hasUniqueSCIMDefinedTypes,
 	SCIM_ENTERPRISE_USER_SCHEMA,
 	SCIMEnterpriseUserInputSchema,
@@ -92,8 +92,9 @@ function createComparableSCIMPatchValue(value: unknown): unknown {
 export function scimUserPatchChangesState(
 	user: SCIMUser,
 	state: SCIMUserPatchState,
+	context: SCIMUserSchemaContext,
 ): boolean {
-	const attributes = readSCIMUserAttributes(user);
+	const attributes = readSCIMUserAttributes(user, context.canonicalSchema);
 	return (
 		user.userName !== state.userName ||
 		user.primaryEmail !== state.primaryEmail ||
@@ -617,6 +618,148 @@ function removeEmptyEnterpriseExtension(
 	setEnterpriseSchemaDeclaration(document, false);
 }
 
+/** Add or remove a custom extension URN from the document's `schemas`. */
+function setExtensionSchemaDeclaration(
+	document: Record<string, unknown>,
+	urn: string,
+	declared: boolean,
+): void {
+	const schemas = Array.isArray(document.schemas)
+		? document.schemas.filter(
+				(schema): schema is string => typeof schema === "string",
+			)
+		: [];
+	const without = schemas.filter((schema) => schema !== urn);
+	document.schemas = declared ? [...without, urn] : without;
+}
+
+/**
+ * Apply a PATCH operation that targets a custom extension URN, either the whole
+ * extension object (`urn`) or one of its simple attributes (`urn:attribute`).
+ * Mutates `document` and returns `true` when the path belongs to a declared
+ * custom extension; returns `false` otherwise so core/enterprise handling runs.
+ */
+function applyCustomExtensionPatch(
+	document: Record<string, unknown>,
+	op: "add" | "remove" | "replace",
+	path: string,
+	value: unknown,
+	context: SCIMUserSchemaContext,
+	pathless = false,
+): boolean {
+	const pathTrim = path.trim();
+	const pathLower = pathTrim.toLowerCase();
+	// Longest URN first, so a URN that is a prefix of another does not win.
+	const descriptors = [...context.customDescriptors].sort(
+		(left, right) => right.id.length - left.id.length,
+	);
+	for (const descriptor of descriptors) {
+		const urn = descriptor.id;
+		const urnLower = urn.toLowerCase();
+		const isRoot = pathLower === urnLower;
+		const isSubAttribute = pathLower.startsWith(`${urnLower}:`);
+		if (!isRoot && !isSubAttribute) continue;
+
+		const findAttribute = (name: string) =>
+			descriptor.attributes.find(
+				(attribute) => attribute.name.toLowerCase() === name.toLowerCase(),
+			);
+		const persist = (next: Record<string, unknown>) => {
+			if (Object.keys(next).length === 0) {
+				delete document[urn];
+				setExtensionSchemaDeclaration(document, urn, false);
+			} else {
+				document[urn] = next;
+				setExtensionSchemaDeclaration(document, urn, true);
+			}
+			return true;
+		};
+
+		const container = isRecord(document[urn])
+			? { ...(document[urn] as Record<string, unknown>) }
+			: {};
+
+		if (isRoot) {
+			if (op === "remove") {
+				delete document[urn];
+				setExtensionSchemaDeclaration(document, urn, false);
+				return true;
+			}
+			if (!isRecord(value)) {
+				return invalidPatchValue(`${urn} must be an object`);
+			}
+			// A path-targeted `replace` on the extension root replaces the whole
+			// object, so omitted attributes are cleared. A pathless op (the URN is a
+			// key in a no-path value) merges per SCIM semantics, so `add` and a
+			// pathless `replace` both merge into the stored value. Each attribute is
+			// validated on its own, so an unrelated required attribute does not force
+			// a 400 on a partial update, and a `null` value clears that attribute.
+			const next: Record<string, unknown> =
+				op === "replace" && !pathless ? {} : container;
+			for (const [key, raw] of Object.entries(value)) {
+				const attribute = findAttribute(key);
+				const attributeSchema = attribute
+					? descriptor.attributeInputSchemas[attribute.name]
+					: undefined;
+				if (!attribute || !attributeSchema) {
+					throw createSCIMError("BAD_REQUEST", {
+						detail: `User PATCH path ${urn}:${key} is not supported`,
+						scimType: "invalidPath",
+					});
+				}
+				if (raw === null) {
+					delete next[attribute.name];
+					continue;
+				}
+				const parsed = attributeSchema.safeParse(raw);
+				if (!parsed.success) {
+					const issue = parsed.error.issues[0];
+					return invalidPatchValue(
+						issue
+							? `${urn}:${attribute.name}: ${issue.message}`
+							: `${urn}:${attribute.name} is invalid`,
+					);
+				}
+				next[attribute.name] = parsed.data;
+			}
+			return persist(next);
+		}
+
+		const attributeName = pathTrim.slice(urn.length + 1);
+		const attribute =
+			attributeName &&
+			!attributeName.includes(":") &&
+			!attributeName.includes(".")
+				? findAttribute(attributeName)
+				: undefined;
+		const attributeSchema = attribute
+			? descriptor.attributeInputSchemas[attribute.name]
+			: undefined;
+		if (!attribute || !attributeSchema) {
+			throw createSCIMError("BAD_REQUEST", {
+				detail: `User PATCH path ${path} is not supported`,
+				scimType: "invalidPath",
+			});
+		}
+
+		if (op === "remove" || value === null) {
+			delete container[attribute.name];
+			return persist(container);
+		}
+
+		const parsed = attributeSchema.safeParse(value);
+		if (!parsed.success) {
+			const issue = parsed.error.issues[0];
+			return invalidPatchValue(
+				issue ? `${path}: ${issue.message}` : `${path} is invalid`,
+			);
+		}
+		container[attribute.name] = parsed.data;
+		return persist(container);
+	}
+	return false;
+}
+
 function mergePatchObject(
 	current: unknown,
 	value: unknown,
@@ -1031,6 +1174,7 @@ function createSCIMUserPatchDocument(
 function finalizeSCIMUserPatch(
 	state: SCIMUserPatchState,
 	document: Record<string, unknown>,
+	context: SCIMUserSchemaContext,
 ): SCIMUserPatchState {
 	document.userName = state.userName;
 	document.externalId = state.externalId;
@@ -1050,7 +1194,7 @@ function finalizeSCIMUserPatch(
 	};
 	document.emails = clonePatchValue(state.emails);
 
-	const parsed = APIUserSchema.safeParse(document);
+	const parsed = context.inputSchema.safeParse(document);
 	if (!parsed.success) {
 		const issue = parsed.error.issues[0];
 		return invalidPatchValue(
@@ -1059,7 +1203,10 @@ function finalizeSCIMUserPatch(
 				: "The patched User resource is invalid",
 		);
 	}
-	const profile = createCanonicalSCIMUserProfile(parsed.data);
+	const profile = createCanonicalSCIMUserProfile(
+		parsed.data,
+		context.customDescriptors,
+	);
 	return {
 		userName: profile.userName,
 		primaryEmail: profile.primaryEmail,
@@ -1081,8 +1228,9 @@ function finalizeSCIMUserPatch(
 export function applySCIMUserPatch(
 	user: SCIMUser,
 	operations: z.infer<typeof patchSCIMUserBodySchema>["Operations"],
+	context: SCIMUserSchemaContext,
 ): SCIMUserPatchState {
-	const attributes = readSCIMUserAttributes(user);
+	const attributes = readSCIMUserAttributes(user, context.canonicalSchema);
 	const document = createSCIMUserPatchDocument(user, attributes);
 	const state: SCIMUserPatchState = {
 		userName: user.userName,
@@ -1104,7 +1252,13 @@ export function applySCIMUserPatch(
 		op: "add" | "remove" | "replace",
 		path: string,
 		value: unknown,
+		pathless = false,
 	): void {
+		if (
+			applyCustomExtensionPatch(document, op, path, value, context, pathless)
+		) {
+			return;
+		}
 		const schemaRelativePath = stripSCIMCoreAttributePrefix(
 			"User",
 			path.trim(),
@@ -1293,9 +1447,9 @@ export function applySCIMUserPatch(
 			invalidPatchValue("A pathless User PATCH value must be an object");
 		}
 		for (const [attribute, value] of Object.entries(operation.value)) {
-			applyAttribute(operation.op, attribute, value);
+			applyAttribute(operation.op, attribute, value, true);
 		}
 	}
 
-	return finalizeSCIMUserPatch(state, document);
+	return finalizeSCIMUserPatch(state, document, context);
 }

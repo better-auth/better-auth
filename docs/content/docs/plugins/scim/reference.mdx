@@ -189,7 +189,7 @@ Requests with a body may use `application/scim+json` or `application/json`. Resp
 
 `POST` and `PUT` bodies must contain exactly one matching core schema URN:
 
-* User: `urn:ietf:params:scim:schemas:core:2.0:User`, optionally followed by `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User`
+* User: `urn:ietf:params:scim:schemas:core:2.0:User`, optionally followed by `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User` and any [custom User schema extension](#custom-user-schema-extensions) declared through `userSchemaExtensions`
 * Group: `urn:ietf:params:scim:schemas:core:2.0:Group`
 
 The Enterprise User URI may be declared without an extension object, as Microsoft Entra does in some requests, and the declaration remains in the response. An Enterprise object without its URI is invalid. PATCH bodies must include `urn:ietf:params:scim:api:messages:2.0:PatchOp`. User and Group create or replace requests with unsupported or duplicate schema URNs return `400 Bad Request` with `scimType: "invalidValue"`.
@@ -269,6 +269,52 @@ A profile-managing source writes the primary email and display name to the Bette
 The Enterprise User extension supports `employeeNumber`, `costCenter`, `organization`, `division`, `department`, and `manager`. A manager accepts a nonempty identifier string, an RFC object containing `value`, `$ref`, or both, or a singleton array containing that object. Better Auth accepts a client-supplied read-only `displayName` for provider compatibility but does not persist, echo, or pass it to identity callbacks. Responses and callbacks normalize every retained manager to an object with at least `value` or `$ref`. The manager is an external reference: Better Auth does not require a matching local User or search another connection.
 
 PATCH accepts standard Enterprise paths such as `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department`. It also accepts the classic Entra aliases `manager`, `manager.value`, and `manager.$ref` as input paths, while canonical responses continue to place manager data under the Enterprise User URI. `manager.displayName` remains read-only.
+
+### Custom User schema extensions
+
+Declare application-specific User schema extensions through the `userSchemaExtensions` option. Each declared extension is advertised through `/Schemas` and `/ResourceTypes`, validated on ingress, stored, and echoed on responses. This is useful for carrying an identifier from another system (for example a SAP user id) through SCIM provisioning. `externalId` is a separate SCIM attribute that Better Auth uses for identity linking, so a parallel correlation id belongs in a custom extension rather than `externalId`.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { scim } from "@better-auth/scim";
+
+export const auth = betterAuth({
+  user: {
+    additionalFields: {
+      // Mapped from the extension below. Keep it optional and input: false so
+      // only SCIM can set it; end-user writable mapped fields are spoofable.
+      sapUserId: { type: "string", required: false, input: false },
+    },
+  },
+  plugins: [
+    scim({
+      connections: [/* ... */],
+      userSchemaExtensions: [
+        {
+          urn: "urn:ietf:params:scim:schemas:extension:acme:2.0:User",
+          name: "AcmeUser",
+          attributes: [
+            { name: "sapUserId", type: "string", mapTo: "sapUserId" },
+            { name: "costCenter", type: "string" },
+          ],
+        },
+      ],
+    }),
+  ],
+});
+```
+
+Rules and behavior:
+
+* **Simple singular attributes only.** `type` is one of `string` (default), `boolean`, `integer`, `decimal`, `dateTime`, or `reference`. `dateTime` must be RFC 3339. Complex and multi-valued attributes are not supported.
+* **Strict validation.** An attribute that is not declared on its extension, and any extension URN that was not declared, return `400 Bad Request`. Attribute names are matched case-insensitively. `required: true` rejects a payload that declares the extension but omits the attribute; the extension object itself is always optional.
+* **Lenient schema declaration.** A configured extension's value is accepted even when its URN is omitted from the request `schemas` array (as some providers, including Microsoft Entra, send it); the URN is then included on the response.
+* **`mapTo` (optional).** When present, the attribute value is written to the named `user.additionalFields` key so it is queryable outside SCIM (`dateTime` is written as a `Date`). When absent, the attribute is stored on the SCIM resource and echoed in responses only. The target field must be declared on the `user` model, be optional, and have a compatible type (`string`/`reference` → `string`, `integer`/`decimal` → `number`, `boolean` → `boolean`, `dateTime` → `date`); otherwise the plugin throws at startup. Declare the field `input: false` so only SCIM can set it — the plugin warns at startup when a mapped field is end-user writable.
+* **`returned: "never"`.** Keeps a stored attribute out of SCIM responses (useful for values you store but do not want echoed).
+* **Profile source only.** When several connections provision one user, only the profile-source connection writes custom attributes, matching `email` and `name`.
+* **PATCH.** `add`, `replace`, and `remove` work against the extension URN (`urn:ietf:params:scim:schemas:extension:acme:2.0:User`) and a single attribute path (`urn:ietf:params:scim:schemas:extension:acme:2.0:User:sapUserId`). `replace` on the extension URN replaces the whole object (omitted attributes are cleared); `add` merges. `remove`, or a `null` value, clears an attribute and its mapped user field. A single-element array value is unwrapped.
+* **Deprovision.** Mapped values are retained on the Better Auth user when the SCIM user is deactivated or deleted.
+* **Attribute selection (limitation).** Custom extension attributes not configured with `returned: "never"` are always included on a full-resource `GET`, but per-attribute selection via `attributes=<urn>:<attribute>` or `excludedAttributes` does not yet resolve custom schema-qualified paths. Requesting a custom attribute by path omits it from the narrowed response; full representations are unaffected.
 
 ```json title="Create User"
 {

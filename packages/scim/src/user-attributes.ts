@@ -1,3 +1,4 @@
+import type * as z from "zod";
 import type { SCIMUser } from "./persistence";
 import { createSCIMError } from "./scim-error";
 import type { SCIMCanonicalUserAttributes } from "./user-schemas";
@@ -6,6 +7,13 @@ import {
 	SCIM_USER_SCHEMA,
 	SCIMCanonicalUserAttributesSchema,
 } from "./user-schemas";
+
+/**
+ * The canonical User attribute schema used to serialize and read a stored
+ * payload. Defaults to the built-in schema; the plugin passes a per-instance
+ * schema that also accepts declared custom extension attributes.
+ */
+export type SCIMCanonicalUserAttributesValidator = z.ZodType;
 
 function invalidStoredUserAttributes(): never {
 	throw createSCIMError("INTERNAL_SERVER_ERROR", {
@@ -16,8 +24,9 @@ function invalidStoredUserAttributes(): never {
 /** Serialize one validated, bounded canonical User attribute payload. */
 export function serializeSCIMUserAttributes(
 	attributes: SCIMCanonicalUserAttributes,
+	schema: SCIMCanonicalUserAttributesValidator = SCIMCanonicalUserAttributesSchema,
 ): string {
-	const parsed = SCIMCanonicalUserAttributesSchema.safeParse(attributes);
+	const parsed = schema.safeParse(attributes);
 	if (!parsed.success) return invalidStoredUserAttributes();
 	const serialized = JSON.stringify(parsed.data);
 	if (serialized.length > SCIM_MAX_SERIALIZED_USER_ATTRIBUTES_LENGTH) {
@@ -67,6 +76,7 @@ export function readSCIMUserAttributes(
 		| "familyName"
 		| "serializedEmails"
 	>,
+	schema: SCIMCanonicalUserAttributesValidator = SCIMCanonicalUserAttributesSchema,
 ): SCIMCanonicalUserAttributes {
 	if (!user.serializedAttributes) {
 		return deriveSCIMUserAttributesFromMirrors(user);
@@ -83,7 +93,7 @@ export function readSCIMUserAttributes(
 	} catch {
 		return invalidStoredUserAttributes();
 	}
-	const attributes = SCIMCanonicalUserAttributesSchema.safeParse(parsed);
+	const attributes = schema.safeParse(parsed);
 	if (!attributes.success) return invalidStoredUserAttributes();
-	return attributes.data;
+	return attributes.data as SCIMCanonicalUserAttributes;
 }
