@@ -1,6 +1,6 @@
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -9,6 +9,7 @@ vi.mock("@better-fetch/fetch", () => ({
 import { betterFetch } from "@better-fetch/fetch";
 
 import { verifyProviderIdToken } from "../oauth2";
+import type { MicrosoftEntraIDProfile } from "./microsoft-entra-id";
 import { microsoft } from "./microsoft-entra-id";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -337,5 +338,33 @@ describe("microsoft id_token alg omission", () => {
 
 		const isValid = await verifyProviderIdToken(provider, token);
 		expect(isValid).toBe(false);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/3802
+ * @see https://learn.microsoft.com/en-us/entra/identity-platform/id-token-claims-reference
+ * @see https://learn.microsoft.com/en-us/entra/identity-platform/optional-claims-reference
+ */
+it("types numeric timestamps, claim arrays, and omitted conditional claims", () => {
+	const profile = {
+		aud: "client",
+		iss: "https://login.microsoftonline.com/tenant/v2.0",
+		iat: 1700000000,
+		nbf: 1700000000,
+		exp: 1700003600,
+		oid: "stable-user-id",
+		sub: "pairwise-subject",
+		tid: "tenant",
+	};
+	assertType<MicrosoftEntraIDProfile>(profile);
+	assertType<MicrosoftEntraIDProfile>({
+		...profile,
+		aio: "opaque-value",
+		in_corp: true,
+		auth_time: 1700000000,
+		groups: ["group-id"],
+		acrs: ["c1"],
+		xms_cc: ["CP1"],
 	});
 });
