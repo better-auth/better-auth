@@ -307,7 +307,14 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 
 									if (username) {
 										if (!skipValidation) {
+											// On /admin/update-user the session user is the admin, not the user being updated.
+											const adminTargetUserId =
+												currentPath === "/admin/update-user" &&
+												typeof context?.body?.userId === "string"
+													? context.body.userId
+													: null;
 											const currentUserId =
+												adminTargetUserId ||
 												context?.context?.session?.user?.id ||
 												("id" in user ? (user.id as string) : null);
 											await validateUsername(
