@@ -89,8 +89,8 @@ it("types the current Dropbox account", () => {
 	});
 	// @ts-expect-error Group creation has no other variant.
 	assertType<SharingPolicies["group_creation_policy"]>({ ".tag": "other" });
-	// @ts-expect-error Link creation only accepts documented tags.
 	assertType<SharingPolicies["shared_link_create_policy"]>({
+		// @ts-expect-error Link creation only accepts documented tags.
 		".tag": "invalid",
 	});
 	assertType<DropboxProfile["root_info"]>({
