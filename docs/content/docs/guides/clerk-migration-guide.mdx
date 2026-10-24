@@ -147,7 +147,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
     })
     ```
 
-    If you want new TOTP setups to use the same Base32 format as the secrets imported from Clerk, set `totpOptions.secretEncoding` to `"base32"`:
+    If you want new TOTP setups to use the same Base32 format as the secrets imported from Clerk, replace `twoFactor()` in the `plugins` array above with the following:
 
     ```ts
     twoFactor({
