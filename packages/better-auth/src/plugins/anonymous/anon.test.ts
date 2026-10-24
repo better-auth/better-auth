@@ -13,6 +13,7 @@ import {
 	vi,
 } from "vitest";
 import * as apiModule from "../../api";
+import { parseSetCookieHeader } from "../../cookies";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -778,5 +779,91 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 		});
 
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11533
+ */
+describe("anonymous after-hook on sign-in over a previous session cookie", async () => {
+	const linkAccountFn = vi.fn();
+	const { auth, client, sessionSetter, signInWithTestUser, testUser } =
+		await getTestInstance(
+			{ plugins: [anonymous({ onLinkAccount: linkAccountFn })] },
+			{ clientOptions: { plugins: [anonymousClient()] } },
+		);
+
+	/**
+	 * Signs in with email and returns the session cookie a browser would keep.
+	 * Set-Cookie headers apply in order, so the last one for a name wins.
+	 */
+	async function signInEmail(headers: Headers) {
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		const { token } = (await res.json()) as { token: string };
+		const sessionCookie = parseSetCookieHeader(
+			res.headers.get("set-cookie") || "",
+		).get("better-auth.session_token");
+		return { token, sessionCookie };
+	}
+
+	it("keeps the new session cookie when the request carries a revoked session cookie", async () => {
+		const { headers: staleHeaders } = await signInWithTestUser();
+		await auth.api.revokeSessions({ headers: staleHeaders });
+
+		const { token, sessionCookie } = await signInEmail(staleHeaders);
+
+		expect(sessionCookie?.value.split(".")[0]).toBe(token);
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				cookie: `better-auth.session_token=${sessionCookie?.value}`,
+			}),
+		});
+		expect(session?.session.token).toBe(token);
+	});
+
+	it("keeps the new session cookie when the request carries an expired session cookie", async () => {
+		const stale = await signInEmail(new Headers());
+		const { internalAdapter } = await auth.$context;
+		await internalAdapter.updateSession(stale.token, {
+			expiresAt: new Date(Date.now() - 1000),
+		});
+
+		const { token, sessionCookie } = await signInEmail(
+			new Headers({
+				cookie: `better-auth.session_token=${stale.sessionCookie?.value}`,
+			}),
+		);
+
+		expect(sessionCookie?.value.split(".")[0]).toBe(token);
+	});
+
+	it("sets the session cookie when the request carries no session cookie", async () => {
+		const { token, sessionCookie } = await signInEmail(new Headers());
+
+		expect(sessionCookie?.value.split(".")[0]).toBe(token);
+	});
+
+	it("links a live anonymous session and keeps the new session cookie", async () => {
+		const anonHeaders = new Headers();
+		const anonymousUser = await client.signIn.anonymous({
+			fetchOptions: { onSuccess: sessionSetter(anonHeaders) },
+		});
+		let contextSessionUserId: string | undefined;
+		linkAccountFn.mockImplementationOnce(({ ctx }) => {
+			contextSessionUserId = ctx.context.session?.user.id;
+		});
+
+		const { token, sessionCookie } = await signInEmail(anonHeaders);
+
+		expect(linkAccountFn).toHaveBeenCalledOnce();
+		expect(linkAccountFn.mock.calls[0]?.[0].anonymousUser.user.id).toBe(
+			anonymousUser.data?.user.id,
+		);
+		expect(contextSessionUserId).toBe(anonymousUser.data?.user.id);
+		expect(sessionCookie?.value.split(".")[0]).toBe(token);
 	});
 });
