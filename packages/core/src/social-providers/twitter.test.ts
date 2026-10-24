@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock(import("@better-fetch/fetch"), () => ({
 	betterFetch: vi.fn(),
@@ -6,6 +6,7 @@ vi.mock(import("@better-fetch/fetch"), () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import type { TwitterProfile } from "./twitter";
 import { twitter } from "./twitter";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -53,5 +54,40 @@ describe("twitter.getUserInfo", () => {
 		}).getUserInfo({ accessToken: "access-token" });
 
 		expect(result?.user.email).toBe("user@example.com");
+	});
+});
+
+/**
+ * @see https://docs.x.com/openapi.json
+ */
+it("types omitted and nullable entity details and URL previews", () => {
+	assertType<TwitterProfile["data"]["entities"]>({});
+	assertType<TwitterProfile["data"]["entities"]>({ url: {}, description: {} });
+	assertType<TwitterProfile["data"]["entities"]>({
+		url: null,
+		description: null,
+	});
+	assertType<TwitterProfile["data"]["entities"]>({
+		url: { urls: null },
+		description: {
+			hashtags: null,
+			cashtags: [{ start: 0, end: 4, tag: "X" }],
+			mentions: [{ start: 5, end: 10, username: "user", id: null }],
+			urls: [
+				{
+					start: 11,
+					end: 34,
+					url: "https://t.co/example",
+					expanded_url: null,
+					display_url: null,
+					title: null,
+					description: "Page",
+					status: 200,
+					unwound_url: "https://example.com",
+					media_key: null,
+					images: [{ url: null, width: 640, height: null }],
+				},
+			],
+		},
 	});
 });
