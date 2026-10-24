@@ -79,6 +79,7 @@ model Verification {
 model TwoFactor {
   id                      String    @id @map("_id")
   secret                  String
+  secretEncoding          String?
   backupCodes             String
   userId                  String
   user                    User      @relation(fields: [userId], references: [id], onDelete: Cascade)

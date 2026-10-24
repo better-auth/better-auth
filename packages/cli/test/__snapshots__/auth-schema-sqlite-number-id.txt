@@ -97,6 +97,7 @@ export const twoFactor = sqliteTable(
   {
     id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
     secret: text("secret").notNull(),
+    secretEncoding: text("secret_encoding", { enum: ["utf8", "base32"] }),
     backupCodes: text("backup_codes").notNull(),
     userId: integer("user_id")
       .notNull()

@@ -19,6 +19,12 @@ export const schema = {
 				returned: false,
 				index: true,
 			},
+			secretEncoding: {
+				type: ["utf8", "base32"],
+				required: false,
+				input: false,
+				returned: false,
+			},
 			backupCodes: {
 				type: "string",
 				required: true,

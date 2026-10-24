@@ -6,6 +6,7 @@ import {
   timestamp,
   boolean,
   int,
+  mysqlEnum,
   index,
 } from "drizzle-orm/mysql-core";
 
@@ -89,6 +90,7 @@ export const twoFactor = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     secret: varchar("secret", { length: 255 }).notNull(),
+    secretEncoding: mysqlEnum("secret_encoding", ["utf8", "base32"]),
     backupCodes: text("backup_codes").notNull(),
     userId: varchar("user_id", { length: 36 })
       .notNull()

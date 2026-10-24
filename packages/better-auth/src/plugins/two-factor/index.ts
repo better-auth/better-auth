@@ -4,6 +4,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { base32 } from "@better-auth/utils/base32";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
@@ -244,10 +245,17 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						ctx.context.secretConfig,
 						backupCodeOptions,
 					);
-					const secret = generateRandomString(32);
+					const secretEncoding = options?.totpOptions?.secretEncoding ?? "utf8";
+					const secret =
+						secretEncoding === "base32"
+							? crypto.getRandomValues(new Uint8Array(32))
+							: generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
 						key: ctx.context.secretConfig,
-						data: secret,
+						data:
+							typeof secret === "string"
+								? secret
+								: base32.encode(secret, { padding: false }),
 					});
 					if (options?.skipVerificationOnEnable) {
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -271,6 +279,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					}
 					const totpData = {
 						secret: encryptedSecret,
+						secretEncoding,
 						backupCodes: backupCodes.encryptedBackupCodes,
 						verified: !!options?.skipVerificationOnEnable,
 					};

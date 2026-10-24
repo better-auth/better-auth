@@ -1,5 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
@@ -39,6 +40,12 @@ export type TOTPOptions = {
 	 */
 	period?: number | undefined;
 	/**
+	 * Encoding for newly generated TOTP secrets.
+	 * Existing enrollments use their stored encoding.
+	 * @default "utf8"
+	 */
+	secretEncoding?: "utf8" | "base32" | undefined;
+	/**
 	 * Backup codes configuration
 	 */
 	backupCodes?: BackupCodeOptions | undefined;
@@ -59,6 +66,9 @@ const generateTOTPBodySchema = z.object({
 	secret: z.string().meta({
 		description: "The secret to generate the TOTP code",
 	}),
+	secretEncoding: z.enum(["utf8", "base32"]).nullish().meta({
+		description: "Encoding of the secret. Defaults to UTF-8.",
+	}),
 });
 
 const verifyTOTPBodySchema = z.object({
@@ -78,6 +88,31 @@ const verifyTOTPBodySchema = z.object({
 		})
 		.optional(),
 });
+
+function decodeTOTPSecret(
+	secret: string,
+	encoding: TwoFactorTable["secretEncoding"],
+): string | Uint8Array | null {
+	switch (encoding ?? "utf8") {
+		case "utf8":
+			return secret;
+		case "base32":
+			try {
+				const normalized = secret.toUpperCase();
+				const bytes = base32.decode(normalized);
+				// Reject empty, truncated or malformed secrets the decoder may accept.
+				return bytes.length &&
+					base32.encode(bytes, { padding: normalized.includes("=") }) ===
+						normalized
+					? bytes
+					: null;
+			} catch {
+				return null;
+			}
+		default:
+			return null;
+	}
+}
 
 export const totp2fa = (options?: TOTPOptions | undefined) => {
 	const opts = {
@@ -136,7 +171,11 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					code: "TOTP_NOT_CONFIGURED",
 				});
 			}
-			const code = await createOTP(ctx.body.secret, {
+			const secret = decodeTOTPSecret(ctx.body.secret, ctx.body.secretEncoding);
+			if (secret === null) {
+				throw APIError.from("BAD_REQUEST", TWO_FACTOR_ERROR_CODES.INVALID_CODE);
+			}
+			const code = await createOTP(secret, {
 				period: opts.period,
 				digits: opts.digits,
 			}).totp();
@@ -215,7 +254,11 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				}
 				await ctx.context.password.checkPassword(user.id, ctx);
 			}
-			const totpURI = createOTP(secret, {
+			const decodedSecret = decodeTOTPSecret(secret, twoFactor.secretEncoding);
+			if (decodedSecret === null) {
+				throw APIError.from("BAD_REQUEST", TWO_FACTOR_ERROR_CODES.INVALID_CODE);
+			}
+			const totpURI = createOTP(decodedSecret, {
 				digits: opts.digits,
 				period: opts.period,
 			}).url(options?.issuer || ctx.context.appName, user.email);
@@ -302,10 +345,13 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					key: ctx.context.secretConfig,
 					data: twoFactor.secret,
 				});
-				status = await createOTP(decrypted, {
-					period: opts.period,
-					digits: opts.digits,
-				}).verify(ctx.body.code);
+				const secret = decodeTOTPSecret(decrypted, twoFactor.secretEncoding);
+				status =
+					secret !== null &&
+					(await createOTP(secret, {
+						period: opts.period,
+						digits: opts.digits,
+					}).verify(ctx.body.code));
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
 				await attempt?.restore();

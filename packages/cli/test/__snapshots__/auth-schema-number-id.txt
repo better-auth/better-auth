@@ -88,6 +88,7 @@ export const twoFactor = pgTable(
   {
     id: integer("id").generatedByDefaultAsIdentity().primaryKey(),
     secret: text("secret").notNull(),
+    secretEncoding: text("secret_encoding", { enum: ["utf8", "base32"] }),
     backupCodes: text("backup_codes").notNull(),
     userId: integer("user_id")
       .notNull()

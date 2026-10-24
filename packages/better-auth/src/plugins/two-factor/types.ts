@@ -105,6 +105,10 @@ export interface TwoFactorTable {
 	id: string;
 	userId: string;
 	secret: string;
+	/**
+	 * Encoding of the decrypted TOTP secret. Missing or null values use UTF-8.
+	 */
+	secretEncoding?: "utf8" | "base32" | null;
 	backupCodes: string;
 	verified: boolean;
 	failedVerificationCount?: number;
