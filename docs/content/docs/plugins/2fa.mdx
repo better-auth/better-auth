@@ -432,9 +432,9 @@ To display the backup codes to the user, you can call `viewBackupCodes` on the s
   ```ts
   type viewBackupCodes = {
       /**
-       * The user ID to view all backup codes. 
+       * The ID of the user whose backup codes to return.
        */
-      userId?: string | null = "user-id"
+      userId: string = "user-id"
   }
   ```
 </APIMethod>
