@@ -2,4 +2,4 @@
 "@better-auth/core": minor
 ---
 
-`NotionProfile` now accepts partial users with an omitted `type`, nullable names and avatars, and the optional email verification claim while retaining both `person` and `bot` variants. Missing avatars preserve stored images during enabled profile updates.
+Notion users without an avatar now keep their existing profile image when profile updates are enabled. Update custom mappings to handle optional `type`, nullable `name` and `avatar_url`, and missing `image` values as `undefined` instead of `null`.
