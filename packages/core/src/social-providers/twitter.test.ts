@@ -58,7 +58,7 @@ describe("twitter.getUserInfo", () => {
 });
 
 /**
- * @see https://api.x.com/2/openapi.json
+ * @see https://docs.x.com/openapi.json
  */
 it("types omitted and nullable entity details and URL previews", () => {
 	assertType<TwitterProfile["data"]["entities"]>({});
