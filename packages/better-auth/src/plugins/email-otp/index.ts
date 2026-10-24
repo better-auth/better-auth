@@ -111,6 +111,16 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								identifier: toOTPIdentifier("email-verification", email),
 								expiresAt: getDate(opts.expiresIn, "sec"),
 							});
+							/**
+							 * Sign-up answers an existing email with a synthetic user, so the
+							 * stored account decides whether the code is mailed. It is stored
+							 * either way, so wrong codes count against the same attempt limit.
+							 */
+							const user =
+								await ctx.context.internalAdapter.findUserByEmail(email);
+							if (!user || user.user.emailVerified) {
+								return;
+							}
 							await ctx.context.runInBackgroundOrAwait(
 								options.sendVerificationOTP(
 									{
