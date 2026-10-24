@@ -27,6 +27,11 @@ describe("createDynamicPathProxy", () => {
 		expect(matcher("/change-password")).toBe(true);
 		expect(matcher("/revoke-other-sessions")).toBe(true);
 
+		// confirming an email change updates the session's user, so the client
+		// must refetch; previewing one changes nothing
+		expect(matcher("/change-email/confirm")).toBe(true);
+		expect(matcher("/change-email/preview")).toBe(false);
+
 		// non-mutating reads should not toggle the signal
 		expect(matcher("/get-session")).toBe(false);
 		expect(matcher("/list-sessions")).toBe(false);
