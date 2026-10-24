@@ -97,9 +97,7 @@ export interface TwitterProfile {
 		profile_image_url?: string | undefined;
 		protected?: boolean | undefined;
 		/**
-		 * Unique identifier of this user's pinned Tweet.
-		 *
-		 *  You can obtain the expanded object in `includes.tweets` by adding `user.fields=pinned_tweet_id` and `expansions=pinned_tweet_id` in the `/2/users/me` query parameters of a custom `getUserInfo` request.
+		 * The identifier of the user's pinned post.
 		 */
 		pinned_tweet_id?: string | undefined;
 		created_at?: string | undefined;
