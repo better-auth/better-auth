@@ -844,6 +844,7 @@ type RefreshTokenRotationReplayRequest = {
 type RefreshTokenRotationReplay = {
 	request: RefreshTokenRotationReplayRequest;
 	response: OAuthTokenResponse;
+	sessionId?: string | null;
 };
 
 function normalizeReplayValues(values: string[] | undefined) {
@@ -937,7 +938,10 @@ function isRefreshTokenRotationReplay(
 				))) &&
 		(request.confirmation === undefined ||
 			isConfirmation(request.confirmation)) &&
-		isOAuthTokenResponse(replay.response)
+		isOAuthTokenResponse(replay.response) &&
+		(replay.sessionId === undefined ||
+			replay.sessionId === null ||
+			typeof replay.sessionId === "string")
 	);
 }
 
@@ -1006,6 +1010,7 @@ async function storeRefreshTokenRotationReplay(
 	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
 	request: RefreshTokenRotationReplayRequest,
 	response: OAuthTokenResponse,
+	sessionId: string | undefined,
 ) {
 	if ((opts.refreshTokenReuseInterval ?? 0) <= 0) {
 		return;
@@ -1017,6 +1022,7 @@ async function storeRefreshTokenRotationReplay(
 			rotationReplayResponse: await encryptRefreshTokenRotationReplay(ctx, {
 				request,
 				response,
+				sessionId: sessionId ?? null,
 			}),
 		},
 	});
@@ -1034,22 +1040,32 @@ async function getRefreshTokenRotationReplay(
 		return undefined;
 	}
 
+	let replay: RefreshTokenRotationReplay | undefined;
 	try {
-		const replay = await decryptRefreshTokenRotationReplay(
+		replay = await decryptRefreshTokenRotationReplay(
 			ctx,
 			refreshToken.rotationReplayResponse,
 		);
-		if (
-			!replay ||
-			!sameRefreshTokenRotationReplayRequest(replay.request, request)
-		) {
-			return undefined;
-		}
-		return replay.response;
 	} catch (error) {
 		ctx.context.logger.error("refresh token rotation replay failed", error);
 		return undefined;
 	}
+	if (
+		!replay ||
+		!sameRefreshTokenRotationReplayRequest(replay.request, request)
+	) {
+		return undefined;
+	}
+	const replaySessionId =
+		replay.sessionId === undefined ? refreshToken.sessionId : replay.sessionId;
+	if (
+		(replay.sessionId === undefined && !replaySessionId) ||
+		(replaySessionId &&
+			!(await resolveActiveRefreshSessionId(ctx, replaySessionId)))
+	) {
+		return undefined;
+	}
+	return replay.response;
 }
 
 async function resolveRefreshTokenRotationReplayRequest(
@@ -1349,6 +1365,7 @@ async function createUserTokens(
 					confirmation,
 				}),
 				responseBody,
+				sessionId,
 			);
 		} catch (error) {
 			ctx.context.logger.error(
@@ -1785,6 +1802,19 @@ async function handleClientCredentialsGrant(
  * Refresh tokens will only allow the same or lesser scopes as the initial authorize request.
  * To add scopes, you must restart the authorize process again.
  */
+async function resolveActiveRefreshSessionId(
+	ctx: GenericEndpointContext,
+	sessionId: string | null | undefined,
+): Promise<string | undefined> {
+	if (!sessionId) return undefined;
+	const session = await ctx.context.adapter.findOne<Session>({
+		model: "session",
+		where: [{ field: "id", value: sessionId }],
+	});
+	if (!session || session.expiresAt <= new Date()) return undefined;
+	return sessionId;
+}
+
 async function handleRefreshTokenGrant(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1953,6 +1983,10 @@ async function handleRefreshTokenGrant(
 		refreshToken.authTime != null
 			? normalizeTimestampValue(refreshToken.authTime)
 			: undefined;
+	const sessionId = await resolveActiveRefreshSessionId(
+		ctx,
+		refreshToken.sessionId,
+	);
 
 	// Generate new tokens
 	return createUserTokens(ctx, opts, {
@@ -1962,7 +1996,7 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: refreshToken.sessionId,
+		sessionId,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,
