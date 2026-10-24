@@ -45,6 +45,31 @@ export interface PhoneNumberOptions {
 		  ) => Awaitable<boolean>)
 		| undefined;
 	/**
+	 * The method used to store the OTP code in the verification record.
+	 *
+	 * - `"plain"` stores the code as-is.
+	 * - `"hashed"` stores a SHA-256 hash of the code.
+	 * - `"encrypted"` encrypts the code with the app secret.
+	 * - A custom `hash` or `encrypt`/`decrypt` pair controls the transformation.
+	 *
+	 * The attempt counter is kept outside the stored value, so attempt limiting
+	 * keeps working when the code is hashed or encrypted.
+	 *
+	 * @default "plain"
+	 */
+	storeOTP?:
+		| (
+				| "hashed"
+				| "plain"
+				| "encrypted"
+				| { hash: (otp: string) => Awaitable<string> }
+				| {
+						encrypt: (otp: string) => Awaitable<string>;
+						decrypt: (otp: string) => Awaitable<string>;
+				  }
+		  )
+		| undefined;
+	/**
 	 * a callback to send otp on user requesting to reset their password
 	 *
 	 * @param data - contains phone number and code
