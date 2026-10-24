@@ -155,12 +155,16 @@ export async function onSubscriptionCreated(
 	options: StripeOptions,
 	event: Stripe.Event,
 ) {
+	if (!options.subscription?.enabled) {
+		return;
+	}
+	// The payload follows the webhook endpoint's API version, so refetch to get the SDK's shape.
+	// A failed fetch is not caught here, so the webhook fails and Stripe retries the event.
+	const stripeSubscriptionCreated =
+		await options.stripeClient.subscriptions.retrieve(
+			(event.data.object as Stripe.Subscription).id,
+		);
 	try {
-		if (!options.subscription?.enabled) {
-			return;
-		}
-
-		const stripeSubscriptionCreated = event.data.object as Stripe.Subscription;
 		const stripeCustomerId = stripeSubscriptionCreated.customer?.toString();
 		if (!stripeCustomerId) {
 			ctx.context.logger.warn(
@@ -283,11 +287,16 @@ export async function onSubscriptionUpdated(
 	options: StripeOptions,
 	event: Stripe.Event,
 ) {
+	if (!options.subscription?.enabled) {
+		return;
+	}
+	// The payload follows the webhook endpoint's API version, so refetch to get the SDK's shape.
+	// A failed fetch is not caught here, so the webhook fails and Stripe retries the event.
+	const stripeSubscriptionUpdated =
+		await options.stripeClient.subscriptions.retrieve(
+			(event.data.object as Stripe.Subscription).id,
+		);
 	try {
-		if (!options.subscription?.enabled) {
-			return;
-		}
-		const stripeSubscriptionUpdated = event.data.object as Stripe.Subscription;
 		const resolved = await resolvePlanItem(
 			options,
 			stripeSubscriptionUpdated.items.data,

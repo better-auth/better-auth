@@ -1882,6 +1882,9 @@ describe("stripe subscription", () => {
 					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
 				},
 			};
+			stripeMock.subscriptions.retrieve.mockResolvedValue(
+				webhookEvent.data.object,
+			);
 
 			const testOptions = {
 				...stripeOptions,

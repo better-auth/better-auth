@@ -1427,6 +1427,9 @@ describe("seat-based billing", () => {
 				},
 			);
 
+			stripeMock.subscriptions.retrieve.mockResolvedValue(
+				mockEvent.data.object,
+			);
 			const webhookOptions: StripeOptions = {
 				...seatOptions,
 				stripeClient: {
@@ -1563,6 +1566,9 @@ describe("seat-based billing", () => {
 			);
 
 			webhookMock.mockResolvedValue(mockUpdateEvent);
+			stripeMock.subscriptions.retrieve.mockResolvedValue(
+				mockUpdateEvent.data.object,
+			);
 
 			const response = await auth.handler(
 				new Request("http://localhost:3000/api/auth/stripe/webhook", {

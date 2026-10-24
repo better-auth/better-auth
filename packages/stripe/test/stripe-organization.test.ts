@@ -753,6 +753,9 @@ describe("stripe - organization customer", () => {
 				constructEventAsync: vi.fn().mockResolvedValue(mockEvent),
 			},
 		};
+		stripeForOrgWebhook.subscriptions.retrieve.mockResolvedValue(
+			mockEvent.data.object,
+		);
 
 		const testOrgWebhookOptions: StripeOptions = {
 			...orgStripeOptions,
@@ -1106,6 +1109,9 @@ describe("stripe - organization customer", () => {
 				constructEventAsync: vi.fn().mockResolvedValue(mockUpdateEvent),
 			},
 		};
+		stripeForOrgUpdateWebhook.subscriptions.retrieve.mockResolvedValue(
+			mockUpdateEvent.data.object,
+		);
 
 		const testOrgUpdateWebhookOptions: StripeOptions = {
 			...orgStripeOptions,
@@ -1254,6 +1260,9 @@ describe("stripe - organization customer", () => {
 				constructEventAsync: vi.fn().mockResolvedValue(mockCancelEvent),
 			},
 		};
+		stripeForOrgCancelWebhook.subscriptions.retrieve.mockResolvedValue(
+			mockCancelEvent.data.object,
+		);
 
 		const testOrgCancelWebhookOptions: StripeOptions = {
 			...orgStripeOptions,
@@ -1676,6 +1685,9 @@ describe("stripe - organization customer", () => {
 				constructEventAsync: vi.fn().mockResolvedValue(mockCreateEvent),
 			},
 		};
+		stripeForCreatedCallback.subscriptions.retrieve.mockResolvedValue(
+			mockCreateEvent.data.object,
+		);
 
 		const testCreatedCallbackOptions: StripeOptions = {
 			...orgStripeOptions,
