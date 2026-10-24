@@ -21,7 +21,6 @@ import {
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
-	SAML_HTTP_POST_BINDING,
 	validateAudience,
 	validateInResponseTo,
 	validateSAMLAlgorithms,
@@ -202,19 +201,11 @@ export function getSAMLRedirectCandidates(
 	];
 }
 
-function toArray<T>(value: T | T[] | undefined): T[] {
-	if (Array.isArray(value)) {
-		return value;
-	}
-	return value ? [value] : [];
-}
-
 function getExpectedSAMLRecipients(
 	config: SAMLConfig,
 	baseURL: string,
 	providerId: string,
 	currentCallbackPath: string,
-	assertionConsumerServiceUrl: string | string[] | undefined,
 ): string[] {
 	const configuredPostAssertionConsumerServiceUrls =
 		getSAMLPostAssertionConsumerServiceUrls(config.spMetadata?.metadata);
@@ -223,7 +214,6 @@ function getExpectedSAMLRecipients(
 		currentCallbackPath,
 		`${baseURL}/sso/saml2/sp/acs/${providerId}`,
 		...configuredPostAssertionConsumerServiceUrls,
-		...toArray(assertionConsumerServiceUrl),
 	];
 }
 
@@ -432,15 +422,11 @@ export async function processSAMLResponse(
 		sp.entityMeta.getEntityID(),
 		parsedSamlConfig.audience,
 	];
-	const assertionConsumerServiceUrl = sp.entityMeta.getAssertionConsumerService(
-		SAML_HTTP_POST_BINDING,
-	);
 	const expectedRecipients = getExpectedSAMLRecipients(
 		parsedSamlConfig,
 		ctx.context.baseURL,
 		providerId,
 		currentCallbackPath,
-		assertionConsumerServiceUrl,
 	);
 	const serviceProviderPolicy =
 		deriveSAMLServiceProviderPolicy(parsedSamlConfig);
