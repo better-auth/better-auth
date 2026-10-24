@@ -12,31 +12,32 @@ export interface GitlabProfile extends Record<string, any> {
 	email: string;
 	name: string;
 	state: string;
-	avatar_url: string;
+	locked: boolean;
+	avatar_url: string | null;
 	web_url: string;
 	created_at: string;
 	bio: string;
-	location?: string | undefined;
-	public_email: string;
-	skype: string;
+	location?: string | null | undefined;
+	public_email: string | null;
+	skype?: string;
 	linkedin: string;
 	twitter: string;
 	website_url: string;
 	organization: string;
 	job_title: string;
-	pronouns: string;
+	pronouns: string | null;
 	bot: boolean;
-	work_information?: string | undefined;
-	followers: number;
-	following: number;
-	local_time: string;
-	last_sign_in_at: string;
-	confirmed_at: string;
-	theme_id: number;
-	last_activity_on: string;
+	work_information?: string | null | undefined;
+	followers?: number;
+	following?: number;
+	local_time: string | null;
+	last_sign_in_at: string | null;
+	confirmed_at: string | null;
+	theme_id: number | null;
+	last_activity_on: string | null;
 	color_scheme_id: number;
 	projects_limit: number;
-	current_sign_in_at: string;
+	current_sign_in_at: string | null;
 	identities: Array<{
 		provider: string;
 		extern_uid: string;
@@ -47,8 +48,8 @@ export interface GitlabProfile extends Record<string, any> {
 	external: boolean;
 	private_profile: boolean;
 	commit_email: string;
-	shared_runners_minutes_limit: number;
-	extra_shared_runners_minutes_limit: number;
+	shared_runners_minutes_limit?: number | null;
+	extra_shared_runners_minutes_limit?: number | null;
 	email_verified?: boolean | undefined;
 }
 
@@ -139,13 +140,13 @@ export const gitlab = (options: GitlabOptions) => {
 				return null;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
-			// GitLab may provide email_verified claim, but it's not guaranteed.
-			// We check for it first, then default to false for security consistency.
+			// GitLab does not document email_verified on /api/v4/user.
+			// Default to false unless an extension supplies the claim.
 			return {
 				user: {
 					name: profile.name ?? profile.username ?? "",
 					email: profile.email,
-					image: profile.avatar_url,
+					image: profile.avatar_url ?? undefined,
 					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
