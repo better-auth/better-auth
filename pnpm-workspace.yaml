@@ -29,7 +29,7 @@ overrides:
   dompurify: '>=3.4.12 <4'
   happy-dom: '>=20.8.9 <21'
   defu@<6.1.5: '>=6.1.5 <7'
-  undici@>=7 <7.29.0: '>=7.29.0 <8'
+  undici@>=7 <7.29.1: '>=7.29.1 <8'
   'undici@>=6 <6.28.0': '>=6.28.0 <7'
   tar@<7.5.21: '>=7.5.21 <8'
   flatted@<3.4.2: '>=3.4.2 <4'
@@ -37,13 +37,13 @@ overrides:
   '@remix-run/router@<1.23.2': '>=1.23.2 <2'
   '@remix-run/react@<2.17.3': '>=2.17.3 <3'
   '@hono/node-server@<2.0.5': '>=2.0.5 <3'
-  hono@<4.12.25: '>=4.12.25 <5'
+  hono@<4.13.11: '>=4.13.11 <5'
   nitropack@<2.13.4: '>=2.13.4 <3'
   postcss@<8.5.18: '>=8.5.18 <9'
   smol-toml@<1.6.1: '>=1.6.1 <2'
   srvx@<0.11.13: '>=0.11.13 <0.12'
   svelte@<=5.55.6: '>=5.55.7 <6'
-  'vite@>=6 <6.4.3': '>=6.4.3 <7'
+  'vite@>=6 <6.4.4': '>=6.4.4 <7'
   yaml: ^2.9.0
   express-rate-limit@<8.2.2: '>=8.2.2 <9'
   effect@<3.20.0: '>=3.20.0 <4'
@@ -59,9 +59,11 @@ overrides:
   'seroval@<1.5.3': '>=1.5.3 <2'
   'valibot@<1.4.2': '>=1.4.2 <2'
   '@babel/core@<7.29.6': '>=7.29.6 <8'
-  sharp: '>=0.35.3 <0.36'
+  sharp: '>=0.35.5 <0.36'
   # better-sqlite3 12.10.0 added Node 26 support.
   'better-sqlite3@>=12 <12.10.0': '>=12.10.0 <13'
+  # chromium-edge-launcher depends on @types/node "*". Keep it on the root version so peer variants stay aligned with demo/nextjs.
+  chromium-edge-launcher>@types/node: 25.9.4
 
 catalog:
   '@better-auth/utils': 0.5.0
@@ -69,7 +71,7 @@ catalog:
   better-call: 1.4.4
   kysely: ^0.28.17 || ^0.29.0
   nanostores: ^1.3.0
-  tsdown: 0.21.10
+  tsdown: 0.23.1
   typescript: ^6.0.3
   zod: ^4.5.4
 
