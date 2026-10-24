@@ -155,12 +155,16 @@ export async function onSubscriptionCreated(
 	options: StripeOptions,
 	event: Stripe.Event,
 ) {
+	if (!options.subscription?.enabled) {
+		return;
+	}
+	// The payload follows the webhook endpoint's API version, so refetch to get the SDK's shape.
+	// A failed fetch is not caught here, so the webhook fails and Stripe retries the event.
+	const stripeSubscriptionCreated =
+		await options.stripeClient.subscriptions.retrieve(
+			(event.data.object as Stripe.Subscription).id,
+		);
 	try {
-		if (!options.subscription?.enabled) {
-			return;
-		}
-
-		const stripeSubscriptionCreated = event.data.object as Stripe.Subscription;
 		const stripeCustomerId = stripeSubscriptionCreated.customer?.toString();
 		if (!stripeCustomerId) {
 			ctx.context.logger.warn(
@@ -283,11 +287,16 @@ export async function onSubscriptionUpdated(
 	options: StripeOptions,
 	event: Stripe.Event,
 ) {
+	if (!options.subscription?.enabled) {
+		return;
+	}
+	// Lifecycle callbacks detect transitions from the event, since the refetched state may already be past them.
+	const eventSubscription = event.data.object as Stripe.Subscription;
+	// The payload follows the webhook endpoint's API version, so refetch to get the SDK's shape.
+	// A failed fetch is not caught here, so the webhook fails and Stripe retries the event.
+	const stripeSubscriptionUpdated =
+		await options.stripeClient.subscriptions.retrieve(eventSubscription.id);
 	try {
-		if (!options.subscription?.enabled) {
-			return;
-		}
-		const stripeSubscriptionUpdated = event.data.object as Stripe.Subscription;
 		const resolved = await resolvePlanItem(
 			options,
 			stripeSubscriptionUpdated.items.data,
@@ -403,8 +412,8 @@ export async function onSubscriptionUpdated(
 		}
 
 		const isNewCancellation =
-			stripeSubscriptionUpdated.status === "active" &&
-			isStripePendingCancel(stripeSubscriptionUpdated) &&
+			eventSubscription.status === "active" &&
+			isStripePendingCancel(eventSubscription) &&
 			!isPendingCancel(subscription);
 		if (isNewCancellation) {
 			await options.subscription.onSubscriptionCancel?.({
@@ -422,7 +431,7 @@ export async function onSubscriptionUpdated(
 		});
 		if (plan) {
 			if (
-				stripeSubscriptionUpdated.status === "active" &&
+				eventSubscription.status === "active" &&
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialEnd
 			) {
@@ -432,7 +441,7 @@ export async function onSubscriptionUpdated(
 				);
 			}
 			if (
-				stripeSubscriptionUpdated.status === "incomplete_expired" &&
+				eventSubscription.status === "incomplete_expired" &&
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialExpired
 			) {
