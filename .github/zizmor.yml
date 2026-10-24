@@ -22,6 +22,14 @@ rules:
       # Intentional: runs trusted code from main and validates the triggering
       # branch and commit before creating a token. It never executes that revision.
       - sync-version-docs.yml
+      # Intentional: maintainer-only slash commands. Each job gates on
+      # author_association and checks out the default branch, reading the PR
+      # only as git data or through the GitHub API.
+      - auto-changeset.yml
+      - release-notes-command.yml
+      # Intentional: maintainer-only @claude mentions gated on
+      # author_association. Outside contributors cannot trigger it.
+      - claude.yml
   use-trusted-publishing:
     ignore:
       # Intentional: pkg.pr.new publishes ephemeral PR preview packages, not npm
