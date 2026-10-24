@@ -412,7 +412,8 @@ export const auth = betterAuth({
 			},
 			afterDelete: async (user) => {
 				// Perform cleanup after user deletion
-			}
+			},
+			confirmationMode: "instant" // "instant" | "explicit", see Users & Accounts
 		}
 	},
 })
