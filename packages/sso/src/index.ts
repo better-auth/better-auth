@@ -272,7 +272,9 @@ export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): BetterAuthPlugin {
 	assertNoAdditionalFieldCollisions(options);
-	const optionsWithStore = options as O;
+	// Coalesce to an empty object so endpoints can read option fields without a
+	// guard even when the plugin is created without any options.
+	const optionsWithStore = (options ?? {}) as O;
 
 	let endpoints = {
 		spMetadata: spMetadata(optionsWithStore),
