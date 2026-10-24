@@ -126,7 +126,7 @@ description: Apple provider setup and usage.
     For multiple static audiences (for example a Service ID plus a native bundle ID), prefer `clientId: string[]` or `audience: string[]` instead of setting only `appBundleIdentifier`. When the audience must depend on the request (for example reading an `x-platform` header), use a custom [`verifyIdToken`](/docs/concepts/oauth#verifyidtoken) callback — it receives the request context as its third argument.
 
     <Callout type="warn">
-      Apple emits the `email` claim only on the first authorization; every subsequent sign-in omits it, and Apple provides no user-info endpoint to fetch it later. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for persistence guidance and the `mapProfileToUser` fallback.
+      Apple returns the `user` object, including the user’s name, only on the first authorization. Save that information when it is provided. The email address is included in subsequent identity tokens, although managed Apple Accounts may have an empty email. See [Apple’s authorization response documentation](https://developer.apple.com/documentation/signinwithapple/configuring-your-webpage-for-sign-in-with-apple). See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email) for the `mapProfileToUser` fallback.
     </Callout>
   </Step>
 </Steps>
