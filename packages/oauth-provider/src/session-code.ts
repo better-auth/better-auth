@@ -11,14 +11,9 @@ import {
 } from "better-auth/oauth2";
 import * as z from "zod";
 import { getDpopProofJwt, getEndpointUrl } from "./dpop";
-import { decodeRefreshToken } from "./token";
-import type { OAuthOptions, OAuthRefreshToken, Scope } from "./types";
-import {
-	getClient,
-	getStoredToken,
-	parseBearerToken,
-	storeToken,
-} from "./utils";
+import { findRefreshToken } from "./token-lookup";
+import type { OAuthOptions, Scope } from "./types";
+import { getClient, parseBearerToken, storeToken } from "./utils";
 
 const DEFAULT_SESSION_CODE_EXPIRES_IN = 180;
 const SESSION_CODE_PREFIX = "oauth-session-code:";
@@ -54,25 +49,10 @@ async function findLiveRefreshToken(
 	opts: OAuthOptions<Scope[]>,
 	presented: string,
 ) {
-	const decoded = await decodeRefreshToken(opts, presented);
-	const refreshToken = await ctx.context.adapter.findOne<
-		OAuthRefreshToken<Scope[]> & { id: string }
-	>({
-		model: "oauthRefreshToken",
-		where: [
-			{
-				field: "token",
-				value: await getStoredToken(
-					opts.storeTokens,
-					decoded.token,
-					"refresh_token",
-				),
-			},
-		],
-	});
-	if (!refreshToken?.userId) return null;
+	const refreshToken = await findRefreshToken(ctx, opts, presented);
+	if (!refreshToken?.userId || !refreshToken.clientId) return null;
 	if (refreshToken.revoked) return null;
-	if (new Date(refreshToken.expiresAt).getTime() <= Date.now()) return null;
+	if (refreshToken.expiresAt.getTime() <= Date.now()) return null;
 
 	const client = await getClient(ctx, opts, refreshToken.clientId);
 	if (!client || client.disabled) return null;
