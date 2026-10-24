@@ -19,6 +19,7 @@ import {
 	SSO_PROVIDER_STATE_KEY,
 } from "../provider-reference";
 import {
+	getSAMLNameIDFormat,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
 	SAML_HTTP_POST_BINDING,
@@ -46,6 +47,7 @@ import {
 	assertSSOUserResolutionNativeTransactionSupport,
 	assertSSOUserResolutionSessionStorage,
 	getFailedSSOAuthenticationResult,
+	mapSSOProfile,
 	requireSuccessfulSSOAuthentication,
 	resolveSSOUser,
 } from "../user-resolution";
@@ -610,6 +612,7 @@ export async function processSAMLResponse(
 		}
 	}
 	const mapping = parsedSamlConfig.mapping ?? {};
+	const nameIDFormat = getSAMLNameIDFormat(samlBindingContent);
 
 	// samlify >= 2.13 types attribute values as `string | string[]` to support
 	// multi-valued attributes. The identity fields below are single-valued.
@@ -626,11 +629,11 @@ export async function processSAMLResponse(
 			]),
 		),
 		id: extract.nameID,
-		email: (
+		email:
 			attr(mapping.email || "email") ||
-			extract.nameID ||
-			""
-		).toLowerCase(),
+			(nameIDFormat === constants.SAML_EMAIL_NAME_ID_FORMAT
+				? extract.nameID
+				: undefined),
 		name:
 			[
 				attr(mapping.firstName || "givenName"),
@@ -645,33 +648,67 @@ export async function processSAMLResponse(
 				? parseProviderEmailVerified(attr(mapping.emailVerified))
 				: false,
 	};
-	if (!userInfo.id || !userInfo.email) {
-		ctx.context.logger.error("Missing essential user info from SAML response", {
-			providerId,
-			attributeNames: Object.keys(attributes),
-			hasNameId: Boolean(userInfo.id),
-			hasEmail: Boolean(userInfo.email),
-		});
-		throw new APIError("BAD_REQUEST", {
-			message: "Unable to extract user ID or email from SAML response",
-		});
-	}
 	const providerUserAttributes = Object.fromEntries(
 		Object.entries(userInfo).filter(([key]) => key !== "id"),
 	);
+	const missingUserInfo = (hasNameId: boolean, hasEmail: boolean) => {
+		ctx.context.logger.error("Missing essential user info from SAML response", {
+			providerId,
+			attributeNames: Object.keys(attributes),
+			hasNameId,
+			hasEmail,
+		});
+		return new APIError("BAD_REQUEST", {
+			code: "MISSING_USER_INFO",
+			message:
+				"Unable to extract user ID or email from SAML response. Map an email attribute, or create a placeholder with `mapProfileToUser`.",
+		});
+	};
+	if (!userInfo.id) {
+		throw missingUserInfo(false, Boolean(userInfo.email));
+	}
+	const accountKey = { issuer, accountId: userInfo.id };
+	const mappedUser = await mapSSOProfile(
+		options,
+		{
+			protocol: "saml",
+			providerId,
+			accountKey,
+			providerUser: {
+				email: userInfo.email,
+				emailVerified: userInfo.emailVerified,
+				name: userInfo.name,
+				image:
+					typeof providerUserAttributes.image === "string"
+						? providerUserAttributes.image
+						: undefined,
+			},
+			providerAttributes,
+			nameID: userInfo.id,
+			nameIDFormat,
+		},
+		ctx.context.logger,
+	).catch((e) => {
+		if (isAPIError(e) && e.body?.code) {
+			throw ctx.redirect(
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+					error: e.body.code,
+					...(e.body.message ? { error_description: e.body.message } : {}),
+				}),
+			);
+		}
+		throw e;
+	});
+	const email = mappedUser.email?.toLowerCase();
+	if (!email) {
+		throw missingUserInfo(true, false);
+	}
 	const providerUser = {
 		...providerUserAttributes,
-		email: userInfo.email as string,
-		name: (userInfo.name || userInfo.email) as string,
-		image:
-			typeof providerUserAttributes.image === "string"
-				? providerUserAttributes.image
-				: undefined,
-		emailVerified: userInfo.emailVerified,
-	};
-	const accountKey = {
-		issuer,
-		accountId: userInfo.id as string,
+		email,
+		name: mappedUser.name || email,
+		image: mappedUser.image,
+		emailVerified: mappedUser.emailVerified,
 	};
 
 	// 16. Session creation
@@ -682,7 +719,7 @@ export async function processSAMLResponse(
 	const isTrustedProvider: boolean =
 		"domainVerified" in provider &&
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
-		validateEmailDomain(userInfo.email as string, provider.domain);
+		validateEmailDomain(email, provider.domain);
 
 	const callbackUrl = redirectCandidates.some(Boolean)
 		? samlRedirectUrl
@@ -744,7 +781,7 @@ export async function processSAMLResponse(
 				const authentication = await handleOAuthUserInfo(ctx, {
 					userInfo: {
 						...providerUser,
-						id: userInfo.id as string,
+						id: accountKey.accountId,
 					},
 					account: {
 						providerId,
@@ -826,9 +863,9 @@ export async function processSAMLResponse(
 		profile: {
 			providerType: "saml",
 			providerId,
-			accountId: userInfo.id as string,
-			email: userInfo.email as string,
-			emailVerified: userInfo.emailVerified,
+			accountId: accountKey.accountId,
+			email,
+			emailVerified: providerUser.emailVerified,
 			rawAttributes: attributes,
 		},
 		provider,
