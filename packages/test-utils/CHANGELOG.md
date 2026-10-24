@@ -1,5 +1,7 @@
 # @better-auth/test-utils
 
+## 1.8.0-beta.3
+
 ## 1.8.0-beta.2
 
 ## 1.8.0-beta.1

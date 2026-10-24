@@ -1,5 +1,33 @@
 # @better-auth/core
 
+## 1.8.0-beta.3
+
+### Minor Changes
+
+- [#11867](https://github.com/better-auth/better-auth/pull/11867) [`7e635bc`](https://github.com/better-auth/better-auth/commit/7e635bce38e0ef7a7ece88ea9984487596f5d79d) Thanks [@bytaesu](https://github.com/bytaesu)! - Discord profile mappings now handle optional metadata and expose avatar decoration, collectible, and primary guild details. Missing email verification defaults to false.
+
+- [#11846](https://github.com/better-auth/better-auth/pull/11846) [`5b5093e`](https://github.com/better-auth/better-auth/commit/5b5093e0123e424328b89f022b2c8fbaf4e6a737) Thanks [@bytaesu](https://github.com/bytaesu)! - Dropbox profile types now include account status, locale, referral links, pairing status, account type, team policies, and root information. Update custom profiles to supply the required fields, including `home_path` for team roots, and handle omitted profile photos and missing or `null` team information.
+
+- [#11856](https://github.com/better-auth/better-auth/pull/11856) [`50dfb4a`](https://github.com/better-auth/better-auth/commit/50dfb4af2e1a2a8fd4ebf874a705a840544e714e) Thanks [@bytaesu](https://github.com/bytaesu)! - Facebook Limited Login profile callbacks now accept tokens without name, email, or picture claims. Profile mappings must handle these omitted values.
+
+- [#11855](https://github.com/better-auth/better-auth/pull/11855) [`41ebe9a`](https://github.com/better-auth/better-auth/commit/41ebe9ab6787cd96f56338bfa18e62faba0e354f) Thanks [@bytaesu](https://github.com/bytaesu)! - `LinearUser.avatarUrl` is now required and typed as `string | null`; custom profiles must include it, and mappings must handle `null`. Null avatars preserve stored images during enabled profile updates, and authorization scopes are comma-separated.
+
+- [#11839](https://github.com/better-auth/better-auth/pull/11839) [`7a3a84f`](https://github.com/better-auth/better-auth/commit/7a3a84f3c7418292eabbf8134b20093a1e8bf281) Thanks [@bytaesu](https://github.com/bytaesu)! - `GithubProfile.id` and account counters are now numbers. Profile mappings must handle nullable details and omitted scope-dependent fields, including `twitter_username`. Private-account and enterprise fields are available when returned by GitHub.
+
+- [#11853](https://github.com/better-auth/better-auth/pull/11853) [`3e80e84`](https://github.com/better-auth/better-auth/commit/3e80e84edba5acd7a26df8f6dd64c2575870a028) Thanks [@bytaesu](https://github.com/bytaesu)! - GitLab profile mappings must handle nullable details and omitted conditional fields. `locked` is now a required boolean; null avatars leave stored images unchanged when profile updates are enabled.
+
+- [#11851](https://github.com/better-auth/better-auth/pull/11851) [`4e13e16`](https://github.com/better-auth/better-auth/commit/4e13e16c6d67e33baea7f769c88eed494b44be01) Thanks [@bytaesu](https://github.com/bytaesu)! - `SlackProfile` email and profile claims are now optional, and custom claims are `unknown`; update profile mappings accordingly. The built-in provider and Generic OAuth helper use POST for userinfo and reject Slack errors returned with HTTP 200.
+
+- [#11859](https://github.com/better-auth/better-auth/pull/11859) [`a9aa12e`](https://github.com/better-auth/better-auth/commit/a9aa12ee639cef37bfdfbe817b58c5f0d57dddf2) Thanks [@bytaesu](https://github.com/bytaesu)! - Notion users without an avatar now keep their existing profile image when profile updates are enabled. Update custom mappings to handle optional `type`, nullable `name` and `avatar_url`, and missing `image` values as `undefined` instead of `null`. Custom mappings can now access optional `person.email_verified` metadata.
+
+- [#11854](https://github.com/better-auth/better-auth/pull/11854) [`a7d4b48`](https://github.com/better-auth/better-auth/commit/a7d4b4841fe1e2159ddfbc36fd6eb82663b7a980) Thanks [@bytaesu](https://github.com/bytaesu)! - `MicrosoftEntraIDProfile` timestamps are numbers, `groups`, `acrs`, and `xms_cc` are string arrays, `in_corp` is boolean, and conditional claims and profile photos can be omitted. Update profile mappings to handle these types and missing values.
+
+- [#11862](https://github.com/better-auth/better-auth/pull/11862) [`cbf3a97`](https://github.com/better-auth/better-auth/commit/cbf3a97902f8d0a2965aac284eaba3d631b88211) Thanks [@bytaesu](https://github.com/bytaesu)! - PayPal profile types now reflect omitted names, email, and verification claims when personal permissions are not granted. Missing email verification defaults to false; profile mappings must supply an email when the provider omits it.
+
+- [#11861](https://github.com/better-auth/better-auth/pull/11861) [`efabf96`](https://github.com/better-auth/better-auth/commit/efabf960a8dcc3fdac58492187ebbfd0f4e578f1) Thanks [@bytaesu](https://github.com/bytaesu)! - `RailwayProfile.email`, `name`, and `picture` are now optional to reflect granted scopes. Profile mappings must supply an email when the provider omits it.
+
+- [#11852](https://github.com/better-auth/better-auth/pull/11852) [`959a9c6`](https://github.com/better-auth/better-auth/commit/959a9c697ac89d4d727981272de260850c02c12d) Thanks [@bytaesu](https://github.com/bytaesu)! - Nested `TwitterProfile` entity objects, arrays, and URL details can now be omitted or `null`; update typed reads to handle both. The types also include description cashtags, mentions, and URL preview metadata; request extra `user.fields` on `/2/users/me` in custom profile lookups.
+
 ## 1.8.0-beta.2
 
 ### Minor Changes
