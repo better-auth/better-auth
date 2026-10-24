@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import type { SCIMDeclaredConnectionVerificationResult } from ".";
-import { scim } from ".";
+import { scim, supportsNativeSCIMTransactions } from ".";
 
 type SCIMUserRow = {
 	id: string;
@@ -729,12 +729,16 @@ describe("SCIM connection provisioning", () => {
 			scimUser: [] as SCIMUserRow[],
 			scimGroupMember: [] as { id: string }[],
 			scimProjectionGrant: [] as { id: string }[],
+			scimManagedConnection: [] as { id: string }[],
 		};
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",
 			database: withoutNativeTransactions(memoryAdapter(data)),
 			plugins: [
 				scim({
+					managedConnections: {
+						credentialHashSecret: "managed-test-secret-at-least-32-characters",
+					},
 					connections: [
 						{
 							id: "workforce",
@@ -751,7 +755,69 @@ describe("SCIM connection provisioning", () => {
 			],
 		});
 
-		await expect(auth.$context).rejects.toThrow("native transaction support");
+		const context = await auth.$context;
+		expect(supportsNativeSCIMTransactions(context.adapter)).toBe(false);
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				headers: { authorization: "Bearer test-scim-token" },
+			}),
+		);
+		expect(response.status).toBe(501);
+		expect(response.headers.get("content-type")).toBe("application/scim+json");
+		await expect(response.json()).resolves.toMatchObject({
+			schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+			status: "501",
+		});
+		const malformed = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				method: "POST",
+				headers: {
+					authorization: "Bearer test-scim-token",
+					"content-type": "text/plain",
+				},
+				body: "not json",
+			}),
+		);
+		expect(malformed.status).toBe(501);
+		const created = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				method: "POST",
+				headers: {
+					authorization: "Bearer test-scim-token",
+					"content-type": "application/scim+json",
+				},
+				body: JSON.stringify({
+					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					userName: "ada@example.com",
+				}),
+			}),
+		);
+		expect(created.status).toBe(501);
+		await expect(
+			auth.api.createSCIMUser({
+				body: {
+					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					userName: "ada@example.com",
+				},
+				headers: { authorization: "Bearer test-scim-token" },
+			}),
+		).rejects.toThrow("native transaction support");
+		await expect(
+			auth.api.listSCIMManagedConnections({
+				body: { provisioningDomainId: "workforce" },
+			}),
+		).resolves.toEqual({ connections: [] });
+		await expect(
+			auth.api.createSCIMManagedConnection({
+				body: {
+					creationRequestId: "creation-request-01",
+					provisioningDomainId: "workforce",
+					actorId: "actor",
+					scopes: ["scim.users.read"],
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			}),
+		).rejects.toThrow("native transaction support");
 		expect(data.scimConnectionBinding).toEqual([]);
 		expect(data.user).toEqual([]);
 		expect(data.scimSubject).toEqual([]);
