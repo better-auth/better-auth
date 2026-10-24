@@ -1,5 +1,7 @@
 # @better-auth/sso
 
+## 1.7.13
+
 ## 1.7.12
 
 ### Patch Changes
