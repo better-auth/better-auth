@@ -8,6 +8,7 @@ import {
 } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { APIError } from "../../api";
+import { consumeIssuedIdTokenNonce } from "../../api/routes/id-token-nonce";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
@@ -46,6 +47,13 @@ const oneTapCallbackBodySchema = z.object({
 		description:
 			"Google ID token, which the client obtains from the One Tap API",
 	}),
+	nonce: z
+		.string()
+		.meta({
+			description:
+				"Nonce issued by /id-token/nonce and passed to Google when the ID token was requested",
+		})
+		.optional(),
 	/**
 	 * Sent so the global origin-check middleware validates the post-login
 	 * redirect target against `trustedOrigins`. Without it the client performs
@@ -101,7 +109,14 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					},
 				},
 				async (ctx) => {
-					const { idToken } = ctx.body;
+					const { idToken, nonce } = ctx.body;
+					const googleOAuthProvider = await getAwaitableValue(
+						ctx.context.socialProviders,
+						{ value: "google" },
+					);
+					if (googleOAuthProvider) {
+						await consumeIssuedIdTokenNonce(ctx, googleOAuthProvider, nonce);
+					}
 					const googleProvider =
 						typeof ctx.context.options.socialProviders?.google === "function"
 							? await ctx.context.options.socialProviders?.google()
@@ -121,8 +136,10 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					const payload = (await verifyGoogleIdToken({
 						token: idToken,
 						audience,
-					})) as Partial<GoogleProfile> | null;
-					if (!payload) {
+						nonce,
+					})) as (Partial<GoogleProfile> & { nonce?: unknown }) | null;
+					// A token minted with a nonce must be presented with that nonce.
+					if (!payload || (payload.nonce !== undefined && !nonce)) {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
@@ -151,10 +168,6 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					// Map the verified token the way the redirect and `signIn.social`
 					// flows do, so a configured `mapProfileToUser` or `getUserInfo`
 					// applies to One Tap too.
-					const googleOAuthProvider = await getAwaitableValue(
-						ctx.context.socialProviders,
-						{ value: "google" },
-					);
 					const providerResult = googleOAuthProvider
 						? await googleOAuthProvider.getUserInfo({ idToken })
 						: {
