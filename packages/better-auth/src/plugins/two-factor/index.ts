@@ -23,7 +23,9 @@ import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
+	TWO_FACTOR_ATTEMPT_COUNTER_PREFIX,
 	TWO_FACTOR_COOKIE_NAME,
+	TWO_FACTOR_VERIFICATION_PREFIX,
 } from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
@@ -540,7 +542,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								maxAge,
 							},
 						);
-						const identifier = `2fa-${generateRandomString(20)}`;
+						const identifier = `${TWO_FACTOR_VERIFICATION_PREFIX}${generateRandomString(20)}`;
 						const expiresAt = new Date(Date.now() + maxAge * 1000);
 						await ctx.context.internalAdapter.createVerificationValue({
 							value: data.user.id,
@@ -552,7 +554,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						// concurrent burst cannot exceed the budget.
 						await ctx.context.internalAdapter.createVerificationValue({
 							value: "0",
-							identifier: `2fa-attempts-${identifier}`,
+							identifier: `${TWO_FACTOR_ATTEMPT_COUNTER_PREFIX}${identifier}`,
 							expiresAt,
 						});
 						await ctx.setSignedCookie(
