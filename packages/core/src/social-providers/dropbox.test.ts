@@ -67,11 +67,32 @@ it("maps a personal Dropbox account without a photo or team", async () => {
 
 /**
  * @see https://github.com/dropbox/dropbox-api-spec/blob/3c363a594dafbe0f4646e73352b62a4767540d25/users.stone#L179-L206
+ * @see https://github.com/dropbox/dropbox-api-spec/blob/b63b5d5be0d1473b6bf237843fea977574c18fad/team_policies.stone
  */
 it("types the current Dropbox account", () => {
 	expectTypeOf<DropboxProfile["disabled"]>().toEqualTypeOf<boolean>();
 	expectTypeOf<DropboxProfile["locale"]>().toEqualTypeOf<string>();
 	expectTypeOf<DropboxProfile["is_paired"]>().toEqualTypeOf<boolean>();
+
+	type SharingPolicies = NonNullable<
+		DropboxProfile["team"]
+	>["sharing_policies"];
+	assertType<SharingPolicies>({
+		shared_folder_member_policy: { ".tag": "team_and_approved" },
+		shared_folder_join_policy: { ".tag": "from_anyone" },
+		shared_link_create_policy: { ".tag": "default_no_one" },
+		group_creation_policy: { ".tag": "admins_and_members" },
+		shared_folder_link_restriction_policy: { ".tag": "members" },
+		enforce_link_password_policy: { ".tag": "required" },
+		default_link_expiration_days_policy: { ".tag": "day_180" },
+		shared_link_default_permissions_policy: { ".tag": "other" },
+	});
+	// @ts-expect-error Group creation has no other variant.
+	assertType<SharingPolicies["group_creation_policy"]>({ ".tag": "other" });
+	// @ts-expect-error Link creation only accepts documented tags.
+	assertType<SharingPolicies["shared_link_create_policy"]>({
+		".tag": "invalid",
+	});
 	assertType<DropboxProfile["root_info"]>({
 		".tag": "team",
 		root_namespace_id: "123",

@@ -7,6 +7,65 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
+interface DropboxTeamSharingPolicies {
+	shared_folder_member_policy: {
+		".tag": "team" | "anyone" | "team_and_approved" | "other";
+	};
+	shared_folder_join_policy: {
+		".tag": "from_team_only" | "from_anyone" | "other";
+	};
+	shared_link_create_policy: {
+		".tag":
+			| "default_public"
+			| "default_team_only"
+			| "team_only"
+			| "default_no_one"
+			| "other";
+	};
+	group_creation_policy: { ".tag": "admins_and_members" | "admins_only" };
+	shared_folder_link_restriction_policy: {
+		".tag": "members" | "anyone" | "other";
+	};
+	enforce_link_password_policy: { ".tag": "optional" | "required" | "other" };
+	default_link_expiration_days_policy: {
+		".tag":
+			| "none"
+			| "day_1"
+			| "day_3"
+			| "day_7"
+			| "day_30"
+			| "day_90"
+			| "day_180"
+			| "year_1"
+			| "other";
+	};
+	shared_link_default_permissions_policy: {
+		".tag": "default" | "edit" | "view" | "other";
+	};
+}
+
+interface DropboxTeam {
+	id: string;
+	name: string;
+	sharing_policies: DropboxTeamSharingPolicies;
+	office_addin_policy: { ".tag": "disabled" | "enabled" | "other" };
+	top_level_content_policy: { ".tag": "everyone" | "admin_only" | "other" };
+}
+
+type DropboxRootInfo =
+	| {
+			".tag": "team";
+			root_namespace_id: string;
+			home_namespace_id: string;
+			home_path: string;
+	  }
+	| {
+			".tag": "user";
+			root_namespace_id: string;
+			home_namespace_id: string;
+			home_path?: string;
+	  };
+
 export interface DropboxProfile {
 	account_id: string;
 	name: {
@@ -23,38 +82,11 @@ export interface DropboxProfile {
 	country?: string;
 	locale: string;
 	referral_link: string;
-	team?: {
-		id: string;
-		name: string;
-		sharing_policies: {
-			shared_folder_member_policy: { ".tag": string };
-			shared_folder_join_policy: { ".tag": string };
-			shared_link_create_policy: { ".tag": string };
-			group_creation_policy: { ".tag": string };
-			shared_folder_link_restriction_policy: { ".tag": string };
-			enforce_link_password_policy: { ".tag": string };
-			default_link_expiration_days_policy: { ".tag": string };
-			shared_link_default_permissions_policy: { ".tag": string };
-		};
-		office_addin_policy: { ".tag": "disabled" | "enabled" | "other" };
-		top_level_content_policy: { ".tag": "everyone" | "admin_only" | "other" };
-	} | null;
+	team?: DropboxTeam | null;
 	team_member_id?: string;
 	is_paired: boolean;
 	account_type: { ".tag": "basic" | "pro" | "business" };
-	root_info:
-		| {
-				".tag": "team";
-				root_namespace_id: string;
-				home_namespace_id: string;
-				home_path: string;
-		  }
-		| {
-				".tag": "user";
-				root_namespace_id: string;
-				home_namespace_id: string;
-				home_path?: string;
-		  };
+	root_info: DropboxRootInfo;
 }
 
 export interface DropboxOptions extends ProviderOptions<DropboxProfile> {
