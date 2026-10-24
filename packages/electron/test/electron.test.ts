@@ -7,6 +7,7 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { generateCodeChallenge } from "better-auth/oauth2";
+import { getTestInstance } from "better-auth/test";
 import { beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kElectron } from "../src/authenticate";
 import { electronClient } from "../src/client";
@@ -174,6 +175,54 @@ describe("Electron", () => {
 		expect(data).toHaveProperty("electron_authorization_code");
 		// @ts-expect-error
 		expect(data!.electron_authorization_code).toBeTypeOf("string");
+	});
+
+	it("should return the sign-in result when the transfer cookie holds another signed value", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [electron()],
+		});
+		const { secret } = await auth.$context;
+		const signUp = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					email: "transfer-cookie-replay@test.com",
+					password: "password",
+					name: "Transfer Cookie Replay",
+					rememberMe: false,
+				}),
+			}),
+		);
+		const dontRemember = parseSetCookieHeader(
+			signUp.headers.get("set-cookie") ?? "",
+		).get("better-auth.dont_remember")?.value;
+		expect(dontRemember).toBeDefined();
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: `better-auth.transfer_token=${dontRemember}`,
+				},
+				body: JSON.stringify({
+					email: "transfer-cookie-replay@test.com",
+					password: "password",
+				}),
+			}),
+		);
+		const text = await res.text();
+
+		expect(res.status).toBe(200);
+		expect(Object.keys(JSON.parse(text)).sort()).toEqual([
+			"redirect",
+			"token",
+			"user",
+		]);
+		expect(text).not.toContain(secret);
 	});
 
 	it("/electron/init-oauth-proxy should forward each Set-Cookie from the inner sign-in response as a separate header", async () => {

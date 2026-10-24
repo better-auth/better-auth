@@ -171,7 +171,12 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						});
 						let transferPayload: z.infer<typeof querySchema> | null = null;
 						if (!!transferCookie) {
-							transferPayload = safeJSONParse(transferCookie);
+							const stored = querySchema.safeParse(
+								safeJSONParse(transferCookie),
+							);
+							if (stored.success) {
+								transferPayload = stored.data;
+							}
 						} else {
 							const query = querySchema.safeParse(ctx.query);
 							if (query.success && query.data.client_id === opts.clientID) {
@@ -184,7 +189,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 						const identifier = await handleTransfer(ctx, transferPayload);
 						if (identifier === null) {
-							return ctx;
+							return;
 						}
 
 						return ctx.json({
