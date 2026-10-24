@@ -92,7 +92,7 @@ export interface KakaoProfile {
 	/** Custom user properties */
 	properties?: Record<string, any> | undefined;
 	/** Kakao account info */
-	kakao_account: KakaoAccount;
+	kakao_account?: KakaoAccount;
 	/** Partner info */
 	for_partner?: Partner | undefined;
 }
@@ -118,6 +118,7 @@ export const kakao = (options: KakaoOptions) => {
 				options,
 				authorizationEndpoint: "https://kauth.kakao.com/oauth/authorize",
 				scopes: _scopes,
+				scopeJoiner: ",",
 				state,
 				redirectURI,
 				additionalParams,

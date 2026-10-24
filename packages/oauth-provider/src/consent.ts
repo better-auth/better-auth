@@ -120,6 +120,15 @@ export async function consentEndpoint<Result>(
 	}
 
 	// Consent accepted
+	const chosenReferenceId = ctx.body.reference_id as string | undefined;
+	// Without the callback to verify it, a chosen reference would be dropped
+	// and the consent stored without one.
+	if (chosenReferenceId !== undefined && !opts.postLogin?.consentReferenceId) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "reference_id requires postLogin.consentReferenceId",
+			error: "invalid_request",
+		});
+	}
 	const promptSet = parsePrompt(query.get("prompt") ?? "");
 	const hasLoginPrompt = promptSet.has("login");
 	const hasSatisfiedLoginPrompt =
@@ -138,6 +147,8 @@ export async function consentEndpoint<Result>(
 		user: session?.user!,
 		session: session?.session!,
 		scopes: requestedScopes ?? originalRequestedScopes,
+		query: new URLSearchParams(query),
+		consent: { referenceId: chosenReferenceId },
 	});
 	const foundConsent = await findConsent(
 		ctx,
@@ -208,6 +219,6 @@ export async function consentEndpoint<Result>(
 		oauthRequest.postLoginClearedForSession === session?.session.id;
 	return await authorize(ctx, {
 		postLogin: postLoginClearedForThisSession,
-		consentAccepted: true,
+		acceptedConsent: { referenceId },
 	});
 }

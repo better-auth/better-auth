@@ -2301,14 +2301,13 @@ describe("oauth-provider device approval through the consent flow", async () => 
 	});
 
 	it("rejects an approval when the code expires before the final step", async () => {
-		let calls = 0;
-		resolveReference = () => {
-			// The consent endpoint resolves the reference first; expire the code
-			// before the second resolution, which precedes the approval.
-			calls += 1;
-			if (calls === 2) vi.setSystemTime(Date.now() + 31 * 60 * 1000);
-			return "org_1";
-		};
+		resolveReference = () => "org_1";
+		// The authentication context resolves just before the approval; expire
+		// the code then.
+		resolveAuthenticationContext.mockImplementationOnce(() => {
+			vi.setSystemTime(Date.now() + 31 * 60 * 1000);
+			return undefined;
+		});
 		const { user_code, headers } = await startDevice();
 		vi.useFakeTimers({ toFake: ["Date"] });
 		try {

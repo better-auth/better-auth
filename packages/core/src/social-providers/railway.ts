@@ -13,12 +13,18 @@ const userinfoEndpoint = "https://backboard.railway.com/oauth/me";
 export interface RailwayProfile {
 	/** The user's unique ID (OAuth `sub` claim). */
 	sub: string;
-	/** The user's email address. */
-	email: string;
-	/** The user's display name. */
-	name: string;
-	/** URL of the user's profile picture. */
-	picture: string;
+	/**
+	 * The user's email address, returned with the `email` scope.
+	 */
+	email?: string;
+	/**
+	 * The user's display name, returned with the `profile` scope.
+	 */
+	name?: string;
+	/**
+	 * URL of the user's profile picture, returned with the `profile` scope.
+	 */
+	picture?: string;
 }
 
 export interface RailwayOptions extends ProviderOptions<RailwayProfile> {

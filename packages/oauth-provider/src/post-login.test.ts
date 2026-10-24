@@ -1,4 +1,6 @@
+import { generateCodeChallenge } from "@better-auth/core/oauth2";
 import { APIError } from "better-auth/api";
+import { generateRandomString } from "better-auth/crypto";
 import { jwt } from "better-auth/plugins/jwt";
 import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
@@ -10,6 +12,28 @@ import type { OAuthOptions, Scope } from "./types";
 
 const baseURL = "http://localhost:3000";
 const redirectURI = "https://client.example.com/callback";
+
+/** Sends an authorization request and returns where the provider redirects. */
+async function authorizeRedirect(
+	auth: { handler: (request: Request) => Promise<Response> },
+	headers: Headers,
+	params: Record<string, string | string[]>,
+) {
+	const query = new URLSearchParams({
+		redirect_uri: redirectURI,
+		response_type: "code",
+		code_challenge: "a".repeat(43),
+		code_challenge_method: "S256",
+	});
+	for (const [key, value] of Object.entries(params)) {
+		query.delete(key);
+		for (const item of [value].flat()) query.append(key, item);
+	}
+	const response = await auth.handler(
+		new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, { headers }),
+	);
+	return new URL(response.headers.get("location") ?? "", baseURL);
+}
 
 async function createPostLoginTestInstance() {
 	const shouldRedirect =
@@ -73,23 +97,13 @@ async function createPostLoginTestInstance() {
 		headers,
 		body: { redirect_uris: [redirectURI] },
 	});
-	const query = new URLSearchParams({
-		client_id: oauthClient.client_id,
-		redirect_uri: redirectURI,
-		response_type: "code",
-		scope: "openid read:organization",
-		state: "organization-selection",
-		code_challenge: "a".repeat(43),
-		code_challenge_method: "S256",
-	});
 
-	async function authorize(requestHeaders = headers) {
-		const response = await auth.handler(
-			new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, {
-				headers: requestHeaders,
-			}),
-		);
-		return new URL(response.headers.get("location") ?? "", baseURL);
+	function authorize(requestHeaders = headers) {
+		return authorizeRedirect(auth, requestHeaders, {
+			client_id: oauthClient.client_id,
+			scope: "openid read:organization",
+			state: "organization-selection",
+		});
 	}
 
 	return { ...instance, headers, organizations, shouldRedirect, authorize };
@@ -212,22 +226,12 @@ describe.each([
 		}
 		await storeConsent("org_1", ["read"]);
 
-		async function authorize(scope: string) {
-			const query = new URLSearchParams({
+		function authorize(scope: string) {
+			return authorizeRedirect(auth, headers, {
 				client_id: oauthClient.client_id,
-				redirect_uri: redirectURI,
-				response_type: "code",
 				scope,
 				state: "no-reference",
-				code_challenge: "a".repeat(43),
-				code_challenge_method: "S256",
 			});
-			const response = await auth.handler(
-				new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, {
-					headers,
-				}),
-			);
-			return new URL(response.headers.get("location") ?? "", baseURL);
 		}
 
 		async function findConsents() {
@@ -300,4 +304,381 @@ describe.each([
 			"write",
 		]);
 	});
+});
+
+/**
+ * The consent lookup and write, the member lookup, and the reference on the
+ * issued token all go through the database adapter.
+ */
+describe.each(["sqlite", "postgres", "mongodb"] as const)(
+	"consent bound to a named or chosen organization on %s",
+	(testWith) => {
+		type PostLogin = NonNullable<OAuthOptions<Scope[]>["postLogin"]>;
+
+		async function createOrganizationConsentTestInstance() {
+			const shouldRedirect = vi.fn<PostLogin["shouldRedirect"]>(() => false);
+			const consentReferenceId = vi.fn<PostLogin["consentReferenceId"]>();
+			const instance = await getTestInstance(
+				{
+					baseURL,
+					plugins: [
+						organization(),
+						jwt(),
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+							scopes: ["openid", "read:organization"],
+							postLogin: {
+								page: "/select-organization",
+								shouldRedirect,
+								consentReferenceId,
+							},
+						}),
+					],
+				},
+				{
+					testWith,
+					// MongoDB keeps one database for every instance in this file.
+					testUser: { email: `${generateRandomString(12)}@test.com` },
+					clientOptions: { plugins: [oauthProviderClient()] },
+				},
+			);
+			const { auth, client, signInWithTestUser } = instance;
+			const { headers, user } = await signInWithTestUser();
+			const { adapter } = await auth.$context;
+
+			consentReferenceId.mockImplementation(
+				async ({ user, scopes, query, consent }) => {
+					if (!scopes.includes("read:organization")) return undefined;
+					const organizationId =
+						query.get("organization") ?? consent?.referenceId;
+					if (!organizationId) {
+						if (!consent) return undefined;
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_request",
+							error_description: "Choose an organization",
+						});
+					}
+					const member = await adapter.findOne({
+						model: "member",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "userId", value: user.id },
+						],
+					});
+					if (!member) {
+						throw new APIError("FORBIDDEN", {
+							error: "access_denied",
+							error_description: "Not a member of this organization",
+						});
+					}
+					return organizationId;
+				},
+			);
+
+			async function createOrganization(name: string, userId: string) {
+				const slug = `${name}-${generateRandomString(8, "a-z")}`;
+				const organization = await auth.api.createOrganization({
+					body: { name, slug, userId },
+				});
+				if (!organization) throw new Error("Organization was not created");
+				return organization.id;
+			}
+			const first = await createOrganization("first", user.id);
+			const second = await createOrganization("second", user.id);
+			const { user: outsider } = await auth.api.signUpEmail({
+				body: {
+					email: `${generateRandomString(12)}@test.com`,
+					password: "outsider-password",
+					name: "Outsider",
+				},
+			});
+			const notMine = await createOrganization("not-mine", outsider.id);
+
+			const oauthClient = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectURI],
+					token_endpoint_auth_method: "client_secret_post",
+				},
+			});
+			const codeVerifier = generateRandomString(43, "a-z", "A-Z", "0-9");
+			const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+			function authorize(scope: string, organizationId?: string) {
+				return authorizeRedirect(auth, headers, {
+					client_id: oauthClient.client_id,
+					scope,
+					state: "organization-consent",
+					code_challenge: codeChallenge,
+					...(organizationId ? { organization: organizationId } : {}),
+				});
+			}
+
+			function accept(consentPage: URL, referenceId?: string) {
+				return client.oauth2.consent({
+					accept: true,
+					reference_id: referenceId,
+					oauth_query: consentPage.search.slice(1),
+					fetchOptions: { headers },
+				});
+			}
+
+			/** Redeems the code and returns the reference its access token carries. */
+			async function tokenReference(callback: string) {
+				const code = new URL(callback).searchParams.get("code");
+				if (!code) throw new Error("authorization code not issued");
+				const tokenHeaders = {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				};
+				const tokens = await client.$fetch<{ access_token: string }>(
+					"/oauth2/token",
+					{
+						method: "POST",
+						headers: tokenHeaders,
+						body: new URLSearchParams({
+							grant_type: "authorization_code",
+							code,
+							code_verifier: codeVerifier,
+							redirect_uri: redirectURI,
+							client_id: oauthClient.client_id,
+							client_secret: oauthClient.client_secret!,
+						}),
+					},
+				);
+				if (!tokens.data) throw new Error("access token not issued");
+				const introspection = await client.oauth2.introspect(
+					{
+						client_id: oauthClient.client_id,
+						client_secret: oauthClient.client_secret,
+						token: tokens.data.access_token,
+						token_type_hint: "access_token",
+					},
+					{ headers: tokenHeaders },
+				);
+				return introspection.data?.reference_id;
+			}
+
+			async function findConsents() {
+				return adapter.findMany<{ referenceId?: string | null }>({
+					model: "oauthConsent",
+					where: [{ field: "userId", value: user.id }],
+				});
+			}
+
+			return {
+				first,
+				second,
+				notMine,
+				shouldRedirect,
+				consentReferenceId,
+				authorize,
+				accept,
+				tokenReference,
+				findConsents,
+			};
+		}
+
+		it("binds consent to the organization the authorization request names", async () => {
+			const {
+				first,
+				second,
+				shouldRedirect,
+				authorize,
+				accept,
+				tokenReference,
+				findConsents,
+			} = await createOrganizationConsentTestInstance();
+			const consentPage = await authorize("openid read:organization", second);
+
+			expect(consentPage.pathname).toBe("/consent");
+			expect(shouldRedirect.mock.lastCall?.[0].query.get("organization")).toBe(
+				second,
+			);
+
+			const result = await accept(consentPage);
+			if (!result.data) throw new Error("consent was refused");
+
+			expect(await tokenReference(result.data.url)).toBe(second);
+			expect((await findConsents()).map((c) => c.referenceId)).toEqual([
+				second,
+			]);
+			const reused = await authorize("openid read:organization", second);
+			expect(reused.origin + reused.pathname).toBe(redirectURI);
+			expect(reused.searchParams.get("code")).toBeTruthy();
+			expect(
+				(await authorize("openid read:organization", first)).pathname,
+			).toBe("/consent");
+		});
+
+		it("stores the organization the user chooses on the consent page", async () => {
+			const {
+				first,
+				consentReferenceId,
+				authorize,
+				accept,
+				tokenReference,
+				findConsents,
+			} = await createOrganizationConsentTestInstance();
+			const consentPage = await authorize("openid read:organization");
+
+			expect(consentPage.pathname).toBe("/consent");
+			expect(consentReferenceId.mock.lastCall?.[0].consent).toBeUndefined();
+
+			consentReferenceId.mockClear();
+			const result = await accept(consentPage, first);
+			if (!result.data) throw new Error("consent was refused");
+
+			expect(consentReferenceId).toHaveBeenCalledOnce();
+			const [{ consent, query }] = consentReferenceId.mock.lastCall!;
+			expect(consent).toEqual({ referenceId: first });
+			expect(query.get("client_id")).toBeTruthy();
+			expect(query.has("sig")).toBe(false);
+			expect(query.has("ba_param")).toBe(false);
+			expect(await tokenReference(result.data.url)).toBe(first);
+			expect((await findConsents()).map((c) => c.referenceId)).toEqual([first]);
+		});
+
+		it("refuses an organization the user does not belong to", async () => {
+			const { notMine, authorize, accept, findConsents } =
+				await createOrganizationConsentTestInstance();
+			const consentPage = await authorize("openid read:organization");
+			const result = await accept(consentPage, notMine);
+
+			expect(result.data).toBeNull();
+			expect(result.error?.status).toBe(403);
+			expect(result.error).toMatchObject({ error: "access_denied" });
+			expect(await findConsents()).toEqual([]);
+		});
+
+		it("stores consent without a reference when the request needs none", async () => {
+			const { consentReferenceId, authorize, accept, findConsents } =
+				await createOrganizationConsentTestInstance();
+			const consentPage = await authorize("openid");
+			const result = await accept(consentPage);
+			if (!result.data) throw new Error("consent was refused");
+			const callback = new URL(result.data.url);
+
+			expect(callback.origin + callback.pathname).toBe(redirectURI);
+			expect(callback.searchParams.get("code")).toBeTruthy();
+			expect(consentReferenceId).toHaveBeenLastCalledWith(
+				expect.objectContaining({ consent: { referenceId: undefined } }),
+			);
+			const consents = await findConsents();
+			expect(consents).toHaveLength(1);
+			expect(consents[0]?.referenceId ?? undefined).toBeUndefined();
+		});
+	},
+);
+
+it("rejects a chosen reference when no callback can verify it", async () => {
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: { redirect_uris: [redirectURI] },
+	});
+	const consentPage = await authorizeRedirect(auth, headers, {
+		client_id: oauthClient.client_id,
+		scope: "openid",
+	});
+	const result = await client.oauth2.consent({
+		accept: true,
+		reference_id: "org_1",
+		oauth_query: consentPage.search.slice(1),
+		fetchOptions: { headers },
+	});
+
+	expect(result.error?.status).toBe(400);
+	expect(result.error).toMatchObject({ error: "invalid_request" });
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11039
+ */
+it("gives every interaction hook the validated request, including repeated resources", async () => {
+	type Options = OAuthOptions<Scope[]>;
+	const resources = ["https://api.example.com", "https://mcp.example.com"];
+	const selectAccount =
+		vi.fn<NonNullable<Options["selectAccount"]>["shouldRedirect"]>();
+	const signup =
+		vi.fn<NonNullable<NonNullable<Options["signup"]>["shouldRedirect"]>>();
+	const postLogin =
+		vi.fn<NonNullable<Options["postLogin"]>["shouldRedirect"]>();
+	const consentReferenceId =
+		vi.fn<NonNullable<Options["postLogin"]>["consentReferenceId"]>();
+	selectAccount.mockReturnValue(false);
+	signup.mockReturnValue(false);
+	postLogin.mockReturnValue(false);
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+					resources,
+					enforcePerClientResources: false,
+					selectAccount: {
+						page: "/select-account",
+						shouldRedirect: selectAccount,
+					},
+					signup: { shouldRedirect: signup },
+					postLogin: {
+						page: "/select-organization",
+						shouldRedirect: postLogin,
+						consentReferenceId,
+					},
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: { redirect_uris: [redirectURI] },
+	});
+	const consentPage = await authorizeRedirect(auth, headers, {
+		client_id: oauthClient.client_id,
+		scope: "openid",
+		organization: "org_1",
+		resource: resources,
+	});
+
+	expect(consentPage.pathname).toBe("/consent");
+	// Authorize resolves the consent reference before it looks up stored consent.
+	for (const hook of [selectAccount, signup, postLogin, consentReferenceId]) {
+		expect(hook).toHaveBeenCalledOnce();
+		const [context] = hook.mock.lastCall!;
+		expect(context.query.getAll("resource")).toEqual(resources);
+		expect(context.query.get("organization")).toBe("org_1");
+	}
+
+	consentReferenceId.mockClear();
+	await client.oauth2.consent({
+		accept: true,
+		oauth_query: consentPage.search.slice(1),
+		fetchOptions: { headers, throw: true },
+	});
+	expect(consentReferenceId).toHaveBeenCalledOnce();
+	const [accepted] = consentReferenceId.mock.lastCall!;
+	expect(accepted.consent).toBeDefined();
+	expect(accepted.query.getAll("resource")).toEqual(resources);
 });

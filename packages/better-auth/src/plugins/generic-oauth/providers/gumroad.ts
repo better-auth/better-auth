@@ -10,7 +10,7 @@ export interface GumroadOptions extends BaseOAuthProviderOptions {}
 
 interface GumroadUser {
 	user_id: string;
-	name: string;
+	name: string | null;
 	email: string;
 	profile_url: string;
 }
@@ -65,7 +65,7 @@ export function gumroad(
 
 		return {
 			id: profile.user.user_id,
-			name: profile.user.name,
+			name: profile.user.name ?? undefined,
 			email: profile.user.email,
 			image: profile.user.profile_url,
 			emailVerified: false,
