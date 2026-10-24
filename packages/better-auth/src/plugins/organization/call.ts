@@ -45,8 +45,9 @@ export const orgSessionMiddleware = createAuthMiddleware(
 );
 
 /**
- * Like `orgSessionMiddleware`, but reads the session from the authoritative
- * store instead of the cookie cache, so `session.user` reflects the database.
+ * Like `orgSessionMiddleware`, but with a server-side session store (`database`
+ * or `secondaryStorage`) it re-reads the session from that store instead of the
+ * cookie cache. Stateless deployments keep the signed cookie as the session.
  */
 export const orgSensitiveSessionMiddleware = createAuthMiddleware(
 	{
