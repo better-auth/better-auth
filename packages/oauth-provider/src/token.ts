@@ -518,10 +518,21 @@ async function createOpaqueAccessToken(
 }
 
 /**
+ * Page size for reading a refresh-token family. Each page is also used as an
+ * `in` list, and D1 binds at most 100 parameters per statement.
+ */
+const REFRESH_FAMILY_PAGE_SIZE = 50;
+
+/**
  * Tear down the entire refresh-token family for a (client, user) pair, plus
  * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
- * Access tokens are deleted first so the parent rows' foreign-key children
- * do not block the refresh-row delete.
+ * Every refresh row and access token in the family is marked revoked before
+ * anything is deleted, so if a delete fails, rotation's `revoked` guard still
+ * refuses every refresh row and `validateOpaqueAccessToken` treats every
+ * access token as inactive. If an access-token update fails, the refresh rows
+ * stay revoked, but access tokens not yet marked stay valid until they expire.
+ * Access tokens are deleted first so the parent rows' foreign-key children do
+ * not block the refresh-row delete.
  *
  * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
  * with respect to each other. Between them, a concurrent rotation in a
@@ -539,23 +550,47 @@ export async function invalidateRefreshFamily(
 	clientId: string,
 	userId: string,
 ) {
-	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
+	const revokedAt = new Date();
+	await ctx.context.adapter.updateMany({
 		model: "oauthRefreshToken",
 		where: [
 			{ field: "clientId", value: clientId },
 			{ field: "userId", value: userId },
+			// Same filter as rotation's CAS, so skipped rows can't rotate (#10309).
+			{ field: "revoked", operator: "eq", value: null },
 		],
+		update: { revoked: revokedAt },
 	});
-	if (refreshTokens.length) {
+	const refreshIdPages: string[][] = [];
+	for (let offset = 0; ; offset += REFRESH_FAMILY_PAGE_SIZE) {
+		const page = await ctx.context.adapter.findMany<{ id: string }>({
+			model: "oauthRefreshToken",
+			where: [
+				{ field: "clientId", value: clientId },
+				{ field: "userId", value: userId },
+			],
+			sortBy: { field: "id", direction: "asc" },
+			limit: REFRESH_FAMILY_PAGE_SIZE,
+			offset,
+		});
+		if (page.length) {
+			refreshIdPages.push(page.map((r) => r.id));
+		}
+		if (page.length < REFRESH_FAMILY_PAGE_SIZE) {
+			break;
+		}
+	}
+	for (const refreshIds of refreshIdPages) {
+		await ctx.context.adapter.updateMany({
+			model: "oauthAccessToken",
+			where: [{ field: "refreshId", operator: "in", value: refreshIds }],
+			update: { revoked: revokedAt },
+		});
+	}
+	for (const refreshIds of refreshIdPages) {
 		await ctx.context.adapter.deleteMany({
 			model: "oauthAccessToken",
-			where: [
-				{
-					field: "refreshId",
-					operator: "in",
-					value: refreshTokens.map((r) => r.id),
-				},
-			],
+			where: [{ field: "refreshId", operator: "in", value: refreshIds }],
 		});
 	}
 	await ctx.context.adapter.deleteMany({
