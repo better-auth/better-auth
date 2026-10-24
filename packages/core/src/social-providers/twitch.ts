@@ -1,5 +1,5 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
-import { logger } from "../env";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -18,11 +18,11 @@ export interface TwitchProfile {
 	/**
 	 * The preferred username of the user
 	 */
-	preferred_username: string;
+	preferred_username?: string;
 	/**
 	 * The email of the user
 	 */
-	email: string;
+	email?: string | null;
 	/**
 	 * Indicate if this user has a verified email.
 	 */
@@ -30,13 +30,23 @@ export interface TwitchProfile {
 	/**
 	 * The picture of the user
 	 */
-	picture: string;
+	picture?: string;
 }
 
 export interface TwitchOptions extends ProviderOptions<TwitchProfile> {
 	clientId: string;
 	claims?: string[] | undefined;
 }
+/**
+ * @see https://dev.twitch.tv/docs/api/reference/#get-users
+ */
+interface TwitchUser {
+	id: string;
+	display_name: string;
+	email?: string;
+	profile_image_url: string;
+}
+
 export const twitch = (options: TwitchOptions) => {
 	const tokenEndpoint = "https://id.twitch.tv/oauth2/token";
 	return {
@@ -90,12 +100,39 @@ export const twitch = (options: TwitchOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			const idToken = token.idToken;
-			if (!idToken) {
-				logger.error("No idToken found in token");
+			if (!token.accessToken) {
 				return null;
 			}
-			const profile = decodeJwt(idToken) as TwitchProfile;
+			const { data } = await betterFetch<{ data: TwitchUser[] }>(
+				"https://api.twitch.tv/helix/users",
+				{
+					headers: {
+						Authorization: `Bearer ${token.accessToken}`,
+						"Client-Id": options.clientId,
+					},
+				},
+			);
+			const user = data?.data?.[0];
+			if (typeof user?.id !== "string" || !user.id) {
+				return null;
+			}
+			// Keep the fetched account bound to a supplied ID token.
+			if (token.idToken) {
+				try {
+					if (decodeJwt(token.idToken).sub !== user.id) return null;
+				} catch {
+					return null;
+				}
+			}
+
+			const profile: TwitchProfile = {
+				sub: user.id,
+				preferred_username: user.display_name,
+				email: user.email,
+				// Get Users returns only verified email addresses.
+				email_verified: !!user.email,
+				picture: user.profile_image_url,
+			};
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
