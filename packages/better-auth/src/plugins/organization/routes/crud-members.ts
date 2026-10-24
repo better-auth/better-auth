@@ -21,8 +21,7 @@ import type { OrganizationOptions } from "../types";
 
 const baseMemberSchema = z.object({
 	userId: z.coerce.string().meta({
-		description:
-			'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
+		description: 'The ID of the user to add as a member. Eg: "user-id"',
 	}),
 	role: z.union([z.string(), z.array(z.string())]).meta({
 		description:
