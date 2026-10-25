@@ -316,29 +316,19 @@ Before starting the migration process, set up Better Auth in your project. Follo
         }
 
         for (const factor of auth0User.mfa_factors) {
-            try {
-                if (factor.totp && factor.totp.secret) {
-                    await ctx.adapter.create({
-                        model: "twoFactor",
-                        data: {
-                            userId: userId,
-                            // TOTP secrets are Base32, so mark them for decoding
-                            secret: await symmetricEncrypt({
-                                key: ctx.secretConfig,
-                                data: `base32:${factor.totp.secret}`,
-                            }),
-                            backupCodes: await generateBackupCodes(ctx.secretConfig)
-                        }
-                    });
-                    // Enable 2FA only after the secret is stored
-                    await ctx.adapter.update({
-                        model: "user",
-                        where: [{ field: "id", value: userId }],
-                        update: { twoFactorEnabled: true }
-                    });
-                }
-            } catch (error) {
-                console.error(`Failed to migrate MFA factor for user ${userId}:`, error);
+            if (factor.totp && factor.totp.secret) {
+                await ctx.adapter.create({
+                    model: "twoFactor",
+                    data: {
+                        userId: userId,
+                        // TOTP secrets are Base32, so mark them for decoding
+                        secret: await symmetricEncrypt({
+                            key: ctx.secretConfig,
+                            data: `base32:${factor.totp.secret}`,
+                        }),
+                        backupCodes: await generateBackupCodes(ctx.secretConfig)
+                    }
+                });
             }
         }
     }
@@ -530,6 +520,10 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
                         ...(isUsernameEnabled ? {
                             username: auth0User.username || auth0User.nickname,
+                        } : {}),
+
+                        ...(isTwoFactorEnabled ? {
+                            twoFactorEnabled: auth0User.mfa_factors?.some((factor: any) => factor.totp?.secret) ?? false,
                         } : {}),
 
                     };
