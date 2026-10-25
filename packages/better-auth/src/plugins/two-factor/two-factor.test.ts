@@ -1,9 +1,10 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { applySetCookies, parseSetCookieHeader } from "../../cookies";
-import { symmetricDecrypt } from "../../crypto";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -1827,6 +1828,54 @@ describe("pre-migration twoFactor rows (verified absent)", async () => {
 		});
 		expect(updated?.verified).toBe(true);
 	});
+});
+
+describe("imported Base32 TOTP secrets", async () => {
+	const canonical = "JBSWY3DPEHPK3PXP";
+
+	it.each([
+		{ form: "uppercase", imported: canonical },
+		{ form: "lowercase", imported: canonical.toLowerCase() },
+	])(
+		"should verify codes and keep the provisioning URI secret ($form)",
+		async ({ imported }) => {
+			const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [twoFactor()],
+			});
+			const { headers } = await signInWithTestUser();
+			const userId = (await auth.api.getSession({ headers }))?.user
+				.id as string;
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+			});
+
+			const secret = await symmetricEncrypt({
+				key: DEFAULT_SECRET,
+				data: `base32:${imported}`,
+			});
+			await db.update({
+				model: "twoFactor",
+				update: { secret },
+				where: [{ field: "userId", value: userId }],
+			});
+
+			const { totpURI } = await auth.api.getTOTPURI({
+				body: { password: testUser.password },
+				headers,
+			});
+			expect(new URL(totpURI).searchParams.get("secret")).toBe(canonical);
+
+			const code = await createOTP(base32.decode(canonical)).totp();
+			await expect(
+				auth.api.verifyTOTP({
+					body: { code },
+					headers,
+				}),
+			).resolves.toMatchObject({ token: expect.any(String) });
+		},
+	);
 });
 
 /**
