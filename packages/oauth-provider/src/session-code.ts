@@ -31,6 +31,18 @@ export function sessionCodeExpiresIn(
 	return setting.expiresIn ?? DEFAULT_SESSION_CODE_EXPIRES_IN;
 }
 
+function clientMayMintSessionCode(
+	opts: OAuthOptions<Scope[]>,
+	clientId: string,
+): boolean {
+	const setting = opts.sessionCode;
+	if (!setting) return false;
+	if (setting !== true && setting.clientIds) {
+		return setting.clientIds.includes(clientId);
+	}
+	return opts.cachedTrustedClients?.has(clientId) === true;
+}
+
 function sessionCodeDisabled(): never {
 	throw new APIError("NOT_FOUND", {
 		message: "Session code exchange is disabled",
@@ -56,6 +68,7 @@ async function findLiveRefreshToken(
 
 	const client = await getClient(ctx, opts, refreshToken.clientId);
 	if (!client || client.disabled) return null;
+	if (!clientMayMintSessionCode(opts, refreshToken.clientId)) return null;
 
 	const boundJkt = getConfirmationJkt(refreshToken.confirmation);
 	// mTLS `cnf.x5t#S256` is a sender constraint this endpoint cannot check.

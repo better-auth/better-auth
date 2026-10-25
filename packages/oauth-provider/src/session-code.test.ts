@@ -14,7 +14,12 @@ import type { OAuthClient } from "./types/oauth";
 const authServerBaseUrl = "http://localhost:3000";
 const redirectUri = "http://localhost:5000/api/auth/callback/test";
 
-async function issueRefreshToken(sessionCode: boolean | { expiresIn: number }) {
+async function issueRefreshToken(
+	sessionCode: boolean | { expiresIn?: number; clientIds?: string[] },
+	approve = true,
+) {
+	const trustedClients = new Set<string>();
+	const clientIds = sessionCode !== true ? sessionCode.clientIds : undefined;
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -27,6 +32,7 @@ async function issueRefreshToken(sessionCode: boolean | { expiresIn: number }) {
 				loginPage: "/login",
 				consentPage: "/consent",
 				sessionCode,
+				cachedTrustedClients: clientIds ? undefined : trustedClients,
 			}),
 		],
 	});
@@ -96,6 +102,8 @@ async function issueRefreshToken(sessionCode: boolean | { expiresIn: number }) {
 	});
 	expect(tokens.data?.refresh_token).toBeTruthy();
 	expect(tokens.data?.access_token).toBeTruthy();
+	if (approve && clientIds) clientIds.push(oauthClient.client_id);
+	if (approve && !clientIds) trustedClients.add(oauthClient.client_id);
 
 	return {
 		auth,
@@ -139,6 +147,35 @@ describe("oauth session code", () => {
 		});
 		expect(replay.data).toBeNull();
 		expect(replay.error).toBeTruthy();
+	});
+
+	it("mints a code for a client id the server listed", async () => {
+		const { client, refreshToken } = await issueRefreshToken({
+			clientIds: [],
+		});
+		const created = await client.$fetch<{ code: string }>(
+			"/oauth2/session-code",
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${refreshToken}`,
+				},
+			},
+		);
+		expect(created.error).toBeNull();
+		expect(created.data?.code).toBeTruthy();
+	});
+
+	it("rejects a client the server did not approve", async () => {
+		const { client, refreshToken } = await issueRefreshToken(true, false);
+		const created = await client.$fetch("/oauth2/session-code", {
+			method: "POST",
+			headers: {
+				authorization: `Bearer ${refreshToken}`,
+			},
+		});
+		expect(created.data).toBeNull();
+		expect(created.error).toBeTruthy();
 	});
 
 	it("rejects an access token", async () => {

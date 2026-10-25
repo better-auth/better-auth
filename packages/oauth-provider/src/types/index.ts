@@ -952,6 +952,12 @@ export interface OAuthOptions<
 	 * required. An access token is not accepted: only an unrevoked,
 	 * unexpired refresh token can mint the code.
 	 *
+	 * `true`, or an object without `clientIds`, allows only clients listed in
+	 * `cachedTrustedClients`. `clientIds` is the whole allowlist when set.
+	 * A client cannot grant itself this through registration. The exchange
+	 * creates a normal account session, so a third-party refresh token is
+	 * not enough.
+	 *
 	 * `expiresIn` is the code lifetime in seconds.
 	 *
 	 * @default disabled
@@ -960,6 +966,7 @@ export interface OAuthOptions<
 		| boolean
 		| {
 				expiresIn?: number;
+				clientIds?: readonly string[];
 		  };
 	/**
 	 * Create access token expirations based on scope.
