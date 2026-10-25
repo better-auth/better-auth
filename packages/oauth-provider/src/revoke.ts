@@ -363,28 +363,19 @@ export async function revokeEndpoint(
 		authMethod,
 	);
 
-	try {
-		if (token_type_hint === undefined || token_type_hint === "access_token") {
-			try {
-				return await revokeAccessToken(ctx, opts, client.clientId, token);
-			} catch (error) {
-				if (error instanceof APIError) {
-					if (
-						token_type_hint === "access_token" ||
-						error.body?.error === "unsupported_token_type"
-					) {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
-				}
-			}
-		}
+	// RFC 7009 §2.1: the hint only orders the lookup. A token not found under
+	// the hinted type is still searched for across the other supported types.
+	const tokenTypes =
+		token_type_hint === "refresh_token"
+			? (["refresh_token", "access_token"] as const)
+			: (["access_token", "refresh_token"] as const);
 
-		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
+	try {
+		for (const tokenType of tokenTypes) {
 			try {
+				if (tokenType === "access_token") {
+					return await revokeAccessToken(ctx, opts, client.clientId, token);
+				}
 				const refreshToken = await decodeRefreshToken(opts, token);
 				return await revokeRefreshToken(
 					ctx,
@@ -394,7 +385,7 @@ export async function revokeEndpoint(
 				);
 			} catch (error) {
 				if (error instanceof APIError) {
-					if (token_type_hint === "refresh_token") {
+					if (error.body?.error === "unsupported_token_type") {
 						throw error;
 					} // else continue
 				} else if (error instanceof Error) {
@@ -405,20 +396,10 @@ export async function revokeEndpoint(
 			}
 		}
 
-		throw new APIError("BAD_REQUEST", {
-			error_description: "token not found",
-			error: "invalid_request",
-		});
+		// RFC 7009 §2.2: an unknown or already-invalid token still succeeds.
+		return null;
 	} catch (error) {
 		if (error instanceof APIError) {
-			// RFC 7009 §2.2.1: an explicit protocol error (unsupported_token_type)
-			// must surface; an unknown or already-invalid token still succeeds.
-			if (error.body?.error === "unsupported_token_type") {
-				throw error;
-			}
-			if (error.name === "BAD_REQUEST") {
-				return null;
-			}
 			throw error;
 		} else if (error instanceof Error) {
 			logger.error("Introspection error:", error.message, error.stack);

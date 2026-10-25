@@ -211,7 +211,26 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
+	async function introspect(token: string) {
+		return client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+	}
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+	 */
+	it("should revoke a refresh_token sent with token_type_hint access_token", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -227,7 +246,10 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
-		expect(revocation.error?.status).toBe(400);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+		const introspection = await introspect(tokens.data?.refresh_token!);
+		expect(introspection.data).toEqual({ active: false });
 	});
 
 	it("should pass verification with token_type_hint refresh_token and sent refresh_token", async () => {
@@ -250,7 +272,10 @@ describe("oauth revoke", async () => {
 		expect(revocation.error).toBe(null);
 	});
 
-	it("should fail verification with token_type_hint refresh_token and sent access_token", async () => {
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+	 */
+	it("should revoke an opaque access_token sent with token_type_hint refresh_token", async () => {
 		const tokens = await getTokens();
 		const revocation = await client.oauth2.revoke(
 			{
@@ -266,7 +291,82 @@ describe("oauth revoke", async () => {
 				},
 			},
 		);
+		expect(revocation.data).toBe(null);
+		expect(revocation.error).toBe(null);
+		const introspection = await introspect(tokens.data?.access_token!);
+		expect(introspection.data).toEqual({ active: false });
+	});
+
+	it("reports unsupported_token_type for a jwt access_token with token_type_hint refresh_token", async () => {
+		const tokens = await getTokens(undefined, validResource);
+		const revocation = await client.oauth2.revoke(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: tokens.data?.access_token!,
+				token_type_hint: "refresh_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
 		expect(revocation.error?.status).toBe(400);
+		expect(revocation.error).toMatchObject({
+			error: "unsupported_token_type",
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12029
+	 * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.2
+	 */
+	describe("invalid tokens", () => {
+		it.each([undefined, "access_token", "refresh_token"] as const)(
+			"should succeed for an unknown token with token_type_hint %s",
+			async (token_type_hint) => {
+				const revocation = await client.oauth2.revoke(
+					{
+						client_id: oauthClient?.client_id,
+						client_secret: oauthClient?.client_secret,
+						token: "bogus",
+						token_type_hint,
+					},
+					{
+						headers: {
+							accept: "application/json",
+							"content-type": "application/x-www-form-urlencoded",
+						},
+					},
+				);
+				expect(revocation.data).toBe(null);
+				expect(revocation.error).toBe(null);
+			},
+		);
+
+		it("should succeed when revoking the same refresh_token twice", async () => {
+			const tokens = await getTokens();
+			for (let i = 0; i < 2; i++) {
+				const revocation = await client.oauth2.revoke(
+					{
+						client_id: oauthClient?.client_id,
+						client_secret: oauthClient?.client_secret,
+						token: tokens.data?.refresh_token!,
+						token_type_hint: "refresh_token",
+					},
+					{
+						headers: {
+							accept: "application/json",
+							"content-type": "application/x-www-form-urlencoded",
+						},
+					},
+				);
+				expect(revocation.data).toBe(null);
+				expect(revocation.error).toBe(null);
+			}
+		});
 	});
 
 	it("reports unsupported_token_type for a jwt access_token without token_type_hint", async () => {
