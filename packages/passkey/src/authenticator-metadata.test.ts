@@ -23,10 +23,16 @@ describe("getAuthenticatorName", () => {
 		);
 	});
 
-	it("resolves Chrome and YubiKey AAGUIDs", () => {
-		expect(getAuthenticatorName("adce0002-35bc-c60a-648b-0b25f1f05503")).toBe("Chrome on Mac");
-		expect(getAuthenticatorName("fa2b99dc-9e39-4257-8f92-4a30d23c4118")).toBe("YubiKey 5 Series with NFC");
-		expect(getAuthenticatorName("d8522d9f-575b-4866-88a9-ba99fa02f35b")).toBe("YubiKey Bio Series - FIDO Edition");
+	it("resolves Chrome on Mac and hardware security keys", () => {
+		expect(getAuthenticatorName("adce0002-35bc-c60a-648b-0b25f1f05503")).toBe(
+			"Chrome on Mac",
+		);
+		expect(getAuthenticatorName("fa2b99dc-9e39-4257-8f92-4a30d23c4118")).toBe(
+			"YubiKey 5 Series with NFC",
+		);
+		expect(getAuthenticatorName("d8522d9f-575b-4866-88a9-ba99fa02f35b")).toBe(
+			"YubiKey Bio Series - FIDO Edition",
+		);
 	});
 
 	it("resolves every AAGUID of a multi-AAGUID provider", () => {
