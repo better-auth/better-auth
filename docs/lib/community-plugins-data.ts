@@ -485,4 +485,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/Weesofficial.png",
 		},
 	},
+	{
+		name: "better-auth-captcha",
+		url: "https://github.com/klynglabs/better-auth-captcha",
+		description:
+			"Client half of the captcha plugin. Solves Cloudflare Turnstile, reCAPTCHA v3, hCaptcha, or CaptchaFox challenges in the background and attaches the token to protected requests automatically. Requires better-auth 1.7+.",
+		author: {
+			name: "aarmful",
+			github: "aarmful",
+			avatar: "https://github.com/aarmful.png",
+		},
+	},
 ];
