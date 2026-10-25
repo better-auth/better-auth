@@ -126,7 +126,7 @@ description: Apple provider setup and usage.
     For multiple static audiences (for example a Service ID plus a native bundle ID), prefer `clientId: string[]` or `audience: string[]` instead of setting only `appBundleIdentifier`. When the audience must depend on the request (for example reading an `x-platform` header), use a custom [`verifyIdToken`](/docs/concepts/oauth#verifyidtoken) callback — it receives the request context as its third argument.
 
     <Callout type="warn">
-      Apple returns the `user` object only on first authorization, so save it. Email is included in subsequent ID tokens but may be empty for Work & School accounts.
+      Apple provides the user’s name only on first authorization. Email is included in subsequent ID tokens but may be empty for Work & School accounts.
     </Callout>
   </Step>
 </Steps>
