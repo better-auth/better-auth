@@ -311,7 +311,7 @@ After the user has entered their 2FA code, you can verify it using `twoFactor.ve
 
 #### Importing Existing TOTP Secrets
 
-To import TOTP secrets from another provider, prefix each Base32 secret with `base32:` and encrypt it with your auth secret before storing it in the `twoFactor` table.
+To import TOTP secrets from another provider, prefix each Base32 secret with `base32:`, encrypt it with your auth secret, and store it in the `twoFactor` table. Then set `twoFactorEnabled: true` on the user.
 
 ```ts
 import { symmetricEncrypt } from "better-auth/crypto";
@@ -324,8 +324,6 @@ const secret = await symmetricEncrypt({
 ```
 
 Remove any spaces from the secret before storing it. Imported secrets must use SHA-1 and the same `digits` and `period` as your TOTP options.
-
-Then set `twoFactorEnabled: true` on the user. Sign-in only asks for a second factor when this flag is set.
 
 ### OTP
 
