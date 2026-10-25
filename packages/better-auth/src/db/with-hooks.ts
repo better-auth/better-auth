@@ -251,6 +251,58 @@ export function getWithHooks(
 		return updated;
 	}
 
+	async function runDeleteBeforeHooks<T extends Record<string, any>>(
+		entity: T,
+		model: BaseModelNames,
+	) {
+		const context = tryGetCurrentAuthEndpointContext();
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.delete?.before;
+			if (toRun) {
+				const result = await withSpan(
+					`db delete.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "delete.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(entity as any, context),
+				);
+				if (result === false) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	async function queueDeleteAfterHooks<T extends Record<string, any>>(
+		entity: T,
+		model: BaseModelNames,
+	) {
+		const context = tryGetCurrentAuthEndpointContext();
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.delete?.after;
+			if (toRun) {
+				await queueAfterTransactionHook(async () => {
+					await withSpan(
+						`db delete.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(entity as any, context),
+					);
+				});
+			}
+		}
+	}
+
 	async function deleteWithHooks<T extends Record<string, any>>(
 		where: Where[],
 		model: BaseModelNames,
@@ -260,40 +312,27 @@ export function getWithHooks(
 					executeMainFn?: boolean;
 			  }
 			| undefined,
+		options?: {
+			preloadedEntity?: T | null;
+			skipBeforeHooks?: boolean;
+		},
 	) {
-		const context = tryGetCurrentAuthEndpointContext();
-		let entityToDelete: T | null = null;
+		const entities =
+			options?.preloadedEntity !== undefined
+				? options.preloadedEntity
+					? [options.preloadedEntity]
+					: []
+				: await (await getCurrentAdapter(adapter)).findMany<T>({
+						model,
+						where,
+						limit: 1,
+					});
+		const entityToDelete = entities[0] || null;
 
-		try {
-			const entities = await (await getCurrentAdapter(adapter)).findMany<T>({
-				model,
-				where,
-				limit: 1,
-			});
-			entityToDelete = entities[0] || null;
-		} catch {
-			// If we can't find the entity, we'll still proceed with deletion
-		}
-
-		if (entityToDelete) {
-			for (const { source, hooks } of hooksEntries) {
-				const toRun = hooks[model]?.delete?.before;
-				if (toRun) {
-					const result = await withSpan(
-						`db delete.before ${model}`,
-						{
-							[ATTR_HOOK_TYPE]: "delete.before",
-							[ATTR_DB_COLLECTION_NAME]: model,
-							[ATTR_CONTEXT]: source,
-						},
-						() =>
-							// @ts-expect-error context type mismatch
-							toRun(entityToDelete as any, context),
-					);
-					if (result === false) {
-						return null;
-					}
-				}
+		if (entityToDelete && !options?.skipBeforeHooks) {
+			const allowed = await runDeleteBeforeHooks(entityToDelete, model);
+			if (!allowed) {
+				return null;
 			}
 		}
 
@@ -301,35 +340,23 @@ export function getWithHooks(
 			? await customDeleteFn.fn(where)
 			: null;
 
+		const targetWhere =
+			options?.preloadedEntity && "id" in options.preloadedEntity
+				? [{ field: "id", value: (options.preloadedEntity as any).id }]
+				: where;
+
 		const shouldRunAdapterDelete =
 			!customDeleteFn || customDeleteFn.executeMainFn;
 		const deleted =
 			shouldRunAdapterDelete && entityToDelete
 				? await (await getCurrentAdapter(adapter)).delete({
 						model,
-						where,
+						where: targetWhere,
 					})
 				: customDeleted;
 
 		if (entityToDelete) {
-			for (const { source, hooks } of hooksEntries) {
-				const toRun = hooks[model]?.delete?.after;
-				if (toRun) {
-					await queueAfterTransactionHook(async () => {
-						await withSpan(
-							`db delete.after ${model}`,
-							{
-								[ATTR_HOOK_TYPE]: "delete.after",
-								[ATTR_DB_COLLECTION_NAME]: model,
-								[ATTR_CONTEXT]: source,
-							},
-							() =>
-								// @ts-expect-error context type mismatch
-								toRun(entityToDelete as any, context),
-						);
-					});
-				}
-			}
+			await queueDeleteAfterHooks(entityToDelete, model);
 		}
 
 		return deleted;
@@ -344,37 +371,24 @@ export function getWithHooks(
 					executeMainFn?: boolean;
 			  }
 			| undefined,
+		options?: {
+			preloadedEntities?: T[];
+			skipBeforeHooks?: boolean;
+		},
 	) {
-		const context = tryGetCurrentAuthEndpointContext();
-		let entitiesToDelete: T[] = [];
+		const entitiesToDelete =
+			options?.preloadedEntities !== undefined
+				? options.preloadedEntities
+				: await (await getCurrentAdapter(adapter)).findMany<T>({
+						model,
+						where,
+					});
 
-		try {
-			entitiesToDelete = await (await getCurrentAdapter(adapter)).findMany<T>({
-				model,
-				where,
-			});
-		} catch {
-			// If we can't find the entities, we'll still proceed with deletion
-		}
-
-		for (const entity of entitiesToDelete) {
-			for (const { source, hooks } of hooksEntries) {
-				const toRun = hooks[model]?.delete?.before;
-				if (toRun) {
-					const result = await withSpan(
-						`db delete.before ${model}`,
-						{
-							[ATTR_HOOK_TYPE]: "delete.before",
-							[ATTR_DB_COLLECTION_NAME]: model,
-							[ATTR_CONTEXT]: source,
-						},
-						() =>
-							// @ts-expect-error context type mismatch
-							toRun(entity as any, context),
-					);
-					if (result === false) {
-						return null;
-					}
+		if (!options?.skipBeforeHooks) {
+			for (const entity of entitiesToDelete) {
+				const allowed = await runDeleteBeforeHooks(entity, model);
+				if (!allowed) {
+					return null;
 				}
 			}
 		}
@@ -383,33 +397,56 @@ export function getWithHooks(
 			? await customDeleteFn.fn(where)
 			: null;
 
-		const deleted =
-			!customDeleteFn || customDeleteFn.executeMainFn
-				? await (await getCurrentAdapter(adapter)).deleteMany({
-						model,
-						where,
-					})
-				: customDeleted;
+		if (
+			options?.preloadedEntities !== undefined &&
+			entitiesToDelete.length === 0
+		) {
+			return customDeleted ?? 0;
+		}
 
-		for (const entity of entitiesToDelete) {
-			for (const { source, hooks } of hooksEntries) {
-				const toRun = hooks[model]?.delete?.after;
-				if (toRun) {
-					// Queue after hooks to run post-transaction
-					await queueAfterTransactionHook(async () => {
-						await withSpan(
-							`db delete.after ${model}`,
-							{
-								[ATTR_HOOK_TYPE]: "delete.after",
-								[ATTR_DB_COLLECTION_NAME]: model,
-								[ATTR_CONTEXT]: source,
-							},
-							() =>
-								// @ts-expect-error context type mismatch
-								toRun(entity as any, context),
-						);
+		let deleted: any = customDeleted;
+		if (!customDeleteFn || customDeleteFn.executeMainFn) {
+			const currentAdapter = await getCurrentAdapter(adapter);
+			if (
+				options?.preloadedEntities !== undefined &&
+				entitiesToDelete.every((e: any) => e && "id" in e)
+			) {
+				const CHUNK_SIZE = 80;
+				let totalDeleted = 0;
+				for (let i = 0; i < entitiesToDelete.length; i += CHUNK_SIZE) {
+					const chunk = entitiesToDelete.slice(i, i + CHUNK_SIZE);
+					const chunkWhere: Where[] = [
+						...where,
+						{
+							field: "id",
+							operator: "in",
+							value: chunk.map((e: any) => e.id),
+						},
+					];
+					const count = await currentAdapter.deleteMany({
+						model,
+						where: chunkWhere,
 					});
+					if (typeof count === "number") {
+						totalDeleted += count;
+					}
+					for (const entity of chunk) {
+						await queueDeleteAfterHooks(entity, model);
+					}
 				}
+				deleted = totalDeleted;
+			} else {
+				deleted = await currentAdapter.deleteMany({
+					model,
+					where,
+				});
+				for (const entity of entitiesToDelete) {
+					await queueDeleteAfterHooks(entity, model);
+				}
+			}
+		} else {
+			for (const entity of entitiesToDelete) {
+				await queueDeleteAfterHooks(entity, model);
 			}
 		}
 
@@ -509,5 +546,6 @@ export function getWithHooks(
 		deleteWithHooks,
 		deleteManyWithHooks,
 		consumeOneWithHooks,
+		runDeleteBeforeHooks,
 	};
 }
