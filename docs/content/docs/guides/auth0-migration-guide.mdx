@@ -330,6 +330,12 @@ Before starting the migration process, set up Better Auth in your project. Follo
                             backupCodes: await generateBackupCodes(ctx.secretConfig)
                         }
                     });
+                    // Enable 2FA only after the secret is stored
+                    await ctx.adapter.update({
+                        model: "user",
+                        where: [{ field: "id", value: userId }],
+                        update: { twoFactorEnabled: true }
+                    });
                 }
             } catch (error) {
                 console.error(`Failed to migrate MFA factor for user ${userId}:`, error);
@@ -524,10 +530,6 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
                         ...(isUsernameEnabled ? {
                             username: auth0User.username || auth0User.nickname,
-                        } : {}),
-
-                        ...(isTwoFactorEnabled ? {
-                            twoFactorEnabled: auth0User.mfa_factors?.some((factor: any) => factor.totp?.secret) ?? false,
                         } : {}),
 
                     };

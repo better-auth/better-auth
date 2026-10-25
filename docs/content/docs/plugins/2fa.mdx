@@ -325,6 +325,8 @@ const secret = await symmetricEncrypt({
 
 Remove any spaces from the secret before storing it. Imported secrets must use SHA-1 and the same `digits` and `period` as your TOTP options.
 
+Then set `twoFactorEnabled: true` on the user. Sign-in only asks for a second factor when this flag is set.
+
 ### OTP
 
 OTP (One-Time Password) is similar to TOTP but a random code is generated and sent to the user's email or phone.
