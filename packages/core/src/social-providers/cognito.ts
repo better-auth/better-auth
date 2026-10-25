@@ -13,7 +13,8 @@ import {
 export interface CognitoProfile {
 	sub: string;
 	email: string;
-	email_verified: boolean;
+	/** The userinfo endpoint returns this as a string. */
+	email_verified: boolean | "true" | "false";
 	name: string;
 	given_name?: string | undefined;
 	family_name?: string | undefined;
@@ -56,6 +57,9 @@ export interface CognitoOptions extends ProviderOptions<CognitoProfile> {
 	 */
 	identityProvider?: string | undefined;
 }
+
+const toBoolean = (value: boolean | string | undefined) =>
+	typeof value === "string" ? value === "true" : !!value;
 
 export const cognito = (options: CognitoOptions) => {
 	if (!options.domain || !options.region || !options.userPoolId) {
@@ -189,7 +193,7 @@ export const cognito = (options: CognitoOptions) => {
 							name: enrichedProfile.name,
 							email: profile.email,
 							image: profile.picture,
-							emailVerified: profile.email_verified,
+							emailVerified: toBoolean(profile.email_verified),
 							...userMap,
 						},
 						data: enrichedProfile,
@@ -221,7 +225,7 @@ export const cognito = (options: CognitoOptions) => {
 									"",
 								email: userInfo.email,
 								image: userInfo.picture,
-								emailVerified: userInfo.email_verified,
+								emailVerified: toBoolean(userInfo.email_verified),
 								...userMap,
 							},
 							data: userInfo,
