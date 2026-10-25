@@ -15,11 +15,12 @@ const authServerBaseUrl = "http://localhost:3000";
 const redirectUri = "http://localhost:5000/api/auth/callback/test";
 
 async function issueRefreshToken(
-	sessionCode: boolean | { expiresIn?: number; clientIds?: string[] },
+	sessionCode: true | { expiresIn?: number; clientIds?: string[] },
 	approve = true,
 ) {
 	const trustedClients = new Set<string>();
-	const clientIds = sessionCode !== true ? sessionCode.clientIds : undefined;
+	const clientIds =
+		typeof sessionCode === "object" ? sessionCode.clientIds : undefined;
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
