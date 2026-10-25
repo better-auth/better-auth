@@ -285,13 +285,27 @@ export async function onSubscriptionCreated(
 export async function onSubscriptionUpdated(
 	ctx: GenericEndpointContext,
 	options: StripeOptions,
-	event: Stripe.Event,
+	event: Stripe.CustomerSubscriptionUpdatedEvent,
 ) {
 	if (!options.subscription?.enabled) {
 		return;
 	}
-	// Lifecycle callbacks detect transitions from the event, since the refetched state may already be past them.
-	const eventSubscription = event.data.object as Stripe.Subscription;
+	// Transitions come from the event itself, since the refetched state may already be past them.
+	const eventSubscription = event.data.object;
+	const previousSubscription = {
+		...eventSubscription,
+		...event.data.previous_attributes,
+	};
+	const isNewCancellation =
+		eventSubscription.status === "active" &&
+		isStripePendingCancel(eventSubscription) &&
+		!isStripePendingCancel(previousSubscription);
+	const isTrialEnded =
+		previousSubscription.status === "trialing" &&
+		eventSubscription.status === "active";
+	const isTrialExpired =
+		previousSubscription.status === "trialing" &&
+		eventSubscription.status === "incomplete_expired";
 	// The payload follows the webhook endpoint's API version, so refetch to get the SDK's shape.
 	// A failed fetch is not caught here, so the webhook fails and Stripe retries the event.
 	const stripeSubscriptionUpdated =
@@ -411,11 +425,8 @@ export async function onSubscriptionUpdated(
 			return;
 		}
 
-		const isNewCancellation =
-			eventSubscription.status === "active" &&
-			isStripePendingCancel(eventSubscription) &&
-			!isPendingCancel(subscription);
-		if (isNewCancellation) {
+		// Skip transitions the stored row already reflects, so a redelivered event does not repeat callbacks.
+		if (isNewCancellation && !isPendingCancel(subscription)) {
 			await options.subscription.onSubscriptionCancel?.({
 				event,
 				subscription: subscriptionUpdated,
@@ -431,7 +442,7 @@ export async function onSubscriptionUpdated(
 		});
 		if (plan) {
 			if (
-				eventSubscription.status === "active" &&
+				isTrialEnded &&
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialEnd
 			) {
@@ -441,7 +452,7 @@ export async function onSubscriptionUpdated(
 				);
 			}
 			if (
-				eventSubscription.status === "incomplete_expired" &&
+				isTrialExpired &&
 				subscription.status === "trialing" &&
 				plan.freeTrial?.onTrialExpired
 			) {

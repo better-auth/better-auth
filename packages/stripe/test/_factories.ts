@@ -131,10 +131,14 @@ function createEventBase<T extends Stripe.Event.Type>(
 export function createSubscriptionEvent(
 	type: Extract<Stripe.Event.Type, `customer.subscription.${string}`>,
 	subscriptionOverrides: Partial<Stripe.Subscription> = {},
+	previousAttributes?: Partial<Stripe.Subscription>,
 ): Stripe.Event {
 	return {
 		...createEventBase(type),
-		data: { object: createSubscription(subscriptionOverrides) },
+		data: {
+			object: createSubscription(subscriptionOverrides),
+			previous_attributes: previousAttributes,
+		},
 	} as Stripe.Event;
 }
 

@@ -1234,6 +1234,7 @@ describe("stripe webhook", () => {
 					url: "/v1/subscription_items",
 				},
 			},
+			{ cancel_at_period_end: false },
 		);
 
 		const userCancelRequest = new Request(
@@ -2520,6 +2521,11 @@ describe("stripe webhook", () => {
 							comment: null,
 						},
 					},
+					previous_attributes: {
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: null,
+					},
 				},
 			};
 
@@ -3013,77 +3019,108 @@ describe("stripe webhook", () => {
 		);
 
 		/**
-		 * @see https://docs.stripe.com/webhooks#event-ordering
+		 * Delayed events can arrive after the subscription changed again,
+		 * so lifecycle callbacks follow the event's own changes instead of the refetched state.
+		 * @see https://docs.stripe.com/events/how-events-work#snapshot-events
 		 */
-		test("customer.subscription.updated runs onSubscriptionCancel from the event when the refetched subscription was resumed", async ({
-			memory,
-			stripeMock,
-			stripeOptions,
-		}) => {
-			const { current, legacy } = createSubscriptions();
-			const event = createSubscriptionEvent("customer.subscription.updated", {
-				...legacy,
-				cancel_at_period_end: true,
-			});
-			stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
-			stripeMock.subscriptions.retrieve.mockResolvedValue(current);
-			const onSubscriptionCancel = vi.fn();
-			const { send } = await setup("customer.subscription.updated", memory, {
-				...stripeOptions,
-				subscription: {
-					...stripeOptions.subscription,
-					onSubscriptionCancel,
-				},
-			});
-
-			const response = await send(event);
-
-			expect(response.status).toBe(200);
-			expect(onSubscriptionCancel).toHaveBeenCalledOnce();
-		});
-
-		/**
-		 * @see https://docs.stripe.com/webhooks#event-ordering
-		 */
-		test("customer.subscription.updated runs onTrialEnd from the event when the refetched subscription was canceled", async ({
-			memory,
-			stripeMock,
-			stripeOptions,
-		}) => {
-			const { current, legacy } = createSubscriptions();
-			const event = createSubscriptionEvent(
-				"customer.subscription.updated",
-				legacy,
-			);
-			stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
-			stripeMock.subscriptions.retrieve.mockResolvedValue({
-				...current,
-				status: "canceled",
-			});
-			const onTrialEnd = vi.fn();
-			const { send } = await setup(
-				"customer.subscription.updated",
+		describe("transitions come from the event", () => {
+			test("runs onSubscriptionCancel when the event schedules cancellation that was later undone", async ({
 				memory,
-				{
+				stripeMock,
+				stripeOptions,
+			}) => {
+				const { current } = createSubscriptions();
+				const event = createSubscriptionEvent(
+					"customer.subscription.updated",
+					{ ...current, cancel_at_period_end: true },
+					{ cancel_at_period_end: false },
+				);
+				stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+				stripeMock.subscriptions.retrieve.mockResolvedValue(current);
+				const onSubscriptionCancel = vi.fn();
+				const { send } = await setup("customer.subscription.updated", memory, {
 					...stripeOptions,
 					subscription: {
 						...stripeOptions.subscription,
-						plans: [
-							{
-								priceId: TEST_PRICES.starter,
-								name: "starter",
-								freeTrial: { days: 14, onTrialEnd },
-							},
-						],
+						onSubscriptionCancel,
 					},
-				},
-				"trialing",
-			);
+				});
 
-			const response = await send(event);
+				const response = await send(event);
 
-			expect(response.status).toBe(200);
-			expect(onTrialEnd).toHaveBeenCalledOnce();
+				expect(response.status).toBe(200);
+				expect(onSubscriptionCancel).toHaveBeenCalledOnce();
+			});
+
+			test("skips onSubscriptionCancel when the event changes other fields of a pending cancellation", async ({
+				memory,
+				stripeMock,
+				stripeOptions,
+			}) => {
+				const { current } = createSubscriptions();
+				const event = createSubscriptionEvent(
+					"customer.subscription.updated",
+					{ ...current, cancel_at_period_end: true },
+					{ metadata: { note: "before" } },
+				);
+				stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+				stripeMock.subscriptions.retrieve.mockResolvedValue(current);
+				const onSubscriptionCancel = vi.fn();
+				const { send } = await setup("customer.subscription.updated", memory, {
+					...stripeOptions,
+					subscription: {
+						...stripeOptions.subscription,
+						onSubscriptionCancel,
+					},
+				});
+
+				const response = await send(event);
+
+				expect(response.status).toBe(200);
+				expect(onSubscriptionCancel).not.toHaveBeenCalled();
+			});
+
+			test("runs onTrialEnd when the event ends the trial of a subscription that was later canceled", async ({
+				memory,
+				stripeMock,
+				stripeOptions,
+			}) => {
+				const { current } = createSubscriptions();
+				const event = createSubscriptionEvent(
+					"customer.subscription.updated",
+					current,
+					{ status: "trialing" },
+				);
+				stripeMock.webhooks.constructEventAsync.mockResolvedValue(event);
+				stripeMock.subscriptions.retrieve.mockResolvedValue({
+					...current,
+					status: "canceled",
+				});
+				const onTrialEnd = vi.fn();
+				const { send } = await setup(
+					"customer.subscription.updated",
+					memory,
+					{
+						...stripeOptions,
+						subscription: {
+							...stripeOptions.subscription,
+							plans: [
+								{
+									priceId: TEST_PRICES.starter,
+									name: "starter",
+									freeTrial: { days: 14, onTrialEnd },
+								},
+							],
+						},
+					},
+					"trialing",
+				);
+
+				const response = await send(event);
+
+				expect(response.status).toBe(200);
+				expect(onTrialEnd).toHaveBeenCalledOnce();
+			});
 		});
 	});
 });

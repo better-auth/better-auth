@@ -1252,6 +1252,7 @@ describe("stripe - organization customer", () => {
 					feedback_option: null,
 				},
 			},
+			{ cancel_at_period_end: false, cancel_at: null, canceled_at: null },
 		);
 
 		const stripeForOrgCancelWebhook = {

@@ -72,6 +72,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
     <Callout type="info">
       **Upgrading from Stripe v18?** Version 19 uses async webhook signature verification (`constructEventAsync`) which is handled internally by the plugin. No code changes required on your end!
     </Callout>
+
     <Callout type="info">
       **Upgrading to Stripe v23?** Version 23 uses API version `2026-09-30.endive`, which rejects `payment_method_types` when creating a Checkout Session. If you pass it through `getCheckoutSessionParams`, use `allowed_payment_method_types` or `excluded_payment_method_types` instead, or remove it to manage payment methods from the Stripe Dashboard.
     </Callout>
@@ -862,7 +863,7 @@ stripe({
 | `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context.                                              |
 | `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.                                                      |
 | `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription, stripeSubscription }`. Use `stripeSubscription` for raw Stripe fields like `cancellation_details`. |
-| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.                                                       |
+| `onSubscriptionCancel`     | `function`                   | Called when a subscription update schedules cancellation. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.                                     |
 | `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                                                                             |
 
 #### Plan Configuration

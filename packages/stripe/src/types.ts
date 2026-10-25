@@ -303,8 +303,10 @@ export type SubscriptionOptions = {
 		  }) => Promise<void>)
 		| undefined;
 	/**
-	 * A callback to run once when a subscription transitions into a pending-cancel state
+	 * A callback to run when a subscription update event schedules cancellation
 	 * (e.g. `cancel_at_period_end` or a scheduled `cancel_at`).
+	 * Stripe can deliver an event more than once, so use `event.id` to deduplicate side effects.
+	 * @see https://docs.stripe.com/webhooks#handle-duplicate-events
 	 * @returns
 	 */
 	onSubscriptionCancel?:
