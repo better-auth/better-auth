@@ -23,64 +23,63 @@ describe("disabled cookie cache fallback", () => {
 			query: { disableCookieCache: true },
 			expectedSessionDataMaxAge: cacheMaxAge,
 		},
-	])("ignores retired session_data when caching is disabled $mode", async ({
-		cacheEnabled,
-		query,
-		expectedSessionDataMaxAge,
-	}) => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
-			secret,
-			advanced: {
-				cookies: {
-					session_token: { name: "custom.session_token" },
-					session_data: { name: "custom.session" },
+	])(
+		"ignores retired session_data when caching is disabled $mode",
+		async ({ cacheEnabled, query, expectedSessionDataMaxAge }) => {
+			const { client, testUser, cookieSetter } = await getTestInstance({
+				secret,
+				advanced: {
+					cookies: {
+						session_token: { name: "custom.session_token" },
+						session_data: { name: "custom.session" },
+					},
 				},
-			},
-			session: {
-				cookieCache: {
-					enabled: cacheEnabled,
-					strategy: "compact",
-					maxAge: cacheMaxAge,
+				session: {
+					cookieCache: {
+						enabled: cacheEnabled,
+						strategy: "compact",
+						maxAge: cacheMaxAge,
+					},
 				},
-			},
-		});
-		const headers = new Headers();
-		await client.signIn.email(
-			{ email: testUser.email, password: testUser.password },
-			{ onSuccess: cookieSetter(headers) },
-		);
+			});
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: testUser.email, password: testUser.password },
+				{ onSuccess: cookieSetter(headers) },
+			);
 
-		const retiredCache = await symmetricEncodeJWT(
-			{ retired: true },
-			secret,
-			"better-auth-session",
-		);
-		headers.set(
-			"cookie",
-			`${headers.get("cookie")}; custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks`,
-		);
+			const retiredCache = await symmetricEncodeJWT(
+				{ retired: true },
+				secret,
+				"better-auth-session",
+			);
+			headers.set(
+				"cookie",
+				`${headers.get("cookie")}; custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks`,
+			);
 
-		let setCookieHeader = "";
-		const session = await client.getSession({
-			query,
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					setCookieHeader = context.response.headers.get("set-cookie") || "";
+			let setCookieHeader = "";
+			const session = await client.getSession({
+				query,
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						setCookieHeader = context.response.headers.get("set-cookie") || "";
+					},
 				},
-			},
-		});
-		expect(session.data?.user.email).toBe(testUser.email);
+			});
+			expect(session.data?.user.email).toBe(testUser.email);
 
-		const responseCookies = parseSetCookieHeader(setCookieHeader);
-		expect(responseCookies.get("custom.session")?.["max-age"]).toBe(
-			expectedSessionDataMaxAge,
-		);
-		for (const name of ["custom.session.0", "custom.session.1"]) {
-			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
-		}
-		expect(responseCookies.has("custom.session_token")).toBe(false);
-	});
+			const responseCookies = parseSetCookieHeader(setCookieHeader);
+			expect(responseCookies.get("custom.session")?.["max-age"]).toBe(
+				expectedSessionDataMaxAge,
+			);
+			for (const name of ["custom.session.0", "custom.session.1"]) {
+				expect(responseCookies.get(name)?.["max-age"]).toBe(0);
+			}
+			expect(responseCookies.has("custom.session_token")).toBe(false);
+		},
+	);
 
 	it.each([
 		{ state: "missing", sessionTokenCookie: "" },
@@ -88,52 +87,53 @@ describe("disabled cookie cache fallback", () => {
 			state: "invalid",
 			sessionTokenCookie: "; custom.session_token=invalid",
 		},
-	])("clears retired session_data when session_token is $state", async ({
-		sessionTokenCookie,
-	}) => {
-		const { client } = await getTestInstance({
-			secret,
-			advanced: {
-				cookies: {
-					session_token: { name: "custom.session_token" },
-					session_data: { name: "custom.session" },
+	])(
+		"clears retired session_data when session_token is $state",
+		async ({ sessionTokenCookie }) => {
+			const { client } = await getTestInstance({
+				secret,
+				advanced: {
+					cookies: {
+						session_token: { name: "custom.session_token" },
+						session_data: { name: "custom.session" },
+					},
 				},
-			},
-			session: {
-				cookieCache: { enabled: false },
-			},
-		});
-		const retiredCache = await symmetricEncodeJWT(
-			{ retired: true },
-			secret,
-			"better-auth-session",
-		);
-		const headers = new Headers({
-			cookie:
-				`custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks` +
-				sessionTokenCookie,
-		});
-
-		let setCookieHeader = "";
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-				onSuccess(context) {
-					setCookieHeader = context.response.headers.get("set-cookie") || "";
+				session: {
+					cookieCache: { enabled: false },
 				},
-			},
-		});
+			});
+			const retiredCache = await symmetricEncodeJWT(
+				{ retired: true },
+				secret,
+				"better-auth-session",
+			);
+			const headers = new Headers({
+				cookie:
+					`custom.session=${retiredCache}; custom.session.0=stale; custom.session.1=chunks` +
+					sessionTokenCookie,
+			});
 
-		expect(session.data).toBeNull();
-		const responseCookies = parseSetCookieHeader(setCookieHeader);
-		for (const name of [
-			"custom.session",
-			"custom.session.0",
-			"custom.session.1",
-		]) {
-			expect(responseCookies.get(name)?.["max-age"]).toBe(0);
-		}
-	});
+			let setCookieHeader = "";
+			const session = await client.getSession({
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						setCookieHeader = context.response.headers.get("set-cookie") || "";
+					},
+				},
+			});
+
+			expect(session.data).toBeNull();
+			const responseCookies = parseSetCookieHeader(setCookieHeader);
+			for (const name of [
+				"custom.session",
+				"custom.session.0",
+				"custom.session.1",
+			]) {
+				expect(responseCookies.get(name)?.["max-age"]).toBe(0);
+			}
+		},
+	);
 });
 
 /**

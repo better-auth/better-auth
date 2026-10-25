@@ -630,14 +630,14 @@ describe("OIDC Discovery", () => {
 				"issuer with trailing slash",
 			],
 			["//oauth2/token", "https://idp.example.com/base//", "multiple slashes"],
-		])("should resolve relative endpoint preserving issuer base path (%s, %s) - %s", ([
-			endpoint,
-			issuer,
-		]) => {
-			expect(normalizeUrl("url", endpoint!, issuer!)).toBe(
-				"https://idp.example.com/base/oauth2/token",
-			);
-		});
+		])(
+			"should resolve relative endpoint preserving issuer base path (%s, %s) - %s",
+			([endpoint, issuer]) => {
+				expect(normalizeUrl("url", endpoint!, issuer!)).toBe(
+					"https://idp.example.com/base/oauth2/token",
+				);
+			},
+		);
 
 		it("should reject invalid endpoint urls", () => {
 			const endpoint = "oauth2/token";

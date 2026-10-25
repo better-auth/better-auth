@@ -8,7 +8,7 @@ import { isNativePrivateUseRedirectUri } from "@better-auth/core/utils/redirect-
 import { APIError, getSessionFromCtx, NO_STORE_HEADERS } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
-import { validatePublicClientJwks } from "./client-jwks";
+import { assertValidClientJwks } from "./client-jwks";
 import { stripReservedOAuthClientMetadataExtensions } from "./client-metadata";
 import {
 	getSupportedAuthMethods,
@@ -20,6 +20,7 @@ import {
 	validateClientCredentialsScopes,
 } from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
+import { assertResourcePrivileges } from "./oauthResource/privileges";
 import { getResource } from "./resources";
 import type {
 	ClientRegistrationRequest,
@@ -80,6 +81,29 @@ function resolveRegistrationResponseTypes(
 	return grantTypes.includes("authorization_code") ? ["code"] : undefined;
 }
 
+/**
+ * The requested grants this server supports. Clients such as MCP connectors
+ * send one grant union to every server, so a metadata document or a dynamic
+ * registration may list grants this server does not issue. Throws when the
+ * request shares no grant with the server.
+ */
+function resolveMutuallySupportedGrantTypes(
+	opts: OAuthOptions<Scope[]>,
+	grantTypes: GrantType[],
+): GrantType[] {
+	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
+	const mutualGrantTypes = grantTypes.filter((grantType) =>
+		supportedGrantTypes.has(grantType),
+	);
+	if (mutualGrantTypes.length === 0) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
+		});
+	}
+	return mutualGrantTypes;
+}
+
 function applyOAuthClientRegistrationDefaults(
 	client: OAuthClientRegistrationMetadata,
 	defaultApplicationType: "web" | "native" | null = "web",
@@ -116,10 +140,10 @@ function isNonHttpRedirectUri(redirectUri: string): boolean {
 /**
  * Server-owned default for dynamic registrations that omit `application_type`.
  * `"infer"` classifies as native when any redirect URI uses a non-http(s)
- * scheme, because a web client can never register one. Every URI is then
- * validated against the native rules. A sent `application_type` is never
- * overridden because `applyOAuthClientRegistrationDefaults` only fills the
- * absent field.
+ * scheme or http on an exact loopback host, because a web client can never
+ * register either. Every URI is then validated against the native rules. A
+ * sent `application_type` is never overridden because
+ * `applyOAuthClientRegistrationDefaults` only fills the absent field.
  */
 function resolveDynamicRegistrationDefaultApplicationType(
 	opts: OAuthOptions<Scope[]>,
@@ -127,7 +151,9 @@ function resolveDynamicRegistrationDefaultApplicationType(
 ): "web" | "native" {
 	const configured = opts.clientRegistrationDefaultApplicationType ?? "web";
 	if (configured !== "infer") return configured;
-	return (client.redirect_uris ?? []).some(isNonHttpRedirectUri)
+	return (client.redirect_uris ?? []).some(
+		(uri) => isNonHttpRedirectUri(uri) || isExactLoopbackHttpRedirectUri(uri),
+	)
 		? "native"
 		: "web";
 }
@@ -152,14 +178,19 @@ function getRawHttpHostname(redirectUri: string): string | null {
 	return (hostAndPort.split(":")[0] ?? "").toLowerCase();
 }
 
-async function resolveClientRegistrationResources(
-	ctx: GenericEndpointContext,
+function isExactLoopbackHttpRedirectUri(redirectUri: string): boolean {
+	const hostname = getRawHttpHostname(redirectUri);
+	return (
+		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]"
+	);
+}
+
+function assertDynamicRegistrationResourcesAllowed(
 	opts: OAuthOptions<Scope[]>,
 	requestedResources: readonly string[],
-): Promise<string[]> {
-	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
+) {
 	const allowedResources = new Set([
-		...defaultResources,
+		...(opts.clientRegistrationDefaultResources ?? []),
 		...(opts.clientRegistrationAllowedResources ?? []),
 	]);
 	for (const identifier of requestedResources) {
@@ -170,7 +201,14 @@ async function resolveClientRegistrationResources(
 			});
 		}
 	}
+}
 
+async function resolveClientRegistrationResources(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	requestedResources: readonly string[],
+): Promise<string[]> {
+	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
 	const resources = [...new Set([...defaultResources, ...requestedResources])];
 	for (const identifier of resources) {
 		const row = await getResource(ctx, opts, identifier);
@@ -219,11 +257,6 @@ function validateClientRedirectUri(
 	}
 	const isRedirectLoopback =
 		isLoopbackIP(url.hostname) || url.hostname === "localhost";
-	const rawHttpHostname = getRawHttpHostname(redirectUri);
-	const isAllowedNativeHttpLoopback =
-		rawHttpHostname === "localhost" ||
-		rawHttpHostname === "127.0.0.1" ||
-		rawHttpHostname === "[::1]";
 
 	if (applicationType === "web") {
 		if (!isHttps || isRedirectLoopback) {
@@ -243,7 +276,7 @@ function validateClientRedirectUri(
 		return;
 	}
 	if (isHttp) {
-		if (!isAllowedNativeHttpLoopback) {
+		if (!isExactLoopbackHttpRedirectUri(redirectUri)) {
 			invalidRedirectUri(
 				`native clients may use http only on the exact loopback hosts localhost, 127.0.0.1, or [::1]: ${redirectUri}`,
 			);
@@ -255,16 +288,6 @@ function validateClientRedirectUri(
 		invalidRedirectUri(
 			`native private-use redirect URI schemes must not use a reserved scheme; they must be an authority-free reverse-domain URI or a custom-scheme URI with a host and a path: ${redirectUri}`,
 		);
-	}
-}
-
-function assertValidRegistrationJwks(jwks: NonNullable<OAuthClient["jwks"]>) {
-	const result = validatePublicClientJwks(jwks);
-	if (!result.valid) {
-		throw new APIError("BAD_REQUEST", {
-			error: "invalid_client_metadata",
-			error_description: result.error,
-		});
 	}
 }
 
@@ -317,8 +340,24 @@ export async function registerEndpoint(
 		);
 	}
 
+	// RFC 7591 §3.2.1 lets the server replace requested metadata: register the
+	// supported grants and return them, instead of rejecting the whole request.
+	const grantTypes = body.grant_types?.length
+		? resolveMutuallySupportedGrantTypes(opts, body.grant_types)
+		: body.grant_types;
+	const droppedAuthorizationCode =
+		body.grant_types?.includes("authorization_code") &&
+		!grantTypes?.includes("authorization_code");
+	const metadata = {
+		...body,
+		grant_types: grantTypes,
+		// `code`, the only response type, goes with `authorization_code`; the
+		// defaults derive response_types from the registered grants instead.
+		response_types: droppedAuthorizationCode ? undefined : body.response_types,
+	};
+
 	if (!session && !isTokenAuthorized) {
-		if (body.grant_types?.includes("client_credentials")) {
+		if (metadata.grant_types?.includes("client_credentials")) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_client_metadata",
 				error_description:
@@ -346,7 +385,7 @@ export async function registerEndpoint(
 				})
 			: undefined);
 	const response = await createOAuthClientRegistration(ctx, opts, {
-		metadata: body,
+		metadata,
 		registrationSource: "dynamic",
 		userId: referenceId ? undefined : session?.session.userId,
 		referenceId,
@@ -436,18 +475,16 @@ export async function checkOAuthClient(
 	}
 
 	// Validate correlation between grant_types and response_types
-	const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 	if (isClientMetadataDocument) {
 		// One metadata document serves every authorization server the client talks
 		// to, so it declares a grant union; require one mutual grant and let the
 		// token endpoint refuse the rest.
-		if (!grantTypes.some((grantType) => supportedGrantTypes.has(grantType))) {
-			throw new APIError("BAD_REQUEST", {
-				error: "invalid_client_metadata",
-				error_description: `no mutually supported grant_type among ${grantTypes.join(", ")}`,
-			});
-		}
+		resolveMutuallySupportedGrantTypes(opts, grantTypes);
 	} else {
+		// Dynamic registration drops unsupported requested grants before this
+		// check, so this rejects managed clients, client updates, and a defaulted
+		// grant the server does not support.
+		const supportedGrantTypes = new Set(getSupportedGrantTypes(opts));
 		for (const grantType of grantTypes) {
 			if (!supportedGrantTypes.has(grantType)) {
 				throw new APIError("BAD_REQUEST", {
@@ -634,7 +671,7 @@ export async function checkOAuthClient(
 			}
 		}
 		if (clientWithDefaults.jwks) {
-			assertValidRegistrationJwks(clientWithDefaults.jwks);
+			assertValidClientJwks(clientWithDefaults.jwks);
 		}
 	}
 	// private_key_jwt requires key material; other methods may still register
@@ -720,7 +757,11 @@ export type CreateOAuthClientRegistrationInput =
 	  })
 	| (CreateOAuthClientRegistrationBaseInput & {
 			registrationSource: "managed";
-			requestedResources?: never;
+			/**
+			 * Resources to link to the new client. The caller must authorize the
+			 * `link` resource privilege for each one before persisting.
+			 */
+			requestedResources?: string[];
 			/** Server-owned scope ceiling configured by an administrator. */
 			clientCredentialsScopes?: Scope[];
 	  });
@@ -884,12 +925,11 @@ async function persistOAuthClientRegistration(
 		user_id: owner?.referenceId ? undefined : owner?.userId,
 		reference_id: owner?.referenceId,
 	});
+	// A discovery refresh leaves the stored ceiling alone (see the update below).
 	schema.clientCredentialsScopes =
-		input.registrationSource === "clientMetadataDocument"
-			? (input.existingClient?.clientCredentialsScopes ?? [])
-			: input.registrationSource === "managed"
-				? (input.clientCredentialsScopes ?? [])
-				: [];
+		input.registrationSource === "managed"
+			? (input.clientCredentialsScopes ?? [])
+			: [];
 	schema.clientDiscoveryId =
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
@@ -900,12 +940,17 @@ async function persistOAuthClientRegistration(
 	) {
 		schema.applicationType = null;
 	}
+	const requestedResources =
+		input.registrationSource === "clientMetadataDocument"
+			? []
+			: (input.requestedResources ?? []);
+	if (input.registrationSource === "dynamic") {
+		assertDynamicRegistrationResourcesAllowed(opts, requestedResources);
+	}
 	const resources = await resolveClientRegistrationResources(
 		ctx,
 		opts,
-		input.registrationSource === "dynamic"
-			? (input.requestedResources ?? [])
-			: [],
+		requestedResources,
 	);
 	const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
 	const clientResourceModel =
@@ -925,6 +970,16 @@ async function persistOAuthClientRegistration(
 			let storedClient: SchemaClient<Scope[]>;
 			let created = false;
 			if (existingClient) {
+				// Server-owned fields (disabled, consent and logout settings, the
+				// ceiling) can change while this refresh fetches metadata, so the
+				// refresh never writes them.
+				const {
+					clientCredentialsScopes: _ceiling,
+					disabled: _disabled,
+					skipConsent: _skipConsent,
+					enableEndSession: _enableEndSession,
+					...refreshed
+				} = schema;
 				const updatedClient = await adapter.update<SchemaClient<Scope[]>>({
 					model: clientModel,
 					where: [
@@ -935,10 +990,7 @@ async function persistOAuthClientRegistration(
 						},
 					],
 					update: {
-						...schema,
-						disabled: existingClient.disabled,
-						skipConsent: existingClient.skipConsent,
-						enableEndSession: existingClient.enableEndSession,
+						...refreshed,
 						createdAt: existingClient.createdAt,
 						updatedAt: new Date(iat * 1000),
 					},
@@ -1255,12 +1307,17 @@ export async function createOAuthClientEndpoint(
 			"configure-client-credentials-scopes",
 		);
 	}
+	const requestedResources = settings?.admin ? metadata.resources : undefined;
+	for (const identifier of new Set(requestedResources ?? [])) {
+		await assertResourcePrivileges(ctx, session, opts, "link", identifier);
+	}
 	const registrationInput: CreateOAuthClientRegistrationInput = {
 		metadata,
 		registrationSource: "managed",
 		userId: referenceId ? undefined : session.session.userId,
 		referenceId,
 		clientCredentialsScopes,
+		...(requestedResources ? { requestedResources } : {}),
 	};
 	const responseBody = settings?.admin
 		? await createOAuthClientAdministrativeRegistration(

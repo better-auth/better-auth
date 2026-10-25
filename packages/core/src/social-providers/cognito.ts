@@ -161,6 +161,7 @@ export const cognito = (options: CognitoOptions) => {
 				getCognitoPublicKey(header.kid!, options.region, options.userPoolId),
 			issuer: `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`,
 			audience: options.clientId,
+			algorithms: ["RS256"],
 			maxTokenAge: "1h",
 		},
 

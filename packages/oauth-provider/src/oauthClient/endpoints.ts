@@ -1,6 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import type { ClientJwks } from "../client-jwks";
+import { assertValidClientJwks } from "../client-jwks";
+import { getEndpointUrl } from "../dpop";
 import type { OAuthClientRegistrationMetadata } from "../register";
 import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "../register";
 import type {
@@ -11,7 +14,8 @@ import type {
 	Scope,
 } from "../types";
 import type { GrantType } from "../types/oauth";
-import { getClient, storeClientSecret } from "../utils";
+import { assertNotTrustedClient, getClient, storeClientSecret } from "../utils";
+import { verifyClientAssertion } from "../utils/client-assertion";
 import {
 	normalizeClientCredentialsScopes,
 	validateClientCredentialsScopes,
@@ -31,7 +35,7 @@ export async function getClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "read");
+	await assertClientPrivileges(ctx, session, opts, "read", ctx.query.client_id);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const client = await getClient(ctx, opts, ctx.query.client_id);
@@ -143,17 +147,17 @@ export async function deleteClientEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "delete");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"delete",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
-	const trustedClient = opts.cachedTrustedClients?.has(clientId);
-	if (trustedClient) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "trusted clients must be updated manually",
-			error: "invalid_client",
-		});
-	}
+	assertNotTrustedClient(opts, clientId);
 
 	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
@@ -216,17 +220,17 @@ export async function updateClientEndpoint(
 	OAuthClientAdministrativeResponse | OAuthClientRegistrationResponse
 > {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "update");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"update",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
-	const trustedClient = opts.cachedTrustedClients?.has(clientId);
-	if (trustedClient) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "trusted clients must be updated manually",
-			error: "invalid_client",
-		});
-	}
+	assertNotTrustedClient(opts, clientId);
 
 	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
@@ -257,6 +261,7 @@ export async function updateClientEndpoint(
 			session,
 			opts,
 			"configure-client-credentials-scopes",
+			clientId,
 		);
 	}
 
@@ -298,6 +303,7 @@ export async function updateClientEndpoint(
 				session,
 				opts,
 				"configure-client-credentials-scopes",
+				clientId,
 			);
 		}
 	}
@@ -386,17 +392,17 @@ export async function rotateClientSecretEndpoint(
 	opts: OAuthOptions<Scope[]>,
 ) {
 	const session = await getSessionFromCtx(ctx);
-	await assertClientPrivileges(ctx, session, opts, "rotate");
+	await assertClientPrivileges(
+		ctx,
+		session,
+		opts,
+		"rotate",
+		ctx.body.client_id,
+	);
 	if (!session) throw new APIError("UNAUTHORIZED");
 
 	const clientId = ctx.body.client_id;
-	const trustedClient = opts.cachedTrustedClients?.has(clientId);
-	if (trustedClient) {
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			error_description: "trusted clients must be updated manually",
-			error: "invalid_client",
-		});
-	}
+	assertNotTrustedClient(opts, clientId);
 
 	const client = await getClient(ctx, opts, clientId);
 	if (!client) {
@@ -455,4 +461,87 @@ export async function rotateClientSecretEndpoint(
 		...updatedClient,
 		clientSecret: (opts.prefix?.clientSecret ?? "") + clientSecret,
 	});
+}
+
+/**
+ * The write is guarded on the exact key set the assertion was verified against.
+ * A concurrent rotation changes that value, so the stale request loses instead
+ * of overwriting a newer key set.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc7523#section-3
+ */
+export async function rotateClientKeysEndpoint(
+	ctx: GenericEndpointContext & {
+		body: {
+			client_assertion: string;
+			client_assertion_type: string;
+			jwks: ClientJwks;
+		};
+	},
+	opts: OAuthOptions<Scope[]>,
+): Promise<{ client_id: string; jwks: ClientJwks }> {
+	if (!opts.allowClientKeyRotation) {
+		throw new APIError("FORBIDDEN", {
+			error: "access_denied",
+			error_description: "Client key rotation is disabled",
+		});
+	}
+	const { body } = ctx;
+	assertValidClientJwks(body.jwks);
+
+	const { client } = await verifyClientAssertion(
+		ctx,
+		opts,
+		body.client_assertion,
+		body.client_assertion_type,
+		undefined,
+		// Without the request, so the audience stays the fixed endpoint path; this
+		// still drops a trailing slash from `baseURL`.
+		getEndpointUrl(
+			{ context: ctx.context, request: undefined },
+			"/oauth2/client/rotate-keys",
+		),
+		{
+			endpointAudienceOnly: true,
+			assertClient: (candidate) => assertRotatable(opts, candidate),
+		},
+	);
+
+	const updated = await ctx.context.adapter.incrementOne<SchemaClient<Scope[]>>(
+		{
+			model: "oauthClient",
+			where: [
+				{ field: "clientId", value: client.clientId },
+				{ field: "jwks", value: client.jwks! },
+			],
+			increment: {},
+			set: {
+				jwks: JSON.stringify(body.jwks),
+				updatedAt: new Date(),
+			},
+		},
+	);
+	if (!updated) {
+		throw new APIError("CONFLICT", {
+			error: "invalid_request",
+			error_description:
+				"client keys changed while rotating; retry with a fresh client assertion",
+		});
+	}
+
+	return { client_id: client.clientId, jwks: body.jwks };
+}
+
+function assertRotatable(
+	opts: OAuthOptions<Scope[]>,
+	client: SchemaClient<Scope[]>,
+) {
+	assertNotTrustedClient(opts, client.clientId);
+	if (client.clientDiscoveryId || client.jwksUri || !client.jwks) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client",
+			error_description:
+				"client keys are not stored inline; rotate them where the client publishes them",
+		});
+	}
 }

@@ -9,6 +9,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import {
 	createElement,
+	useCallback,
 	useEffect,
 	useId,
 	useMemo,
@@ -87,32 +88,6 @@ function getDefaultOpen(sections: NavigationSection[], pathname: string) {
 	return index === -1 ? 0 : index;
 }
 
-function useActiveItemScroll(active: boolean) {
-	const ref = useRef<HTMLAnchorElement>(null);
-
-	useEffect(() => {
-		if (!active) return;
-		const element = ref.current;
-		const viewport = element?.closest<HTMLElement>(
-			"[data-docs-sidebar-viewport]",
-		);
-		if (!element || !viewport || viewport.getClientRects().length === 0) return;
-
-		const elementRect = element.getBoundingClientRect();
-		const viewportRect = viewport.getBoundingClientRect();
-		if (
-			elementRect.top >= viewportRect.top &&
-			elementRect.bottom <= viewportRect.bottom
-		) {
-			return;
-		}
-
-		element.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [active]);
-
-	return ref;
-}
-
 function useMobileDialog(active: boolean) {
 	const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -189,11 +164,7 @@ export function DocsSidebar() {
 			>
 				<SidebarVersionSwitcher />
 				<SearchButton onClick={() => setOpenSearch(true)} />
-				<SidebarNavigation
-					key={pathname}
-					sections={sections}
-					pathname={pathname}
-				/>
+				<SidebarNavigation sections={sections} pathname={pathname} />
 				<SidebarFooter />
 			</motion.aside>
 
@@ -234,7 +205,6 @@ export function DocsSidebar() {
 								className="flex-1 min-h-0 overflow-y-auto"
 							>
 								<SidebarNavigation
-									key={pathname}
 									sections={sections}
 									pathname={pathname}
 									mobile
@@ -287,14 +257,78 @@ function SidebarNavigation({
 	mobile?: boolean;
 	onNavigate?: () => void;
 }) {
-	const [currentOpen, setCurrentOpen] = useState(() =>
-		getDefaultOpen(sections, pathname),
-	);
+	const [expandedSection, setExpandedSection] = useState<{
+		pathname: string;
+		sections: NavigationSection[];
+		index: number;
+	}>(() => ({ pathname, sections, index: getDefaultOpen(sections, pathname) }));
+	if (
+		expandedSection.pathname !== pathname ||
+		expandedSection.sections !== sections
+	) {
+		setExpandedSection({
+			pathname,
+			sections,
+			index: getDefaultOpen(sections, pathname),
+		});
+	}
+	const currentOpen = expandedSection.index;
 	const navigationId = useId();
+	const navigationRef = useRef<HTMLDivElement>(null);
+	const scrollActiveItem = useCallback(() => {
+		const navigation = navigationRef.current;
+		const viewport = navigation?.closest<HTMLElement>(
+			"[data-docs-sidebar-viewport]",
+		);
+		const activeLinks =
+			navigation?.querySelectorAll<HTMLAnchorElement>("a[data-active]");
+		const element = Array.from(activeLinks ?? []).findLast((link) =>
+			isPathWithinFolderIndex(
+				link.getAttribute("href") ?? undefined,
+				navigation?.dataset.pathname ?? "",
+			),
+		);
+		if (!element || !viewport || viewport.getClientRects().length === 0) return;
+
+		const elementRect = element.getBoundingClientRect();
+		const viewportRect = viewport.getBoundingClientRect();
+		if (viewportRect.height === 0) return;
+		for (
+			let parent = element.parentElement;
+			parent && parent !== viewport;
+			parent = parent.parentElement
+		) {
+			const parentRect = parent.getBoundingClientRect();
+			if (
+				elementRect.top < parentRect.top - 1 ||
+				elementRect.bottom > parentRect.bottom + 1
+			) {
+				return;
+			}
+		}
+
+		const top = viewportRect.top + 16;
+		const bottom = viewportRect.bottom - (mobile ? 16 : 32);
+		const offset =
+			elementRect.top < top
+				? elementRect.top - top
+				: elementRect.bottom > bottom
+					? elementRect.bottom - bottom
+					: 0;
+		if (offset !== 0) viewport.scrollBy({ top: offset, behavior: "instant" });
+	}, [mobile]);
+
+	useEffect(() => {
+		scrollActiveItem();
+	}, [pathname, currentOpen, scrollActiveItem]);
 
 	const content = (
 		<MotionConfig transition={{ duration: 0.35, type: "spring", bounce: 0 }}>
-			<div className="flex flex-col">
+			<div
+				ref={navigationRef}
+				data-pathname={pathname}
+				className="flex flex-col"
+			>
 				{sections.map((section, index) => {
 					const panelId = `${navigationId}-section-${index}`;
 					return (
@@ -311,9 +345,11 @@ function SidebarNavigation({
 										: "text-foreground/70 hover:text-foreground hover:bg-foreground/3",
 								)}
 								onClick={() =>
-									setCurrentOpen((previous) =>
-										previous === index ? -1 : index,
-									)
+									setExpandedSection({
+										pathname,
+										sections,
+										index: currentOpen === index ? -1 : index,
+									})
 								}
 							>
 								<span className="flex size-4.5 items-center justify-center [&>svg]:size-4.5">
@@ -334,12 +370,14 @@ function SidebarNavigation({
 										initial={{ opacity: 0, height: 0 }}
 										animate={{ opacity: 1, height: "auto" }}
 										exit={{ opacity: 0, height: 0 }}
+										onAnimationComplete={scrollActiveItem}
 										className="relative overflow-hidden"
 									>
 										<NavigationNodes
 											nodes={section.children}
 											pathname={pathname}
 											onNavigate={onNavigate}
+											onAnimationComplete={scrollActiveItem}
 										/>
 									</motion.div>
 								) : null}
@@ -370,11 +408,13 @@ function NavigationNodes({
 	nodes,
 	pathname,
 	onNavigate,
+	onAnimationComplete,
 	nested = false,
 }: {
 	nodes: Node[];
 	pathname: string;
 	onNavigate?: () => void;
+	onAnimationComplete: () => void;
 	nested?: boolean;
 }) {
 	return (
@@ -391,6 +431,7 @@ function NavigationNodes({
 					node={node}
 					pathname={pathname}
 					onNavigate={onNavigate}
+					onAnimationComplete={onAnimationComplete}
 					nested={nested}
 				/>
 			))}
@@ -408,11 +449,13 @@ function NavigationNode({
 	node,
 	pathname,
 	onNavigate,
+	onAnimationComplete,
 	nested,
 }: {
 	node: Node;
 	pathname: string;
 	onNavigate?: () => void;
+	onAnimationComplete: () => void;
 	nested: boolean;
 }) {
 	if (node.type === "separator") {
@@ -435,6 +478,7 @@ function NavigationNode({
 			folder={node}
 			pathname={pathname}
 			onNavigate={onNavigate}
+			onAnimationComplete={onAnimationComplete}
 			nested={nested}
 		/>
 	);
@@ -444,11 +488,13 @@ function NavigationFolder({
 	folder,
 	pathname,
 	onNavigate,
+	onAnimationComplete,
 	nested,
 }: {
 	folder: Folder;
 	pathname: string;
 	onNavigate?: () => void;
+	onAnimationComplete: () => void;
 	nested: boolean;
 }) {
 	const active = nodeContainsPath(folder, pathname);
@@ -462,6 +508,7 @@ function NavigationFolder({
 					nodes={folder.children}
 					pathname={pathname}
 					onNavigate={onNavigate}
+					onAnimationComplete={onAnimationComplete}
 					nested={nested}
 				/>
 			</>
@@ -487,12 +534,14 @@ function NavigationFolder({
 						initial={{ opacity: 0, height: 0 }}
 						animate={{ opacity: 1, height: "auto" }}
 						exit={{ opacity: 0, height: 0 }}
+						onAnimationComplete={onAnimationComplete}
 						className="overflow-hidden"
 					>
 						<NavigationNodes
 							nodes={children}
 							pathname={pathname}
 							onNavigate={onNavigate}
+							onAnimationComplete={onAnimationComplete}
 							nested
 						/>
 					</motion.div>
@@ -525,11 +574,9 @@ function NavigationLink({
 	nested: boolean;
 }) {
 	const opensNewTab = node.external && node.url.startsWith("http");
-	const linkRef = useActiveItemScroll(active);
 
 	return (
 		<Link
-			ref={linkRef}
 			href={node.url}
 			target={opensNewTab ? "_blank" : undefined}
 			rel={opensNewTab ? "noreferrer noopener" : undefined}

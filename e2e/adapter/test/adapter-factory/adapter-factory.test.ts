@@ -3,13 +3,12 @@ import type { User } from "@better-auth/core/db";
 import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
-	CleanedWhere,
+	CustomAdapter,
 	DBAdapter,
-	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { betterAuth } from "better-auth";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
 /*
 
@@ -22,13 +21,26 @@ The rest are just edge cases.
 
 */
 
+/**
+ * `Mock` resolves the generics of the function it wraps, so a typed
+ * `vi.fn<CustomAdapter[K]>()` is not assignable to the generic `CustomAdapter`
+ * methods. This resolves them the same way so those mocks can stand in.
+ */
+type AdapterOverrides = {
+	[K in keyof CustomAdapter]?: CustomAdapter[K] extends (
+		...args: infer A
+	) => infer R
+		? (...args: A) => R
+		: CustomAdapter[K];
+};
+
 async function createTestAdapter<Options extends BetterAuthOptions>(
 	props: {
 		config?: Partial<AdapterFactoryConfig>;
 		options?: Options;
 		adapter?: (
 			...args: Parameters<AdapterFactoryCustomizeAdapterCreator>
-		) => Partial<ReturnType<AdapterFactoryCustomizeAdapterCreator>>;
+		) => AdapterOverrides;
 	} = {
 		config: {
 			adapterId: "test-id",
@@ -75,64 +87,34 @@ async function createTestAdapter<Options extends BetterAuthOptions>(
 			>;
 			return {
 				async create(data) {
-					if (x.create) {
-						return await x.create(data);
-					}
-					return data.data;
+					return x.create?.(data) ?? data.data;
 				},
 				async update(data) {
-					if (x.update) {
-						return await x.update(data);
-					}
-					return data.update;
+					return x.update?.(data) ?? data.update;
 				},
 				async updateMany(data) {
-					if (x.updateMany) {
-						return await x.updateMany(data);
-					}
-					return 0;
+					return x.updateMany?.(data) ?? 0;
 				},
 				async count(data) {
-					if (x.count) {
-						return await x.count(data);
-					}
-					return 0;
+					return x.count?.(data) ?? 0;
 				},
 				async delete(data) {
-					if (x.delete) {
-						return await x.delete(data);
-					}
-					return;
+					return x.delete?.(data);
 				},
 				async deleteMany(data) {
-					if (x.deleteMany) {
-						return await x.deleteMany(data);
-					}
-					return 0;
+					return x.deleteMany?.(data) ?? 0;
 				},
 				async consumeOne(data) {
-					if (x.consumeOne) {
-						return await x.consumeOne(data);
-					}
-					return null;
+					return x.consumeOne?.(data) ?? null;
 				},
 				async incrementOne(data) {
-					if (x.incrementOne) {
-						return await x.incrementOne(data);
-					}
-					return null;
+					return x.incrementOne?.(data) ?? null;
 				},
 				async findMany(data) {
-					if (x.findMany) {
-						return await x.findMany(data);
-					}
-					return [];
+					return x.findMany?.(data) ?? [];
 				},
 				async findOne(data) {
-					if (x.findOne) {
-						return await x.findOne(data);
-					}
-					return null;
+					return x.findOne?.(data) ?? null;
 				},
 				options: x.options ?? {},
 			};
@@ -401,661 +383,490 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test('Should receive a generated id during the call, unless "disableIdGeneration" is set to true', async () => {
-				const createWithId: { id: unknown } = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						adapter(args_0) {
-							return {
-								async create({ data, model, select }) {
-									r(data as any);
-									return data;
-								},
-							};
-						},
-					});
-					adapter.create({
-						model: "user",
-						data: { name: "test-name" },
-					});
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					adapter: () => ({ create }),
 				});
+				await adapter.create({ model: "user", data: { name: "test-name" } });
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data.id).toBeTypeOf("string");
 
-				expect(createWithId).toBeDefined();
-				expect(createWithId.id).toBeDefined();
-				expect(typeof createWithId.id).toBe("string");
-
-				const createWithoutId: { id: unknown } = await new Promise(
-					async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								disableIdGeneration: true,
-								debugLogs: {},
-							},
-							adapter(args_0) {
-								return {
-									async create({ data, model, select }) {
-										r(data as any);
-										return data;
-									},
-								};
-							},
-						});
-						adapter.create({
-							model: "user",
-							data: { name: "test-name" },
-						});
-					},
-				);
-
-				expect(createWithoutId).toBeDefined();
-				expect(createWithoutId.id).toBeUndefined();
+				const createWithoutId = vi.fn<CustomAdapter["create"]>();
+				const adapterWithoutId = await createTestAdapter({
+					config: { disableIdGeneration: true, debugLogs: {} },
+					adapter: () => ({ create: createWithoutId }),
+				});
+				await adapterWithoutId.create({
+					model: "user",
+					data: { name: "test-name" },
+				});
+				const argsWithoutId = createWithoutId.mock.lastCall?.[0];
+				expect.assert(argsWithoutId);
+				expect(argsWithoutId.data).not.toHaveProperty("id");
 			});
 
 			test("Should not modify result null to string for id or fields referencing id", async () => {
-				const result: { id: string; testPluginField: string | null } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							adapter(args_0) {
-								return {
-									async create({ data, model, select }) {
-										return data;
-									},
-								};
-							},
-							options: {
-								plugins: [
-									{
-										id: "test-plugin-id",
-										schema: {
-											testPluginTable: {
-												fields: {
-													testPluginField: {
-														type: "string",
-														required: false,
-														references: {
-															model: "user",
-															field: "id",
-														},
-													},
+				const adapter = await createTestAdapter({
+					options: {
+						plugins: [
+							{
+								id: "test-plugin-id",
+								schema: {
+									testPluginTable: {
+										fields: {
+											testPluginField: {
+												type: "string",
+												required: false,
+												references: {
+													model: "user",
+													field: "id",
 												},
 											},
 										},
 									},
-								],
-							},
-						});
-						r(
-							await adapter.create({
-								model: "testPluginTable",
-								data: {
-									testPluginField: null,
 								},
-							}),
-						);
-					});
+							},
+						],
+					},
+				});
+				const result = await adapter.create({
+					model: "testPluginTable",
+					data: { testPluginField: null },
+				});
 
-				expect(result.id).toBeTypeOf("string");
-				expect(result.testPluginField).toBeNull();
+				expect(result).toMatchObject({
+					id: expect.any(String),
+					testPluginField: null,
+				});
 			});
 
 			test("Should modify boolean type to 1 or 0 if the DB doesn't support it. And expect the result to be transformed back to boolean", async () => {
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						supportsBooleans: false,
+					},
+					adapter: () => ({ create }),
+				});
+
 				// Testing true
-				const createTRUEParameters: { data: { emailVerified: number } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsBooleans: false,
-							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { emailVerified: true },
-						});
-						expect(res).toHaveProperty("emailVerified");
-						expect(res.emailVerified).toBe(true);
-					});
-				expect(createTRUEParameters.data).toHaveProperty("emailVerified");
-				expect(createTRUEParameters.data.emailVerified).toBe(1);
+				const trueResult = await adapter.create({
+					model: "user",
+					data: { emailVerified: true },
+				});
+				expect(trueResult).toHaveProperty("emailVerified");
+				expect(trueResult.emailVerified).toBe(true);
 
 				// Testing false
-				const createFALSEParameters: { data: { emailVerified: number } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsBooleans: false,
-							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { emailVerified: false },
-						});
-						expect(res).toHaveProperty("emailVerified");
-						expect(res.emailVerified).toBe(false);
-					});
-				expect(createFALSEParameters.data).toHaveProperty("emailVerified");
-				expect(createFALSEParameters.data.emailVerified).toBe(0);
+				const falseResult = await adapter.create({
+					model: "user",
+					data: { emailVerified: false },
+				});
+				expect(falseResult).toHaveProperty("emailVerified");
+				expect(falseResult.emailVerified).toBe(false);
+				expect(create.mock.calls.map(([args]) => args.data)).toMatchObject([
+					{ emailVerified: 1 },
+					{ emailVerified: 0 },
+				]);
 			});
 
 			test("Should modify string[] type to TEXT if the DB doesn't support it. And expect the result to be transformed back to string[]", async () => {
-				const createJSONParameters: { data: { preferences: string } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsJSON: false,
-							},
-							options: {
-								user: {
-									additionalFields: {
-										preferences: {
-											type: "string[]",
-										},
-									},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						supportsJSON: false,
+					},
+					options: {
+						user: {
+							additionalFields: {
+								preferences: {
+									type: "string[]",
 								},
 							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const obj = { preferences: ["medium", "large"] };
-						const res = await adapter.create({
-							model: "user",
-							data: obj,
-						});
-						expect(res).toHaveProperty("preferences");
-						expect(res.preferences).toEqual(obj.preferences);
-					});
-				expect(createJSONParameters.data).toHaveProperty("preferences");
-				expect(createJSONParameters.data.preferences).toEqual(
-					'[\"medium\",\"large\"]',
-				);
+						},
+					},
+					adapter: () => ({ create }),
+				});
+				const obj = { preferences: ["medium", "large"] };
+				const res = await adapter.create({
+					model: "user",
+					data: obj,
+				});
+				expect(res).toHaveProperty("preferences");
+				expect(res.preferences).toEqual(obj.preferences);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					preferences: '[\"medium\",\"large\"]',
+				});
 			});
 
 			test("Should modify number[] type to TEXT if the DB doesn't support it. And expect the result to be transformed back to number[]", async () => {
-				const createJSONParameters: { data: { preferences: string } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsJSON: false,
-							},
-							options: {
-								user: {
-									additionalFields: {
-										preferences: {
-											type: "number[]",
-										},
-									},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						supportsJSON: false,
+					},
+					options: {
+						user: {
+							additionalFields: {
+								preferences: {
+									type: "number[]",
 								},
 							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const obj = { preferences: [6, 7] };
-						const res = await adapter.create({
-							model: "user",
-							data: obj,
-						});
-						expect(res).toHaveProperty("preferences");
-						expect(res.preferences).toEqual(obj.preferences);
-					});
-				expect(createJSONParameters.data).toHaveProperty("preferences");
-				expect(createJSONParameters.data.preferences).toEqual("[6,7]");
+						},
+					},
+					adapter: () => ({ create }),
+				});
+				const obj = { preferences: [6, 7] };
+				const res = await adapter.create({
+					model: "user",
+					data: obj,
+				});
+				expect(res).toHaveProperty("preferences");
+				expect(res.preferences).toEqual(obj.preferences);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					preferences: "[6,7]",
+				});
 			});
 
 			test("Should modify JSON type to TEXT if the DB doesn't support it. And expect the result to be transformed back to JSON", async () => {
-				const createJSONParameters: { data: { preferences: string } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsJSON: false,
-							},
-							options: {
-								user: {
-									additionalFields: {
-										preferences: {
-											type: "json",
-										},
-									},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						supportsJSON: false,
+					},
+					options: {
+						user: {
+							additionalFields: {
+								preferences: {
+									type: "json",
 								},
 							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const obj = { preferences: { color: "blue", size: "large" } };
-						const res = await adapter.create({
-							model: "user",
-							data: obj,
-						});
-						expect(res).toHaveProperty("preferences");
-						expect(res.preferences).toEqual(obj.preferences);
-					});
-				expect(createJSONParameters.data).toHaveProperty("preferences");
-				expect(createJSONParameters.data.preferences).toEqual(
-					'{"color":"blue","size":"large"}',
-				);
+						},
+					},
+					adapter: () => ({ create }),
+				});
+				const obj = { preferences: { color: "blue", size: "large" } };
+				const res = await adapter.create({
+					model: "user",
+					data: obj,
+				});
+				expect(res).toHaveProperty("preferences");
+				expect(res.preferences).toEqual(obj.preferences);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					preferences: '{"color":"blue","size":"large"}',
+				});
 			});
 
 			test("Should modify date type to TEXT if the DB doesn't support it. And expect the result to be transformed back to date", async () => {
 				const testDate = new Date();
-				const createDateParameters: { data: { createdAt: string } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsDates: false,
-							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { createdAt: testDate },
-						});
-						expect(res).toHaveProperty("createdAt");
-						expect(res.createdAt).toBeInstanceOf(Date);
-					});
-				expect(createDateParameters.data).toHaveProperty("createdAt");
-				expect(createDateParameters.data.createdAt).toEqual(
-					testDate.toISOString(),
-				);
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						supportsDates: false,
+					},
+					adapter: () => ({ create }),
+				});
+				const res = await adapter.create({
+					model: "user",
+					data: { createdAt: testDate },
+				});
+				expect(res).toHaveProperty("createdAt");
+				expect(res.createdAt).toBeInstanceOf(Date);
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					createdAt: testDate.toISOString(),
+				});
 			});
 
 			test("Should allow custom transform input", async () => {
-				const createCustomTransformInputParameters: { data: { name: string } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								debugLogs: {},
-								customTransformInput({ field, data }) {
-									if (field === "name") {
-										return data.toUpperCase();
-									}
-									return data;
-								},
-							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { name: "test-name" },
-						});
-						expect(res).toHaveProperty("name");
-						expect(res.name).toEqual("TEST-NAME");
-					});
-				expect(createCustomTransformInputParameters.data).toHaveProperty(
-					"name",
-				);
-				expect(createCustomTransformInputParameters.data.name).toEqual(
-					"TEST-NAME",
-				);
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						customTransformInput({ field, data }) {
+							if (field === "name") {
+								return data.toUpperCase();
+							}
+							return data;
+						},
+					},
+					adapter: () => ({ create }),
+				});
+				const res = await adapter.create({
+					model: "user",
+					data: { name: "test-name" },
+				});
+				expect(res).toHaveProperty("name");
+				expect(res.name).toEqual("TEST-NAME");
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					name: "TEST-NAME",
+				});
 			});
 
 			test("Should allow custom transform output", async () => {
-				const createCustomTransformOutputParameters: {
-					data: { name: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							customTransformOutput({ field, data }) {
-								if (field === "name") {
-									return data.toLowerCase();
-								}
-								return data;
-							},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						customTransformOutput({ field, data }) {
+							if (field === "name") {
+								return data.toLowerCase();
+							}
+							return data;
 						},
-						adapter(args_0) {
-							return {
-								async create(data) {
-									r(data as any);
-									return data.data;
-								},
-							};
-						},
-					});
-					const res = await adapter.create({
-						model: "user",
-						data: { name: "TEST-NAME" },
-					});
-					expect(res).toHaveProperty("name");
-					expect(res.name).toEqual("test-name");
+					},
+					adapter: () => ({ create }),
 				});
-				expect(createCustomTransformOutputParameters.data).toHaveProperty(
-					"name",
-				);
-				expect(createCustomTransformOutputParameters.data.name).toEqual(
-					"TEST-NAME", // Remains the same as the input because we're only transforming the output
-				);
+				const res = await adapter.create({
+					model: "user",
+					data: { name: "TEST-NAME" },
+				});
+				expect(res).toHaveProperty("name");
+				expect(res.name).toEqual("test-name");
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				// Remains the same as the input because we're only transforming the output
+				expect(args.data).toMatchObject({
+					name: "TEST-NAME",
+				});
 			});
 
 			test("Should allow custom transform input and output", async () => {
-				const createCustomTransformInputAndOutputParameters: {
-					data: { name: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							customTransformInput({ field, data }) {
-								if (field === "name") {
-									return data.toUpperCase();
-								}
-								return data;
-							},
-							customTransformOutput({ field, data }) {
-								if (field === "name") {
-									return data.toLowerCase();
-								}
-								return data;
-							},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						customTransformInput({ field, data }) {
+							if (field === "name") {
+								return data.toUpperCase();
+							}
+							return data;
 						},
-						adapter(args_0) {
-							return {
-								async create(data) {
-									r(data as any);
-									return data.data;
-								},
-							};
+						customTransformOutput({ field, data }) {
+							if (field === "name") {
+								return data.toLowerCase();
+							}
+							return data;
 						},
-					});
-					const res = await adapter.create({
-						model: "user",
-						data: { name: "TEST-NAME" },
-					});
-					expect(res).toHaveProperty("name");
-					expect(res.name).toEqual("test-name");
+					},
+					adapter: () => ({ create }),
 				});
-				expect(
-					createCustomTransformInputAndOutputParameters.data,
-				).toHaveProperty("name");
-				expect(createCustomTransformInputAndOutputParameters.data.name).toEqual(
-					"TEST-NAME",
-				);
+				const res = await adapter.create({
+					model: "user",
+					data: { name: "TEST-NAME" },
+				});
+				expect(res).toHaveProperty("name");
+				expect(res.name).toEqual("test-name");
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					name: "TEST-NAME",
+				});
 			});
 
 			test("Should allow custom map input key transformation", async () => {
-				const parameters: {
-					data: { email_address: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							mapKeysTransformInput: {
-								email: "email_address",
-							},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						mapKeysTransformInput: {
+							email: "email_address",
 						},
-						adapter(args_0) {
-							return {
-								async create(data) {
-									r(data as any);
-									return data.data;
-								},
-							};
-						},
-					});
-
-					const res = (await adapter.create({
-						model: "user",
-						data: { email: "test@test.com" },
-					})) as { email: string };
-
-					expect(res).toHaveProperty("email");
-					expect(res).not.toHaveProperty("email_address");
-					expect(res.email).toEqual(undefined); // The reason it's undefined is because we did transform `email` to `email_address`, however we never transformed `email_address` back to `email`.
+					},
+					adapter: () => ({ create }),
 				});
-				expect(parameters.data).toHaveProperty("email_address");
-				expect(parameters.data.email_address).toEqual("test@test.com");
+
+				const res = (await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				})) as { email: string };
+
+				expect(res).toHaveProperty("email");
+				expect(res).not.toHaveProperty("email_address");
+				expect(res.email).toEqual(undefined); // The reason it's undefined is because we did transform `email` to `email_address`, however we never transformed `email_address` back to `email`.
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email_address: "test@test.com",
+				});
 			});
 
 			test("Should allow custom transform input to transform the where clause", async () => {
-				const parameters: CleanedWhere[] = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							mapKeysTransformInput: {
-								id: "_id",
-							},
+				const findOne = vi.fn<CustomAdapter["findOne"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						mapKeysTransformInput: {
+							id: "_id",
 						},
-						adapter(args_0) {
-							return {
-								async findOne({ model, where, select }) {
-									r(where);
-									return {} as any;
-								},
-							};
-						},
-					});
-					adapter.findOne({
-						model: "user",
-						where: [{ field: "id", value: "123" }],
-					});
+					},
+					adapter: () => ({ findOne }),
+				});
+				await adapter.findOne({
+					model: "user",
+					where: [{ field: "id", value: "123" }],
 				});
 
-				expect(parameters[0]!.field).toEqual("_id");
+				const args = findOne.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.where).toMatchObject([{ field: "_id" }]);
 			});
 
 			test("Should allow custom map output key transformation", async () => {
-				const parameters: {
-					data: { email: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							mapKeysTransformOutput: {
-								email: "wrong_email_key",
-							},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						mapKeysTransformOutput: {
+							email: "wrong_email_key",
 						},
+					},
 
-						adapter(args_0) {
-							return {
-								async create(data) {
-									r(data as any);
-									return data.data;
-								},
-							};
-						},
-					});
-					const res = (await adapter.create({
-						model: "user",
-						data: { email: "test@test.com" },
-					})) as { wrong_email_key: string };
-					// Even though we're using the output key transformation, we still don't actually get the key transformation we want.
-					// This is because the output is also parsed against the schema, and the `wrong_email_key` key is not in the schema.
-					expect(res).toHaveProperty("wrong_email_key");
-					expect(res).not.toHaveProperty("email");
-					expect(res.wrong_email_key).toEqual("test@test.com");
+					adapter: () => ({ create }),
 				});
+				const res = (await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				})) as { wrong_email_key: string };
+				// Even though we're using the output key transformation, we still don't actually get the key transformation we want.
+				// This is because the output is also parsed against the schema, and the `wrong_email_key` key is not in the schema.
+				expect(res).toHaveProperty("wrong_email_key");
+				expect(res).not.toHaveProperty("email");
+				expect(res.wrong_email_key).toEqual("test@test.com");
 
-				expect(parameters.data).toHaveProperty("email");
-				expect(parameters.data.email).toEqual("test@test.com");
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email: "test@test.com",
+				});
 			});
 
 			test("Should allow custom map input and output key transformation", async () => {
-				const parameters: {
-					data: { email_address: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							mapKeysTransformInput: {
-								email: "email_address",
-							},
-							mapKeysTransformOutput: {
-								email_address: "email",
-							},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						mapKeysTransformInput: {
+							email: "email_address",
 						},
-						adapter(args_0) {
-							return {
-								async create(data) {
-									r(data as any);
-									return data.data;
-								},
-							};
+						mapKeysTransformOutput: {
+							email_address: "email",
 						},
-					});
-					const res = await adapter.create({
-						model: "user",
-						data: { email: "test@test.com" },
-					});
-					expect(res).toHaveProperty("email");
-					expect(res).not.toHaveProperty("email_address");
-					expect(res.email).toEqual("test@test.com");
+					},
+					adapter: () => ({ create }),
 				});
-				expect(parameters.data).toHaveProperty("email_address");
-				expect(parameters.data).not.toHaveProperty("email");
-				expect(parameters.data.email_address).toEqual("test@test.com");
+				const res = await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				});
+				expect(res).toHaveProperty("email");
+				expect(res).not.toHaveProperty("email_address");
+				expect(res.email).toEqual("test@test.com");
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email_address: "test@test.com",
+				});
+				expect(args.data).not.toHaveProperty("email");
 			});
 
 			test("Should expect the fields to be transformed into the correct field names if customized", async () => {
-				const parameters: { data: any; select?: string[]; model: string } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								debugLogs: {},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+					},
+					options: {
+						user: {
+							fields: {
+								email: "email_address",
 							},
-							options: {
-								user: {
-									fields: {
-										email: "email_address",
-									},
-								},
-							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { email: "test@test.com" },
-						});
-						expect(res).toHaveProperty("email");
-						expect(res).not.toHaveProperty("email_address");
-						expect(res.email).toEqual("test@test.com");
-					});
-				expect(parameters).toHaveProperty("data");
-				expect(parameters.data).toHaveProperty("email_address");
-				expect(parameters.data).not.toHaveProperty("email");
-				expect(parameters.data.email_address).toEqual("test@test.com");
+						},
+					},
+					adapter: () => ({ create }),
+				});
+				const res = await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				});
+				expect(res).toHaveProperty("email");
+				expect(res).not.toHaveProperty("email_address");
+				expect(res.email).toEqual("test@test.com");
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email_address: "test@test.com",
+				});
+				expect(args.data).not.toHaveProperty("email");
 			});
 
 			test("Should expect the model to be transformed into the correct model name if customized", async () => {
-				const parameters: { data: any; select?: string[]; model: string } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								debugLogs: {},
-							},
-							options: {
-								user: {
-									modelName: "user_table",
-								},
-							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { email: "test@test.com" },
-						});
-						expect(res).toHaveProperty("id");
-						expect(res).toHaveProperty("email");
-					});
-				expect(parameters).toHaveProperty("model");
-				expect(parameters.model).toEqual("user_table");
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+					},
+					options: {
+						user: {
+							modelName: "user_table",
+						},
+					},
+					adapter: () => ({ create }),
+				});
+				const res = await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				});
+				expect(res).toHaveProperty("id");
+				expect(res).toHaveProperty("email");
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.model).toEqual("user_table");
 			});
 
 			test("Should expect the result to follow the schema", async () => {
-				const parameters: { data: any; select?: string[]; model: string } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								debugLogs: {},
+				const create = vi.fn<CustomAdapter["create"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+					},
+					options: {
+						user: {
+							fields: {
+								email: "email_address",
 							},
-							options: {
-								user: {
-									fields: {
-										email: "email_address",
-									},
-								},
-							},
-							adapter(args_0) {
-								return {
-									async create(data) {
-										r(data as any);
-										return data.data;
-									},
-								};
-							},
-						});
-						const res = await adapter.create({
-							model: "user",
-							data: { email: "test@test.com" },
-						});
-						expect(res).toHaveProperty("email");
-						expect(res).toHaveProperty("id");
-						expect(res).toHaveProperty("createdAt");
-						expect(res).toHaveProperty("updatedAt");
-						expect(res).toHaveProperty("name");
-						expect(res).toHaveProperty("emailVerified");
-						expect(res).toHaveProperty("image");
-						expect(res).not.toHaveProperty("email_address");
-					});
-				expect(parameters).toHaveProperty("data");
-				expect(parameters.data).toHaveProperty("email_address");
-				expect(parameters.data).not.toHaveProperty("email");
-				expect(parameters.data.email_address).toEqual("test@test.com");
+						},
+					},
+					adapter: () => ({ create }),
+				});
+				const res = await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				});
+				expect(res).toHaveProperty("email");
+				expect(res).toHaveProperty("id");
+				expect(res).toHaveProperty("createdAt");
+				expect(res).toHaveProperty("updatedAt");
+				expect(res).toHaveProperty("name");
+				expect(res).toHaveProperty("emailVerified");
+				expect(res).toHaveProperty("image");
+				expect(res).not.toHaveProperty("email_address");
+				const args = create.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.data).toMatchObject({
+					email_address: "test@test.com",
+				});
+				expect(args.data).not.toHaveProperty("email");
 			});
 
 			test("Should expect the result to respect the select fields", async () => {
@@ -1123,643 +934,509 @@ describe("Create Adapter Helper", async () => {
 			});
 
 			test("Should modify boolean type to 1 or 0 if the DB doesn't support it. And expect the result to be transformed back to boolean", async () => {
-				// Testing true
-				const updateTRUEParameters: { update: { emailVerified: number } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsBooleans: false,
-							},
-							adapter(args_0) {
-								return {
-									async update(data) {
-										r(data as any);
-										return data.update;
-									},
-								};
-							},
-						});
-						const user: { emailVerified: boolean; id: string } =
-							await adapter.create({
-								model: "user",
-								data: { emailVerified: false },
-							});
-						const res = await adapter.update({
-							model: "user",
-							where: [{ field: "id", value: user.id }],
-							update: { emailVerified: true },
-						});
-						expect(res).toHaveProperty("emailVerified");
-						//@ts-expect-error
-						expect(res.emailVerified).toBe(true);
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						supportsBooleans: false,
+					},
+					adapter: () => ({ update }),
+				});
+				const user: { emailVerified: boolean; id: string } =
+					await adapter.create({
+						model: "user",
+						data: { emailVerified: false },
 					});
-				expect(updateTRUEParameters.update).toHaveProperty("emailVerified");
-				expect(updateTRUEParameters.update.emailVerified).toBe(1);
+
+				// Testing true
+				const trueResult = await adapter.update({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { emailVerified: true },
+				});
+				expect(trueResult).toHaveProperty("emailVerified");
+				//@ts-expect-error
+				expect(trueResult.emailVerified).toBe(true);
 
 				// Testing false
-				const createFALSEParameters: { update: { emailVerified: number } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsBooleans: false,
-							},
-							adapter(args_0) {
-								return {
-									async update(data) {
-										r(data as any);
-										return data.update;
-									},
-								};
-							},
-						});
-						const user: { emailVerified: boolean; id: string } =
-							await adapter.create({
-								model: "user",
-								data: { emailVerified: true },
-							});
-						const res = await adapter.update({
-							model: "user",
-							where: [{ field: "id", value: user.id }],
-							update: { emailVerified: false },
-						});
-						expect(res).toHaveProperty("emailVerified");
-						//@ts-expect-error
-						expect(res.emailVerified).toBe(false);
-					});
-				expect(createFALSEParameters.update).toHaveProperty("emailVerified");
-				expect(createFALSEParameters.update.emailVerified).toBe(0);
+				const falseResult = await adapter.update({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { emailVerified: false },
+				});
+				expect(falseResult).toHaveProperty("emailVerified");
+				//@ts-expect-error
+				expect(falseResult.emailVerified).toBe(false);
+				expect(update.mock.calls.map(([args]) => args.update)).toMatchObject([
+					{ emailVerified: 1 },
+					{ emailVerified: 0 },
+				]);
 			});
 
 			test("Should modify JSON type to TEXT if the DB doesn't support it. And expect the result to be transformed back to JSON", async () => {
-				const createJSONParameters: { update: { preferences: string } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsJSON: false,
-							},
-							options: {
-								user: {
-									additionalFields: {
-										preferences: {
-											type: "json",
-										},
-									},
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						supportsJSON: false,
+					},
+					options: {
+						user: {
+							additionalFields: {
+								preferences: {
+									type: "json",
 								},
 							},
-							adapter(args_0) {
-								return {
-									async update(data) {
-										r(data as any);
-										return data.update;
-									},
-								};
-							},
-						});
-						const obj = { preferences: { color: "blue", size: "large" } };
-						const user: { email: string; id: string } = await adapter.create({
-							model: "user",
-							data: { email: "test@test.com" },
-						});
-						const res: typeof obj | null = await adapter.update({
-							model: "user",
-							where: [{ field: "id", value: user.id }],
-							update: { preferences: obj.preferences },
-						});
-						expect(res).toHaveProperty("preferences");
-						expect(res?.preferences).toEqual(obj.preferences);
-					});
-				expect(createJSONParameters.update).toHaveProperty("preferences");
-				expect(createJSONParameters.update.preferences).toEqual(
-					'{"color":"blue","size":"large"}',
-				);
+						},
+					},
+					adapter: () => ({ update }),
+				});
+				const obj = { preferences: { color: "blue", size: "large" } };
+				const user: { email: string; id: string } = await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				});
+				const res: typeof obj | null = await adapter.update({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { preferences: obj.preferences },
+				});
+				expect(res).toHaveProperty("preferences");
+				expect(res?.preferences).toEqual(obj.preferences);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					preferences: '{"color":"blue","size":"large"}',
+				});
 			});
 
 			test("Should modify date type to TEXT if the DB doesn't support it. And expect the result to be transformed back to date", async () => {
 				const testDate = new Date();
-				const createDateParameters: { update: { createdAt: string } } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							config: {
-								supportsDates: false,
-							},
-							adapter(args_0) {
-								return {
-									async update(data) {
-										r(data as any);
-										return data.update;
-									},
-								};
-							},
-						});
-						const user: { email: string; id: string } = await adapter.create({
-							model: "user",
-							data: { email: "test@test.com" },
-						});
-						const res: { createdAt: Date } | null = await adapter.update({
-							model: "user",
-							where: [{ field: "id", value: user.id }],
-							update: { createdAt: testDate },
-						});
-						expect(res).toHaveProperty("createdAt");
-						expect(res?.createdAt).toBeInstanceOf(Date);
-					});
-				expect(createDateParameters.update).toHaveProperty("createdAt");
-				expect(createDateParameters.update.createdAt).toEqual(
-					testDate.toISOString(),
-				);
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						supportsDates: false,
+					},
+					adapter: () => ({ update }),
+				});
+				const user: { email: string; id: string } = await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				});
+				const res: { createdAt: Date } | null = await adapter.update({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { createdAt: testDate },
+				});
+				expect(res).toHaveProperty("createdAt");
+				expect(res?.createdAt).toBeInstanceOf(Date);
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					createdAt: testDate.toISOString(),
+				});
 			});
 
 			test("Should allow custom transform input", async () => {
-				const createCustomTransformInputParameters: {
-					update: { name: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							customTransformInput({ field, data }) {
-								if (field === "name") {
-									return data.toUpperCase();
-								}
-								return data;
-							},
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						customTransformInput({ field, data }) {
+							if (field === "name") {
+								return data.toUpperCase();
+							}
+							return data;
 						},
-						adapter(args_0) {
-							return {
-								async update(data) {
-									r(data as any);
-									return data.update;
-								},
-							};
-						},
-					});
-					const user: { id: string; name: string } = await adapter.create({
-						model: "user",
-						data: { name: "test-name" },
-					});
-					const res: { name: string } | null = await adapter.update({
-						model: "user",
-						where: [{ field: "id", value: user.id }],
-						update: { name: "test-name-2" },
-					});
-					expect(res).toHaveProperty("name");
-					expect(res?.name).toEqual("TEST-NAME-2");
+					},
+					adapter: () => ({ update }),
 				});
-				expect(createCustomTransformInputParameters.update).toHaveProperty(
-					"name",
-				);
-				expect(createCustomTransformInputParameters.update.name).toEqual(
-					"TEST-NAME-2",
-				);
+				const user: { id: string; name: string } = await adapter.create({
+					model: "user",
+					data: { name: "test-name" },
+				});
+				const res = await adapter.update({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { name: "test-name-2" },
+				});
+
+				expect(res).toMatchObject({ name: "TEST-NAME-2" });
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					name: "TEST-NAME-2",
+				});
 			});
 
 			test("Should allow custom transform output", async () => {
-				const createCustomTransformOutputParameters: {
-					update: { name: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							customTransformOutput({ field, data }) {
-								if (field === "name") {
-									return data.toLowerCase();
-								}
-								return data;
-							},
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						customTransformOutput({ field, data }) {
+							if (field === "name") {
+								return data.toLowerCase();
+							}
+							return data;
 						},
-						adapter(args_0) {
-							return {
-								async update(data) {
-									r(data as any);
-									return data.update;
-								},
-							};
-						},
-					});
-					const user: { id: string; name: string } = await adapter.create({
-						model: "user",
-						data: { name: "TEST-NAME" },
-					});
-					const res: { name: string } | null = await adapter.update({
-						model: "user",
-						where: [{ field: "id", value: user.id }],
-						update: { name: "test-name-2" },
-					});
-					expect(res).toHaveProperty("name");
-					expect(res?.name).toEqual("test-name-2");
+					},
+					adapter: () => ({ update }),
 				});
-				expect(createCustomTransformOutputParameters.update).toHaveProperty(
-					"name",
-				);
-				expect(createCustomTransformOutputParameters.update.name).toEqual(
-					"test-name-2",
-				);
+				const user: { id: string; name: string } = await adapter.create({
+					model: "user",
+					data: { name: "TEST-NAME" },
+				});
+				const res: { name: string } | null = await adapter.update({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { name: "test-name-2" },
+				});
+				expect(res).toHaveProperty("name");
+				expect(res?.name).toEqual("test-name-2");
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					name: "test-name-2",
+				});
 			});
 
 			test("Should allow custom transform input and output", async () => {
-				const createCustomTransformInputAndOutputParameters: {
-					update: { name: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							customTransformInput({ field, data }) {
-								if (field === "name") {
-									return data.toUpperCase();
-								}
-								return data;
-							},
-							customTransformOutput({ field, data }) {
-								if (field === "name") {
-									return data.toLowerCase();
-								}
-								return data;
-							},
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						customTransformInput({ field, data }) {
+							if (field === "name") {
+								return data.toUpperCase();
+							}
+							return data;
 						},
-						adapter(args_0) {
-							return {
-								async update(data) {
-									r(data as any);
-									return data.update;
-								},
-							};
+						customTransformOutput({ field, data }) {
+							if (field === "name") {
+								return data.toLowerCase();
+							}
+							return data;
 						},
-					});
-					const user: { id: string; name: string } = await adapter.create({
-						model: "user",
-						data: { name: "test-name" },
-					});
-					const res: { name: string } | null = await adapter.update({
-						model: "user",
-						where: [{ field: "id", value: user.id }],
-						update: { name: "test-name-2" },
-					});
-					expect(res).toHaveProperty("name");
-					expect(res?.name).toEqual("test-name-2");
+					},
+					adapter: () => ({ update }),
 				});
-				expect(
-					createCustomTransformInputAndOutputParameters.update,
-				).toHaveProperty("name");
-				expect(
-					createCustomTransformInputAndOutputParameters.update.name,
-				).toEqual("test-name-2".toUpperCase());
+				const user: { id: string; name: string } = await adapter.create({
+					model: "user",
+					data: { name: "test-name" },
+				});
+				const res: { name: string } | null = await adapter.update({
+					model: "user",
+					where: [{ field: "id", value: user.id }],
+					update: { name: "test-name-2" },
+				});
+				expect(res).toHaveProperty("name");
+				expect(res?.name).toEqual("test-name-2");
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					name: "test-name-2".toUpperCase(),
+				});
 			});
 
 			test("Should allow custom map input key transformation", async () => {
-				const parameters: {
-					update: { email_address: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							mapKeysTransformInput: {
-								email: "email_address",
-							},
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						mapKeysTransformInput: {
+							email: "email_address",
 						},
-						adapter(args_0) {
-							return {
-								async update(data) {
-									r(data as any);
-									return data.update;
-								},
-							};
-						},
-					});
-					const user = (await adapter.create({
-						model: "user",
-						data: { email: "test@test.com" },
-					})) as { email: string; id: string };
-
-					const res: { email: string } | null = await adapter.update({
-						model: "user",
-						update: { email: "test2@test.com" },
-						where: [{ field: "id", value: user.id }],
-					});
-
-					expect(res).toHaveProperty("email");
-					expect(res).not.toHaveProperty("email_address");
-					expect(res?.email).toEqual(undefined); // The reason it's undefined is because we did transform `email` to `email_address`, however we never transformed `email_address` back to `email`.
+					},
+					adapter: () => ({ update }),
 				});
-				expect(parameters.update).toHaveProperty("email_address");
-				expect(parameters.update.email_address).toEqual("test2@test.com");
+				const user = (await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				})) as { email: string; id: string };
+
+				const res: { email: string } | null = await adapter.update({
+					model: "user",
+					update: { email: "test2@test.com" },
+					where: [{ field: "id", value: user.id }],
+				});
+
+				expect(res).toHaveProperty("email");
+				expect(res).not.toHaveProperty("email_address");
+				expect(res?.email).toEqual(undefined); // The reason it's undefined is because we did transform `email` to `email_address`, however we never transformed `email_address` back to `email`.
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					email_address: "test2@test.com",
+				});
 			});
 
 			test("Should allow custom map output key transformation", async () => {
-				const parameters: {
-					update: { email: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							mapKeysTransformOutput: {
-								email: "email_address",
-							},
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						mapKeysTransformOutput: {
+							email: "email_address",
 						},
-						adapter(args_0) {
-							return {
-								async update(data) {
-									r(data as any);
-									return data.update;
-								},
-							};
-						},
-					});
-					const user = (await adapter.create({
-						model: "user",
-						data: { email: "test@test.com" },
-					})) as { email: string; id: string };
-
-					const res: { email_address: string } | null = await adapter.update({
-						model: "user",
-						update: { email: "test2@test.com" },
-						where: [{ field: "id", value: user.id }],
-					});
-
-					expect(res).toHaveProperty("email_address");
-					expect(res).not.toHaveProperty("email");
-					expect(res?.email_address).toEqual("test2@test.com");
+					},
+					adapter: () => ({ update }),
 				});
-				expect(parameters.update).toHaveProperty("email");
-				expect(parameters.update).not.toHaveProperty("email_address");
-				expect(parameters.update.email).toEqual("test2@test.com");
+				const user = (await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				})) as { email: string; id: string };
+
+				const res: { email_address: string } | null = await adapter.update({
+					model: "user",
+					update: { email: "test2@test.com" },
+					where: [{ field: "id", value: user.id }],
+				});
+
+				expect(res).toHaveProperty("email_address");
+				expect(res).not.toHaveProperty("email");
+				expect(res?.email_address).toEqual("test2@test.com");
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					email: "test2@test.com",
+				});
+				expect(args.update).not.toHaveProperty("email_address");
 			});
 
 			test("Should allow custom map input and output key transformation", async () => {
-				const parameters: {
-					update: { email_address: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-							mapKeysTransformInput: {
-								email: "email_address",
-							},
-							mapKeysTransformOutput: {
-								email_address: "email",
-							},
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+						mapKeysTransformInput: {
+							email: "email_address",
 						},
-						adapter(args_0) {
-							return {
-								async update(data) {
-									r(data as any);
-									return data.update;
-								},
-							};
+						mapKeysTransformOutput: {
+							email_address: "email",
 						},
-					});
-					const user = (await adapter.create({
-						model: "user",
-						data: { email: "test@test.com" },
-					})) as { email: string; id: string };
-
-					const res: { email: string } | null = await adapter.update({
-						model: "user",
-						update: { email: "test2@test.com" },
-						where: [{ field: "id", value: user.id }],
-					});
-
-					expect(res).toHaveProperty("email");
-					expect(res).not.toHaveProperty("email_address");
-					expect(res?.email).toEqual("test2@test.com");
+					},
+					adapter: () => ({ update }),
 				});
-				expect(parameters.update).toHaveProperty("email_address");
-				expect(parameters.update).not.toHaveProperty("email");
-				expect(parameters.update.email_address).toEqual("test2@test.com");
+				const user = (await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				})) as { email: string; id: string };
+
+				const res: { email: string } | null = await adapter.update({
+					model: "user",
+					update: { email: "test2@test.com" },
+					where: [{ field: "id", value: user.id }],
+				});
+
+				expect(res).toHaveProperty("email");
+				expect(res).not.toHaveProperty("email_address");
+				expect(res?.email).toEqual("test2@test.com");
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					email_address: "test2@test.com",
+				});
+				expect(args.update).not.toHaveProperty("email");
 			});
 
 			test("Should expect the fields to be transformed into the correct field names if customized", async () => {
-				const parameters: {
-					update: { email_address: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							debugLogs: {},
-						},
-						options: {
-							user: {
-								fields: {
-									email: "email_address",
-								},
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						debugLogs: {},
+					},
+					options: {
+						user: {
+							fields: {
+								email: "email_address",
 							},
 						},
-						adapter(args_0) {
-							return {
-								async update(data) {
-									r(data as any);
-									return data.update;
-								},
-							};
-						},
-					});
-					const user: { id: string; email: string } = await adapter.create({
-						model: "user",
-						data: { email: "test@test.com" },
-					});
-					const res: { email: string } | null = await adapter.update({
-						model: "user",
-						update: { email: "test2@test.com" },
-						where: [{ field: "id", value: user.id }],
-					});
-					expect(res).toHaveProperty("email");
-					expect(res).not.toHaveProperty("email_address");
-					expect(res?.email).toEqual("test2@test.com");
+					},
+					adapter: () => ({ update }),
 				});
-				expect(parameters.update).toHaveProperty("email_address");
-				expect(parameters.update).not.toHaveProperty("email");
-				expect(parameters.update.email_address).toEqual("test2@test.com");
+				const user: { id: string; email: string } = await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				});
+				const res: { email: string } | null = await adapter.update({
+					model: "user",
+					update: { email: "test2@test.com" },
+					where: [{ field: "id", value: user.id }],
+				});
+				expect(res).toHaveProperty("email");
+				expect(res).not.toHaveProperty("email_address");
+				expect(res?.email).toEqual("test2@test.com");
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).toMatchObject({
+					email_address: "test2@test.com",
+				});
+				expect(args.update).not.toHaveProperty("email");
 			});
 
 			test("Should expect not to receive an id even if disableIdGeneration is false in an update call", async () => {
-				const parameters: {
-					update: { id: string };
-				} = await new Promise(async (r) => {
-					const adapter = await createTestAdapter({
-						config: {
-							disableIdGeneration: true,
-						},
-						adapter(args_0) {
-							return {
-								async update(data) {
-									r(data as any);
-									return data.update;
-								},
-							};
-						},
-					});
-					const user: { email: string; id: string } = await adapter.create({
-						model: "user",
-						data: { email: "test@test.com" },
-					});
-					await adapter.update({
-						model: "user",
-						update: { email: "test2@test.com" },
-						where: [{ field: "id", value: user.id }],
-					});
+				const update = vi.fn<CustomAdapter["update"]>();
+				const adapter = await createTestAdapter({
+					config: {
+						disableIdGeneration: true,
+					},
+					adapter: () => ({ update }),
 				});
-				expect(parameters.update).not.toHaveProperty("id");
+				const user: { email: string; id: string } = await adapter.create({
+					model: "user",
+					data: { email: "test@test.com" },
+				});
+				await adapter.update({
+					model: "user",
+					update: { email: "test2@test.com" },
+					where: [{ field: "id", value: user.id }],
+				});
+				const args = update.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.update).not.toHaveProperty("id");
 			});
 		});
 
 		describe("find", () => {
 			test("findOne: Should transform the where clause according to the schema", async () => {
-				const parameters: { where: Where[]; model: string; select?: string[] } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							options: {
-								user: {
-									fields: {
-										email: "email_address",
-									},
-								},
+				const fakeResult: Omit<User, "email"> & {
+					email_address: string;
+				} = {
+					/* cspell:disable-next-line */
+					id: "random-id-oudwduwbdouwbdu123b",
+					email_address: "test@test.com",
+					emailVerified: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					name: "test-name",
+				};
+				const findOne = vi
+					.fn<CustomAdapter["findOne"]>()
+					.mockResolvedValue(fakeResult);
+				const adapter = await createTestAdapter({
+					options: {
+						user: {
+							fields: {
+								email: "email_address",
 							},
-							adapter(args_0) {
-								return {
-									async findOne({ model, where, select }) {
-										const fakeResult: Omit<User, "email"> & {
-											email_address: string;
-										} = {
-											/* cspell:disable-next-line */
-											id: "random-id-oudwduwbdouwbdu123b",
-											email_address: "test@test.com",
-											emailVerified: false,
-											createdAt: new Date(),
-											updatedAt: new Date(),
-											name: "test-name",
-										};
-										r({ model, where, select });
-										return fakeResult as any;
-									},
-								};
-							},
-						});
-						const res = await adapter.findOne<User>({
-							model: "user",
-							where: [{ field: "email", value: "test@test.com" }],
-						});
-						expect(res).not.toHaveProperty("email_address");
-						expect(res).toHaveProperty("email");
-						expect(res?.email).toEqual("test@test.com");
-					});
-				expect(parameters.where[0]!.field).toEqual("email_address");
+						},
+					},
+					adapter: () => ({ findOne }),
+				});
+				const res = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "email", value: "test@test.com" }],
+				});
+				expect(res).not.toHaveProperty("email_address");
+				expect(res).toHaveProperty("email");
+				expect(res?.email).toEqual("test@test.com");
+				const args = findOne.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.where).toMatchObject([{ field: "email_address" }]);
 			});
 			test("findMany: Should transform the where clause according to the schema", async () => {
-				const parameters: { where: Where[] | undefined; model: string } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							options: {
-								user: {
-									fields: {
-										email: "email_address",
-									},
-								},
+				const fakeResult: (Omit<User, "email"> & {
+					email_address: string;
+				})[] = [
+					{
+						id: "random-id-eio1d1u12h33123ed",
+						email_address: "test@test.com",
+						emailVerified: false,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						name: "test-name",
+					},
+				];
+				const findMany = vi
+					.fn<CustomAdapter["findMany"]>()
+					.mockResolvedValue(fakeResult);
+				const adapter = await createTestAdapter({
+					options: {
+						user: {
+							fields: {
+								email: "email_address",
 							},
-							adapter(args_0) {
-								return {
-									async findMany({ model, where }) {
-										const fakeResult: (Omit<User, "email"> & {
-											email_address: string;
-										})[] = [
-											{
-												id: "random-id-eio1d1u12h33123ed",
-												email_address: "test@test.com",
-												emailVerified: false,
-												createdAt: new Date(),
-												updatedAt: new Date(),
-												name: "test-name",
-											},
-										];
-										r({ model, where });
-										return fakeResult as any;
-									},
-								};
-							},
-						});
-						const res = await adapter.findMany<User>({
-							model: "user",
-							where: [{ field: "email", value: "test@test.com" }],
-						});
-						expect(res[0]).not.toHaveProperty("email_address");
-						expect(res[0]).toHaveProperty("email");
-						expect(res[0]?.email).toEqual("test@test.com");
-					});
-				expect(parameters.where?.[0]!.field).toEqual("email_address");
+						},
+					},
+					adapter: () => ({ findMany }),
+				});
+				const res = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "email", value: "test@test.com" }],
+				});
+				expect(res[0]).not.toHaveProperty("email_address");
+				expect(res[0]).toHaveProperty("email");
+				expect(res[0]?.email).toEqual("test@test.com");
+				const args = findMany.mock.lastCall?.[0];
+				expect.assert(args);
+				expect(args.where).toMatchObject([{ field: "email_address" }]);
 			});
 
 			test("findOne: Should receive an integer id in where clause if the user has enabled `serial`", async () => {
-				const parameters: { where: Where[]; model: string; select?: string[] } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							options: {
-								advanced: {
-									database: {
-										generateId: "serial",
-									},
-								},
+				const fakeResult: Omit<User, "id"> & { id: number } = {
+					id: 1,
+					email: "test@test.com",
+					emailVerified: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					name: "test-name",
+				};
+				const findOne = vi
+					.fn<CustomAdapter["findOne"]>()
+					.mockResolvedValue(fakeResult);
+				const adapter = await createTestAdapter({
+					options: {
+						advanced: {
+							database: {
+								generateId: "serial",
 							},
-							adapter(args_0) {
-								return {
-									async findOne({ model, where, select }) {
-										const fakeResult: Omit<User, "id"> & { id: number } = {
-											id: 1,
-											email: "test@test.com",
-											emailVerified: false,
-											createdAt: new Date(),
-											updatedAt: new Date(),
-											name: "test-name",
-										};
-										r({ model, where, select });
-										return fakeResult as any;
-									},
-								};
-							},
-						});
-						const res = await adapter.findOne<User>({
-							model: "user",
-							where: [{ field: "id", value: "1" }],
-						});
+						},
+					},
+					adapter: () => ({ findOne }),
+				});
+				const res = await adapter.findOne<User>({
+					model: "user",
+					where: [{ field: "id", value: "1" }],
+				});
 
-						expect(res).toHaveProperty("id");
-						expect(res?.id).toEqual("1");
-					});
+				expect(res).toHaveProperty("id");
+				expect(res?.id).toEqual("1");
+				const args = findOne.mock.lastCall?.[0];
+				expect.assert(args);
 				// The where clause should convert the string id value of `"1"` to an int since `generateId` is serial.
-				expect(parameters.where[0]!.value).toEqual(1);
+				expect(args.where).toMatchObject([{ value: 1 }]);
 			});
 			test("findMany: Should receive an integer id in where clause if the user has enabled `serial`", async () => {
-				const parameters: { where: Where[] | undefined; model: string } =
-					await new Promise(async (r) => {
-						const adapter = await createTestAdapter({
-							options: {
-								advanced: {
-									database: {
-										generateId: "serial",
-									},
-								},
+				const fakeResult: (Omit<User, "id"> & { id: number })[] = [
+					{
+						id: 1,
+						email: "test@test.com",
+						emailVerified: false,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+						name: "test-name",
+					},
+				];
+				const findMany = vi
+					.fn<CustomAdapter["findMany"]>()
+					.mockResolvedValue(fakeResult);
+				const adapter = await createTestAdapter({
+					options: {
+						advanced: {
+							database: {
+								generateId: "serial",
 							},
-							adapter(args_0) {
-								return {
-									async findMany({ model, where }) {
-										const fakeResult: (Omit<User, "id"> & { id: number })[] = [
-											{
-												id: 1,
-												email: "test@test.com",
-												emailVerified: false,
-												createdAt: new Date(),
-												updatedAt: new Date(),
-												name: "test-name",
-											},
-										];
-										r({ model, where });
-										return fakeResult as any;
-									},
-								};
-							},
-						});
-						const res = await adapter.findMany<User>({
-							model: "user",
-							where: [{ field: "id", value: "1" }],
-						});
+						},
+					},
+					adapter: () => ({ findMany }),
+				});
+				const res = await adapter.findMany<User>({
+					model: "user",
+					where: [{ field: "id", value: "1" }],
+				});
 
-						expect(res[0]).toHaveProperty("id");
-						expect(res[0]!.id).toEqual("1");
-					});
+				expect(res[0]).toHaveProperty("id");
+				expect(res[0]!.id).toEqual("1");
+				const args = findMany.mock.lastCall?.[0];
+				expect.assert(args);
 				// The where clause should convert the string id value of `"1"` to an int since `serial` is enabled.
-				expect(parameters.where?.[0]!.value).toEqual(1);
+				expect(args.where).toMatchObject([{ value: 1 }]);
 			});
 		});
 	});
