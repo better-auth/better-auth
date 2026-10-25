@@ -1714,6 +1714,15 @@ describe("oauth register - application_type", async () => {
 
 	const register = makeRegister(customFetchImpl as typeof fetch);
 
+	it("reads metadata stored as a JSON string by earlier versions", () => {
+		const wire = schemaToOAuth({
+			clientId: "legacy-metadata-client",
+			redirectUris: ["https://app.example.com/callback"],
+			metadata: JSON.stringify({ custom: "value" }),
+		});
+		expect(Reflect.get(wire, "custom")).toBe("value");
+	});
+
 	it("maps applicationType as a first-class field without hiding it in metadata", () => {
 		const stored = oauthToSchema({
 			client_id: "mapping-client",
@@ -1722,7 +1731,8 @@ describe("oauth register - application_type", async () => {
 			metadata: { custom: "value" },
 		});
 		expect(stored.applicationType).toBe("native");
-		expect(stored.metadata).toBe(JSON.stringify({ custom: "value" }));
+		// An object, so a JSON column stores it as JSON rather than a string
+		expect(stored.metadata).toEqual({ custom: "value" });
 
 		const wire = schemaToOAuth(stored);
 		expect(wire.application_type).toBe("native");
@@ -1780,9 +1790,7 @@ describe("oauth register - application_type", async () => {
 				...reservedMetadata,
 			},
 		});
-		expect(JSON.parse(stored.metadata ?? "{}")).toEqual({
-			custom: "preserved",
-		});
+		expect(stored.metadata).toEqual({ custom: "preserved" });
 
 		const wire = schemaToOAuth(stored);
 		expect(Reflect.get(wire, "custom")).toBe("preserved");

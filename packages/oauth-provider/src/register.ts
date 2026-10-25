@@ -1400,10 +1400,9 @@ export function oauthToSchema(
 	const metadataObj = stripReservedOAuthClientMetadataExtensions(
 		inputMetadata ?? {},
 	);
+	// A json field: the adapter serializes it when the database has no JSON type
 	const metadata =
-		metadataObj && Object.keys(metadataObj).length
-			? JSON.stringify(metadataObj)
-			: undefined;
+		metadataObj && Object.keys(metadataObj).length ? metadataObj : undefined;
 
 	return {
 		// Important Fields
