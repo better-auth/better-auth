@@ -20,6 +20,6 @@
     "svelte": "5.57.2",
     "svelte-check": "4.7.6",
     "typescript": "catalog:",
-    "vite": "8.2.0"
+    "vite": "8.2.4"
   }
 }
