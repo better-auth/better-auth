@@ -168,6 +168,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
     ### Export Clerk Users
 
     Go to the Clerk dashboard and [export the users](https://clerk.com/docs/deployments/exporting-users#export-your-users-data-from-the-clerk-dashboard). It will download a CSV file with the users data. You need to save it as `exported_users.csv` and put it in the root of your project.
+
+    The export includes each user's TOTP secret but not their backup codes, so the migration script generates new backup codes.
   </Step>
 
   <Step>
@@ -176,7 +178,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
     Create a new file called `migrate-clerk.ts` in the `scripts` folder and add the following code:
 
     ```ts title="scripts/migrate-clerk.ts"
-    import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
+        import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
+    import type { SecretConfig } from "better-auth/crypto";
 
     import { auth } from "@/lib/auth"; // import your auth instance
 
@@ -258,9 +261,8 @@ Before starting the migration process, set up Better Auth in your project. Follo
 
 
     export async function generateBackupCodes(
-      secret: string,
+      key: string | SecretConfig,
     ) {
-      const key = secret;
       const backupCodes = Array.from({ length: 10 })
           .fill(null)
           .map(() => generateRandomString(10, "a-z", "0-9", "A-Z"))
@@ -321,7 +323,7 @@ Before starting the migration process, set up Better Auth in your project. Follo
                   updatedAt: safeDateConversion(clerkUser?.updated_at),
                   // # Two Factor (if you enabled two factor plugin)
                   ...(isTwoFactorEnabled ? {
-                      twoFactorEnabled: clerkUser?.two_factor_enabled
+                      twoFactorEnabled: Boolean(totp_secret)
                   } : {}),
                   // # Admin (if you enabled admin plugin)
                   ...(isAdminEnabled ? {
@@ -395,13 +397,17 @@ Before starting the migration process, set up Better Auth in your project. Follo
           }
 
           //two factor
-          if (isTwoFactorEnabled) {
+          if (isTwoFactorEnabled && totp_secret) {
               await ctx.adapter.create({
                   model: "twoFactor",
                   data: {
                       userId: createdUser.id,
-                      secret: totp_secret,
-                      backupCodes: await generateBackupCodes(totp_secret)
+                      // Clerk exports Base32 secrets, so mark them for decoding
+                      secret: await symmetricEncrypt({
+                          key: ctx.secretConfig,
+                          data: `base32:${totp_secret}`,
+                      }),
+                      backupCodes: await generateBackupCodes(ctx.secretConfig)
                   }
               })
           }
