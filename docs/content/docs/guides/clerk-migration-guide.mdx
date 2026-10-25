@@ -175,26 +175,26 @@ Before starting the migration process, set up Better Auth in your project. Follo
   <Step>
     ### Create the migration script
 
+    Install a CSV parser to read the export:
+
+    ```package-install
+    npm install csv-parse
+    ```
+
     Create a new file called `migrate-clerk.ts` in the `scripts` folder and add the following code:
 
     ```ts title="scripts/migrate-clerk.ts"
-        import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
+    import { parse } from "csv-parse/sync";
+    import { generateRandomString, symmetricEncrypt } from "better-auth/crypto";
     import type { SecretConfig } from "better-auth/crypto";
 
     import { auth } from "@/lib/auth"; // import your auth instance
 
     function getCSVData(csv: string) {
-      const lines = csv.split('\n').filter(line => line.trim());
-      const headers = lines[0]?.split(',').map(header => header.trim()) || [];
-      const jsonData = lines.slice(1).map(line => {
-          const values = line.split(',').map(value => value.trim());
-          return headers.reduce((obj, header, index) => {
-              obj[header] = values[index] || '';
-              return obj;
-          }, {} as Record<string, string>);
-      });
-
-      return jsonData as Array<{
+      return parse(csv, {
+          columns: true,
+          skip_empty_lines: true,
+      }) as Array<{
           id: string;
           first_name: string;
           last_name: string;
