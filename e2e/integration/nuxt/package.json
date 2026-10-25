@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@nuxt/test-utils": "4.3.1",
-    "@playwright/test": "~1.58.2",
+    "@playwright/test": "~1.64.1",
     "typescript": "catalog:",
     "vue-tsc": "3.3.11"
   }

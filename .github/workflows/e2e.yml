@@ -86,9 +86,6 @@ jobs:
       contents: read
     env:
       COMPOSE_SERVICES: postgres
-      # Playwright 1.58 has no Ubuntu 26.04 browser build (support starts in 1.61), so use the
-      # Ubuntu 24.04 build. Remove this once Playwright is 1.61 or later.
-      PLAYWRIGHT_HOST_PLATFORM_OVERRIDE: ubuntu24.04-x64
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
