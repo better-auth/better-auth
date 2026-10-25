@@ -486,6 +486,32 @@ export const genericOAuth = <const ID extends string>(
 					refreshToken: string,
 					refreshCtx?: OAuthRefreshContext,
 				): Promise<OAuth2Tokens> {
+					if (c.refreshToken) {
+						// Strip the endpoint ctx down to the documented
+						// { headers, request } contract before handing it to the
+						// hook, so endpoint internals/secrets can't leak via
+						// serialize/log of the hook argument.
+						const sanitizedCtx: OAuthRefreshContext | undefined = refreshCtx
+							? {
+									headers: refreshCtx.headers,
+									request: refreshCtx.request,
+								}
+							: undefined;
+						const tokens = await c.refreshToken(refreshToken, sanitizedCtx);
+						if (
+							!tokens?.accessToken ||
+							typeof tokens.accessToken !== "string"
+						) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+							);
+						}
+						return applyDefaultAccessTokenExpiry(
+							tokens,
+							c.accessTokenExpiresIn,
+						);
+					}
 					if (!tokenUrl) {
 						throw APIError.from(
 							"BAD_REQUEST",
