@@ -85,44 +85,58 @@ If your app manages schema generation separately, run `npx auth generate` and ap
 
 ## Managed Directory Sync
 
-The `managedDirectorySync` option is the dashboard-side companion to the SCIM 1.7 plugin-managed runtime flow. When `enabled` is `true`, the dashboard installs the reservation tables and APIs needed for managed directory-sync state. `ssoPairing` enables the SSO hooks needed when a directory-backed user identity is paired with an SSO provider, and `membershipProjection` lets the system project SCIM membership changes into organization membership records.
+The `managedDirectorySync` option .
 
-```ts
-dash({
-  apiKey: process.env.BETTER_AUTH_API_KEY,
-  managedDirectorySync: {
-    enabled: true,
-    ssoPairing: true,
-    membershipProjection: {
-      enabled: true,
-      role: "member",
-    },
-  },
-})
-```
+Managed directory sync is the dashboard-side companion to the [SCIM plugin-managed connections](/docs/plugins/scim/reference#managed-connection-catalog). Use it when each organization (tenant) should get a directory connection from the dashboard — without hard-coding every tenant in application config.
 
-This opt-in control plane is for the SCIM 1.7 plugin-managed runtime flow. In Better Auth 1.7, SCIM supports three connection modes:
+In Better Auth 1.7, SCIM supports three connection modes:
 
 * static code-defined connections
 * application-owned runtime verification
 * plugin-managed runtime connections via `managedConnections`
 
-The `managedDirectorySync` option enables the plugin-managed mode for directory-sync provisioning in `dash`. It creates the reserved schema and APIs needed to manage directory connections and paired SSO state.
+Managed directory sync is built for that third mode. Responsibilities split cleanly:
 
-### Managed directory sync options
+| Layer                            | Owns                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| `scim({ managedConnections })`   | SCIM protocol, credential catalog, user/group provisioning                          |
+| `dash({ managedDirectorySync })` | Per-organization connection lifecycle, dashboard APIs, and projection into your app |
 
-| Option                         | Type      | Description                                                                                                                                                  |
-| ------------------------------ | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `enabled`                      | `boolean` | Enables the managed directory-sync control plane and the SCIM reservation tables / APIs. Default: `false`.                                                   |
-| `ssoPairing`                   | `boolean` | Installs the SSO `resolveUser` and provider-mutation hooks required when a paired directory needs to reconcile a user identity through SSO. Default: `true`. |
-| `membershipProjection`         | `object`  | Enables SCIM-to-organization membership projection when a directory should create group or member membership records.                                        |
-| `membershipProjection.enabled` | `boolean` | Enables the projection hook. Default: `true`.                                                                                                                |
-| `membershipProjection.role`    | `string`  | Role assigned to projected organization memberships. Default: `"member"`.                                                                                    |
+Once the control plane is on, you can layer optional behaviors: project users into organization memberships and pair the directory with SSO for sign-in, map SCIM attributes onto custom fields.
 
-Use this when the application wants Better Auth to manage the runtime tenant connection lifecycle for SCIM and pair it with SSO-based identity resolution. It is intended for the new 1.7 flow and complements `scim({ managedConnections })`.
+### Enable managed directory sync
 
-<Callout type="warning">
-  Enabling `managedDirectorySync` requires the corresponding database migrations for the managed directory-sync tables. Run the migration step before using the managed runtime flow.
+You need the [organization](/docs/plugins/organization), [SCIM](/docs/plugins/scim), and `dash` plugins. SCIM must use `managedConnections` so Infrastructure can reserve and issue per-tenant credentials.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { sso } from "@better-auth/sso";
+import { scim } from "@better-auth/scim";
+import { dash } from "@better-auth/infra";
+
+export const auth = betterAuth({
+  plugins: [
+    organization(),
+    sso({}),
+    scim({
+      connections: [],
+      managedConnections: {
+        credentialHashSecret: process.env.SCIM_CREDENTIAL_HASH_SECRET!,
+      },
+    }),
+    dash({
+      apiKey: process.env.BETTER_AUTH_API_KEY,
+      managedDirectorySync: {
+        enabled: true,
+      },
+    }),
+  ],
+});
+```
+
+<Callout type="warn">
+  Enabling `managedDirectorySync` adds reservation tables. Run a migration before creating directories from the dashboard.
 </Callout>
 
 ```package-install
@@ -131,13 +145,190 @@ npx auth migrate
 
 If your app manages schema generation separately, run `npx auth generate` and apply the generated migration with your preferred tool.
 
-### Database Schema
+After setup, create and manage directories in the Infrastructure dashboard (or via the [directory sync endpoints](#directory-sync)).
 
-When `managedDirectorySync.enabled` is `true`, the dash plugin adds the following models. Better Auth supplies the primary `id` field for each model.
+### Membership projection
+
+Membership projection is the usual next step after a directory is connected: when SCIM provisions or deactivates a user, dash reconciles that user into the organization that owns the directory.
+
+It is **enabled by default** whenever managed directory sync is on.
+
+```ts
+dash({
+  apiKey: process.env.BETTER_AUTH_API_KEY,
+  managedDirectorySync: {
+    enabled: true,
+    membershipProjection: {
+      enabled: true,
+      role: "member", // role only when projection creates the membership
+    },
+  },
+})
+```
+
+| Option                         | Type      | Description                                                                   |
+| ------------------------------ | --------- | ----------------------------------------------------------------------------- |
+| `membershipProjection.enabled` | `boolean` | Installs SCIM `projection.reconcileUser` for org membership. Default: `true`. |
+| `membershipProjection.role`    | `string`  | Role assigned when projection **creates** a membership. Default: `"member"`.  |
+
+Behavior:
+
+* Active directory users are added to the organization (or linked if they are already members).
+* Deactivated users have directory-owned memberships removed.
+* Provenance tracks whether the membership was **created** by the directory or only **observed** (already existed). Projection only mutates memberships it owns.
+
+Turn it off only when SCIM should provision users without touching organization membership:
+
+```ts
+membershipProjection: {
+  enabled: false,
+}
+```
+
+### SSO pairing
+
+SSO pairing links a managed directory to an SSO provider so a provisioned user can sign in with the same identity the directory manages.
+
+It is **enabled by default**. You only need it when directories are created as **paired** with SSO.
+
+```ts
+plugins: [
+  sso({}),
+  dash({
+    apiKey: process.env.BETTER_AUTH_API_KEY,
+    managedDirectorySync: {
+      enabled: true,
+      ssoPairing: true,
+    },
+  }),
+]
+```
+
+| Option       | Type      | Description                                  |
+| ------------ | --------- | -------------------------------------------- |
+| `ssoPairing` | `boolean` | Installs SSO pairing hooks. Default: `true`. |
+
+Notes:
+
+* Paired sign-in resolves the Better Auth user from the SCIM external id configured on the directory.
+* Set `ssoPairing: false` when you only need provisioning and never create paired directories.
+
+### Field projection
+
+Field projection maps SCIM User attributes onto Better Auth fields during directory-sync reconcile. Mappings are configured **per directory connection** in the Infrastructure dashboard (or via the field-mapping endpoints).
+
+It is **opt-in** and adds its own tables — enable it, migrate, then configure mappings.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { scim } from "@better-auth/scim";
+import { dash } from "@better-auth/infra";
+
+export const auth = betterAuth({
+  user: {
+    additionalFields: {
+      employeeId: { type: "string", required: false },
+      department: { type: "string", required: false },
+    },
+  },
+  plugins: [
+    organization({
+      schema: {
+        member: {
+          additionalFields: {
+            title: { type: "string", required: false },
+            costCenter: { type: "string", required: false },
+          },
+        },
+      },
+    }),
+    scim({
+      connections: [],
+      managedConnections: {
+        credentialHashSecret: process.env.SCIM_CREDENTIAL_HASH_SECRET!,
+      },
+    }),
+    dash({
+      apiKey: process.env.BETTER_AUTH_API_KEY,
+      managedDirectorySync: {
+        enabled: true,
+        fieldProjection: {
+          enabled: true,
+        },
+      },
+    }),
+  ],
+});
+```
+
+1. Declare the `user` / `member` fields you want to fill (as above).
+2. Run migrations for the field-mapping tables.
+3. In the Infrastructure dashboard, open the directory connection and map SCIM paths → target fields.
+
+| Option                    | Type      | Description                                                                        |
+| ------------------------- | --------- | ---------------------------------------------------------------------------------- |
+| `fieldProjection.enabled` | `boolean` | Adds field-mapping schema and projects fields on SCIM reconcile. Default: `false`. |
+
+#### Projectable fields
+
+| Entity   | Projectable targets                                                   | Not projectable                                                                                                                                     |
+| -------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `user`   | Writable `user.additionalFields`, plus allowlisted core field `image` | Identity fields managed by SCIM (`email`, `name`); sensitive keys (`role`, `password`, ban fields, 2FA secrets); `input: false` or reference fields |
+| `member` | Writable `organization.schema.member.additionalFields` only           | Membership-owned keys (`role`, user/org ids). Member maps require membership projection (default on)                                                |
+
+Only **directory-created** memberships (`ownership: "created"`) receive member field projection. Observed memberships are left unchanged.
+
+#### SCIM attribute catalog
+
+Mappings read from a curated SCIM **User** attribute catalog:
+
+| Path                                                                                                  | Typical use                               |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `userName`                                                                                            | Login / username                          |
+| `primaryEmail` / `emails.primary`                                                                     | Email-shaped additional fields            |
+| `displayName`                                                                                         | Display name                              |
+| `externalId`                                                                                          | IdP stable id                             |
+| `name.formatted` / `name.givenName` / `name.familyName`                                               | Name parts                                |
+| `title`                                                                                               | Job title                                 |
+| `userType`                                                                                            | User classification                       |
+| `preferredLanguage` / `locale` / `timezone`                                                           | Locale preferences                        |
+| `photos.primary`                                                                                      | Avatar URL → often mapped to `user.image` |
+| `enterprise.employeeNumber`                                                                           | Employee id                               |
+| `enterprise.costCenter` / `enterprise.organization` / `enterprise.division` / `enterprise.department` | Enterprise extension attributes           |
+
+Values are resolved as strings from the persisted SCIM user row, then coerced to the Better Auth field type (`string`, `number`, `boolean`, or `date`).
+
+#### Projection modes
+
+Each connection stores a mode per entity (`user` and `member`). Default mode is **`create-only`**.
+
+| Mode          | Behavior                                                                                                                                                                                                                                                              |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `create-only` | Fills empty targets (and values that still match a static schema default) on first provision. Once every productive mapped target is set, projection freezes for that row so later operator edits are preserved. Delayed SCIM attributes can still land until freeze. |
+| `reconcile`   | Rewrites mapped fields on every SCIM reconcile while the directory owns the profile / membership. Use when the IdP should remain the source of truth for those fields.                                                                                                |
+
+### Options reference
+
+Full `managedDirectorySync` shape:
+
+| Option                         | Type      | Description                                                                |
+| ------------------------------ | --------- | -------------------------------------------------------------------------- |
+| `enabled`                      | `boolean` | Enables the control plane and reservation tables / APIs. Default: `false`. |
+| `ssoPairing`                   | `boolean` | SSO pairing hooks for paired directories. Default: `true`.                 |
+| `membershipProjection`         | `object`  | SCIM → organization membership projection.                                 |
+| `membershipProjection.enabled` | `boolean` | Default: `true`.                                                           |
+| `membershipProjection.role`    | `string`  | Role when projection creates a membership. Default: `"member"`.            |
+| `fieldProjection`              | `object`  | Opt-in SCIM → custom field projection.                                     |
+| `fieldProjection.enabled`      | `boolean` | Default: `false`.                                                          |
+
+### Database schema
+
+When `managedDirectorySync.enabled` is `true`, the dash plugin adds the models below. Better Auth supplies the primary `id` field for each model. Some tables are only installed when an opt-in feature is enabled.
 
 #### `directorySyncConnection`
 
-Stores the managed directory's organization, SCIM connection, SSO pairing, lifecycle, and decommission state.
+Always present when managed directory sync is enabled. Stores the managed directory's organization, SCIM connection, SSO pairing, lifecycle, and decommission state.
 
 | Column                  | Type      | Constraints                   | Description                                      |
 | ----------------------- | --------- | ----------------------------- | ------------------------------------------------ |
@@ -167,18 +358,67 @@ Stores the managed directory's organization, SCIM connection, SSO pairing, lifec
 
 #### `directorySyncMembershipProvenance`
 
-Tracks organization memberships created or managed by directory-sync projection so the plugin can reconcile only the memberships it owns.
+Always present when managed directory sync is enabled. Tracks organization memberships created or managed by membership projection.
 
 | Column                 | Type     | Constraints              | Description                                |
 | ---------------------- | -------- | ------------------------ | ------------------------------------------ |
 | `membershipKey`        | `string` | Required, unique, hidden | Stable key for the projected membership.   |
 | `organizationId`       | `string` | Required, indexed        | Organization containing the membership.    |
-| `userId`               | `string` | Required, indexed        | Better Auth User receiving the membership. |
+| `userId`               | `string` | Required, indexed        | Better Auth user receiving the membership. |
 | `memberId`             | `string` | Required, unique         | Organization `member` record identifier.   |
-| `ownership`            | `string` | Required, hidden         | Projection ownership state.                |
+| `ownership`            | `string` | Required, hidden         | `created` or `observed`.                   |
 | `provisioningDomainId` | `string` | Required, indexed        | SCIM provisioning domain that produced it. |
 | `createdAt`            | `date`   | Required                 | Creation timestamp.                        |
 | `updatedAt`            | `date`   | Required                 | Last update timestamp.                     |
+
+#### `directorySyncFieldMapping`
+
+Only when `fieldProjection.enabled` is `true`. Per-connection mapping from SCIM attributes (and/or static defaults) onto Better Auth fields.
+
+| Column                 | Type      | Constraints              | Description                                          |
+| ---------------------- | --------- | ------------------------ | ---------------------------------------------------- |
+| `mappingKey`           | `string`  | Required, unique, hidden | Stable key for the mapping row.                      |
+| `provisioningDomainId` | `string`  | Required, indexed        | SCIM provisioning domain.                            |
+| `organizationId`       | `string`  | Required, indexed        | Organization that owns the directory.                |
+| `entity`               | `string`  | Required                 | Target entity (`user` or `member`).                  |
+| `targetField`          | `string`  | Required                 | Better Auth field name on that entity.               |
+| `scimSource`           | `string`  | Optional                 | SCIM resource for `scimPath` (defaults from entity). |
+| `scimPath`             | `string`  | Optional                 | Allowlisted SCIM attribute path.                     |
+| `defaultValue`         | `string`  | Optional                 | Fallback when SCIM value is empty.                   |
+| `enabled`              | `boolean` | Required, default `true` | Whether the mapping is applied at runtime.           |
+| `createdAt`            | `date`    | Required                 | Creation timestamp.                                  |
+| `updatedAt`            | `date`    | Required                 | Last update timestamp.                               |
+| `createdByActorId`     | `string`  | Required                 | Actor that created the mapping.                      |
+| `lastActorId`          | `string`  | Required                 | Actor responsible for the latest mutation.           |
+
+#### `directorySyncFieldProjectionMode`
+
+Only when `fieldProjection.enabled` is `true`. Per-connection, per-entity write cadence (`create-only` or `reconcile`).
+
+| Column                 | Type     | Constraints                     | Description                                |
+| ---------------------- | -------- | ------------------------------- | ------------------------------------------ |
+| `modeKey`              | `string` | Required, unique, hidden        | Stable key for the mode row.               |
+| `provisioningDomainId` | `string` | Required, indexed               | SCIM provisioning domain.                  |
+| `organizationId`       | `string` | Required, indexed               | Organization that owns the directory.      |
+| `entity`               | `string` | Required                        | Entity the mode applies to.                |
+| `mode`                 | `string` | Required, default `create-only` | Projection mode.                           |
+| `createdAt`            | `date`   | Required                        | Creation timestamp.                        |
+| `updatedAt`            | `date`   | Required                        | Last update timestamp.                     |
+| `lastActorId`          | `string` | Required                        | Actor responsible for the latest mutation. |
+
+#### `directorySyncFieldProvenance`
+
+Only when `fieldProjection.enabled` is `true`. Marks that create-only fields were applied for a provisioning domain + entity + target row.
+
+| Column                 | Type     | Constraints              | Description                                                 |
+| ---------------------- | -------- | ------------------------ | ----------------------------------------------------------- |
+| `provenanceKey`        | `string` | Required, unique, hidden | Stable key for the provenance row.                          |
+| `provisioningDomainId` | `string` | Required, indexed        | SCIM provisioning domain.                                   |
+| `entity`               | `string` | Required                 | Entity that was projected.                                  |
+| `targetId`             | `string` | Required, indexed        | Primary key of the projected row (`userId`, `memberId`, …). |
+| `appliedAt`            | `date`   | Required                 | When create-only fields were frozen.                        |
+| `createdAt`            | `date`   | Required                 | Creation timestamp.                                         |
+| `updatedAt`            | `date`   | Required                 | Last update timestamp.                                      |
 
 For the full SCIM model and migration guidance, see the [SCIM plugin reference](/docs/plugins/scim/reference) and the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide).
 
@@ -321,12 +561,15 @@ The dash plugin registers numerous admin endpoints for the dashboard:
 
 ### Directory Sync
 
-| Endpoint                             | Method | Description      |
-| ------------------------------------ | ------ | ---------------- |
-| `/dash/organization/directories`     | GET    | List directories |
-| `/dash/organization/directory`       | POST   | Create directory |
-| `/dash/organization/directory`       | DELETE | Delete directory |
-| `/dash/organization/directory/token` | POST   | Regenerate token |
+| Endpoint                                                        | Method | Description                                                             |
+| --------------------------------------------------------------- | ------ | ----------------------------------------------------------------------- |
+| `/dash/organization/directories`                                | GET    | List directories                                                        |
+| `/dash/organization/directory`                                  | POST   | Create directory (optional `fieldMappings` when field projection is on) |
+| `/dash/organization/directory`                                  | DELETE | Delete directory                                                        |
+| `/dash/organization/directory/token`                            | POST   | Regenerate token                                                        |
+| `/dash/organization/:id/directory-field-mapping-options`        | GET    | Field-mapping catalog (available fields, SCIM paths, coverage warnings) |
+| `/dash/organization/:id/directories/:providerId/field-mappings` | GET    | Get field mappings and modes for a directory connection                 |
+| `/dash/organization/:id/directories/:providerId/field-mappings` | PUT    | Replace field mappings and modes for a directory connection             |
 
 ### Log Drains
 
