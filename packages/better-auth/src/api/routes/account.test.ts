@@ -1,4 +1,6 @@
+import type { AuthContext } from "@better-auth/core";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import type {
 	CognitoProfile,
 	GoogleProfile,
@@ -20,6 +22,7 @@ import {
 import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
 import { signJWT, symmetricDecodeJWT, symmetricEncodeJWT } from "../../crypto";
+import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import { genericOAuth } from "../../plugins/generic-oauth";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
@@ -2923,3 +2926,198 @@ describe("account resolution in stateless mode", async () => {
 		expect(accountCookie?.maxAge).not.toBe(0);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11561
+ */
+describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
+	"concurrent provider token refresh (encryptOAuthTokens: $encryptOAuthTokens)",
+	async ({ encryptOAuthTokens }) => {
+		const refreshAccessToken =
+			vi.fn<(refreshToken: string) => Promise<OAuth2Tokens>>();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					refreshAccessToken,
+				},
+			},
+			account: { encryptOAuthTokens },
+		});
+		const ctx = await auth.$context;
+		const tokenContext = ctx as unknown as AuthContext;
+		const { headers, user } = await signInWithTestUser();
+
+		/**
+		 * Rotates refresh tokens and lets each one be used once, like X and
+		 * Atlassian. A spent refresh token fails as `invalid_grant`.
+		 */
+		function useRotatingProvider() {
+			const spent = new Set<string>();
+			let issued = 0;
+			refreshAccessToken.mockImplementation(async (token) => {
+				if (spent.has(token)) {
+					throw new Error("invalid_grant");
+				}
+				spent.add(token);
+				await new Promise((resolve) => setTimeout(resolve, 10));
+				issued += 1;
+				return {
+					accessToken: `access-${issued}`,
+					refreshToken: `refresh-${issued}`,
+					accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+				};
+			});
+		}
+
+		async function createExpiredAccount() {
+			return ctx.internalAdapter.createAccount({
+				userId: user.id,
+				providerId: "google",
+				accountId: `google-${crypto.randomUUID()}`,
+				accessToken: await setTokenUtil("expired-access", tokenContext),
+				refreshToken: await setTokenUtil("refresh-0", tokenContext),
+				accessTokenExpiresAt: new Date(Date.now() - 1000),
+			});
+		}
+
+		async function readStoredTokens(accountId: string) {
+			const stored = (await ctx.internalAdapter.findAccounts(user.id)).find(
+				(account) => account.id === accountId,
+			);
+			return {
+				accessToken: await decryptOAuthToken(
+					stored?.accessToken ?? "",
+					tokenContext,
+				),
+				refreshToken: await decryptOAuthToken(
+					stored?.refreshToken ?? "",
+					tokenContext,
+				),
+			};
+		}
+
+		beforeEach(() => {
+			refreshAccessToken.mockReset();
+		});
+
+		it("refreshes once when getAccessToken is called concurrently", async () => {
+			useRotatingProvider();
+			const account = await createExpiredAccount();
+
+			const results = await Promise.all(
+				Array.from({ length: 3 }, () =>
+					auth.api.getAccessToken({
+						headers,
+						body: { accountId: account.id },
+					}),
+				),
+			);
+
+			expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+			for (const result of results) {
+				expect(result.accessToken).toBe("access-1");
+			}
+			expect(await readStoredTokens(account.id)).toEqual({
+				accessToken: "access-1",
+				refreshToken: "refresh-1",
+			});
+		});
+
+		it("refreshes once when refreshToken is called concurrently", async () => {
+			useRotatingProvider();
+			const account = await createExpiredAccount();
+
+			const results = await Promise.all(
+				Array.from({ length: 2 }, () =>
+					auth.api.refreshToken({
+						headers,
+						body: { accountId: account.id },
+					}),
+				),
+			);
+
+			expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+			for (const result of results) {
+				expect(result.accessToken).toBe("access-1");
+				expect(result.refreshToken).toBe("refresh-1");
+			}
+			expect(await readStoredTokens(account.id)).toEqual({
+				accessToken: "access-1",
+				refreshToken: "refresh-1",
+			});
+		});
+
+		it("uses the stored tokens when another worker spent the refresh token first", async () => {
+			const account = await createExpiredAccount();
+			refreshAccessToken.mockImplementationOnce(async () => {
+				// Another worker refreshed and stored the rotated tokens first.
+				await ctx.internalAdapter.updateAccount(account.id, {
+					accessToken: await setTokenUtil("other-worker-access", tokenContext),
+					refreshToken: await setTokenUtil(
+						"other-worker-refresh",
+						tokenContext,
+					),
+					accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+				});
+				throw new Error("invalid_grant");
+			});
+
+			const result = await auth.api.getAccessToken({
+				headers,
+				body: { accountId: account.id },
+			});
+
+			expect(result.accessToken).toBe("other-worker-access");
+			expect(await readStoredTokens(account.id)).toEqual({
+				accessToken: "other-worker-access",
+				refreshToken: "other-worker-refresh",
+			});
+		});
+
+		it("does not overwrite a grant stored while the refresh was in flight", async () => {
+			const account = await createExpiredAccount();
+			refreshAccessToken.mockImplementationOnce(async () => {
+				// The user re-linked the provider account during the refresh.
+				await ctx.internalAdapter.updateAccount(account.id, {
+					accessToken: await setTokenUtil("relinked-access", tokenContext),
+					refreshToken: await setTokenUtil("relinked-refresh", tokenContext),
+					accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+				});
+				return {
+					accessToken: "stale-access",
+					refreshToken: "stale-refresh",
+					accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+				};
+			});
+
+			const result = await auth.api.refreshToken({
+				headers,
+				body: { accountId: account.id },
+			});
+
+			expect(result.accessToken).toBe("relinked-access");
+			expect(result.refreshToken).toBe("relinked-refresh");
+			expect(await readStoredTokens(account.id)).toEqual({
+				accessToken: "relinked-access",
+				refreshToken: "relinked-refresh",
+			});
+		});
+
+		it("still fails when the refresh token was not replaced", async () => {
+			const account = await createExpiredAccount();
+			refreshAccessToken.mockRejectedValueOnce(new Error("invalid_grant"));
+
+			await expect(
+				auth.api.getAccessToken({
+					headers,
+					body: { accountId: account.id },
+				}),
+			).rejects.toMatchObject({
+				body: { code: "FAILED_TO_GET_ACCESS_TOKEN" },
+			});
+		});
+	},
+);
