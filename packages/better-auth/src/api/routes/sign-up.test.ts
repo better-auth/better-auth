@@ -997,9 +997,10 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 	it("should send verification email when a background task handler is configured", async () => {
 		let committed = false;
 		let transactional = false;
+		let sentBeforeCommit = false;
 		const sendVerificationEmail = vi.fn().mockImplementation(async () => {
-			if (transactional) {
-				expect(committed).toBe(true);
+			if (transactional && !committed) {
+				sentBeforeCommit = true;
 			}
 		});
 		const backgroundTasks: Promise<unknown>[] = [];
@@ -1049,6 +1050,7 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 		await Promise.all(backgroundTasks);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+		expect(sentBeforeCommit).toBe(false);
 	});
 });
 
