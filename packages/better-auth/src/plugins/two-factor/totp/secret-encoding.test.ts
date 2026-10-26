@@ -8,6 +8,7 @@ import { convertSetCookieToCookie } from "../../../test-utils/headers";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../../utils/constants";
 import { twoFactor } from "..";
+import { DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS } from "../constant";
 import type { TwoFactorTable } from "../types";
 
 /** @see https://github.com/better-auth/better-auth/issues/9944 */
@@ -292,7 +293,10 @@ describe("TOTP secret encoding", () => {
 			auth.api.generateTOTP({
 				body: { secret: "invalid!", secretEncoding: "base32" },
 			}),
-		).rejects.toMatchObject({ body: { code: "INVALID_CODE" } });
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: { code: "INVALID_CODE" },
+		});
 	});
 
 	it.each(["utf8", "base32"] as const)(
@@ -339,6 +343,80 @@ describe("TOTP secret encoding", () => {
 		},
 	);
 
+	it("preserves the last attempt when a stored secret cannot be decoded", async () => {
+		const { auth, db, testUser, signInWithTestUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor()],
+		});
+		const { user } = await signInWithTestUser();
+		const encryptedSecret = await symmetricEncrypt({
+			key: DEFAULT_SECRET,
+			data: secret,
+		});
+		await db.create({
+			model: "twoFactor",
+			data: {
+				userId: user.id,
+				secret: encryptedSecret,
+				secretEncoding: "base32",
+				backupCodes: "[]",
+				verified: true,
+			},
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+			update: { twoFactorEnabled: true },
+		});
+		const challenge = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		const headers = convertSetCookieToCookie(challenge.headers);
+		const verifyCode = (code: string) =>
+			auth.api.verifyTOTP({ headers, body: { code }, asResponse: true });
+		const failedAttempts = DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS - 1;
+		for (let i = 0; i < failedAttempts; i++) {
+			expect((await verifyCode(utf8Code)).status).toBe(401);
+		}
+		await db.update({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+			update: {
+				secret: await symmetricEncrypt({
+					key: DEFAULT_SECRET,
+					data: "invalid!",
+				}),
+			},
+		});
+		const rejected = await verifyCode(rawCode);
+		expect(rejected.status).toBe(500);
+		expect(await rejected.json()).toMatchObject({
+			code: "FAILED_TO_VERIFY_TOTP",
+		});
+		expect(
+			await db.findOne({
+				model: "twoFactor",
+				where: [{ field: "userId", value: user.id }],
+			}),
+		).toMatchObject({
+			failedVerificationCount: failedAttempts,
+			lockedUntil: null,
+		});
+		await db.update({
+			model: "twoFactor",
+			where: [{ field: "userId", value: user.id }],
+			update: { secret: encryptedSecret },
+		});
+		const verified = await verifyCode(rawCode);
+		expect(verified.status).toBe(200);
+		expect(
+			await auth.api.getSession({
+				headers: convertSetCookieToCookie(verified.headers),
+			}),
+		).toMatchObject({ user: { id: user.id } });
+	});
+
 	it.each([
 		{ secretEncoding: "base32", stored: "invalid!" },
 		{ secretEncoding: "base32", stored: "" },
@@ -349,7 +427,7 @@ describe("TOTP secret encoding", () => {
 		{ secretEncoding: "base32", stored: `${secret}=======` },
 		{ secretEncoding: "unknown", stored: secret },
 	])(
-		"rejects invalid stored secrets ($secretEncoding, $stored)",
+		"reports invalid stored secrets as server errors ($secretEncoding, $stored)",
 		async ({ secretEncoding, stored }) => {
 			const { auth, db, testUser, signInWithTestUser } = await getTestInstance({
 				secret: DEFAULT_SECRET,
@@ -376,7 +454,13 @@ describe("TOTP secret encoding", () => {
 					headers,
 					body: { password: testUser.password },
 				}),
-			).rejects.toMatchObject({ body: { code: "INVALID_CODE" } });
+			).rejects.toMatchObject({
+				statusCode: 500,
+				body: {
+					code: "FAILED_TO_GET_TOTP_URI",
+					message: "Failed to get TOTP URI",
+				},
+			});
 			const challenge = await auth.api.signInEmail({
 				body: { email: testUser.email, password: testUser.password },
 				asResponse: true,
@@ -386,14 +470,17 @@ describe("TOTP secret encoding", () => {
 				body: { code: utf8Code },
 				asResponse: true,
 			});
-			expect(rejected.status).toBe(401);
-			expect(await rejected.json()).toMatchObject({ code: "INVALID_CODE" });
+			expect(rejected.status).toBe(500);
+			expect(await rejected.json()).toMatchObject({
+				code: "FAILED_TO_VERIFY_TOTP",
+				message: "Failed to verify TOTP",
+			});
 			expect(
 				await db.findOne({
 					model: "twoFactor",
 					where: [{ field: "userId", value: user.id }],
 				}),
-			).toMatchObject({ failedVerificationCount: 1 });
+			).toMatchObject({ failedVerificationCount: 0, lockedUntil: null });
 		},
 	);
 });

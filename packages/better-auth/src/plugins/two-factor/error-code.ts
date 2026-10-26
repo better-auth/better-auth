@@ -7,6 +7,8 @@ export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
 	TOTP_NOT_ENABLED: "TOTP not enabled",
 	TOTP_ALREADY_ENABLED: "TOTP is already enabled",
 	TOTP_NOT_CONFIGURED: "TOTP is not available",
+	FAILED_TO_VERIFY_TOTP: "Failed to verify TOTP",
+	FAILED_TO_GET_TOTP_URI: "Failed to get TOTP URI",
 	TWO_FACTOR_NOT_ENABLED: "Two factor isn't enabled",
 	BACKUP_CODES_NOT_ENABLED: "Backup codes aren't enabled",
 	INVALID_BACKUP_CODE: "Invalid backup code",

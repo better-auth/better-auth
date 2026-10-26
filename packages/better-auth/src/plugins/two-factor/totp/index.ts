@@ -256,7 +256,11 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			}
 			const decodedSecret = decodeTOTPSecret(secret, twoFactor.secretEncoding);
 			if (decodedSecret === null) {
-				throw APIError.from("BAD_REQUEST", TWO_FACTOR_ERROR_CODES.INVALID_CODE);
+				ctx.context.logger.error("Failed to decode stored TOTP secret");
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					TWO_FACTOR_ERROR_CODES.FAILED_TO_GET_TOTP_URI,
+				);
 			}
 			const totpURI = createOTP(decodedSecret, {
 				digits: opts.digits,
@@ -346,12 +350,17 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 					data: twoFactor.secret,
 				});
 				const secret = decodeTOTPSecret(decrypted, twoFactor.secretEncoding);
-				status =
-					secret !== null &&
-					(await createOTP(secret, {
-						period: opts.period,
-						digits: opts.digits,
-					}).verify(ctx.body.code));
+				if (secret === null) {
+					ctx.context.logger.error("Failed to decode stored TOTP secret");
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						TWO_FACTOR_ERROR_CODES.FAILED_TO_VERIFY_TOTP,
+					);
+				}
+				status = await createOTP(secret, {
+					period: opts.period,
+					digits: opts.digits,
+				}).verify(ctx.body.code);
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
 				await attempt?.restore();

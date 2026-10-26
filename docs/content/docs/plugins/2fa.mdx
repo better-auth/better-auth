@@ -565,6 +565,8 @@ This setting is used when a user starts TOTP setup or restarts setup before veri
 
 The plugin encrypts secrets in both formats and uses the stored encoding to verify codes and generate TOTP URIs. Base32 secrets can be uppercase or lowercase, with or without padding.
 
+If a stored secret cannot be decoded, verifying a TOTP code returns `500` with the `FAILED_TO_VERIFY_TOTP` error code, and getting the TOTP URI returns `500` with `FAILED_TO_GET_TOTP_URI`. The server logs the decoding failure, which does not count as a failed verification attempt.
+
 Run a database migration to add the optional `secretEncoding` column. You don't need to update existing secrets. To import a Base32 secret, encrypt the Base32 string with `symmetricEncrypt` and set `secretEncoding: "base32"` on the `twoFactor` record.
 
 You can pass `secretEncoding` alongside the unencrypted `secret` in the body of `auth.api.generateTOTP` on the server. This helper defaults to `"utf8"`, regardless of the `totpOptions.secretEncoding` setting.
