@@ -3142,10 +3142,35 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 				body: { accountId: account.id },
 			});
 
+			// As before concurrent refreshes were guarded, a hook that cancels the
+			// write gets the fresh tokens for this call but nothing is stored. With a
+			// rotating provider the stored `refresh-0` is now spent, so the next
+			// refresh fails until the account is re-linked; the hook opted into that.
 			expect(result.accessToken).toBe("access-1");
 			expect(await readStoredTokens(account.id)).toEqual({
 				accessToken: "expired-access",
 				refreshToken: "refresh-0",
+			});
+		});
+
+		it("fails when the account is unlinked while the refresh is in flight", async () => {
+			const account = await createExpiredAccount();
+			refreshAccessToken.mockImplementationOnce(async () => {
+				await ctx.internalAdapter.deleteAccount(account.id);
+				return {
+					accessToken: "orphaned-access",
+					refreshToken: "orphaned-refresh",
+					accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+				};
+			});
+
+			await expect(
+				auth.api.getAccessToken({
+					headers,
+					body: { accountId: account.id },
+				}),
+			).rejects.toMatchObject({
+				body: { code: "FAILED_TO_GET_ACCESS_TOKEN" },
 			});
 		});
 

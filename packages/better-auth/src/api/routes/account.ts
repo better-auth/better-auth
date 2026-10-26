@@ -770,7 +770,11 @@ async function refreshAccountTokens(
 		// Another worker or a re-link stored newer tokens while this refresh
 		// was in flight. Keep them rather than overwriting them.
 		const current = await findStoredAccount(ctx, account);
-		if (current?.refreshToken && current.refreshToken !== spentRefreshToken) {
+		if (!current) {
+			// The account was unlinked while the refresh was in flight.
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+		}
+		if (current.refreshToken && current.refreshToken !== spentRefreshToken) {
 			return readStoredTokens(ctx, current);
 		}
 		// Nothing replaced the refresh token, so the write was skipped for
