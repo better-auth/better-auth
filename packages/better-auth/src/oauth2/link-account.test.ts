@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import * as coreEnv from "@better-auth/core/env";
 import type {
 	DiscordProfile,
 	GoogleProfile,
@@ -24,7 +25,7 @@ import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { signJWT } from "../crypto";
 import { getMigrations } from "../db/get-migration";
 import { getTestInstance } from "../test-utils/test-instance";
-import type { User } from "../types";
+import type { BetterAuthOptions, User } from "../types";
 import { DEFAULT_SECRET } from "../utils/constants";
 
 let mockEmail = "";
@@ -2708,5 +2709,91 @@ describe("oauth2 - account-linking logs use the configured logger", async () => 
 			"Unable to link account",
 			expect.anything(),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11321
+	 */
+	it("forwards the pre-account takeover diagnostic warning to the custom logger", async () => {
+		const email = "logger-warning-11321@example.com";
+		await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Logger Warning User",
+		});
+
+		const isDevSpy = vi.spyOn(coreEnv, "isDevelopment").mockReturnValue(true);
+		try {
+			await signInWithGoogle(email);
+
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining("GHSA-g38m-r43w-p2q7"),
+			);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining("requireLocalEmailVerified: false"),
+			);
+			expect(log).not.toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(email),
+			);
+		} finally {
+			isDevSpy.mockRestore();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11321
+	 */
+	it.each([
+		{
+			config: { disableImplicitLinking: true },
+			name: "disableImplicitLinking: true",
+		},
+		{ config: { enabled: false }, name: "enabled: false" },
+	])("logs generic warning instead of pre-account takeover warning when $name", async ({
+		config,
+	}) => {
+		const email = `logger-generic-${Object.keys(config)[0]}@example.com`;
+		await client.signUp.email({
+			email,
+			password: "password123",
+			name: "Logger Generic User",
+		});
+
+		const originalAccountLinking = {
+			...ctx.options.account?.accountLinking,
+		};
+		(ctx.options as BetterAuthOptions).account = {
+			...ctx.options.account,
+			accountLinking: {
+				...ctx.options.account?.accountLinking,
+				...config,
+			},
+		};
+
+		const isDevSpy = vi.spyOn(coreEnv, "isDevelopment").mockReturnValue(true);
+		log.mockClear();
+		try {
+			await signInWithGoogle(email);
+
+			expect(log).not.toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining("GHSA-g38m-r43w-p2q7"),
+			);
+			expect(log).toHaveBeenCalledWith(
+				"warn",
+				expect.stringContaining(
+					"User already exist but account isn't linked to google",
+				),
+			);
+		} finally {
+			(ctx.options as BetterAuthOptions).account = {
+				...ctx.options.account,
+				accountLinking: originalAccountLinking,
+			};
+			isDevSpy.mockRestore();
+		}
 	});
 });
