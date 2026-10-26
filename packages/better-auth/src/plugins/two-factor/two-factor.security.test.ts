@@ -2,7 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -488,12 +488,19 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 		});
 
 		const sessionsBefore = await countSessions();
-		const freshCode = await createOTP(secret).totp();
-		const res = await auth.api.verifyTOTP({
-			body: { code: freshCode },
-			headers: challengeHeaders,
-			asResponse: true,
-		});
+		vi.useFakeTimers();
+		let res: Response;
+		try {
+			vi.setSystemTime(new Date(Date.now() + 31000));
+			const freshCode = await createOTP(secret).totp();
+			res = await auth.api.verifyTOTP({
+				body: { code: freshCode },
+				headers: challengeHeaders,
+				asResponse: true,
+			});
+		} finally {
+			vi.useRealTimers();
+		}
 
 		expect(res.status).toBe(401);
 		const json = (await res.json()) as { message: string };
@@ -518,20 +525,28 @@ describe("two-factor security: 2FA challenge is single-use and expiry-bounded", 
 	it("two concurrent verifications of the same challenge yield exactly one session", async () => {
 		const challengeHeaders = await startChallenge();
 		const sessionsBefore = await countSessions();
-		const code = await createOTP(secret).totp();
+		vi.useFakeTimers();
+		let first: Response;
+		let second: Response;
+		try {
+			vi.setSystemTime(new Date(Date.now() + 65000));
+			const code = await createOTP(secret).totp();
 
-		const [first, second] = await Promise.all([
-			auth.api.verifyTOTP({
-				body: { code },
-				headers: challengeHeaders,
-				asResponse: true,
-			}),
-			auth.api.verifyTOTP({
-				body: { code },
-				headers: challengeHeaders,
-				asResponse: true,
-			}),
-		]);
+			[first, second] = await Promise.all([
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: challengeHeaders,
+					asResponse: true,
+				}),
+				auth.api.verifyTOTP({
+					body: { code },
+					headers: challengeHeaders,
+					asResponse: true,
+				}),
+			]);
+		} finally {
+			vi.useRealTimers();
+		}
 
 		const statuses = [first.status, second.status].sort();
 		expect(statuses).toEqual([200, 401]);
@@ -727,5 +742,204 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		// the consume and never reach session creation, so at most one 200.
 		const successCount = results.filter((res) => res.status === 200).length;
 		expect(successCount).toBeLessThanOrEqual(1);
+	});
+});
+
+/**
+ * Shared TOTP replay fixture: enrolled user, verified factor, bound helpers.
+ * Suites use distinct fake-time steps so step-keyed markers never collide.
+ */
+async function setupTotpUser(opts?: { secondaryStorage?: SecondaryStorage }) {
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		...(opts?.secondaryStorage
+			? { secondaryStorage: opts.secondaryStorage }
+			: {}),
+		plugins: [twoFactor()],
+	});
+	const { headers: initialHeaders } = await signInWithTestUser();
+	const dbUser = await db.findOne<User>({
+		model: "user",
+		where: [{ field: "email", value: testUser.email }],
+	});
+	const userId = dbUser!.id;
+	const enrollment = await auth.api.enableTwoFactor({
+		body: { password: testUser.password },
+		headers: initialHeaders,
+	});
+	if (enrollment.method !== "totp") {
+		throw new Error("expected totp enrollment");
+	}
+	const row = await db.findOne<TwoFactorTable>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: userId }],
+	});
+	const secret = await symmetricDecrypt({
+		key: DEFAULT_SECRET,
+		data: row!.secret,
+	});
+	const enrollCode = await createOTP(secret).totp();
+	const verifyEnrollRes = await auth.api.verifyTOTP({
+		body: { code: enrollCode },
+		headers: initialHeaders,
+		asResponse: true,
+	});
+	expect(verifyEnrollRes.status).toBe(200);
+	async function startChallenge(): Promise<Headers> {
+		const res = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+		return convertSetCookieToCookie(res.headers);
+	}
+	const verify = (code: string, headers: Headers): Promise<Response> =>
+		auth.api.verifyTOTP({ body: { code }, headers, asResponse: true });
+	return {
+		auth,
+		db,
+		userId,
+		secret,
+		startChallenge,
+		verify,
+		activeSessionHeaders: convertSetCookieToCookie(verifyEnrollRes.headers),
+	};
+}
+
+async function withStep(advanceMs: number, fn: () => Promise<void>) {
+	vi.useFakeTimers();
+	try {
+		vi.setSystemTime(new Date(Date.now() + advanceMs));
+		return await fn();
+	} finally {
+		vi.useRealTimers();
+	}
+}
+
+async function expectInvalidCode(res: Response): Promise<void> {
+	expect(res.status).toBe(401);
+	const json = (await res.json()) as { message: string };
+	expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+}
+
+describe("two-factor security: TOTP single-use replay prevention (RFC 6238 §5.2)", async () => {
+	const { secret, startChallenge, verify, activeSessionHeaders } =
+		await setupTotpUser();
+
+	it("should reject reused TOTP code on step-up verification (RFC 6238 §5.2)", async () => {
+		// Fresh unconsumed step past enrollment.
+		await withStep(31000, async () => {
+			const code = await createOTP(secret).totp();
+			const firstRes = await verify(code, activeSessionHeaders);
+			expect(firstRes.status).toBe(200);
+			await expectInvalidCode(await verify(code, activeSessionHeaders));
+		});
+	});
+
+	it("should accept valid code from subsequent time step after consuming previous step", async () => {
+		await withStep(65000, async () => {
+			const code1 = await createOTP(secret).totp();
+			expect((await verify(code1, activeSessionHeaders)).status).toBe(200);
+
+			// Advance to the subsequent step.
+			vi.setSystemTime(new Date(Date.now() + 31000));
+			const code2 = await createOTP(secret).totp();
+			expect((await verify(code2, activeSessionHeaders)).status).toBe(200);
+
+			// Boundary: offset -2 is outside the ±1 window.
+			const otp = createOTP(secret, { period: 30 });
+			const currentStep = Math.floor(Date.now() / 30000);
+			// cspell:ignore hotp
+			await expectInvalidCode(
+				await verify(await otp.hotp(currentStep - 2), activeSessionHeaders),
+			);
+		});
+	});
+
+	it("should reject reusing TOTP code across different sign-in challenges", async () => {
+		await withStep(195000, async () => {
+			const code = await createOTP(secret).totp();
+			expect((await verify(code, await startChallenge())).status).toBe(200);
+			await expectInvalidCode(await verify(code, await startChallenge()));
+		});
+	});
+
+	it("should reject concurrent replay attempts with the same TOTP code in a 5-request burst", async () => {
+		await withStep(260000, async () => {
+			const code = await createOTP(secret).totp();
+			const challenges = await Promise.all(
+				Array.from({ length: 5 }, () => startChallenge()),
+			);
+			const statuses = (
+				await Promise.all(challenges.map((headers) => verify(code, headers)))
+			)
+				.map((r) => r.status)
+				.sort();
+			// Exactly one request succeeds with 200, the remaining 4 fail with 401
+			expect(statuses).toEqual([200, 401, 401, 401, 401]);
+		});
+	});
+});
+
+describe("two-factor security: TOTP replay prevention with secondaryStorage", async () => {
+	// Map-backed store: sessions flow through get/set while replay markers
+	// use increment/delete, so every method must behave like the real backend.
+	const store = new Map<string, { value: string; expiresAt: number }>();
+	const readEntry = (key: string) => {
+		const entry = store.get(key);
+		if (!entry) return null;
+		if (entry.expiresAt < Date.now()) {
+			store.delete(key);
+			return null;
+		}
+		return entry;
+	};
+	const secondaryStorage: SecondaryStorage = {
+		async get(key: string) {
+			return readEntry(key)?.value ?? null;
+		},
+		async getAndDelete(key: string) {
+			const entry = readEntry(key);
+			store.delete(key);
+			return entry?.value ?? null;
+		},
+		async increment(key: string, ttl: number) {
+			const current = readEntry(key);
+			const count = Number(current?.value ?? 0) + 1;
+			store.set(key, {
+				value: String(count),
+				expiresAt: current ? current.expiresAt : Date.now() + ttl * 1000,
+			});
+			return count;
+		},
+		async set(key: string, value: string, ttl?: number) {
+			store.set(key, {
+				value,
+				expiresAt: Date.now() + (ttl ?? 60) * 1000,
+			});
+		},
+		async delete(key: string) {
+			store.delete(key);
+		},
+	};
+
+	const { secret, startChallenge, verify } = await setupTotpUser({
+		secondaryStorage,
+	});
+
+	it("should reject concurrent replay attempts with secondaryStorage across separate challenges", async () => {
+		await withStep(60000, async () => {
+			const code = await createOTP(secret).totp();
+			const challenges = await Promise.all(
+				Array.from({ length: 5 }, () => startChallenge()),
+			);
+			const statuses = (
+				await Promise.all(challenges.map((headers) => verify(code, headers)))
+			)
+				.map((r) => r.status)
+				.sort();
+			// Exactly one succeeds, remaining 4 are rejected
+			expect(statuses).toEqual([200, 401, 401, 401, 401]);
+		});
 	});
 });

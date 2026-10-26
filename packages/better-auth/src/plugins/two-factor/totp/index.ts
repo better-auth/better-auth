@@ -4,7 +4,7 @@ import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
-import { symmetricDecrypt } from "../../../crypto";
+import { constantTimeEqual, symmetricDecrypt } from "../../../crypto";
 import { shouldRequirePassword } from "../../../utils/password";
 import { PACKAGE_VERSION } from "../../../version";
 import type { BackupCodeOptions } from "../backup-codes";
@@ -15,6 +15,7 @@ import type {
 	TwoFactorTable,
 	UserWithTwoFactor,
 } from "../types";
+import type { TwoFactorValidSignal } from "../verify-two-factor";
 import {
 	assertTwoFactorNotLocked,
 	recordTwoFactorFailure,
@@ -296,16 +297,72 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			const attempt = isSignIn
 				? await beginAttempt(DEFAULT_TWO_FACTOR_ALLOWED_ATTEMPTS)
 				: null;
-			let status: boolean;
+			let replayIdToClean: string | null = null;
+			let status = false;
 			try {
 				const decrypted = await symmetricDecrypt({
 					key: ctx.context.secretConfig,
 					data: twoFactor.secret,
 				});
-				status = await createOTP(decrypted, {
+				const otp = createOTP(decrypted, {
 					period: opts.period,
 					digits: opts.digits,
-				}).verify(ctx.body.code);
+				});
+				let matchedStep: number | null = null;
+				const currentStep = Math.floor(Date.now() / (opts.period * 1000));
+				for (let offset = -1; offset <= 1; offset++) {
+					const candidateStep = currentStep + offset;
+					// cspell:ignore hotp
+					const candidateCode = await otp.hotp(candidateStep);
+					if (constantTimeEqual(candidateCode, ctx.body.code)) {
+						matchedStep ??= candidateStep;
+					}
+				}
+				const shouldReserve =
+					isSignIn ||
+					twoFactor.verified === true ||
+					(user.twoFactorEnabled && twoFactor.verified !== false);
+
+				if (matchedStep === null) {
+					status = false;
+				} else if (shouldReserve) {
+					const expiresAt = new Date((matchedStep + 2) * opts.period * 1000);
+					// Step-keyed tombstone: steps are unique, so no pre-reserve
+					// cleanup is needed and adjacent-step collisions cannot false-block.
+					const replayId = `totp-used:${twoFactor.id}:${matchedStep}`;
+					let reserved = false;
+					if (
+						ctx.context.secondaryStorage &&
+						!ctx.context.options.verification?.storeInDatabase
+					) {
+						const ttlSeconds = Math.max(
+							1,
+							Math.ceil((expiresAt.getTime() - Date.now()) / 1000),
+						);
+						reserved =
+							(await ctx.context.secondaryStorage.increment(
+								replayId,
+								ttlSeconds,
+							)) === 1;
+					} else {
+						// Atomic first-writer-wins gate (no read-modify-write):
+						// losers observe the consumed step as INVALID_CODE.
+						reserved =
+							await ctx.context.internalAdapter.reserveVerificationValue({
+								identifier: replayId,
+								value: "used",
+								expiresAt,
+							});
+					}
+					status = reserved;
+					if (reserved) {
+						replayIdToClean = replayId;
+					}
+				} else {
+					// Enrollment verification claims no marker (nothing consumed yet);
+					// single-use applies from the next verification on.
+					status = true;
+				}
 			} catch (error) {
 				// A server error before the code is checked must not spend the slot.
 				await attempt?.restore();
@@ -318,47 +375,74 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				}
 				return invalid("INVALID_CODE");
 			}
-			if (isSignIn) {
-				await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
-			}
 
-			// Enrollment mode: TOTP row exists but hasn't been verified yet.
-			// This covers fresh TOTP setup (twoFactorEnabled=false),
-			// adding TOTP to an OTP-only account (twoFactorEnabled=true),
-			// and pre-migration rows where verified is null/undefined.
-			if (twoFactor.verified !== true) {
-				if (!user.twoFactorEnabled) {
-					// session.session is guaranteed non-null here: the sign-in guard
-					// above already rejected isSignIn && verified === false.
-					const activeSession = session.session!;
-					const updatedUser = await ctx.context.internalAdapter.updateUser(
-						user.id,
-						{
-							twoFactorEnabled: true,
-						},
-					);
-					const newSession = await ctx.context.internalAdapter.createSession(
-						user.id,
-						false,
-						activeSession,
-					);
-
-					await setSessionCookie(ctx, {
-						session: newSession,
-						user: updatedUser,
-					});
-					await ctx.context.internalAdapter.deleteSession(activeSession.token);
+			const sessionSignal: TwoFactorValidSignal = {};
+			try {
+				if (isSignIn) {
+					await resetTwoFactorFailures(ctx, twoFactorTable, twoFactor);
 				}
-				// Mark verified only after all session operations succeed.
-				// This keeps the gate on twoFactorEnabled (retry-safe) and ensures
-				// a partial failure cannot leave verified=true with twoFactorEnabled=false.
-				await ctx.context.adapter.update({
-					model: twoFactorTable,
-					update: { verified: true },
-					where: [{ field: "id", value: twoFactor.id }],
-				});
+
+				// Enrollment: fresh setup, OTP-only accounts adding TOTP, and
+				// pre-migration rows with verified null/undefined.
+				if (twoFactor.verified !== true) {
+					if (!user.twoFactorEnabled) {
+						// session.session is guaranteed non-null here: the sign-in guard
+						// above already rejected isSignIn && verified === false.
+						const activeSession = session.session!;
+						const updatedUser = await ctx.context.internalAdapter.updateUser(
+							user.id,
+							{
+								twoFactorEnabled: true,
+							},
+						);
+						const newSession = await ctx.context.internalAdapter.createSession(
+							user.id,
+							false,
+							activeSession,
+						);
+
+						await setSessionCookie(ctx, {
+							session: newSession,
+							user: updatedUser,
+						});
+						await ctx.context.internalAdapter.deleteSession(
+							activeSession.token,
+						);
+					}
+					// Mark verified only after session ops succeed: retry-safe, and a
+					// partial failure cannot leave verified=true with twoFactorEnabled=false.
+					await ctx.context.adapter.update({
+						model: twoFactorTable,
+						update: { verified: true },
+						where: [{ field: "id", value: twoFactor.id }],
+					});
+				}
+				// valid() flips sessionSignal once the session row exists.
+				// Pre-session failures roll back below; post-session ones
+				// keep the marker (rollback would mint a second session).
+				const result = await valid(ctx, sessionSignal);
+				replayIdToClean = null;
+				return result;
+			} catch (error) {
+				if (replayIdToClean && !sessionSignal.sessionIssued) {
+					// Pre-session failure spent no session: return the slot so
+					// a transient error does not burn the code on retry.
+					await attempt?.restore();
+					if (
+						ctx.context.secondaryStorage &&
+						!ctx.context.options.verification?.storeInDatabase
+					) {
+						try {
+							await ctx.context.secondaryStorage.delete(replayIdToClean);
+						} catch {}
+					} else {
+						await ctx.context.internalAdapter
+							.deleteVerificationByIdentifier(replayIdToClean)
+							.catch(() => {});
+					}
+				}
+				throw error;
 			}
-			return valid(ctx);
 		},
 	);
 

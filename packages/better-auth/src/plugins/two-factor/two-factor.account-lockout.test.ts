@@ -138,8 +138,9 @@ async function setup(
 			asResponse: true,
 		});
 	}
-	function correctTotp() {
-		return createOTP(secret).totp();
+	function correctTotp(stepOffset = 0) {
+		const currentStep = Math.floor(Date.now() / 30000);
+		return createOTP(secret).hotp(currentStep + stepOffset);
 	}
 	async function failOtpOnce(): Promise<Response> {
 		const challengeHeaders = await startChallenge();
@@ -320,7 +321,7 @@ describe("two-factor: account-level lockout across challenges", () => {
 		}
 		const stillOpen = await verifyTotp(
 			await startChallenge(),
-			await correctTotp(),
+			await correctTotp(1),
 		);
 		expect(stillOpen.status).toBe(200);
 	});
