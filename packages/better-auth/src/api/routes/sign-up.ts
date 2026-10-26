@@ -1,6 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { queueAfterTransactionHook, runWithTransaction } from "@better-auth/core/context";
+import {
+	queueAfterTransactionHook,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
