@@ -1019,6 +1019,10 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 				disableTestUser: true,
 			},
 		);
+		const ctx = await auth.$context;
+		const transactionSpy = ctx.adapter.options?.adapterConfig.transaction
+			? vi.spyOn(ctx.adapter, "transaction")
+			: undefined;
 
 		await auth.api.signUpEmail({
 			body: {
@@ -1031,6 +1035,9 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 		await Promise.all(backgroundTasks);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+		if (transactionSpy) {
+			expect(transactionSpy).toHaveBeenCalled();
+		}
 	});
 });
 
