@@ -370,6 +370,100 @@ describe("listMembers with >100 members", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12053
+ */
+describe("removeMember with >100 members", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				// A function limit leaves listMembers on its default page of 100.
+				membershipLimit: async () => 500,
+			}),
+		],
+	});
+	const ctx = await auth.$context;
+	const { headers } = await signInWithTestUser();
+
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "large-owner-org",
+			slug: "large-owner-org",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	// Creator + 110 members, then a second owner as the 112th member.
+	for (let i = 0; i < 110; i++) {
+		const user = await ctx.adapter.create({
+			model: "user",
+			data: {
+				email: `large-owner-org-${i}@test.com`,
+				name: `large-owner-org-${i}`,
+			},
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org.id,
+				userId: user.id,
+				role: "member",
+			},
+		});
+	}
+	const secondOwnerUser = await ctx.adapter.create({
+		model: "user",
+		data: {
+			email: "large-owner-org-second-owner@test.com",
+			name: "large-owner-org-second-owner",
+		},
+	});
+	const secondOwner = await auth.api.addMember({
+		body: {
+			organizationId: org.id,
+			userId: secondOwnerUser.id,
+			role: "owner",
+		},
+	});
+	if (!secondOwner) throw new Error("Second owner not added");
+
+	it("should remove an owner when another owner exists beyond the first 100 members", async () => {
+		const removed = await auth.api.removeMember({
+			body: {
+				organizationId: org.id,
+				memberIdOrEmail: secondOwner.id,
+			},
+			headers,
+		});
+		expect(removed?.member.id).toBe(secondOwner.id);
+		expect(
+			await ctx.adapter.count({
+				model: "member",
+				where: [{ field: "organizationId", value: org.id }],
+			}),
+		).toBe(111);
+	});
+
+	it("should still refuse to remove the only remaining owner", async () => {
+		const self = await auth.api.getActiveMember({
+			query: { organizationId: org.id },
+			headers,
+		});
+		await expect(
+			auth.api.removeMember({
+				body: {
+					organizationId: org.id,
+					memberIdOrEmail: self.id,
+				},
+				headers,
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES
+				.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER.message,
+		);
+	});
+});
+
 describe("updateMemberRole", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		plugins: [organization()],

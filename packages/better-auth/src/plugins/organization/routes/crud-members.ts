@@ -379,14 +379,24 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
 					);
 				}
-				const { members } = await adapter.listMembers({
-					organizationId: organizationId,
-				});
-				const owners = members.filter((member) => {
-					const roles = member.role.split(",");
-					return roles.includes(creatorRole);
-				});
-				if (owners.length <= 1) {
+				// Look for another owner on the member table alone: listMembers
+				// returns one page and joins every member's user row, which drops
+				// owners past the first page and can exceed the bound-parameter
+				// limit of some databases (e.g. D1).
+				const otherOwnerCandidates = await ctx.context.adapter.findMany<Member>(
+					{
+						model: "member",
+						where: [
+							{ field: "organizationId", value: organizationId },
+							{ field: "role", value: creatorRole, operator: "contains" },
+							{ field: "id", value: toBeRemovedMember.id, operator: "ne" },
+						],
+					},
+				);
+				const hasOtherOwner = otherOwnerCandidates.some((member) =>
+					member.role.split(",").includes(creatorRole),
+				);
+				if (!hasOtherOwner) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
