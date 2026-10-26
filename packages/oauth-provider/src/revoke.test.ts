@@ -53,16 +53,17 @@ describe("oauth revoke", async () => {
 
 	async function createAuthUrl(
 		overrides?: Partial<Parameters<typeof createAuthorizationURL>[0]>,
+		registered = oauthClient,
 	) {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+		if (!registered?.client_id || !registered?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
 		const codeVerifier = generateRandomString(32);
 		const url = await createAuthorizationURL({
 			id: providerId,
 			options: {
-				clientId: oauthClient?.client_id,
-				clientSecret: oauthClient?.client_secret,
+				clientId: registered?.client_id,
+				clientSecret: registered?.client_secret,
 				redirectURI: redirectUri,
 			},
 			redirectURI: "",
@@ -83,8 +84,9 @@ describe("oauth revoke", async () => {
 			Partial<Parameters<typeof authorizationCodeRequest>[0]>,
 			"code"
 		>,
+		registered = oauthClient,
 	) {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+		if (!registered?.client_id || !registered?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
 
@@ -92,8 +94,8 @@ describe("oauth revoke", async () => {
 			...overrides,
 			redirectURI: redirectUri,
 			options: {
-				clientId: oauthClient.client_id,
-				clientSecret: oauthClient.client_secret,
+				clientId: registered.client_id,
+				clientSecret: registered.client_secret,
 				redirectURI: redirectUri,
 			},
 		});
@@ -119,8 +121,12 @@ describe("oauth revoke", async () => {
 	async function getTokens(
 		overrides?: Partial<Parameters<typeof createAuthUrl>[0]>,
 		resource?: string,
+		registered = oauthClient,
 	) {
-		const { url: authUrl, codeVerifier } = await createAuthUrl(overrides);
+		const { url: authUrl, codeVerifier } = await createAuthUrl(
+			overrides,
+			registered,
+		);
 		let callbackRedirectUrl = "";
 		await client.$fetch(authUrl.toString(), {
 			onError(context) {
@@ -128,11 +134,14 @@ describe("oauth revoke", async () => {
 			},
 		});
 		const url = new URL(callbackRedirectUrl);
-		return await validateAuthCode({
-			code: url.searchParams.get("code")!,
-			codeVerifier,
-			resource,
-		});
+		return await validateAuthCode(
+			{
+				code: url.searchParams.get("code")!,
+				codeVerifier,
+				resource,
+			},
+			registered,
+		);
 	}
 
 	// Registers a confidential client application to work with
@@ -366,6 +375,63 @@ describe("oauth revoke", async () => {
 				expect(revocation.data).toBe(null);
 				expect(revocation.error).toBe(null);
 			}
+		});
+
+		it("should not tear down the caller's tokens for another client's revoked refresh_token", async () => {
+			const otherClient = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					application_type: "native",
+					token_endpoint_auth_method: "client_secret_post",
+					skip_consent: true,
+				},
+			});
+			const ownerTokens = await getTokens();
+			const callerTokens = await getTokens(undefined, undefined, otherClient);
+			expect(callerTokens.data?.refresh_token).toBeDefined();
+
+			const revokeAs = (registered: OAuthClient | null, token: string) =>
+				client.oauth2.revoke(
+					{
+						client_id: registered?.client_id,
+						client_secret: registered?.client_secret,
+						token,
+						token_type_hint: "refresh_token",
+					},
+					{
+						headers: {
+							accept: "application/json",
+							"content-type": "application/x-www-form-urlencoded",
+						},
+					},
+				);
+			expect(
+				(await revokeAs(oauthClient, ownerTokens.data?.refresh_token!)).error,
+			).toBe(null);
+
+			const revocation = await revokeAs(
+				otherClient,
+				ownerTokens.data?.refresh_token!,
+			);
+			expect(revocation.data).toBe(null);
+			expect(revocation.error).toBe(null);
+
+			const introspection = await client.oauth2.introspect(
+				{
+					client_id: otherClient?.client_id,
+					client_secret: otherClient?.client_secret,
+					token: callerTokens.data?.refresh_token!,
+					token_type_hint: "refresh_token",
+				},
+				{
+					headers: {
+						accept: "application/json",
+						"content-type": "application/x-www-form-urlencoded",
+					},
+				},
+			);
+			expect(introspection.data?.active).toBe(true);
 		});
 	});
 
