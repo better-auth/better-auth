@@ -2935,6 +2935,8 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 	async ({ encryptOAuthTokens }) => {
 		const refreshAccessToken =
 			vi.fn<(refreshToken: string) => Promise<OAuth2Tokens>>();
+		const accountUpdateBefore = vi.fn(async (): Promise<boolean | void> => {});
+		const accountUpdateAfter = vi.fn(async (_account: Account | null) => {});
 		const { auth, signInWithTestUser } = await getTestInstance({
 			socialProviders: {
 				google: {
@@ -2945,6 +2947,14 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 				},
 			},
 			account: { encryptOAuthTokens },
+			databaseHooks: {
+				account: {
+					update: {
+						before: accountUpdateBefore,
+						after: accountUpdateAfter,
+					},
+				},
+			},
 		});
 		const ctx = await auth.$context;
 		const tokenContext = ctx as unknown as AuthContext;
@@ -3001,6 +3011,8 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 
 		beforeEach(() => {
 			refreshAccessToken.mockReset();
+			accountUpdateBefore.mockClear();
+			accountUpdateAfter.mockClear();
 		});
 
 		it("refreshes once when getAccessToken is called concurrently", async () => {
@@ -3017,6 +3029,10 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 			);
 
 			expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+			expect(refreshAccessToken).toHaveBeenCalledWith(
+				"refresh-0",
+				expect.anything(),
+			);
 			for (const result of results) {
 				expect(result.accessToken).toBe("access-1");
 			}
@@ -3040,6 +3056,10 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 			);
 
 			expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+			expect(refreshAccessToken).toHaveBeenCalledWith(
+				"refresh-0",
+				expect.anything(),
+			);
 			for (const result of results) {
 				expect(result.accessToken).toBe("access-1");
 				expect(result.refreshToken).toBe("refresh-1");
@@ -3104,6 +3124,29 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 				accessToken: "relinked-access",
 				refreshToken: "relinked-refresh",
 			});
+			// The skipped write must not reach `update.after` hooks.
+			expect(accountUpdateAfter).toHaveBeenCalledTimes(1);
+			expect(accountUpdateAfter).not.toHaveBeenCalledWith(
+				null,
+				expect.anything(),
+			);
+		});
+
+		it("returns the refreshed tokens when an update.before hook cancels the write", async () => {
+			useRotatingProvider();
+			const account = await createExpiredAccount();
+			accountUpdateBefore.mockResolvedValueOnce(false);
+
+			const result = await auth.api.getAccessToken({
+				headers,
+				body: { accountId: account.id },
+			});
+
+			expect(result.accessToken).toBe("access-1");
+			expect(await readStoredTokens(account.id)).toEqual({
+				accessToken: "expired-access",
+				refreshToken: "refresh-0",
+			});
 		});
 
 		it("still fails when the refresh token was not replaced", async () => {
@@ -3121,3 +3164,65 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 		});
 	},
 );
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11561
+ */
+it("does not share in-flight refreshes between auth instances", async () => {
+	const createInstance = async () => {
+		const refreshAccessToken = vi.fn(async (): Promise<OAuth2Tokens> => {
+			await new Promise((resolve) => setTimeout(resolve, 50));
+			return {
+				accessToken: `access-${crypto.randomUUID()}`,
+				refreshToken: `refresh-${crypto.randomUUID()}`,
+				accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+			};
+		});
+		const { auth, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					refreshAccessToken,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const { headers, user } = await signInWithTestUser();
+		// Both databases hold the same account row, as a copied database would.
+		await ctx.adapter.create({
+			model: "account",
+			data: {
+				id: "shared-account-id",
+				userId: user.id,
+				providerId: "google",
+				accountId: "shared-google-account",
+				accessToken: "expired-access",
+				refreshToken: "shared-refresh",
+				accessTokenExpiresAt: new Date(Date.now() - 1000),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+			forceAllowId: true,
+		});
+		return { auth, headers, refreshAccessToken };
+	};
+	const first = await createInstance();
+	const second = await createInstance();
+
+	const [firstResult, secondResult] = await Promise.all([
+		first.auth.api.getAccessToken({
+			headers: first.headers,
+			body: { accountId: "shared-account-id" },
+		}),
+		second.auth.api.getAccessToken({
+			headers: second.headers,
+			body: { accountId: "shared-account-id" },
+		}),
+	]);
+
+	expect(first.refreshAccessToken).toHaveBeenCalledTimes(1);
+	expect(second.refreshAccessToken).toHaveBeenCalledTimes(1);
+	expect(firstResult.accessToken).not.toBe(secondResult.accessToken);
+});

@@ -642,10 +642,14 @@ type RefreshedAccount = {
 };
 
 /**
- * Refreshes running in this process, keyed by account ID and the stored
- * refresh token they spend, so concurrent callers share one provider call.
+ * Refreshes running in this process, per auth instance and keyed by account
+ * ID and the stored refresh token they spend, so concurrent callers share one
+ * provider call.
  */
-const inFlightRefreshes = new Map<string, Promise<RefreshedAccount>>();
+const inFlightRefreshes = new WeakMap<
+	object,
+	Map<string, Promise<RefreshedAccount>>
+>();
 
 async function findStoredAccount(
 	ctx: GenericEndpointContext,
@@ -766,22 +770,32 @@ async function refreshAccountTokens(
 		// Another worker or a re-link stored newer tokens while this refresh
 		// was in flight. Keep them rather than overwriting them.
 		const current = await findStoredAccount(ctx, account);
-		if (!current) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+		if (current?.refreshToken && current.refreshToken !== spentRefreshToken) {
+			return readStoredTokens(ctx, current);
 		}
-		return readStoredTokens(ctx, current);
+		// Nothing replaced the refresh token, so the write was skipped for
+		// another reason, such as an `update.before` hook returning `false`.
+		return { tokens: refreshed, stored: updatedData };
 	};
 
 	if (!isGuarded) {
 		return refresh();
 	}
+	// The internal adapter is created once per auth instance.
+	const instance = ctx.context.internalAdapter;
+	let refreshes = inFlightRefreshes.get(instance);
+	if (refreshes === undefined) {
+		refreshes = new Map();
+		inFlightRefreshes.set(instance, refreshes);
+	}
 	const key = `${account.id}:${spentRefreshToken}`;
-	let pending = inFlightRefreshes.get(key);
+	let pending = refreshes.get(key);
 	if (pending === undefined) {
+		const instanceRefreshes = refreshes;
 		pending = refresh().finally(() => {
-			inFlightRefreshes.delete(key);
+			instanceRefreshes.delete(key);
 		});
-		inFlightRefreshes.set(key, pending);
+		refreshes.set(key, pending);
 	}
 	return pending;
 }
