@@ -995,7 +995,13 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/12051
 	 */
 	it("should send verification email when a background task handler is configured", async () => {
-		const sendVerificationEmail = vi.fn().mockResolvedValue(undefined);
+		let committed = false;
+		let transactional = false;
+		const sendVerificationEmail = vi.fn().mockImplementation(async () => {
+			if (transactional) {
+				expect(committed).toBe(true);
+			}
+		});
 		const backgroundTasks: Promise<unknown>[] = [];
 		const { auth } = await getTestInstance(
 			{
@@ -1020,9 +1026,17 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 			},
 		);
 		const ctx = await auth.$context;
-		const transactionSpy = ctx.adapter.options?.adapterConfig.transaction
-			? vi.spyOn(ctx.adapter, "transaction")
-			: undefined;
+		transactional = !!ctx.adapter.options?.adapterConfig.transaction;
+		if (transactional) {
+			const transaction = ctx.adapter.transaction.bind(ctx.adapter);
+			vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
+				transaction(async (trx) => {
+					const result = await cb(trx);
+					committed = true;
+					return result;
+				}),
+			);
+		}
 
 		await auth.api.signUpEmail({
 			body: {
@@ -1035,9 +1049,6 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 		await Promise.all(backgroundTasks);
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
-		if (transactionSpy) {
-			expect(transactionSpy).toHaveBeenCalled();
-		}
 	});
 });
 
