@@ -306,6 +306,11 @@ async function getBackchannelLogoutTargetRejection(
 		resolved = await Promise.race([
 			dns.lookup(hostname, { all: true }),
 			new Promise<never>((_, reject) => {
+				// A listener added after the abort never fires.
+				if (signal.aborted) {
+					reject(signal.reason);
+					return;
+				}
 				signal.addEventListener("abort", () => reject(signal.reason), {
 					once: true,
 				});
