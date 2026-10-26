@@ -990,6 +990,49 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12051
+	 */
+	it("should send verification email when transaction is enabled with a background task handler", async () => {
+		const sendVerificationEmail = vi.fn();
+		const backgroundTasks: Promise<unknown>[] = [];
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				advanced: {
+					backgroundTasks: {
+						handler: (p) => {
+							backgroundTasks.push(p);
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+				transaction: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "transaction-bg@test.com",
+				password: "password123",
+				name: "Transaction BG",
+			},
+		});
+
+		await Promise.all(backgroundTasks);
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe("sign-up enumeration protection — indistinguishable response", async () => {
