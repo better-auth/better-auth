@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithTransaction } from "@better-auth/core/context";
+import { queueAfterTransactionHook, runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -394,16 +394,18 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
 					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
-						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-								safeCloneRequest(ctx.request),
-							),
-						);
+						await queueAfterTransactionHook(async () => {
+							await ctx.context.runInBackgroundOrAwait(
+								ctx.context.options.emailVerification.sendVerificationEmail(
+									{
+										user: createdUser,
+										url,
+										token,
+									},
+									safeCloneRequest(ctx.request),
+								),
+							);
+						});
 					}
 				}
 
