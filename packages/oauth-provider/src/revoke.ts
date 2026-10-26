@@ -376,7 +376,14 @@ export async function revokeEndpoint(
 				if (tokenType === "access_token") {
 					return await revokeAccessToken(ctx, opts, client.clientId, token);
 				}
-				const refreshToken = await decodeRefreshToken(opts, token);
+				let refreshToken: Awaited<ReturnType<typeof decodeRefreshToken>>;
+				try {
+					refreshToken = await decodeRefreshToken(opts, token);
+				} catch {
+					// A custom `formatRefreshToken.decrypt` may throw a plain Error on
+					// input it cannot decode: not a refresh token of this server.
+					continue;
+				}
 				return await revokeRefreshToken(
 					ctx,
 					opts,

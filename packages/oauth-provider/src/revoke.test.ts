@@ -653,4 +653,113 @@ describe("oauth revoke - config", async () => {
 		expect(revocation.data).toBe(null);
 		expect(revocation.error).toBe(null);
 	});
+
+	describe("formatRefreshToken decrypt throws on foreign input", async () => {
+		const encryptedPrefix = "enc.";
+		const testScopes = ["openid", "offline_access"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: (token) => `${encryptedPrefix}${token}`,
+					decrypt: (token) => {
+						if (!token.startsWith(encryptedPrefix)) {
+							throw new Error("cannot decrypt refresh token");
+						}
+						return { token: token.slice(encryptedPrefix.length) };
+					},
+				},
+			},
+		});
+		if (!oauthClient) expect.unreachable();
+
+		const formHeaders = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+
+		async function getTokens() {
+			const { url: authUrl, codeVerifier } = await createAuthUrl(oauthClient!, {
+				scopes: testScopes,
+			});
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const url = new URL(callbackRedirectUrl);
+			const tokens = await client.oauth2.token(
+				{
+					grant_type: "authorization_code",
+					code: url.searchParams.get("code") ?? undefined,
+					code_verifier: codeVerifier,
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					scope: testScopes.join(" "),
+					redirect_uri: redirectUri,
+				},
+				{ headers: formHeaders },
+			);
+			return tokens.data as { access_token?: string; refresh_token?: string };
+		}
+
+		type TokenTypeHint = "access_token" | "refresh_token";
+
+		function revoke(token: string, token_type_hint?: TokenTypeHint) {
+			return client.oauth2.revoke(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token,
+					token_type_hint,
+				},
+				{ headers: formHeaders },
+			);
+		}
+
+		function introspect(token: string, token_type_hint?: TokenTypeHint) {
+			return client.oauth2.introspect(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token,
+					token_type_hint,
+				},
+				{ headers: formHeaders },
+			);
+		}
+
+		it.each([undefined, "access_token", "refresh_token"] as const)(
+			"should succeed for an unknown token with token_type_hint %s",
+			async (token_type_hint) => {
+				const revocation = await revoke("bogus", token_type_hint);
+				expect(revocation.data).toBe(null);
+				expect(revocation.error).toBe(null);
+			},
+		);
+
+		it("should revoke an opaque access_token sent with token_type_hint refresh_token", async () => {
+			const tokens = await getTokens();
+			expect(tokens.access_token).toBeDefined();
+			const revocation = await revoke(tokens.access_token!, "refresh_token");
+			expect(revocation.data).toBe(null);
+			expect(revocation.error).toBe(null);
+			const introspection = await introspect(
+				tokens.access_token!,
+				"access_token",
+			);
+			expect(introspection.data).toEqual({ active: false });
+		});
+
+		it("should still revoke a valid refresh_token", async () => {
+			const tokens = await getTokens();
+			expect(tokens.refresh_token?.startsWith(encryptedPrefix)).toBeTruthy();
+			const revocation = await revoke(tokens.refresh_token!, "refresh_token");
+			expect(revocation.data).toBe(null);
+			expect(revocation.error).toBe(null);
+			const introspection = await introspect(tokens.refresh_token!);
+			expect(introspection.data).toEqual({ active: false });
+		});
+	});
 });
