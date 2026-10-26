@@ -792,7 +792,7 @@ async function resolveDpopTokenBinding(
 	opts: OAuthOptions<Scope[]>,
 	params: {
 		client: SchemaClient<Scope[]>;
-		grantIssuance: ResourceGrantIssuance;
+		grantIssuance: Pick<ResourceGrantIssuance, "dpopBoundAccessTokensRequired">;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
@@ -833,6 +833,36 @@ async function resolveDpopTokenBinding(
 		}
 		throw error;
 	}
+}
+
+/**
+ * Resolves the request's DPoP binding ahead of issuance, by the same resource
+ * policy `createUserTokens` applies. The authorization code grant calls this
+ * before consuming the code and passes the result to issuance as
+ * `confirmation`, so a rejected proof leaves the code for a retry.
+ */
+async function resolveRequestDpopBinding(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		resources?: string[];
+		verificationValue?: VerificationValue;
+	},
+): Promise<Confirmation | undefined> {
+	const policy = await resolveResourcePolicy(ctx, opts, {
+		resource: params.resources,
+		clientId: params.client.clientId,
+		requestedScopes: params.scopes,
+	});
+	return resolveDpopTokenBinding(ctx, opts, {
+		client: params.client,
+		grantIssuance: {
+			dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
+		},
+		verificationValue: params.verificationValue,
+	});
 }
 
 type RefreshTokenRotationReplayRequest = {
@@ -1360,7 +1390,26 @@ async function createUserTokens(
 	return ctx.json(responseBody);
 }
 
-/** Checks verification value */
+/**
+ * Rejects an unknown, expired, or already-redeemed authorization code. A code
+ * presented after redemption revokes the tokens it issued (RFC 6749 §4.1.2).
+ */
+async function rejectAuthorizationCode(
+	ctx: GenericEndpointContext,
+	authorizationCodeId: string,
+): Promise<never> {
+	await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+	throw new APIError("BAD_REQUEST", {
+		error_description: "invalid code",
+		error: "invalid_grant",
+	});
+}
+
+/**
+ * Reads and checks the verification value without consuming it. The caller
+ * consumes the code only after every request-level check passes, so a rejected
+ * verifier, binding, or DPoP proof leaves the code for a retry.
+ */
 async function checkVerificationValue(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1374,20 +1423,17 @@ async function checkVerificationValue(
 		code,
 		"authorization_code",
 	);
-	// Atomic single-use redemption per RFC 6749 §4.1.2. The first caller
-	// receives the row and mints tokens; concurrent racers receive `null`
-	// and fall through to the `invalid_grant` error path (RFC 6749 §5.2).
 	const verification =
-		await ctx.context.internalAdapter.consumeVerificationValue(
+		await ctx.context.internalAdapter.findVerificationValue(
 			authorizationCodeId,
 		);
 
-	if (!verification) {
-		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
-		throw new APIError("BAD_REQUEST", {
-			error_description: "invalid code",
-			error: "invalid_grant",
-		});
+	// Secondary storage returns `expiresAt` as a JSON string, so coerce it.
+	if (
+		!verification ||
+		new Date(verification.expiresAt).getTime() < Date.now()
+	) {
+		return rejectAuthorizationCode(ctx, authorizationCodeId);
 	}
 
 	let rawValue: unknown;
@@ -1676,6 +1722,27 @@ async function handleAuthorizationCodeGrant(
 		getSupportedClaims(opts),
 	);
 
+	// Verify the DPoP proof, including the authorization request's `dpop_jkt`,
+	// before the claim below; issuance reuses this binding.
+	const confirmation = await resolveRequestDpopBinding(ctx, opts, {
+		client,
+		scopes,
+		resources: effectiveResources,
+		verificationValue,
+	});
+
+	// Atomic single-use redemption per RFC 6749 §4.1.2, claimed only after the
+	// request passed every check above. The first caller receives the row and
+	// mints tokens; concurrent racers receive `null` and are rejected as a
+	// replay with `invalid_grant` (RFC 6749 §5.2).
+	const consumed =
+		await ctx.context.internalAdapter.consumeVerificationValue(
+			authorizationCodeId,
+		);
+	if (!consumed) {
+		return rejectAuthorizationCode(ctx, authorizationCodeId);
+	}
+
 	return createUserTokens(ctx, opts, {
 		client,
 		scopes: verificationValue.query.scope?.split(" ") ?? [],
@@ -1690,6 +1757,7 @@ async function handleAuthorizationCodeGrant(
 		requestedUserInfoClaims,
 		resources: effectiveResources,
 		originalResources: authorizedResources,
+		confirmation,
 	});
 }
 
