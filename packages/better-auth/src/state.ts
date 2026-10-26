@@ -136,8 +136,9 @@ export async function generateGenericState(
 		stateCookie.attributes,
 	);
 
-	const expiresAt = new Date();
-	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+	// Use epoch arithmetic: local wall-clock setters such as `setMinutes` can
+	// produce an already-expired date during a DST fall-back hour.
+	const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
 		value: JSON.stringify({
