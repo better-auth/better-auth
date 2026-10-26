@@ -5,6 +5,7 @@ import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
 import {
+	invalidateResourceCache,
 	resetSeedStateForTests,
 	resolveResourcePolicy,
 	seedResourcesOnce,
@@ -296,6 +297,29 @@ describe("resolveResourcePolicy — entity path", () => {
 			requestedScopes: ["read", "write", "anything"],
 		});
 		expect(policy.audienceClaim).toBe(id);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("treats stored empty array allowedScopes as 'no restriction'", async () => {
+		const id = "https://api.example.com/stored-empty";
+		const { ctx, opts } = await bootProvider({
+			resources: [id],
+		});
+		await ctx.adapter.update({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: id }],
+			update: { allowedScopes: [] },
+		});
+		invalidateResourceCache(id);
+		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
+			resource: id,
+			clientId: "client-x",
+			requestedScopes: ["read", "write"],
+		});
+		expect(policy.audienceClaim).toBe(id);
+		expect(policy.effectiveScopes).toStrictEqual(["read", "write"]);
 	});
 
 	it("returns single-resource signing config", async () => {
@@ -617,6 +641,46 @@ describe("resolveResourcePolicy — enforcePerClientResources", () => {
 			requestedScopes: [],
 		});
 		expect(policy.audienceClaim).toBe(id);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11725
+ */
+describe("oauthProvider — allowedScopes configuration validation", () => {
+	it("rejects allowedScopes: [] at construction with guidance to use disabled: true or null", () => {
+		const identifier = "https://api.example.com/invalid-empty-scopes";
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [{ identifier, allowedScopes: [] }],
+			} as OAuthOptions<Scope[]>),
+		).toThrowError(/disabled: true/);
+
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [{ identifier, allowedScopes: [] }],
+			} as OAuthOptions<Scope[]>),
+		).toThrowError(/null/);
+
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [{ identifier, allowedScopes: [""] }],
+			} as OAuthOptions<Scope[]>),
+		).toThrowError(/allowedScopes entries must be non-empty strings/);
+
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [{ identifier, allowedScopes: ["   "] }],
+			} as OAuthOptions<Scope[]>),
+		).toThrowError(/allowedScopes entries must be non-empty strings/);
 	});
 });
 

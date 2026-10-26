@@ -10,6 +10,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { oauthResourceScopeTestSuite } from "../adapter-factory/oauth-resource-scope-test-suite";
 import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
@@ -51,6 +52,7 @@ const { execute } = await testAdapter({
 			token: "prisma-postgres-scim-token",
 			testId: "prisma-postgres",
 		}),
+		oauthResourceScopeTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",

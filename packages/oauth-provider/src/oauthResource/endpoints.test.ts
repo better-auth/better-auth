@@ -15,6 +15,7 @@ import type {
 	OAuthResource,
 	Scope,
 } from "../types";
+import { adminCreateOAuthResource, adminUpdateOAuthResource } from "./index";
 
 beforeEach(() => {
 	vi.spyOn(logger, "warn").mockImplementation(() => undefined);
@@ -164,6 +165,247 @@ describe("resource admin CRUD", () => {
 		expect(fetched.accessTokenTtl).toBe(60);
 		expect(fetched.name).toBe("Original"); // untouched
 		expect(fetched.allowedScopes).toEqual(["read"]); // untouched
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("accepts allowedScopes: [] in admin create schema and HTTP endpoint and stores []", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/admin-create-empty";
+
+		const createEndpoint = adminCreateOAuthResource(instance.opts);
+		const parseResult = createEndpoint.options.body.safeParse({
+			identifier,
+			allowedScopes: [],
+		});
+		expect(parseResult.success).toBe(true);
+
+		const parseEmptyElementResult = createEndpoint.options.body.safeParse({
+			identifier,
+			allowedScopes: [""],
+		});
+		expect(parseEmptyElementResult.success).toBe(false);
+		if (!parseEmptyElementResult.success) {
+			expect(parseEmptyElementResult.error.issues[0]?.message).toMatch(
+				/scope cannot be empty/,
+			);
+		}
+
+		const parseWhitespaceElementResult = createEndpoint.options.body.safeParse({
+			identifier,
+			allowedScopes: ["   "],
+		});
+		expect(parseWhitespaceElementResult.success).toBe(false);
+		if (!parseWhitespaceElementResult.success) {
+			expect(parseWhitespaceElementResult.error.issues[0]?.message).toMatch(
+				/scope cannot be empty/,
+			);
+		}
+
+		const created = (await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier, allowedScopes: [] },
+			headers,
+		})) as OAuthResource;
+		expect(created.allowedScopes).toEqual([]);
+
+		const paddedIdentifier = `${identifier}-padded`;
+		const createdPadded = (await instance.auth.api.adminCreateOAuthResource({
+			body: {
+				identifier: paddedIdentifier,
+				allowedScopes: ["  read  ", "write "],
+			},
+			headers,
+		})) as OAuthResource;
+		expect(createdPadded.allowedScopes).toEqual(["read", "write"]);
+
+		await expect(
+			instance.auth.api.adminCreateOAuthResource({
+				body: { identifier: `${identifier}-ws`, allowedScopes: ["   "] },
+				headers,
+			}),
+		).rejects.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("accepts allowedScopes: [] in admin update schema and HTTP endpoint and stores []", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/admin-update-empty";
+
+		await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier, allowedScopes: ["read"] },
+			headers,
+		});
+
+		const updateEndpoint = adminUpdateOAuthResource(instance.opts);
+		const parseResult = updateEndpoint.options.body.safeParse({
+			allowedScopes: [],
+		});
+		expect(parseResult.success).toBe(true);
+
+		const parseEmptyUpdateResult = updateEndpoint.options.body.safeParse({
+			allowedScopes: [""],
+		});
+		expect(parseEmptyUpdateResult.success).toBe(false);
+		if (!parseEmptyUpdateResult.success) {
+			expect(parseEmptyUpdateResult.error.issues[0]?.message).toMatch(
+				/scope cannot be empty/,
+			);
+		}
+
+		const parseWhitespaceUpdateResult = updateEndpoint.options.body.safeParse({
+			allowedScopes: ["   "],
+		});
+		expect(parseWhitespaceUpdateResult.success).toBe(false);
+		if (!parseWhitespaceUpdateResult.success) {
+			expect(parseWhitespaceUpdateResult.error.issues[0]?.message).toMatch(
+				/scope cannot be empty/,
+			);
+		}
+
+		const updated = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { allowedScopes: [] },
+			headers,
+		})) as OAuthResource;
+		expect(updated.allowedScopes).toEqual([]);
+
+		const updatedPadded = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { allowedScopes: ["  admin:read  "] },
+			headers,
+		})) as OAuthResource;
+		expect(updatedPadded.allowedScopes).toEqual(["admin:read"]);
+
+		await expect(
+			instance.auth.api.adminUpdateOAuthResource({
+				params: { identifier },
+				body: { allowedScopes: ["   "] } as never,
+				headers,
+			}),
+		).rejects.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("unrestricted resource with allowedScopes: [] round-trips from read to update without error", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/round-trip-unrestricted";
+
+		await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier, name: "Unrestricted Resource" },
+			headers,
+		});
+
+		const fetched = (await instance.auth.api.adminGetOAuthResource({
+			params: { identifier },
+			headers,
+		})) as OAuthResource;
+		expect(fetched.allowedScopes).toEqual([]);
+
+		// A client sends back the fetched resource in an update request
+		const updated = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: {
+				name: "Updated Name",
+				allowedScopes: fetched.allowedScopes,
+			},
+			headers,
+		})) as OAuthResource;
+		expect(updated.name).toBe("Updated Name");
+		expect(updated.allowedScopes).toEqual([]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("admin update with allowedScopes: undefined does not modify existing allowedScopes", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const id = "https://api.example.com/scope-preserve-undefined";
+
+		await instance.auth.api.adminCreateOAuthResource({
+			body: {
+				identifier: id,
+				name: "Original Name",
+				allowedScopes: ["read", "write"],
+			},
+			headers,
+		});
+
+		const updated = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier: id },
+			body: {
+				name: "Updated Name",
+				allowedScopes: undefined,
+			},
+			headers,
+		})) as OAuthResource;
+
+		expect(updated.name).toBe("Updated Name");
+		expect(updated.allowedScopes).toEqual(["read", "write"]);
+
+		const ctx = await instance.auth.$context;
+		const row = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: id }],
+		});
+		expect(row?.name).toBe("Updated Name");
+		expect(row?.allowedScopes).toEqual(["read", "write"]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("admin create with omitted allowedScopes stores [] and admin update with allowedScopes: null stores []", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const id = "https://api.example.com/scope-storable-admin";
+		const created = (await instance.auth.api.adminCreateOAuthResource({
+			body: {
+				identifier: id,
+				name: "Scope Storable Admin",
+			},
+			headers,
+		})) as OAuthResource;
+		expect(created.allowedScopes).toEqual([]);
+
+		const ctx = await instance.auth.$context;
+		const rowAfterCreate = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: id }],
+		});
+		expect(rowAfterCreate?.allowedScopes).toEqual([]);
+
+		await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier: id },
+			body: { allowedScopes: ["read", "write"] },
+			headers,
+		});
+		const rowWithScopes = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: id }],
+		});
+		expect(rowWithScopes?.allowedScopes).toEqual(["read", "write"]);
+
+		const cleared = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier: id },
+			body: { allowedScopes: null } as never,
+			headers,
+		})) as OAuthResource;
+		expect(cleared.allowedScopes).toEqual([]);
+
+		const rowAfterClear = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: id }],
+		});
+		expect(rowAfterClear?.allowedScopes).toEqual([]);
 	});
 
 	it("update on a missing identifier returns 404", async () => {

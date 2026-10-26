@@ -12,24 +12,33 @@ import {
 	updateResourceEndpoint,
 } from "./endpoints";
 
-/**
- * Shared body schema for create/update — every field is optional except
- * `identifier` on create (validated in the handler). Update accepts a
- * subset; the handler only writes fields that are explicitly present.
- */
-const resourceBodySchema = z.object({
+const baseResourceBodySchema = z.object({
 	identifier: z.string().min(1).optional(),
 	name: z.string().optional(),
 	accessTokenTtl: z.number().int().positive().nullable().optional(),
 	refreshTokenTtl: z.number().int().positive().nullable().optional(),
 	signingAlgorithm: z.enum(JWS_ALGORITHMS).nullable().optional(),
 	signingKeyId: z.string().nullable().optional(),
-	// FIXME(#11725): reject [] and point callers to `disabled` or `null`.
-	allowedScopes: z.array(z.string()).nullable().optional(),
 	customClaims: z.record(z.string(), z.unknown()).nullable().optional(),
 	dpopBoundAccessTokensRequired: z.boolean().optional(),
 	disabled: z.boolean().optional(),
 	metadata: z.record(z.string(), z.unknown()).nullable().optional(),
+});
+
+const createResourceBodySchema = baseResourceBodySchema
+	.extend({
+		allowedScopes: z
+			.array(z.string().trim().min(1, "scope cannot be empty"))
+			.nullable()
+			.optional(),
+	})
+	.required({ identifier: true });
+
+const updateResourceBodySchema = baseResourceBodySchema.extend({
+	allowedScopes: z
+		.array(z.string().trim().min(1, "scope cannot be empty"))
+		.nullable()
+		.optional(),
 });
 
 export const adminCreateOAuthResource = (opts: OAuthOptions<Scope[]>) =>
@@ -37,7 +46,7 @@ export const adminCreateOAuthResource = (opts: OAuthOptions<Scope[]>) =>
 		"/admin/oauth2/resources",
 		{
 			method: "POST",
-			body: resourceBodySchema.required({ identifier: true }),
+			body: createResourceBodySchema,
 			metadata: { SERVER_ONLY: true },
 		},
 		async (ctx) => createResourceEndpoint(ctx, opts),
@@ -72,7 +81,7 @@ export const adminUpdateOAuthResource = (opts: OAuthOptions<Scope[]>) =>
 		"/admin/oauth2/resources/:identifier",
 		{
 			method: "PATCH",
-			body: resourceBodySchema,
+			body: updateResourceBodySchema,
 			metadata: { SERVER_ONLY: true },
 		},
 		async (ctx) =>

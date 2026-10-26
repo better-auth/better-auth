@@ -794,6 +794,9 @@ export interface OAuthOptions<
 	 *   defaults.
 	 * - Object form: explicit per-resource policy (TTL, signing alg, scope
 	 *   allowlist, custom claims, sender-constraint requirements).
+	 *   `allowedScopes` may be omitted for no scope restriction, or set to a
+	 *   non-empty string array as an allowlist. An empty array (`[]`) is rejected
+	 *   (use `disabled: true` to stop issuing tokens).
 	 *
 	 * Seeding is keyed by `identifier`. Behavior on re-seed is controlled by
 	 * {@link OAuthOptions.resourceSeedMode}.
@@ -1903,8 +1906,10 @@ export interface OAuthResource {
 	signingAlgorithm?: JWSAlgorithms | null;
 	signingKeyId?: string | null;
 	/**
-	 * When non-null, requested scopes must intersect this set or the request is
-	 * rejected with `invalid_scope`.
+	 * When set to a non-empty array, requested scopes must intersect this set or
+	 * the request is rejected with `invalid_scope`. `null`, `undefined`, or `[]`
+	 * in the persisted row are all treated as no scope restriction. An empty
+	 * array cannot be written on purpose via public inputs.
 	 */
 	allowedScopes?: string[] | null;
 	/**
@@ -1947,7 +1952,11 @@ export interface OAuthResourceInput {
 	refreshTokenTtl?: number;
 	signingAlgorithm?: JWSAlgorithms;
 	signingKeyId?: string;
-	allowedScopes?: string[];
+	/**
+	 * Omit for no scope restriction; non-empty array is an allowlist.
+	 * In admin endpoints, `null` or `[]` removes scope restrictions.
+	 */
+	allowedScopes?: string[] | null;
 	customClaims?: Record<string, unknown>;
 	dpopBoundAccessTokensRequired?: boolean;
 	disabled?: boolean;
