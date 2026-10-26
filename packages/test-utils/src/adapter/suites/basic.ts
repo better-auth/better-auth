@@ -3377,6 +3377,54 @@ export const getNormalTestSuiteTests = (
 				expect(neIds).toContain(otherImage.id);
 			},
 
+		// The adapter factory omits `undefined` fields on create, so a document
+		// store may hold no value at all for an optional field.
+		"findMany - eq and ne operators with null value should treat an unset field as null":
+			async () => {
+				const { image: _, ...withoutImage } = await generate("user");
+				const unset = await adapter.create<User>({
+					model: "user",
+					data: withoutImage,
+					forceAllowId: true,
+				});
+				const withImage = await adapter.create<User>({
+					model: "user",
+					data: {
+						...(await generate("user")),
+						image: "https://example.com/avatar.png",
+					},
+					forceAllowId: true,
+				});
+
+				const nullIds = (
+					await adapter.findMany<User>({
+						model: "user",
+						where: [{ field: "image", operator: "eq", value: null }],
+					})
+				).map((u) => u.id);
+				expect(nullIds).toContain(unset.id);
+				expect(nullIds).not.toContain(withImage.id);
+
+				const notNullIds = (
+					await adapter.findMany<User>({
+						model: "user",
+						where: [{ field: "image", operator: "ne", value: null }],
+					})
+				).map((u) => u.id);
+				expect(notNullIds).not.toContain(unset.id);
+				expect(notNullIds).toContain(withImage.id);
+
+				const updated = await adapter.update<User>({
+					model: "user",
+					where: [
+						{ field: "id", value: unset.id },
+						{ field: "image", operator: "eq", value: null },
+					],
+					update: { name: "unset-where-updated" },
+				});
+				expect(updated?.name).toBe("unset-where-updated");
+			},
+
 		"update - should return updated record when where condition uses null value":
 			async () => {
 				const withNull = await adapter.create<User>({
