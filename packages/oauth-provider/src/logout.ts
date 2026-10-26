@@ -1,6 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
+import {
+	classifyHost,
+	isPublicRoutableHost,
+} from "@better-auth/core/utils/host";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
@@ -255,6 +259,71 @@ async function applyBackchannelLogoutPlan(
 }
 
 /**
+ * SSRF gate run immediately before each back-channel logout POST. Returns why
+ * the target must be skipped, or `null` when delivery may proceed.
+ *
+ * Registration only classifies the literal hostname, so a public-looking name
+ * whose DNS record points at a loopback, RFC 1918, link-local (including cloud
+ * metadata), or other RFC 6890 special-purpose address passes it. This re-runs
+ * that check on the stored value and classifies every address the hostname
+ * resolves to. A failed lookup skips delivery instead of letting the fetch
+ * retry it, because an attacker-controlled name server could fail the first
+ * query and answer the second with an internal address.
+ *
+ * Residual risk: the global `fetch` cannot be pinned to the validated address,
+ * so it resolves the hostname again and a DNS-rebinding answer between the two
+ * lookups remains possible. On runtimes without `node:dns` only the syntactic
+ * check applies. Deployments that need a strict guarantee should restrict
+ * outbound traffic at the network layer.
+ */
+async function getBackchannelLogoutTargetRejection(
+	backchannelLogoutUri: string,
+	signal: AbortSignal,
+): Promise<string | null> {
+	let hostname: string;
+	try {
+		hostname = new URL(backchannelLogoutUri).hostname;
+	} catch {
+		return "is not a valid URL";
+	}
+	const host = classifyHost(hostname);
+	if (host.kind !== "public") {
+		return "points to a private or reserved address";
+	}
+	// IP literals are fully classified above; only DNS names need resolving.
+	if (host.literal !== "fqdn") return null;
+
+	let dns: typeof import("node:dns/promises");
+	try {
+		dns = await import("node:dns/promises");
+	} catch {
+		// Runtime without node:dns: rely on the syntactic check above.
+		return null;
+	}
+
+	let resolved: Array<{ address: string }>;
+	try {
+		resolved = await Promise.race([
+			dns.lookup(hostname, { all: true }),
+			new Promise<never>((_, reject) => {
+				signal.addEventListener("abort", () => reject(signal.reason), {
+					once: true,
+				});
+			}),
+		]);
+	} catch {
+		return "could not be resolved";
+	}
+	if (resolved.length === 0) return "could not be resolved";
+	for (const { address } of resolved) {
+		if (!isPublicRoutableHost(address)) {
+			return `resolves to a non-public address (${address})`;
+		}
+	}
+	return null;
+}
+
+/**
  * Asynchronous phase: sign one Logout Token per target client and POST it to
  * the registered `backchannel_logout_uri`. The caller hands this to
  * `runInBackgroundOrAwait`, so when a background handler is configured (Vercel
@@ -262,9 +331,9 @@ async function applyBackchannelLogoutPlan(
  * one it completes inline so delivery is not lost on request teardown.
  *
  * Spec §2.5: "the OP SHOULD NOT retransmit", so each RP gets a single attempt
- * within `BACKCHANNEL_DISPATCH_TIMEOUT_MS`. Every per-client failure (fetch
- * error, non-2xx response, signing error, subject resolution error) is
- * logged; none of them can reject the outer promise.
+ * within `BACKCHANNEL_DISPATCH_TIMEOUT_MS`. Every per-client failure (rejected
+ * delivery address, fetch error, non-2xx response, signing error, subject
+ * resolution error) is logged; none of them can reject the outer promise.
  */
 async function deliverBackchannelLogoutTokens(
 	ctx: GenericEndpointContext,
@@ -284,6 +353,19 @@ async function deliverBackchannelLogoutTokens(
 	await Promise.allSettled(
 		plan.targets.map(async ({ client, sub }) => {
 			try {
+				// One deadline covers the address check and the POST, so a slow
+				// name server cannot extend the per-RP ceiling.
+				const signal = AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS);
+				const rejection = await getBackchannelLogoutTargetRejection(
+					client.backchannelLogoutUri!,
+					signal,
+				);
+				if (rejection) {
+					logger.warn(
+						`back-channel logout to client ${client.clientId} skipped: backchannel_logout_uri ${rejection}`,
+					);
+					return;
+				}
 				const jti = generateRandomString(32, "a-z", "A-Z", "0-9");
 				const token = await signLogoutToken(
 					ctx,
@@ -306,7 +388,7 @@ async function deliverBackchannelLogoutTokens(
 						Accept: "application/json",
 					},
 					body: new URLSearchParams({ logout_token: token }),
-					signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
+					signal,
 					redirect: "error",
 				});
 				// Spec §2.8: RP MUST return 200; many frameworks normalize empty 200
