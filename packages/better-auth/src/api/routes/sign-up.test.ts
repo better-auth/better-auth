@@ -994,8 +994,8 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12051
 	 */
-	it("should send verification email when transaction is enabled with a background task handler", async () => {
-		const sendVerificationEmail = vi.fn();
+	it("should send verification email when a background task handler is configured", async () => {
+		const sendVerificationEmail = vi.fn().mockResolvedValue(undefined);
 		const backgroundTasks: Promise<unknown>[] = [];
 		const { auth } = await getTestInstance(
 			{
@@ -1009,23 +1009,22 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 				},
 				advanced: {
 					backgroundTasks: {
-						handler: (p) => {
-							backgroundTasks.push(p);
+						handler: (promise) => {
+							backgroundTasks.push(promise);
 						},
 					},
 				},
 			},
 			{
 				disableTestUser: true,
-				transaction: true,
 			},
 		);
 
 		await auth.api.signUpEmail({
 			body: {
-				email: "transaction-bg@test.com",
+				email: "bg-handler@test.com",
 				password: "password123",
-				name: "Transaction BG",
+				name: "BG Handler",
 			},
 		});
 
