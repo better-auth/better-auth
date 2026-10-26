@@ -1,5 +1,107 @@
 # @better-auth/oauth-provider
 
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- [#11830](https://github.com/better-auth/better-auth/pull/11830) [`a1f6f0b`](https://github.com/better-auth/better-auth/commit/a1f6f0bf19ba1be85e977d891d0f0ca43723c0a3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps using the CIMD plugin no longer lose an administrator's change to a discovered client when a metadata refresh is running at the same time. Before, disabling the client, setting `skipConsent` or `enableEndSession`, or assigning `client_credentials` scopes while its document was being fetched could be undone by the refresh. No action is needed.
+
+- [#10881](https://github.com/better-auth/better-auth/pull/10881) [`37debaa`](https://github.com/better-auth/better-auth/commit/37debaa8a17d11d05f8eeabdb94877a4b1575a1d) Thanks [@sahiljagtap08](https://github.com/sahiljagtap08)! - Corrected the OpenAPI response schemas for `/oauth2/consent` and `/oauth2/continue` to describe `{ redirect: true, url: string }`, so generated clients no longer expect a nonexistent `redirect_uri` field. Runtime responses are unchanged.
+
+## 1.7.10
+
+### Patch Changes
+
+- [#11786](https://github.com/better-auth/better-auth/pull/11786) [`cdd491b`](https://github.com/better-auth/better-auth/commit/cdd491b9d023f57f511d2905e0dcf55f565666d6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - DPoP proofs are accepted again for two setups that broke in v1.7.9:
+  - Plugin endpoints with route params, such as `/extension/:tenant/token`, that issue tokens with a DPoP proof. A valid proof for `/extension/acme/token` was rejected with `invalid_dpop_proof`, because the expected `htu` contained the literal `:tenant`.
+  - Token and UserInfo requests to a URL with a trailing slash, such as `/api/auth/oauth2/token/`, when `advanced.skipTrailingSlashes` is on. The proof was rejected because the expected `htu` dropped the slash.
+
+  The expected `htu` still takes its origin and base path from `baseURL`, so keep `baseURL` set to the public URL clients call. Other setups are unaffected.
+
+- [#11815](https://github.com/better-auth/better-auth/pull/11815) [`44f14bb`](https://github.com/better-auth/better-auth/commit/44f14bbf82be7352bdafbd78ebdcfa90850eaab0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Device-code clients that request `offline_access` and poll the token endpoint for only some of the RFC 8707 resources the user approved can now refresh for any approved resource. Previously, a refresh for an approved resource left out of the poll failed with `invalid_target`. Device codes polled without `resource`, or for every approved resource, are unaffected.
+
+- [#11695](https://github.com/better-auth/better-auth/pull/11695) [`fe550a9`](https://github.com/better-auth/better-auth/commit/fe550a9c57fa0454c6234cd9e46af4ed9eef9201) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Confidential `private_key_jwt` clients that register inline `jwks` can now replace their own signing keys without a user session. Until now those keys were fixed at registration. The feature is off by default; set `allowClientKeyRotation: true` to enable it. No database migration is needed, but the provider refuses to start with it enabled on the memory adapter or with `advanced.database.generateId: "serial"`, because neither enforces single-use client assertions.
+
+  The client calls `POST /oauth2/client/rotate-keys` with its complete new `jwks` and a client assertion signed by one of its current keys, whose `aud` includes the rotation endpoint's URL. An assertion addressed only to the token endpoint or the issuer is rejected. Keys left out of the new set stop working at once, so roll a key in two steps: send the old and new keys together, then drop the old key once every instance signs with the new one.
+
+- [#11801](https://github.com/better-auth/better-auth/pull/11801) [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If `postLogin.consentReferenceId` returns no reference for some authorizations (for example, it returns an organization ID only for organization scopes), consent is now kept separate per reference. Approving consent without a reference no longer overwrites the consent stored for an organization, and an authorization without a reference no longer skips the consent prompt because the user consented under an organization. Previously, approving `read write` without a reference could replace an organization's stored `read` consent, so later authorizations for that organization were granted `write` without asking. For new authorizations, an empty string is treated the same as no reference, including the `referenceId` passed to token claim callbacks.
+
+  Users may see the consent prompt once for authorizations that were previously approved through another reference's consent. Until they do, silent (`prompt=none`) authorizations in these setups return `consent_required`. Consent overwritten before this release is not repaired; users can review or revoke it through the consent management endpoints. Setups that never configured `consentReferenceId`, or that always return a reference, are unaffected.
+
+- [#11797](https://github.com/better-auth/better-auth/pull/11797) [`906c32f`](https://github.com/better-auth/better-auth/commit/906c32f4b595c01f14917f753a79b77a068f36f0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you enable dynamic client registration, Claude's MCP connector can now register. It requests `urn:ietf:params:oauth:grant-type:jwt-bearer` along with `authorization_code` and `refresh_token`, and Better Auth rejected the whole registration with `invalid_client_metadata` because one grant was unsupported. Dynamic registration now keeps the requested grants the server supports and lists them in the registration response. A request that shares no grant with the server is still rejected. Clients created with `createOAuthClient` or `adminCreateOAuthClient` still reject unsupported grants.
+
+- [#11798](https://github.com/better-auth/better-auth/pull/11798) [`2fa7e2f`](https://github.com/better-auth/better-auth/commit/2fa7e2f8bb603c1013855d43888ec54f6a442ba4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `clientRegistrationDefaultApplicationType: "infer"`, clients that register an `http` callback on `localhost`, `127.0.0.1`, or `[::1]` without `application_type` now register as `native`. This includes older Claude Code releases, which register `http://127.0.0.1:<port>/callback`. Current Claude Code releases send `application_type: "native"` and were not affected. Before, `"infer"` chose `native` only for callbacks whose scheme is not `http` or `https`, so these registrations were treated as `web` and rejected with `invalid_redirect_uri`. The `"web"` default and the `"native"` setting are unchanged, and an `application_type` the client sends is never overridden.
+
+- [#11176](https://github.com/better-auth/better-auth/pull/11176) [`8f3da46`](https://github.com/better-auth/better-auth/commit/8f3da46ae5b1fe577b38bd7952af1116af3087ff) Thanks [@Bekacru](https://github.com/Bekacru)! - The token endpoint now returns `invalid_client` instead of `invalid_grant` when a request names a `client_id` that is not registered, for the `authorization_code`, `refresh_token`, and device code grants. MCP clients whose registration was deleted, for example by a database reset or an upgrade that dropped OAuth tables, now register again and prompt the user to sign in. Before, they kept the deleted `client_id` and stayed signed out until the user cleared their saved credentials by hand. A registered client that sends wrong credentials also gets `invalid_client` now, even when its code or refresh token is also invalid.
+
+- [#11596](https://github.com/better-auth/better-auth/pull/11596) [`963b7f9`](https://github.com/better-auth/better-auth/commit/963b7f9417d676725215ce97e9910370f18d5477) Thanks [@mahoor](https://github.com/mahoor)! - `/oauth2/userinfo`, `/oauth2/introspect` and `/oauth2/revoke` now answer a JWT that fails verification the way they answer any unknown token. Before, they returned an empty 500. This covers an `alg: none` token, a tampered signature, an unknown `kid` and a wrong issuer: userinfo returns 401 `invalid_token` with a `WWW-Authenticate` challenge, introspection returns `{ "active": false }`, and revocation returns its unknown-token error. Valid JWT and opaque access tokens are unaffected, including JWT-shaped tokens issued by `generateOpaqueAccessToken`.
+
+  If you set `disableJwtPlugin: true`, a JWT-shaped token that is not a stored access token, such as an ID token, now gets the same unknown-token response instead of a 500.
+
+  A key set the server cannot use, such as one where two keys share a `kid`, still returns 500.
+
+- [#11781](https://github.com/better-auth/better-auth/pull/11781) [`e34b828`](https://github.com/better-auth/better-auth/commit/e34b8282747b3b0148b011be4c2f8b07364788a7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you configure `cachedTrustedClients`, attempts to update, delete, or rotate the secret of one of those clients through the client management endpoints now fail with HTTP 400 instead of 500. The response body is unchanged (`error: "invalid_client"`), so only code that branches on the status code is affected. A 500 previously made a deliberate refusal look like a server failure.
+
+- [#11799](https://github.com/better-auth/better-auth/pull/11799) [`f42c0c2`](https://github.com/better-auth/better-auth/commit/f42c0c220d42fbfcb672c492e5ef1d2b29da3d2f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Requests that name a `client_id` the server does not know now fail with `error_description` set to `client not found`. Before, `/oauth2/authorize` said `client_id is required`, which read as a missing parameter, `/oauth2/token`, `/oauth2/revoke`, and `/oauth2/introspect` said `missing client`, and requests that authenticate with a `private_key_jwt` client assertion said `unknown client`. You would see this, for example, when an MCP client kept a registration the server had deleted. The `invalid_client` error code is unchanged.
+
+- [#11724](https://github.com/better-auth/better-auth/pull/11724) [`4d7da0b`](https://github.com/better-auth/better-auth/commit/4d7da0bef84d78e39e855efabbe913067225ce8f) Thanks [@drewsephski](https://github.com/drewsephski)! - Clients exchanging an authorization code with PKCE now get the token errors RFC 7636 and RFC 6749 specify. A `code_verifier` that does not match the authorization request's `code_challenge` returns HTTP 400 `invalid_grant`; it previously returned HTTP 401 `invalid_request`. For clients where PKCE is optional, a missing or unexpected `code_verifier` still returns `invalid_request`, now with HTTP 400 instead of 401. No request that failed before now succeeds.
+
+## 1.7.9
+
+### Patch Changes
+
+- [#10799](https://github.com/better-auth/better-auth/pull/10799) [`54a0994`](https://github.com/better-auth/better-auth/commit/54a09948e8a98f9166b650f791b083818c3dab27) Thanks [@bytaesu](https://github.com/bytaesu)! - DPoP token and UserInfo requests now succeed when the server sees a different request URL than the one the client called. This affects deployments behind a proxy that rewrites the host or path, and the Next.js dev server, which reports every request as `localhost`. Before, a client that built the proof's `htu` from the public endpoint URL got `invalid_dpop_proof` for every grant that accepts DPoP.
+
+  The expected `htu` is now the public endpoint URL built from `baseURL`, such as `https://auth.example.com/api/auth/oauth2/token`, or the URL of a plugin endpoint that issues tokens. Behind a proxy, set `baseURL` to the public URL clients call, not the internal one. A client that sends proofs to a host other than `baseURL` must build `htu` from the public URL instead. Deployments where the request URL already matches `baseURL` are unaffected.
+
+- [#11185](https://github.com/better-auth/better-auth/pull/11185) [`0a1a87e`](https://github.com/better-auth/better-auth/commit/0a1a87e388c0b50c8d18f3c411c6963c205b11f1) Thanks [@johanneskares](https://github.com/johanneskares)! - If you use `postLogin` with the documented organization selector, users who belong to more than one organization can now finish authorization. Since v1.6.16, selecting an organization and calling `oauth2.continue({ postLogin: true })` sent these users back to the selection page every time.
+
+  `postLogin.shouldRedirect` now receives `isContinuation`, which is `true` when the user returns from your post login page. To stop the loop, update your callback to match the [Post Login Screen example](https://www.better-auth.com/docs/plugins/oauth-provider#post-login-screen): on a new authorization, ask users with several organizations to choose; on continuation, return `false` once the session's active organization is one the user belongs to. Callbacks that do not read `isContinuation` behave as before.
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11625](https://github.com/better-auth/better-auth/pull/11625) [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed single-use checks for apps that set `advanced.database.generateId: "uuid"`. Default id generation is unaffected, and no migration is needed.
+  - On SQLite and MySQL, SAML sign-in, DPoP-bound requests checked against the database replay store, `private_key_jwt` client authentication, and magic link or email OTP sign-ins that adopt an unverified account failed with a `NOT NULL` error on the `id` column. They now work. SIWE sign-in ignored the `email` field and used the wallet-derived address; it now uses the supplied email when no other account has it.
+  - On Postgres and MongoDB, a reused SAML assertion, DPoP proof, or client assertion was accepted. Each one is now accepted only once.
+
+  With `generateId: "serial"`, behavior is unchanged: these checks need string ids, and Better Auth now logs a warning the first time one of these flows runs.
+
+- [#10956](https://github.com/better-auth/better-auth/pull/10956) [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78) Thanks [@disbell](https://github.com/disbell)! - Native OAuth clients and Client ID Metadata Documents can now use custom-scheme redirect URIs with a host and a path, such as Cursor's `cursor://anysphere.cursor-mcp/oauth/callback`. Previously, only the authority-free reverse-domain form, such as `com.example.app:/callback`, was accepted, and these registrations failed with `invalid_redirect_uri`.
+
+  Cursor also omits `application_type` when it registers, so the `web` default still rejects it. To accept Cursor, set the new `clientRegistrationDefaultApplicationType` option to `"infer"`. A dynamic registration that omits `application_type` then becomes `native` when any of its redirect URIs uses a custom scheme, and every redirect URI must pass the native rules. Setting `"native"` treats every registration that omits the field as `native`. The default remains `"web"`, and an `application_type` the client sends is never overridden.
+
+  Pairwise clients (`subject_type: "pairwise"`) cannot use these host-bearing custom-scheme redirect URIs. Web clients are unaffected: they still accept only `https` redirect URIs on non-loopback hosts.
+
+- [#11658](https://github.com/better-auth/better-auth/pull/11658) [`847acd0`](https://github.com/better-auth/better-auth/commit/847acd02bb2d6d17e757ab2b44a837fa0c3ba669) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you configure `clientPrivileges`, the callback now receives `clientId` when a user reads, updates, deletes, rotates the secret of, or configures scopes on an existing client. You can use it to allow or deny actions per client among users who share a `clientReference`. Before, the callback could not tell which client the request targeted. `clientId` is absent for creating and listing clients, and the callback still cannot grant access to a client owned by someone else, apart from the existing scope-only updates through `adminUpdateOAuthClient`. Existing callbacks keep working unchanged.
+
+- [#10266](https://github.com/better-auth/better-auth/pull/10266) [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9) Thanks [@shiminshen](https://github.com/shiminshen)! - Projects that enable `exactOptionalPropertyTypes` can use the `oauthProvider()` and `mcp()` plugins again. Since 1.7.0, adding either plugin to `betterAuth()` failed to type-check with a TS2322 error.
+
+- [#11654](https://github.com/better-auth/better-auth/pull/11654) [`1a9be41`](https://github.com/better-auth/better-auth/commit/1a9be41d184ee2fcbc7f39b1ef1ab5cb492f7147) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Authorized client owners can pause and resume an OAuth client by updating its `disabled` field through `adminUpdateOAuthClient`. A disabled client cannot obtain new tokens, and token introspection reports its existing tokens as inactive.
+
+- [#11655](https://github.com/better-auth/better-auth/pull/11655) [`38f3bb3`](https://github.com/better-auth/better-auth/commit/38f3bb34af7de8b17078a5d4e26bf2f430337b58) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you register OAuth clients from your server with `adminCreateOAuthClient`, you can now pass `resources` to link the new client to protected resources in the same call. Previously you created the client first and then called `adminLinkClientResource` for each resource. When `resourcePrivileges` is configured, it is called with the `link` action for each requested resource, and a missing or disabled resource rejects the registration with `invalid_target`. Dynamic client registration and `adminLinkClientResource` are unchanged.
+
+- [#11655](https://github.com/better-auth/better-auth/pull/11655) [`38f3bb3`](https://github.com/better-auth/better-auth/commit/38f3bb34af7de8b17078a5d4e26bf2f430337b58) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource identifiers created with `adminCreateOAuthResource` or listed in the `resources` option now follow the same rules as the `resource` parameter in token and registration requests. An identifier with an empty fragment (`https://api.example.com/#`) or a `javascript:`, `data:`, or `vbscript:` scheme is rejected, and startup seeding skips it with a warning. Token requests already rejected these identifiers, so no working resource is affected. Setups with a custom `identifierValidator` are unaffected.
+
+- [#11726](https://github.com/better-auth/better-auth/pull/11726) [`aaf0d7d`](https://github.com/better-auth/better-auth/commit/aaf0d7da3e854ab6e19c184b682308d4f024e4f0) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps that configure protected resources, through `resources` in `oauthProvider()` or `resource` in `mcp()`, keep working when the resource table cannot be written at startup. Since 1.7.0, a database that was briefly unreachable, a table that was not migrated yet, or two instances starting at the same time made every auth route fail until the process restarted, and `auth generate` failed for Drizzle projects. The auth instance now starts, logs the error through your configured `logger`, and writes the resources on the first request that needs one.
+
+  With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes`, including the one `mcp()` adds, still cannot be stored. The app now starts, but requests that use any configured resource fail until you declare `allowedScopes` for that resource.
+
+## 1.7.7
+
+### Patch Changes
+
+- [#8686](https://github.com/better-auth/better-auth/pull/8686) [`683ac1d`](https://github.com/better-auth/better-auth/commit/683ac1ddc31f1007171b045230827edb08b99f91) Thanks [@lennondotw](https://github.com/lennondotw)! - Add an optional `validateRedirectUri` callback for trusted deployments with dynamic OAuth redirect URIs. Existing configurations keep their registered URI validation behavior.
+
+- [#11402](https://github.com/better-auth/better-auth/pull/11402) [`b26057e`](https://github.com/better-auth/better-auth/commit/b26057e23a3c4fc8c97c346857751564d57324c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Export `verifyOAuthQueryParams` from the package root, so an application that renders its own consent page can verify the `sig`/`exp` this plugin's `signParams` puts on the authorization query before it renders anything.
+
 ## 1.7.6
 
 ## 1.7.5

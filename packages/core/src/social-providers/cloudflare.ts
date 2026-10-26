@@ -87,9 +87,15 @@ type CloudflareClientAuthentication =
 			 */
 			clientSecret: string;
 			/**
-			 * The authentication method configured for the token endpoint.
+			 * Authentication strategy for token endpoint requests.
 			 *
-			 * @default "client_secret_basic"
+			 * @default { method: "client_secret_basic" }
+			 */
+			tokenEndpointAuth?:
+				| { method: "client_secret_basic" | "client_secret_post" }
+				| undefined;
+			/**
+			 * @deprecated Use `tokenEndpointAuth` instead.
 			 */
 			tokenEndpointAuthMethod?:
 				| "client_secret_basic"
@@ -104,7 +110,11 @@ type CloudflareClientAuthentication =
 			/**
 			 * Clients without a secret do not authenticate at the token endpoint.
 			 *
-			 * @default "none"
+			 * @default { method: "none" }
+			 */
+			tokenEndpointAuth?: { method: "none" } | undefined;
+			/**
+			 * @deprecated Use `tokenEndpointAuth` instead.
 			 */
 			tokenEndpointAuthMethod?: "none" | undefined;
 	  };
@@ -125,10 +135,13 @@ export type CloudflareOptions = CloudflareBaseOptions &
 const getTokenEndpointAuth = (
 	options: CloudflareOptions,
 ): TokenEndpointAuth => {
-	const defaultMethod = options.clientSecret ? "client_secret_basic" : "none";
-	const method = options.tokenEndpointAuthMethod ?? defaultMethod;
-
-	return { method };
+	return (
+		options.tokenEndpointAuth ?? {
+			method:
+				options.tokenEndpointAuthMethod ??
+				(options.clientSecret ? "client_secret_basic" : "none"),
+		}
+	);
 };
 
 export const cloudflare = (options: CloudflareOptions) => {

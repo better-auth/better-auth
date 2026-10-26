@@ -46,7 +46,14 @@ export async function onCheckoutSessionCompleted(
 	try {
 		const client = options.stripeClient;
 		const checkoutSession = event.data.object as Stripe.Checkout.Session;
-		if (checkoutSession.mode === "setup" || !options.subscription?.enabled) {
+		/**
+		 * Only `subscription` mode is currently supported.
+		 * @see https://docs.stripe.com/api/checkout/sessions/object#checkout_session_object-mode
+		 */
+		if (
+			checkoutSession.mode !== "subscription" ||
+			!options.subscription?.enabled
+		) {
 			return;
 		}
 		const subscription = await client.subscriptions.retrieve(
@@ -244,12 +251,15 @@ export async function onSubscriptionCreated(
 				referenceId,
 				stripeCustomerId,
 				stripeSubscriptionId: stripeSubscriptionCreated.id,
-				status: stripeSubscriptionCreated.status,
+				// Stripe's enums are open since stripe-node 22.4 (they include `OtherString`);
+				// store the value as-is, as the update paths already do.
+				status: stripeSubscriptionCreated.status as Subscription["status"],
 				plan: plan.name.toLowerCase(),
 				periodStart,
 				periodEnd,
 				seats,
-				billingInterval: subscriptionItem.price.recurring?.interval,
+				billingInterval: subscriptionItem.price.recurring
+					?.interval as Subscription["billingInterval"],
 			},
 		});
 

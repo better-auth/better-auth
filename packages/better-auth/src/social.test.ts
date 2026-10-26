@@ -16,7 +16,15 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { createAuthMiddleware } from "./api";
 import { getOAuthState } from "./api/state/oauth";
 import { parseSetCookieHeader } from "./cookies";
@@ -696,6 +704,133 @@ describe("Disable implicit signup", async () => {
 });
 
 describe("Disable signup", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11480
+	 */
+	describe("ID-token sign-in", () => {
+		const googleIdTokenOptions = (email: string) => {
+			const profile: GoogleProfile = {
+				aud: "test",
+				azp: "test",
+				email,
+				email_verified: true,
+				exp: 2_000_000_000,
+				family_name: "User",
+				given_name: "Google",
+				iat: 1_900_000_000,
+				iss: "https://accounts.google.com",
+				name: "Google User",
+				picture: "https://example.com/avatar.png",
+				sub: "google-id-token-user",
+			};
+			return {
+				clientId: "test",
+				clientSecret: "test",
+				verifyIdToken: async () => true,
+				getUserInfo: async () => ({
+					user: { email, name: profile.name, emailVerified: true },
+					data: profile,
+				}),
+			};
+		};
+
+		it.each([
+			{ requestSignUp: undefined, scenario: "without requestSignUp" },
+			{ requestSignUp: true, scenario: "with requestSignUp" },
+		])(
+			"rejects ID-token sign-in for a new user $scenario",
+			async ({ requestSignUp }) => {
+				const email = "new-id-token-user@example.com";
+				const { client, auth } = await getTestInstance(
+					{
+						socialProviders: {
+							google: {
+								...googleIdTokenOptions(email),
+								disableSignUp: true,
+							},
+						},
+					},
+					{ disableTestUser: true },
+				);
+
+				const response = await client.signIn.social({
+					provider: "google",
+					idToken: { token: "a.b.c" },
+					requestSignUp,
+				});
+
+				const user = await (await auth.$context).adapter.findOne({
+					model: "user",
+					where: [{ field: "email", value: email }],
+				});
+				expect(user).toBeNull();
+				expect(response.error).toMatchObject({
+					status: 401,
+					code: "OAUTH_LINK_ERROR",
+					message: "signup disabled",
+				});
+			},
+		);
+
+		it("allows an existing ID-token user to sign in when provider sign-up is disabled", async () => {
+			const email = "existing-id-token-user@example.com";
+			const { client, auth } = await getTestInstance(
+				{ socialProviders: { google: googleIdTokenOptions(email) } },
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				client.signIn.social({
+					provider: "google",
+					idToken: { token: "a.b.c" },
+				});
+
+			const firstResponse = await signIn();
+			expect(firstResponse.error).toBeNull();
+
+			const provider = (await auth.$context).socialProviders.find(
+				(provider) => provider.id === "google",
+			);
+			expect(provider).toBeDefined();
+			provider!.options!.disableSignUp = true;
+
+			const response = await signIn();
+			expect(response.error).toBeNull();
+			expect(response.data).toMatchObject({
+				redirect: false,
+				user: { email },
+			});
+		});
+
+		it("keeps the top-level provider sign-up restriction for ID-token sign-in", async () => {
+			const { client, auth } = await getTestInstance(
+				{
+					socialProviders: {
+						google: {
+							...googleIdTokenOptions("top-level-id-token-user@example.com"),
+							disableSignUp: false,
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const provider = (await auth.$context).socialProviders.find(
+				(provider) => provider.id === "google",
+			);
+			expect(provider).toBeDefined();
+			provider!.disableSignUp = true;
+
+			const response = await client.signIn.social({
+				provider: "google",
+				idToken: { token: "a.b.c" },
+			});
+			expect(response.error).toMatchObject({
+				status: 401,
+				code: "OAUTH_LINK_ERROR",
+				message: "signup disabled",
+			});
+		});
+	});
+
 	it("Should not create user when sign up is disabled", async () => {
 		const headers = new Headers();
 		const { client, cookieSetter } = await getTestInstance({
@@ -1419,37 +1554,43 @@ describe("Multi-client ID support — other widened providers", () => {
 		["apple", appleConfig, "apple-web"],
 		["facebook", facebookConfig, "fb-web"],
 		["cognito", cognitoConfig, "cog-web"],
-	] as const)("%s uses the first entry of the clientId array for the auth URL", async (provider, config, firstId) => {
-		const { client } = await getTestInstance(
-			{ socialProviders: { [provider]: config } },
-			{ disableTestUser: true },
-		);
+	] as const)(
+		"%s uses the first entry of the clientId array for the auth URL",
+		async (provider, config, firstId) => {
+			const { client } = await getTestInstance(
+				{ socialProviders: { [provider]: config } },
+				{ disableTestUser: true },
+			);
 
-		const res = await client.signIn.social({
-			provider,
-			callbackURL: "/callback",
-		});
+			const res = await client.signIn.social({
+				provider,
+				callbackURL: "/callback",
+			});
 
-		expect(res.data?.url).toContain(firstId);
-	});
+			expect(res.data?.url).toContain(firstId);
+		},
+	);
 
 	it.each([
 		["apple", { ...appleConfig, clientId: [] as string[] }],
 		["facebook", { ...facebookConfig, clientId: [] as string[] }],
 		["cognito", { ...cognitoConfig, clientId: [] as string[] }],
-	] as const)("%s rejects an empty clientId array", async (provider, config) => {
-		const { client } = await getTestInstance(
-			{ socialProviders: { [provider]: config } },
-			{ disableTestUser: true },
-		);
+	] as const)(
+		"%s rejects an empty clientId array",
+		async (provider, config) => {
+			const { client } = await getTestInstance(
+				{ socialProviders: { [provider]: config } },
+				{ disableTestUser: true },
+			);
 
-		const res = await client.signIn.social({
-			provider,
-			callbackURL: "/callback",
-		});
+			const res = await client.signIn.social({
+				provider,
+				callbackURL: "/callback",
+			});
 
-		expect(res.error?.status).toBe(500);
-	});
+			expect(res.error?.status).toBe(500);
+		},
+	);
 });
 
 describe("Apple Provider", async () => {
@@ -1900,6 +2041,106 @@ describe("Vercel Provider", async () => {
 			}),
 		);
 	});
+
+	it(
+		"creates a session through the built-in Vercel callback using workload OIDC",
+		mswServer.boundary(async () => {
+			const oidcAssertionType =
+				"urn:vercel:params:oauth:client-assertion-type:oidc-bearer";
+			const tokenRequest = vi.fn(async ({ request }: { request: Request }) => {
+				const body = new URLSearchParams(await request.text());
+				expect(body.get("grant_type")).toBe("authorization_code");
+				expect(body.get("client_id")).toBe("vercel-client");
+				expect(body.get("client_assertion")).toBe("workload-oidc-token");
+				expect(body.get("client_assertion_type")).toBe(oidcAssertionType);
+				expect(body.get("code_verifier")).toBeTruthy();
+				expect(body.get("redirect_uri")).toBe(
+					"http://localhost:3000/api/auth/callback/vercel",
+				);
+				expect(body.has("client_secret")).toBe(false);
+				expect(request.headers.has("authorization")).toBe(false);
+				return HttpResponse.json({
+					access_token: "user-access-token",
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			});
+			mswServer.use(
+				http.post("https://api.vercel.com/login/oauth/token", tokenRequest),
+				http.get(
+					"https://api.vercel.com/login/oauth/userinfo",
+					({ request }) => {
+						expect(request.headers.get("authorization")).toBe(
+							"Bearer user-access-token",
+						);
+						return HttpResponse.json({
+							sub: "vercel-user",
+							email: "user@example.com",
+							email_verified: true,
+							name: "Vercel User",
+						});
+					},
+				),
+			);
+
+			const getOidcToken = vi.fn(async () => "workload-oidc-token");
+			const { client, auth, cookieSetter } = await getTestInstance(
+				{
+					socialProviders: {
+						vercel: {
+							clientId: "vercel-client",
+							tokenEndpointAuth: {
+								method: "custom",
+								async customizeRequest({ body }) {
+									body.set("client_id", "vercel-client");
+									body.set("client_assertion", await getOidcToken());
+									body.set("client_assertion_type", oidcAssertionType);
+								},
+							},
+						},
+					},
+				},
+				{ disableTestUser: true },
+			);
+			const headers = new Headers();
+			const signIn = await client.signIn.social({
+				provider: "vercel",
+				callbackURL: "/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			expect(signIn.error).toBeNull();
+			expect(getOidcToken).not.toHaveBeenCalled();
+			const authorizationUrl = new URL(signIn.data!.url!);
+			const callbackUrl = new URL(
+				authorizationUrl.searchParams.get("redirect_uri")!,
+			);
+			callbackUrl.searchParams.set(
+				"state",
+				authorizationUrl.searchParams.get("state")!,
+			);
+			callbackUrl.searchParams.set("code", "authorization-code");
+
+			const response = await auth.handler(
+				new Request(callbackUrl, { headers }),
+			);
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toBe("/dashboard");
+			expect(tokenRequest).toHaveBeenCalledOnce();
+			expect(getOidcToken).toHaveBeenCalledOnce();
+			cookieSetter(headers)({ response });
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			expect(session.data?.user.email).toBe("user@example.com");
+			expect(session.data?.user.emailVerified).toBe(true);
+			const ctx = await auth.$context;
+			const accounts = await ctx.internalAdapter.findAccounts(
+				session.data!.user.id,
+			);
+			expect(accounts).toHaveLength(1);
+			expect(accounts[0]?.providerId).toBe("vercel");
+			expect(accounts[0]?.accountId).toBe("vercel-user");
+		}),
+	);
 
 	it("should configure Vercel provider correctly", async () => {
 		const { auth } = await getTestInstance({
@@ -2713,6 +2954,9 @@ describe("Microsoft Provider", async () => {
 	});
 });
 
+/**
+ * @see https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/#choose-a-flow
+ */
 describe("Cloudflare Provider", () => {
 	let userInfoRequestCount = 0;
 
@@ -2935,7 +3179,23 @@ describe("Cloudflare Provider", () => {
 		expect(accounts[0]?.accountId).toBe("cloudflare_user_123");
 	});
 
-	it("should support client_secret_post token authentication", async () => {
+	it.each([
+		{
+			name: "deprecated option",
+			authentication: { tokenEndpointAuthMethod: "client_secret_post" },
+		},
+		{
+			name: "new option",
+			authentication: { tokenEndpointAuth: { method: "client_secret_post" } },
+		},
+		{
+			name: "new option precedence",
+			authentication: {
+				tokenEndpointAuthMethod: "client_secret_basic",
+				tokenEndpointAuth: { method: "client_secret_post" },
+			},
+		},
+	] as const)("uses $name authentication", async ({ authentication }) => {
 		mswServer.use(
 			http.post(
 				"https://dash.cloudflare.com/oauth2/token",
@@ -2965,7 +3225,7 @@ describe("Cloudflare Provider", () => {
 					cloudflare: {
 						clientId: "cloudflare-post-client-id",
 						clientSecret: "cloudflare-post-client-secret",
-						tokenEndpointAuthMethod: "client_secret_post",
+						...authentication,
 					},
 				},
 			},

@@ -239,6 +239,22 @@ describe("verifyGoogleIdToken", () => {
 		expect(payload?.sub).toBe("google-user-123");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11636
+	 */
+	it("accepts a token whose nbf is a few seconds ahead of the server clock", async () => {
+		const { publicJWK, token } = await createSignedGoogleToken({
+			nbf: Math.floor(Date.now() / 1000) + 5,
+		});
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { keys: [publicJWK] },
+		} as never);
+
+		const payload = await verifyGoogleIdToken({ token, audience: CLIENT_ID });
+
+		expect(payload?.sub).toBe("google-user-123");
+	});
+
 	it("rejects tokens signed with symmetric algorithms before fetching Google keys", async () => {
 		const secret = await generateSecret("HS256");
 		const token = await new SignJWT({

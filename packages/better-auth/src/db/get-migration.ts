@@ -1,6 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
-import { getAuthTables } from "@better-auth/core/db";
 import {
 	initGetFieldName,
 	initGetModelName,
@@ -39,12 +38,13 @@ import type {
 	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { getSchema } from "./get-schema";
+import { buildSchema } from "./get-schema";
 
 const postgresMap = {
 	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
+		"int8",
 		"integer",
 		"bigint",
 		"smallint",
@@ -576,8 +576,11 @@ export async function getMigrations(
 	config: BetterAuthOptions,
 	{ throwOnUnsafe = true }: { throwOnUnsafe?: boolean } = {},
 ) {
-	const betterAuthSchema = getSchema(config);
-	const authTables = getAuthTables(config);
+	const {
+		schema: betterAuthSchema,
+		tables: authTables,
+		referenceKeys,
+	} = buildSchema(config);
 	const logger = createLogger(config.logger);
 	const unsafeChanges: string[] = [];
 	const reportUnsafeChange = (message: string) => {
@@ -968,14 +971,27 @@ export async function getMigrations(
 
 	// Helper function to safely resolve model and field names, falling back to
 	// user-supplied strings for external tables not in the BetterAuth schema
-	function getReferencePath(model: string, field: string): string {
+	function getReferencePath(field: DBFieldAttribute): string {
+		const reference = field.references;
+		if (!reference) {
+			throw new BetterAuthError("Cannot resolve a field without references.");
+		}
+		const keys = referenceKeys.get(field);
+		if (!keys) {
+			throw new BetterAuthError(
+				`Missing migration reference metadata for "${reference.model}.${reference.field}".`,
+			);
+		}
 		try {
-			const modelName = getModelName(model);
-			const fieldName = getFieldName({ model, field });
+			const modelName = getModelName(keys.modelKey);
+			const fieldName = getFieldName({
+				model: keys.modelKey,
+				field: keys.fieldKey,
+			});
 			return `${modelName}.${fieldName}`;
 		} catch {
 			// If resolution fails (external table), fall back to user-supplied references
-			return `${model}.${field}`;
+			return `${reference.model}.${reference.field}`;
 		}
 	}
 
@@ -1061,12 +1077,7 @@ export async function getMigrations(
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(
-								getReferencePath(
-									field.references.model,
-									field.references.field,
-								),
-							)
+							.references(getReferencePath(field))
 							.onDelete(field.references.onDelete || "cascade");
 					}
 					if (timestampDefault) {
@@ -1132,12 +1143,7 @@ export async function getMigrations(
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(
-								getReferencePath(
-									field.references.model,
-									field.references.field,
-								),
-							)
+							.references(getReferencePath(field))
 							.onDelete(field.references.onDelete || "cascade");
 					}
 

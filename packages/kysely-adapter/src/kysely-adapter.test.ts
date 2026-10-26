@@ -123,12 +123,13 @@ describe("kysely-adapter", () => {
 		expect(result).toEqual(deleted);
 		expect(selectQuery.select).toHaveBeenCalledWith("verification.id");
 		expect(selectQuery.where).toHaveBeenCalledTimes(1);
-		expect(deleteQuery.where).toHaveBeenCalledTimes(1);
+		expect(deleteQuery.where).toHaveBeenCalledTimes(2);
 		expect(deleteQuery.where).toHaveBeenCalledWith(
 			"verification.id",
 			"in",
 			selectQuery,
 		);
+		expect(deleteQuery.where).toHaveBeenNthCalledWith(2, expect.any(Function));
 		expect(deleteQuery.returningAll).toHaveBeenCalledTimes(1);
 	});
 
@@ -171,6 +172,7 @@ describe("kysely-adapter", () => {
 			"in",
 			selectQuery,
 		);
+		expect(deleteQuery.where).toHaveBeenNthCalledWith(2, expect.any(Function));
 		expect(deleteQuery.outputAll).toHaveBeenCalledWith("deleted");
 	});
 });

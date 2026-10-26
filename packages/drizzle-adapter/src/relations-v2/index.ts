@@ -33,6 +33,7 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import { fromDriverDate, toDriverDate } from "../date-columns";
 import type { RelationKeysByModel } from "../join-relation-key";
 import {
 	buildRelationKeysByModel,
@@ -1129,10 +1130,15 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						.from(table)
 						.where(...clause)
 						.limit(1);
+					// The guard is repeated on the UPDATE itself: PostgreSQL re-checks
+					// an UPDATE's own WHERE after waiting on a concurrent writer, but not
+					// an uncorrelated subquery's, so a guard that lives only in
+					// `targetIds` is never re-evaluated (#10557). See the same code in
+					// ../drizzle-adapter.ts.
 					const updated = await db
 						.update(table)
 						.set(assignments)
-						.where(inArray(idColumn, targetIds))
+						.where(and(...clause, inArray(idColumn, targetIds)))
 						.returning();
 					return (updated[0] as any) ?? null;
 				},
@@ -1172,6 +1178,18 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			// cause double-stringification). For PostgreSQL, native arrays are used.
 			// See: https://github.com/better-auth/better-auth/issues/7440
 			supportsArrays: true,
+			customTransformInput: ({ data, fieldAttributes, model, field }) => {
+				if (fieldAttributes.type !== "date") return data;
+				const table =
+					config.schema?.[model] ??
+					db._?.relations?.[model]?.table ??
+					db._?.fullSchema?.[model];
+				return toDriverDate(data, table?.[field], config.provider);
+			},
+			customTransformOutput: ({ data, fieldAttributes }) => {
+				if (fieldAttributes.type !== "date" || data == null) return data;
+				return fromDriverDate(data);
+			},
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>

@@ -7,7 +7,7 @@ import {
 import type { Session, User } from "better-auth/types";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { resolveAccessTokenClaims } from "./claims";
 import {
 	getResourceCustomClaims,
@@ -30,6 +30,7 @@ import {
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	isInvalidJwtError,
 	parseClientMetadata,
 	resolveSubjectIdentifier,
 	toAudienceClaim,
@@ -120,10 +121,15 @@ async function validateJwtAccessToken(
 	token: string,
 	clientId?: string,
 ) {
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin?.options;
+	// Without the JWT plugin, this server issues only opaque access tokens.
+	if (opts.disableJwtPlugin) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "JWT access tokens are disabled",
+			error: "invalid_request",
+		});
+	}
+	const jwtPlugin = getJwtPlugin(ctx.context);
+	const jwtPluginOptions = jwtPlugin.options;
 	const baseURL = ctx.context.baseURL ?? "";
 	const userInfoAud = `${baseURL}/oauth2/userinfo`;
 	const expectedIssuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
@@ -138,7 +144,7 @@ async function validateJwtAccessToken(
 		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
 			? jwtPluginOptions.jwks.remoteUrl
 			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+					const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
 					// @ts-expect-error response is a JSONWebKeySet but within the response field
 					return jwksRes?.response as JSONWebKeySet | undefined;
 				};
@@ -152,26 +158,27 @@ async function validateJwtAccessToken(
 		);
 		jwtPayload = verified.payload;
 	} catch (error) {
-		if (error instanceof Error) {
-			if (error.name === "TypeError" || error.name === "JWSInvalid") {
-				// likely an opaque token
-				throw new APIError("BAD_REQUEST", {
-					error_description: "invalid JWT signature",
-					error: "invalid_request",
-				});
-			} else if (error.name === "JWTExpired") {
-				return {
-					active: false,
-				};
-			} else if (error.name === "JWTInvalid") {
-				// issuer or other JWT claim validation failure
-				return {
-					active: false,
-				};
-			}
-			throw error;
+		// jose raises these only after the signature verifies: an expired token,
+		// or a malformed claims set. Check them before `isInvalidJwtError`, which
+		// also matches them.
+		if (
+			error instanceof joseErrors.JWTExpired ||
+			error instanceof joseErrors.JWTInvalid
+		) {
+			return {
+				active: false,
+			};
 		}
-		throw new Error(error as unknown as string);
+		// likely an opaque token, or a JWT this server cannot verify (bad
+		// signature, unknown key, failed claim checks such as `iss`), which
+		// may still be a stored opaque token (`generateOpaqueAccessToken`)
+		if (error instanceof TypeError || isInvalidJwtError(error)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "invalid JWT signature",
+				error: "invalid_request",
+			});
+		}
+		throw error;
 	}
 
 	// Manual `aud` validation (RFC 7662 §2.2 + RFC 8707 §3). EVERY value in

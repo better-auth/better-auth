@@ -804,7 +804,7 @@ To update organization info, you can use `organization.update`
           /**
            * The metadata of the organization. 
            */
-          metadata?: Record<string, any> | null = { customerId: "test" }
+          metadata?: Record<string, any> = { customerId: "test" }
       }
       /**
        * The organization ID. to update.
@@ -1186,9 +1186,9 @@ If you want to add a member directly to an organization without sending an invit
   ```ts
   type addMember = {
       /**
-       * The user ID which represents the user to be added as a member. If `null` is provided, then it's expected to provide session headers. 
+       * The ID of the user to add as a member.
        */
-      userId?: string | null = "user-id"
+      userId: string = "user-id"
       /**
        * The role(s) to assign to the new member. 
        */

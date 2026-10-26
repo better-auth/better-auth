@@ -30,6 +30,13 @@ function containsUnsupportedNode(
 	);
 }
 
+function parseMarkdown(value: string) {
+	return fromMarkdown(value, {
+		extensions: [gfm()],
+		mdastExtensions: [gfmFromMarkdown()],
+	});
+}
+
 export function containsUnsupportedGeneratedMarkdown(
 	value: string,
 	policy: GeneratedMarkdownPolicy,
@@ -39,11 +46,17 @@ export function containsUnsupportedGeneratedMarkdown(
 	}
 	const allowedNodes =
 		policy === "description" ? descriptionNodes : inlineNodes;
-	const markdown = fromMarkdown(value, {
-		extensions: [gfm()],
-		mdastExtensions: [gfmFromMarkdown()],
-	});
-	return containsUnsupportedNode(markdown, allowedNodes);
+	return containsUnsupportedNode(parseMarkdown(value), allowedNodes);
+}
+
+export function inlineCodeValues(value: string): string[] {
+	return parseMarkdown(value).children.flatMap((node) =>
+		node.type === "paragraph"
+			? node.children.flatMap((child) =>
+					child.type === "inlineCode" ? [child.value] : [],
+				)
+			: [],
+	);
 }
 
 export function formatUntrustedInlineMarkdown(value: string): string {

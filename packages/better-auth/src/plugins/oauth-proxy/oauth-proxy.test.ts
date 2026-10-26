@@ -18,6 +18,7 @@ import {
 } from "../../api";
 import { parseJSON } from "../../client/parser";
 import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
+import { derivePurposeKey } from "../../crypto/purpose";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { oAuthProxy } from ".";
@@ -71,6 +72,75 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("oauth-proxy", async () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-965c-763c-88jm
+	 */
+	it("packages database state after verification identifiers are namespaced", async () => {
+		const proxySecret = "shared-proxy-purpose-test-secret";
+		const { auth, client } = await getTestInstance({
+			baseURL: "http://preview.example.com",
+			plugins: [
+				oAuthProxy({
+					productionURL: "http://localhost:3000",
+					secret: proxySecret,
+				}),
+			],
+		});
+		const signIn = await client.signIn.social(
+			{ provider: "google", callbackURL: "/dashboard" },
+			{ throw: true },
+		);
+		if (!signIn.url) throw new Error("OAuth authorization URL missing");
+		const encryptedPackage = new URL(signIn.url).searchParams.get("state");
+		if (!encryptedPackage) throw new Error("OAuth proxy state missing");
+		const payload = parseJSON<{ state: string; isOAuthProxy: boolean }>(
+			await symmetricDecrypt({
+				key: derivePurposeKey(proxySecret, "oauth-proxy-package"),
+				data: encryptedPackage,
+			}),
+		);
+		expect(payload.isOAuthProxy).toBe(true);
+		expect(
+			await (await auth.$context).internalAdapter.findVerificationValue(
+				`auth-state:${payload.state}`,
+			),
+		).not.toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-r4xp-prcw-77qf
+	 */
+	it.each([
+		["/callback/google/oauth-proxy", "state-cookie"],
+		["/oauth-proxy-callback", "state-cookie"],
+		["/callback/google/oauth-proxy", "pre-upgrade"],
+		["/oauth-proxy-callback", "pre-upgrade"],
+	] as const)(
+		"rejects profile input on %s encrypted for %s",
+		async (path, source) => {
+			const { auth, client } = await getTestInstance({
+				plugins: [oAuthProxy()],
+			});
+			const { secretConfig } = await auth.$context;
+			const encryptedState = await symmetricEncrypt({
+				key:
+					source === "state-cookie"
+						? derivePurposeKey(secretConfig, "oauth-state-cookie")
+						: secretConfig,
+				data: JSON.stringify({ callbackURL: "/dashboard" }),
+			});
+			let location: string | null = null;
+			await client.$fetch(
+				`${path}?callbackURL=%2Fdashboard&profile=${encodeURIComponent(encryptedState)}`,
+				{
+					onError(context) {
+						location = context.response.headers.get("location");
+					},
+				},
+			);
+			expect(location).toContain("error=invalid_profile");
+		},
+	);
 	it("redirects when a provider cannot derive a stable account identity", async () => {
 		const provider = {
 			id: "invalid-account-identity",
@@ -637,7 +707,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify we can decrypt the state package
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-package"),
 				data: encryptedState!,
 			});
 
@@ -746,7 +816,7 @@ describe("oauth-proxy", async () => {
 
 			// Decrypt and verify profile data
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			const payload = parseJSON<{
@@ -1230,7 +1300,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -1281,7 +1351,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -1356,7 +1426,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify profile data structure
 			const decrypted = await symmetricDecrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			const payload = parseJSON<{
@@ -1404,7 +1474,7 @@ describe("oauth-proxy", async () => {
 			};
 			const expectInvalidPayload = async (payload: unknown) => {
 				const encryptedPayload = await symmetricEncrypt({
-					key: secret,
+					key: derivePurposeKey(secret, "oauth-proxy-profile"),
 					data: JSON.stringify(payload),
 				});
 				await client.$fetch(
@@ -1507,7 +1577,7 @@ describe("oauth-proxy", async () => {
 
 			// Verify: encrypted with dedicated secret, NOT with global secret
 			const decryptedWithDedicated = await symmetricDecrypt({
-				key: dedicatedSecret,
+				key: derivePurposeKey(dedicatedSecret, "oauth-proxy-profile"),
 				data: encryptedProfile!,
 			});
 			expect(decryptedWithDedicated).toContain("user@email.com");
@@ -1597,7 +1667,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encrypted = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -1764,7 +1834,7 @@ describe("oauth-proxy", async () => {
 			};
 
 			const encryptedProfile = await symmetricEncrypt({
-				key: secret,
+				key: derivePurposeKey(secret, "oauth-proxy-profile"),
 				data: JSON.stringify(payload),
 			});
 
@@ -2245,7 +2315,7 @@ describe("oauth-proxy", async () => {
 		expect(encryptedProfile).toBeTruthy();
 		const { secret } = await auth.$context;
 		const decrypted = await symmetricDecrypt({
-			key: secret,
+			key: derivePurposeKey(secret, "oauth-proxy-profile"),
 			data: encryptedProfile!,
 		});
 		const payload = parseJSON<{
@@ -2365,5 +2435,144 @@ describe("oauth-proxy current URL trust", () => {
 		} finally {
 			vi.unstubAllEnvs();
 		}
+	});
+});
+
+describe("oauth-proxy callback binding", () => {
+	const providerId = "test-idp";
+
+	function createProvider(
+		options: Partial<
+			Pick<
+				OAuthProvider,
+				"issuer" | "requiresIdTokenNonce" | "validateAuthorizationCode"
+			>
+		> = {},
+	) {
+		return {
+			id: providerId,
+			name: "Test IdP",
+			issuer: options.issuer,
+			requiresIdTokenNonce: options.requiresIdTokenNonce,
+			accountSubject: () => "test-subject",
+			createAuthorizationURL: vi.fn<OAuthProvider["createAuthorizationURL"]>(
+				({ state }) =>
+					new URL(`https://idp.example.com/authorize?state=${state}`),
+			),
+			validateAuthorizationCode:
+				options.validateAuthorizationCode ??
+				(async () => ({ accessToken: "test-access-token" })),
+			getUserInfo: vi.fn<OAuthProvider["getUserInfo"]>(async () => ({
+				user: {
+					email: "user@idp.example.com",
+					name: "Test User",
+					emailVerified: true,
+				},
+				data: { sub: "test-subject" },
+			})),
+		} satisfies OAuthProvider;
+	}
+
+	function withProvider(provider: OAuthProvider) {
+		return {
+			id: "test-idp-provider",
+			init: (ctx: { socialProviders: OAuthProvider[] }) => ({
+				context: { socialProviders: [provider, ...ctx.socialProviders] },
+			}),
+		};
+	}
+
+	/**
+	 * Starts sign-in on a preview instance and completes the callback on
+	 * production, returning where production redirects.
+	 */
+	async function completeProxiedCallback({
+		preview = createProvider(),
+		production = createProvider(),
+		query = "",
+	}: {
+		preview?: OAuthProvider;
+		production?: OAuthProvider;
+		query?: string;
+	} = {}) {
+		const productionInstance = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				plugins: [oAuthProxy(), withProvider(production)],
+			},
+			{ disableTestUser: true },
+		);
+		const previewInstance = await getTestInstance(
+			{
+				baseURL: "http://preview.example.com",
+				plugins: [
+					oAuthProxy({ productionURL: "http://localhost:3000" }),
+					withProvider(preview),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const { url } = await previewInstance.client.signIn.social(
+			{ provider: providerId, callbackURL: "/dashboard" },
+			{ throw: true },
+		);
+		const state = new URL(url!).searchParams.get("state");
+
+		const redirect: { location: string | null } = { location: null };
+		await productionInstance.client.$fetch(
+			`/callback/${providerId}?code=test&state=${state}${query}`,
+			{
+				onError(context) {
+					redirect.location = context.response.headers.get("location");
+				},
+			},
+		);
+		if (!redirect.location) {
+			throw new Error("OAuth proxy callback did not redirect");
+		}
+		return new URL(redirect.location);
+	}
+
+	it("rejects a callback whose iss does not match the provider issuer", async () => {
+		const location = await completeProxiedCallback({
+			production: createProvider({ issuer: "https://idp.example.com" }),
+			query: "&iss=https://attacker.example",
+		});
+
+		expect(location.searchParams.get("error")).toBe("issuer_mismatch");
+	});
+
+	it("rejects a callback when the provider requires a nonce the state lacks", async () => {
+		const location = await completeProxiedCallback({
+			production: createProvider({ requiresIdTokenNonce: true }),
+		});
+
+		expect(location.searchParams.get("error")).toBe("nonce_binding_missing");
+	});
+
+	it("passes the nonce issued at sign-in to the provider's getUserInfo", async () => {
+		const preview = createProvider({ requiresIdTokenNonce: true });
+		const production = createProvider({ requiresIdTokenNonce: true });
+
+		await completeProxiedCallback({ preview, production });
+
+		const issuedNonce =
+			preview.createAuthorizationURL.mock.calls[0]?.[0].idTokenNonce;
+		expect(issuedNonce).toEqual(expect.any(String));
+		expect(production.getUserInfo).toHaveBeenCalledWith(
+			expect.objectContaining({ expectedIdTokenNonce: issuedNonce }),
+		);
+	});
+
+	it("redirects with invalid_code when the code exchange throws synchronously", async () => {
+		const location = await completeProxiedCallback({
+			production: createProvider({
+				validateAuthorizationCode: () => {
+					throw new Error("token endpoint misconfigured");
+				},
+			}),
+		});
+
+		expect(location.searchParams.get("error")).toBe("invalid_code");
 	});
 });

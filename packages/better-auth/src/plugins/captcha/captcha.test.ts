@@ -92,6 +92,35 @@ describe("captcha", async () => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	it("returns JSON content type for captcha errors", async () => {
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					captcha({
+						provider: "cloudflare-turnstile",
+						secretKey: "xx-secret-key",
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					email: "test@test.com",
+					password: "test123456",
+				}),
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(response.headers.get("content-type")).toBe("application/json");
+		expect(await response.json()).toMatchObject({ code: "MISSING_RESPONSE" });
+	});
+
 	it("should apply rate limits before verifying captcha tokens", async () => {
 		mockBetterFetch.mockClear();
 		mockBetterFetch.mockResolvedValue({
@@ -565,57 +594,59 @@ describe("captcha", async () => {
 			},
 		];
 
-		it.each(
-			providerConfigs,
-		)("$provider bounds the verification request with the shared timeout", async (config) => {
-			mockBetterFetch.mockClear();
-			mockBetterFetch.mockResolvedValue({
-				data: { success: true, challenge_ts: "ts", hostname: "example.com" },
-			});
+		it.each(providerConfigs)(
+			"$provider bounds the verification request with the shared timeout",
+			async (config) => {
+				mockBetterFetch.mockClear();
+				mockBetterFetch.mockResolvedValue({
+					data: { success: true, challenge_ts: "ts", hostname: "example.com" },
+				});
 
-			const { client } = await getTestInstance({
-				plugins: [captcha(config)],
-			});
+				const { client } = await getTestInstance({
+					plugins: [captcha(config)],
+				});
 
-			await client.signIn.email({
-				email: "test@test.com",
-				password: "test123456",
-				fetchOptions: {
-					headers: { "x-captcha-response": "captcha-token" },
-				},
-			});
+				await client.signIn.email({
+					email: "test@test.com",
+					password: "test123456",
+					fetchOptions: {
+						headers: { "x-captcha-response": "captcha-token" },
+					},
+				});
 
-			expect(mockBetterFetch).toHaveBeenCalled();
-			const fetchOptions = mockBetterFetch.mock.calls[0]![1];
-			expect(fetchOptions.timeout).toBe(CAPTCHA_VERIFY_TIMEOUT_MS);
-		});
+				expect(mockBetterFetch).toHaveBeenCalled();
+				const fetchOptions = mockBetterFetch.mock.calls[0]![1];
+				expect(fetchOptions.timeout).toBe(CAPTCHA_VERIFY_TIMEOUT_MS);
+			},
+		);
 
-		it.each(
-			providerConfigs,
-		)("$provider fails closed when the provider call times out", async (config) => {
-			mockBetterFetch.mockClear();
-			// betterFetch aborts on timeout, which surfaces as a thrown AbortError
-			// rather than a resolved error response.
-			mockBetterFetch.mockRejectedValue(
-				new DOMException("The operation was aborted.", "AbortError"),
-			);
+		it.each(providerConfigs)(
+			"$provider fails closed when the provider call times out",
+			async (config) => {
+				mockBetterFetch.mockClear();
+				// betterFetch aborts on timeout, which surfaces as a thrown AbortError
+				// rather than a resolved error response.
+				mockBetterFetch.mockRejectedValue(
+					new DOMException("The operation was aborted.", "AbortError"),
+				);
 
-			const { client } = await getTestInstance({
-				plugins: [captcha(config)],
-			});
+				const { client } = await getTestInstance({
+					plugins: [captcha(config)],
+				});
 
-			const res = await client.signIn.email({
-				email: "test@test.com",
-				password: "test123456",
-				fetchOptions: {
-					headers: { "x-captcha-response": "captcha-token" },
-				},
-			});
+				const res = await client.signIn.email({
+					email: "test@test.com",
+					password: "test123456",
+					fetchOptions: {
+						headers: { "x-captcha-response": "captcha-token" },
+					},
+				});
 
-			// A timed-out provider must not let the request through.
-			expect(res.error?.status).toBe(500);
-			expect(res.data).toBeNull();
-		});
+				// A timed-out provider must not let the request through.
+				expect(res.error?.status).toBe(500);
+				expect(res.data).toBeNull();
+			},
+		);
 	});
 
 	describe("exempt paths", () => {
@@ -868,27 +899,26 @@ describe("captcha", async () => {
 	});
 
 	describe("vercel-botid", () => {
-		it.each([
-			"/sign-up/email",
-			"/sign-in/email",
-			"/request-password-reset",
-		])("rejects bots on %s without a captcha token or secret key", async (path) => {
-			const checkBotId = vi.fn(async () => ({ isBot: true }));
-			const { auth } = await getTestInstance({
-				plugins: [captcha({ provider: "vercel-botid", checkBotId })],
-			});
-			const res = await auth.handler(
-				new Request(`http://localhost:3000/api/auth${path}`, {
-					method: "POST",
-				}),
-			);
+		it.each(["/sign-up/email", "/sign-in/email", "/request-password-reset"])(
+			"rejects bots on %s without a captcha token or secret key",
+			async (path) => {
+				const checkBotId = vi.fn(async () => ({ isBot: true }));
+				const { auth } = await getTestInstance({
+					plugins: [captcha({ provider: "vercel-botid", checkBotId })],
+				});
+				const res = await auth.handler(
+					new Request(`http://localhost:3000/api/auth${path}`, {
+						method: "POST",
+					}),
+				);
 
-			expect(res.status).toBe(403);
-			expect(await res.json()).toMatchObject({
-				code: "VERIFICATION_FAILED",
-			});
-			expect(checkBotId).toHaveBeenCalledOnce();
-		});
+				expect(res.status).toBe(403);
+				expect(await res.json()).toMatchObject({
+					code: "VERIFICATION_FAILED",
+				});
+				expect(checkBotId).toHaveBeenCalledOnce();
+			},
+		);
 
 		/**
 		 * @see https://vercel.com/docs/botid/local-development-behavior

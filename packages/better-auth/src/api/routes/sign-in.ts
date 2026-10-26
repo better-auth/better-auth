@@ -342,6 +342,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					callbackURL: c.body.callbackURL,
 					disableSignUp:
 						(provider.disableImplicitSignUp && !c.body.requestSignUp) ||
+						provider.options?.disableSignUp ||
 						provider.disableSignUp,
 					source: {
 						method: "oauth",

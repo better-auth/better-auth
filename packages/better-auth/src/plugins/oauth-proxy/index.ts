@@ -7,10 +7,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { AccountKey } from "@better-auth/core/db";
 import { accountSchema, userSchema } from "@better-auth/core/db";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { safeJSONParse } from "@better-auth/core/utils/json";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -19,18 +16,19 @@ import { parseJSON } from "../../client/parser";
 import { setSessionCookie } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
-import {
-	resolveOAuthAccountKey,
-	toOAuthProfileRecord,
-} from "../../oauth2/account-key";
+import type { EncryptionPurpose } from "../../crypto/purpose";
+import { derivePurposeKey } from "../../crypto/purpose";
+import { exchangeOAuthCallback } from "../../oauth2/callback";
 import { redirectOnError } from "../../oauth2/errors";
 import {
 	handleOAuthUserInfo,
 	linkOAuthAccount,
 } from "../../oauth2/link-account";
-import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
-import { parseGenericState } from "../../state";
+import {
+	getAuthStateVerificationIdentifier,
+	parseGenericState,
+} from "../../state";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
 import { PACKAGE_VERSION } from "../../version";
@@ -74,12 +72,11 @@ export interface OAuthProxyOptions {
 	 * A dedicated secret used to encrypt and decrypt data passed between
 	 * servers during the OAuth proxy flow.
 	 *
-	 * When set, this secret is used **instead of** the global
-	 * `BETTER_AUTH_SECRET` for all OAuth proxy encryption operations.
-	 * This limits the blast radius if the secret is shared across
-	 * environments (production, preview, development): a leaked proxy
-	 * secret cannot be used to forge sessions or decrypt other data
-	 * protected by the main secret.
+	 * When set, keys derived from this secret are used **instead of** keys
+	 * derived from `BETTER_AUTH_SECRET` for OAuth proxy encryption.
+	 * This limits exposure of data protected only by the main secret if
+	 * the proxy secret is shared across environments (production, preview,
+	 * development). A compromised proxy secret can still affect OAuth flows.
 	 *
 	 * All environments participating in the OAuth proxy flow must share
 	 * the same `secret` value.
@@ -94,9 +91,9 @@ export interface OAuthProxyOptions {
 type OAuthProxyStatePackage = {
 	state: string;
 	/**
-	 * The OAuth state, encrypted under the proxy key (`getEncryptionKey`), not
-	 * the per-environment `oauth_state` cookie key. Production decrypts it with
-	 * the same proxy key, so both state strategies must produce it that way.
+	 * The OAuth state, encrypted under the proxy-state purpose key, not the
+	 * per-environment `oauth_state` cookie key. Production decrypts it with
+	 * the same purpose key for either state strategy.
 	 */
 	stateCookie: string;
 	isOAuthProxy: boolean;
@@ -161,13 +158,17 @@ const oauthCallbackQuerySchema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
 	user: z.string().optional(),
+	iss: z.string().optional(),
+	device_id: z.string().optional(),
 });
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 	const getEncryptionKey = (
 		ctx: GenericEndpointContext,
-	): string | SecretConfig => opts?.secret ?? ctx.context.secretConfig;
+		purpose: EncryptionPurpose,
+	): string | SecretConfig =>
+		derivePurposeKey(opts?.secret ?? ctx.context.secretConfig, purpose);
 
 	const oauthProxyCompletion = createAuthEndpoint(
 		"/callback/:id/oauth-proxy",
@@ -199,7 +200,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 			let decryptedPayload: string;
 			try {
 				decryptedPayload = await symmetricDecrypt({
-					key: getEncryptionKey(ctx),
+					key: getEncryptionKey(ctx, "oauth-proxy-profile"),
 					data: encryptedProfile,
 				});
 			} catch (e) {
@@ -416,7 +417,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let statePackage: OAuthProxyStatePackage | undefined;
 						try {
 							const decryptedPackage = await symmetricDecrypt({
-								key: getEncryptionKey(ctx),
+								key: getEncryptionKey(ctx, "oauth-proxy-package"),
 								data: state,
 							});
 							statePackage =
@@ -449,13 +450,19 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							);
 							return;
 						}
-						const { code, error, user: userData } = query.data;
+						const {
+							code,
+							error,
+							user: userData,
+							iss,
+							device_id: deviceId,
+						} = query.data;
 
 						// Decrypt state to get codeVerifier and callbackURL
 						let stateData: StateData;
 						try {
 							const decryptedState = await symmetricDecrypt({
-								key: getEncryptionKey(ctx),
+								key: getEncryptionKey(ctx, "oauth-proxy-state"),
 								data: statePackage.stateCookie,
 							});
 							stateData = parseJSON<StateData>(decryptedState);
@@ -503,74 +510,23 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
 						}
 
-						// Exchange code for tokens
-						let tokens: OAuth2Tokens | null;
-						try {
-							tokens = await provider.validateAuthorizationCode({
-								code,
-								codeVerifier: stateData.codeVerifier,
-								redirectURI: `${ctx.context.baseURL}${getOAuthCallbackPath(provider)}`,
-							});
-						} catch (e) {
-							ctx.context.logger.error(
-								"Failed to validate authorization code",
-								e,
-							);
-							throw redirectOnError(ctx, errorURL, "invalid_code");
-						}
-
-						if (!tokens) {
-							throw redirectOnError(ctx, errorURL, "invalid_code");
-						}
-
-						const parsedUserData = userData
-							? safeJSONParse<{
-									name?: {
-										firstName?: string;
-										lastName?: string;
-									};
-									email?: string;
-								}>(userData)
-							: null;
-
-						// Get user info from provider
-						const userInfoResult = await provider.getUserInfo({
-							...tokens,
-							/**
-							 * The user object from the provider
-							 * This is only available for some providers like Apple
-							 */
-							user: parsedUserData ?? undefined,
+						const exchanged = await exchangeOAuthCallback(ctx, provider, {
+							code,
+							codeVerifier: stateData.codeVerifier,
+							iss,
+							deviceId,
+							user: userData,
+							idTokenNonce: stateData.idTokenNonce,
 						});
-						const userInfo = userInfoResult?.user;
-
-						if (!userInfo) {
-							ctx.context.logger.error("Unable to get user info from provider");
-							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
+						if (exchanged.error) {
+							throw redirectOnError(ctx, errorURL, exchanged.error);
 						}
+						const { tokens, userInfo, providerProfile, accountKey } = exchanged;
 
 						if (!userInfo.email) {
 							ctx.context.logger.error("Provider did not return email");
 							throw redirectOnError(ctx, errorURL, "email_not_found");
 						}
-						let accountKey: AccountKey;
-						try {
-							accountKey = await resolveOAuthAccountKey(
-								provider,
-								tokens,
-								userInfoResult.data,
-							);
-						} catch (error) {
-							ctx.context.logger.error(
-								"Unable to derive provider account identity",
-								{
-									providerId: provider.id,
-									error,
-								},
-							);
-							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
-						}
-						const providerProfile = toOAuthProfileRecord(userInfoResult.data);
 
 						const proxyCallbackURL = new URL(stateData.callbackURL);
 						const finalCallbackURL =
@@ -607,7 +563,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						};
 
 						const encryptedPayload = await symmetricEncrypt({
-							key: getEncryptionKey(ctx),
+							key: getEncryptionKey(ctx, "oauth-proxy-profile"),
 							data: JSON.stringify(payload),
 						});
 
@@ -656,8 +612,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 
 						// Recover the plaintext OAuth state for the configured strategy,
-						// then re-encrypt it under `getEncryptionKey` (the shared/proxy
-						// secret) so production can read it back; production does not have
+						// then re-encrypt it under the proxy-state purpose key so production
+						// can read it back; production does not have
 						// this environment's `BETTER_AUTH_SECRET`. Any failure (malformed
 						// cookie, decrypt, or encrypt) falls back to a non-proxied flow.
 						try {
@@ -675,7 +631,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 									).get(oauthStateCookie.name)?.value;
 									if (encryptedCookieValue) {
 										plaintextState = await symmetricDecrypt({
-											key: ctx.context.secretConfig,
+											key: derivePurposeKey(
+												ctx.context.secretConfig,
+												"oauth-state-cookie",
+											),
 											data: encryptedCookieValue,
 										});
 									}
@@ -684,7 +643,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								// Database mode: the verification value is already plaintext JSON.
 								const verification =
 									await ctx.context.internalAdapter.findVerificationValue(
-										originalState,
+										getAuthStateVerificationIdentifier(originalState),
 									);
 								plaintextState = verification?.value;
 							}
@@ -693,10 +652,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								return;
 							}
 
-							// Re-encrypt the state under the proxy key, then wrap it in the
-							// package production reads back with that same key.
+							// Encrypt the state under the proxy-state key, then wrap it in a
+							// package encrypted under the separate proxy-package key.
 							const stateCookie = await symmetricEncrypt({
-								key: getEncryptionKey(ctx),
+								key: getEncryptionKey(ctx, "oauth-proxy-state"),
 								data: plaintextState,
 							});
 							const statePackage: OAuthProxyStatePackage = {
@@ -705,7 +664,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								isOAuthProxy: true,
 							};
 							const encryptedPackage = await symmetricEncrypt({
-								key: getEncryptionKey(ctx),
+								key: getEncryptionKey(ctx, "oauth-proxy-package"),
 								data: JSON.stringify(statePackage),
 							});
 

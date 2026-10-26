@@ -158,6 +158,26 @@ const magicLinkVerifyQuerySchema = z.object({
 		})
 		.optional(),
 });
+// Require the exact record shape even if a custom identifier hasher maps
+// different verification purposes to the same storage key.
+const magicLinkRecordSchema = z
+	.object({
+		type: z.literal("magic-link"),
+		email: z.email(),
+		name: z.string().optional(),
+	})
+	.strict();
+function parseMagicLinkRecord(value: string) {
+	try {
+		const parsed: unknown = JSON.parse(value);
+		return magicLinkRecordSchema.safeParse(parsed);
+	} catch {
+		return null;
+	}
+}
+
+const magicLinkIdentifier = (storedToken: string) =>
+	`magic-link:${storedToken}`;
 export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
@@ -243,8 +263,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 						: generateRandomString(32, "a-z", "A-Z");
 					const storedToken = await storeToken(ctx, verificationToken);
 					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: storedToken,
-						value: JSON.stringify({ email, name: ctx.body.name }),
+						identifier: magicLinkIdentifier(storedToken),
+						value: JSON.stringify({
+							type: "magic-link",
+							email,
+							name: ctx.body.name,
+						}),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
 					const realBaseURL = new URL(ctx.context.baseURL);
@@ -301,21 +325,9 @@ export const magicLink = (options: MagicLinkOptions) => {
 					method: "GET",
 					query: magicLinkVerifyQuerySchema,
 					use: [
-						originCheck((ctx) => {
-							return ctx.query.callbackURL
-								? decodeURIComponent(ctx.query.callbackURL)
-								: "/";
-						}),
-						originCheck((ctx) => {
-							return ctx.query.newUserCallbackURL
-								? decodeURIComponent(ctx.query.newUserCallbackURL)
-								: "/";
-						}),
-						originCheck((ctx) => {
-							return ctx.query.errorCallbackURL
-								? decodeURIComponent(ctx.query.errorCallbackURL)
-								: "/";
-						}),
+						originCheck((ctx) => ctx.query.callbackURL || "/"),
+						originCheck((ctx) => ctx.query.newUserCallbackURL || "/"),
+						originCheck((ctx) => ctx.query.errorCallbackURL || "/"),
 					],
 					requireHeaders: true,
 					metadata: {
@@ -351,15 +363,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 					// new URL("http://localhost:3001/hello", "http://localhost:3000").toString()
 					// Returns http://localhost:3001/hello
 					const callbackURL = new URL(
-						ctx.query.callbackURL
-							? decodeURIComponent(ctx.query.callbackURL)
-							: "/",
+						ctx.query.callbackURL || "/",
 						ctx.context.baseURL,
 					).toString();
 					const errorCallbackURL = new URL(
-						ctx.query.errorCallbackURL
-							? decodeURIComponent(ctx.query.errorCallbackURL)
-							: callbackURL,
+						ctx.query.errorCallbackURL || callbackURL,
 						ctx.context.baseURL,
 					);
 
@@ -378,23 +386,34 @@ export const magicLink = (options: MagicLinkOptions) => {
 					}
 
 					const newUserCallbackURL = new URL(
-						ctx.query.newUserCallbackURL
-							? decodeURIComponent(ctx.query.newUserCallbackURL)
-							: callbackURL,
+						ctx.query.newUserCallbackURL || callbackURL,
 						ctx.context.baseURL,
 					).toString();
 					const storedToken = await storeToken(ctx, token);
+					const identifier = magicLinkIdentifier(storedToken);
+					const pendingValue =
+						await ctx.context.internalAdapter.findVerificationValue(identifier);
+					// Reject a known cross-purpose collision without consuming the
+					// other flow's record. Session issuance still requires atomic
+					// consumption and validation of the returned value below.
+					if (
+						!pendingValue ||
+						!parseMagicLinkRecord(pendingValue.value)?.success
+					) {
+						redirectWithError("INVALID_TOKEN");
+					}
 					const tokenValue =
 						await ctx.context.internalAdapter.consumeVerificationValue(
-							storedToken,
+							identifier,
 						);
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}
-					const { email, name } = JSON.parse(tokenValue.value) as {
-						email: string;
-						name?: string | undefined;
-					};
+					const record = parseMagicLinkRecord(tokenValue.value);
+					if (!record?.success) {
+						redirectWithError("INVALID_TOKEN");
+					}
+					const { email, name } = record.data;
 
 					let isNewUser = false;
 					let user = await ctx.context.internalAdapter

@@ -125,6 +125,7 @@ export const apple = (options: AppleOptions) => {
 		idToken: {
 			jwks: (header) => getApplePublicKey(header.kid!),
 			issuer: "https://appleid.apple.com",
+			algorithms: ["RS256"],
 			audience:
 				options.audience && options.audience.length
 					? options.audience
