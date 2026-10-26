@@ -335,12 +335,12 @@ Before starting the migration process, set up Better Auth in your project. Follo
                   } : {}),
                   // # Username (if you enabled username plugin)
                   ...(isUsernameEnabled ? {
-                      // Clerk exports missing values as empty strings
+                      // Empty CSV cells parse as empty strings
                       username: username || undefined,
                   } : {}),
                   // # Phone Number (if you enabled phone number plugin)  
                   ...(isPhoneNumberEnabled ? {
-                      // Clerk exports missing values as empty strings
+                      // Empty CSV cells parse as empty strings
                       phoneNumber: primary_phone_number || undefined,
                       phoneNumberVerified: verified_phone_numbers.length > 0,
                   } : {}),
