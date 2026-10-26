@@ -61,6 +61,36 @@
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.14
+
+### Patch Changes
+
+- [#12031](https://github.com/better-auth/better-auth/pull/12031) [`d2cb7f5`](https://github.com/better-auth/better-auth/commit/d2cb7f56ca2e9faa9b1522117570c438aa367484) Thanks [@bytaesu](https://github.com/bytaesu)! - Two-factor TOTP now accepts imported Base32 secrets stored as `base32:<secret>`.
+
+- Updated dependencies [[`2947ab7`](https://github.com/better-auth/better-auth/commit/2947ab76c3a141f205813de9201661ee21e327c2)]:
+  - @better-auth/core@1.7.14
+  - @better-auth/drizzle-adapter@1.7.14
+  - @better-auth/kysely-adapter@1.7.14
+  - @better-auth/memory-adapter@1.7.14
+  - @better-auth/mongo-adapter@1.7.14
+  - @better-auth/prisma-adapter@1.7.14
+  - @better-auth/telemetry@1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11985](https://github.com/better-auth/better-auth/pull/11985) [`9cb95fe`](https://github.com/better-auth/better-auth/commit/9cb95fe3d0f5b3bdd08522b42ef362739dc1597a) Thanks [@bytaesu](https://github.com/bytaesu)! - Type declarations no longer list type-only exports as values, so importing one as a value now fails type checking instead of failing at runtime.
+
+- Updated dependencies [[`2712441`](https://github.com/better-auth/better-auth/commit/2712441e355204389c88a7eb546974cce1936b5f), [`1cf4b2c`](https://github.com/better-auth/better-auth/commit/1cf4b2c8f5bffdbdb101f11a6fefedbab6cf2994)]:
+  - @better-auth/core@1.7.13
+  - @better-auth/drizzle-adapter@1.7.13
+  - @better-auth/kysely-adapter@1.7.13
+  - @better-auth/memory-adapter@1.7.13
+  - @better-auth/mongo-adapter@1.7.13
+  - @better-auth/prisma-adapter@1.7.13
+  - @better-auth/telemetry@1.7.13
+
 ## 1.7.12
 
 ### Patch Changes

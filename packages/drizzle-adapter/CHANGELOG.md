@@ -15,6 +15,10 @@
 - Updated dependencies []:
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.14
+
+## 1.7.13
+
 ## 1.7.12
 
 ## 1.7.11

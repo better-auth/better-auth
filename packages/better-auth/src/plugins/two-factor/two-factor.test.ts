@@ -1,9 +1,10 @@
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { applySetCookies, parseSetCookieHeader } from "../../cookies";
-import { symmetricDecrypt } from "../../crypto";
+import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -1826,6 +1827,116 @@ describe("pre-migration twoFactor rows (verified absent)", async () => {
 			where: [{ field: "userId", value: userId }],
 		});
 		expect(updated?.verified).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/9944
+ */
+describe("imported Base32 TOTP secrets", async () => {
+	const canonical = "JBSWY3DPEHPK3PXP";
+	const forms = [
+		{ form: "uppercase", imported: canonical },
+		{ form: "lowercase", imported: canonical.toLowerCase() },
+	];
+
+	async function enrollImported(imported: string) {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor()],
+		});
+		const { headers, user } = await signInWithTestUser();
+		await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+		});
+		await db.update({
+			model: "twoFactor",
+			update: {
+				secret: await symmetricEncrypt({
+					key: DEFAULT_SECRET,
+					data: `base32:${imported}`,
+				}),
+			},
+			where: [{ field: "userId", value: user.id }],
+		});
+		return { auth, headers, testUser };
+	}
+
+	it.for(forms)(
+		"returns the normalized secret in the TOTP URI ($form)",
+		async ({ imported }) => {
+			const { auth, headers, testUser } = await enrollImported(imported);
+			const { totpURI } = await auth.api.getTOTPURI({
+				body: { password: testUser.password },
+				headers,
+			});
+			expect(new URL(totpURI).searchParams.get("secret")).toBe(canonical);
+		},
+	);
+
+	it.for(forms)(
+		"verifies codes from an imported secret ($form)",
+		async ({ imported }) => {
+			const { auth, headers } = await enrollImported(imported);
+			const code = await createOTP(base32.decode(canonical)).totp();
+			await expect(
+				auth.api.verifyTOTP({
+					body: { code },
+					headers,
+				}),
+			).resolves.toMatchObject({ token: expect.any(String) });
+		},
+	);
+
+	it("completes sign-in with an imported secret", async () => {
+		const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [twoFactor()],
+		});
+		const { user } = await signInWithTestUser();
+
+		// Insert the row the way the migration guides do, without `verified`
+		await db.create({
+			model: "twoFactor",
+			data: {
+				userId: user.id,
+				secret: await symmetricEncrypt({
+					key: DEFAULT_SECRET,
+					data: `base32:${canonical}`,
+				}),
+				backupCodes: await symmetricEncrypt({
+					key: DEFAULT_SECRET,
+					data: "[]",
+				}),
+			},
+		});
+		await db.update({
+			model: "user",
+			update: { twoFactorEnabled: true },
+			where: [{ field: "id", value: user.id }],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const json = await signInRes.json();
+		expect(json.twoFactorMethods).toEqual(["totp"]);
+
+		const code = await createOTP(base32.decode(canonical)).totp();
+		await expect(
+			auth.api.verifyTOTP({
+				body: { code },
+				headers: convertSetCookieToCookie(signInRes.headers),
+			}),
+		).resolves.toMatchObject({
+			token: expect.any(String),
+			user: { id: user.id },
+		});
 	});
 });
 

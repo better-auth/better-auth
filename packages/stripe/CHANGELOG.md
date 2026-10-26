@@ -12,6 +12,14 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11954](https://github.com/better-auth/better-auth/pull/11954) [`da53fae`](https://github.com/better-auth/better-auth/commit/da53faea2530df6fda47f83f72da3eb5557ae60d) Thanks [@godwit-bo](https://github.com/godwit-bo)! - Support Stripe SDK v23.
+
 ## 1.7.12
 
 ## 1.7.11
