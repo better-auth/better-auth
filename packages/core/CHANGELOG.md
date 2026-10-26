@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.7.14
+
+### Patch Changes
+
+- [#12045](https://github.com/better-auth/better-auth/pull/12045) [`2947ab7`](https://github.com/better-auth/better-auth/commit/2947ab76c3a141f205813de9201661ee21e327c2) Thanks [@honuuk](https://github.com/honuuk)! - Kakao sign-in now passes `loginHint` to Kakao, so the Kakao Account login page opens with the ID field prefilled.
+
 ## 1.7.13
 
 ### Patch Changes
