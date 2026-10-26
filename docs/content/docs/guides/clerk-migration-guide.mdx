@@ -360,41 +360,40 @@ Before starting the migration process, set up Better Auth in your project. Follo
           if (!createdUser) {
               throw new Error(`Unable to create or find user ${id}`);
           }
+          // create credential account
+          // Clerk's API lists only OAuth accounts, so passwords come from the export
+          if (password_digest) {
+              await ctx.adapter.create({
+                  model: "account",
+                  data: {
+                      providerId: "credential",
+                      accountId: createdUser.id,
+                      userId: createdUser.id,
+                      password: password_digest,
+                      createdAt: safeDateConversion(clerkUser?.created_at),
+                      updatedAt: safeDateConversion(clerkUser?.updated_at),
+                  }
+              })
+          }
           // create external account
           const externalAccounts = clerkUser?.external_accounts;
           if (externalAccounts) {
               for (const externalAccount of externalAccounts) {
                   const { id, provider, identification_id, provider_user_id, approved_scopes, email_address, first_name, last_name, image_url, created_at, updated_at } = externalAccount;
-                  if (externalAccount.provider === "credential") {
-                      await ctx.adapter.create({
-                          model: "account",
-                          data: {
-                              id,
-                              providerId: provider,
-                              accountId: createdUser.id,
-                              scope: approved_scopes,
-                              userId: createdUser.id,
-                              createdAt: safeDateConversion(created_at),
-                              updatedAt: safeDateConversion(updated_at),
-                              password: password_digest,
-                          }
-                      })
-                  } else {
-                      const providerId = provider.replace("oauth_", "");
-                      await ctx.adapter.create({
-                          model: "account",
-                          data: {
-                              id,
-                              providerId,
-                              accountId: externalAccount.provider_user_id,
-                              scope: approved_scopes,
-                              userId: createdUser.id,
-                              createdAt: safeDateConversion(created_at),
-                              updatedAt: safeDateConversion(updated_at),
-                          },
-                          forceAllowId: true
-                      })
-                  }
+                  const providerId = provider.replace("oauth_", "");
+                  await ctx.adapter.create({
+                      model: "account",
+                      data: {
+                          id,
+                          providerId,
+                          accountId: externalAccount.provider_user_id,
+                          scope: approved_scopes,
+                          userId: createdUser.id,
+                          createdAt: safeDateConversion(created_at),
+                          updatedAt: safeDateConversion(updated_at),
+                      },
+                      forceAllowId: true
+                  })
               }
           }
 
