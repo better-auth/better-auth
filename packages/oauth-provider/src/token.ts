@@ -494,26 +494,45 @@ async function createOpaqueAccessToken(
 	const token = opts.generateOpaqueAccessToken
 		? await opts.generateOpaqueAccessToken()
 		: generateRandomString(32, "A-Z", "a-z");
-	await ctx.context.adapter.create({
-		model: "oauthAccessToken",
-		data: {
-			token: await storeToken(opts.storeTokens, token, "access_token"),
-			clientId: client.clientId,
-			sessionId: payload?.sid,
-			userId: user?.id,
-			referenceId,
-			authorizationCodeId,
-			resources,
-			refreshId,
-			confirmation,
-			requestedUserInfoClaims: requestedUserInfoClaims?.length
-				? requestedUserInfoClaims
-				: undefined,
-			scopes,
-			createdAt: new Date(iat * 1000),
-			expiresAt: new Date(exp * 1000),
-		},
-	});
+	const storedToken = await storeToken(opts.storeTokens, token, "access_token");
+	try {
+		await ctx.context.adapter.create({
+			model: "oauthAccessToken",
+			data: {
+				token: storedToken,
+				clientId: client.clientId,
+				sessionId: payload?.sid,
+				userId: user?.id,
+				referenceId,
+				authorizationCodeId,
+				resources,
+				refreshId,
+				confirmation,
+				requestedUserInfoClaims: requestedUserInfoClaims?.length
+					? requestedUserInfoClaims
+					: undefined,
+				scopes,
+				createdAt: new Date(iat * 1000),
+				expiresAt: new Date(exp * 1000),
+			},
+		});
+	} catch (error) {
+		// A concurrent reuse detection or code replay can delete the refresh
+		// token issued with this one before this insert runs.
+		if (
+			refreshId &&
+			!(await ctx.context.adapter.findOne({
+				model: "oauthRefreshToken",
+				where: [{ field: "id", value: refreshId }],
+			}))
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "grant revoked during token issuance",
+				error: "invalid_grant",
+			});
+		}
+		throw error;
+	}
 	return (opts.prefix?.opaqueAccessToken ?? "") + token;
 }
 
