@@ -1,5 +1,26 @@
 # better-auth
 
+## 1.8.0-beta.3
+
+### Minor Changes
+
+- [#11864](https://github.com/better-auth/better-auth/pull/11864) [`b460b45`](https://github.com/better-auth/better-auth/commit/b460b45d61af03e29bf7cdf6ff9cf94c1832f9ae) Thanks [@bytaesu](https://github.com/bytaesu)! - The Gumroad OAuth helper now returns `undefined` for accounts without a name, matching its declared profile type. Profile mappings should handle a missing name.
+
+- [#11851](https://github.com/better-auth/better-auth/pull/11851) [`4e13e16`](https://github.com/better-auth/better-auth/commit/4e13e16c6d67e33baea7f769c88eed494b44be01) Thanks [@bytaesu](https://github.com/bytaesu)! - `SlackProfile` email and profile claims are now optional, and custom claims are `unknown`; update profile mappings accordingly. The built-in provider and Generic OAuth helper use POST for userinfo and reject Slack errors returned with HTTP 200.
+
+- [#11863](https://github.com/better-auth/better-auth/pull/11863) [`94c73d4`](https://github.com/better-auth/better-auth/commit/94c73d4a8338622e3f306fb37e8f500429512226) Thanks [@bytaesu](https://github.com/bytaesu)! - The Patreon OAuth helper now normalizes null names and images to missing values while preserving empty strings. Email can remain null or be omitted when email access is not granted.
+
+### Patch Changes
+
+- Updated dependencies [[`26a2c44`](https://github.com/better-auth/better-auth/commit/26a2c4417413541e2f7418e1ffd6e9e895858828), [`fb7ab26`](https://github.com/better-auth/better-auth/commit/fb7ab26338442f5af2466294b24d75c1e6657233), [`7e635bc`](https://github.com/better-auth/better-auth/commit/7e635bce38e0ef7a7ece88ea9984487596f5d79d), [`5b5093e`](https://github.com/better-auth/better-auth/commit/5b5093e0123e424328b89f022b2c8fbaf4e6a737), [`50dfb4a`](https://github.com/better-auth/better-auth/commit/50dfb4af2e1a2a8fd4ebf874a705a840544e714e), [`41ebe9a`](https://github.com/better-auth/better-auth/commit/41ebe9ab6787cd96f56338bfa18e62faba0e354f), [`7a3a84f`](https://github.com/better-auth/better-auth/commit/7a3a84f3c7418292eabbf8134b20093a1e8bf281), [`3e80e84`](https://github.com/better-auth/better-auth/commit/3e80e84edba5acd7a26df8f6dd64c2575870a028), [`4e13e16`](https://github.com/better-auth/better-auth/commit/4e13e16c6d67e33baea7f769c88eed494b44be01), [`a9aa12e`](https://github.com/better-auth/better-auth/commit/a9aa12ee639cef37bfdfbe817b58c5f0d57dddf2), [`a7d4b48`](https://github.com/better-auth/better-auth/commit/a7d4b4841fe1e2159ddfbc36fd6eb82663b7a980), [`cbf3a97`](https://github.com/better-auth/better-auth/commit/cbf3a97902f8d0a2965aac284eaba3d631b88211), [`efabf96`](https://github.com/better-auth/better-auth/commit/efabf960a8dcc3fdac58492187ebbfd0f4e578f1), [`959a9c6`](https://github.com/better-auth/better-auth/commit/959a9c697ac89d4d727981272de260850c02c12d)]:
+  - @better-auth/core@1.8.0-beta.3
+  - @better-auth/drizzle-adapter@1.8.0-beta.3
+  - @better-auth/kysely-adapter@1.8.0-beta.3
+  - @better-auth/memory-adapter@1.8.0-beta.3
+  - @better-auth/mongo-adapter@1.8.0-beta.3
+  - @better-auth/prisma-adapter@1.8.0-beta.3
+  - @better-auth/telemetry@1.8.0-beta.3
+
 ## 1.8.0-beta.2
 
 ### Patch Changes
