@@ -122,6 +122,15 @@ export interface GoogleOneTapOptions {
 	 */
 	additionalOptions?: Record<string, any> | undefined;
 	/**
+	 * Fetch a single-use nonce from `/id-token/nonce` before each prompt and
+	 * button render, pass it to Google, and send it with the ID token. Enable it
+	 * together with `requireIssuedIdTokenNonce` on the server's
+	 * `socialProviders.google`.
+	 *
+	 * @default false
+	 */
+	useIssuedNonce?: boolean | undefined;
+	/**
 	 * Configuration options for the prompt and exponential backoff behavior.
 	 */
 	promptOptions?:
@@ -150,7 +159,10 @@ export interface GoogleOneTapOptions {
 }
 
 export interface GoogleOneTapActionOptions
-	extends Omit<GoogleOneTapOptions, "clientId" | "promptOptions"> {
+	extends Omit<
+		GoogleOneTapOptions,
+		"clientId" | "promptOptions" | "useIssuedNonce"
+	> {
 	fetchOptions?: ClientFetchOption | undefined;
 	/**
 	 * Callback URL.
@@ -161,6 +173,10 @@ export interface GoogleOneTapActionOptions
 	 * This lets you render an alternative UI (e.g. a Google Sign-In button) to restart the process.
 	 */
 	onPromptNotification?: ((notification?: any | undefined) => void) | undefined;
+	/**
+	 * @deprecated Ignored. A nonce the app chooses gives the server nothing to
+	 * check. Set `useIssuedNonce` on `oneTapClient` instead.
+	 */
 	nonce?: string | undefined;
 	/**
 	 * Button mode configuration. When provided, renders a "Sign In with Google" button
@@ -194,6 +210,15 @@ export interface GoogleOneTapActionOptions
 }
 
 let isRequestInProgress = false;
+
+// Issued nonces expire after five minutes; refresh a rendered button before then.
+const BUTTON_NONCE_REFRESH_MS = 4 * 60 * 1000;
+const BUTTON_NONCE_RETRY_MS = 10 * 1000;
+// One refresh chain per container, so several live buttons each keep a fresh nonce.
+const buttonRefreshTimers = new WeakMap<
+	HTMLElement,
+	ReturnType<typeof setTimeout>
+>();
 
 function isFedCMSupported() {
 	return typeof window !== "undefined" && "IdentityCredential" in window;
@@ -252,6 +277,82 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						return;
 					}
 
+					if (opts?.nonce !== undefined) {
+						console.warn(
+							"Google One Tap: the `nonce` option is ignored. Set `useIssuedNonce` to bind sign-ins to a server-issued nonce.",
+						);
+					}
+
+					/** Returns whether it navigated away. */
+					async function callback(idToken: string, nonce: string | undefined) {
+						const res = await $fetch("/one-tap/callback", {
+							method: "POST",
+							body: { idToken, nonce, callbackURL: opts?.callbackURL },
+							...opts?.fetchOptions,
+							...fetchOptions,
+						});
+
+						// The server validates callbackURL against trustedOrigins; do
+						// not navigate if it rejected the request.
+						if (res?.error) {
+							return false;
+						}
+
+						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
+							const target = opts?.callbackURL ?? "/";
+							if (isSafeUrlScheme(target)) {
+								window.location.href = target;
+								return true;
+							}
+						}
+						return false;
+					}
+
+					// The app's fetchOptions belong to the callback (e.g. a redirect in
+					// onSuccess), so the nonce request does not use them.
+					const fetchNonce = async () => {
+						if (!options.useIssuedNonce) return undefined;
+						const { data, error } = await $fetch<{ nonce: string }>(
+							"/id-token/nonce",
+							// `throw: false` keeps the `{ data, error }` shape when the app sets `throw: true`.
+							{ method: "POST", body: { provider: "google" }, throw: false },
+						);
+						// Without a nonce the server rejects the sign-in, so do not show Google.
+						if (!data?.nonce) {
+							throw new Error("Google One Tap: failed to fetch a nonce", {
+								cause: error,
+							});
+						}
+						return data.nonce;
+					};
+
+					const autoSelect = opts?.autoSelect ?? options.autoSelect;
+					const initialize = (
+						nonce: string | undefined,
+						onCredential: (response: { credential: string }) => Promise<void>,
+					) =>
+						window.google?.accounts.id.initialize({
+							client_id: options.clientId,
+							callback: onCredential,
+							auto_select: autoSelect,
+							cancel_on_tap_outside:
+								opts?.cancelOnTapOutside ?? options.cancelOnTapOutside,
+							context: opts?.context ?? options.context ?? "signin",
+							ux_mode: opts?.uxMode || "popup",
+							/**
+							 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
+							 */
+							itp_support: true,
+							// Spread: @types/google.accounts lacks button_auto_select.
+							...(opts?.button?.fedCM && {
+								use_fedcm_for_button: true,
+								button_auto_select: autoSelect,
+							}),
+							...options.additionalOptions,
+							// After the spread, so only an issued nonce reaches Google.
+							nonce,
+						});
+
 					// Button mode: render a button instead of showing the prompt
 					if (opts?.button) {
 						await loadGoogleScript();
@@ -269,123 +370,73 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							return;
 						}
 
-						async function callback(idToken: string) {
-							const res = await $fetch("/one-tap/callback", {
-								method: "POST",
-								body: { idToken, callbackURL: opts?.callbackURL },
-								...opts?.fetchOptions,
-								...fetchOptions,
-							});
-
-							// The server validates callbackURL against trustedOrigins; do
-							// not navigate if it rejected the request.
-							if (res?.error) {
-								return;
-							}
-
-							if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
-								const target = opts?.callbackURL ?? "/";
-								if (isSafeUrlScheme(target)) {
-									window.location.href = target;
-								}
-							}
-						}
-
-						const autoSelect = opts?.autoSelect ?? options.autoSelect;
-						const cancelOnTapOutside =
-							opts?.cancelOnTapOutside ?? options.cancelOnTapOutside;
-						const contextValue = opts?.context ?? options.context ?? "signin";
-
-						window.google?.accounts.id.initialize({
-							client_id: options.clientId,
-							callback: async (response: { credential: string }) => {
+						const buttonConfig = opts.button.config ?? { type: "icon" };
+						const renderButton = async () => {
+							clearTimeout(buttonRefreshTimers.get(container));
+							const nonce = await fetchNonce();
+							initialize(nonce, async (response) => {
+								let navigated = false;
 								try {
-									await callback(response.credential);
+									navigated = await callback(response.credential, nonce);
 								} catch (error) {
 									console.error("Error during button callback:", error);
 								}
-							},
-							auto_select: autoSelect,
-							cancel_on_tap_outside: cancelOnTapOutside,
-							context: contextValue,
-							ux_mode: opts?.uxMode || "popup",
-							nonce: opts?.nonce,
-							itp_support: true,
-							// Spread: @types/google.accounts lacks button_auto_select.
-							...(opts.button.fedCM && {
-								use_fedcm_for_button: true,
-								button_auto_select: autoSelect,
-							}),
-							...options.additionalOptions,
-						});
+								if (nonce && !navigated) await refreshButton();
+							});
+							// A rendered button signs in with the nonce it was initialized
+							// with, and each nonce is single-use and expires. Re-render with
+							// a fresh nonce after every attempt and before expiry.
+							if (nonce) {
+								container.replaceChildren();
+								buttonRefreshTimers.set(
+									container,
+									setTimeout(refreshButton, BUTTON_NONCE_REFRESH_MS),
+								);
+							}
+							window.google?.accounts.id.renderButton(container, buttonConfig);
+						};
+						const refreshButton = async () => {
+							// Stop once the app has removed the button.
+							if (!container.isConnected) return;
+							try {
+								await renderButton();
+							} catch (error) {
+								console.error(
+									"Google One Tap: failed to refresh the button",
+									error,
+								);
+								buttonRefreshTimers.set(
+									container,
+									setTimeout(refreshButton, BUTTON_NONCE_RETRY_MS),
+								);
+							}
+						};
 
-						window.google?.accounts.id.renderButton(
-							container,
-							opts.button.config ?? {
-								type: "icon",
-							},
-						);
-
+						await renderButton();
 						return;
 					}
 
-					async function callback(idToken: string) {
-						const res = await $fetch("/one-tap/callback", {
-							method: "POST",
-							body: { idToken, callbackURL: opts?.callbackURL },
-							...opts?.fetchOptions,
-							...fetchOptions,
-						});
-
-						// The server validates callbackURL against trustedOrigins; do
-						// not navigate if it rejected the request.
-						if (res?.error) {
-							return;
-						}
-
-						if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
-							const target = opts?.callbackURL ?? "/";
-							if (isSafeUrlScheme(target)) {
-								window.location.href = target;
-							}
-						}
-					}
-
-					const autoSelect = opts?.autoSelect ?? options.autoSelect;
-					const cancelOnTapOutside =
-						opts?.cancelOnTapOutside ?? options.cancelOnTapOutside;
-					const contextValue = opts?.context ?? options.context ?? "signin";
 					isRequestInProgress = true;
 
 					try {
-						await loadGoogleScript();
+						const [, nonce] = await Promise.all([
+							loadGoogleScript(),
+							fetchNonce(),
+						]);
 						await new Promise<void>((resolve, reject) => {
 							let isResolved = false;
 							const baseDelay = options.promptOptions?.baseDelay ?? 1000;
 							const maxAttempts = options.promptOptions?.maxAttempts ?? 5;
 
-							window.google?.accounts.id.initialize({
-								client_id: options.clientId,
-								callback: async (response: { credential: string }) => {
-									isResolved = true;
-									try {
-										await callback(response.credential);
-										resolve();
-									} catch (error) {
-										console.error("Error during One Tap callback:", error);
-										reject(error);
-									}
-								},
-								auto_select: autoSelect,
-								cancel_on_tap_outside: cancelOnTapOutside,
-								context: contextValue,
-								ux_mode: opts?.uxMode || "popup",
-								nonce: opts?.nonce,
-								/**
-								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
-								 */
-								itp_support: true,
-								...options.additionalOptions,
+							initialize(nonce, async (response) => {
+								isResolved = true;
+								try {
+									await callback(response.credential, nonce);
+									resolve();
+								} catch (error) {
+									console.error("Error during One Tap callback:", error);
+									reject(error);
+								}
 							});
 
 							const handlePrompt = (attempt: number) => {

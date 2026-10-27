@@ -203,7 +203,8 @@ await authClient.oneTap({
 * `cancelOnTapOutside`: Cancel the One Tap popup when the user taps outside it. Note that this option may not have an effect when FedCM is active, as the browser manages the dismiss behavior. Default is true.
 * `uxMode`: The mode to use for the Google One Tap flow. Can be "popup" or "redirect". Default is "popup".
 * `context`: The context in which the One Tap API should be used. Can be "signin", "signup", or "use". Default is "signin".
-* `additionalOptions`: Extra options to pass to Google's initialize method as per the [Google Identity Services docs](https://developers.google.com/identity/gsi/web/reference/js-reference#google.accounts.id.prompt).
+* `additionalOptions`: Extra options to pass to Google's initialize method as per the [Google Identity Services docs](https://developers.google.com/identity/gsi/web/reference/js-reference#google.accounts.id.prompt). A `nonce` set here is ignored; use `useIssuedNonce`.
+* `useIssuedNonce`: Fetch a single-use nonce from the server before each prompt and button render, and send it with the ID token. Enable it together with the server's `requireIssuedIdTokenNonce`. See [Binding sign-ins to a nonce](#binding-sign-ins-to-a-nonce). Default is false.
 * `promptOptions`: Configuration for the prompt behavior and exponential backoff:
   * `baseDelay`: Base delay in milliseconds for retries. Default is 1000.
   * `maxAttempts`: Maximum number of prompt attempts before invoking the `onPromptNotification` callback. Default is 5.
@@ -255,6 +256,40 @@ When using button mode, pass a `button` object to the `oneTap` action with the f
 
   With only `oneTap({ clientId })` and no `socialProviders.google`, One Tap uses the token's `name`, `email`, `email_verified`, and `picture` claims.
 </Callout>
+
+### Binding sign-ins to a nonce
+
+Set `requireIssuedIdTokenNonce` on `socialProviders.google` and `useIssuedNonce` on the client to bind each One Tap sign-in to a nonce the server issued:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  socialProviders: {
+    google: {
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      requireIssuedIdTokenNonce: true,
+    },
+  },
+  plugins: [oneTap()],
+});
+```
+
+```ts title="auth-client.ts"
+export const authClient = createAuthClient({
+  plugins: [
+    oneTapClient({
+      clientId: "YOUR_CLIENT_ID",
+      useIssuedNonce: true,
+    }),
+  ],
+});
+```
+
+The client fetches a nonce from `POST /id-token/nonce` and passes it to Google. The callback then accepts only a token whose `nonce` claim matches a nonce the server issued in the last five minutes and has not used yet. Button mode fetches a new nonce after each sign-in attempt and before the current one expires. A callback whose nonce is missing, unknown, expired, or already used fails with `400 INVALID_ID_TOKEN_NONCE`. A token whose `nonce` claim differs from the nonce fails as an invalid ID token.
+
+The setting is read from `socialProviders.google`, so it needs the Google provider. With only `oneTap({ clientId })`, One Tap does not use issued nonces.
+
+With or without it, the callback rejects a token that carries a `nonce` claim when the request sends no nonce.
 
 ### Authorized JavaScript origins
 

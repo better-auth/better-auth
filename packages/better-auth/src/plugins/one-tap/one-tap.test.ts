@@ -1,6 +1,7 @@
 // cspell:ignore AQAB
-import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type { BetterFetch } from "@better-fetch/fetch";
 import type { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
@@ -1209,5 +1210,292 @@ describe("one-tap prompt notifications", () => {
 		const { onPromptNotification } = await runPrompt(notDisplayed);
 
 		expect(onPromptNotification).toHaveBeenCalledExactlyOnceWith(notDisplayed);
+	});
+});
+
+describe("one-tap issued nonce", async () => {
+	afterEach(() => {
+		Reflect.deleteProperty(verifiedPayload, "nonce");
+	});
+
+	const { client } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test-client",
+				clientSecret: "test-secret",
+				requireIssuedIdTokenNonce: true,
+			},
+		},
+		plugins: [oneTap()],
+	});
+
+	const issueNonce = async () => {
+		const { data } = await client.idToken.nonce({ provider: "google" });
+		return data!.nonce;
+	};
+	const postCallback = async (body: Record<string, unknown>) => {
+		const res = await client.$fetch<{ token: string }>("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token", ...body },
+		});
+		return {
+			...res,
+			error: res.error as (typeof res.error & { code?: string }) | null,
+		};
+	};
+
+	it("signs in with an issued nonce that matches the token's nonce claim", async () => {
+		const nonce = await issueNonce();
+		Object.assign(verifiedPayload, { nonce });
+
+		const res = await postCallback({ nonce });
+
+		expect(res.error).toBeNull();
+		expect(res.data?.token).toBeDefined();
+	});
+
+	it("rejects a callback without a nonce", async () => {
+		const res = await postCallback({});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("INVALID_ID_TOKEN_NONCE");
+		expect(jwtVerify).not.toHaveBeenCalled();
+	});
+
+	it("rejects a nonce that was already used", async () => {
+		const nonce = await issueNonce();
+		Object.assign(verifiedPayload, { nonce });
+		expect((await postCallback({ nonce })).error).toBeNull();
+
+		const replay = await postCallback({ nonce });
+
+		expect(replay.error?.code).toBe("INVALID_ID_TOKEN_NONCE");
+	});
+
+	it("rejects a nonce in a format the server never issues", async () => {
+		const res = await postCallback({ nonce: "not-an-issued-nonce" });
+
+		expect(res.error?.code).toBe("INVALID_ID_TOKEN_NONCE");
+	});
+
+	it("rejects an issued nonce that differs from the token's nonce claim", async () => {
+		Object.assign(verifiedPayload, { nonce: "a".repeat(32) });
+
+		const res = await postCallback({ nonce: await issueNonce() });
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("invalid id token");
+	});
+});
+
+describe("one-tap without an issued nonce", async () => {
+	afterEach(() => {
+		Reflect.deleteProperty(verifiedPayload, "nonce");
+	});
+
+	const { client } = await getTestInstance({
+		socialProviders: {},
+		plugins: [oneTap({ clientId: "test-client" })],
+	});
+
+	it("rejects a token with a nonce claim posted without a nonce", async () => {
+		Object.assign(verifiedPayload, { nonce: "a".repeat(32) });
+
+		const res = await client.$fetch("/one-tap/callback", {
+			method: "POST",
+			body: { idToken: "stub-id-token" },
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("invalid id token");
+	});
+});
+
+describe("oneTapClient with useIssuedNonce", async () => {
+	const initialize = vi.fn();
+	const renderButton = vi.fn();
+	const prompt = vi.fn((listener: (notification: unknown) => void) =>
+		listener({ isNotDisplayed: () => true }),
+	);
+
+	afterEach(() => {
+		initialize.mockReset();
+		renderButton.mockReset();
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+		Reflect.deleteProperty(verifiedPayload, "nonce");
+	});
+
+	const { client, auth } = await getTestInstance(
+		{
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					requireIssuedIdTokenNonce: true,
+				},
+			},
+			plugins: [oneTap()],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					oneTapClient({ clientId: "test-client", useIssuedNonce: true }),
+				],
+			},
+		},
+	);
+
+	const stubBrowser = () =>
+		vi.stubGlobal("window", {
+			document: {},
+			googleScriptInitialized: true,
+			google: { accounts: { id: { initialize, renderButton, prompt } } },
+		});
+	const container = () =>
+		({ isConnected: true, replaceChildren: vi.fn() }) as unknown as HTMLElement;
+	type InitializeConfig = {
+		nonce?: string;
+		callback: (response: { credential: string }) => Promise<void>;
+	};
+	const initConfig = (call: number) =>
+		initialize.mock.calls[call]![0] as InitializeConfig;
+	// Simulates Google minting a token for the nonce the client initialized with.
+	const signInWith = async (config: InitializeConfig) => {
+		Object.assign(verifiedPayload, { nonce: config.nonce });
+		await config.callback({ credential: "stub-id-token" });
+	};
+
+	it("initializes the prompt with an issued nonce and signs in with it", async () => {
+		stubBrowser();
+		const onSuccess = vi.fn();
+		await client.oneTap({ fetchOptions: { onSuccess } });
+
+		const config = initConfig(0);
+		expect(config.nonce).toMatch(/^[a-zA-Z0-9]{32}$/);
+		await signInWith(config);
+		expect(onSuccess).toHaveBeenCalledOnce();
+	});
+
+	it("re-initializes the button with a fresh nonce after each attempt", async () => {
+		stubBrowser();
+		const onSuccess = vi.fn();
+		await client.oneTap({
+			button: { container: container() },
+			fetchOptions: { onSuccess },
+		});
+
+		await signInWith(initConfig(0));
+		expect(initialize).toHaveBeenCalledTimes(2);
+		expect(renderButton).toHaveBeenCalledTimes(2);
+		expect(initConfig(1).nonce).not.toBe(initConfig(0).nonce);
+
+		await signInWith(initConfig(1));
+		expect(onSuccess).toHaveBeenCalledTimes(2);
+	});
+
+	it("refreshes the button's nonce before it expires", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		stubBrowser();
+		await client.oneTap({
+			button: { container: container() },
+			fetchOptions: {},
+		});
+		expect(initialize).toHaveBeenCalledTimes(1);
+
+		await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+
+		expect(initialize).toHaveBeenCalledTimes(2);
+		expect(initConfig(1).nonce).not.toBe(initConfig(0).nonce);
+	});
+
+	it("keeps refreshing every live button, not only the newest", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		stubBrowser();
+		await client.oneTap({
+			button: { container: container() },
+			fetchOptions: {},
+		});
+		await client.oneTap({
+			button: { container: container() },
+			fetchOptions: {},
+		});
+		expect(initialize).toHaveBeenCalledTimes(2);
+
+		await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+
+		expect(initialize).toHaveBeenCalledTimes(4);
+	});
+
+	// Simulates the nonce endpoint failing, then recovering.
+	const setNonceEndpointUp = async (up: boolean) => {
+		const google = (await auth.$context).socialProviders.find(
+			(provider) => provider.id === "google",
+		)!;
+		google.options = { ...google.options, requireIssuedIdTokenNonce: up };
+	};
+
+	it("does not open the prompt when no nonce can be fetched", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		stubBrowser();
+		await setNonceEndpointUp(false);
+
+		await expect(client.oneTap({ fetchOptions: {} })).rejects.toThrow(
+			"failed to fetch a nonce",
+		);
+		expect(initialize).not.toHaveBeenCalled();
+		await setNonceEndpointUp(true);
+		error.mockRestore();
+	});
+
+	it("retries a failed button refresh until the nonce endpoint recovers", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		stubBrowser();
+		await client.oneTap({
+			button: { container: container() },
+			fetchOptions: {},
+		});
+
+		await setNonceEndpointUp(false);
+		await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+		expect(initialize).toHaveBeenCalledTimes(1);
+
+		await setNonceEndpointUp(true);
+		await vi.advanceTimersByTimeAsync(10 * 1000);
+		expect(initialize).toHaveBeenCalledTimes(2);
+		error.mockRestore();
+	});
+
+	it("fetches the nonce when the auth client throws on errors", async () => {
+		// With `throw: true`, Better Fetch resolves to the body instead of `{ data, error }`.
+		const $fetch = vi.fn(async (_path: string, init?: { throw?: boolean }) =>
+			init?.throw === false
+				? { data: { nonce: "n".repeat(32) }, error: null }
+				: { nonce: "n".repeat(32) },
+		);
+		const { oneTap: run } = oneTapClient({
+			clientId: "test-client",
+			useIssuedNonce: true,
+		}).getActions(
+			$fetch as unknown as BetterFetch,
+			{} as ClientStore,
+			undefined,
+		);
+		stubBrowser();
+
+		await run({ fetchOptions: {} });
+
+		expect(initConfig(0).nonce).toBe("n".repeat(32));
+	});
+
+	it("ignores the deprecated nonce option and warns", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+		stubBrowser();
+		await client.oneTap({ nonce: "app-chosen-nonce", fetchOptions: {} });
+
+		expect(initConfig(0).nonce).not.toBe("app-chosen-nonce");
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining("nonce"));
+		warn.mockRestore();
 	});
 });
