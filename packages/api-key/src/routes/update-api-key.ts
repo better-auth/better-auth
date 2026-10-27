@@ -1,5 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
@@ -440,7 +441,9 @@ export function updateApiKey({
 			let newApiKey: ApiKey = apiKey;
 			try {
 				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-					const dbUpdated = await ctx.context.adapter.update<ApiKey>({
+					const dbUpdated = await (
+						await getCurrentAdapter(ctx.context.adapter)
+					).update<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [
 							{
@@ -455,7 +458,9 @@ export function updateApiKey({
 						newApiKey = dbUpdated;
 					}
 				} else if (opts.storage === "database") {
-					const result = await ctx.context.adapter.update<ApiKey>({
+					const result = await (
+						await getCurrentAdapter(ctx.context.adapter)
+					).update<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [
 							{
