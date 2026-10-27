@@ -297,11 +297,11 @@ describe("resource admin CRUD", () => {
 	it("admin update with allowedScopes: undefined does not modify existing allowedScopes", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
-		const id = "https://api.example.com/scope-preserve-undefined";
+		const identifier = "https://api.example.com/scope-preserve-undefined";
 
 		await instance.auth.api.adminCreateOAuthResource({
 			body: {
-				identifier: id,
+				identifier,
 				name: "Original Name",
 				allowedScopes: ["read", "write"],
 			},
@@ -309,7 +309,7 @@ describe("resource admin CRUD", () => {
 		});
 
 		const updated = (await instance.auth.api.adminUpdateOAuthResource({
-			params: { identifier: id },
+			params: { identifier },
 			body: {
 				name: "Updated Name",
 				allowedScopes: undefined,
@@ -323,7 +323,7 @@ describe("resource admin CRUD", () => {
 		const ctx = await instance.auth.$context;
 		const row = await ctx.adapter.findOne<OAuthResource>({
 			model: "oauthResource",
-			where: [{ field: "identifier", value: id }],
+			where: [{ field: "identifier", value: identifier }],
 		});
 		expect(row?.name).toBe("Updated Name");
 		expect(row?.allowedScopes).toEqual(["read", "write"]);
@@ -335,10 +335,10 @@ describe("resource admin CRUD", () => {
 	it("admin create with omitted allowedScopes stores [] and admin update with allowedScopes: null stores []", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
-		const id = "https://api.example.com/scope-storable-admin";
+		const identifier = "https://api.example.com/scope-storable-admin";
 		const created = (await instance.auth.api.adminCreateOAuthResource({
 			body: {
-				identifier: id,
+				identifier,
 				name: "Scope Storable Admin",
 			},
 			headers,
@@ -348,23 +348,23 @@ describe("resource admin CRUD", () => {
 		const ctx = await instance.auth.$context;
 		const rowAfterCreate = await ctx.adapter.findOne<OAuthResource>({
 			model: "oauthResource",
-			where: [{ field: "identifier", value: id }],
+			where: [{ field: "identifier", value: identifier }],
 		});
 		expect(rowAfterCreate?.allowedScopes).toEqual([]);
 
 		await instance.auth.api.adminUpdateOAuthResource({
-			params: { identifier: id },
+			params: { identifier },
 			body: { allowedScopes: ["read", "write"] },
 			headers,
 		});
 		const rowWithScopes = await ctx.adapter.findOne<OAuthResource>({
 			model: "oauthResource",
-			where: [{ field: "identifier", value: id }],
+			where: [{ field: "identifier", value: identifier }],
 		});
 		expect(rowWithScopes?.allowedScopes).toEqual(["read", "write"]);
 
 		const cleared = (await instance.auth.api.adminUpdateOAuthResource({
-			params: { identifier: id },
+			params: { identifier },
 			body: { allowedScopes: null },
 			headers,
 		})) as OAuthResource;
@@ -372,7 +372,7 @@ describe("resource admin CRUD", () => {
 
 		const rowAfterClear = await ctx.adapter.findOne<OAuthResource>({
 			model: "oauthResource",
-			where: [{ field: "identifier", value: id }],
+			where: [{ field: "identifier", value: identifier }],
 		});
 		expect(rowAfterClear?.allowedScopes).toEqual([]);
 	});
