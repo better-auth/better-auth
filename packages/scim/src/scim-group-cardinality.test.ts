@@ -58,42 +58,6 @@ function createDeferred() {
 	return { promise, resolve };
 }
 
-const LEGACY_SQLITE_BOUND_VARIABLE_LIMIT = 999;
-
-function assertBoundVariablesFit(where: readonly Where[] | undefined) {
-	for (const clause of where ?? []) {
-		if (
-			Array.isArray(clause.value) &&
-			clause.value.length > LEGACY_SQLITE_BOUND_VARIABLE_LIMIT
-		) {
-			throw new Error("too many SQL variables");
-		}
-	}
-}
-
-function createBoundVariableLimitedAdapter(data: MemoryDB) {
-	return (options: BetterAuthOptions): DBAdapter => {
-		const adapter = memoryAdapter(data)(options);
-		return {
-			...adapter,
-			transaction: <Result>(
-				callback: (transaction: DBTransactionAdapter) => Promise<Result>,
-			) =>
-				adapter.transaction((transaction) => {
-					const findMany: DBTransactionAdapter["findMany"] = (input) => {
-						assertBoundVariablesFit(input.where);
-						return transaction.findMany(input);
-					};
-					const deleteMany: DBTransactionAdapter["deleteMany"] = (input) => {
-						assertBoundVariablesFit(input.where);
-						return transaction.deleteMany(input);
-					};
-					return callback({ ...transaction, findMany, deleteMany });
-				}),
-		};
-	};
-}
-
 function createCardinalityRaceAdapter(
 	data: MemoryDB & { scimGroup: GroupRow[] },
 ) {
@@ -179,11 +143,7 @@ function createCardinalityRaceAdapter(
 	};
 }
 
-function createFixture(
-	createDatabase: (
-		data: MemoryDB,
-	) => (options: BetterAuthOptions) => DBAdapter = memoryAdapter,
-) {
+function createFixture() {
 	const data = {
 		user: [] as User[],
 		session: [] as { id: string }[],
@@ -199,7 +159,7 @@ function createFixture(
 	};
 	const auth = betterAuth({
 		baseURL: "http://localhost:3000",
-		database: createDatabase(data),
+		database: memoryAdapter(data),
 		plugins: [
 			scim({
 				connections: [
@@ -413,6 +373,9 @@ describe("SCIM Group direct-member cardinality", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12066
+	 */
 	it("empties and deletes Groups whose persisted state violates the invariant", async () => {
 		const fixture = createFixture();
 		const { auth, data, headers } = fixture;
@@ -443,49 +406,6 @@ describe("SCIM Group direct-member cardinality", () => {
 
 		expect(data.scimGroupMember).toEqual([]);
 		expect(data.scimGroup.map((group) => group.id)).toEqual([replaced.id]);
-	});
-
-	it("applies full Group writes when the database caps bound variables at 999", async () => {
-		const { auth, data, headers } = createFixture(
-			createBoundVariableLimitedAdapter,
-		);
-		const members = createMemberReferences(SCIM_MAX_GROUP_MEMBERS, "member");
-		data.scimUser.push(
-			...members.map((member) => ({
-				id: member.value,
-				connectionId: "workforce",
-				displayName: member.value,
-			})),
-		);
-
-		const group = await auth.api.createSCIMGroup({
-			body: { schemas: [GROUP_SCHEMA], displayName: "Engineering", members },
-			headers,
-		});
-		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS);
-		for (const op of ["remove", "add"] as const) {
-			await auth.api.patchSCIMGroup({
-				params: { groupId: group.id },
-				body: {
-					schemas: [PATCH_SCHEMA],
-					Operations: [{ op, path: "members", value: members }],
-				},
-				headers,
-			});
-		}
-		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS);
-
-		await auth.api.replaceSCIMGroup({
-			params: { groupId: group.id },
-			body: {
-				schemas: [GROUP_SCHEMA],
-				displayName: "Engineering",
-				members: [],
-			},
-			headers,
-		});
-
-		expect(data.scimGroupMember).toEqual([]);
 	});
 
 	it("serializes concurrent additions before enforcing the member limit", async () => {

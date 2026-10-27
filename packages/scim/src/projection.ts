@@ -71,6 +71,28 @@ export function isSCIMProjectionSubjectConflict(
 	);
 }
 
+async function findSCIMGroupsByIds(
+	database: DBTransactionAdapter,
+	groupIds: readonly string[],
+): Promise<SCIMGroup[]> {
+	const groups: SCIMGroup[] = [];
+	for (
+		let offset = 0;
+		offset < groupIds.length;
+		offset += SCIM_PROJECTION_BATCH_SIZE
+	) {
+		const chunk = groupIds.slice(offset, offset + SCIM_PROJECTION_BATCH_SIZE);
+		groups.push(
+			...(await database.findMany<SCIMGroup>({
+				model: "scimGroup",
+				where: [{ field: "id", value: chunk, operator: "in" }],
+				limit: chunk.length,
+			})),
+		);
+	}
+	return groups;
+}
+
 async function acquireProjectionSubjectLocks(
 	database: DBTransactionAdapter,
 	provisioningDomainId: string,
@@ -200,13 +222,10 @@ async function buildDesiredGrants(
 	const groupById =
 		input.groupById ??
 		new Map(
-			(
-				await database.findMany<SCIMGroup>({
-					model: "scimGroup",
-					where: [{ field: "id", value: groupIds, operator: "in" }],
-					limit: groupIds.length,
-				})
-			).map((group) => [group.id, group]),
+			(await findSCIMGroupsByIds(database, groupIds)).map((group) => [
+				group.id,
+				group,
+			]),
 		);
 	const desiredGrants = new Map<
 		string,
@@ -343,7 +362,11 @@ async function reconcileProjectionUserState(
 	const removedGrantKeys = existingGrants
 		.filter((grant) => !desiredGrantByKey.has(grant.grantKey))
 		.map((grant) => grant.grantKey);
-	if (removedGrantKeys.length > 0) {
+	for (
+		let offset = 0;
+		offset < removedGrantKeys.length;
+		offset += SCIM_PROJECTION_BATCH_SIZE
+	) {
 		await database.deleteMany({
 			model: "scimProjectionGrant",
 			where: [
@@ -354,7 +377,10 @@ async function reconcileProjectionUserState(
 				{ field: "userId", value: input.userId },
 				{
 					field: "grantKey",
-					value: removedGrantKeys,
+					value: removedGrantKeys.slice(
+						offset,
+						offset + SCIM_PROJECTION_BATCH_SIZE,
+					),
 					operator: "in",
 				},
 			],
@@ -485,14 +511,7 @@ async function reconcileSCIMUserBatch(
 	const groupIds = [
 		...new Set(memberships.map((membership) => membership.groupId)),
 	];
-	const groups =
-		groupIds.length === 0
-			? []
-			: await input.database.findMany<SCIMGroup>({
-					model: "scimGroup",
-					where: [{ field: "id", value: groupIds, operator: "in" }],
-					limit: groupIds.length,
-				});
+	const groups = await findSCIMGroupsByIds(input.database, groupIds);
 	const existingGrants = await input.database.findMany<SCIMProjectionGrant>({
 		model: "scimProjectionGrant",
 		where: [

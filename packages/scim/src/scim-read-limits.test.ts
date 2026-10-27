@@ -1,15 +1,67 @@
-import type { User } from "better-auth";
+import type {
+	BetterAuthOptions,
+	DBAdapter,
+	DBTransactionAdapter,
+	User,
+	Where,
+} from "better-auth";
 import { betterAuth } from "better-auth";
+import type { MemoryDB } from "better-auth/adapters/memory";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
+import { SCIM_MAX_GROUP_MEMBERS } from "./group-schemas";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const ADMIN_GROUP = "Admins";
 
-function createFixture(defaultFindManyLimit?: number) {
+const LEGACY_SQLITE_BOUND_VARIABLE_LIMIT = 999;
+
+function assertBoundVariablesFit(where: readonly Where[] | undefined) {
+	for (const clause of where ?? []) {
+		if (
+			Array.isArray(clause.value) &&
+			clause.value.length > LEGACY_SQLITE_BOUND_VARIABLE_LIMIT
+		) {
+			throw new Error("too many SQL variables");
+		}
+	}
+}
+
+function createBoundVariableLimitedAdapter(data: MemoryDB) {
+	return (options: BetterAuthOptions): DBAdapter => {
+		const adapter = memoryAdapter(data)(options);
+		return {
+			...adapter,
+			transaction: <Result>(
+				callback: (transaction: DBTransactionAdapter) => Promise<Result>,
+			) =>
+				adapter.transaction((transaction) => {
+					const findMany: DBTransactionAdapter["findMany"] = (input) => {
+						assertBoundVariablesFit(input.where);
+						return transaction.findMany(input);
+					};
+					const deleteMany: DBTransactionAdapter["deleteMany"] = (input) => {
+						assertBoundVariablesFit(input.where);
+						return transaction.deleteMany(input);
+					};
+					return callback({ ...transaction, findMany, deleteMany });
+				}),
+		};
+	};
+}
+
+function createFixture({
+	defaultFindManyLimit,
+	createDatabase = memoryAdapter,
+}: {
+	defaultFindManyLimit?: number;
+	createDatabase?: (
+		data: MemoryDB,
+	) => (options: BetterAuthOptions) => DBAdapter;
+} = {}) {
 	const data = {
 		user: [] as User[],
 		session: [] as { id: string }[],
@@ -18,9 +70,23 @@ function createFixture(defaultFindManyLimit?: number) {
 		scimConnectionBinding: [] as { id: string }[],
 		scimIdentityTombstone: [] as { id: string }[],
 		scimSubject: [] as { id: string }[],
-		scimUser: [] as { id: string }[],
-		scimGroup: [] as { id: string; updatedAt: Date }[],
-		scimGroupMember: [] as { groupId: string; scimUserId: string }[],
+		scimUser: [] as {
+			id: string;
+			connectionId?: string;
+			displayName?: string;
+		}[],
+		scimGroup: [] as {
+			id: string;
+			displayName: string;
+			displayNameKey: string;
+			updatedAt: Date;
+		}[],
+		scimGroupMember: [] as {
+			id: string;
+			groupId: string;
+			scimUserId: string;
+			membershipKey: string;
+		}[],
 		scimProjectionGrant: [] as {
 			userId: string;
 			scimUserId: string;
@@ -29,7 +95,7 @@ function createFixture(defaultFindManyLimit?: number) {
 	};
 	const auth = betterAuth({
 		baseURL: "http://localhost:3000",
-		database: memoryAdapter(data),
+		database: createDatabase(data),
 		advanced: { database: { defaultFindManyLimit } },
 		plugins: [
 			scim({
@@ -290,11 +356,113 @@ describe("SCIM Group writes and role mapping past the default findMany limit", (
 	});
 
 	it("maps the role of every member when the default findMany limit is 10", async () => {
-		const { createUsers, createGroup, usersWithAdminGrant } = createFixture(10);
+		const { createUsers, createGroup, usersWithAdminGrant } = createFixture({
+			defaultFindManyLimit: 10,
+		});
 		const userIds = await createUsers(20);
 
 		await createGroup(ADMIN_GROUP, userIds);
 
 		expect(usersWithAdminGrant()).toBe(20);
+	});
+
+	it("maps a role from each of 12 Groups a User is in when the default findMany limit is 10", async () => {
+		const { createUserInAdminGroups, adminGrantCountOf } = createFixture({
+			defaultFindManyLimit: 10,
+		});
+
+		const userId = await createUserInAdminGroups(12);
+
+		expect(adminGrantCountOf(userId)).toBe(12);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12066
+ */
+describe("SCIM Group writes and role mapping when the database caps bound variables at 999", () => {
+	it("applies full Group writes", async () => {
+		const { auth, data, headers } = createFixture({
+			createDatabase: createBoundVariableLimitedAdapter,
+		});
+		const members = Array.from(
+			{ length: SCIM_MAX_GROUP_MEMBERS },
+			(_, index) => ({
+				value: `member-${index}`,
+			}),
+		);
+		data.scimUser.push(
+			...members.map((member) => ({
+				id: member.value,
+				connectionId: "workforce",
+				displayName: member.value,
+			})),
+		);
+
+		const group = await auth.api.createSCIMGroup({
+			body: { schemas: [GROUP_SCHEMA], displayName: "Engineering", members },
+			headers,
+		});
+		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS);
+		for (const op of ["remove", "add"] as const) {
+			await auth.api.patchSCIMGroup({
+				params: { groupId: group.id },
+				body: {
+					schemas: [PATCH_SCHEMA],
+					Operations: [{ op, path: "members", value: members }],
+				},
+				headers,
+			});
+		}
+		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS);
+
+		await auth.api.replaceSCIMGroup({
+			params: { groupId: group.id },
+			body: {
+				schemas: [GROUP_SCHEMA],
+				displayName: "Engineering",
+				members: [],
+			},
+			headers,
+		});
+
+		expect(data.scimGroupMember).toEqual([]);
+	});
+
+	it("maps, removes and restores the roles of a User in 1001 Groups", async () => {
+		const {
+			data,
+			createGroup,
+			createUserInAdminGroups,
+			setActive,
+			adminGrantCountOf,
+		} = createFixture({ createDatabase: createBoundVariableLimitedAdapter });
+		const userId = await createUserInAdminGroups(1);
+		const [group] = data.scimGroup;
+		const [membership] = data.scimGroupMember;
+		if (!group || !membership) throw new Error("Group not created");
+		for (let index = 0; index < 999; index++) {
+			data.scimGroup.push({
+				...group,
+				id: `seeded-group-${index}`,
+				displayName: `${ADMIN_GROUP} seeded ${index}`,
+				displayNameKey: `seeded-group-key-${index}`,
+			});
+			data.scimGroupMember.push({
+				...membership,
+				id: `seeded-membership-${index}`,
+				groupId: `seeded-group-${index}`,
+				membershipKey: `seeded-membership-key-${index}`,
+			});
+		}
+
+		await createGroup(`${ADMIN_GROUP} last`, [userId]);
+		expect(adminGrantCountOf(userId)).toBe(1001);
+
+		await setActive(userId, false);
+		expect(adminGrantCountOf(userId)).toBe(0);
+
+		await setActive(userId, true);
+		expect(adminGrantCountOf(userId)).toBe(1001);
 	});
 });

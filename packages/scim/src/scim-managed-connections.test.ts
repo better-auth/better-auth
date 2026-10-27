@@ -210,6 +210,9 @@ describe("SCIM managed connections", () => {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12066
+	 */
 	it("lists more than 100 connections of a provisioning domain", async ({
 		onTestFinished,
 	}) => {
