@@ -18,7 +18,7 @@ import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import { resetSeedStateForTests, seedResourcesOnce } from "./resources";
+import { ensureResourceRow, invalidateResourceCache } from "./resources";
 import type { OAuthClaimExtensionInput, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
@@ -34,16 +34,15 @@ const introspectHeaders = {
 } as const;
 
 /**
- * Boots an oauth-provider instance, seeds resource rows eagerly, signs in a
- * test user, and returns a configured auth client plus helpers for running the
- * authorization-code flow. Mirrors the harness in `resources-e2e.test.ts`.
+ * Boots an oauth-provider instance, creates resource rows lazily through
+ * `ensureResourceRow` where needed, signs in a test user, and returns a
+ * configured auth client plus helpers for running the authorization-code flow.
+ * Mirrors the harness in `resources-e2e.test.ts`.
  */
 async function bootHarness(
 	config: Partial<OAuthOptions<Scope[]>> = {},
 	scopes: string[] = ["openid", "profile", "email", "offline_access"],
 ) {
-	resetSeedStateForTests();
-
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
@@ -61,8 +60,6 @@ async function bootHarness(
 				: [jwt({ jwt: { issuer: authServerBaseUrl } })]),
 		],
 	});
-	const seedCtx = await auth.$context;
-	await seedResourcesOnce(seedCtx as unknown as AuthContext, opts);
 
 	const { headers, user } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -164,6 +161,7 @@ async function bootHarness(
 
 	const linkClientToResource = async (clientId: string, resourceId: string) => {
 		const ctx = await auth.$context;
+		await ensureResourceRow(ctx as unknown as AuthContext, opts, resourceId);
 		await ctx.adapter.create({
 			model: "oauthClientResource",
 			data: {
@@ -179,6 +177,7 @@ async function bootHarness(
 		client,
 		headers,
 		user,
+		opts,
 		registerClient,
 		mintToken,
 		introspect,
@@ -264,6 +263,42 @@ describe("opaque introspection — per-resource customClaims parity", async () =
 		expect(data?.active).toBe(true);
 		expect(data?.dept).toBe("ops");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("re-derives custom claims at introspection for a config-only resource with no row", async () => {
+		const configOnlyResource = "https://api.example.com/config-only-claims";
+		const customHarness = await bootHarness({
+			disableJwtPlugin: true,
+			resources: [
+				{
+					identifier: configOnlyResource,
+					customClaims: { "x-custom-claim": "resolved-from-config" },
+				},
+			],
+		});
+		const customClient = await customHarness.registerClient();
+		const token = await customHarness.mintToken(customClient, {
+			resource: configOnlyResource,
+		});
+
+		const introspection = await customHarness.introspect({
+			token,
+			client_id: customClient.client_id,
+			client_secret: customClient.client_secret,
+		});
+		const data = introspection.data as Record<string, unknown> | undefined;
+
+		expect(data?.active).toBe(true);
+		expect(data?.["x-custom-claim"]).toBe("resolved-from-config");
+
+		const ctx = await customHarness.auth.$context;
+		const rows = await ctx.adapter.findMany({
+			model: "oauthResource",
+		});
+		expect(rows).toHaveLength(0);
+	});
 });
 
 /**
@@ -347,7 +382,6 @@ describe("opaque introspection — resource lifecycle", async () => {
 	const harness = await bootHarness({
 		disableJwtPlugin: true,
 		resources: [
-			{ identifier: deletedResource, customClaims: { dept: "ops" } },
 			{ identifier: disabledResource, customClaims: { dept: "sec" } },
 		],
 	});
@@ -355,6 +389,30 @@ describe("opaque introspection — resource lifecycle", async () => {
 
 	beforeAll(async () => {
 		oauthClient = await harness.registerClient();
+		const ctx = await harness.auth.$context;
+		await ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier: deletedResource,
+				name: deletedResource,
+				accessTokenTtl: null,
+				refreshTokenTtl: null,
+				signingAlgorithm: null,
+				signingKeyId: null,
+				allowedScopes: null,
+				customClaims: { dept: "ops" },
+				disabled: false,
+				policyVersion: 1,
+				metadata: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			} as never,
+		});
+		await ensureResourceRow(
+			ctx as unknown as AuthContext,
+			harness.opts,
+			disabledResource,
+		);
 	});
 
 	it("reports inactive once the bound resource row is deleted", async () => {
@@ -374,6 +432,7 @@ describe("opaque introspection — resource lifecycle", async () => {
 			model: "oauthResource",
 			where: [{ field: "identifier", value: deletedResource }],
 		});
+		invalidateResourceCache(deletedResource);
 
 		const after = await harness.introspect({
 			token,
@@ -393,6 +452,7 @@ describe("opaque introspection — resource lifecycle", async () => {
 			where: [{ field: "identifier", value: disabledResource }],
 			update: { disabled: true },
 		});
+		invalidateResourceCache(disabledResource);
 
 		const introspection = await harness.introspect({
 			token,

@@ -14,7 +14,6 @@ import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import { checkOAuthClient, oauthToSchema, schemaToOAuth } from "./register";
-import { resetSeedStateForTests } from "./resources";
 import type { OAuthOptions } from "./types";
 import type { OAuthClient } from "./types/oauth";
 
@@ -382,8 +381,11 @@ describe("oauth register", async () => {
 		);
 	});
 
-	it("lazy-seeds configured resources before DCR validation", async () => {
-		const identifier = "https://api.example.com/dcr-lazy-seed";
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("lazily creates an oauthResource row when DCR links a configured resource", async () => {
+		const identifier = "https://api.example.com/dcr-lazy-row";
 		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
 			{
 				baseURL: baseUrl,
@@ -400,11 +402,13 @@ describe("oauth register", async () => {
 			},
 		);
 		const ctx = await auth.$context;
-		await ctx.adapter.delete({
+		// Initially, zero rows exist for the configured resource
+		const initialRows = await ctx.adapter.findMany({
 			model: "oauthResource",
 			where: [{ field: "identifier", value: identifier }],
 		});
-		resetSeedStateForTests();
+		expect(initialRows).toHaveLength(0);
+
 		const { headers } = await signInWithTestUser();
 		const client = createAuthClient({
 			plugins: [oauthProviderClient()],
@@ -427,6 +431,369 @@ describe("oauth register", async () => {
 
 		expect(response.error).toBeNull();
 		expect(response.data?.resources).toEqual([identifier]);
+
+		// Now exactly one row exists in oauthResource
+		const rowsAfter = await ctx.adapter.findMany({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rowsAfter).toHaveLength(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("does not create an oauthResource row when client registration fails validation", async () => {
+		const identifier = "https://api.example.com/dcr-failed-validation";
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: baseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						resources: [identifier],
+						clientRegistrationAllowedResources: [identifier],
+					}),
+					jwt(),
+				],
+			},
+		);
+		const ctx = await auth.$context;
+		const initialRows = await ctx.adapter.findMany({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(initialRows).toHaveLength(0);
+
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: baseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		// 1. Fails validation due to invalid redirect URI (contains fragment)
+		const invalidRedirectResponse = await client.$fetch<
+			OAuthClient & { resources?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [`${redirectUri}#fragment`],
+				resources: [identifier],
+			},
+		});
+		expect(invalidRedirectResponse.error).not.toBeNull();
+		expect(invalidRedirectResponse.error?.status).toBe(400);
+
+		const rowsAfterInvalidRedirect = await ctx.adapter.findMany({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rowsAfterInvalidRedirect).toHaveLength(0);
+
+		// 2. Fails validation due to invalid client metadata (unsupported grant_type)
+		const invalidMetadataResponse = await client.$fetch<
+			OAuthClient & { resources?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				grant_types: ["urn:custom:unsupported-grant"],
+				resources: [identifier],
+			},
+		});
+		expect(invalidMetadataResponse.error).not.toBeNull();
+		expect(invalidMetadataResponse.error?.status).toBe(400);
+
+		const rowsAfterInvalidMetadata = await ctx.adapter.findMany({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rowsAfterInvalidMetadata).toHaveLength(0);
+
+		// 3. Successful registration creates the row
+		const validResponse = await client.$fetch<
+			OAuthClient & { resources?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				resources: [identifier],
+			},
+		});
+		expect(validResponse.error).toBeNull();
+		expect(validResponse.data?.resources).toEqual([identifier]);
+
+		const rowsAfterValid = await ctx.adapter.findMany({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rowsAfterValid).toHaveLength(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("two concurrent registrations linking the same configured resource create exactly one oauthResource row", async () => {
+		const identifier = "https://api.example.com/dcr-concurrent-link";
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: baseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						resources: [identifier],
+						clientRegistrationAllowedResources: [identifier],
+					}),
+					jwt(),
+				],
+			},
+		);
+		const ctx = await auth.$context;
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: baseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		const [res1, res2] = await Promise.all([
+			client.$fetch<OAuthClient & { resources?: string[] }>(
+				"/oauth2/register",
+				{
+					method: "POST",
+					body: {
+						redirect_uris: [`${redirectUri}/1`],
+						resources: [identifier],
+					},
+				},
+			),
+			client.$fetch<OAuthClient & { resources?: string[] }>(
+				"/oauth2/register",
+				{
+					method: "POST",
+					body: {
+						redirect_uris: [`${redirectUri}/2`],
+						resources: [identifier],
+					},
+				},
+			),
+		]);
+
+		expect(res1.error).toBeNull();
+		expect(res2.error).toBeNull();
+		expect(res1.data?.resources).toEqual([identifier]);
+		expect(res2.data?.resources).toEqual([identifier]);
+
+		const resourceRows = await ctx.adapter.findMany({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(resourceRows).toHaveLength(1);
+
+		const links = await ctx.adapter.findMany({
+			model: "oauthClientResource",
+			where: [{ field: "resourceId", value: identifier }],
+		});
+		expect(links).toHaveLength(2);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("rejects dynamic client registration with tombstoned or nonexistent resource and leaves 0 client rows", async () => {
+		const validResource = "https://api.example.com/dcr-upfront-valid";
+		const tombstonedResource = "https://api.example.com/dcr-upfront-tombstoned";
+		const unconfiguredResource =
+			"https://api.example.com/dcr-upfront-unconfigured";
+
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: baseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						resources: [validResource, tombstonedResource],
+						clientRegistrationAllowedResources: [
+							validResource,
+							tombstonedResource,
+						],
+					}),
+					jwt(),
+				],
+			},
+		);
+		const ctx = await auth.$context;
+
+		await ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				id: tombstonedResource,
+				identifier: tombstonedResource,
+				name: "tombstoned",
+				disabled: false,
+				metadata: JSON.stringify({ __deleted: true }),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: baseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		const tombstoneRes = await client.$fetch<
+			OAuthClient & { resources?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [`${redirectUri}/tombstone`],
+				resources: [tombstonedResource],
+			},
+		});
+		expect(tombstoneRes.error).not.toBeNull();
+		expect(tombstoneRes.error?.status).toBe(400);
+		expect((tombstoneRes.error as { error?: string } | null)?.error).toBe(
+			"invalid_target",
+		);
+
+		const unconfiguredRes = await client.$fetch<
+			OAuthClient & { resources?: string[] }
+		>("/oauth2/register", {
+			method: "POST",
+			body: {
+				redirect_uris: [`${redirectUri}/unconfigured`],
+				resources: [unconfiguredResource],
+			},
+		});
+		expect(unconfiguredRes.error).not.toBeNull();
+		expect(unconfiguredRes.error?.status).toBe(400);
+		expect((unconfiguredRes.error as { error?: string } | null)?.error).toBe(
+			"invalid_target",
+		);
+
+		const mixRes = await client.$fetch<OAuthClient & { resources?: string[] }>(
+			"/oauth2/register",
+			{
+				method: "POST",
+				body: {
+					redirect_uris: [`${redirectUri}/mix`],
+					resources: [validResource, tombstonedResource],
+				},
+			},
+		);
+		expect(mixRes.error).not.toBeNull();
+		expect(mixRes.error?.status).toBe(400);
+		expect((mixRes.error as { error?: string } | null)?.error).toBe(
+			"invalid_target",
+		);
+
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					client_name: "managed-nonexistent",
+					grant_types: ["client_credentials"],
+					resources: ["https://api.example.com/nonexistent-managed"],
+				},
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({ error: "invalid_target" }),
+		});
+
+		const clients = await ctx.adapter.findMany({
+			model: "oauthClient",
+		});
+		expect(clients).toHaveLength(0);
+
+		const clientResources = await ctx.adapter.findMany({
+			model: "oauthClientResource",
+		});
+		expect(clientResources).toHaveLength(0);
+
+		const validResourceRows = await ctx.adapter.findMany({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: validResource }],
+		});
+		expect(validResourceRows).toHaveLength(0);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("allows dynamic client registration when database row is disabled but config enables it with overwrite seed mode", async () => {
+		const resourceUri = "https://api.example.com/dcr-overwrite-enabled";
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: baseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						resourceSeedMode: "overwrite",
+						resources: [{ identifier: resourceUri, disabled: false }],
+						clientRegistrationAllowedResources: [resourceUri],
+					}),
+					jwt(),
+				],
+			},
+		);
+		const ctx = await auth.$context;
+
+		await ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier: resourceUri,
+				name: "DB Resource",
+				disabled: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: baseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		const res = await client.$fetch<OAuthClient & { resources?: string[] }>(
+			"/oauth2/register",
+			{
+				method: "POST",
+				body: {
+					redirect_uris: [`${redirectUri}/overwrite-enabled`],
+					resources: [resourceUri],
+				},
+			},
+		);
+
+		expect(res.error).toBeNull();
+		expect(res.data?.client_id).toBeDefined();
+		expect(res.data?.resources).toContain(resourceUri);
 	});
 
 	it("should register client with metadata field", async () => {

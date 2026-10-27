@@ -1,6 +1,17 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { assertIdentifierValid, invalidateResourceCache } from "../resources";
+import {
+	assertIdentifierValid,
+	combineResource,
+	ensureResourceRow,
+	getConfiguredResource,
+	getConfiguredResourcesWithoutRows,
+	getResource,
+	invalidateResourceCache,
+	isResourceTombstoned,
+	omitDeleted,
+	withResourceInsertLock,
+} from "../resources";
 import type {
 	OAuthOptions,
 	OAuthResource,
@@ -48,8 +59,7 @@ function decodePathParam(value: string): string {
 
 /**
  * Builds the create-payload from a normalized input. Fills in defaults
- * for the fields seedResources uses so the admin-CRUD and seed paths
- * write identical rows.
+ * so the admin-CRUD and configured-resource paths write identical rows.
  *
  * @internal
  */
@@ -68,7 +78,7 @@ function buildResourceRow(input: OAuthResourceInput, now: Date) {
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
 		policyVersion: 1,
-		metadata: input.metadata ?? null,
+		metadata: omitDeleted(input.metadata),
 		createdAt: now,
 		updatedAt: now,
 	};
@@ -88,9 +98,57 @@ export async function createResourceEndpoint(
 			error_description: "identifier is required",
 		});
 	}
+	if (input.metadata !== undefined) {
+		input.metadata = omitDeleted(input.metadata) ?? undefined;
+	}
 	await assertIdentifierValid(opts, input.identifier);
 
+	const existing = await ctx.context.adapter.findOne<OAuthResource>({
+		model: resourceModel(opts),
+		where: [{ field: "identifier", value: input.identifier }],
+	});
+
 	const now = new Date();
+	const entry = await getConfiguredResource(opts, input.identifier);
+	const mode = opts.resourceSeedMode ?? "insertOnly";
+
+	if (existing) {
+		if (isResourceTombstoned(existing)) {
+			const rowData = buildResourceRow(input, now);
+			await ctx.context.adapter.update<OAuthResource>({
+				model: resourceModel(opts),
+				where: [{ field: "identifier", value: input.identifier }],
+				update: {
+					...rowData,
+					createdAt: existing.createdAt ?? now,
+					updatedAt: now,
+				},
+			});
+			invalidateResourceCache(input.identifier);
+			const refreshed = await ctx.context.adapter.findOne<OAuthResource>({
+				model: resourceModel(opts),
+				where: [{ field: "identifier", value: input.identifier }],
+			});
+			const responseResource = entry
+				? combineResource(refreshed ?? (rowData as OAuthResource), entry, mode)
+				: (refreshed ?? (rowData as OAuthResource));
+			return ctx.json(responseResource, { status: 201 });
+		}
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `resource ${input.identifier} already exists`,
+		});
+	}
+
+	const configured = entry;
+	if (configured && !isResourceTombstoned(configured.resource)) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: `resource ${input.identifier} already exists`,
+			message: "resource already exists",
+		});
+	}
+
 	let created: OAuthResource;
 	try {
 		created = await ctx.context.adapter.create<
@@ -117,7 +175,10 @@ export async function createResourceEndpoint(
 		});
 	}
 	invalidateResourceCache(created.identifier);
-	return ctx.json(created, { status: 201 });
+	const responseResource = entry
+		? combineResource(created, entry, mode)
+		: created;
+	return ctx.json(responseResource, { status: 201 });
 }
 
 export async function listResourcesEndpoint(
@@ -126,11 +187,20 @@ export async function listResourcesEndpoint(
 ) {
 	const session = await getSessionFromCtx(ctx);
 	await assertResourcePrivileges(ctx, session, opts, "list");
-	// TODO(#11725): include configured resources that have no row yet.
-	const rows = await ctx.context.adapter.findMany<OAuthResource>({
-		model: resourceModel(opts),
-	});
-	return ctx.json(rows ?? []);
+	const rows =
+		(await ctx.context.adapter.findMany<OAuthResource>({
+			model: resourceModel(opts),
+		})) ?? [];
+	const mode = opts.resourceSeedMode ?? "insertOnly";
+	const activeRows = rows.filter((row) => !isResourceTombstoned(row));
+	const combinedRows = await Promise.all(
+		activeRows.map(async (row) => {
+			const entry = await getConfiguredResource(opts, row.identifier);
+			return entry ? combineResource(row, entry, mode) : row;
+		}),
+	);
+	const configOnly = await getConfiguredResourcesWithoutRows(opts, rows);
+	return ctx.json([...combinedRows, ...configOnly]);
 }
 
 export async function getResourceByIdentifierEndpoint(
@@ -140,17 +210,14 @@ export async function getResourceByIdentifierEndpoint(
 	const identifier = decodePathParam(ctx.params.identifier);
 	const session = await getSessionFromCtx(ctx);
 	await assertResourcePrivileges(ctx, session, opts, "read", identifier);
-	const row = await ctx.context.adapter.findOne<OAuthResource>({
-		model: resourceModel(opts),
-		where: [{ field: "identifier", value: identifier }],
-	});
-	if (!row) {
+	const resource = await getResource(ctx, opts, identifier);
+	if (!resource) {
 		throw new APIError("NOT_FOUND", {
 			error: "not_found",
 			error_description: `resource ${identifier} not found`,
 		});
 	}
-	return ctx.json(row);
+	return ctx.json(resource);
 }
 
 export async function updateResourceEndpoint(
@@ -164,11 +231,23 @@ export async function updateResourceEndpoint(
 	const session = await getSessionFromCtx(ctx);
 	await assertResourcePrivileges(ctx, session, opts, "update", identifier);
 
-	const existing = await ctx.context.adapter.findOne<OAuthResource>({
+	const mode = opts.resourceSeedMode ?? "insertOnly";
+	const entry = await getConfiguredResource(opts, identifier);
+
+	let existing = await ctx.context.adapter.findOne<OAuthResource>({
 		model: resourceModel(opts),
 		where: [{ field: "identifier", value: identifier }],
 	});
+	if (existing && isResourceTombstoned(existing)) {
+		throw new APIError("NOT_FOUND", {
+			error: "not_found",
+			error_description: `resource ${identifier} not found`,
+		});
+	}
 	if (!existing) {
+		existing = await ensureResourceRow(ctx, opts, identifier);
+	}
+	if (!existing || isResourceTombstoned(existing)) {
 		throw new APIError("NOT_FOUND", {
 			error: "not_found",
 			error_description: `resource ${identifier} not found`,
@@ -195,12 +274,60 @@ export async function updateResourceEndpoint(
 			update[key] = ctx.body[key];
 		}
 	}
+	if ("metadata" in update) {
+		update.metadata = omitDeleted(update.metadata);
+	}
 
-	await ctx.context.adapter.update<OAuthResource>({
-		model: resourceModel(opts),
-		where: [{ field: "identifier", value: identifier }],
-		update,
-	});
+	const executeUpdate = async (txAdapter: typeof ctx.context.adapter) => {
+		const latestRow = await txAdapter.findOne<OAuthResource>({
+			model: resourceModel(opts),
+			where: [{ field: "identifier", value: identifier }],
+		});
+		if (!latestRow || isResourceTombstoned(latestRow)) {
+			throw new APIError("NOT_FOUND", {
+				error: "not_found",
+				error_description: `resource ${identifier} not found`,
+			});
+		}
+
+		let latestMeta: Record<string, unknown> = {};
+		if (latestRow.metadata) {
+			if (typeof latestRow.metadata === "string") {
+				try {
+					const parsed = JSON.parse(latestRow.metadata);
+					latestMeta =
+						parsed && typeof parsed === "object"
+							? (parsed as Record<string, unknown>)
+							: {};
+				} catch {
+					latestMeta = {};
+				}
+			} else if (typeof latestRow.metadata === "object") {
+				latestMeta = { ...(latestRow.metadata as Record<string, unknown>) };
+			}
+		}
+		if (latestMeta.__deleted) {
+			throw new APIError("NOT_FOUND", {
+				error: "not_found",
+				error_description: `resource ${identifier} not found`,
+			});
+		}
+
+		await txAdapter.update<OAuthResource>({
+			model: resourceModel(opts),
+			where: [{ field: "identifier", value: identifier }],
+			update,
+		});
+	};
+
+	if (typeof ctx.context.adapter.transaction === "function") {
+		await ctx.context.adapter.transaction(async (txAdapter) => {
+			await executeUpdate(txAdapter as typeof ctx.context.adapter);
+		});
+	} else {
+		await executeUpdate(ctx.context.adapter);
+	}
+
 	invalidateResourceCache(identifier);
 	// `adapter.update` may return `null` or non-fresh data (see the Adapter
 	// contract). Re-fetch the row so the response always reflects what was
@@ -209,15 +336,18 @@ export async function updateResourceEndpoint(
 		model: resourceModel(opts),
 		where: [{ field: "identifier", value: identifier }],
 	});
-	if (!refreshed) {
-		// Row vanished between the update and the re-read (concurrent delete).
+	if (!refreshed || isResourceTombstoned(refreshed)) {
+		// Row vanished or was tombstoned between the update and the re-read.
 		// Surface a clean 404 instead of a null body.
 		throw new APIError("NOT_FOUND", {
 			error: "not_found",
 			error_description: `resource ${identifier} not found`,
 		});
 	}
-	return ctx.json(refreshed);
+	const responseResource = entry
+		? combineResource(refreshed, entry, mode)
+		: refreshed;
+	return ctx.json(responseResource);
 }
 
 export async function deleteResourceEndpoint(
@@ -228,27 +358,149 @@ export async function deleteResourceEndpoint(
 	const session = await getSessionFromCtx(ctx);
 	await assertResourcePrivileges(ctx, session, opts, "delete", identifier);
 
-	// Verify the row exists so we can return a clean 404 (vs. an opaque
-	// "0 rows affected" result from the adapter).
 	const existing = await ctx.context.adapter.findOne<OAuthResource>({
 		model: resourceModel(opts),
 		where: [{ field: "identifier", value: identifier }],
 	});
-	if (!existing) {
+	const configured = await getConfiguredResource(opts, identifier);
+
+	if (!existing && !configured) {
 		throw new APIError("NOT_FOUND", {
 			error: "not_found",
 			error_description: `resource ${identifier} not found`,
 		});
 	}
 
-	await ctx.context.adapter.delete({
-		model: resourceModel(opts),
-		where: [{ field: "identifier", value: identifier }],
-	});
-	// Hard-invalidate the cache on delete — RFC open question §1 says
-	// existing tokens for a deleted resource should be cascade-rejected on
-	// next verify, which depends on `getResource` returning null promptly.
+	if (existing && isResourceTombstoned(existing)) {
+		throw new APIError("NOT_FOUND", {
+			error: "not_found",
+			error_description: `resource ${identifier} not found`,
+		});
+	}
+
+	const executeDelete = async (txAdapter: typeof ctx.context.adapter) => {
+		const latestRow = await txAdapter.findOne<OAuthResource>({
+			model: resourceModel(opts),
+			where: [{ field: "identifier", value: identifier }],
+		});
+		if (!latestRow && !configured) {
+			throw new APIError("NOT_FOUND", {
+				error: "not_found",
+				error_description: `resource ${identifier} not found`,
+			});
+		}
+		if (latestRow && isResourceTombstoned(latestRow)) {
+			throw new APIError("NOT_FOUND", {
+				error: "not_found",
+				error_description: `resource ${identifier} not found`,
+			});
+		}
+
+		await txAdapter.deleteMany({
+			model: linkModel(opts),
+			where: [{ field: "resourceId", value: identifier }],
+		});
+
+		if (configured) {
+			if (latestRow) {
+				let existingMeta: Record<string, unknown> = {};
+				if (latestRow.metadata) {
+					if (typeof latestRow.metadata === "string") {
+						try {
+							const parsed = JSON.parse(latestRow.metadata);
+							existingMeta =
+								parsed && typeof parsed === "object"
+									? (parsed as Record<string, unknown>)
+									: {};
+						} catch {
+							existingMeta = {};
+						}
+					} else if (typeof latestRow.metadata === "object") {
+						existingMeta = {
+							...(latestRow.metadata as Record<string, unknown>),
+						};
+					}
+				}
+
+				await txAdapter.update<OAuthResource>({
+					model: resourceModel(opts),
+					where: [{ field: "identifier", value: identifier }],
+					update: {
+						disabled: true,
+						metadata: {
+							...existingMeta,
+							__deleted: true,
+						},
+						updatedAt: new Date(),
+					},
+				});
+			} else {
+				await txAdapter.create<OAuthResource>({
+					model: resourceModel(opts),
+					data: {
+						identifier,
+						name: configured.resource.name ?? identifier,
+						allowedScopes: configured.resource.allowedScopes ?? [],
+						disabled: true,
+						metadata: {
+							__deleted: true,
+						},
+						policyVersion: 1,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
+				});
+			}
+		} else {
+			await txAdapter.delete({
+				model: resourceModel(opts),
+				where: [{ field: "identifier", value: identifier }],
+			});
+		}
+	};
+
+	await withResourceInsertLock(
+		ctx.context.adapter,
+		`${resourceModel(opts)}:${identifier}`,
+		async () => {
+			const runDelete = async () => {
+				if (typeof ctx.context.adapter.transaction === "function") {
+					await ctx.context.adapter.transaction(async (txAdapter) => {
+						await executeDelete(txAdapter as typeof ctx.context.adapter);
+					});
+				} else {
+					await executeDelete(ctx.context.adapter);
+				}
+			};
+
+			try {
+				await runDelete();
+			} catch (err) {
+				if (err instanceof APIError) {
+					throw err;
+				}
+				const message = err instanceof Error ? err.message : String(err);
+				if (/unique|duplicate|UNIQUE/i.test(message)) {
+					const winner = await ctx.context.adapter.findOne<OAuthResource>({
+						model: resourceModel(opts),
+						where: [{ field: "identifier", value: identifier }],
+					});
+					if (winner && isResourceTombstoned(winner)) {
+						throw new APIError("NOT_FOUND", {
+							error: "not_found",
+							error_description: `resource ${identifier} not found`,
+						});
+					}
+					await runDelete();
+					return;
+				}
+				throw err;
+			}
+		},
+	);
+
 	invalidateResourceCache(identifier);
+
 	return ctx.json({ deleted: true });
 }
 
@@ -272,10 +524,7 @@ export async function linkClientResourceEndpoint(
 
 	// Confirm both ends exist so the FK cascade doesn't surface as a
 	// generic 500.
-	const resource = await ctx.context.adapter.findOne<OAuthResource>({
-		model: resourceModel(opts),
-		where: [{ field: "identifier", value: resourceId }],
-	});
+	const resource = await getResource(ctx, opts, resourceId);
 	if (!resource) {
 		throw new APIError("NOT_FOUND", {
 			error: "not_found",
@@ -290,6 +539,14 @@ export async function linkClientResourceEndpoint(
 		throw new APIError("NOT_FOUND", {
 			error: "not_found",
 			error_description: `client ${clientId} not found`,
+		});
+	}
+
+	const ensured = await ensureResourceRow(ctx, opts, resourceId);
+	if (!ensured || isResourceTombstoned(ensured)) {
+		throw new APIError("NOT_FOUND", {
+			error: "not_found",
+			error_description: `resource ${resourceId} not found`,
 		});
 	}
 

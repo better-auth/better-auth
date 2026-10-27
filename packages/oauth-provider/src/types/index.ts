@@ -787,16 +787,18 @@ export interface OAuthOptions<
 	) => Awaitable<boolean>;
 	/**
 	 * Protected resources the AS issues access tokens for. Promotes the
-	 * resource model into a first-class persisted entity with per-resource
-	 * token policy.
+	 * resource model into a first-class entity with per-resource token policy.
 	 *
-	 * - String form: each string becomes an `oauthResource` row using plugin-level
+	 * - String form: each string defines an in-memory resource using plugin-level
 	 *   defaults.
 	 * - Object form: explicit per-resource policy (TTL, signing alg, scope
 	 *   allowlist, custom claims, sender-constraint requirements).
 	 *
-	 * Seeding is keyed by `identifier`. Behavior on re-seed is controlled by
-	 * {@link OAuthOptions.resourceSeedMode}.
+	 * Configured entries are indexed in memory when the plugin is constructed
+	 * and combined with database rows at read time according to
+	 * {@link OAuthOptions.resourceSeedMode}. Zero database I/O is performed at
+	 * construction; a database row is created lazily only when a client is
+	 * linked to the resource or an admin edits it.
 	 *
 	 * @see RFC 8707 — `identifier` is the `resource` parameter value
 	 * @example
@@ -810,15 +812,16 @@ export interface OAuthOptions<
 	 */
 	resources?: Array<string | OAuthResourceInput>;
 	/**
-	 * Controls whether boot-time `resources` config overwrites DB-edited rows.
+	 * Controls how in-memory `resources` config combines with database rows at
+	 * read time.
 	 *
-	 * - `"insertOnly"` (default, safe): only inserts rows whose `identifier` is
-	 *   not already present. Existing rows are untouched — admin edits via CRUD
-	 *   are never reverted on restart.
-	 * - `"merge"`: inserts missing rows; updates only fields present in the
-	 *   config object for existing rows.
-	 * - `"overwrite"`: inserts missing rows; replaces existing rows with the
-	 *   config values. Use only when the config is the source of truth.
+	 * - `"insertOnly"` (default, safe): a database row, once it exists, wins
+	 *   over config, so admin edits via CRUD survive restarts. If no row
+	 *   exists, the configured entry is used.
+	 * - `"merge"`: the database row is overlaid with fields that are present
+	 *   in the configured entry.
+	 * - `"overwrite"`: the configured entry replaces the database row's policy
+	 *   fields.
 	 *
 	 * Defaults to the safe option to prevent accidental policy reverts in
 	 * production deployments.
@@ -827,12 +830,14 @@ export interface OAuthOptions<
 	 */
 	resourceSeedMode?: "insertOnly" | "merge" | "overwrite";
 	/**
-	 * Opt-in cache membership for resources by `identifier`. Mirrors the
-	 * {@link OAuthOptions.cachedTrustedClients} pattern.
+	 * Opt-in cache membership for stored resource rows by `identifier`. Mirrors
+	 * the {@link OAuthOptions.cachedTrustedClients} pattern.
 	 *
-	 * Cached resources are invalidated on every CRUD write. Resources not in
-	 * this set are looked up from the DB on every request — the safe default
-	 * when admins edit rows through external tooling.
+	 * The cache stores raw database rows only; in-memory config is combined
+	 * after lookup. Cached resources are invalidated on every CRUD write and
+	 * lazy row creation. Resources not in this set are looked up from the DB
+	 * on every request — the safe default when admins edit rows through external
+	 * tooling.
 	 */
 	cachedResources?: Set<string>;
 	/**
@@ -1881,13 +1886,17 @@ export interface OAuthAuthorizationQuery {
 }
 
 /**
- * A persisted protected-resource row as stored in `oauthResource`.
+ * Persisted or synthesized in-memory representation of a protected resource.
+ * Configured entries without a database row use the same shape in memory.
  *
  * `null` on any policy column means "inherit the plugin-level default at
  * token issuance time" — admins can later override without re-seeding.
  */
 export interface OAuthResource {
-	/** Auto-generated primary key */
+	/**
+	 * Primary key for database-backed rows; falls back to the resource
+	 * `identifier` for in-memory configured resources.
+	 */
 	id: string;
 	/**
 	 * Business key used in the `aud` claim and as the RFC 8707 `resource` value.

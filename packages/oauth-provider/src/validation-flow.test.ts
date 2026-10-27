@@ -4,14 +4,12 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
-import {
-	resetSeedStateForTests,
-	resolveResourcePolicy,
-	seedResourcesOnce,
-} from "./resources";
+import { ensureResourceRow, resolveResourcePolicy } from "./resources";
 import type { OAuthClientResource, OAuthOptions, Scope } from "./types";
 
-const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
+const bootProvider = async (
+	options: Partial<OAuthOptions<Scope[]>> & { skipEnsure?: boolean } = {},
+) => {
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
@@ -21,9 +19,13 @@ const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const instance = await getTestInstance({
 		plugins: [jwt(), oauthProvider(opts)],
 	});
-	resetSeedStateForTests();
 	const ctx = await instance.auth.$context;
-	await seedResourcesOnce(ctx as unknown as AuthContext, opts);
+	if (opts.resources?.length && !options.skipEnsure) {
+		for (const r of opts.resources) {
+			const id = typeof r === "string" ? r : r.identifier;
+			await ensureResourceRow(ctx as unknown as AuthContext, opts, id);
+		}
+	}
 	return { ...instance, ctx, opts };
 };
 
@@ -617,6 +619,73 @@ describe("resolveResourcePolicy — enforcePerClientResources", () => {
 			requestedScopes: [],
 		});
 		expect(policy.audienceClaim).toBe(id);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11725
+ */
+describe("resolveResourcePolicy — config-only policy enforcement", () => {
+	it("applies TTL, scope intersection, disabled: true, and custom claims for config-only resources", async () => {
+		const resource1 = "https://api.example.com/valid";
+		const resourceDisabled = "https://api.example.com/disabled";
+
+		const { ctx, opts } = await bootProvider({
+			skipEnsure: true,
+			resources: [
+				{
+					identifier: resource1,
+					accessTokenTtl: 300,
+					allowedScopes: ["read", "write"],
+					customClaims: { role: "admin" },
+				},
+				{
+					identifier: resourceDisabled,
+					disabled: true,
+				},
+			],
+		});
+
+		// 1. Valid policy
+		const policy = await resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
+			resource: resource1,
+			clientId: "client-1",
+			requestedScopes: ["read"],
+		});
+		expect(policy.audienceClaim).toBe(resource1);
+		expect(policy.accessTokenTtl).toBe(300);
+		expect(policy.effectiveScopes).toEqual(["read"]);
+		expect(policy.rawCustomClaims).toEqual({ role: "admin" });
+
+		// 2. Scope intersection failure
+		await expect(
+			resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
+				resource: resource1,
+				clientId: "client-1",
+				requestedScopes: ["unallowed"],
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: expect.objectContaining({ error: "invalid_scope" }),
+		});
+
+		// 3. Disabled resource failure
+		await expect(
+			resolveResourcePolicy(fakeEndpointCtx(ctx), opts, {
+				resource: resourceDisabled,
+				clientId: "client-1",
+				requestedScopes: [],
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: expect.objectContaining({ error: "invalid_target" }),
+		});
+
+		// Confirm zero DB rows exist
+		const rows = await ctx.adapter.findMany({
+			model: "oauthResource",
+		});
+		expect(rows).toHaveLength(0);
 	});
 });
 

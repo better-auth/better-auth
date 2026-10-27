@@ -24,7 +24,11 @@ import {
 } from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { assertResourcePrivileges } from "./oauthResource/privileges";
-import { getResource } from "./resources";
+import {
+	ensureResourceRow,
+	getResource,
+	isResourceTombstoned,
+} from "./resources";
 import type {
 	ClientRegistrationRequest,
 	OAuthClientAdministrativeResponse,
@@ -219,17 +223,26 @@ async function resolveClientRegistrationResources(
 	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
 	const resources = [...new Set([...defaultResources, ...requestedResources])];
 	for (const identifier of resources) {
-		const row = await getResource(ctx, opts, identifier);
-		if (!row) {
+		const effective = await getResource(ctx, opts, identifier);
+		if (!effective || isResourceTombstoned(effective)) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_target",
 				error_description: `requested resource ${identifier} does not exist`,
 			});
 		}
-		if (row.disabled) {
+		if (effective.disabled) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_target",
 				error_description: `requested resource ${identifier} is disabled`,
+			});
+		}
+	}
+	for (const identifier of resources) {
+		const row = await ensureResourceRow(ctx, opts, identifier);
+		if (!row || isResourceTombstoned(row)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_target",
+				error_description: `requested resource ${identifier} does not exist`,
 			});
 		}
 	}

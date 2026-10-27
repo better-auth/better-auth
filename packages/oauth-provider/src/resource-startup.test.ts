@@ -1,17 +1,32 @@
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11538
+ * @see https://github.com/better-auth/better-auth/issues/11725
+ */
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { logger } from "@better-auth/core/env";
 import { memoryAdapter } from "@better-auth/memory-adapter";
+import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins/jwt";
-import { getTestInstance } from "better-auth/test";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions, OAuthResourceInput, Scope } from "./types";
+import {
+	ensureResourceRow,
+	getResource,
+	invalidateResourceCache,
+} from "./resources";
+import type { OAuthOptions, Scope } from "./types";
 
 const resource = "https://api.example.com/mcp";
 
-type ResourceFault = (
-	operation: "findOne" | "create",
-	adapter: DBAdapter,
-) => Promise<void> | void;
+const OAUTH_MODELS = new Set([
+	"oauthResource",
+	"oauthClient",
+	"oauthClientResource",
+	"oauthClientAssertion",
+	"oauthConsent",
+	"oauthAccessToken",
+	"oauthRefreshToken",
+]);
 
 type Row = Record<string, unknown>;
 
@@ -30,256 +45,329 @@ const createDatabase = () => ({
 	verification: [] as Row[],
 });
 
-/**
- * Boots an instance whose `oauthResource` operations pass through `fault`
- * first, so a test can simulate the storage states a real deployment hits.
- * Pass `shared` to give several instances the same adapter object.
- */
-async function bootWithResourceFault(
-	fault: { current: ResourceFault | null },
-	{
-		resources = [resource],
-		resourceSeedMode,
-		shared,
-	}: {
-		resources?: Array<string | OAuthResourceInput>;
-		resourceSeedMode?: OAuthOptions<Scope[]>["resourceSeedMode"];
-		shared?: {
-			database: ReturnType<typeof createDatabase>;
-			adapter?: DBAdapter;
-		};
-	} = {},
+interface CallRecord {
+	model: string;
+	operation: string;
+}
+
+function createRecordingAdapter(
+	beforeOAuthCall?: (call: CallRecord) => Promise<void> | void,
 ) {
-	const database = shared?.database ?? createDatabase();
-	const log = vi.fn();
-	const createMemoryAdapter = memoryAdapter(database);
-	const createAdapter = (
-		options: Parameters<typeof createMemoryAdapter>[0],
-	) => {
-		const adapter = createMemoryAdapter(options);
-		const intercept =
-			<Operation extends "findOne" | "create">(operation: Operation) =>
-			async (args: Parameters<DBAdapter[Operation]>[0]) => {
-				if (args.model === "oauthResource") {
-					await fault.current?.(operation, adapter);
-				}
-				return (adapter[operation] as (a: typeof args) => unknown)(args);
-			};
-		return {
-			...adapter,
-			findOne: intercept("findOne"),
-			create: intercept("create"),
-		} as typeof adapter;
+	const database = createDatabase();
+	const calls: CallRecord[] = [];
+	const createAdapter = memoryAdapter(database);
+
+	const databaseOption = (options: Parameters<typeof createAdapter>[0]) => {
+		const adapter = createAdapter(options);
+		return new Proxy(adapter, {
+			get(target, property, receiver) {
+				const value = Reflect.get(target, property, receiver);
+				if (typeof value !== "function") return value;
+				return async (...args: unknown[]) => {
+					const model = (args[0] as { model?: string } | undefined)?.model;
+					if (model && OAUTH_MODELS.has(model)) {
+						const record: CallRecord = {
+							model,
+							operation: String(property),
+						};
+						calls.push(record);
+						await beforeOAuthCall?.(record);
+					}
+					return (value as (...a: unknown[]) => unknown).apply(target, args);
+				};
+			},
+		}) as DBAdapter;
 	};
-	const firstResource = resources[0];
-	const instance = await getTestInstance({
-		logger: { level: "debug", log },
-		database: (options) => {
-			if (!shared) return createAdapter(options);
-			shared.adapter ??= createAdapter(options);
-			return shared.adapter;
-		},
-		plugins: [
+
+	return { database, calls, databaseOption };
+}
+
+function bootAuth(
+	plugins: Parameters<typeof betterAuth>[0]["plugins"],
+	beforeOAuthCall?: (call: CallRecord) => Promise<void> | void,
+) {
+	const recorder = createRecordingAdapter(beforeOAuthCall);
+	const auth = betterAuth({
+		appName: "11725-part2-test",
+		baseURL: "http://localhost:3000",
+		secret: "0123456789012345678901234567890123456789",
+		database: (options) => recorder.databaseOption(options),
+		plugins,
+	});
+	return { auth, database: recorder.database, calls: recorder.calls };
+}
+
+describe("resource startup and database-free init", () => {
+	let warnSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+	});
+
+	afterEach(() => {
+		warnSpy.mockRestore();
+		invalidateResourceCache();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("construction with resources records zero adapter operations on OAuth models", async () => {
+		const { auth, database, calls } = bootAuth([
 			jwt(),
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
-				allowUnauthenticatedClientRegistration: true,
-				resources,
-				resourceSeedMode,
-				clientRegistrationDefaultResources: [
-					typeof firstResource === "string"
-						? firstResource
-						: firstResource!.identifier,
+				resources: [resource],
+			}),
+		]);
+		await auth.$context;
+		expect(calls).toEqual([]);
+		expect(database.oauthResource).toHaveLength(0);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("construction with mcp({ resource }) records zero adapter operations on OAuth models", async () => {
+		const mod = (await import(
+			new URL("../../mcp/src/index.ts", import.meta.url).href
+		)) as {
+			mcp: (opts: {
+				loginPage: string;
+				consentPage: string;
+				resource: string;
+			}) => ReturnType<typeof oauthProvider>;
+		};
+		const { auth, database, calls } = bootAuth([
+			jwt(),
+			mod.mcp({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resource,
+			}),
+		]);
+		await auth.$context;
+		expect(calls).toEqual([]);
+		expect(database.oauthResource).toHaveLength(0);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("a gated oauthResource read is never entered during construction", async () => {
+		let enteredGate = false;
+		const { auth } = bootAuth(
+			[
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resources: [resource],
+				}),
+			],
+			async (call) => {
+				if (call.model === "oauthResource" && call.operation === "findOne") {
+					enteredGate = true;
+				}
+			},
+		);
+
+		await auth.$context;
+		expect(enteredGate).toBe(false);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("warns once and skips invalid identifier at configuration indexing", async () => {
+		const invalidUri = "not a valid uri";
+		const { auth, database } = bootAuth([
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [invalidUri],
+			}),
+		]);
+		const ctx = await auth.$context;
+		const res = await getResource(
+			{ context: ctx } as never,
+			{
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [invalidUri],
+			} as OAuthOptions<Scope[]>,
+			invalidUri,
+		);
+		expect(res).toBeNull();
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining(`skipping resource`),
+		);
+		expect(database.oauthResource).toHaveLength(0);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("strips unsupported signingAlgorithm with a warning log", async () => {
+		const { auth } = bootAuth([
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [
+					{
+						identifier: resource,
+						// @ts-expect-error testing invalid signingAlgorithm from raw config
+						signingAlgorithm: "UNSUPPORTED_ALG",
+					},
 				],
 			}),
-		],
-	});
-	const register = () =>
-		instance.auth.api.registerOAuthClient({
-			body: { redirect_uris: ["https://app.example.com/callback"] },
-		}) as Promise<{ resources?: string[] }>;
-	const errorLogs = () => log.mock.calls.filter(([level]) => level === "error");
-	return { ...instance, database, register, errorLogs };
-}
-
-/**
- * @see https://github.com/better-auth/better-auth/issues/11538
- */
-describe("resource seeding at startup", () => {
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10887
-	 */
-	it("keeps the instance usable when storage fails during startup and seeds once it recovers", async () => {
-		const fault = {
-			current: (() => {
-				throw new TypeError("fetch failed");
-			}) as ResourceFault | null,
-		};
-		const { auth, signInWithTestUser, register, database, errorLogs } =
-			await bootWithResourceFault(fault);
-
-		const { headers } = await signInWithTestUser();
-		await expect(auth.api.getSession({ headers })).resolves.toMatchObject({
-			user: { email: "test@test.com" },
-		});
-		expect(errorLogs()).toEqual([
-			[
-				"error",
-				expect.stringContaining("could not seed `resources` at startup"),
-				expect.objectContaining({ message: "fetch failed" }),
-			],
 		]);
-		await expect(register()).rejects.toThrow("fetch failed");
+		const ctx = await auth.$context;
+		const res = await getResource(
+			{ context: ctx } as never,
+			{
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [
+					{
+						identifier: resource,
+						signingAlgorithm: "UNSUPPORTED_ALG",
+					},
+				],
+			} as unknown as OAuthOptions<Scope[]>,
+			resource,
+		);
+		expect(res).not.toBeNull();
+		expect(res?.signingAlgorithm).toBeNull();
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining(`dropping unsupported signingAlgorithm`),
+		);
+	});
 
-		fault.current = null;
-		await expect(register()).resolves.toMatchObject({
-			resources: [resource],
-		});
-		expect(database.oauthResource).toHaveLength(1);
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("surfaces identifierValidator rejection on read, not at construction, and memoizes success", async () => {
+		let validatorCallCount = 0;
+		const rejected = "https://api.example.com/rejected";
+		const opts: OAuthOptions<Scope[]> = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			resources: [resource, rejected],
+			identifierValidator: (id) => {
+				validatorCallCount++;
+				if (id === rejected) {
+					return false;
+				}
+				return true;
+			},
+		};
+
+		const { auth } = bootAuth([jwt(), oauthProvider(opts)]);
+		// Construction does zero validator calls
+		await auth.$context;
+		expect(validatorCallCount).toBe(0);
+
+		const ctx = await auth.$context;
+		// First read of rejected resource runs the validator, returns null, and logs a warning
+		const rejectedRes = await getResource(
+			{ context: ctx } as never,
+			opts,
+			rejected,
+		);
+		expect(rejectedRes).toBeNull();
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining(`skipping resource for ${rejected}`),
+		);
+		expect(validatorCallCount).toBe(1);
+
+		// Second read uses memoized invalid state and avoids re-invoking the validator
+		const rejectedRes2 = await getResource(
+			{ context: ctx } as never,
+			opts,
+			rejected,
+		);
+		expect(rejectedRes2).toBeNull();
+		expect(validatorCallCount).toBe(1);
+
+		// First read of valid resource runs the validator and succeeds
+		const res = await getResource({ context: ctx } as never, opts, resource);
+		expect(res?.identifier).toBe(resource);
+		expect(validatorCallCount).toBe(2);
+
+		// Second read of valid resource uses memoized check
+		const res2 = await getResource({ context: ctx } as never, opts, resource);
+		expect(res2?.identifier).toBe(resource);
+		expect(validatorCallCount).toBe(2);
 	});
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11034
+	 * @see https://github.com/better-auth/better-auth/issues/11725
 	 */
-	it("treats a row inserted by a concurrent instance as already seeded", async () => {
-		const fault = {
-			current: (async (operation, adapter) => {
-				if (operation !== "create") return;
-				fault.current = null;
-				// Another instance wins the insert; the driver error is wrapped the
-				// way Drizzle wraps it, with the SQLSTATE only on `cause`.
-				await adapter.create({
-					model: "oauthResource",
-					data: { identifier: resource, name: resource, disabled: false },
-				});
-				throw new Error('Failed query: insert into "oauth_resource" ...', {
-					cause: Object.assign(new Error("duplicate key value"), {
-						code: "23505",
-					}),
-				});
-			}) as ResourceFault | null,
-		};
-		const { register, database, errorLogs } =
-			await bootWithResourceFault(fault);
-
-		expect(errorLogs()).toEqual([]);
-		expect(database.oauthResource).toHaveLength(1);
-		await expect(register()).resolves.toMatchObject({
+	it("ensureResourceRow returns the row inserted by a concurrent winner", async () => {
+		const opts: OAuthOptions<Scope[]> = {
+			loginPage: "/login",
+			consentPage: "/consent",
 			resources: [resource],
-		});
-	});
-
-	it("applies merge mode to a row a concurrent instance inserted", async () => {
-		const fault = {
-			current: (async (operation, adapter) => {
-				if (operation !== "create") return;
-				fault.current = null;
-				await adapter.create({
-					model: "oauthResource",
-					data: { identifier: resource, name: resource, disabled: false },
-				});
-				throw new Error("duplicate key value");
-			}) as ResourceFault | null,
 		};
-		const { database } = await bootWithResourceFault(fault, {
-			resources: [{ identifier: resource, accessTokenTtl: 300 }],
-			resourceSeedMode: "merge",
-		});
+		const { auth, database } = bootAuth([jwt(), oauthProvider(opts)]);
+		const ctx = await auth.$context;
 
-		expect(database.oauthResource).toEqual([
-			expect.objectContaining({ identifier: resource, accessTokenTtl: 300 }),
-		]);
-	});
-
-	it("reports the insert error when the row cannot be re-read", async () => {
 		let creates = 0;
-		const fault = {
-			current: ((operation) => {
-				if (operation === "create") {
-					creates++;
-					throw new Error("value too long for column");
-				}
-				if (creates > 0) throw new Error("connection lost");
-			}) as ResourceFault | null,
-		};
-		const { errorLogs } = await bootWithResourceFault(fault);
+		const originalCreate = ctx.adapter.create.bind(ctx.adapter);
+		ctx.adapter.create = vi.fn(async (args) => {
+			if (args.model === "oauthResource") {
+				creates++;
+				// Simulate another instance winning the insert
+				database.oauthResource.push({
+					id: resource,
+					identifier: resource,
+					name: "raced winner",
+					disabled: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+					policyVersion: 1,
+				});
+				throw new Error("duplicate key value", {
+					cause: Object.assign(new Error("duplicate key"), { code: "23505" }),
+				});
+			}
+			return originalCreate(args);
+		}) as never;
 
-		expect(errorLogs()).toEqual([
-			[
-				"error",
-				expect.any(String),
-				expect.objectContaining({ message: "value too long for column" }),
-			],
-		]);
-	});
-
-	it("seeds each instance's resources when instances share an adapter", async () => {
-		const shared = { database: createDatabase() };
-		const fault = { current: null };
-		await bootWithResourceFault(fault, {
-			resources: ["https://api.example.com/first"],
-			shared,
+		const ensured = await ensureResourceRow(ctx as never, opts, resource);
+		expect(ensured).toMatchObject({
+			identifier: resource,
+			name: "raced winner",
 		});
-		// The test harness signs up the same user on every boot.
-		for (const model of ["user", "account", "session"] as const) {
-			shared.database[model].length = 0;
-		}
-		await bootWithResourceFault(fault, {
-			resources: ["https://api.example.com/second"],
-			shared,
-		});
-
-		expect(
-			shared.database.oauthResource.map((row) => row.identifier).sort(),
-		).toEqual([
-			"https://api.example.com/first",
-			"https://api.example.com/second",
-		]);
+		expect(creates).toBe(1);
 	});
 
 	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11294
+	 * @see https://github.com/better-auth/better-auth/issues/11725
 	 */
-	it.each([
-		[
-			"Drizzle missing model",
-			new Error(
-				'[# Drizzle Adapter]: The model "oauthResource" was not found in the schema object. Please pass the schema directly to the adapter options.',
-			),
-		],
-		[
-			"Drizzle-wrapped missing relation",
-			new Error('Failed query: select "id" from "oauth_resource" ...', {
-				cause: new Error('relation "oauth_resource" does not exist'),
-			}),
-		],
-		[
-			"Prisma missing model",
-			new Error(
-				"Model oauthResource does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'",
-			),
-		],
-	])(
-		"defers quietly on a %s error and seeds once the table exists",
-		async (_, error) => {
-			const fault = {
-				current: (() => {
-					throw error;
-				}) as ResourceFault | null,
-			};
-			const { register, database, errorLogs } =
-				await bootWithResourceFault(fault);
+	it("ensureResourceRow reports the insert error when the row cannot be re-read", async () => {
+		const opts: OAuthOptions<Scope[]> = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			resources: [resource],
+		};
+		const { auth } = bootAuth([jwt(), oauthProvider(opts)]);
+		const ctx = await auth.$context;
 
-			expect(errorLogs()).toEqual([]);
-			await expect(register()).rejects.toThrow(error.message);
+		ctx.adapter.create = vi.fn(async (args) => {
+			if (args.model === "oauthResource") {
+				throw new Error("value too long for column");
+			}
+			return null as never;
+		}) as never;
 
-			fault.current = null;
-			await expect(register()).resolves.toMatchObject({
-				resources: [resource],
-			});
-			expect(database.oauthResource).toHaveLength(1);
-		},
-	);
+		await expect(
+			ensureResourceRow(ctx as never, opts, resource),
+		).rejects.toThrow("value too long for column");
+	});
 });

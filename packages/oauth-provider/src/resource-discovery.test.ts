@@ -5,11 +5,7 @@ import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
 import { registerClientMetadataDocument } from "./register";
-import {
-	invalidateResourceCache,
-	resetSeedStateForTests,
-	seedResourcesOnce,
-} from "./resources";
+import { ensureResourceRow, invalidateResourceCache } from "./resources";
 import type {
 	OAuthClientResource,
 	OAuthOptions,
@@ -40,9 +36,7 @@ const boot = async (
 		...(useTransactionalMemory ? { database: undefined } : {}),
 		plugins: [jwt(), oauthProvider(opts)],
 	});
-	resetSeedStateForTests();
 	const ctx = await instance.auth.$context;
-	await seedResourcesOnce(ctx as unknown as AuthContext, opts);
 	return { ...instance, ctx, opts };
 };
 
@@ -176,11 +170,17 @@ describe("DCR — resources field (RFC 7591 §2 extension)", () => {
 			resources: [resource],
 			clientRegistrationAllowedResources: [resource],
 		});
+		await ensureResourceRow(
+			instance.ctx as unknown as AuthContext,
+			instance.opts,
+			resource,
+		);
 		await instance.ctx.adapter.update({
 			model: "oauthResource",
 			where: [{ field: "identifier", value: resource }],
 			update: { disabled: true },
 		});
+		invalidateResourceCache(resource);
 		await expect(
 			instance.auth.api.registerOAuthClient({
 				body: {
@@ -295,11 +295,17 @@ describe("managed client registration resources", () => {
 			const configured = "https://api.example.com/managed-unavailable";
 			const instance = await boot({ resources: [configured] }, true);
 			if (kind === "disabled") {
+				await ensureResourceRow(
+					instance.ctx as unknown as AuthContext,
+					instance.opts,
+					configured,
+				);
 				await instance.ctx.adapter.update({
 					model: "oauthResource",
 					where: [{ field: "identifier", value: configured }],
 					update: { disabled: true },
 				});
+				invalidateResourceCache(configured);
 			}
 			const { headers } = await instance.signInWithTestUser();
 			const clientName = `managed-${kind}-resource`;

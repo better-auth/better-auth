@@ -1,4 +1,3 @@
-import type { AuthContext } from "@better-auth/core";
 import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL, deriveDpopJkt } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -8,7 +7,6 @@ import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import { extendOAuthProvider } from "./extensions";
 import { oauthProvider } from "./oauth";
-import { resetSeedStateForTests, seedResourcesOnce } from "./resources";
 import type { OAuthTokenExchangeOptions } from "./token-exchange";
 import {
 	ACCESS_TOKEN_TYPE,
@@ -65,7 +63,6 @@ async function bootScenario(
 	} = {},
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {},
 ) {
-	resetSeedStateForTests();
 	const opts = {
 		loginPage: "/login",
 		consentPage: "/consent",
@@ -93,10 +90,6 @@ async function bootScenario(
 					testUser: { email: `${generateRandomString(12)}@test.com` },
 				}
 			: {},
-	);
-	await seedResourcesOnce(
-		(await auth.$context) as unknown as AuthContext,
-		opts,
 	);
 	const { headers } = await signInWithTestUser();
 

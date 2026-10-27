@@ -16,10 +16,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import {
+	ensureResourceRow,
 	invalidateResourceCache,
-	resetSeedStateForTests,
 	resolveResourcePolicy,
-	seedResourcesOnce,
 } from "./resources";
 import type {
 	OAuthOptions,
@@ -31,8 +30,7 @@ import type { OAuthClient } from "./types/oauth";
 
 /**
  * Boots an in-memory better-auth instance with the oauth-provider plugin and
- * (when not disabled by callers) the jwt plugin. Pre-seeds resource rows so
- * tests don't have to deal with the lazy seeding semantics directly.
+ * (when not disabled by callers) the jwt plugin.
  */
 const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const opts = {
@@ -47,9 +45,13 @@ const bootProvider = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const instance = await getTestInstance({
 		plugins: [jwt(), oauthProvider(opts)],
 	});
-	resetSeedStateForTests();
 	const ctx = await instance.auth.$context;
-	await seedResourcesOnce(ctx as unknown as AuthContext, opts);
+	if (opts.resources?.length) {
+		for (const r of opts.resources) {
+			const id = typeof r === "string" ? r : r.identifier;
+			await ensureResourceRow(ctx as unknown as AuthContext, opts, id);
+		}
+	}
 	return { ...instance, ctx, opts };
 };
 
@@ -70,10 +72,6 @@ const fakeEndpointCtx = (
 const bootCodeFlowHarness = async (
 	options: Partial<OAuthOptions<Scope[]>> = {},
 ) => {
-	// Module-level resource cache + seed-completion flag persist across tests
-	// in this file. Reset both before each harness boot so a stale cached row
-	// from an earlier test doesn't leak into a fresh instance.
-	resetSeedStateForTests();
 	invalidateResourceCache();
 
 	const authServerBaseUrl = "http://localhost:3000";
@@ -96,10 +94,6 @@ const bootCodeFlowHarness = async (
 		baseURL: authServerBaseUrl,
 		plugins: [jwt({ jwt: { issuer: authServerBaseUrl } }), oauthProvider(opts)],
 	});
-	// Force the seed to run now (lazy-seed normally defers until first resource
-	// access, which is after migrations have run).
-	const seedCtx = await auth.$context;
-	await seedResourcesOnce(seedCtx as unknown as AuthContext, opts);
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -235,6 +229,7 @@ const bootCodeFlowHarness = async (
 		oauthClient,
 		headers,
 		authServerBaseUrl,
+		opts,
 		runCodeFlow,
 		exchangeCode,
 	};
@@ -289,8 +284,25 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-resource 
 		// failure mode), enabling RS-side immediate enforcement without per-
 		// token revocation calls.
 		const validResource = "https://api.example.com/bug-1-delete";
-		const harness = await bootCodeFlowHarness({
-			resources: [validResource],
+		const harness = await bootCodeFlowHarness({});
+		const ctx = await harness.auth.$context;
+		await ctx.adapter.create<OAuthResource>({
+			model: "oauthResource",
+			data: {
+				identifier: validResource,
+				name: validResource,
+				accessTokenTtl: null,
+				refreshTokenTtl: null,
+				signingAlgorithm: null,
+				signingKeyId: null,
+				allowedScopes: null,
+				customClaims: null,
+				disabled: false,
+				policyVersion: 1,
+				metadata: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			} as unknown as OAuthResource,
 		});
 		const result = await harness.runCodeFlow({
 			authorizeResource: validResource,
@@ -316,11 +328,11 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-resource 
 		expect(beforeDelete.data?.active).toBe(true);
 
 		// Delete the resource row directly to simulate admin DELETE.
-		const ctx = await harness.auth.$context;
 		await ctx.adapter.delete({
 			model: "oauthResource",
 			where: [{ field: "identifier", value: validResource }],
 		});
+		invalidateResourceCache(validResource);
 
 		const afterDelete = await harness.client.oauth2.introspect(
 			{
@@ -356,11 +368,17 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-resource 
 		const accessToken = result.tokens!.data!.access_token!;
 
 		const ctx = await harness.auth.$context;
+		await ensureResourceRow(
+			ctx as unknown as AuthContext,
+			harness.opts,
+			validResource,
+		);
 		await ctx.adapter.update({
 			model: "oauthResource",
 			where: [{ field: "identifier", value: validResource }],
 			update: { disabled: true },
 		});
+		invalidateResourceCache(validResource);
 
 		const introspection = await harness.client.oauth2.introspect(
 			{
@@ -389,11 +407,17 @@ describe("introspection accepts entity-issued JWTs and rejects deleted-resource 
 		});
 
 		const ctx = await harness.auth.$context;
+		await ensureResourceRow(
+			ctx as unknown as AuthContext,
+			harness.opts,
+			resourceIdentifier,
+		);
 		await ctx.adapter.update({
 			model: "oauthResource",
 			where: [{ field: "identifier", value: resourceIdentifier }],
 			update: { disabled: true },
 		});
+		invalidateResourceCache(resourceIdentifier);
 
 		const result = await harness.runCodeFlow({
 			authorizeResource: resourceIdentifier,
@@ -899,9 +923,6 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 				],
 			},
 		);
-		resetSeedStateForTests();
-		const ctx = await auth.$context;
-		await seedResourcesOnce(ctx as unknown as AuthContext, oauthOptions);
 		const { headers } = await signInWithTestUser();
 		const authClient = createAuthClient({
 			baseURL: authServerBaseUrl,
@@ -948,6 +969,44 @@ describe("JWT access tokens emit RFC 9068 §2.2.3 `client_id` claim", () => {
 		expect(protectedHeader.typ).toBe("at+jwt");
 		expect(decoded.sub).toBe(client.client_id);
 		expect(decoded.client_id).toBe(client.client_id);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("issues tokens for config-only resources without creating an oauthResource row", async () => {
+		const identifier = "https://api.example.com/config-only-token";
+		const harness = await bootCodeFlowHarness({
+			resources: [
+				{
+					identifier,
+					accessTokenTtl: 300,
+					customClaims: { "x-tenant": "tenant-123" },
+				},
+			],
+		});
+		const result = await harness.runCodeFlow({
+			authorizeResource: identifier,
+			tokenResource: identifier,
+		});
+
+		expect(result.tokens?.data?.access_token).toBeDefined();
+		const decoded = decodeJwt(result.tokens!.data!.access_token!) as {
+			aud: string | string[];
+			exp: number;
+			iat: number;
+			"x-tenant": string;
+		};
+		const audClaim = Array.isArray(decoded.aud) ? decoded.aud : [decoded.aud];
+		expect(audClaim).toContain(identifier);
+		expect(decoded["x-tenant"]).toBe("tenant-123");
+		expect(decoded.exp - decoded.iat).toBe(300);
+
+		const ctx = await harness.auth.$context;
+		const rows = await ctx.adapter.findMany<OAuthResource>({
+			model: "oauthResource",
+		});
+		expect(rows).toHaveLength(0);
 	});
 
 	it("strips `client_id` from per-resource customClaims (AS owns it)", async () => {
