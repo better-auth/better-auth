@@ -1146,6 +1146,69 @@ describe("account", async () => {
 		expect(googleAccount?.refreshToken).toBe("second-refresh-token");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11557
+	 */
+	it("should not pass the account id in the refreshToken update data", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+		const testCtx = await auth.$context;
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const params = new URLSearchParams(await request.text());
+				expect(params.get("grant_type")).toBe("refresh_token");
+				return HttpResponse.json({
+					access_token: "rotated-access-token",
+					refresh_token: "rotated-refresh-token",
+				});
+			}),
+		);
+
+		const { headers, user } = await signInWithTestUser();
+		const account = await testCtx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "google",
+			accountId: "google-sub",
+			accessToken: "initial-access-token",
+			refreshToken: "initial-refresh-token",
+			scope: "email",
+		});
+		const updateAccountSpy = vi.spyOn(testCtx.internalAdapter, "updateAccount");
+
+		const res = await client.$fetch<{ refreshToken?: string }>(
+			"/refresh-token",
+			{
+				body: {
+					providerId: "google",
+				},
+				headers,
+				method: "POST",
+			},
+		);
+		expect(res.error).toBeFalsy();
+		expect(res.data?.refreshToken).toBe("rotated-refresh-token");
+
+		// Adapters that reject the primary key in update data (e.g. Convex) would
+		// fail the write after the provider has already rotated the refresh token
+		expect(updateAccountSpy).toHaveBeenCalledTimes(1);
+		const [updatedId, updateData] = updateAccountSpy.mock.calls[0]!;
+		expect(updatedId).toBe(account.id);
+		expect(updateData).not.toHaveProperty("id");
+		updateAccountSpy.mockRestore();
+
+		const accounts = await testCtx.internalAdapter.findAccounts(user.id);
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount?.refreshToken).toBe("rotated-refresh-token");
+	});
+
 	it("should persist refreshed idToken in database during getAccessToken auto-refresh", async () => {
 		const { auth, client, cookieSetter } = await getTestInstance({
 			socialProviders: {
