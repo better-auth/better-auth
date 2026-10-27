@@ -39,6 +39,7 @@ import type {
 	SCIMSubject,
 	SCIMUser,
 } from "./persistence";
+import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
 import {
@@ -1312,6 +1313,7 @@ export function deleteSCIMUser(
 						},
 						{ field: "scimUserId", value: sourceBeforeLocks.id },
 					],
+					limit: SCIM_UNBOUNDED_ROW_LIMIT,
 				});
 				const lockedGroups = await acquireSCIMGroupMutationLocks(
 					trx,
@@ -1348,6 +1350,7 @@ export function deleteSCIMUser(
 						},
 						{ field: "scimUserId", value: currentSource.id },
 					],
+					limit: SCIM_UNBOUNDED_ROW_LIMIT,
 				});
 				if (!areMembershipGroupsLocked(lockedMemberships, lockedGroups)) {
 					throwConcurrentSCIMGroupMutation();

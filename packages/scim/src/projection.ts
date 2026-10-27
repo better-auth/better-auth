@@ -21,6 +21,7 @@ import type {
 	SCIMSubject,
 	SCIMUser,
 } from "./persistence";
+import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import { createScopedKey } from "./resource-key";
 import { runSCIMApplicationCallback } from "./scim-error";
 
@@ -189,6 +190,7 @@ async function buildDesiredGrants(
 					operator: "in",
 				},
 			],
+			limit: SCIM_UNBOUNDED_ROW_LIMIT,
 		}));
 	if (memberships.length === 0) return [];
 
@@ -207,6 +209,7 @@ async function buildDesiredGrants(
 							operator: "in",
 						},
 					],
+					limit: memberships.length,
 				})
 			).map((group) => [group.id, group]),
 		);
@@ -334,6 +337,7 @@ async function reconcileProjectionUserState(
 				},
 				{ field: "userId", value: input.userId },
 			],
+			limit: SCIM_UNBOUNDED_ROW_LIMIT,
 		}));
 	const desiredGrantByKey = new Map(
 		desiredGrants.map((grant) => [grant.grantKey, grant]),
@@ -451,6 +455,7 @@ async function reconcileSCIMUserBatch(
 				value: input.provisioningDomainId,
 			},
 		],
+		limit: SCIM_UNBOUNDED_ROW_LIMIT,
 	});
 	const connectionIds = [
 		...new Set(
@@ -478,6 +483,7 @@ async function reconcileSCIMUserBatch(
 							operator: "in",
 						},
 					],
+					limit: SCIM_UNBOUNDED_ROW_LIMIT,
 				})
 			: [];
 	const groupIds = [
@@ -489,6 +495,7 @@ async function reconcileSCIMUserBatch(
 			: await input.database.findMany<SCIMGroup>({
 					model: "scimGroup",
 					where: [{ field: "id", value: groupIds, operator: "in" }],
+					limit: groupIds.length,
 				});
 	const existingGrants = await input.database.findMany<SCIMProjectionGrant>({
 		model: "scimProjectionGrant",
@@ -499,6 +506,7 @@ async function reconcileSCIMUserBatch(
 			},
 			{ field: "userId", value: userIds, operator: "in" },
 		],
+		limit: SCIM_UNBOUNDED_ROW_LIMIT,
 	});
 
 	const scimUsersByUserId = new Map<string, SCIMUser[]>();

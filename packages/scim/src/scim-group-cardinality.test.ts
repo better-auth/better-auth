@@ -316,7 +316,7 @@ describe("SCIM Group direct-member cardinality", () => {
 		).toEqual(groupUpdatedAt);
 	});
 
-	it("bounds a Group response when persisted state violates the invariant", async () => {
+	it("rejects Group requests when persisted state violates the invariant", async () => {
 		const { auth, data, headers } = createFixture();
 		const group = await auth.api.createSCIMGroup({
 			body: {
@@ -348,15 +348,46 @@ describe("SCIM Group direct-member cardinality", () => {
 			})),
 		);
 
+		const serverError = {
+			statusCode: 500,
+			body: expect.objectContaining({ status: "500" }),
+		};
 		await expect(
 			auth.api.getSCIMGroup({
 				params: { groupId: group.id },
 				headers,
 			}),
-		).rejects.toMatchObject({
-			statusCode: 500,
-			body: expect.objectContaining({ status: "500" }),
-		});
+		).rejects.toMatchObject(serverError);
+		await expect(
+			auth.api.replaceSCIMGroup({
+				params: { groupId: group.id },
+				body: {
+					schemas: [GROUP_SCHEMA],
+					displayName: "Engineering",
+					members: [],
+				},
+				headers,
+			}),
+		).rejects.toMatchObject(serverError);
+		await expect(
+			auth.api.patchSCIMGroup({
+				params: { groupId: group.id },
+				body: {
+					schemas: [PATCH_SCHEMA],
+					Operations: [
+						{ op: "replace", path: "displayName", value: "Platform" },
+					],
+				},
+				headers,
+			}),
+		).rejects.toMatchObject(serverError);
+		await expect(
+			auth.api.deleteSCIMGroup({
+				params: { groupId: group.id },
+				headers,
+			}),
+		).rejects.toMatchObject(serverError);
+		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS + 1);
 	});
 
 	it("serializes concurrent additions before enforcing the member limit", async () => {
