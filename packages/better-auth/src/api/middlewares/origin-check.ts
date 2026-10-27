@@ -94,7 +94,10 @@ export const originCheck = (
 			if (pattern.includes("*")) {
 				return wildcardMatch(pattern)(getHost(url));
 			}
-			return url.startsWith(pattern);
+			const protocol = getProtocol(url);
+			return protocol === "http:" || protocol === "https:" || !protocol
+				? pattern === getOrigin(url)
+				: url.startsWith(pattern);
 		};
 
 		const validateURL = (url: string | undefined, label: string) => {
