@@ -9,7 +9,7 @@ const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const ADMIN_GROUP = "Admins";
 
-function createFixture() {
+function createFixture(defaultFindManyLimit?: number) {
 	const data = {
 		user: [] as User[],
 		session: [] as { id: string }[],
@@ -30,6 +30,7 @@ function createFixture() {
 	const auth = betterAuth({
 		baseURL: "http://localhost:3000",
 		database: memoryAdapter(data),
+		advanced: { database: { defaultFindManyLimit } },
 		plugins: [
 			scim({
 				connections: [
@@ -286,5 +287,14 @@ describe("SCIM Group writes and role mapping past the default findMany limit", (
 		expect(
 			data.scimGroup.filter((group) => group.updatedAt.getTime() === 0),
 		).toEqual([]);
+	});
+
+	it("maps the role of every member when the default findMany limit is 10", async () => {
+		const { createUsers, createGroup, usersWithAdminGrant } = createFixture(10);
+		const userIds = await createUsers(20);
+
+		await createGroup(ADMIN_GROUP, userIds);
+
+		expect(usersWithAdminGrant()).toBe(20);
 	});
 });

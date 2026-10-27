@@ -194,22 +194,17 @@ async function buildDesiredGrants(
 		}));
 	if (memberships.length === 0) return [];
 
+	const groupIds = [
+		...new Set(memberships.map((membership) => membership.groupId)),
+	];
 	const groupById =
 		input.groupById ??
 		new Map(
 			(
 				await database.findMany<SCIMGroup>({
 					model: "scimGroup",
-					where: [
-						{
-							field: "id",
-							value: [
-								...new Set(memberships.map((membership) => membership.groupId)),
-							],
-							operator: "in",
-						},
-					],
-					limit: memberships.length,
+					where: [{ field: "id", value: groupIds, operator: "in" }],
+					limit: groupIds.length,
 				})
 			).map((group) => [group.id, group]),
 		);
