@@ -20,6 +20,7 @@ import {
 } from "./signed-query";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
+import { checkOAuthQueryParams } from "./utils";
 
 const signedQueryParameterNameParam = "ba_param";
 
@@ -164,6 +165,38 @@ describe("oauth signed query signatures", () => {
 		expect(
 			await verifyOAuthQueryParams(signedParams.toString(), "test-secret"),
 		).toBe(false);
+	});
+
+	it("should distinguish expired, tampered and valid signed params", async () => {
+		const valid = await createSignedParams("test-secret");
+		expect(await checkOAuthQueryParams(valid.toString(), "test-secret")).toBe(
+			"valid",
+		);
+
+		const expired = new URLSearchParams(valid);
+		expired.set("exp", "1");
+		expired.set(
+			"sig",
+			await makeSignature(
+				canonicalizeOAuthQueryParams(
+					new URLSearchParams([...expired].filter(([k]) => k !== "sig")),
+				).toString(),
+				"test-secret",
+			),
+		);
+		expect(await checkOAuthQueryParams(expired.toString(), "test-secret")).toBe(
+			"expired",
+		);
+		expect(
+			await verifyOAuthQueryParams(expired.toString(), "test-secret"),
+		).toBe(false);
+
+		// Expired AND unsigned/tampered must not reveal expiry
+		const forged = new URLSearchParams(valid);
+		forged.set("exp", "1");
+		expect(await checkOAuthQueryParams(forged.toString(), "test-secret")).toBe(
+			"invalid_signature",
+		);
 	});
 
 	it("should reject duplicate signature params", async () => {

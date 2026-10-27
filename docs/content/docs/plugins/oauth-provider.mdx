@@ -1155,6 +1155,8 @@ The `shouldRedirect` hooks of `signup`, `selectAccount`, and `postLogin`, and `p
 
 If your sign-in pages include custom page query parameters, they may coexist in the URL, but they should not be added to the signed `oauth_query`. The client plugin forwards only the parameters declared by the signed redirect.
 
+When the signed `oauth_query` is rejected, endpoints respond with `invalid_signature` if the signature does not verify, or `expired_request` if the signature is valid but `exp` has passed. Use `expired_request` to tell the user to restart the flow instead of showing a generic invalid-link message.
+
 If you utilize the Client Plugin `oauthProviderClient`, then the `oauth_query` parameter is automatically sent to every endpoint that requires it. If you have custom sign-in endpoints, you would need to manually add the window's signed query in the request body `oauth_query`. This should only include the signed query parameters.
 
 #### Login Screen
