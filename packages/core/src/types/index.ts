@@ -7,6 +7,7 @@ export type {
 	GenericEndpointContext,
 	InfoContext,
 	InternalAdapter,
+	PasswordVerifyResult,
 	PluginContext,
 } from "./context";
 export type {
