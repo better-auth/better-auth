@@ -1954,7 +1954,10 @@ export interface OAuthResourceInput {
 	signingKeyId?: string;
 	/**
 	 * Omit for no scope restriction; non-empty array is an allowlist.
-	 * In admin endpoints, `null` or `[]` removes scope restrictions.
+	 * In admin endpoints, `null` removes scope restrictions. An empty
+	 * array (`[]`) is rejected — omit the field or pass `null` to allow
+	 * every requested scope, or set `disabled: true` to stop issuing
+	 * tokens for this resource.
 	 */
 	allowedScopes?: string[] | null;
 	customClaims?: Record<string, unknown>;

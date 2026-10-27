@@ -227,12 +227,14 @@ function normalizeResourceParam(resource: unknown): string[] | undefined {
 export const EMPTY_ALLOWED_SCOPES_MESSAGE =
 	"`allowedScopes` cannot be empty. Omit it (or pass null) to allow every requested scope, or set `disabled: true` to stop issuing tokens for this resource.";
 
-export const EMPTY_UPDATE_ALLOWED_SCOPES_MESSAGE =
-	"`allowedScopes` cannot be empty. Pass null to allow every requested scope, or set `disabled: true` to stop issuing tokens for this resource.";
-
 /**
  * Normalizes an `allowedScopes` value so `null`, `undefined`, and `[]` all
  * resolve as "no restriction" (`undefined`).
+ *
+ * The `[]` case is a legacy/migration shim: rows stored before the
+ * deny→allow flip (including SQL `NULL` list columns read back as `[]`)
+ * keep resolving as unrestricted. New writes cannot produce `[]` on
+ * purpose — both the config seed path and the admin schemas reject it.
  *
  * @internal
  */
@@ -709,9 +711,7 @@ export function collectResourceInputs(
 				inputs.push({
 					...entry,
 					allowedScopes:
-						entry.allowedScopes === null
-							? null
-							: entry.allowedScopes?.map((s: string) => s.trim()),
+						entry.allowedScopes === null ? null : entry.allowedScopes,
 				});
 			}
 		}
@@ -734,7 +734,7 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
-		allowedScopes: input.allowedScopes?.map((s: string) => s.trim()) ?? [],
+		allowedScopes: input.allowedScopes ?? [],
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
@@ -777,9 +777,7 @@ function buildSeedUpdate(
 		update.signingKeyId = input.signingKeyId;
 	if (input.allowedScopes !== undefined)
 		update.allowedScopes =
-			input.allowedScopes === null
-				? []
-				: input.allowedScopes.map((s: string) => s.trim());
+			input.allowedScopes === null ? [] : input.allowedScopes;
 	if (input.customClaims !== undefined)
 		update.customClaims = input.customClaims;
 	if (input.dpopBoundAccessTokensRequired !== undefined) {

@@ -665,22 +665,6 @@ describe("oauthProvider — allowedScopes configuration validation", () => {
 				resources: [{ identifier, allowedScopes: [] }],
 			} as OAuthOptions<Scope[]>),
 		).toThrowError(/null/);
-
-		expect(() =>
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				resources: [{ identifier, allowedScopes: [""] }],
-			} as OAuthOptions<Scope[]>),
-		).toThrowError(/allowedScopes entries must be non-empty strings/);
-
-		expect(() =>
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				resources: [{ identifier, allowedScopes: ["   "] }],
-			} as OAuthOptions<Scope[]>),
-		).toThrowError(/allowedScopes entries must be non-empty strings/);
 	});
 });
 

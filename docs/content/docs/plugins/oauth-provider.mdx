@@ -1414,7 +1414,7 @@ oauthProvider({
 })
 ```
 
-Omit `allowedScopes` (or pass `null` or `[]` at runtime) to allow every requested scope. A non-empty array is an allowlist; scopes outside it are removed and an empty intersection is rejected with `invalid_scope`. In config, an empty array (`[]`) is rejected at construction to prevent ambiguity with blocking access (use `disabled: true` to stop issuing tokens). Pass `null` or `[]` through the admin API to remove the restriction.
+Omit `allowedScopes` (or pass `null` at runtime) to allow every requested scope. A non-empty array is an allowlist; scopes outside it are removed and an empty intersection is rejected with `invalid_scope`. In config, an empty array (`[]`) is rejected at construction to prevent ambiguity with blocking access (use `disabled: true` to stop issuing tokens). Pass `null` through the admin API to remove the restriction; `[]` is rejected there too. Admin responses serialize an unrestricted allowlist as `null`, which echoes back cleanly.
 
 Use the admin resource endpoints when resource policy needs to change at runtime.
 

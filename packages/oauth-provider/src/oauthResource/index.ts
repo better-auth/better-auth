@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
-import { JWS_ALGORITHMS } from "../resources";
+import { EMPTY_ALLOWED_SCOPES_MESSAGE, JWS_ALGORITHMS } from "../resources";
 import type { OAuthOptions, Scope } from "../types";
 import {
 	createResourceEndpoint,
@@ -25,20 +25,28 @@ const baseResourceBodySchema = z.object({
 	metadata: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
+/**
+ * Shared `allowedScopes` field for the admin create and update schemas.
+ * Mirrors the seed-path `[]` rejection in `oauthProvider()` (`oauth.ts`):
+ * an explicit empty array is rejected at the schema boundary (400) with
+ * guidance to pass `null` (or omit the field) for "no restriction", or set
+ * `disabled: true` to stop issuing tokens. `null`/omitted still mean
+ * unrestricted and are stored as `[]` (see `buildResourceRow`), which keeps
+ * reading as unrestricted via `normalizeAllowedScopes` (legacy/migration
+ * shim for pre-existing rows).
+ */
+const allowedScopesField = z
+	.array(z.string())
+	.min(1, EMPTY_ALLOWED_SCOPES_MESSAGE)
+	.nullable()
+	.optional();
+
 const createResourceBodySchema = baseResourceBodySchema
-	.extend({
-		allowedScopes: z
-			.array(z.string().trim().min(1, "scope cannot be empty"))
-			.nullable()
-			.optional(),
-	})
+	.extend({ allowedScopes: allowedScopesField })
 	.required({ identifier: true });
 
 const updateResourceBodySchema = baseResourceBodySchema.extend({
-	allowedScopes: z
-		.array(z.string().trim().min(1, "scope cannot be empty"))
-		.nullable()
-		.optional(),
+	allowedScopes: allowedScopesField,
 });
 
 export const adminCreateOAuthResource = (opts: OAuthOptions<Scope[]>) =>

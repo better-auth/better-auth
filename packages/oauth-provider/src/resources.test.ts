@@ -66,7 +66,7 @@ describe("collectResourceInputs", () => {
 		});
 		expect(inputs).toEqual([
 			{ identifier: "https://a", allowedScopes: null },
-			{ identifier: "https://b", allowedScopes: ["read", "write"] },
+			{ identifier: "https://b", allowedScopes: [" read ", "write"] },
 		]);
 	});
 });
@@ -168,7 +168,7 @@ describe("seedResources (integration via plugin init)", () => {
 		});
 	});
 
-	it("normalizes and trims scope entries when seeding configured resources", async () => {
+	it("stores scope entries verbatim when seeding configured resources", async () => {
 		const { auth } = await bootWithResourcesOption({
 			resources: [
 				{
@@ -178,7 +178,7 @@ describe("seedResources (integration via plugin init)", () => {
 			],
 		});
 		const row = await readResource(auth, "https://api.example.com/padded");
-		expect(row?.allowedScopes).toEqual(["read", "write"]);
+		expect(row?.allowedScopes).toEqual(["  read  ", "write "]);
 	});
 
 	it("logs the enforcePerClientResources resolution at init", async () => {

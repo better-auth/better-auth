@@ -81,63 +81,50 @@ export const oauthResourceScopeTestSuite = createTestSuite(
 					expect(policy.audienceClaim).toBe(identifier);
 				},
 			},
-		"rejects allowedScopes: [] in config, accepts [] in admin schemas, and rejects empty scope strings":
-			{
-				migrateBetterAuth: scopeBetterAuthOptions,
-				async test() {
-					const emptyIdentifier = `${ROOT}/empty`;
-					expect(() =>
-						oauthProvider({
-							loginPage: "/login",
-							consentPage: "/consent",
-							enforcePerClientResources: false,
-							resources: [{ identifier: emptyIdentifier, allowedScopes: [] }],
-						} as never),
-					).toThrowError(/disabled: true/);
-
-					const dummyOpts = {
+		"rejects allowedScopes: [] in config and admin schemas": {
+			migrateBetterAuth: scopeBetterAuthOptions,
+			async test() {
+				const emptyIdentifier = `${ROOT}/empty`;
+				expect(() =>
+					oauthProvider({
 						loginPage: "/login",
 						consentPage: "/consent",
 						enforcePerClientResources: false,
-					} as never;
+						resources: [{ identifier: emptyIdentifier, allowedScopes: [] }],
+					} as never),
+				).toThrowError(/disabled: true/);
 
-					const createEndpoint = adminCreateOAuthResource(dummyOpts);
-					const updateEndpoint = adminUpdateOAuthResource(dummyOpts);
+				const dummyOpts = {
+					loginPage: "/login",
+					consentPage: "/consent",
+					enforcePerClientResources: false,
+				} as never;
 
-					const createResult = createEndpoint.options.body.safeParse({
-						identifier: emptyIdentifier,
-						allowedScopes: [],
-					});
-					expect(createResult.success).toBe(true);
+				const createEndpoint = adminCreateOAuthResource(dummyOpts);
+				const updateEndpoint = adminUpdateOAuthResource(dummyOpts);
 
-					const updateResult = updateEndpoint.options.body.safeParse({
-						allowedScopes: [],
-					});
-					expect(updateResult.success).toBe(true);
-
-					const createEmptyStringResult = createEndpoint.options.body.safeParse(
-						{
-							identifier: emptyIdentifier,
-							allowedScopes: [""],
-						},
+				const createResult = createEndpoint.options.body.safeParse({
+					identifier: emptyIdentifier,
+					allowedScopes: [],
+				});
+				expect(createResult.success).toBe(false);
+				if (!createResult.success) {
+					expect(createResult.error.issues[0]?.message).toMatch(
+						/disabled: true/,
 					);
-					expect(createEmptyStringResult.success).toBe(false);
+				}
 
-					const updateWhitespaceResult = updateEndpoint.options.body.safeParse({
-						allowedScopes: ["   "],
-					});
-					expect(updateWhitespaceResult.success).toBe(false);
-
-					const trimResult = createEndpoint.options.body.safeParse({
-						identifier: emptyIdentifier,
-						allowedScopes: ["  read  "],
-					});
-					expect(trimResult.success).toBe(true);
-					if (trimResult.success) {
-						expect(trimResult.data.allowedScopes).toEqual(["read"]);
-					}
-				},
+				const updateResult = updateEndpoint.options.body.safeParse({
+					allowedScopes: [],
+				});
+				expect(updateResult.success).toBe(false);
+				if (!updateResult.success) {
+					expect(updateResult.error.issues[0]?.message).toMatch(
+						/disabled: true/,
+					);
+				}
 			},
+		},
 		"updates a resource allowedScopes to ['read'] and clears to [] round-tripping on live adapter":
 			{
 				migrateBetterAuth: scopeBetterAuthOptions,

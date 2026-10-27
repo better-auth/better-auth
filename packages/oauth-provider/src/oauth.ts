@@ -211,15 +211,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				`resources entry ${resource.identifier}: ${EMPTY_ALLOWED_SCOPES_MESSAGE}`,
 			);
 		}
-		if (
-			resource.allowedScopes?.some(
-				(s) => typeof s !== "string" || s.trim().length === 0,
-			)
-		) {
-			throw new BetterAuthError(
-				`resources entry ${resource.identifier}: allowedScopes entries must be non-empty strings.`,
-			);
-		}
 	}
 
 	// Discovery `claims_supported`: protocol claims that are always present, plus
