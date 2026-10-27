@@ -556,6 +556,121 @@ describe("prisma-adapter", () => {
 		expect(txClient.verification.update).toHaveBeenCalledTimes(1);
 	});
 
+	it.each(["postgresql", "mongodb"] as const)(
+		"incrementOne keeps an insensitive guard case-insensitive on the keyed update (%s)",
+		async (provider) => {
+			const target = { id: "row-1", identifier: "Mixed@Example.com" };
+			const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
+			const txClient = {
+				verification: {
+					findFirst: vi.fn().mockResolvedValue(target),
+					update,
+				},
+			};
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(async (cb) => cb(txClient)),
+					verification: {},
+				} as never,
+				{ provider },
+			)({
+				verification: {
+					additionalFields: { remaining: { type: "number" } },
+				},
+			} as BetterAuthOptions);
+
+			await adapter.incrementOne({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: "mixed@example.com",
+						mode: "insensitive",
+					},
+				],
+				increment: { remaining: -1 },
+			});
+
+			expect(txClient.verification.findFirst).toHaveBeenCalledWith({
+				where: {
+					identifier: { equals: "mixed@example.com", mode: "insensitive" },
+				},
+			});
+			expect(update).toHaveBeenCalledWith({
+				where: {
+					id: "row-1",
+					AND: [
+						{
+							identifier: { equals: "mixed@example.com", mode: "insensitive" },
+						},
+					],
+				},
+				data: { remaining: { increment: -1 } },
+			});
+		},
+	);
+
+	it("incrementOne resolves an insensitive id before the keyed update", async () => {
+		const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue({ id: "row-1" }),
+				update,
+			},
+		};
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(async (cb) => cb(txClient)),
+				verification: {},
+			} as never,
+			{ provider: "postgresql" },
+		)({
+			verification: {
+				additionalFields: { remaining: { type: "number" } },
+			},
+		} as BetterAuthOptions);
+
+		await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "row-1", mode: "insensitive" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(update).toHaveBeenCalledWith({
+			where: {
+				id: "row-1",
+				AND: [{ id: { equals: "row-1", mode: "insensitive" } }],
+			},
+			data: { remaining: { increment: -1 } },
+		});
+	});
+
+	it("update keeps an insensitive predicate next to a unique key", async () => {
+		const update = vi.fn().mockResolvedValue({ id: "user-id" });
+		const adapter = prismaAdapter(
+			{ $transaction: vi.fn(), user: { update } },
+			{ provider: "postgresql" },
+		)({});
+
+		await adapter.update({
+			model: "user",
+			where: [
+				{ field: "id", value: "user-id" },
+				{ field: "email", value: "test@example.com", mode: "insensitive" },
+			],
+			update: { name: "Updated" },
+		});
+
+		expect(update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: {
+					id: "user-id",
+					AND: [{ email: { equals: "test@example.com", mode: "insensitive" } }],
+				},
+			}),
+		);
+	});
+
 	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {
 		const target = {
 			id: "verification-id",
