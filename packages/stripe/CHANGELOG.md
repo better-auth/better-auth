@@ -1,5 +1,27 @@
 # @better-auth/stripe
 
+## 1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11954](https://github.com/better-auth/better-auth/pull/11954) [`da53fae`](https://github.com/better-auth/better-auth/commit/da53faea2530df6fda47f83f72da3eb5557ae60d) Thanks [@godwit-bo](https://github.com/godwit-bo)! - Support Stripe SDK v23.
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#9684](https://github.com/better-auth/better-auth/pull/9684) [`72a6394`](https://github.com/better-auth/better-auth/commit/72a6394e30ced6654ebffe3c5b74dc1b570f6880) Thanks [@nikhilgupta58](https://github.com/nikhilgupta58)! - Stop logging a "Stripe webhook failed" error when a one-time `payment` mode checkout session completes.
+
 ## 1.7.7
 
 ## 1.7.6

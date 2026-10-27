@@ -1206,15 +1206,12 @@ describe("stripe checkout", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(meteredMockStripe.checkout.sessions.create).toHaveBeenCalled();
-			const createCall =
-				meteredMockStripe.checkout.sessions.create.mock.calls[0][0];
-			const baseLineItem = createCall.line_items.find(
-				(item: { price: string }) => item.price === meteredPriceId,
+			expect(meteredMockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					line_items: expect.arrayContaining([{ price: meteredPriceId }]),
+				}),
+				undefined,
 			);
-
-			expect(baseLineItem).toBeDefined();
-			expect(baseLineItem).not.toHaveProperty("quantity");
 		});
 
 		test("should still include quantity for licensed base price in checkout session", async ({
@@ -1286,15 +1283,14 @@ describe("stripe checkout", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(licensedMockStripe.checkout.sessions.create).toHaveBeenCalled();
-			const createCall =
-				licensedMockStripe.checkout.sessions.create.mock.calls[0][0];
-			const baseLineItem = createCall.line_items.find(
-				(item: { price: string }) => item.price === licensedPriceId,
+			expect(licensedMockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					line_items: expect.arrayContaining([
+						{ price: licensedPriceId, quantity: 1 },
+					]),
+				}),
+				undefined,
 			);
-
-			expect(baseLineItem).toBeDefined();
-			expect(baseLineItem).toHaveProperty("quantity", 1);
 		});
 
 		test("should not include quantity for metered price during billing portal upgrade", async ({
@@ -1421,14 +1417,15 @@ describe("stripe checkout", () => {
 
 			expect(
 				upgradeMockStripe.billingPortal.sessions.create,
-			).toHaveBeenCalled();
-			const portalCall =
-				upgradeMockStripe.billingPortal.sessions.create.mock.calls[0][0];
-			const portalItem =
-				portalCall.flow_data.subscription_update_confirm.items[0];
-
-			expect(portalItem.price).toBe(meteredPriceId);
-			expect(portalItem).not.toHaveProperty("quantity");
+			).toHaveBeenCalledWith(
+				expect.objectContaining({
+					flow_data: expect.objectContaining({
+						subscription_update_confirm: expect.objectContaining({
+							items: [{ id: expect.any(String), price: meteredPriceId }],
+						}),
+					}),
+				}),
+			);
 		});
 
 		test("should not include quantity for metered price during direct subscription upgrade", async ({
@@ -1554,15 +1551,14 @@ describe("stripe checkout", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(upgradeMockStripe.subscriptions.update).toHaveBeenCalled();
-			const updateCall =
-				upgradeMockStripe.subscriptions.update.mock.calls[0][1];
-			const meteredItem = updateCall.items.find(
-				(item: { price?: string }) => item.price === meteredPriceId,
+			expect(upgradeMockStripe.subscriptions.update).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					items: expect.arrayContaining([
+						{ id: expect.any(String), price: meteredPriceId },
+					]),
+				}),
 			);
-
-			expect(meteredItem).toBeDefined();
-			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 
 		test("should not include quantity for metered price during scheduled upgrade", async ({
@@ -1708,16 +1704,17 @@ describe("stripe checkout", () => {
 
 			expect(
 				scheduleMockStripe.subscriptionSchedules.update,
-			).toHaveBeenCalled();
-			const scheduleUpdate =
-				scheduleMockStripe.subscriptionSchedules.update.mock.calls[0][1];
-			const newPhase = scheduleUpdate.phases[1];
-			const meteredItem = newPhase.items.find(
-				(item: { price: string }) => item.price === meteredPriceId,
+			).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					phases: [
+						expect.anything(),
+						expect.objectContaining({
+							items: expect.arrayContaining([{ price: meteredPriceId }]),
+						}),
+					],
+				}),
 			);
-
-			expect(meteredItem).toBeDefined();
-			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 	});
 	/**

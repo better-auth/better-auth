@@ -4,7 +4,10 @@ import {
 	isLoopbackHost,
 	isPublicRoutableHost,
 } from "@better-auth/core/utils/host";
-import { isReverseDomainPrivateUseRedirectUri } from "@better-auth/core/utils/redirect-uri";
+import {
+	isNativePrivateUseRedirectUri,
+	isReverseDomainPrivateUseRedirectUri,
+} from "@better-auth/core/utils/redirect-uri";
 import type { OAuthClientMetadata } from "@better-auth/oauth-provider";
 import { oauthClientMetadataSchema } from "@better-auth/oauth-provider";
 import {
@@ -136,7 +139,7 @@ function isAbsoluteRedirectUri(uri: string): boolean {
 		return (
 			parsed.protocol === "http:" ||
 			parsed.protocol === "https:" ||
-			isReverseDomainPrivateUseRedirectUri(parsed)
+			isNativePrivateUseRedirectUri(parsed)
 		);
 	} catch {
 		return false;
@@ -375,7 +378,7 @@ export function validateCimdMetadata(
 			const isRedirectField =
 				key === "redirect_uris" || key === "post_logout_redirect_uris";
 			const isPrivateUseRedirect =
-				isRedirectField && isReverseDomainPrivateUseRedirectUri(uri);
+				isRedirectField && isNativePrivateUseRedirectUri(uri);
 			if (
 				uri.protocol !== "https:" &&
 				uri.protocol !== "http:" &&
@@ -383,16 +386,27 @@ export function validateCimdMetadata(
 			) {
 				return {
 					valid: false,
-					error: `all values for ${key} must use HTTP(S) or an authority-free private-use scheme`,
+					error: `all values for ${key} must use HTTP(S) or a private-use scheme`,
 				};
 			}
-			if (isPrivateUseRedirect) {
+			// Native private-use URIs have no HTTP origin, so they skip
+			// origin-binding. In post_logout_redirect_uris only the
+			// authority-free reverse-domain form skips it; host-bearing custom
+			// schemes there stay origin-bound.
+			if (
+				isPrivateUseRedirect &&
+				(key === "redirect_uris" || isReverseDomainPrivateUseRedirectUri(uri))
+			) {
 				continue;
 			}
 
 			// Loopback redirect URIs are allowed for local/native app flows
-			// (RFC 8252); this exception applies only to redirect URI fields.
-			const localhostAllowed = isRedirectField && isLoopbackHost(uri.hostname);
+			// (RFC 8252); this exception applies only to HTTP(S) URIs in redirect
+			// URI fields. A custom scheme with a loopback host stays origin-bound.
+			const localhostAllowed =
+				isRedirectField &&
+				(uri.protocol === "http:" || uri.protocol === "https:") &&
+				isLoopbackHost(uri.hostname);
 			if (uri.origin !== clientIdOrigin && !localhostAllowed) {
 				return {
 					valid: false,

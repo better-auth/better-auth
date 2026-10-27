@@ -186,7 +186,7 @@ interface IdentityMutationTransactionOptions {
 	subjectCreationUserId?: string;
 }
 
-function concurrentIdentityMutation(): never {
+export function concurrentIdentityMutation(): never {
 	const error = createSCIMError("CONFLICT", {
 		detail: "The SCIM identity changed concurrently; retry the request",
 	}) as SCIMIdentityMutationConflict;

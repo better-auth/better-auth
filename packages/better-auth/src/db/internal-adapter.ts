@@ -64,6 +64,12 @@ export const createInternalAdapter = (
 	const secondaryStorage = options.secondaryStorage;
 	const verificationConsumeLocks = new Map<string, Promise<void>>();
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
+	// With secondary storage, the database is the authoritative session store
+	// only when sessions are written to it and revoked rows are deleted.
+	const databaseSessionFallbackEnabled =
+		!!secondaryStorage &&
+		options.session?.storeSessionInDatabase === true &&
+		options.session?.preserveSessionInDatabase !== true;
 	const {
 		createWithHooks,
 		updateWithHooks,
@@ -330,6 +336,23 @@ export const createInternalAdapter = (
 			userId: string,
 			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
 		) => {
+			if (databaseSessionFallbackEnabled) {
+				// The database holds every session, including ones whose cached copy
+				// failed to write, so list from it. Expired rows are skipped, as the
+				// cached list does.
+				const sessions = await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session>({
+					model: "session",
+					where: [
+						{ field: "userId", value: userId },
+						{ field: "expiresAt", value: new Date(), operator: "gt" },
+					],
+				});
+				return sessions.map((session) =>
+					parseSessionOutput(ctx.options, session),
+				);
+			}
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -477,9 +500,12 @@ export const createInternalAdapter = (
 				return ctx?.headers || ctx?.request?.headers;
 			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
-			const databaseSessionFallbackEnabled =
-				storeInDb === true &&
-				options.session?.preserveSessionInDatabase !== true;
+			// Deferring is only safe when the database can serve the session. When
+			// secondary storage is the session store, its write is the session
+			// itself and must fail inside the caller's transaction.
+			const deferMirror =
+				storageOptions?.deferSecondaryStorageWrites === true &&
+				databaseSessionFallbackEnabled;
 			const {
 				// always ignore override id - new sessions must have new ids
 				id: _,
@@ -568,35 +594,35 @@ export const createInternalAdapter = (
 				secondaryStorage
 					? {
 							fn: async (sessionData) => {
-								return storageOptions?.deferSecondaryStorageWrites
-									? sessionData
-									: mirrorSessionToSecondaryStorage(sessionData as Session);
+								if (!deferMirror) {
+									return mirrorSessionToSecondaryStorage(
+										sessionData as Session,
+									);
+								}
+								// Queued here, before createWithHooks queues the session's
+								// after hooks, so a hook that revokes the session runs after
+								// the cached copy exists and removes it.
+								await queueAfterTransactionHook(
+									async () => {
+										await mirrorSessionToSecondaryStorage(
+											sessionData as Session,
+										);
+									},
+									{
+										onError(error: unknown) {
+											logger.error(
+												"Failed to mirror committed session to secondary storage",
+												error,
+											);
+										},
+									},
+								);
+								return sessionData;
 							},
 							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
-			if (
-				secondaryStorage &&
-				storageOptions?.deferSecondaryStorageWrites &&
-				res
-			) {
-				await queueAfterTransactionHook(
-					async () => {
-						await mirrorSessionToSecondaryStorage(res as Session);
-					},
-					databaseSessionFallbackEnabled
-						? {
-								onError(error: unknown) {
-									logger.error(
-										"Failed to mirror committed session to secondary storage",
-										error,
-									);
-								},
-							}
-						: undefined,
-				);
-			}
 			return res as Session;
 		},
 		findSession: async (
@@ -675,12 +701,14 @@ export const createInternalAdapter = (
 				  }
 				| undefined,
 		) => {
+			const uniqueTokens = [...new Set(sessionTokens)];
+			const sessionsByToken = new Map<
+				string,
+				{ session: Session; user: User }
+			>();
+			const missingTokens: string[] = [];
 			if (secondaryStorage) {
-				const sessions: {
-					session: Session;
-					user: User;
-				}[] = [];
-				for (const sessionToken of sessionTokens) {
+				for (const sessionToken of uniqueTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
 						try {
@@ -711,50 +739,57 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							sessions.push(session);
+							sessionsByToken.set(sessionToken, session);
 						} catch {
 							// Skip invalid/corrupt session data
 							continue;
 						}
+					} else {
+						missingTokens.push(sessionToken);
 					}
 				}
-				return sessions;
 			}
 
-			const sessions = await (await getCurrentAdapter(adapter)).findMany<
-				Session & { user: User | null }
-			>({
-				model: "session",
-				where: [
-					{
-						field: "token",
-						value: sessionTokens,
-						operator: "in",
+			const databaseTokens = secondaryStorage ? missingTokens : uniqueTokens;
+			if (
+				databaseTokens.length > 0 &&
+				(!secondaryStorage || databaseSessionFallbackEnabled)
+			) {
+				const databaseSessions = await (
+					await getCurrentAdapter(adapter)
+				).findMany<Session & { user: User | null }>({
+					model: "session",
+					limit: databaseTokens.length,
+					where: [
+						{
+							field: "token",
+							value: databaseTokens,
+							operator: "in",
+						},
+						...(options?.onlyActiveSessions
+							? [
+									{
+										field: "expiresAt",
+										value: new Date(),
+										operator: "gt",
+									} satisfies Where,
+								]
+							: []),
+					],
+					join: {
+						user: true,
 					},
-					...(options?.onlyActiveSessions
-						? [
-								{
-									field: "expiresAt",
-									value: new Date(),
-									operator: "gt",
-								} satisfies Where,
-							]
-						: []),
-				],
-				join: {
-					user: true,
-				},
-			});
+				});
 
-			if (!sessions.length) return [];
-			if (sessions.some((session) => !session.user)) return [];
-
-			return sessions.map((_session) => {
-				const { user, ...session } = _session;
-				return {
-					session,
-					user: user!,
-				};
+				for (const { user, ...session } of databaseSessions) {
+					if (user) {
+						sessionsByToken.set(session.token, { session, user });
+					}
+				}
+			}
+			return uniqueTokens.flatMap((token) => {
+				const session = sessionsByToken.get(token);
+				return session ? [session] : [];
 			});
 		},
 		updateSession: async (

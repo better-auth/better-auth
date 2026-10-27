@@ -1,5 +1,60 @@
 # @better-auth/mcp
 
+## 1.7.14
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.13
+
+## 1.7.12
+
+### Patch Changes
+
+- [#11934](https://github.com/better-auth/better-auth/pull/11934) [`2a576f3`](https://github.com/better-auth/better-auth/commit/2a576f39dc6a3c278e28b6ee004c40396b4bab7c) Thanks [@bytaesu](https://github.com/bytaesu)! - `requireMcpAuth` now accepts only OAuth access tokens and rejects session JWTs from the JWT plugin, even when they share the issuer and audience.
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- Updated dependencies [[`a1f6f0b`](https://github.com/better-auth/better-auth/commit/a1f6f0bf19ba1be85e977d891d0f0ca43723c0a3), [`37debaa`](https://github.com/better-auth/better-auth/commit/37debaa8a17d11d05f8eeabdb94877a4b1575a1d)]:
+  - @better-auth/oauth-provider@1.7.11
+
+## 1.7.10
+
+### Patch Changes
+
+- Updated dependencies [[`cdd491b`](https://github.com/better-auth/better-auth/commit/cdd491b9d023f57f511d2905e0dcf55f565666d6), [`44f14bb`](https://github.com/better-auth/better-auth/commit/44f14bbf82be7352bdafbd78ebdcfa90850eaab0), [`fe550a9`](https://github.com/better-auth/better-auth/commit/fe550a9c57fa0454c6234cd9e46af4ed9eef9201), [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976), [`906c32f`](https://github.com/better-auth/better-auth/commit/906c32f4b595c01f14917f753a79b77a068f36f0), [`2fa7e2f`](https://github.com/better-auth/better-auth/commit/2fa7e2f8bb603c1013855d43888ec54f6a442ba4), [`8f3da46`](https://github.com/better-auth/better-auth/commit/8f3da46ae5b1fe577b38bd7952af1116af3087ff), [`963b7f9`](https://github.com/better-auth/better-auth/commit/963b7f9417d676725215ce97e9910370f18d5477), [`e34b828`](https://github.com/better-auth/better-auth/commit/e34b8282747b3b0148b011be4c2f8b07364788a7), [`f42c0c2`](https://github.com/better-auth/better-auth/commit/f42c0c220d42fbfcb672c492e5ef1d2b29da3d2f), [`4d7da0b`](https://github.com/better-auth/better-auth/commit/4d7da0bef84d78e39e855efabbe913067225ce8f)]:
+  - @better-auth/oauth-provider@1.7.10
+
+## 1.7.9
+
+### Patch Changes
+
+- Updated dependencies [[`54a0994`](https://github.com/better-auth/better-auth/commit/54a09948e8a98f9166b650f791b083818c3dab27), [`0a1a87e`](https://github.com/better-auth/better-auth/commit/0a1a87e388c0b50c8d18f3c411c6963c205b11f1)]:
+  - @better-auth/oauth-provider@1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11635](https://github.com/better-auth/better-auth/pull/11635) [`a5d582a`](https://github.com/better-auth/better-auth/commit/a5d582aaffce1a7457e3da0835a046ba6738c442) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Projects that enable `exactOptionalPropertyTypes` with `skipLibCheck: false` no longer get a TS2430 error from the `@better-auth/mcp` type declarations.
+
+- [#10266](https://github.com/better-auth/better-auth/pull/10266) [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9) Thanks [@shiminshen](https://github.com/shiminshen)! - Projects that enable `exactOptionalPropertyTypes` can use the `oauthProvider()` and `mcp()` plugins again. Since 1.7.0, adding either plugin to `betterAuth()` failed to type-check with a TS2322 error.
+
+- Updated dependencies [[`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a), [`369176e`](https://github.com/better-auth/better-auth/commit/369176e7f6201b4170269991bd3a14d3722eda41), [`6214610`](https://github.com/better-auth/better-auth/commit/62146108c70bbba57aab034bc79f98f016147e78), [`847acd0`](https://github.com/better-auth/better-auth/commit/847acd02bb2d6d17e757ab2b44a837fa0c3ba669), [`c68b2cd`](https://github.com/better-auth/better-auth/commit/c68b2cd8a5a03012ea77071ce74a7708210ea5a9), [`1a9be41`](https://github.com/better-auth/better-auth/commit/1a9be41d184ee2fcbc7f39b1ef1ab5cb492f7147), [`38f3bb3`](https://github.com/better-auth/better-auth/commit/38f3bb34af7de8b17078a5d4e26bf2f430337b58), [`38f3bb3`](https://github.com/better-auth/better-auth/commit/38f3bb34af7de8b17078a5d4e26bf2f430337b58), [`aaf0d7d`](https://github.com/better-auth/better-auth/commit/aaf0d7da3e854ab6e19c184b682308d4f024e4f0)]:
+  - @better-auth/oauth-provider@1.7.8
+
 ## 1.7.7
 
 ### Patch Changes

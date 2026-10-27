@@ -3,7 +3,7 @@ import { exportJWK, generateKeyPair } from "jose";
 import { symmetricEncrypt } from "../../crypto";
 import type { TimeString } from "../../utils/time";
 import { sec } from "../../utils/time";
-import { getJwksAdapter } from "./adapter";
+import { DEFAULT_JWK_ALG, getJwksAdapter } from "./adapter";
 import type { Jwk, JwtOptions } from "./types";
 
 /**
@@ -32,7 +32,7 @@ export async function generateExportedKeyPair(
 	options?: JwtOptions | undefined,
 ) {
 	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
-		alg: "EdDSA",
+		alg: DEFAULT_JWK_ALG,
 		crv: "Ed25519",
 	};
 	const { publicKey, privateKey } = await generateKeyPair(alg, {

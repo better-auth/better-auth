@@ -1,5 +1,35 @@
 # @better-auth/mongo-adapter
 
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+### Patch Changes
+
+- [#11801](https://github.com/better-auth/better-auth/pull/11801) [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you use the MongoDB adapter, `findMany` calls that sort by `id` now return rows in id order. Previously the sort was silently ignored, so paging through results with `limit` and `offset` could repeat or skip rows.
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11014](https://github.com/better-auth/better-auth/pull/11014) [`8133265`](https://github.com/better-auth/better-auth/commit/813326536c79291d70897a18b63272fa1e7346a7) Thanks [@codewithbharat](https://github.com/codewithbharat)! - Report the original MongoDB commit failure instead of "Cannot call abortTransaction after calling commitTransaction" during authentication.
+
+- [#11602](https://github.com/better-auth/better-auth/pull/11602) [`ea85d13`](https://github.com/better-auth/better-auth/commit/ea85d133d640233c1564417f3bad611d99356bb9) Thanks [@maxnze1](https://github.com/maxnze1)! - When you pass `client` to `mongodbAdapter`, a transaction whose commit fails before it reaches the server, for example because the commit timed out, is now aborted on the server. Before, the transaction stayed open until MongoDB's `transactionLifetimeLimitSeconds` expired (60 seconds by default), and other writes to the same documents waited or failed with write conflicts. The original commit error is still the one your code receives.
+
+- [#11515](https://github.com/better-auth/better-auth/pull/11515) [`916ef5c`](https://github.com/better-auth/better-auth/commit/916ef5c5307103d9bea44446a40da5d31de2b3fe) Thanks [@BilalAtique](https://github.com/BilalAtique)! - If you pass `client` to `mongodbAdapter` on a replica set, concurrent requests that write the same documents no longer fail with a 500. Before, MongoDB aborted all but one of them with a write conflict, so a SCIM directory that provisions several users at once returned 500 for most of them. The adapter now retries such a transaction, as MongoDB requires, for up to 120 seconds or until your `MongoClient`'s `timeoutMS`. Under contention a request can take longer instead of failing.
+
+  A retry runs the work again. `databaseHooks` `before` hooks can run more than once for one request, and `after` hooks still run once, after the commit. Work that the request does outside the database before it commits can also repeat on a retried request. For example, an email sign-up can send its verification email twice. Requests that succeed on the first attempt are unaffected, and so are other adapters.
+
 ## 1.7.7
 
 ## 1.7.6
