@@ -3118,7 +3118,12 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 						accessTokenExpiresAt: new Date(Date.now() + 3600_000),
 					}),
 				);
-				throw new Error("invalid_grant");
+				// The token endpoint's error body, as the built-in refresh throws it.
+				return Promise.reject({
+					status: 400,
+					statusText: "Bad Request",
+					error: "invalid_grant",
+				});
 			});
 
 			const result = await auth.api.getAccessToken({
@@ -3128,6 +3133,31 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 			await otherWorkerWrite;
 
 			expect(result.accessToken).toBe("other-worker-access");
+		});
+
+		it("does not keep re-reading when the provider fails for another reason", async () => {
+			const account = await createExpiredAccount();
+			refreshAccessToken.mockRejectedValueOnce({
+				status: 503,
+				statusText: "Service Unavailable",
+				error: "temporarily_unavailable",
+			});
+			const findAccounts = vi.spyOn(ctx.internalAdapter, "findAccounts");
+
+			try {
+				await expect(
+					auth.api.getAccessToken({
+						headers,
+						body: { accountId: account.id },
+					}),
+				).rejects.toMatchObject({
+					body: { code: "FAILED_TO_GET_ACCESS_TOKEN" },
+				});
+				// One read to resolve the account and one to check for a newer grant.
+				expect(findAccounts).toHaveBeenCalledTimes(2);
+			} finally {
+				findAccounts.mockRestore();
+			}
 		});
 
 		it("does not overwrite a grant stored while the refresh was in flight", async () => {

@@ -652,11 +652,30 @@ const inFlightRefreshes = new WeakMap<
 >();
 
 /**
- * Waits between re-reads of the account after a failed refresh, up to 500 ms
- * in total. Another worker that spent the same refresh token may still be
- * storing the rotated tokens; `null` marks the last read.
+ * Waits between re-reads of the account after a refresh is rejected as
+ * `invalid_grant`, up to 500 ms in total. Another worker that spent the same
+ * refresh token may still be storing the rotated tokens; `null` marks the
+ * last read.
  */
 const REFRESH_RETRY_DELAYS_MS = [100, 150, 250, null] as const;
+
+/**
+ * Whether a refresh failure says the refresh token was rejected, which is how
+ * providers answer a rotated token that was already spent. The token endpoint
+ * throws its JSON error body; custom `refreshAccessToken` functions may throw
+ * an `Error` instead.
+ */
+function isInvalidGrantError(error: unknown) {
+	if (error instanceof Error) {
+		return error.message.includes("invalid_grant");
+	}
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"error" in error &&
+		error.error === "invalid_grant"
+	);
+}
 
 async function findStoredAccount(
 	ctx: GenericEndpointContext,
@@ -722,10 +741,14 @@ async function refreshAccountTokens(
 		try {
 			tokens = await refreshAccessToken(decryptedRefreshToken, ctx);
 		} catch (error) {
-			// The refresh token may have been spent by another worker. Its write
-			// can still be in flight, so re-read briefly before failing.
+			// The refresh token may have been spent by another worker. Check once,
+			// and when the provider says so, re-read briefly in case that worker's
+			// write is still in flight.
 			if (isGuarded) {
-				for (const delay of REFRESH_RETRY_DELAYS_MS) {
+				const delays = isInvalidGrantError(error)
+					? REFRESH_RETRY_DELAYS_MS
+					: [null];
+				for (const delay of delays) {
 					const current = await findStoredAccount(ctx, account);
 					if (!current?.refreshToken) {
 						break;
