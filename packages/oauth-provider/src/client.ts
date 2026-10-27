@@ -1,4 +1,3 @@
-import { safeJSONParse } from "@better-auth/core/utils/json";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthDeviceAuthorization } from "./device-code";
@@ -17,25 +16,25 @@ export const oauthProviderClient = () => {
 				description: "Adds the current page query to oauth requests",
 				hooks: {
 					async onRequest(ctx) {
+						if (typeof window === "undefined" || !window.location?.search)
+							return;
+						if (ctx.method === "GET" || ctx.method === "DELETE") return;
+						const oauthQuery = buildSignedOAuthQuery(window.location.search);
+						if (!oauthQuery) return;
+
 						const headers = ctx.headers;
 						const body =
 							typeof ctx.body === "string"
 								? headers.get("content-type") ===
 									"application/x-www-form-urlencoded"
 									? Object.fromEntries(new URLSearchParams(ctx.body))
-									: safeJSONParse<Record<string, unknown>>(ctx.body ?? "{}")
+									: (JSON.parse(ctx.body) as Record<string, unknown>)
 								: ctx.body;
 						if (body?.oauth_query) return;
-						if (
-							typeof window !== "undefined" &&
-							window?.location?.search &&
-							!(ctx.method === "GET" || ctx.method === "DELETE")
-						) {
-							ctx.body = JSON.stringify({
-								...body,
-								oauth_query: buildSignedOAuthQuery(window.location.search),
-							});
-						}
+						ctx.body = JSON.stringify({
+							...body,
+							oauth_query: oauthQuery,
+						});
 					},
 				},
 			},
