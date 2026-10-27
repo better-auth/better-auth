@@ -368,6 +368,16 @@ describe("open-api", async () => {
 		expect(schema.paths["/reset-password"]).toBeUndefined();
 	});
 
+	it("should keep parameterized routes enabled by a globstar entry", async () => {
+		const { auth: authWithEnabledPaths } = await getTestInstance({
+			plugins: [openAPI()],
+			enabledPaths: ["/reset-password/**/some-token"],
+		});
+		const schema = await authWithEnabledPaths.api.generateOpenAPISchema();
+		expect(schema.paths["/reset-password/{token}"]).toBeDefined();
+		expect(schema.paths["/reset-password"]).toBeUndefined();
+	});
+
 	it("should mark model id fields as required and read-only", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		const schemas = schema.components.schemas as Record<
