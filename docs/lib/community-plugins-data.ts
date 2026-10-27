@@ -475,6 +475,28 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "better-auth-multi-tenant",
+		url: "https://github.com/Weesofficial/better-auth-multi-tenant",
+		description:
+			"Subdomain-based multi-tenancy: resolves the tenant from the request host, binds each session to its tenant, and rejects cross-tenant requests and unbound sessions.",
+		author: {
+			name: "Weesofficial",
+			github: "Weesofficial",
+			avatar: "https://github.com/Weesofficial.png",
+		},
+	},
+	{
+		name: "better-auth-captcha",
+		url: "https://github.com/klynglabs/better-auth-captcha",
+		description:
+			"Client half of the captcha plugin. Solves Cloudflare Turnstile, reCAPTCHA v3, hCaptcha, or CaptchaFox challenges in the background and attaches the token to protected requests automatically. Requires better-auth 1.7+.",
+		author: {
+			name: "aarmful",
+			github: "aarmful",
+			avatar: "https://github.com/aarmful.png",
+		},
+	},
+	{
 		name: "tauri-plugin-better-auth",
 		url: "https://github.com/laakal/tauri-plugin-better-auth",
 		description:
