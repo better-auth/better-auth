@@ -77,15 +77,17 @@ export async function findDecommissionedSCIMConnectionIds(
 	connectionIds: readonly string[],
 ): Promise<Set<string>> {
 	if (connectionIds.length === 0) return new Set();
+	const uniqueConnectionIds = [...new Set(connectionIds)];
 	const bindings = await database.findMany<SCIMConnectionBinding>({
 		model: "scimConnectionBinding",
 		where: [
 			{
 				field: "connectionId",
-				value: [...new Set(connectionIds)],
+				value: uniqueConnectionIds,
 				operator: "in",
 			},
 		],
+		limit: uniqueConnectionIds.length,
 	});
 	return new Set(
 		bindings

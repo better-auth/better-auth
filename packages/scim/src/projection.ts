@@ -82,16 +82,17 @@ async function acquireProjectionSubjectLocks(
 		offset < scimUserIds.length;
 		offset += SCIM_PROJECTION_BATCH_SIZE
 	) {
+		const batchSCIMUserIds = scimUserIds.slice(
+			offset,
+			offset + SCIM_PROJECTION_BATCH_SIZE,
+		);
 		const scimUsers = await database.findMany<Pick<SCIMUser, "userId">>({
 			model: "scimUser",
 			where: [
-				{
-					field: "id",
-					value: scimUserIds.slice(offset, offset + SCIM_PROJECTION_BATCH_SIZE),
-					operator: "in",
-				},
+				{ field: "id", value: batchSCIMUserIds, operator: "in" },
 				{ field: "provisioningDomainId", value: provisioningDomainId },
 			],
+			limit: batchSCIMUserIds.length,
 		});
 		for (const scimUser of scimUsers) affectedUserIds.add(scimUser.userId);
 	}
@@ -104,15 +105,14 @@ async function acquireProjectionSubjectLocks(
 		offset < userIds.length;
 		offset += SCIM_PROJECTION_BATCH_SIZE
 	) {
+		const batchUserIds = userIds.slice(
+			offset,
+			offset + SCIM_PROJECTION_BATCH_SIZE,
+		);
 		const subjects = await database.findMany<SCIMSubject>({
 			model: "scimSubject",
-			where: [
-				{
-					field: "userId",
-					value: userIds.slice(offset, offset + SCIM_PROJECTION_BATCH_SIZE),
-					operator: "in",
-				},
-			],
+			where: [{ field: "userId", value: batchUserIds, operator: "in" }],
+			limit: batchUserIds.length,
 		});
 		for (const subject of subjects) {
 			subjectByUserId.set(subject.userId, subject);
@@ -432,6 +432,7 @@ async function reconcileSCIMUserBatch(
 				value: input.provisioningDomainId,
 			},
 		],
+		limit: input.scimUserIds.length,
 	});
 	const requestedSCIMUserById = new Map(
 		requestedSCIMUsers.map((scimUser) => [scimUser.id, scimUser]),
@@ -594,6 +595,7 @@ export function createSCIMProjectionCoordinator(options: SCIMOptions) {
 					{ field: "userId", value: subject.userId },
 					{ field: "provisioningDomainId", value: provisioningDomainId },
 				],
+				limit: SCIM_UNBOUNDED_ROW_LIMIT,
 			});
 			const connectionIds = [
 				...new Set(scimUsers.map((scimUser) => scimUser.connectionId)),
@@ -730,6 +732,7 @@ export async function reconcileSCIMProjectionDomainBatch(input: {
 				operator: "in",
 			},
 		],
+		limit: input.batch.userIds.length,
 	});
 	const aggregateByUserId = new Map(
 		subjects.map((subject) => [subject.userId, subject]),

@@ -33,6 +33,7 @@ import {
 import type { SCIMPatchValueTarget } from "./null-attributes";
 import { expandSCIMPatchNullValues } from "./null-attributes";
 import type { SCIMGroup, SCIMGroupMember, SCIMUser } from "./persistence";
+import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
 import { createSCIMOrderKey, createScopedKey } from "./resource-key";
@@ -643,6 +644,7 @@ async function replaceGroupMemberships(
 				{ field: "connectionId", value: input.connectionId },
 				{ field: "groupId", value: input.groupId },
 			],
+			limit: SCIM_UNBOUNDED_ROW_LIMIT,
 		}));
 	const existingMemberIds = new Set(
 		existingMemberships.map((membership) => membership.scimUserId),
@@ -774,27 +776,6 @@ async function findSCIMUsersForMemberships(
 		);
 	}
 	return new Map(scimUsers.map((scimUser) => [scimUser.id, scimUser]));
-}
-
-async function findGroupMemberships(
-	adapter: Pick<DBAdapter, "findMany">,
-	connectionId: string,
-	groupId: string,
-) {
-	const memberships = await adapter.findMany<SCIMGroupMember>({
-		model: "scimGroupMember",
-		where: [
-			{ field: "connectionId", value: connectionId },
-			{ field: "groupId", value: groupId },
-		],
-		limit: SCIM_MAX_GROUP_MEMBERS + 1,
-	});
-	if (memberships.length > SCIM_MAX_GROUP_MEMBERS) {
-		throw createSCIMError("INTERNAL_SERVER_ERROR", {
-			detail: "Persisted SCIM Group membership exceeds the server limit",
-		});
-	}
-	return memberships;
 }
 
 async function createGroupResource(
@@ -1291,11 +1272,14 @@ export function replaceSCIMGroup(
 							externalIdKey,
 							currentGroup.id,
 						);
-						const currentMemberships = await findGroupMemberships(
-							trx,
-							connection.id,
-							currentGroup.id,
-						);
+						const currentMemberships = await trx.findMany<SCIMGroupMember>({
+							model: "scimGroupMember",
+							where: [
+								{ field: "connectionId", value: connection.id },
+								{ field: "groupId", value: currentGroup.id },
+							],
+							limit: SCIM_UNBOUNDED_ROW_LIMIT,
+						});
 						await projection.acquireUserLocks({
 							database: trx,
 							provisioningDomainId: connection.provisioningDomainId,
@@ -1481,11 +1465,14 @@ export function patchSCIMGroup(
 							]);
 							resourceChanged = affectedSCIMUserIds.size > 0;
 						} else {
-							const currentMemberships = await findGroupMemberships(
-								trx,
-								connection.id,
-								currentGroup.id,
-							);
+							const currentMemberships = await trx.findMany<SCIMGroupMember>({
+								model: "scimGroupMember",
+								where: [
+									{ field: "connectionId", value: connection.id },
+									{ field: "groupId", value: currentGroup.id },
+								],
+								limit: SCIM_UNBOUNDED_ROW_LIMIT,
+							});
 							const patch = applyGroupPatch(
 								currentGroup,
 								currentMemberships.map((membership) => membership.scimUserId),
@@ -1656,11 +1643,14 @@ export function deleteSCIMGroup(
 					connection,
 					group.id,
 				);
-				const memberships = await findGroupMemberships(
-					trx,
-					connection.id,
-					currentGroup.id,
-				);
+				const memberships = await trx.findMany<SCIMGroupMember>({
+					model: "scimGroupMember",
+					where: [
+						{ field: "connectionId", value: connection.id },
+						{ field: "groupId", value: currentGroup.id },
+					],
+					limit: SCIM_UNBOUNDED_ROW_LIMIT,
+				});
 				await projection.acquireUserLocks({
 					database: trx,
 					provisioningDomainId: connection.provisioningDomainId,

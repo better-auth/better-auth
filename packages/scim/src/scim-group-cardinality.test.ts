@@ -191,6 +191,43 @@ function createMemberReferences(count: number, prefix = "candidate") {
 	}));
 }
 
+async function createGroupWithPersistedMembers(
+	{ auth, data, headers }: ReturnType<typeof createFixture>,
+	displayName: string,
+	memberCount: number,
+) {
+	const group = await auth.api.createSCIMGroup({
+		body: {
+			schemas: [GROUP_SCHEMA],
+			displayName,
+		},
+		headers,
+	});
+	const createdAt = new Date();
+	const persistedMembers = createMemberReferences(
+		memberCount,
+		`${group.id}-persisted`,
+	);
+	data.scimUser.push(
+		...persistedMembers.map((member) => ({
+			id: member.value,
+			connectionId: "workforce",
+			displayName: member.value,
+		})),
+	);
+	data.scimGroupMember.push(
+		...persistedMembers.map((member, index) => ({
+			id: `${group.id}-persisted-membership-${index}`,
+			connectionId: "workforce",
+			groupId: group.id,
+			scimUserId: member.value,
+			membershipKey: `${group.id}-persisted-membership-key-${index}`,
+			createdAt,
+		})),
+	);
+	return group;
+}
+
 function expectCardinalityError(error: unknown, expectSCIMType = true) {
 	expect(error).toMatchObject({
 		statusCode: 400,
@@ -316,78 +353,56 @@ describe("SCIM Group direct-member cardinality", () => {
 		).toEqual(groupUpdatedAt);
 	});
 
-	it("rejects Group requests when persisted state violates the invariant", async () => {
-		const { auth, data, headers } = createFixture();
-		const group = await auth.api.createSCIMGroup({
-			body: {
-				schemas: [GROUP_SCHEMA],
-				displayName: "Engineering",
-			},
-			headers,
-		});
-		const createdAt = new Date();
-		const persistedMembers = createMemberReferences(
+	it("bounds a Group response when persisted state violates the invariant", async () => {
+		const fixture = createFixture();
+		const { auth, headers } = fixture;
+		const group = await createGroupWithPersistedMembers(
+			fixture,
+			"Engineering",
 			SCIM_MAX_GROUP_MEMBERS + 1,
-			"persisted",
-		);
-		data.scimUser.push(
-			...persistedMembers.map((member) => ({
-				id: member.value,
-				connectionId: "workforce",
-				displayName: member.value,
-			})),
-		);
-		data.scimGroupMember.push(
-			...persistedMembers.map((member, index) => ({
-				id: `persisted-membership-${index}`,
-				connectionId: "workforce",
-				groupId: group.id,
-				scimUserId: member.value,
-				membershipKey: `persisted-membership-key-${index}`,
-				createdAt,
-			})),
 		);
 
-		const serverError = {
-			statusCode: 500,
-			body: expect.objectContaining({ status: "500" }),
-		};
 		await expect(
 			auth.api.getSCIMGroup({
 				params: { groupId: group.id },
 				headers,
 			}),
-		).rejects.toMatchObject(serverError);
-		await expect(
-			auth.api.replaceSCIMGroup({
-				params: { groupId: group.id },
-				body: {
-					schemas: [GROUP_SCHEMA],
-					displayName: "Engineering",
-					members: [],
-				},
-				headers,
-			}),
-		).rejects.toMatchObject(serverError);
-		await expect(
-			auth.api.patchSCIMGroup({
-				params: { groupId: group.id },
-				body: {
-					schemas: [PATCH_SCHEMA],
-					Operations: [
-						{ op: "replace", path: "displayName", value: "Platform" },
-					],
-				},
-				headers,
-			}),
-		).rejects.toMatchObject(serverError);
-		await expect(
-			auth.api.deleteSCIMGroup({
-				params: { groupId: group.id },
-				headers,
-			}),
-		).rejects.toMatchObject(serverError);
-		expect(data.scimGroupMember).toHaveLength(SCIM_MAX_GROUP_MEMBERS + 1);
+		).rejects.toMatchObject({
+			statusCode: 500,
+			body: expect.objectContaining({ status: "500" }),
+		});
+	});
+
+	it("empties and deletes Groups whose persisted state violates the invariant", async () => {
+		const fixture = createFixture();
+		const { auth, data, headers } = fixture;
+		const replaced = await createGroupWithPersistedMembers(
+			fixture,
+			"Engineering",
+			SCIM_MAX_GROUP_MEMBERS + 10,
+		);
+		const deleted = await createGroupWithPersistedMembers(
+			fixture,
+			"Platform",
+			SCIM_MAX_GROUP_MEMBERS + 10,
+		);
+
+		await auth.api.replaceSCIMGroup({
+			params: { groupId: replaced.id },
+			body: {
+				schemas: [GROUP_SCHEMA],
+				displayName: "Engineering",
+				members: [],
+			},
+			headers,
+		});
+		await auth.api.deleteSCIMGroup({
+			params: { groupId: deleted.id },
+			headers,
+		});
+
+		expect(data.scimGroupMember).toEqual([]);
+		expect(data.scimGroup.map((group) => group.id)).toEqual([replaced.id]);
 	});
 
 	it("serializes concurrent additions before enforcing the member limit", async () => {
