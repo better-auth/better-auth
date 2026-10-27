@@ -28,6 +28,20 @@
 
 ## 1.8.0-beta.0
 
+## 1.7.14
+
+### Patch Changes
+
+- [#12045](https://github.com/better-auth/better-auth/pull/12045) [`2947ab7`](https://github.com/better-auth/better-auth/commit/2947ab76c3a141f205813de9201661ee21e327c2) Thanks [@honuuk](https://github.com/honuuk)! - Kakao sign-in now passes `loginHint` to Kakao, so the Kakao Account login page opens with the ID field prefilled.
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11997](https://github.com/better-auth/better-auth/pull/11997) [`2712441`](https://github.com/better-auth/better-auth/commit/2712441e355204389c88a7eb546974cce1936b5f) Thanks [@bytaesu](https://github.com/bytaesu)! - The Cloudflare provider now accepts `tokenEndpointAuth: { method }`. The existing `tokenEndpointAuthMethod` option is marked as deprecated and remains supported for backward compatibility.
+
+- [#11948](https://github.com/better-auth/better-auth/pull/11948) [`1cf4b2c`](https://github.com/better-auth/better-auth/commit/1cf4b2c8f5bffdbdb101f11a6fefedbab6cf2994) Thanks [@allenzhou101](https://github.com/allenzhou101)! - Allow the Vercel social provider to configure token endpoint authentication, including dynamic OIDC tokens and private key JWT client assertions, without replacing the built-in sign-in flow.
+
 ## 1.7.12
 
 ### Patch Changes
