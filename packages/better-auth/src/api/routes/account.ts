@@ -651,6 +651,13 @@ const inFlightRefreshes = new WeakMap<
 	Map<string, Promise<RefreshedAccount>>
 >();
 
+/**
+ * Waits between re-reads of the account after a failed refresh, up to 500 ms
+ * in total. Another worker that spent the same refresh token may still be
+ * storing the rotated tokens; `null` marks the last read.
+ */
+const REFRESH_RETRY_DELAYS_MS = [100, 150, 250, null] as const;
+
 async function findStoredAccount(
 	ctx: GenericEndpointContext,
 	account: Account,
@@ -715,11 +722,22 @@ async function refreshAccountTokens(
 		try {
 			tokens = await refreshAccessToken(decryptedRefreshToken, ctx);
 		} catch (error) {
-			// The refresh token may have been spent by another worker that has
-			// already stored the rotated tokens.
-			const current = isGuarded ? await findStoredAccount(ctx, account) : null;
-			if (current?.refreshToken && current.refreshToken !== spentRefreshToken) {
-				return readStoredTokens(ctx, current);
+			// The refresh token may have been spent by another worker. Its write
+			// can still be in flight, so re-read briefly before failing.
+			if (isGuarded) {
+				for (const delay of REFRESH_RETRY_DELAYS_MS) {
+					const current = await findStoredAccount(ctx, account);
+					if (!current?.refreshToken) {
+						break;
+					}
+					if (current.refreshToken !== spentRefreshToken) {
+						return readStoredTokens(ctx, current);
+					}
+					if (delay === null) {
+						break;
+					}
+					await new Promise((resolve) => setTimeout(resolve, delay));
+				}
 			}
 			throw error;
 		}

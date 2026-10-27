@@ -3097,6 +3097,39 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 			});
 		});
 
+		it("waits for another worker's write that lands after the provider rejects the refresh", async () => {
+			const account = await createExpiredAccount();
+			let otherWorkerWrite: Promise<unknown> = Promise.resolve();
+			refreshAccessToken.mockImplementationOnce(async () => {
+				// Another worker spent the refresh token first and is still storing
+				// the rotated tokens when this call is rejected.
+				otherWorkerWrite = new Promise((resolve) =>
+					setTimeout(resolve, 150),
+				).then(async () =>
+					ctx.internalAdapter.updateAccount(account.id, {
+						accessToken: await setTokenUtil(
+							"other-worker-access",
+							tokenContext,
+						),
+						refreshToken: await setTokenUtil(
+							"other-worker-refresh",
+							tokenContext,
+						),
+						accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+					}),
+				);
+				throw new Error("invalid_grant");
+			});
+
+			const result = await auth.api.getAccessToken({
+				headers,
+				body: { accountId: account.id },
+			});
+			await otherWorkerWrite;
+
+			expect(result.accessToken).toBe("other-worker-access");
+		});
+
 		it("does not overwrite a grant stored while the refresh was in flight", async () => {
 			const account = await createExpiredAccount();
 			refreshAccessToken.mockImplementationOnce(async () => {
