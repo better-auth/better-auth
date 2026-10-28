@@ -1,0 +1,149 @@
+---
+icon: pluginsAgentaOS
+title: AgentaOS
+description: Better Auth plugin for AgentaOS checkouts, subscriptions, and verified webhooks.
+---
+
+[AgentaOS](https://agentaos.ai) is a merchant of record. It sells your product in its own name, charges the VAT or sales tax, issues the invoice, and pays you out.
+
+The `@agentaos/better-auth` plugin connects AgentaOS to your Better Auth users. It adds a checkout endpoint for the signed-in user, an endpoint that lists that user's subscriptions, and a webhook route that checks the signature and calls your handler.
+
+<Callout>
+  This plugin is maintained by the AgentaOS team. For bugs, issues, or feature requests,
+  visit the [plugin source](https://github.com/AgentaOS/agentaos/tree/main/packages/better-auth).
+  The full reference is in the [AgentaOS documentation](https://docs.agentaos.ai/sdk/better-auth).
+</Callout>
+
+## Features
+
+* Start a checkout for a signed-in user. The buyer chooses a product by its slug. The product id, the price, and the return URL stay on your server.
+* List the signed-in user's subscriptions. The user's email must be verified.
+* Check each webhook signature, then run one function per event.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```bash
+    npm install @agentaos/better-auth @agentaos/pay
+    ```
+  </Step>
+
+  <Step>
+    ### Add the plugin to your auth config
+
+    Create a product in the [AgentaOS dashboard](https://app.agentaos.ai) and copy its link id. Create an API key under **Developers → API keys**. A key that starts with `sk_test_` is for test mode.
+
+    ```ts title="auth.ts"
+    import { AgentaOS } from "@agentaos/pay";
+    import { agentaos } from "@agentaos/better-auth";
+    import { betterAuth } from "better-auth";
+
+    export const auth = betterAuth({
+        // ...your existing config
+        plugins: [
+            agentaos({
+                client: new AgentaOS(process.env.AGENTAOS_API_KEY!),
+                products: [{ slug: "pro", productId: "your-product-link-id" }],
+                successUrl: "https://your-domain.com/thanks",
+                webhookSecret: process.env.AGENTAOS_WEBHOOK_SECRET,
+                onCheckoutCompleted: async ({ event, userId }) => {
+                    // Renewals and upgrade charges arrive here too, with no userId.
+                    if (!userId) return;
+                    await grantAccess(userId, event.data.metadata.product);
+                },
+            }),
+        ],
+    });
+    ```
+
+    A user can only buy a product that is in `products`, and only by its `slug`.
+  </Step>
+
+  <Step>
+    ### Add the client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { agentaosClient } from "@agentaos/better-auth/client";
+
+    export const authClient = createAuthClient({
+        plugins: [agentaosClient()],
+    });
+    ```
+  </Step>
+
+  <Step>
+    ### Set up webhooks
+
+    In the dashboard, under **Settings → Developers → Webhooks**, set the URL to your auth server and copy the signing secret.
+
+    ```txt title=".env"
+    AGENTAOS_API_KEY=your_api_key
+    AGENTAOS_WEBHOOK_SECRET=your_webhook_secret
+    ```
+
+    ```txt
+    https://your-domain.com/api/auth/agentaos/webhook
+    ```
+
+    `/api/auth` is the default path for the auth server. The plugin checks an HMAC-SHA256 signature over the raw body. A wrong secret, a changed body, or a signature older than 5 minutes is rejected.
+  </Step>
+</Steps>
+
+## Usage
+
+### Checkout
+
+```ts
+const { data, error } = await authClient.agentaos.checkout({ slug: "pro" });
+
+if (!error && data?.url) {
+    window.location.href = data.url;
+}
+```
+
+The signed-in user's email is filled in. Their user id and the product slug are stored on the checkout metadata. When AgentaOS refuses a checkout, the error keeps its reason and status. In test mode, pay with the card `4242 4242 4242 4242`, any future date, and any CVC.
+
+### Subscriptions
+
+```ts
+const { data, error } = await authClient.agentaos.subscriptions();
+```
+
+Subscriptions are matched by email, so this endpoint only answers for a user whose email is verified.
+
+## Webhooks
+
+Each handler receives `{ event, userId }`. `userId` is the user who started the checkout. It is set on the first `checkout.session.completed` for that checkout only. Renewals and upgrade charges also arrive as `checkout.session.completed`, with `userId` empty. Save `event.data.metadata.subscriptionId` against your user on that first event if you need it later.
+
+| Handler | Event |
+| --- | --- |
+| `onCheckoutCompleted` | `checkout.session.completed` |
+| `onSubscriptionCreated` | `subscription.created` |
+| `onSubscriptionRenewed` | `subscription.renewed` |
+| `onSubscriptionUpdated` | `subscription.updated` |
+| `onSubscriptionPaymentFailed` | `subscription.payment_failed` |
+| `onSubscriptionCanceled` | `subscription.canceled` |
+| `onDisputeCreated` | `dispute.created` |
+| `onDisputeClosed` | `dispute.closed` |
+
+`onEvent` runs after the handler for that event. If a handler throws, the route answers `500`, AgentaOS sends the event again, and `onEvent` does not run for that attempt.
+
+Two details of the payload:
+
+* On `checkout.session.completed`, `event.data.linkId` is the payment link's public token, not the link id you set as `productId`. Use `event.data.metadata.product` for the slug that was bought.
+* Keys arrive in camelCase, including metadata. A key you send as `user_id` arrives as `userId`.
+
+Ignore test events in live mode by checking `event.data.livemode`. A valid webhook can arrive more than once, so grant access once per checkout, for example by saving `event.data.sessionId`.
+
+The event names are listed in the [AgentaOS webhook reference](https://docs.agentaos.ai/webhooks/events).
+
+## Resources
+
+* [AgentaOS](https://agentaos.ai)
+* [Better Auth plugin reference](https://docs.agentaos.ai/sdk/better-auth)
+* [Webhook reference](https://docs.agentaos.ai/payments/webhooks)
+* [Plugin source](https://github.com/AgentaOS/agentaos/tree/main/packages/better-auth)

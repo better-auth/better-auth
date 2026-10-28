@@ -239,7 +239,7 @@ export const communityPlugins: CommunityPlugin[] = [
 	},
 	{
 		name: "@agentaos/better-auth",
-		url: "https://github.com/AgentaOS/agentaos/tree/main/packages/better-auth",
+		url: "https://agentaos.ai",
 		description:
 			"Better Auth plugin for AgentaOS merchant-of-record checkouts, subscriptions, and verified webhooks.",
 		author: {

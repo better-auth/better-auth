@@ -457,6 +457,7 @@ export const pluginIcons = {
 			</g>
 		</svg>
 	),
+	pluginsAgentaOS: () => <Zap className="w-4 h-4" />,
 	pluginsCreem: () => (
 		<svg
 			width="1.2em"

@@ -187,6 +187,11 @@ const pluginMeta: Record<
 		icon: "CreemIcon",
 		tagline: "Creem payment processing for your app",
 	},
+	agentaos: {
+		category: "Payments",
+		icon: "AgentaOSIcon",
+		tagline: "AgentaOS merchant-of-record checkouts and subscriptions",
+	},
 	chargebee: {
 		category: "Payments",
 		icon: "ChargebeeIcon",
