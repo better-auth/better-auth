@@ -365,7 +365,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 													"issuer",
 													"pkce",
 													"clientId",
-													"clientSecret",
 													"discoveryEndpoint",
 												],
 												description: "OIDC configuration for the provider",
