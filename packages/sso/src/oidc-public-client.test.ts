@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { getHttpTestInstance, getTestInstance } from "better-auth/test";
@@ -117,6 +118,13 @@ describe("SSO OIDC public clients", () => {
 			authorization: undefined,
 		});
 		expect(tokenRequests.at(-1)?.body).not.toHaveProperty("client_secret");
+		const authorizationParams = new URL(url).searchParams;
+		expect(authorizationParams.get("code_challenge_method")).toBe("S256");
+		expect(authorizationParams.get("code_challenge")).toBe(
+			createHash("sha256")
+				.update(String(tokenRequests.at(-1)?.body.code_verifier))
+				.digest("base64url"),
+		);
 	});
 
 	it("refuses to exchange a code for a public client without PKCE", async ({
