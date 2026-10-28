@@ -352,7 +352,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 
 ### ID token nonce binding
 
-OIDC sign-ins bind the ID token to the authorization request that started them. Better Auth sends a random `nonce` with every authorization request, including the restart of an IdP-initiated sign-in, and keeps it in the server-side OAuth state. The callback rejects an ID token whose `nonce` claim is missing or different with `error=invalid_provider` and `error_description=token_not_verified`, and a sign-in whose OAuth state carries no nonce, such as one started before an upgrade, fails with `error=invalid_state` and `error_description=nonce_binding_missing`. When the token response has no ID token, the profile still comes from the UserInfo endpoint.
+By default, OIDC sign-ins bind the ID token to the authorization request that started them. Better Auth sends a random `nonce` with the authorization request, including the restart of an IdP-initiated sign-in, and keeps it in the server-side OAuth state. The callback rejects an ID token whose `nonce` claim is missing or different with `error=invalid_provider` and `error_description=token_not_verified`, and a sign-in whose OAuth state carries no nonce, such as one started before an upgrade, fails with `error=invalid_state` and `error_description=nonce_binding_missing`. When the token response has no ID token, the profile still comes from the UserInfo endpoint. The exception is `resolveUser`, which needs a verified ID token and fails the callback with `error_description=id_token_required_for_user_resolution` without one.
 
 Some providers don't return the `nonce` claim in the authorization code flow. Turn binding off for those providers only:
 
