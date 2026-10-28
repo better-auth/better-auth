@@ -496,4 +496,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/aarmful.png",
 		},
 	},
+	{
+		name: "better-auth-loginllama",
+		url: "https://github.com/joshghent/better-auth-loginllama",
+		description:
+			"Scores each sign-in for account takeover risk (Tor, VPN, impossible travel, bots) with LoginLlama and blocks risky ones before the session is created. Fails open if the API is slow or down.",
+		author: {
+			name: "Josh Ghent",
+			github: "joshghent",
+			avatar: "https://github.com/joshghent.png",
+		},
+	},
 ];
