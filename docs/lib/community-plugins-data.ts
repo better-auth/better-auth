@@ -496,4 +496,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/aarmful.png",
 		},
 	},
+	{
+		name: "SignupVet",
+		url: "https://github.com/signupvet/examples/tree/main/better-auth",
+		description:
+			"Signup fraud check before a user is created: checks the email, phone number and IP of each new user with the SignupVet API, blocks clear fakes (disposable emails, datacenter IPs, signup waves) and stores the risk on the user. Fails open.",
+		author: {
+			name: "SignupVet",
+			github: "signupvet",
+			avatar: "https://github.com/signupvet.png",
+		},
+	},
 ];
