@@ -393,17 +393,16 @@ describe("SSO", async () => {
 		};
 		server.service.once("beforeUserinfo", dropConnection);
 
-		const signInHeaders = new Headers();
-		const res = await authClient.signIn.sso({
-			providerId: "userinfo-error-provider",
-			callbackURL: "/dashboard",
-			fetchOptions: {
-				throw: true,
-				onSuccess: cookieSetter(signInHeaders),
-			},
-		});
-
 		try {
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "userinfo-error-provider",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
 			const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
 			const redirectURL = new URL(callbackURL, "http://localhost:3000");
 			expect(redirectURL.searchParams.get("error")).toBe("invalid_provider");
