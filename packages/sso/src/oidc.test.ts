@@ -1,3 +1,4 @@
+import type { IncomingMessage } from "node:http";
 import { APIError } from "@better-auth/core/error";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
@@ -362,6 +363,55 @@ describe("SSO", async () => {
 			);
 		} finally {
 			server.service.removeListener("beforeResponse", tokenErrorHandler);
+		}
+	});
+
+	it("should redirect with an error when the UserInfo request fails", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "userinfo-error.com",
+				providerId: "userinfo-error-provider",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					userInfoEndpoint: `${server.issuer.url}/userinfo`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		// Close the connection before the provider answers, so the UserInfo
+		// request rejects instead of returning an error response.
+		const dropConnection = (_: unknown, req: IncomingMessage) => {
+			req.socket.destroy();
+		};
+		server.service.once("beforeUserinfo", dropConnection);
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "userinfo-error-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		try {
+			const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
+			const redirectURL = new URL(callbackURL, "http://localhost:3000");
+			expect(redirectURL.searchParams.get("error")).toBe("invalid_provider");
+			expect(redirectURL.searchParams.get("error_description")).toBe(
+				"fetch failed",
+			);
+		} finally {
+			server.service.removeListener("beforeUserinfo", dropConnection);
 		}
 	});
 
