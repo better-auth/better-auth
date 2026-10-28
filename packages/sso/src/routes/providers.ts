@@ -523,6 +523,7 @@ function sanitizeProvider(
 					discoveryEndpoint: oidcConfig.discoveryEndpoint,
 					clientIdLastFour: maskClientId(oidcConfig.clientId),
 					pkce: oidcConfig.pkce,
+					disableIdTokenNonceBinding: oidcConfig.disableIdTokenNonceBinding,
 					authorizationEndpoint: oidcConfig.authorizationEndpoint,
 					tokenEndpoint: oidcConfig.tokenEndpoint,
 					userInfoEndpoint: oidcConfig.userInfoEndpoint,
@@ -798,6 +799,8 @@ function mergeOIDCConfig(
 		...updates,
 		issuer,
 		pkce: updates.pkce ?? current.pkce ?? true,
+		disableIdTokenNonceBinding:
+			updates.disableIdTokenNonceBinding ?? current.disableIdTokenNonceBinding,
 		clientId: updates.clientId ?? current.clientId,
 		clientSecret: updates.clientSecret ?? current.clientSecret,
 		discoveryEndpoint: updates.discoveryEndpoint ?? current.discoveryEndpoint,

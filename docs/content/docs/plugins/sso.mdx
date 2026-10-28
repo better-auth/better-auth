@@ -350,6 +350,25 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 * Discovery errors are structured and well-defined
 * Public-client IdPs or mock servers may require overriding `tokenEndpointAuthentication`
 
+### ID token nonce binding
+
+OIDC sign-ins bind the ID token to the authorization request that started them. Better Auth sends a random `nonce` with every authorization request, including the restart of an IdP-initiated sign-in, and keeps it in the server-side OAuth state. The callback rejects an ID token whose `nonce` claim is missing or different with `token_not_verified`, and a sign-in whose OAuth state carries no nonce, such as one started before an upgrade, fails with `nonce_binding_missing`. When the token response has no ID token, the profile still comes from the UserInfo endpoint.
+
+Some providers don't return the `nonce` claim in the authorization code flow. Turn binding off for those providers only:
+
+```ts
+oidcConfig: {
+    clientId: "your-client-id",
+    clientSecret: "your-client-secret",
+    // Only for a provider that does not return the nonce claim.
+    disableIdTokenNonceBinding: true,
+}
+```
+
+<Callout type="warn">
+  Turning binding off removes ID token replay protection for that provider, so keep PKCE enabled for it.
+</Callout>
+
 ### Resolve SSO Users
 
 Use `resolveUser` when an OIDC or SAML identity must be mapped to an existing Better Auth user instead of relying on email matching. The resolver runs on every SSO sign-in after the protocol identity has been verified.
