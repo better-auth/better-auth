@@ -344,6 +344,23 @@ describe("OIDC Discovery", () => {
 			expect(selectTokenEndpointAuthMethod(doc)).toBe("private_key_jwt");
 		});
 
+		it("should keep an explicit none for public clients", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: ["client_secret_basic"],
+			});
+			expect(selectTokenEndpointAuthMethod(doc, "none")).toBe("none");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12080
+		 */
+		it("should not infer none from discovery", () => {
+			const doc = createMockDiscoveryDocument({
+				token_endpoint_auth_methods_supported: ["none"],
+			});
+			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+		});
+
 		it("should select private_key_jwt when only tls_client_auth and private_key_jwt are supported", () => {
 			const doc = createMockDiscoveryDocument({
 				token_endpoint_auth_methods_supported: [

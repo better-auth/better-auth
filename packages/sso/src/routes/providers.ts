@@ -986,10 +986,28 @@ export const updateSSOProvider = (options: SSOOptions) => {
 								existingProvider.issuer,
 						);
 
-						// Validate: clientSecret is required for non-private_key_jwt auth
+						if (
+							updatedOidcConfig.tokenEndpointAuthentication === "none" &&
+							updatedOidcConfig.clientSecret
+						) {
+							throw new APIError("BAD_REQUEST", {
+								message:
+									"clientSecret must be empty when using none authentication",
+							});
+						}
+						if (
+							updatedOidcConfig.tokenEndpointAuthentication === "none" &&
+							!updatedOidcConfig.pkce
+						) {
+							throw new APIError("BAD_REQUEST", {
+								message: "PKCE is required when using none authentication",
+							});
+						}
+						// Validate: clientSecret is required for secret-based auth
 						if (
 							updatedOidcConfig.tokenEndpointAuthentication !==
 								"private_key_jwt" &&
+							updatedOidcConfig.tokenEndpointAuthentication !== "none" &&
 							!updatedOidcConfig.clientSecret
 						) {
 							throw new APIError("BAD_REQUEST", {

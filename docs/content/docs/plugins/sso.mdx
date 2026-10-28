@@ -168,6 +168,28 @@ When the mapped email claim holds a list of addresses, Better Auth uses the firs
   </Tab>
 </Tabs>
 
+#### Public clients
+
+Some IdPs register an application as a public client, with a `client_id` and no secret. Set `tokenEndpointAuthentication: "none"` for these providers and leave out `clientSecret`:
+
+```ts title="register-oidc-provider.ts"
+await auth.api.registerSSOProvider({
+    body: {
+        providerId: "example-provider",
+        issuer: "https://idp.example.com",
+        domain: "example.com",
+        oidcConfig: {
+            clientId: "your-public-client-id",
+            tokenEndpointAuthentication: "none",
+            pkce: true,
+        },
+    },
+    headers,
+});
+```
+
+The code exchange sends only `client_id` and the PKCE code verifier. PKCE is the only proof that the client finishing the sign-in is the one that started it, so registration and updates reject a `none` provider with `pkce: false` or with a `clientSecret`, and the callback redirects with `pkce_required_for_public_client` if a `none` provider has PKCE turned off.
+
 ### OIDC Discovery
 
 Better Auth automatically fetches and validates the provider's [OpenID Connect Discovery Document](https://openid.net/specs/openid-connect-discovery-1_0.html) from:
@@ -326,9 +348,10 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 
 * `client_secret_basic`
 * `client_secret_post`
+* `none`, for public clients that authenticate with PKCE and `client_id` alone. Discovery never selects it, so set `tokenEndpointAuthentication: "none"` explicitly and leave `clientSecret` empty.
 
 <Callout type="warning">
-  If your IdP advertises only unsupported methods (e.g., `private_key_jwt`, `tls_client_auth`, or `"none"` for public clients), you can explicitly override the method:
+  If your IdP advertises only unsupported methods (e.g., `tls_client_auth`), you can explicitly override the method:
 
   ```ts
   oidcConfig: {
