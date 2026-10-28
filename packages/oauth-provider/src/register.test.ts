@@ -609,11 +609,15 @@ describe("oauth register", async () => {
 	});
 
 	/**
+	 * No tombstone suppression: a row carrying `__deleted` metadata is treated
+	 * like any other existing row, so dynamic registration against it succeeds.
+	 * Only resources with neither a DB row nor config are rejected.
+	 *
 	 * @see https://github.com/better-auth/better-auth/issues/11725
 	 */
-	it("rejects dynamic client registration with tombstoned or nonexistent resource and leaves 0 client rows", async () => {
+	it("accepts dynamic client registration for a __deleted-marked row while still rejecting nonexistent resources", async () => {
 		const validResource = "https://api.example.com/dcr-upfront-valid";
-		const tombstonedResource = "https://api.example.com/dcr-upfront-tombstoned";
+		const markedResource = "https://api.example.com/dcr-upfront-marked";
 		const unconfiguredResource =
 			"https://api.example.com/dcr-upfront-unconfigured";
 
@@ -625,11 +629,8 @@ describe("oauth register", async () => {
 						loginPage: "/login",
 						consentPage: "/consent",
 						allowDynamicClientRegistration: true,
-						resources: [validResource, tombstonedResource],
-						clientRegistrationAllowedResources: [
-							validResource,
-							tombstonedResource,
-						],
+						resources: [validResource, markedResource],
+						clientRegistrationAllowedResources: [validResource, markedResource],
 					}),
 					jwt(),
 				],
@@ -640,9 +641,9 @@ describe("oauth register", async () => {
 		await ctx.adapter.create({
 			model: "oauthResource",
 			data: {
-				id: tombstonedResource,
-				identifier: tombstonedResource,
-				name: "tombstoned",
+				id: markedResource,
+				identifier: markedResource,
+				name: "marked",
 				disabled: false,
 				metadata: JSON.stringify({ __deleted: true }),
 				createdAt: new Date(),
@@ -660,20 +661,17 @@ describe("oauth register", async () => {
 			},
 		});
 
-		const tombstoneRes = await client.$fetch<
+		const markedRes = await client.$fetch<
 			OAuthClient & { resources?: string[] }
 		>("/oauth2/register", {
 			method: "POST",
 			body: {
-				redirect_uris: [`${redirectUri}/tombstone`],
-				resources: [tombstonedResource],
+				redirect_uris: [`${redirectUri}/marked`],
+				resources: [markedResource],
 			},
 		});
-		expect(tombstoneRes.error).not.toBeNull();
-		expect(tombstoneRes.error?.status).toBe(400);
-		expect((tombstoneRes.error as { error?: string } | null)?.error).toBe(
-			"invalid_target",
-		);
+		expect(markedRes.error).toBeNull();
+		expect(markedRes.data?.resources).toEqual([markedResource]);
 
 		const unconfiguredRes = await client.$fetch<
 			OAuthClient & { resources?: string[] }
@@ -696,15 +694,12 @@ describe("oauth register", async () => {
 				method: "POST",
 				body: {
 					redirect_uris: [`${redirectUri}/mix`],
-					resources: [validResource, tombstonedResource],
+					resources: [validResource, markedResource],
 				},
 			},
 		);
-		expect(mixRes.error).not.toBeNull();
-		expect(mixRes.error?.status).toBe(400);
-		expect((mixRes.error as { error?: string } | null)?.error).toBe(
-			"invalid_target",
-		);
+		expect(mixRes.error).toBeNull();
+		expect(mixRes.data?.resources).toEqual([validResource, markedResource]);
 
 		await expect(
 			auth.api.adminCreateOAuthClient({
@@ -722,18 +717,18 @@ describe("oauth register", async () => {
 		const clients = await ctx.adapter.findMany({
 			model: "oauthClient",
 		});
-		expect(clients).toHaveLength(0);
+		expect(clients).toHaveLength(2);
 
 		const clientResources = await ctx.adapter.findMany({
 			model: "oauthClientResource",
 		});
-		expect(clientResources).toHaveLength(0);
+		expect(clientResources).toHaveLength(3);
 
 		const validResourceRows = await ctx.adapter.findMany({
 			model: "oauthResource",
 			where: [{ field: "identifier", value: validResource }],
 		});
-		expect(validResourceRows).toHaveLength(0);
+		expect(validResourceRows).toHaveLength(1);
 	});
 
 	/**

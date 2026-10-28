@@ -1416,22 +1416,16 @@ oauthProvider({
 
 Use the admin resource endpoints when resource policy needs to change at runtime.
 
-Configured resources are resolved in memory when the plugin is constructed. Constructing `betterAuth()` performs no database I/O for OAuth resources.
+Configured resources are indexed in memory during initialization without performing database I/O. At request time, reads combine this configuration with database rows; rows are created lazily when a resource is linked to a client or edited via the admin API. When a database row exists for a resource, `resourceSeedMode` decides how it is combined with the in-memory configuration (`insertOnly`, `merge`, or `overwrite`):
 
-A row in the `oauthResource` table is created lazily and idempotently only when a client is linked to the resource or an admin updates it. When a resource is looked up, `resourceSeedMode` controls how the in-memory configuration combines with a database row:
+* **`insertOnly` (default):** Database rows take precedence once created. Runtime edits via the admin API become effective immediately.
+* **`merge`:** Code-configured fields take precedence over database values for any field defined in code (`resources`). Unconfigured fields fall back to database values.
+* **`overwrite`:** Code-configured values override database values for configured fields, while the database row keeps its `id`, `createdAt`, and `updatedAt`.
 
-| Mode                   | Behavior                                                                                                                                    |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `insertOnly` (default) | A database row, once it exists, wins over config, so admin edits via CRUD survive restarts. If no row exists, the configured entry is used. |
-| `merge`                | The database row is overlaid with fields that are present in the configured entry. Admin edits to unconfigured fields are preserved.        |
-| `overwrite`            | The configured entry replaces the database row's policy fields at read time. Use when config is the single source of truth.                 |
-
-Tooling that inspects the database directly will not see rows for configured resources until they are linked or updated; use the admin resource endpoints to list all resources, including disabled ones.
-
-Deleting a resource via the admin endpoint (`DELETE /admin/oauth2/resources/:identifier` or `auth.api.adminDeleteOAuthResource`) permanently suppresses that resource (even if declared in configuration), cascade-revoking existing tokens at introspection and rejecting new token issuance.
+In `merge` and `overwrite` modes, admin PATCH requests to database rows succeed, but code-configured values continue to be authoritative for configured fields.
 
 <Callout type="warn">
-  With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource row without `allowedScopes` cannot be stored because Prisma cannot write `null` to a list column. When a resource row must be persisted—such as during client registration, linking, or an admin update—explicit `allowedScopes` is required. Declare `allowedScopes` for that resource listing every scope clients may request for it. This includes the resource `mcp()` adds; declare it in `resources` with the same identifier:
+  With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. When a resource row must be persisted (registration, client linking, and admin updates), operations fail until you declare `allowedScopes` for that resource, listing every scope clients may request for it. This includes the resource `mcp()` adds; declare it in `resources` with the same identifier:
 
   ```ts title="auth.ts"
   mcp({
@@ -1450,8 +1444,14 @@ Dynamic registration can attach protected resources to the new client in the sam
 ```ts title="auth.ts"
 oauthProvider({
   resources: [
-    "https://api.example.com/default",
-    "https://api.example.com/optional",
+    {
+      identifier: "https://api.example.com/default",
+      allowedScopes: ["read", "write"],
+    },
+    {
+      identifier: "https://api.example.com/optional",
+      allowedScopes: ["read", "write"],
+    },
   ],
   clientRegistrationDefaultResources: [
     "https://api.example.com/default",

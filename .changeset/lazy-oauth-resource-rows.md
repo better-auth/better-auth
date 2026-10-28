@@ -2,7 +2,5 @@
 "@better-auth/oauth-provider": minor
 ---
 
-- Stop writing configured OAuth resources during `betterAuth()` initialization.
-- Index configured resources in memory and dynamically combine them with database rows at read time.
-- Defer row creation until foreign-key persistence is required (such as client links) or admin updates.
-- Make deleting a configured resource durable: a tombstone row suppresses the configured entry until the resource is recreated.
+- Tooling that reads the `oauthResource` table directly sees fewer rows: no row exists for a configured resource until a client is linked to it or an admin edits it. Use the admin resource endpoints to list all resources.
+- `merge` and `overwrite` are applied when a resource is read, not written into stored rows. Admin PATCH requests to database rows succeed, but code-configured values stay authoritative for configured fields.

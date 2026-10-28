@@ -1,4 +1,4 @@
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { APIError } from "better-auth/api";
 import type { JWSAlgorithms } from "better-auth/plugins";
@@ -59,70 +59,10 @@ const JWS_ALGORITHM_SET = new Set<string>(JWS_ALGORITHMS);
 const MAX_AUD_VALUES = 64;
 
 /**
- * Checks whether an {@link OAuthResource} row is tombstoned (durably deleted).
- *
- * @internal
- */
-export function isResourceTombstoned(
-	row: OAuthResource | null | undefined,
-): boolean {
-	if (!row || !row.metadata) return false;
-	let meta = row.metadata;
-	if (typeof meta === "string") {
-		try {
-			meta = JSON.parse(meta);
-		} catch {
-			return false;
-		}
-	}
-	return Boolean(
-		meta &&
-			typeof meta === "object" &&
-			Object.prototype.hasOwnProperty.call(meta, "__deleted") &&
-			(meta as Record<string, unknown>).__deleted === true,
-	);
-}
-
-/**
- * Strips `__deleted` from metadata and normalizes empty or invalid values to `null`.
- *
- * @internal
- */
-export function omitDeleted(metadata: unknown): Record<string, unknown> | null {
-	if (!metadata) {
-		return null;
-	}
-	let target: Record<string, unknown>;
-	if (typeof metadata === "string") {
-		try {
-			const parsed = JSON.parse(metadata);
-			if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-				return null;
-			}
-			target = parsed as Record<string, unknown>;
-		} catch {
-			return null;
-		}
-	} else if (typeof metadata === "object" && !Array.isArray(metadata)) {
-		target = metadata as Record<string, unknown>;
-	} else {
-		return null;
-	}
-
-	const result: Record<string, unknown> = {};
-	for (const key of Object.keys(target)) {
-		if (key !== "__deleted") {
-			result[key] = target[key];
-		}
-	}
-	return Object.keys(result).length > 0 ? result : null;
-}
-
-/**
  * Result of {@link assertIdentifierValid}/{@link checkIdentifier}. When
  * `ok: false`, `reason` is a human-readable validation failure suitable for
  * `error_description` (admin endpoints throw `invalid_target`) or a `logger.warn`
- * (seed path skips the entry).
+ * (lazy path skips the entry).
  *
  * @internal
  */
@@ -135,7 +75,7 @@ export type IdentifierCheckResult =
  * fragment), honoring {@link OAuthOptions.identifierValidator} when provided.
  *
  * Returns a structured result so callers can decide whether to throw
- * (admin CRUD / DCR) or warn-and-skip (config seed path).
+ * (admin CRUD / DCR) or warn-and-skip (lazy path).
  *
  * @internal
  */
@@ -162,6 +102,50 @@ async function checkIdentifier(
 		};
 	}
 	return { ok: true };
+}
+
+/**
+ * Memoized {@link checkIdentifier} scoped per options object. Repeated and
+ * concurrent lookups for the same identifier share one validator invocation;
+ * a rejection warns once, matching the read-path warn contract asserted in
+ * `resource-startup.test.ts`.
+ *
+ * @internal
+ */
+const identifierValidationByOptions = new WeakMap<
+	OAuthOptions<Scope[]>,
+	Map<string, Promise<IdentifierCheckResult>>
+>();
+
+function checkIdentifierMemoized(
+	opts: OAuthOptions<Scope[]>,
+	identifier: string,
+): Promise<IdentifierCheckResult> {
+	let byIdentifier = identifierValidationByOptions.get(opts);
+	if (!byIdentifier) {
+		byIdentifier = new Map<string, Promise<IdentifierCheckResult>>();
+		identifierValidationByOptions.set(opts, byIdentifier);
+	}
+	const cache = byIdentifier;
+	let pending = cache.get(identifier);
+	if (!pending) {
+		pending = checkIdentifier(opts, identifier).then(
+			(check) => {
+				if (!check.ok) {
+					logger.warn(
+						`oauth-provider: skipping resource for ${identifier} — ${check.reason}`,
+					);
+				}
+				return check;
+			},
+			(err: unknown) => {
+				cache.delete(identifier);
+				throw err;
+			},
+		);
+		cache.set(identifier, pending);
+	}
+	return pending;
 }
 
 /**
@@ -618,35 +602,22 @@ export async function getResourceCustomClaims(
 		where: [
 			{ field: "identifier", operator: "in", value: resourceIdentifiers },
 		],
+		// Fetch every requested identifier: without an explicit limit the
+		// adapter applies `defaultFindManyLimit`, omitted rows would be
+		// treated as missing, and `insertOnly` would restore their configured
+		// `customClaims` (reintroducing removed permissions at introspection).
+		limit: resourceIdentifiers.length,
 	});
 	const rowByIdentifier = new Map(rows.map((row) => [row.identifier, row]));
+	const mode = opts.resourceSeedMode ?? "insertOnly";
 	const merged: Record<string, unknown> = {};
-	// Merge in the token's resource order so "later resource wins" still holds.
+
 	for (const identifier of resourceIdentifiers) {
-		const row = rowByIdentifier.get(identifier);
-		if (row && isResourceTombstoned(row)) {
-			continue;
-		}
-		const entry = await getConfiguredResource(opts, identifier);
-
-		let effectiveResource: OAuthResource | null = null;
-		if (row && entry) {
-			effectiveResource = combineResource(
-				row,
-				entry,
-				opts.resourceSeedMode ?? "insertOnly",
-			);
-		} else if (row) {
-			effectiveResource = row;
-		} else if (entry) {
-			effectiveResource = entry.resource;
-		}
-
-		if (
-			effectiveResource?.customClaims &&
-			typeof effectiveResource.customClaims === "object"
-		) {
-			Object.assign(merged, effectiveResource.customClaims);
+		const dbRow = rowByIdentifier.get(identifier) ?? null;
+		const configured = getConfiguredResource(opts, identifier);
+		const combined = combineResource(dbRow, configured, mode);
+		if (combined?.customClaims && typeof combined.customClaims === "object") {
+			Object.assign(merged, combined.customClaims);
 		}
 	}
 	return merged;
@@ -707,40 +678,42 @@ export function invalidateResourceCache(identifier?: string): void {
 	resourceCache.delete(identifier);
 }
 
-interface ConfiguredResourceEntry {
+/**
+ * @internal
+ */
+export interface ConfiguredResource {
 	input: OAuthResourceInput;
 	resource: OAuthResource;
-	validation: Promise<IdentifierCheckResult> | null;
-	invalid: boolean;
 }
 
-const configuredResourceMaps = new WeakMap<
+const configuredResourcesByOptions = new WeakMap<
 	OAuthOptions<Scope[]>,
-	Map<string, ConfiguredResourceEntry>
+	Map<string, ConfiguredResource>
 >();
 
 /**
- * Indexes configured resources into an in-memory Map keyed by identifier.
- * Zero database I/O is performed.
+ * Indexes configured resources in memory by identifier.
  *
  * @internal
  */
-export function indexConfiguredResources(
+export function getConfiguredResourcesMap(
 	opts: OAuthOptions<Scope[]>,
-): Map<string, ConfiguredResourceEntry> {
-	let map = configuredResourceMaps.get(opts);
+): Map<string, ConfiguredResource> {
+	let map = configuredResourcesByOptions.get(opts);
 	if (map) return map;
-
-	map = new Map<string, ConfiguredResourceEntry>();
-	configuredResourceMaps.set(opts, map);
-
+	map = new Map();
 	const inputs = collectResourceInputs(opts);
-	if (inputs.length === 0) return map;
-
-	const now = new Date();
-	const mode = opts.resourceSeedMode ?? "insertOnly";
-	for (const rawInput of inputs) {
-		let input = rawInput;
+	const now = new Date(0);
+	for (let input of inputs) {
+		if (!opts.identifierValidator) {
+			const parsed = ResourceUriSchema.safeParse(input.identifier);
+			if (!parsed.success) {
+				logger.warn(
+					`oauth-provider: skipping resource for ${input.identifier} — ${parsed.error.issues[0]?.message ?? "not an absolute URI"}`,
+				);
+				continue;
+			}
+		}
 		if (
 			input.signingAlgorithm != null &&
 			!JWS_ALGORITHM_SET.has(input.signingAlgorithm)
@@ -749,182 +722,161 @@ export function indexConfiguredResources(
 				`oauth-provider: dropping unsupported signingAlgorithm "${input.signingAlgorithm}" for resource ${input.identifier} — must be one of ${JWS_ALGORITHMS.join(", ")}. Continuing without an algorithm override.`,
 			);
 			const { signingAlgorithm: _, ...rest } = input;
-			input = rest as typeof input;
+			input = rest as OAuthResourceInput;
 		}
-
-		const existing = map.get(input.identifier);
-		if (existing) {
-			if (mode === "insertOnly") {
-				continue;
-			}
-			if (mode === "merge") {
-				const mergedInput: OAuthResourceInput = { ...existing.input };
-				for (const [k, v] of Object.entries(input)) {
-					if (v !== undefined) {
-						(mergedInput as unknown as Record<string, unknown>)[k] = v;
-					}
-				}
-				const resource: OAuthResource = {
-					id: mergedInput.identifier,
-					...buildSeedRow(mergedInput, now),
-				};
-				map.set(mergedInput.identifier, {
-					input: mergedInput,
-					resource,
-					validation: existing.validation,
-					invalid: existing.invalid,
-				});
-				continue;
-			}
-			// mode === "overwrite" replaces with the newer entry below
-		}
-
 		const resource: OAuthResource = {
 			id: input.identifier,
-			...buildSeedRow(input, now),
+			identifier: input.identifier,
+			name: defaultName(input),
+			accessTokenTtl: input.accessTokenTtl ?? null,
+			refreshTokenTtl: input.refreshTokenTtl ?? null,
+			signingAlgorithm: input.signingAlgorithm ?? null,
+			signingKeyId: input.signingKeyId ?? null,
+			allowedScopes: input.allowedScopes ? [...input.allowedScopes] : null,
+			customClaims:
+				input.customClaims && typeof input.customClaims === "object"
+					? { ...input.customClaims }
+					: null,
+			dpopBoundAccessTokensRequired:
+				input.dpopBoundAccessTokensRequired ?? false,
+			disabled: input.disabled ?? false,
+			policyVersion: 1,
+			metadata:
+				input.metadata && typeof input.metadata === "object"
+					? { ...input.metadata }
+					: null,
+			createdAt: now,
+			updatedAt: now,
 		};
-
-		map.set(input.identifier, {
-			input,
-			resource,
-			validation: null,
-			invalid: false,
-		});
+		map.set(input.identifier, { input, resource });
 	}
-
+	configuredResourcesByOptions.set(opts, map);
 	return map;
 }
 
 /**
- * Looks up a configured resource entry in memory. If not yet indexed, indexes
- * lazily. Defers and memoizes identifier validation per entry.
+ * Fast synchronous in-memory lookup for a code-configured resource.
  *
  * @internal
  */
-export async function getConfiguredResource(
+export function getConfiguredResource(
 	opts: OAuthOptions<Scope[]>,
 	identifier: string,
-): Promise<ConfiguredResourceEntry | null> {
-	let map = configuredResourceMaps.get(opts);
-	if (!map) {
-		map = indexConfiguredResources(opts);
-	}
-	const entry = map.get(identifier);
-	if (!entry || entry.invalid) return null;
-
-	if (entry.validation === null) {
-		entry.validation = checkIdentifier(opts, identifier)
-			.then((check) => {
-				if (!check.ok) {
-					entry.invalid = true;
-					logger.warn(
-						`oauth-provider: skipping resource for ${identifier} — ${check.reason}`,
-					);
-				}
-				return check;
-			})
-			.catch((err) => {
-				entry.validation = null;
-				throw err;
-			});
-	}
-
-	const check = await entry.validation;
-	if (!check.ok) return null;
-	return entry;
+): ConfiguredResource | undefined {
+	return getConfiguredResourcesMap(opts).get(identifier);
 }
 
 /**
- * Returns synthetic resources from in-memory config whose identifiers are
- * not present in the given database rows, for the admin list.
+ * Indexes configured resources into an in-memory Map keyed by identifier.
+ * Zero database I/O is performed.
+ *
+ * Compatibility alias for {@link getConfiguredResourcesMap} required by
+ * `oauth.ts` (dst HEAD) after the src-style transfer renamed it.
  *
  * @internal
  */
-export async function getConfiguredResourcesWithoutRows(
+export function indexConfiguredResources(
 	opts: OAuthOptions<Scope[]>,
-	rows: OAuthResource[],
-): Promise<OAuthResource[]> {
-	const rowIdentifiers = new Set(rows.map((r) => r.identifier));
-	let map = configuredResourceMaps.get(opts);
-	if (!map) {
-		map = indexConfiguredResources(opts);
-	}
-	const result: OAuthResource[] = [];
-	for (const [identifier] of map) {
-		if (rowIdentifiers.has(identifier)) continue;
-		const entry = await getConfiguredResource(opts, identifier);
-		if (entry) {
-			result.push(Object.assign({}, entry.resource));
-		}
-	}
-	return result;
+): Map<string, ConfiguredResource> {
+	return getConfiguredResourcesMap(opts);
 }
 
 /**
- * Combines a stored database row with in-memory configuration per {@link OAuthOptions.resourceSeedMode}.
+ * @internal
+ */
+export type ResourceSeedMode = NonNullable<
+	OAuthOptions<Scope[]>["resourceSeedMode"]
+>;
+
+export function cloneResource(resource: OAuthResource): OAuthResource {
+	return {
+		...resource,
+		allowedScopes: resource.allowedScopes ? [...resource.allowedScopes] : null,
+		customClaims:
+			resource.customClaims && typeof resource.customClaims === "object"
+				? { ...resource.customClaims }
+				: null,
+		metadata:
+			resource.metadata && typeof resource.metadata === "object"
+				? { ...resource.metadata }
+				: null,
+	};
+}
+
+/**
+ * Combines a database row with an in-memory configured resource according to the seed mode:
+ * - `insertOnly` (default): if dbRow exists, return dbRow; else return configured.
+ * - `merge`: configured fields override dbRow fields where present.
+ * - `overwrite`: configured completely replaces dbRow (preserving dbRow id / createdAt).
  *
  * @internal
  */
 export function combineResource(
-	row: OAuthResource,
-	entry: ConfiguredResourceEntry,
-	mode: "insertOnly" | "merge" | "overwrite" = "insertOnly",
-): OAuthResource {
+	dbRow: OAuthResource | null,
+	configured: ConfiguredResource | undefined,
+	mode: ResourceSeedMode = "insertOnly",
+): OAuthResource | null {
+	if (!configured) return dbRow;
+	if (!dbRow) return cloneResource(configured.resource);
+
 	if (mode === "insertOnly") {
-		return Object.assign({}, row);
+		return dbRow;
 	}
 
 	if (mode === "merge") {
-		const combined: OAuthResource = { ...row };
-		const input = entry.input;
-		if (input.name !== undefined) combined.name = input.name;
-		if (input.accessTokenTtl !== undefined) {
-			combined.accessTokenTtl = input.accessTokenTtl;
+		const merged = { ...dbRow };
+		const input = configured.input;
+		const res = configured.resource;
+		for (const key of Object.keys(input) as Array<keyof OAuthResourceInput>) {
+			if (input[key] !== undefined && key !== "identifier" && key in res) {
+				Reflect.set(merged, key, res[key as keyof OAuthResource]);
+			}
 		}
-		if (input.refreshTokenTtl !== undefined) {
-			combined.refreshTokenTtl = input.refreshTokenTtl;
-		}
-		if (input.signingAlgorithm !== undefined) {
-			combined.signingAlgorithm = input.signingAlgorithm;
-		}
-		if (input.signingKeyId !== undefined) {
-			combined.signingKeyId = input.signingKeyId;
-		}
-		if (input.allowedScopes !== undefined) {
-			combined.allowedScopes = input.allowedScopes;
-		}
-		if (input.customClaims !== undefined) {
-			combined.customClaims = input.customClaims;
-		}
-		if (input.dpopBoundAccessTokensRequired !== undefined) {
-			combined.dpopBoundAccessTokensRequired =
-				input.dpopBoundAccessTokensRequired;
-		}
-		if (input.disabled !== undefined) combined.disabled = input.disabled;
-		if (input.metadata !== undefined) {
-			combined.metadata = omitDeleted(input.metadata);
-		}
-		return combined;
+		return cloneResource(merged);
 	}
 
-	// overwrite
-	const combined: OAuthResource = {
-		...entry.resource,
-		id: row.id,
-		createdAt: row.createdAt,
-		updatedAt: row.updatedAt,
-		policyVersion: row.policyVersion ?? entry.resource.policyVersion,
-		metadata: omitDeleted(entry.resource.metadata),
-	};
-	return combined;
+	if (mode === "overwrite") {
+		return {
+			...cloneResource(configured.resource),
+			id: dbRow.id,
+			createdAt: dbRow.createdAt,
+			updatedAt: dbRow.updatedAt,
+		};
+	}
+
+	return dbRow;
+}
+
+/**
+ * Single-flight map for {@link ensureResourceRow}, scoped per adapter.
+ * Keyed by adapter (then `modelName:identifier`) so concurrent ensures
+ * against different databases never share a pending insert: sharing would
+ * hand the second caller the first database's row, and its link insert
+ * would then fail the foreign key check (or dangle where FKs are not
+ * enforced).
+ */
+const inFlightEnsuresByAdapter = new WeakMap<
+	object,
+	Map<string, Promise<OAuthResource | null>>
+>();
+const globalInFlightEnsures = new Map<string, Promise<OAuthResource | null>>();
+
+function inFlightEnsuresFor(
+	adapter: object | undefined,
+): Map<string, Promise<OAuthResource | null>> {
+	if (!adapter) return globalInFlightEnsures;
+	let inFlight = inFlightEnsuresByAdapter.get(adapter);
+	if (!inFlight) {
+		inFlight = new Map();
+		inFlightEnsuresByAdapter.set(adapter, inFlight);
+	}
+	return inFlight;
 }
 
 /**
  * Looks up an {@link OAuthResource} by `identifier`, consulting the in-process
  * cache when the identifier is in {@link OAuthOptions.cachedResources}.
- *
- * Combines database rows with in-memory configuration per {@link OAuthOptions.resourceSeedMode}.
- * Returns a defensive copy so callers can't mutate cached state.
+ * Combines the persisted DB row with in-memory configuration.
  *
  * @internal
  */
@@ -933,48 +885,32 @@ export async function getResource(
 	opts: OAuthOptions<Scope[]>,
 	identifier: string,
 ): Promise<OAuthResource | null> {
-	let dbResource: OAuthResource | null = null;
-	if (opts.cachedResources?.has(identifier)) {
-		const cached = resourceCache.get(identifier);
-		if (cached) {
-			dbResource = Object.assign({}, cached);
-		}
+	if (opts.identifierValidator) {
+		const check = await checkIdentifierMemoized(opts, identifier);
+		if (!check.ok) return null;
 	}
 
-	if (!dbResource) {
-		const row = await ctx.context.adapter.findOne<OAuthResource>({
+	let dbResource: OAuthResource | null = null;
+	const isCached = opts.cachedResources?.has(identifier);
+
+	if (isCached && resourceCache.has(identifier)) {
+		const cached = resourceCache.get(identifier);
+		dbResource = cached ? Object.assign({}, cached) : null;
+	} else {
+		dbResource = await ctx.context.adapter.findOne<OAuthResource>({
 			model: opts.schema?.oauthResource?.modelName ?? "oauthResource",
 			where: [{ field: "identifier", value: identifier }],
 		});
-		if (row) {
-			if (opts.cachedResources?.has(identifier)) {
-				resourceCache.set(identifier, Object.assign({}, row));
-			}
-			dbResource = row;
+		if (isCached && dbResource) {
+			resourceCache.set(identifier, Object.assign({}, dbResource));
 		}
 	}
 
-	if (dbResource && isResourceTombstoned(dbResource)) {
-		return null;
-	}
+	const configured = getConfiguredResource(opts, identifier);
+	const mode = opts.resourceSeedMode ?? "insertOnly";
+	const combined = combineResource(dbResource, configured, mode);
 
-	const configured = await getConfiguredResource(opts, identifier);
-	if (!dbResource && !configured) {
-		return null;
-	}
-
-	if (dbResource && !configured) {
-		return Object.assign({}, dbResource);
-	}
-	if (!dbResource && configured) {
-		return Object.assign({}, configured.resource);
-	}
-
-	return combineResource(
-		dbResource!,
-		configured!,
-		opts.resourceSeedMode ?? "insertOnly",
-	);
+	return combined ? Object.assign({}, combined) : null;
 }
 
 /**
@@ -986,7 +922,7 @@ function defaultName(input: OAuthResourceInput): string {
 }
 
 /**
- * Coerces seed-config `resources` entries — string or object form — into a
+ * Coerces configured `resources` entries — string or object form — into a
  * normalized list of {@link OAuthResourceInput}.
  *
  * @internal
@@ -1004,9 +940,11 @@ export function collectResourceInputs(
 }
 
 /**
- * Builds the row payload sent to the adapter for an insert. All policy
+ * Builds the row payload sent to the adapter for a resource insert. All policy
  * columns default to `null` (= inherit plugin default at issuance time)
  * when the input doesn't specify a value.
+ *
+ * @internal
  */
 function buildSeedRow(input: OAuthResourceInput, now: Date) {
 	return {
@@ -1016,152 +954,100 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
-		// FIXME(#11725): same null limit as buildResourceRow in
-		// oauthResource/endpoints.ts.
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
 		policyVersion: 1,
-		metadata: omitDeleted(input.metadata),
+		metadata: input.metadata ?? null,
 		createdAt: now,
 		updatedAt: now,
 	};
 }
 
-const adapterLocks = new WeakMap<object, Map<string, Promise<unknown>>>();
-
-function getBaseAdapter(adapter: object): object {
-	let current: unknown = adapter;
-	while (current && typeof current === "object") {
-		const candidate = current as {
-			baseAdapter?: unknown;
-			adapter?: unknown;
-		};
-		if (candidate.baseAdapter && typeof candidate.baseAdapter === "object") {
-			current = candidate.baseAdapter;
-		} else if (
-			candidate.adapter &&
-			typeof candidate.adapter === "object" &&
-			("findOne" in candidate.adapter || "create" in candidate.adapter)
-		) {
-			current = candidate.adapter;
-		} else {
-			break;
-		}
-	}
-	return (current as object) ?? adapter;
-}
-
-export function withResourceInsertLock<T>(
-	adapter: object,
-	lockKey: string,
-	task: () => Promise<T>,
-): Promise<T> {
-	const baseAdapter = getBaseAdapter(adapter);
-	let locks = adapterLocks.get(baseAdapter);
-	if (!locks) {
-		locks = new Map<string, Promise<unknown>>();
-		adapterLocks.set(baseAdapter, locks);
-	}
-	const previous = locks.get(lockKey) ?? Promise.resolve();
-	const run = previous.then(task, task);
-	const tracked = run.finally(() => {
-		if (locks!.get(lockKey) === tracked) {
-			locks!.delete(lockKey);
-		}
-	});
-	locks.set(lockKey, tracked);
-	return tracked;
-}
-
 /**
- * Creates a database row for a configured resource lazily and idempotently.
- * Called before client linkage writes or when an admin updates a row-less
- * configured resource.
+ * Lazily creates the `oauthResource` database row for a configured resource if
+ * one does not already exist. Idempotent and safe under concurrent multi-process boots.
  *
  * @internal
  */
 export async function ensureResourceRow(
-	ctx: GenericEndpointContext | { context: AuthContext } | AuthContext,
+	ctx:
+		| GenericEndpointContext
+		| { context: { adapter: unknown } }
+		| { adapter: unknown },
 	opts: OAuthOptions<Scope[]>,
 	identifier: string,
 ): Promise<OAuthResource | null> {
-	const authContext = "context" in ctx ? ctx.context : (ctx as AuthContext);
-	const rawAdapter =
-		("baseAdapter" in authContext &&
-		authContext.baseAdapter &&
-		typeof authContext.baseAdapter === "object"
-			? authContext.baseAdapter
-			: undefined) ??
-		("context" in ctx && ctx.context?.adapter
-			? ctx.context.adapter
-			: authContext.adapter);
-	const adapter = (getBaseAdapter(rawAdapter as object) ??
-		rawAdapter) as typeof authContext.adapter;
+	if (opts.identifierValidator) {
+		const check = await checkIdentifierMemoized(opts, identifier);
+		if (!check.ok) return null;
+	}
+
+	const adapter = (
+		"context" in ctx ? ctx.context.adapter : ctx.adapter
+	) as GenericEndpointContext["context"]["adapter"];
 	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
-	const where = [{ field: "identifier", value: identifier }];
+	const key = `${modelName}:${identifier}`;
+	const inFlightEnsures = inFlightEnsuresFor(adapter as object | undefined);
 
-	const existing = await adapter.findOne<OAuthResource>({
-		model: modelName,
-		where,
-	});
-	if (existing) {
-		if (isResourceTombstoned(existing)) {
-			return null;
-		}
-		return existing;
+	if (inFlightEnsures.has(key)) {
+		return await inFlightEnsures.get(key)!;
 	}
 
-	const entry = await getConfiguredResource(opts, identifier);
-	if (!entry) {
-		return null;
-	}
+	const promise = (async () => {
+		const where = [{ field: "identifier", value: identifier }];
 
-	const adapterKey = adapter as object;
-	const lockKey = `${modelName}:${identifier}`;
-
-	return withResourceInsertLock(adapterKey, lockKey, async () => {
-		const raced = await adapter.findOne<OAuthResource>({
+		const existing = await adapter.findOne<OAuthResource>({
 			model: modelName,
 			where,
 		});
-		if (raced) {
-			if (isResourceTombstoned(raced)) {
-				return null;
-			}
-			return raced;
+		if (existing) {
+			return existing;
+		}
+
+		const configured = getConfiguredResource(opts, identifier);
+		if (!configured) return null;
+
+		const check = await checkIdentifier(opts, configured.input.identifier);
+		if (!check.ok) {
+			logger.warn(
+				`oauth-provider: skipping resource for ${configured.input.identifier} — ${check.reason}`,
+			);
+			return null;
 		}
 
 		const now = new Date();
-		const data = buildSeedRow(entry.input, now);
-
+		let created: OAuthResource | null = null;
 		try {
-			const created = await adapter.create<OAuthResource>({
+			created = await adapter.create<
+				ReturnType<typeof buildSeedRow>,
+				OAuthResource
+			>({
 				model: modelName,
-				data,
+				data: buildSeedRow(configured.input, now),
 			});
-			invalidateResourceCache(identifier);
-			if (created) return created;
-			const reRead = await adapter.findOne<OAuthResource>({
-				model: modelName,
-				where,
-			});
-			return reRead;
 		} catch (err) {
-			const winner = await adapter
+			const raced = await adapter
 				.findOne<OAuthResource>({ model: modelName, where })
 				.catch(() => null);
-			if (winner) {
+			if (raced) {
 				invalidateResourceCache(identifier);
-				if (isResourceTombstoned(winner)) {
-					return null;
-				}
-				return winner;
+				return raced;
 			}
 			throw err;
 		}
-	});
+
+		invalidateResourceCache(identifier);
+		return created;
+	})();
+
+	inFlightEnsures.set(key, promise);
+	try {
+		return await promise;
+	} finally {
+		inFlightEnsures.delete(key);
+	}
 }
 
 /**
