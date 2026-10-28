@@ -897,6 +897,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						body.issuer !== undefined &&
 						body.issuer !== existingProvider.issuer;
 					let trustAnchorsChanged = false;
+					let idTokenNonceBindingChanged = false;
 
 					if (body.issuer !== undefined) {
 						updateData.issuer = body.issuer;
@@ -1023,6 +1024,11 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						) {
 							providerIdentityBoundaryChanged = true;
 						}
+						// Nonce binding is ID token verification policy: guards see it as an
+						// authentication-boundary change, but linked accounts keep their identity.
+						idTokenNonceBindingChanged =
+							(currentOidcConfig.disableIdTokenNonceBinding === true) !==
+							(updatedOidcConfig.disableIdTokenNonceBinding === true);
 
 						updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 					}
@@ -1032,7 +1038,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						{
 							action: "update",
 							isAuthenticationBoundaryChange:
-								providerIdentityBoundaryChanged || trustAnchorsChanged,
+								providerIdentityBoundaryChanged ||
+								trustAnchorsChanged ||
+								idTokenNonceBindingChanged,
 						},
 						existingProvider,
 						trx,
