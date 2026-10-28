@@ -4,6 +4,8 @@ import type { SCIMConnectionBinding } from "./persistence";
 import { createScopedKey } from "./resource-key";
 import { createSCIMError } from "./scim-error";
 
+const SCIM_CONNECTION_ID_QUERY_CHUNK_SIZE = 500;
+
 /** Creates the stable lookup key for a code-defined connection id. */
 export function createSCIMConnectionKey(connectionId: string): string {
 	return createScopedKey(["scim-connection", connectionId]);
@@ -78,17 +80,24 @@ export async function findDecommissionedSCIMConnectionIds(
 ): Promise<Set<string>> {
 	if (connectionIds.length === 0) return new Set();
 	const uniqueConnectionIds = [...new Set(connectionIds)];
-	const bindings = await database.findMany<SCIMConnectionBinding>({
-		model: "scimConnectionBinding",
-		where: [
-			{
-				field: "connectionId",
-				value: uniqueConnectionIds,
-				operator: "in",
-			},
-		],
-		limit: uniqueConnectionIds.length,
-	});
+	const bindings: SCIMConnectionBinding[] = [];
+	for (
+		let offset = 0;
+		offset < uniqueConnectionIds.length;
+		offset += SCIM_CONNECTION_ID_QUERY_CHUNK_SIZE
+	) {
+		const chunk = uniqueConnectionIds.slice(
+			offset,
+			offset + SCIM_CONNECTION_ID_QUERY_CHUNK_SIZE,
+		);
+		bindings.push(
+			...(await database.findMany<SCIMConnectionBinding>({
+				model: "scimConnectionBinding",
+				where: [{ field: "connectionId", value: chunk, operator: "in" }],
+				limit: chunk.length,
+			})),
+		);
+	}
 	return new Set(
 		bindings
 			.filter((binding) => binding.decommissionStatus !== "active")

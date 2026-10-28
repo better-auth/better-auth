@@ -93,6 +93,31 @@ async function findSCIMGroupsByIds(
 	return groups;
 }
 
+async function findSCIMGroupMembershipsBySCIMUserIds(
+	database: DBTransactionAdapter,
+	scimUserIds: readonly string[],
+): Promise<SCIMGroupMember[]> {
+	const memberships: SCIMGroupMember[] = [];
+	for (
+		let offset = 0;
+		offset < scimUserIds.length;
+		offset += SCIM_PROJECTION_BATCH_SIZE
+	) {
+		const chunk = scimUserIds.slice(
+			offset,
+			offset + SCIM_PROJECTION_BATCH_SIZE,
+		);
+		memberships.push(
+			...(await database.findMany<SCIMGroupMember>({
+				model: "scimGroupMember",
+				where: [{ field: "scimUserId", value: chunk, operator: "in" }],
+				limit: SCIM_UNBOUNDED_ROW_LIMIT,
+			})),
+		);
+	}
+	return memberships;
+}
+
 async function acquireProjectionSubjectLocks(
 	database: DBTransactionAdapter,
 	provisioningDomainId: string,
@@ -203,17 +228,10 @@ async function buildDesiredGrants(
 	);
 	const memberships =
 		input.memberships ??
-		(await database.findMany<SCIMGroupMember>({
-			model: "scimGroupMember",
-			where: [
-				{
-					field: "scimUserId",
-					value: input.activeSCIMUsers.map((scimUser) => scimUser.id),
-					operator: "in",
-				},
-			],
-			limit: SCIM_UNBOUNDED_ROW_LIMIT,
-		}));
+		(await findSCIMGroupMembershipsBySCIMUserIds(
+			database,
+			input.activeSCIMUsers.map((scimUser) => scimUser.id),
+		));
 	if (memberships.length === 0) return [];
 
 	const groupIds = [
@@ -496,17 +514,10 @@ async function reconcileSCIMUserBatch(
 		.map((scimUser) => scimUser.id);
 	const memberships =
 		options.projection?.roles && activeSCIMUserIds.length > 0
-			? await input.database.findMany<SCIMGroupMember>({
-					model: "scimGroupMember",
-					where: [
-						{
-							field: "scimUserId",
-							value: activeSCIMUserIds,
-							operator: "in",
-						},
-					],
-					limit: SCIM_UNBOUNDED_ROW_LIMIT,
-				})
+			? await findSCIMGroupMembershipsBySCIMUserIds(
+					input.database,
+					activeSCIMUserIds,
+				)
 			: [];
 	const groupIds = [
 		...new Set(memberships.map((membership) => membership.groupId)),

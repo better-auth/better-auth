@@ -20,13 +20,13 @@ const ADMIN_GROUP = "Admins";
 const LEGACY_SQLITE_BOUND_VARIABLE_LIMIT = 999;
 
 function assertBoundVariablesFit(where: readonly Where[] | undefined) {
-	for (const clause of where ?? []) {
-		if (
-			Array.isArray(clause.value) &&
-			clause.value.length > LEGACY_SQLITE_BOUND_VARIABLE_LIMIT
-		) {
-			throw new Error("too many SQL variables");
-		}
+	const boundVariables = (where ?? []).reduce(
+		(count, clause) =>
+			count + (Array.isArray(clause.value) ? clause.value.length : 1),
+		0,
+	);
+	if (boundVariables > LEGACY_SQLITE_BOUND_VARIABLE_LIMIT) {
+		throw new Error("too many SQL variables");
 	}
 }
 
@@ -464,5 +464,34 @@ describe("SCIM Group writes and role mapping when the database caps bound variab
 
 		await setActive(userId, true);
 		expect(adminGrantCountOf(userId)).toBe(1001);
+	});
+
+	it("maps, removes and restores the roles of a User linked through 1001 connections", async () => {
+		const {
+			data,
+			createGroup,
+			createUserInAdminGroups,
+			setActive,
+			adminGrantCountOf,
+		} = createFixture({ createDatabase: createBoundVariableLimitedAdapter });
+		const userId = await createUserInAdminGroups(1);
+		const [scimUser] = data.scimUser;
+		if (!scimUser) throw new Error("User not created");
+		for (let index = 0; index < 1000; index++) {
+			data.scimUser.push({
+				...scimUser,
+				id: `seeded-scim-user-${index}`,
+				connectionId: `seeded-connection-${index}`,
+			});
+		}
+
+		await createGroup(`${ADMIN_GROUP} last`, [userId]);
+		expect(adminGrantCountOf(userId)).toBe(2);
+
+		await setActive(userId, false);
+		expect(adminGrantCountOf(userId)).toBe(0);
+
+		await setActive(userId, true);
+		expect(adminGrantCountOf(userId)).toBe(2);
 	});
 });
