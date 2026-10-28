@@ -189,7 +189,7 @@ const oidcConfigSchema = z.object({
 		.boolean()
 		.meta({
 			description:
-				"Skip binding the ID token to the sign-in with a nonce. Only for providers that do not return the nonce claim.",
+				"Skip binding the ID token to the sign-in with a nonce. Binding is on by default; set this only for providers that do not return the nonce claim, since it removes ID token replay protection for the provider.",
 		})
 		.optional(),
 	overrideUserInfo: z.boolean().optional(),
