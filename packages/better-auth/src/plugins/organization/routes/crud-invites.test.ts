@@ -906,3 +906,105 @@ describe("invitation teamId must belong to the invitation's organization", async
 		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
 	});
 });
+
+describe("invitation roles written with spaces after the comma", async () => {
+	const INVITEE_EMAIL = "spaced-roles@example.com";
+	const ADMIN_EMAIL = "org-admin@example.com";
+	const PASSWORD = "test-password-123";
+
+	async function setup() {
+		const helpers = await getTestInstance(
+			{
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+				},
+				plugins: [organization({ async sendInvitationEmail() {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { client, signInWithTestUser, cookieSetter } = helpers;
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Spaced",
+			slug: "spaced",
+			fetchOptions: {
+				headers: ownerHeaders,
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		});
+		return { ...helpers, ownerHeaders, orgId: org.data!.id };
+	}
+
+	it("grants every role in the list once the invitation is accepted", async () => {
+		const { client, auth, ownerHeaders, orgId, signInWithUser } = await setup();
+
+		const invite = await auth.api.createInvitation({
+			body: {
+				organizationId: orgId,
+				email: INVITEE_EMAIL,
+				role: "member, admin" as "member",
+			},
+			headers: ownerHeaders,
+		});
+		expect(invite.role).toBe("member,admin");
+
+		await client.signUp.email({
+			email: INVITEE_EMAIL,
+			password: PASSWORD,
+			name: "Invitee",
+		});
+		const { headers: inviteeHeaders } = await signInWithUser(
+			INVITEE_EMAIL,
+			PASSWORD,
+		);
+		const accepted = await auth.api.acceptInvitation({
+			body: { invitationId: invite.id },
+			headers: inviteeHeaders,
+		});
+		expect(accepted?.member.role).toBe("member,admin");
+
+		const canInvite = await auth.api.hasPermission({
+			body: {
+				organizationId: orgId,
+				permissions: { invitation: ["create"] },
+			},
+			headers: inviteeHeaders,
+		});
+		expect(canInvite.success).toBe(true);
+	});
+
+	it("does not let a non-owner invite with the owner role", async () => {
+		const { client, auth, ownerHeaders, orgId, signInWithUser } = await setup();
+
+		await client.signUp.email({
+			email: ADMIN_EMAIL,
+			password: PASSWORD,
+			name: "Org Admin",
+		});
+		const { headers: adminHeaders, res } = await signInWithUser(
+			ADMIN_EMAIL,
+			PASSWORD,
+		);
+		await auth.api.addMember({
+			body: { organizationId: orgId, userId: res.user.id, role: "admin" },
+			headers: ownerHeaders,
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: INVITEE_EMAIL,
+			role: "member, owner" as "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(invite.data).toBeNull();
+		expect(invite.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE",
+		);
+	});
+});
