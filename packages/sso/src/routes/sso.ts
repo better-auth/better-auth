@@ -314,6 +314,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 														enum: [
 															"client_secret_post",
 															"client_secret_basic",
+															"private_key_jwt",
 															"none",
 														],
 														nullable: true,
