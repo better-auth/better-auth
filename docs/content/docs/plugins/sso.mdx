@@ -173,6 +173,7 @@ When the mapped email claim holds a list of addresses, Better Auth uses the firs
 Some IdPs register an application as a public client, with a `client_id` and no secret. Set `tokenEndpointAuthentication: "none"` for these providers and leave out `clientSecret`:
 
 ```ts title="register-oidc-provider.ts"
+const { headers } = await signInWithTestUser();
 await auth.api.registerSSOProvider({
     body: {
         providerId: "example-provider",
@@ -188,7 +189,7 @@ await auth.api.registerSSOProvider({
 });
 ```
 
-The code exchange sends only `client_id` and the PKCE code verifier. PKCE is the only proof that the client finishing the sign-in is the one that started it, so registration and updates reject a `none` provider with `pkce: false` or with a `clientSecret`, and the callback redirects with `pkce_required_for_public_client` if a `none` provider has PKCE turned off.
+The code exchange sends no client secret and no Authorization header: `client_id` and the PKCE code verifier are its only client-authentication values. PKCE is the only proof that the client finishing the sign-in is the one that started it, so registration and updates reject a `none` provider with `pkce: false` or with a `clientSecret`, and the callback redirects with `error=invalid_provider` and `error_description=pkce_required_for_public_client` if a `none` provider has PKCE turned off.
 
 ### OIDC Discovery
 
@@ -361,7 +362,7 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
   }
   ```
 
-  This is especially common with mock OIDC servers or development IdPs that only advertise `"none"` as the supported method.
+  An IdP that advertises only `"none"` usually has the application registered as a public client. Configure it as one instead of overriding to a secret-based method: set `tokenEndpointAuthentication: "none"`, keep PKCE on, and leave out `clientSecret` (see [Public clients](#public-clients)).
 </Callout>
 
 #### Summary
