@@ -132,7 +132,7 @@ export function getSessionAtom(
 		const current = session.value;
 		session.set({
 			...current,
-			isPending: current.data === null,
+			isPending: current.isPending,
 			isRefetching: true,
 			error: null,
 			refetch,
