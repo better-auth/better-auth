@@ -40,11 +40,7 @@ import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
 import * as oauthResourceEndpoints from "./oauthResource";
 import { registerEndpoint } from "./register";
-import {
-	logEnforcePerClientResourcesResolution,
-	logStartupSeedFailure,
-	seedResourcesOnce,
-} from "./resources";
+import { logEnforcePerClientResourcesResolution } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { readSignedOAuthQuery } from "./signed-query";
@@ -554,15 +550,6 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					);
 				}
 			}
-
-			// Seed `oauthResource` rows from plugin config. A failure must not
-			// reject init (a failed init is cached and breaks every route);
-			// `getResource` retries the seed on first resource access.
-			// TODO(#11725): remove database I/O from init. Resolve configured
-			// resources at lookup time and create a row only when a link needs one.
-			await seedResourcesOnce(ctx, opts).catch((error: unknown) =>
-				logStartupSeedFailure(ctx, error),
-			);
 
 			// Record which default applied to `enforcePerClientResources` so
 			// admins can see it in startup logs. Pure resolution lives in

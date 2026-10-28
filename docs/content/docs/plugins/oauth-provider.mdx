@@ -1416,7 +1416,13 @@ oauthProvider({
 
 Use the admin resource endpoints when resource policy needs to change at runtime.
 
-Configured resources are written to the `oauthResource` table when the auth instance starts. `resourceSeedMode` decides what happens to a row that already exists. If the write fails because the database is unreachable or the table has not been migrated yet, the error is logged and the write is retried on the first request that needs a resource. Requests that do not use resources, such as sign-in and session checks, are not affected.
+Configured resources are kept in memory and resolved on demand without performing database I/O. Database rows in the `oauthResource` table are created lazily when a resource is linked to a client or edited via the admin API. When a database row exists for a resource, `resourceSeedMode` decides how it is combined with the in-memory configuration (`insertOnly`, `merge`, or `overwrite`):
+
+* **`insertOnly` (default):** Database rows take precedence once created. Runtime edits via the admin API become effective immediately.
+* **`merge`:** Code-configured fields take precedence over database values for any field defined in code (`resources`). Unconfigured fields fall back to database values.
+* **`overwrite`:** The in-memory code configuration completely overrides database values.
+
+In `merge` and `overwrite` modes, fields declared in the code configuration (`resources`) take precedence over database values when resolving resources. Thus, admin PATCH requests to database rows succeed, but code-configured values continue to be authoritative for configured fields.
 
 <Callout type="warn">
   With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. Requests that use any configured resource fail until you declare `allowedScopes` for that resource, listing every scope clients may request for it. This includes the resource `mcp()` adds; declare it in `resources` with the same identifier:

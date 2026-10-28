@@ -1,14 +1,9 @@
-import type { AuthContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "../oauth";
-import {
-	invalidateResourceCache,
-	resetSeedStateForTests,
-	seedResourcesOnce,
-} from "../resources";
+import { invalidateResourceCache } from "../resources";
 import type {
 	OAuthClientResource,
 	OAuthOptions,
@@ -34,9 +29,7 @@ const boot = async (options: Partial<OAuthOptions<Scope[]>> = {}) => {
 	const instance = await getTestInstance({
 		plugins: [jwt(), oauthProvider(opts)],
 	});
-	resetSeedStateForTests();
 	const ctx = await instance.auth.$context;
-	await seedResourcesOnce(ctx as unknown as AuthContext, opts);
 	return { ...instance, ctx, opts };
 };
 
@@ -45,6 +38,21 @@ const signedInHeaders = async (
 ): Promise<Headers> => {
 	const { headers } = await instance.signInWithTestUser();
 	return headers;
+};
+
+const seedClient = async (
+	instance: Awaited<ReturnType<typeof boot>>,
+	clientId: string,
+) => {
+	await instance.ctx.adapter.create({
+		model: instance.opts.schema?.oauthClient?.modelName ?? "oauthClient",
+		data: {
+			clientId,
+			redirectUris: ["https://example.com/callback"],
+			createdAt: new Date(),
+			updatedAt: new Date(),
+		} as never,
+	});
 };
 
 describe("resource admin CRUD", () => {
@@ -219,6 +227,238 @@ describe("resource admin CRUD", () => {
 		expect(ids).toContain("https://api.example.com/a");
 		expect(ids).toContain("https://api.example.com/b");
 	});
+
+	it("list returns configured resources without DB rows and combines with existing rows", async () => {
+		const configuredId = "https://api.example.com/configured-only";
+		const mergedId = "https://api.example.com/merged";
+		const instance = await boot({
+			resources: [
+				configuredId,
+				{ identifier: mergedId, name: "Configured Name", accessTokenTtl: 300 },
+			],
+			resourceSeedMode: "merge",
+		});
+		const headers = await signedInHeaders(instance);
+
+		await instance.ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier: mergedId,
+				name: "DB Name",
+				accessTokenTtl: 600,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			} as never,
+		});
+
+		const list = (await instance.auth.api.adminListOAuthResources({
+			headers,
+		})) as OAuthResource[];
+		const ids = list.map((r) => r.identifier);
+		expect(ids).toContain(configuredId);
+		expect(ids).toContain(mergedId);
+
+		const merged = list.find((r) => r.identifier === mergedId);
+		expect(merged?.accessTokenTtl).toBe(300);
+		expect(merged?.name).toBe("Configured Name");
+
+		const configuredOnly = list.find((r) => r.identifier === configuredId);
+		expect(configuredOnly?.identifier).toBe(configuredId);
+	});
+
+	it("skips invalid configured resource identifier", async () => {
+		const validIdentifier = "https://api.example.com/valid";
+		const invalidIdentifier = "not-a-valid-uri";
+		const instance = await boot({
+			resources: [validIdentifier, invalidIdentifier],
+		});
+		const headers = await signedInHeaders(instance);
+
+		const list = (await instance.auth.api.adminListOAuthResources({
+			headers,
+		})) as OAuthResource[];
+
+		expect(list.some((r) => r.identifier === validIdentifier)).toBe(true);
+		expect(list.some((r) => r.identifier === invalidIdentifier)).toBe(false);
+	});
+
+	it("read returns configured resource when no DB row exists yet", async () => {
+		const identifier = "https://api.example.com/configured-get";
+		const instance = await boot({
+			resources: [{ identifier, name: "Lazy Get", accessTokenTtl: 120 }],
+		});
+		const headers = await signedInHeaders(instance);
+		const resource = (await instance.auth.api.adminGetOAuthResource({
+			params: { identifier },
+			headers,
+		})) as OAuthResource;
+		expect(resource.identifier).toBe(identifier);
+		expect(resource.name).toBe("Lazy Get");
+		expect(resource.accessTokenTtl).toBe(120);
+	});
+
+	it("update lazily creates DB row for configured resource", async () => {
+		const identifier = "https://api.example.com/lazy-update";
+		const instance = await boot({
+			resources: [{ identifier, name: "Initial Config", accessTokenTtl: 120 }],
+		});
+		const headers = await signedInHeaders(instance);
+
+		const dbBefore = await instance.ctx.adapter.findOne({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(dbBefore).toBeNull();
+
+		const updated = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { accessTokenTtl: 500 },
+			headers,
+		})) as OAuthResource;
+		expect(updated.accessTokenTtl).toBe(500);
+
+		const dbAfter = await instance.ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(dbAfter).not.toBeNull();
+		expect(dbAfter?.accessTokenTtl).toBe(500);
+		expect(dbAfter?.name).toBe("Initial Config");
+	});
+
+	it("delete rejects code-configured resource when no DB row exists", async () => {
+		const identifier = "https://api.example.com/configured-delete";
+		const instance = await boot({
+			resources: [identifier],
+		});
+		const headers = await signedInHeaders(instance);
+		await expect(
+			instance.auth.api.adminDeleteOAuthResource({
+				params: { identifier },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({ error: "invalid_request" }),
+		});
+	});
+
+	it("delete rejects code-configured resource even when DB row exists from prior update", async () => {
+		const identifier = "https://api.example.com/configured-with-row";
+		const instance = await boot({
+			resources: [identifier],
+		});
+		const headers = await signedInHeaders(instance);
+
+		await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { accessTokenTtl: 300 },
+			headers,
+		});
+
+		const dbBefore = await instance.ctx.adapter.findOne({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(dbBefore).not.toBeNull();
+
+		await expect(
+			instance.auth.api.adminDeleteOAuthResource({
+				params: { identifier },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({
+				error: "invalid_request",
+				error_description: `cannot delete code-configured resource ${identifier}`,
+			}),
+		});
+
+		const dbAfter = await instance.ctx.adapter.findOne({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(dbAfter).not.toBeNull();
+	});
+
+	it("create rejects identifier that is already declared in code-configured resources", async () => {
+		const identifier = "https://api.example.com/already-configured";
+		const instance = await boot({
+			resources: [identifier],
+		});
+		const headers = await signedInHeaders(instance);
+
+		await expect(
+			instance.auth.api.adminCreateOAuthResource({
+				body: { identifier },
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({
+				error: "invalid_request",
+				error_description: `resource ${identifier} already exists`,
+			}),
+		});
+	});
+
+	it("update returns combined resource matching getResource response", async () => {
+		const identifier = "https://api.example.com/combined-update";
+		const instance = await boot({
+			resources: [
+				{
+					identifier,
+					name: "Configured Static Name",
+					accessTokenTtl: 120,
+				},
+			],
+			resourceSeedMode: "merge",
+		});
+		const headers = await signedInHeaders(instance);
+
+		const updated = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { name: "DB Dynamic Name", refreshTokenTtl: 3600 },
+			headers,
+		})) as OAuthResource;
+
+		const fetched = (await instance.auth.api.adminGetOAuthResource({
+			params: { identifier },
+			headers,
+		})) as OAuthResource;
+
+		expect(updated).toEqual(fetched);
+		expect(updated.name).toBe("Configured Static Name");
+		expect(updated.refreshTokenTtl).toBe(3600);
+	});
+
+	it("delete removes DB row and associated client links", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/delete-with-links";
+		await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier },
+			headers,
+		});
+		await seedClient(instance, "linked-client");
+		await instance.auth.api.adminLinkClientResource({
+			params: { identifier, client_id: "linked-client" },
+			headers,
+		});
+		const linksBefore = await instance.ctx.adapter.findMany({
+			model: "oauthClientResource",
+			where: [{ field: "resourceId", value: identifier }],
+		});
+		expect(linksBefore.length).toBe(1);
+
+		await instance.auth.api.adminDeleteOAuthResource({
+			params: { identifier },
+			headers,
+		});
+		const linksAfter = await instance.ctx.adapter.findMany({
+			model: "oauthClientResource",
+			where: [{ field: "resourceId", value: identifier }],
+		});
+		expect(linksAfter.length).toBe(0);
+	});
 });
 
 describe("resourcePrivileges gate", () => {
@@ -265,21 +505,6 @@ describe("resourcePrivileges gate", () => {
 });
 
 describe("client/resource linking", () => {
-	const seedClient = async (
-		instance: Awaited<ReturnType<typeof boot>>,
-		clientId: string,
-	) => {
-		await instance.ctx.adapter.create({
-			model: instance.opts.schema?.oauthClient?.modelName ?? "oauthClient",
-			data: {
-				clientId,
-				redirectUris: ["https://example.com/callback"],
-				createdAt: new Date(),
-				updatedAt: new Date(),
-			} as never,
-		});
-	};
-
 	it("link creates the join row and unlink removes it", async () => {
 		const instance = await boot();
 		const headers = await signedInHeaders(instance);
@@ -316,6 +541,33 @@ describe("client/resource linking", () => {
 				where: [{ field: "clientId", value: "test-client" }],
 			});
 		expect(afterUnlink?.length ?? 0).toBe(0);
+	});
+
+	it("link lazily creates DB row for code-configured resource", async () => {
+		const identifier = "https://api.example.com/lazy-link";
+		const instance = await boot({
+			resources: [identifier],
+		});
+		const headers = await signedInHeaders(instance);
+		await seedClient(instance, "lazy-client");
+
+		const dbBefore = await instance.ctx.adapter.findOne({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(dbBefore).toBeNull();
+
+		await instance.auth.api.adminLinkClientResource({
+			params: { identifier, client_id: "lazy-client" },
+			headers,
+		});
+
+		const dbAfter = await instance.ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(dbAfter).not.toBeNull();
+		expect(dbAfter?.identifier).toBe(identifier);
 	});
 
 	it("link is idempotent on repeat calls", async () => {
@@ -378,6 +630,32 @@ describe("client/resource linking", () => {
 		).rejects.toMatchObject({
 			body: expect.objectContaining({ error: "not_found" }),
 		});
+	});
+
+	it("unknown client 404 does not create resource row in linkClientResourceEndpoint", async () => {
+		const identifier = "https://api.example.com/lazy-no-client";
+		const instance = await boot({
+			resources: [identifier],
+		});
+		const headers = await signedInHeaders(instance);
+
+		await expect(
+			instance.auth.api.adminLinkClientResource({
+				params: {
+					identifier,
+					client_id: "nonexistent-client",
+				},
+				headers,
+			}),
+		).rejects.toMatchObject({
+			body: expect.objectContaining({ error: "not_found" }),
+		});
+
+		const dbRow = await instance.ctx.adapter.findOne({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(dbRow).toBeNull();
 	});
 
 	// Compound uniqueness on (clientId, resourceId) makes concurrent link

@@ -24,7 +24,7 @@ import {
 } from "./oauthClient/client-credentials";
 import { assertClientPrivileges } from "./oauthClient/privileges";
 import { assertResourcePrivileges } from "./oauthResource/privileges";
-import { getResource } from "./resources";
+import { ensureResourceRow } from "./resources";
 import type {
 	ClientRegistrationRequest,
 	OAuthClientAdministrativeResponse,
@@ -219,7 +219,7 @@ async function resolveClientRegistrationResources(
 	const defaultResources = opts.clientRegistrationDefaultResources ?? [];
 	const resources = [...new Set([...defaultResources, ...requestedResources])];
 	for (const identifier of resources) {
-		const row = await getResource(ctx, opts, identifier);
+		const row = await ensureResourceRow(ctx, opts, identifier);
 		if (!row) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_target",

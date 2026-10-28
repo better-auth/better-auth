@@ -1,4 +1,3 @@
-import type { AuthContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -6,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
 import {
 	collectResourceInputs,
+	combineResource,
+	getConfiguredResourcesMap,
 	getResource,
+	getResourceCustomClaims,
 	invalidateResourceCache,
-	resetSeedStateForTests,
-	seedResources,
-	seedResourcesOnce,
 } from "./resources";
 import type { OAuthOptions, OAuthResource, Scope } from "./types";
 
@@ -58,17 +57,6 @@ describe("collectResourceInputs", () => {
 	});
 });
 
-/**
- * Helper that boots a fresh in-memory auth instance with the given
- * `oauthProvider` options. Each test gets a clean DB. `loginPage` /
- * `consentPage` are filled with sensible defaults so resource tests only
- * state what's relevant.
- *
- * Better Auth's test harness runs `runMigrations()` AFTER plugin init,
- * so seeding at init silently defers (table doesn't exist yet). The helper
- * runs `seedResources()` explicitly post-migration to give tests the same
- * end state they'd see in production after the first resource request.
- */
 type ResourceTestOptions = Partial<OAuthOptions<Scope[]>>;
 
 const bootWithResourcesOption = async (options: ResourceTestOptions = {}) => {
@@ -80,77 +68,197 @@ const bootWithResourcesOption = async (options: ResourceTestOptions = {}) => {
 	const instance = await getTestInstance({
 		plugins: [jwt(), oauthProvider(resolvedOpts)],
 	});
-	resetSeedStateForTests();
-	const ctx = await instance.auth.$context;
-	await seedResourcesOnce(ctx as unknown as AuthContext, resolvedOpts);
 	return { ...instance, opts: resolvedOpts };
 };
 
-const readResource = async (
-	auth: Awaited<ReturnType<typeof bootWithResourcesOption>>["auth"],
-	identifier: string,
-) =>
-	auth.$context.then((ctx) =>
-		ctx.adapter.findOne<OAuthResource>({
-			model: "oauthResource",
-			where: [{ field: "identifier", value: identifier }],
-		}),
-	);
+describe("combineResource", () => {
+	const identifier = "https://api.example.com/test";
+	const now = new Date(1000);
+	const dbRow: OAuthResource = {
+		id: "db-1",
+		identifier,
+		name: "DB Name",
+		accessTokenTtl: 600,
+		refreshTokenTtl: 1200,
+		signingAlgorithm: "RS256",
+		signingKeyId: "key-1",
+		allowedScopes: ["read"],
+		customClaims: { role: "admin" },
+		dpopBoundAccessTokensRequired: false,
+		disabled: false,
+		policyVersion: 1,
+		metadata: { env: "prod" },
+		createdAt: now,
+		updatedAt: now,
+	};
 
-describe("seedResources (integration via plugin init)", () => {
-	let warnSpy: ReturnType<typeof vi.spyOn>;
+	it("returns dbRow when configured is undefined", () => {
+		expect(combineResource(dbRow, undefined, "insertOnly")).toBe(dbRow);
+		expect(combineResource(dbRow, undefined, "merge")).toBe(dbRow);
+		expect(combineResource(dbRow, undefined, "overwrite")).toBe(dbRow);
+	});
+
+	it("returns configured resource when dbRow is null", () => {
+		const configured = {
+			input: { identifier, name: "Config Name", accessTokenTtl: 300 },
+			resource: {
+				id: identifier,
+				identifier,
+				name: "Config Name",
+				accessTokenTtl: 300,
+				refreshTokenTtl: null,
+				signingAlgorithm: null,
+				signingKeyId: null,
+				allowedScopes: null,
+				customClaims: null,
+				dpopBoundAccessTokensRequired: false,
+				disabled: false,
+				policyVersion: 1,
+				metadata: null,
+				createdAt: new Date(0),
+				updatedAt: new Date(0),
+			},
+		};
+		const result = combineResource(null, configured, "insertOnly");
+		expect(result).toMatchObject({
+			identifier,
+			name: "Config Name",
+			accessTokenTtl: 300,
+		});
+	});
+
+	it("insertOnly returns dbRow unchanged when dbRow exists", () => {
+		const configured = {
+			input: { identifier, name: "New Name", accessTokenTtl: 100 },
+			resource: {
+				id: identifier,
+				identifier,
+				name: "New Name",
+				accessTokenTtl: 100,
+				disabled: false,
+				policyVersion: 1,
+				createdAt: new Date(0),
+				updatedAt: new Date(0),
+			},
+		};
+		const result = combineResource(dbRow, configured, "insertOnly");
+		expect(result).toBe(dbRow);
+		expect(result?.name).toBe("DB Name");
+		expect(result?.accessTokenTtl).toBe(600);
+	});
+
+	it("merge overrides only fields explicitly defined on configured input", () => {
+		const configured = {
+			input: { identifier, accessTokenTtl: 100, customClaims: { extra: true } },
+			resource: {
+				id: identifier,
+				identifier,
+				name: identifier,
+				accessTokenTtl: 100,
+				customClaims: { extra: true },
+				disabled: false,
+				policyVersion: 1,
+				createdAt: new Date(0),
+				updatedAt: new Date(0),
+			},
+		};
+		const result = combineResource(dbRow, configured, "merge");
+		expect(result).toMatchObject({
+			id: "db-1",
+			name: "DB Name",
+			accessTokenTtl: 100,
+			refreshTokenTtl: 1200,
+			signingAlgorithm: "RS256",
+			allowedScopes: ["read"],
+			customClaims: { extra: true },
+		});
+	});
+
+	it("overwrite replaces entire resource while preserving dbRow id and createdAt", () => {
+		const configured = {
+			input: { identifier, accessTokenTtl: 100 },
+			resource: {
+				id: identifier,
+				identifier,
+				name: identifier,
+				accessTokenTtl: 100,
+				refreshTokenTtl: null,
+				signingAlgorithm: null,
+				signingKeyId: null,
+				allowedScopes: null,
+				customClaims: null,
+				dpopBoundAccessTokensRequired: false,
+				disabled: false,
+				policyVersion: 1,
+				metadata: null,
+				createdAt: new Date(0),
+				updatedAt: new Date(0),
+			},
+		};
+		const result = combineResource(dbRow, configured, "overwrite");
+		expect(result).toMatchObject({
+			id: "db-1",
+			createdAt: now,
+			name: identifier,
+			accessTokenTtl: 100,
+			allowedScopes: null,
+			customClaims: null,
+		});
+	});
+});
+
+describe("getResource and in-memory resolution", () => {
 	let infoSpy: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(() => {
-		warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
 		infoSpy = vi.spyOn(logger, "info").mockImplementation(() => undefined);
 	});
 
 	afterEach(() => {
-		warnSpy.mockRestore();
 		infoSpy.mockRestore();
+		invalidateResourceCache();
 	});
 
-	it("seeds nothing when no resource config is set", async () => {
-		const { auth } = await bootWithResourcesOption({});
-		const row = await readResource(auth, "https://nope.example.com");
+	it("returns null when resource is neither in config nor in DB", async () => {
+		const { auth, opts } = await bootWithResourcesOption({});
+		const ctx = await auth.$context;
+		const row = await getResource(
+			{ context: ctx } as never,
+			opts,
+			"https://nope.example.com",
+		);
 		expect(row).toBeNull();
 	});
 
-	it("seeds string-form `resources` entries with plugin defaults", async () => {
-		const { auth } = await bootWithResourcesOption({
-			resources: ["https://api.example.com"],
-		});
-		const row = await readResource(auth, "https://api.example.com");
-		expect(row).toMatchObject({
-			identifier: "https://api.example.com",
-			name: "https://api.example.com",
-			disabled: false,
-			policyVersion: 1,
-			accessTokenTtl: null,
-			signingAlgorithm: null,
-			allowedScopes: null,
-		});
-	});
-
-	it("seeds object-form `resources` entries with explicit policy", async () => {
-		const { auth } = await bootWithResourcesOption({
+	it("returns configured resource in memory when not in DB", async () => {
+		const { auth, opts } = await bootWithResourcesOption({
 			resources: [
 				{
 					identifier: "https://api.example.com/admin",
 					name: "Admin API",
 					accessTokenTtl: 300,
-					allowedScopes: ["admin:read", "admin:write"],
+					allowedScopes: ["admin:read"],
 					signingAlgorithm: "EdDSA",
 				},
 			],
 		});
-		const row = await readResource(auth, "https://api.example.com/admin");
-		expect(row).toMatchObject({
+		const ctx = await auth.$context;
+		const dbRow = await ctx.adapter.findOne({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: "https://api.example.com/admin" }],
+		});
+		expect(dbRow).toBeNull();
+
+		const res = await getResource(
+			{ context: ctx } as never,
+			opts,
+			"https://api.example.com/admin",
+		);
+		expect(res).toMatchObject({
 			identifier: "https://api.example.com/admin",
 			name: "Admin API",
 			accessTokenTtl: 300,
-			allowedScopes: ["admin:read", "admin:write"],
+			allowedScopes: ["admin:read"],
 			signingAlgorithm: "EdDSA",
 		});
 	});
@@ -166,161 +274,208 @@ describe("seedResources (integration via plugin init)", () => {
 		expect(allCalls).toMatch(/default/);
 	});
 
-	it("insertOnly (default) preserves existing rows when re-seeded", async () => {
-		const identifier = "https://api.example.com/insert-only";
-
-		// First boot creates the row.
-		const first = await bootWithResourcesOption({
-			resources: [{ identifier, name: "Original" }],
-		});
-		const firstCtx = await first.auth.$context;
-		await firstCtx.adapter.update({
-			model: "oauthResource",
-			where: [{ field: "identifier", value: identifier }],
-			update: { name: "Admin edited" },
-		});
-
-		// Simulate a reboot by re-running seedResources against the same context
-		// with a renamed value — insertOnly should leave the admin edit intact.
-		await seedResources(
-			firstCtx as unknown as AuthContext,
-			{
-				loginPage: "/login",
-				consentPage: "/consent",
-				resources: [{ identifier, name: "Config rename attempt" }],
-			} as OAuthOptions<Scope[]>,
-		);
-
-		const row = await readResource(first.auth, identifier);
-		expect(row?.name).toBe("Admin edited");
-	});
-
-	it("merge mode updates only specified fields on existing rows", async () => {
-		const identifier = "https://api.example.com/merge";
-
-		const first = await bootWithResourcesOption({
-			resources: [
-				{
-					identifier,
-					name: "Original",
-					accessTokenTtl: 600,
-					allowedScopes: ["a", "b"],
-				},
-			],
-		});
-		const firstCtx = await first.auth.$context;
-
-		await seedResources(
-			firstCtx as unknown as AuthContext,
-			{
-				loginPage: "/login",
-				consentPage: "/consent",
-				resources: [{ identifier, accessTokenTtl: 120 }],
-				resourceSeedMode: "merge",
-			} as OAuthOptions<Scope[]>,
-		);
-
-		const row = await readResource(first.auth, identifier);
-		expect(row).toMatchObject({
-			name: "Original", // untouched
-			accessTokenTtl: 120, // updated
-			allowedScopes: ["a", "b"], // untouched
-		});
-	});
-
-	it("overwrite mode replaces every field on existing rows", async () => {
-		const identifier = "https://api.example.com/overwrite";
-
-		const first = await bootWithResourcesOption({
-			resources: [
-				{
-					identifier,
-					name: "Original",
-					accessTokenTtl: 600,
-					allowedScopes: ["a", "b"],
-				},
-			],
-		});
-		const firstCtx = await first.auth.$context;
-
-		await seedResources(
-			firstCtx as unknown as AuthContext,
-			{
-				loginPage: "/login",
-				consentPage: "/consent",
-				resources: [{ identifier, accessTokenTtl: 120 }],
-				resourceSeedMode: "overwrite",
-			} as OAuthOptions<Scope[]>,
-		);
-
-		const row = await readResource(first.auth, identifier);
-		expect(row).toMatchObject({
-			name: identifier, // overwrite uses identifier as default name
-			accessTokenTtl: 120,
-			allowedScopes: null, // cleared
-		});
-	});
-});
-
-describe("getResource + cache", () => {
-	afterEach(() => {
-		invalidateResourceCache();
-	});
-
-	it("returns the row from the DB when cache is not opt-in", async () => {
-		const { auth } = await bootWithResourcesOption({
-			resources: ["https://api.example.com/uncached"],
-		});
-		const ctx = await auth.$context;
-
-		const row = await getResource(
-			{ context: ctx } as never,
-			{ resources: ["https://api.example.com/uncached"] } as never,
-			"https://api.example.com/uncached",
-		);
-		expect(row?.identifier).toBe("https://api.example.com/uncached");
-	});
-
 	it("caches when identifier is in cachedResources", async () => {
 		const identifier = "https://api.example.com/cached";
 		const cachedResources = new Set([identifier]);
-		const { auth } = await bootWithResourcesOption({
+		const { auth, opts } = await bootWithResourcesOption({
 			resources: [identifier],
 			cachedResources,
 		});
 		const ctx = await auth.$context;
-		const opts = { resources: [identifier], cachedResources } as never;
 
-		// First lookup populates the cache.
+		// Create row in DB first
+		await ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier,
+				name: "Original in DB",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			} as never,
+		});
+
+		// First lookup populates the cache
 		const first = await getResource(
 			{ context: ctx } as never,
 			opts,
 			identifier,
 		);
-		expect(first?.identifier).toBe(identifier);
+		expect(first?.name).toBe("Original in DB");
 
-		// Mutate the row directly in the DB.
+		// Mutate row in DB directly
 		await ctx.adapter.update({
 			model: "oauthResource",
 			where: [{ field: "identifier", value: identifier }],
-			update: { name: "Mutated externally" },
+			update: { name: "Mutated in DB" },
 		});
 
-		// Cached lookup still returns the old name (cache wins until invalidation).
+		// Cached lookup still returns the pre-mutation value
 		const second = await getResource(
 			{ context: ctx } as never,
 			opts,
 			identifier,
 		);
-		expect(second?.name).toBe(identifier); // pre-mutation value
+		expect(second?.name).toBe("Original in DB");
 
-		// After invalidation the next lookup hits the DB.
+		// After invalidation, the lookup reads the updated DB row
 		invalidateResourceCache(identifier);
 		const third = await getResource(
 			{ context: ctx } as never,
 			opts,
 			identifier,
 		);
-		expect(third?.name).toBe("Mutated externally");
+		expect(third?.name).toBe("Mutated in DB");
+	});
+});
+
+describe("getResourceCustomClaims", () => {
+	it("resolves custom claims from in-memory configured resources", async () => {
+		const { auth, opts } = await bootWithResourcesOption({
+			resources: [
+				{
+					identifier: "https://api.example.com/claims-a",
+					customClaims: { tenant: "123", role: "viewer" },
+				},
+				{
+					identifier: "https://api.example.com/claims-b",
+					customClaims: { role: "admin", plan: "pro" },
+				},
+			],
+		});
+		const ctx = await auth.$context;
+
+		const claims = await getResourceCustomClaims(
+			{ context: ctx } as never,
+			opts,
+			["https://api.example.com/claims-a", "https://api.example.com/claims-b"],
+		);
+		expect(claims).toEqual({
+			tenant: "123",
+			role: "admin",
+			plan: "pro",
+		});
+	});
+});
+
+describe("getConfiguredResourcesMap validator priority", () => {
+	let warnSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+	});
+
+	afterEach(() => {
+		warnSpy.mockRestore();
+	});
+
+	it("honors custom identifierValidator and bypasses ResourceUriSchema", () => {
+		const nonUriIdentifier = "custom-identifier-without-scheme";
+		const opts: OAuthOptions<Scope[]> = {
+			resources: [nonUriIdentifier],
+			identifierValidator: (id: string) => id === nonUriIdentifier,
+		} as never;
+
+		const map = getConfiguredResourcesMap(opts);
+		expect(map.has(nonUriIdentifier)).toBe(true);
+		expect(map.get(nonUriIdentifier)?.resource.identifier).toBe(
+			nonUriIdentifier,
+		);
+		expect(warnSpy).not.toHaveBeenCalled();
+	});
+
+	it("skips resource when custom identifierValidator returns false", () => {
+		const blocked = "https://blocked.example.com/api";
+		const opts: OAuthOptions<Scope[]> = {
+			resources: [blocked],
+			identifierValidator: () => false,
+		} as never;
+
+		const map = getConfiguredResourcesMap(opts);
+		expect(map.has(blocked)).toBe(false);
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining("custom validator returned false"),
+		);
+	});
+
+	it("falls back to ResourceUriSchema when no custom identifierValidator is provided", () => {
+		const invalidUri = "not a valid uri";
+		const opts: OAuthOptions<Scope[]> = {
+			resources: [invalidUri],
+		} as never;
+
+		const map = getConfiguredResourcesMap(opts);
+		expect(map.has(invalidUri)).toBe(false);
+		expect(warnSpy).toHaveBeenCalledWith(
+			expect.stringContaining("absolute URI"),
+		);
+	});
+});
+
+describe("multi-instance resourceCache isolation", () => {
+	afterEach(() => {
+		invalidateResourceCache();
+	});
+
+	it("stores DB rows only and avoids policy bleed across auth instances", async () => {
+		const identifier = "https://api.example.com/shared";
+		const cachedResources = new Set([identifier]);
+
+		// Boot first instance with merge mode and specific TTL
+		const { auth: authA, opts: optsA } = await bootWithResourcesOption({
+			resources: [
+				{
+					identifier,
+					name: "Instance A Name",
+					accessTokenTtl: 111,
+				},
+			],
+			resourceSeedMode: "merge",
+			cachedResources,
+		});
+		const ctxA = await authA.$context;
+
+		// Seed row in the DB with null TTL
+		await ctxA.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier,
+				name: "DB Base Name",
+				accessTokenTtl: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			} as never,
+		});
+
+		// Boot second instance with different configured policy on the same identifier
+		const { auth: authB, opts: optsB } = await bootWithResourcesOption({
+			resources: [
+				{
+					identifier,
+					name: "Instance B Name",
+					accessTokenTtl: 999,
+				},
+			],
+			resourceSeedMode: "merge",
+			cachedResources,
+		});
+		const ctxB = await authB.$context;
+
+		// Instance A lookup populates resourceCache with the DB row
+		const resA = await getResource(
+			{ context: ctxA } as never,
+			optsA,
+			identifier,
+		);
+		expect(resA?.accessTokenTtl).toBe(111);
+		expect(resA?.name).toBe("Instance A Name");
+
+		// Instance B lookup hits the cached DB row and combines with Instance B's configuration
+		const resB = await getResource(
+			{ context: ctxB } as never,
+			optsB,
+			identifier,
+		);
+		expect(resB?.accessTokenTtl).toBe(999);
+		expect(resB?.name).toBe("Instance B Name");
 	});
 });

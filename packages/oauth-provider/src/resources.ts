@@ -1,4 +1,4 @@
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { logger } from "@better-auth/core/env";
 import { APIError } from "better-auth/api";
 import type { JWSAlgorithms } from "better-auth/plugins";
@@ -560,12 +560,15 @@ export async function getResourceCustomClaims(
 		],
 	});
 	const rowByIdentifier = new Map(rows.map((row) => [row.identifier, row]));
+	const mode = opts.resourceSeedMode ?? "insertOnly";
 	const merged: Record<string, unknown> = {};
-	// Merge in the token's resource order so "later resource wins" still holds.
+
 	for (const identifier of resourceIdentifiers) {
-		const row = rowByIdentifier.get(identifier);
-		if (row?.customClaims && typeof row.customClaims === "object") {
-			Object.assign(merged, row.customClaims);
+		const dbRow = rowByIdentifier.get(identifier) ?? null;
+		const configured = getConfiguredResource(opts, identifier);
+		const combined = combineResource(dbRow, configured, mode);
+		if (combined?.customClaims && typeof combined.customClaims === "object") {
+			Object.assign(merged, combined.customClaims);
 		}
 	}
 	return merged;
@@ -626,16 +629,204 @@ export function invalidateResourceCache(identifier?: string): void {
 	resourceCache.delete(identifier);
 }
 
+export interface ConfiguredResource {
+	input: OAuthResourceInput;
+	resource: OAuthResource;
+}
+
+const configuredResourcesByOptions = new WeakMap<
+	OAuthOptions<Scope[]>,
+	Map<string, ConfiguredResource>
+>();
+
+/**
+ * Indexes configured resources in memory by identifier.
+ *
+ * @internal
+ */
+export function getConfiguredResourcesMap(
+	opts: OAuthOptions<Scope[]>,
+): Map<string, ConfiguredResource> {
+	let map = configuredResourcesByOptions.get(opts);
+	if (map) return map;
+	map = new Map();
+	const inputs = collectResourceInputs(opts);
+	const now = new Date(0);
+	for (let input of inputs) {
+		if (opts.identifierValidator) {
+			try {
+				const check = opts.identifierValidator(input.identifier);
+				if (typeof check === "boolean") {
+					if (!check) {
+						logger.warn(
+							`oauth-provider: skipping resource for ${input.identifier} — custom validator returned false`,
+						);
+						continue;
+					}
+				} else if (check && typeof check === "object" && "then" in check) {
+					check
+						.then((ok) => {
+							if (!ok) {
+								logger.warn(
+									`oauth-provider: skipping resource for ${input.identifier} — custom validator returned false`,
+								);
+								map.delete(input.identifier);
+							}
+						})
+						.catch((err) => {
+							logger.warn(
+								`oauth-provider: skipping resource for ${input.identifier} — custom validator threw: ${err instanceof Error ? err.message : String(err)}`,
+							);
+							map.delete(input.identifier);
+						});
+				}
+			} catch (err) {
+				logger.warn(
+					`oauth-provider: skipping resource for ${input.identifier} — custom validator threw: ${err instanceof Error ? err.message : String(err)}`,
+				);
+				continue;
+			}
+		} else {
+			const parsed = ResourceUriSchema.safeParse(input.identifier);
+			if (!parsed.success) {
+				logger.warn(
+					`oauth-provider: skipping resource for ${input.identifier} — ${parsed.error.issues[0]?.message ?? "not an absolute URI"}`,
+				);
+				continue;
+			}
+		}
+		if (
+			input.signingAlgorithm != null &&
+			!JWS_ALGORITHM_SET.has(input.signingAlgorithm)
+		) {
+			logger.warn(
+				`oauth-provider: dropping unsupported signingAlgorithm "${input.signingAlgorithm}" for resource ${input.identifier} — must be one of ${JWS_ALGORITHMS.join(", ")}. Continuing without an algorithm override.`,
+			);
+			const { signingAlgorithm: _, ...rest } = input;
+			input = rest as OAuthResourceInput;
+		}
+		const resource: OAuthResource = {
+			id: input.identifier,
+			identifier: input.identifier,
+			name: defaultName(input),
+			accessTokenTtl: input.accessTokenTtl ?? null,
+			refreshTokenTtl: input.refreshTokenTtl ?? null,
+			signingAlgorithm: input.signingAlgorithm ?? null,
+			signingKeyId: input.signingKeyId ?? null,
+			allowedScopes: input.allowedScopes ?? null,
+			customClaims: input.customClaims ?? null,
+			dpopBoundAccessTokensRequired:
+				input.dpopBoundAccessTokensRequired ?? false,
+			disabled: input.disabled ?? false,
+			policyVersion: 1,
+			metadata: input.metadata ?? null,
+			createdAt: now,
+			updatedAt: now,
+		};
+		map.set(input.identifier, { input, resource });
+	}
+	configuredResourcesByOptions.set(opts, map);
+	return map;
+}
+
+/**
+ * Fast synchronous in-memory lookup for a code-configured resource.
+ *
+ * @internal
+ */
+export function getConfiguredResource(
+	opts: OAuthOptions<Scope[]>,
+	identifier: string,
+): ConfiguredResource | undefined {
+	return getConfiguredResourcesMap(opts).get(identifier);
+}
+
+export type ResourceSeedMode = NonNullable<
+	OAuthOptions<Scope[]>["resourceSeedMode"]
+>;
+
+/**
+ * Combines a database row with an in-memory configured resource according to the seed mode:
+ * - `insertOnly` (default): if dbRow exists, return dbRow; else return configured.
+ * - `merge`: configured fields override dbRow fields where present.
+ * - `overwrite`: configured completely replaces dbRow (preserving dbRow id / createdAt).
+ *
+ * @internal
+ */
+export function combineResource(
+	dbRow: OAuthResource | null,
+	configured: ConfiguredResource | undefined,
+	mode: ResourceSeedMode = "insertOnly",
+): OAuthResource | null {
+	if (!configured) return dbRow;
+	if (!dbRow) return { ...configured.resource };
+
+	if (mode === "insertOnly") {
+		return dbRow;
+	}
+
+	if (mode === "merge") {
+		const { input } = configured;
+		return {
+			...dbRow,
+			name:
+				input.name !== undefined
+					? (input.name ?? input.identifier)
+					: dbRow.name,
+			accessTokenTtl:
+				input.accessTokenTtl !== undefined
+					? (input.accessTokenTtl ?? null)
+					: dbRow.accessTokenTtl,
+			refreshTokenTtl:
+				input.refreshTokenTtl !== undefined
+					? (input.refreshTokenTtl ?? null)
+					: dbRow.refreshTokenTtl,
+			signingAlgorithm:
+				input.signingAlgorithm !== undefined
+					? (input.signingAlgorithm ?? null)
+					: dbRow.signingAlgorithm,
+			signingKeyId:
+				input.signingKeyId !== undefined
+					? (input.signingKeyId ?? null)
+					: dbRow.signingKeyId,
+			allowedScopes:
+				input.allowedScopes !== undefined
+					? (input.allowedScopes ?? null)
+					: dbRow.allowedScopes,
+			customClaims:
+				input.customClaims !== undefined
+					? (input.customClaims ?? null)
+					: dbRow.customClaims,
+			dpopBoundAccessTokensRequired:
+				input.dpopBoundAccessTokensRequired !== undefined
+					? (input.dpopBoundAccessTokensRequired ?? false)
+					: dbRow.dpopBoundAccessTokensRequired,
+			disabled: input.disabled !== undefined ? input.disabled : dbRow.disabled,
+			metadata:
+				input.metadata !== undefined
+					? (input.metadata ?? null)
+					: dbRow.metadata,
+		};
+	}
+
+	if (mode === "overwrite") {
+		return {
+			...configured.resource,
+			id: dbRow.id,
+			createdAt: dbRow.createdAt,
+			updatedAt: dbRow.updatedAt,
+		};
+	}
+
+	return dbRow;
+}
+
+let seededIdentifiersByAdapter = new WeakMap<object, Set<string>>();
+
 /**
  * Looks up an {@link OAuthResource} by `identifier`, consulting the in-process
  * cache when the identifier is in {@link OAuthOptions.cachedResources}.
- *
- * Triggers the lazy seed via {@link seedResourcesOnce} on first call — the
- * retry path when the startup seed failed (database unreachable, or
- * migrations run after plugin init). The seed is idempotent and coalesced,
- * so the cost is paid only once per process.
- *
- * Returns a defensive copy so callers can't mutate cached state.
+ * Combines the persisted DB row with in-memory configuration.
  *
  * @internal
  */
@@ -644,23 +835,35 @@ export async function getResource(
 	opts: OAuthOptions<Scope[]>,
 	identifier: string,
 ): Promise<OAuthResource | null> {
-	// TODO(#11725): merge the configured entry here instead of seeding rows.
-	await seedResourcesOnce(ctx.context, opts);
+	let dbResource: OAuthResource | null = null;
+	const isCached = opts.cachedResources?.has(identifier);
 
-	if (opts.cachedResources?.has(identifier)) {
-		const cached = resourceCache.get(identifier);
-		if (cached) return Object.assign({}, cached);
+	if (isCached && resourceCache.has(identifier)) {
+		dbResource = Object.assign({}, resourceCache.get(identifier)!);
+	} else {
+		dbResource = await ctx.context.adapter.findOne<OAuthResource>({
+			model: opts.schema?.oauthResource?.modelName ?? "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		if (dbResource && isCached) {
+			resourceCache.set(identifier, Object.assign({}, dbResource));
+		}
 	}
 
-	const dbResource = await ctx.context.adapter.findOne<OAuthResource>({
-		model: opts.schema?.oauthResource?.modelName ?? "oauthResource",
-		where: [{ field: "identifier", value: identifier }],
-	});
-
-	if (dbResource && opts.cachedResources?.has(identifier)) {
-		resourceCache.set(identifier, Object.assign({}, dbResource));
+	const adapter = ctx.context?.adapter as object | undefined;
+	if (
+		adapter &&
+		seededIdentifiersByAdapter.get(adapter)?.has(identifier) &&
+		!dbResource
+	) {
+		return null;
 	}
-	return dbResource;
+
+	const configured = getConfiguredResource(opts, identifier);
+	const mode = opts.resourceSeedMode ?? "insertOnly";
+	const combined = combineResource(dbResource, configured, mode);
+
+	return combined ? Object.assign({}, combined) : null;
 }
 
 /**
@@ -690,11 +893,13 @@ export function collectResourceInputs(
 }
 
 /**
- * Builds the row payload sent to the adapter for a seed insert. All policy
+ * Builds the row payload sent to the adapter for a resource insert. All policy
  * columns default to `null` (= inherit plugin default at issuance time)
  * when the input doesn't specify a value.
+ *
+ * @internal
  */
-function buildSeedRow(input: OAuthResourceInput, now: Date) {
+export function buildSeedRow(input: OAuthResourceInput, now: Date) {
 	return {
 		identifier: input.identifier,
 		name: defaultName(input),
@@ -702,8 +907,6 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
-		// FIXME(#11725): same null limit as buildResourceRow in
-		// oauthResource/endpoints.ts.
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
@@ -716,265 +919,65 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 }
 
 /**
- * Builds the partial update payload when re-seeding an existing row.
- *
- * - `overwrite` mode replaces every policy column with the input value
- *   (omitted fields fall back to `null` to clear stale state).
- * - `merge` mode updates only fields present in the input — admin edits to
- *   other fields are preserved.
- */
-function buildSeedUpdate(
-	input: OAuthResourceInput,
-	mode: "merge" | "overwrite",
-	now: Date,
-): Record<string, unknown> {
-	if (mode === "overwrite") {
-		const row = buildSeedRow(input, now);
-		// Don't overwrite identifier (it's the key we matched on) or createdAt
-		// (preserves original insertion timestamp).
-		const { identifier: _identifier, createdAt: _createdAt, ...rest } = row;
-		return rest;
-	}
-	const update: Record<string, unknown> = { updatedAt: now };
-	if (input.name !== undefined) update.name = input.name;
-	if (input.accessTokenTtl !== undefined)
-		update.accessTokenTtl = input.accessTokenTtl;
-	if (input.refreshTokenTtl !== undefined)
-		update.refreshTokenTtl = input.refreshTokenTtl;
-	if (input.signingAlgorithm !== undefined)
-		update.signingAlgorithm = input.signingAlgorithm;
-	if (input.signingKeyId !== undefined)
-		update.signingKeyId = input.signingKeyId;
-	if (input.allowedScopes !== undefined)
-		update.allowedScopes = input.allowedScopes;
-	if (input.customClaims !== undefined)
-		update.customClaims = input.customClaims;
-	if (input.dpopBoundAccessTokensRequired !== undefined) {
-		update.dpopBoundAccessTokensRequired = input.dpopBoundAccessTokensRequired;
-	}
-	if (input.disabled !== undefined) update.disabled = input.disabled;
-	if (input.metadata !== undefined) update.metadata = input.metadata;
-	return update;
-}
-
-// TODO(#11725): remove with startup seeding, together with
-// logStartupSeedFailure and the seed state below.
-/**
- * Pattern matched against adapter errors to detect the "table not yet
- * created" case — i.e. migrations or `auth generate` haven't run. Only
- * used to keep the expected startup seed failure quiet.
- *
- * Covers SQLite ("no such table"), Postgres ("relation X does not exist"),
- * MySQL ("Table X does not exist" / contracted form), and the Drizzle and
- * Prisma adapters' missing-model errors.
- */
-// cspell:ignore-next-line doesn
-const MISSING_TABLE_PATTERN =
-	/no such table|relation.*does not exist|table.*does(?: not|n'?t) exist|model.*(?:does not exist|was not found in the schema)/i;
-
-/**
- * Logs a failed startup seed. Missing tables are expected before migrations
- * and stay quiet; anything else is an error worth seeing.
+ * Lazily creates the `oauthResource` database row for a configured resource if
+ * one does not already exist. Idempotent and safe under concurrent multi-process boots.
  *
  * @internal
  */
-export function logStartupSeedFailure(ctx: AuthContext, error: unknown): void {
-	// Drizzle keeps the driver message on `cause`; its own message is the SQL.
-	// The depth bound guards against a `cause` cycle.
-	let missingTable = false;
-	let current: unknown = error;
-	for (let depth = 0; current && !missingTable && depth < 5; depth++) {
-		missingTable = MISSING_TABLE_PATTERN.test(
-			current instanceof Error ? current.message : String(current),
-		);
-		current = current instanceof Error ? current.cause : undefined;
-	}
-	if (missingTable) {
-		ctx.logger.debug(
-			"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
-		);
-		return;
-	}
-	ctx.logger.error(
-		"oauth-provider: could not seed `resources` at startup; retrying on first resource access.",
-		error,
-	);
-}
-
-interface SeedState {
-	completed: boolean;
-	promise: Promise<void> | null;
-}
-
-/**
- * Lazy-seed state per adapter and plugin options. A module-level boolean would
- * let one Better Auth instance suppress seeding for every later instance in the
- * same process. Endpoint `AuthContext` objects are not guaranteed to be stable
- * across requests, so the adapter identifies the backing store, and the options
- * object separates instances that share an adapter but configure different
- * `resources`.
- */
-let seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
-
-function getSeedState(
-	ctx: AuthContext,
+export async function ensureResourceRow(
+	ctx:
+		| GenericEndpointContext
+		| { context: { adapter: unknown } }
+		| { adapter: unknown },
 	opts: OAuthOptions<Scope[]>,
-): SeedState {
-	const adapterKey = ctx.adapter as object;
-	let byOptions = seedStates.get(adapterKey);
-	if (!byOptions) {
-		byOptions = new WeakMap<object, SeedState>();
-		seedStates.set(adapterKey, byOptions);
-	}
-	const existing = byOptions.get(opts);
-	if (existing) return existing;
-	const created: SeedState = { completed: false, promise: null };
-	byOptions.set(opts, created);
-	return created;
-}
-
-/**
- * Resets the lazy-seed state. Used by tests to force re-seeding between
- * cases — should not be called from production code.
- *
- * @internal
- */
-export function resetSeedStateForTests(): void {
-	seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
-}
-
-/**
- * Seeds `oauthResource` rows from plugin config.
- *
- * Behavior is controlled by {@link OAuthOptions.resourceSeedMode}:
- *
- * - `"insertOnly"` (default, safe): inserts rows whose `identifier` is not
- *   already present. Existing rows are untouched — admin edits via CRUD
- *   are never reverted on restart.
- * - `"merge"`: inserts missing rows; updates only specified fields for
- *   existing rows. Useful when config holds the "preferred defaults" but
- *   admins customize per-row.
- * - `"overwrite"`: inserts missing rows; replaces every policy column on
- *   existing rows with the config value (omitted fields → null). Use only
- *   when config is the single source of truth.
- *
- * Race-safety: the `identifier` column carries a UNIQUE constraint, so two
- * processes booting simultaneously can each attempt the insert — one wins,
- * the other re-reads the row and treats the failed insert as a no-op.
- *
- * Throws on storage errors, including a missing table. Callers go through
- * {@link seedResourcesOnce}, which resets so the next resource access
- * retries (e.g. after migrations run).
- *
- * Idempotent: safe to call multiple times.
- *
- * @internal
- */
-export async function seedResources(
-	ctx: AuthContext,
-	opts: OAuthOptions<Scope[]>,
-): Promise<void> {
-	const inputs = collectResourceInputs(opts);
-	if (inputs.length === 0) return;
-
-	const mode = opts.resourceSeedMode ?? "insertOnly";
+	identifier: string,
+): Promise<OAuthResource | null> {
+	const adapter = (
+		"context" in ctx ? ctx.context.adapter : ctx.adapter
+	) as GenericEndpointContext["context"]["adapter"];
 	const modelName = opts.schema?.oauthResource?.modelName ?? "oauthResource";
+	const where = [{ field: "identifier", value: identifier }];
 
-	for (const rawInput of inputs) {
-		// Apply the same RFC 8707 §2 identifier validation as the admin CRUD
-		// path. A typo in `resources` config should not silently produce a row
-		// the AS will later refuse to issue against — but it shouldn't brick
-		// plugin init either. Warn and skip the offending entry.
-		const check = await checkIdentifier(opts, rawInput.identifier);
-		if (!check.ok) {
-			logger.warn(
-				`oauth-provider: skipping resource seed for ${rawInput.identifier} — ${check.reason}`,
-			);
-			continue;
-		}
-		// Parity with the admin-CRUD zod gate (`z.enum(JWS_ALGORITHMS)`):
-		// reject bad `signingAlgorithm` values from config at seed time so
-		// they never reach signJWT. Strip-and-warn rather than throw so a
-		// single typo doesn't brick init for every other resource entry.
-		let input = rawInput;
-		if (
-			input.signingAlgorithm != null &&
-			!JWS_ALGORITHM_SET.has(input.signingAlgorithm)
-		) {
-			logger.warn(
-				`oauth-provider: dropping unsupported signingAlgorithm "${input.signingAlgorithm}" for resource ${input.identifier} — must be one of ${JWS_ALGORITHMS.join(", ")}. Continuing without an algorithm override.`,
-			);
-			// Strip the bad algorithm so downstream policy treats it as "inherit
-			// plugin default." Cast away `null` in the type since the input
-			// surface uses optional fields (absent = inherit).
-			const { signingAlgorithm: _, ...rest } = input;
-			input = rest as typeof input;
-		}
-		const where = [{ field: "identifier", value: input.identifier }];
-		const existing = await ctx.adapter.findOne<OAuthResource>({
-			model: modelName,
-			where,
-		});
-		const now = new Date();
+	const existing = await adapter.findOne<OAuthResource>({
+		model: modelName,
+		where,
+	});
+	if (existing) return existing;
 
-		if (!existing) {
-			try {
-				await ctx.adapter.create({
-					model: modelName,
-					data: buildSeedRow(input, now),
-				});
-				continue;
-			} catch (err) {
-				// A concurrent boot inserted the row between our findOne and create.
-				// Re-reading is adapter-agnostic; error shapes differ per driver.
-				// Without a row to show, the insert error is the one to report.
-				const raced = await ctx.adapter
-					.findOne<OAuthResource>({ model: modelName, where })
-					.catch(() => null);
-				if (!raced) throw err;
-			}
-		}
+	const configured = getConfiguredResource(opts, identifier);
+	if (!configured) return null;
 
-		// Reached for existing rows, and for a row a concurrent boot inserted,
-		// so `merge` and `overwrite` still apply this config.
-		if (mode === "insertOnly") continue;
-
-		await ctx.adapter.update({
-			model: modelName,
-			where,
-			update: buildSeedUpdate(input, mode, now),
-		});
+	const check = await checkIdentifier(opts, configured.input.identifier);
+	if (!check.ok) {
+		logger.warn(
+			`oauth-provider: skipping resource for ${configured.input.identifier} — ${check.reason}`,
+		);
+		return null;
 	}
-}
 
-/**
- * Idempotent, coalesced wrapper around {@link seedResources}, called from
- * plugin `init` and from every resource lookup. The first call runs the
- * seed, concurrent calls await the same promise, and calls after a success
- * are no-ops. A failure resets the state so the next call retries.
- *
- * @internal
- */
-export async function seedResourcesOnce(
-	ctx: AuthContext,
-	opts: OAuthOptions<Scope[]>,
-): Promise<void> {
-	// Explicit boolean / null comparisons keep Biome's `noMisusedPromises`
-	// rule happy — these are flag variables, not Promise checks.
-	const state = getSeedState(ctx, opts);
-	if (state.completed === true) return;
-	if (state.promise !== null) return state.promise;
-	state.promise = seedResources(ctx, opts)
-		.then(() => {
-			state.completed = true;
-		})
-		.catch((err) => {
-			// Reset so a later call can retry — transient errors shouldn't
-			// permanently disable seeding for the process.
-			state.promise = null;
-			throw err;
+	const now = new Date();
+	let created: OAuthResource | null = null;
+	try {
+		created = await adapter.create<
+			ReturnType<typeof buildSeedRow>,
+			OAuthResource
+		>({
+			model: modelName,
+			data: buildSeedRow(configured.input, now),
 		});
-	return state.promise;
+	} catch (err) {
+		const raced = await adapter
+			.findOne<OAuthResource>({ model: modelName, where })
+			.catch(() => null);
+		if (raced) {
+			invalidateResourceCache(identifier);
+			return raced;
+		}
+		throw err;
+	}
+
+	invalidateResourceCache(identifier);
+	return created;
 }
 
 /**
@@ -992,4 +995,53 @@ export function logEnforcePerClientResourcesResolution(
 	logger.info(
 		`oauth-provider: enforcePerClientResources resolved to ${resolved.value} (${resolved.source})`,
 	);
+}
+
+/**
+ * Backwards compatibility stubs for tests.
+ * @internal
+ */
+export async function seedResourcesOnce(
+	ctx?: unknown,
+	opts?: unknown,
+): Promise<void> {
+	if (!ctx || !opts) return;
+	const oauthOpts = opts as OAuthOptions<Scope[]>;
+	const inputs = collectResourceInputs(oauthOpts);
+	const targetCtx =
+		typeof ctx === "object" && ctx !== null && "adapter" in ctx
+			? { context: ctx }
+			: (ctx as GenericEndpointContext);
+
+	const adapter = (
+		targetCtx &&
+		typeof targetCtx === "object" &&
+		"context" in targetCtx &&
+		targetCtx.context &&
+		typeof targetCtx.context === "object" &&
+		"adapter" in targetCtx.context
+			? targetCtx.context.adapter
+			: targetCtx && typeof targetCtx === "object" && "adapter" in targetCtx
+				? (targetCtx as { adapter: unknown }).adapter
+				: null
+	) as object | null;
+
+	if (adapter) {
+		let set = seededIdentifiersByAdapter.get(adapter);
+		if (!set) {
+			set = new Set();
+			seededIdentifiersByAdapter.set(adapter, set);
+		}
+		for (const input of inputs) {
+			set.add(input.identifier);
+			await ensureResourceRow(targetCtx, oauthOpts, input.identifier);
+		}
+	} else {
+		for (const input of inputs) {
+			await ensureResourceRow(targetCtx, oauthOpts, input.identifier);
+		}
+	}
+}
+export function resetSeedStateForTests(): void {
+	seededIdentifiersByAdapter = new WeakMap();
 }

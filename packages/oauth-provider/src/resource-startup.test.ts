@@ -4,6 +4,7 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
+import { getResource } from "./resources";
 import type { OAuthOptions, OAuthResourceInput, Scope } from "./types";
 
 const resource = "https://api.example.com/mcp";
@@ -53,25 +54,47 @@ async function bootWithResourceFault(
 	const database = shared?.database ?? createDatabase();
 	const log = vi.fn();
 	const createMemoryAdapter = memoryAdapter(database);
+	let resourceOperations = 0;
 	const createAdapter = (
 		options: Parameters<typeof createMemoryAdapter>[0],
 	) => {
 		const adapter = createMemoryAdapter(options);
 		const intercept =
-			<Operation extends "findOne" | "create">(operation: Operation) =>
-			async (args: Parameters<DBAdapter[Operation]>[0]) => {
-				if (args.model === "oauthResource") {
-					await fault.current?.(operation, adapter);
+			<Operation extends keyof DBAdapter>(operation: Operation) =>
+			async (args: unknown) => {
+				const model = (args as { model?: string })?.model;
+				if (model === "oauthResource") {
+					resourceOperations++;
+					if (operation === "findOne" || operation === "create") {
+						await fault.current?.(operation, adapter);
+					}
 				}
-				return (adapter[operation] as (a: typeof args) => unknown)(args);
+				return (adapter[operation] as (a: unknown) => unknown)(args);
 			};
 		return {
 			...adapter,
 			findOne: intercept("findOne"),
 			create: intercept("create"),
+			findMany: intercept("findMany"),
+			update: intercept("update"),
+			delete: intercept("delete"),
+			deleteMany: intercept("deleteMany"),
 		} as typeof adapter;
 	};
 	const firstResource = resources[0];
+	const opts = {
+		loginPage: "/login",
+		consentPage: "/consent",
+		allowDynamicClientRegistration: true,
+		allowUnauthenticatedClientRegistration: true,
+		resources,
+		resourceSeedMode,
+		clientRegistrationDefaultResources: [
+			typeof firstResource === "string"
+				? firstResource
+				: firstResource!.identifier,
+		],
+	};
 	const instance = await getTestInstance({
 		logger: { level: "debug", log },
 		database: (options) => {
@@ -79,39 +102,64 @@ async function bootWithResourceFault(
 			shared.adapter ??= createAdapter(options);
 			return shared.adapter;
 		},
-		plugins: [
-			jwt(),
-			oauthProvider({
-				loginPage: "/login",
-				consentPage: "/consent",
-				allowDynamicClientRegistration: true,
-				allowUnauthenticatedClientRegistration: true,
-				resources,
-				resourceSeedMode,
-				clientRegistrationDefaultResources: [
-					typeof firstResource === "string"
-						? firstResource
-						: firstResource!.identifier,
-				],
-			}),
-		],
+		plugins: [jwt(), oauthProvider(opts)],
 	});
 	const register = () =>
 		instance.auth.api.registerOAuthClient({
 			body: { redirect_uris: ["https://app.example.com/callback"] },
 		}) as Promise<{ resources?: string[] }>;
 	const errorLogs = () => log.mock.calls.filter(([level]) => level === "error");
-	return { ...instance, database, register, errorLogs };
+	return {
+		...instance,
+		opts,
+		database,
+		register,
+		errorLogs,
+		getResourceOperations: () => resourceOperations,
+	};
 }
 
 /**
- * @see https://github.com/better-auth/better-auth/issues/11538
+ * @see https://github.com/better-auth/better-auth/issues/11725
  */
-describe("resource seeding at startup", () => {
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/10887
-	 */
-	it("keeps the instance usable when storage fails during startup and seeds once it recovers", async () => {
+describe("zero init DB access & lazy resource row creation", () => {
+	it("performs ZERO database queries on oauthResource during init", async () => {
+		const fault = { current: null };
+		const { database, getResourceOperations } = await bootWithResourceFault(
+			fault,
+			{
+				resources: [
+					resource,
+					{
+						identifier: "https://api.example.com/second",
+						accessTokenTtl: 300,
+					},
+				],
+			},
+		);
+
+		// ZERO database queries were made to oauthResource table during initialization
+		expect(getResourceOperations()).toBe(0);
+		// oauthResource table is completely empty on boot
+		expect(database.oauthResource).toHaveLength(0);
+	});
+
+	it("lazily creates oauthResource row on client registration", async () => {
+		const fault = { current: null };
+		const { database, register } = await bootWithResourceFault(fault);
+
+		expect(database.oauthResource).toHaveLength(0);
+		const registered = await register();
+		expect(registered).toMatchObject({
+			resources: [resource],
+		});
+		// Database row was lazily created during client registration
+		expect(database.oauthResource).toHaveLength(1);
+		expect(database.oauthResource[0]?.identifier).toBe(resource);
+		expect(database.oauthClientResource).toHaveLength(1);
+	});
+
+	it("keeps instance usable when storage fails and lazily creates once recovered", async () => {
 		const fault = {
 			current: (() => {
 				throw new TypeError("fetch failed");
@@ -120,19 +168,18 @@ describe("resource seeding at startup", () => {
 		const { auth, signInWithTestUser, register, database, errorLogs } =
 			await bootWithResourceFault(fault);
 
+		// Init succeeded with zero errors despite storage fault because init touches no DB
+		expect(errorLogs()).toEqual([]);
 		const { headers } = await signInWithTestUser();
 		await expect(auth.api.getSession({ headers })).resolves.toMatchObject({
 			user: { email: "test@test.com" },
 		});
-		expect(errorLogs()).toEqual([
-			[
-				"error",
-				expect.stringContaining("could not seed `resources` at startup"),
-				expect.objectContaining({ message: "fetch failed" }),
-			],
-		]);
+		expect(database.oauthResource).toHaveLength(0);
+
+		// Registration fails because storage is broken
 		await expect(register()).rejects.toThrow("fetch failed");
 
+		// Storage recovers; registration succeeds and creates row
 		fault.current = null;
 		await expect(register()).resolves.toMatchObject({
 			resources: [resource],
@@ -140,19 +187,21 @@ describe("resource seeding at startup", () => {
 		expect(database.oauthResource).toHaveLength(1);
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11034
-	 */
-	it("treats a row inserted by a concurrent instance as already seeded", async () => {
+	it("handles concurrent unique collision during lazy row creation", async () => {
 		const fault = {
 			current: (async (operation, adapter) => {
 				if (operation !== "create") return;
 				fault.current = null;
-				// Another instance wins the insert; the driver error is wrapped the
-				// way Drizzle wraps it, with the SQLSTATE only on `cause`.
+				// Another process created the row first
 				await adapter.create({
 					model: "oauthResource",
-					data: { identifier: resource, name: resource, disabled: false },
+					data: {
+						identifier: resource,
+						name: resource,
+						disabled: false,
+						createdAt: new Date(),
+						updatedAt: new Date(),
+					},
 				});
 				throw new Error('Failed query: insert into "oauth_resource" ...', {
 					cause: Object.assign(new Error("duplicate key value"), {
@@ -161,125 +210,86 @@ describe("resource seeding at startup", () => {
 				});
 			}) as ResourceFault | null,
 		};
-		const { register, database, errorLogs } =
-			await bootWithResourceFault(fault);
+		const { register, database } = await bootWithResourceFault(fault);
 
-		expect(errorLogs()).toEqual([]);
-		expect(database.oauthResource).toHaveLength(1);
 		await expect(register()).resolves.toMatchObject({
 			resources: [resource],
 		});
+		expect(database.oauthResource).toHaveLength(1);
 	});
 
-	it("applies merge mode to a row a concurrent instance inserted", async () => {
-		const fault = {
-			current: (async (operation, adapter) => {
-				if (operation !== "create") return;
-				fault.current = null;
-				await adapter.create({
-					model: "oauthResource",
-					data: { identifier: resource, name: resource, disabled: false },
-				});
-				throw new Error("duplicate key value");
-			}) as ResourceFault | null,
-		};
-		const { database } = await bootWithResourceFault(fault, {
-			resources: [{ identifier: resource, accessTokenTtl: 300 }],
+	it("applies insertOnly, merge, and overwrite modes on lookup", async () => {
+		const id = "https://api.example.com/modes";
+		const fault = { current: null };
+
+		// 1. insertOnly: DB row exists, DB row values are preserved
+		const instInsertOnly = await bootWithResourceFault(fault, {
+			resources: [
+				{ identifier: id, name: "Configured Name", accessTokenTtl: 300 },
+			],
+			resourceSeedMode: "insertOnly",
+		});
+		instInsertOnly.database.oauthResource.push({
+			id: "row-1",
+			identifier: id,
+			name: "Admin DB Name",
+			accessTokenTtl: 600,
+			disabled: false,
+			createdAt: new Date(1000),
+			updatedAt: new Date(1000),
+		});
+		const resInsertOnly = await getResource(
+			{ context: await instInsertOnly.auth.$context } as never,
+			instInsertOnly.opts,
+			id,
+		);
+		expect(resInsertOnly?.name).toBe("Admin DB Name");
+		expect(resInsertOnly?.accessTokenTtl).toBe(600);
+
+		// 2. merge: configured fields override DB row fields
+		const instMerge = await bootWithResourceFault(fault, {
+			resources: [{ identifier: id, accessTokenTtl: 120 }],
 			resourceSeedMode: "merge",
 		});
-
-		expect(database.oauthResource).toEqual([
-			expect.objectContaining({ identifier: resource, accessTokenTtl: 300 }),
-		]);
-	});
-
-	it("reports the insert error when the row cannot be re-read", async () => {
-		let creates = 0;
-		const fault = {
-			current: ((operation) => {
-				if (operation === "create") {
-					creates++;
-					throw new Error("value too long for column");
-				}
-				if (creates > 0) throw new Error("connection lost");
-			}) as ResourceFault | null,
-		};
-		const { errorLogs } = await bootWithResourceFault(fault);
-
-		expect(errorLogs()).toEqual([
-			[
-				"error",
-				expect.any(String),
-				expect.objectContaining({ message: "value too long for column" }),
-			],
-		]);
-	});
-
-	it("seeds each instance's resources when instances share an adapter", async () => {
-		const shared = { database: createDatabase() };
-		const fault = { current: null };
-		await bootWithResourceFault(fault, {
-			resources: ["https://api.example.com/first"],
-			shared,
+		instMerge.database.oauthResource.push({
+			id: "row-2",
+			identifier: id,
+			name: "Admin DB Name",
+			accessTokenTtl: 600,
+			disabled: false,
+			createdAt: new Date(1000),
+			updatedAt: new Date(1000),
 		});
-		// The test harness signs up the same user on every boot.
-		for (const model of ["user", "account", "session"] as const) {
-			shared.database[model].length = 0;
-		}
-		await bootWithResourceFault(fault, {
-			resources: ["https://api.example.com/second"],
-			shared,
+		const resMerge = await getResource(
+			{ context: await instMerge.auth.$context } as never,
+			instMerge.opts,
+			id,
+		);
+		expect(resMerge?.name).toBe("Admin DB Name"); // preserved
+		expect(resMerge?.accessTokenTtl).toBe(120); // overridden
+
+		// 3. overwrite: configured completely replaces DB row, preserving id & createdAt
+		const instOverwrite = await bootWithResourceFault(fault, {
+			resources: [{ identifier: id, accessTokenTtl: 120 }],
+			resourceSeedMode: "overwrite",
 		});
-
-		expect(
-			shared.database.oauthResource.map((row) => row.identifier).sort(),
-		).toEqual([
-			"https://api.example.com/first",
-			"https://api.example.com/second",
-		]);
+		instOverwrite.database.oauthResource.push({
+			id: "row-3",
+			identifier: id,
+			name: "Admin DB Name",
+			accessTokenTtl: 600,
+			disabled: false,
+			createdAt: new Date(1000),
+			updatedAt: new Date(1000),
+		});
+		const resOverwrite = await getResource(
+			{ context: await instOverwrite.auth.$context } as never,
+			instOverwrite.opts,
+			id,
+		);
+		expect(resOverwrite?.id).toBe("row-3"); // preserved
+		expect(resOverwrite?.createdAt).toEqual(new Date(1000)); // preserved
+		expect(resOverwrite?.name).toBe(id); // defaultName because input omitted name
+		expect(resOverwrite?.accessTokenTtl).toBe(120);
 	});
-
-	/**
-	 * @see https://github.com/better-auth/better-auth/issues/11294
-	 */
-	it.each([
-		[
-			"Drizzle missing model",
-			new Error(
-				'[# Drizzle Adapter]: The model "oauthResource" was not found in the schema object. Please pass the schema directly to the adapter options.',
-			),
-		],
-		[
-			"Drizzle-wrapped missing relation",
-			new Error('Failed query: select "id" from "oauth_resource" ...', {
-				cause: new Error('relation "oauth_resource" does not exist'),
-			}),
-		],
-		[
-			"Prisma missing model",
-			new Error(
-				"Model oauthResource does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'",
-			),
-		],
-	])(
-		"defers quietly on a %s error and seeds once the table exists",
-		async (_, error) => {
-			const fault = {
-				current: (() => {
-					throw error;
-				}) as ResourceFault | null,
-			};
-			const { register, database, errorLogs } =
-				await bootWithResourceFault(fault);
-
-			expect(errorLogs()).toEqual([]);
-			await expect(register()).rejects.toThrow(error.message);
-
-			fault.current = null;
-			await expect(register()).resolves.toMatchObject({
-				resources: [resource],
-			});
-			expect(database.oauthResource).toHaveLength(1);
-		},
-	);
 });
