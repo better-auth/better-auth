@@ -1533,6 +1533,26 @@ describe("Admin plugin", async () => {
 		expect(res.error?.code).toBe("PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER");
 	});
 
+	it("should not allow updating the user id through update-user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					id: "new-user-id",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("USER_ID_CANNOT_BE_UPDATED");
+
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.findUserById(testNonAdminUser.id);
+		expect(user?.id).toBe(testNonAdminUser.id);
+	});
+
 	it("should revoke sessions when banning a user via update-user", async () => {
 		const targetHeaders = new Headers();
 		const { data: target } = await client.signUp.email(
