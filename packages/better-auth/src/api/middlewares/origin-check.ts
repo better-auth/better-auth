@@ -4,6 +4,60 @@ import { wildcardMatch } from "../../utils/wildcard";
 import { getHost, getOrigin, getProtocol } from "../../utils/url";
 import type { GenericEndpointContext } from "../../types";
 
+export const matchesPattern = (url: string, pattern: string): boolean => {
+	if (url.startsWith("/")) {
+		return false;
+	}
+	if (pattern.includes("*")) {
+		const patternHost = pattern.includes("://") ? getHost(pattern) : pattern;
+		return wildcardMatch(patternHost)(getHost(url));
+	}
+
+	const candidateProtocol = getProtocol(url);
+	const patternProtocol = getProtocol(pattern);
+
+	if (candidateProtocol === "http:" || candidateProtocol === "https:") {
+		const candidateOrigin = getOrigin(url);
+		const patternOrigin = getOrigin(pattern);
+		return Boolean(
+			candidateOrigin &&
+				patternOrigin &&
+				candidateOrigin !== "null" &&
+				candidateOrigin === patternOrigin,
+		);
+	}
+
+	if (candidateProtocol && patternProtocol) {
+		if (candidateProtocol !== patternProtocol) {
+			return false;
+		}
+		const patternHost = getHost(pattern);
+		if (patternHost) {
+			return getHost(url) === patternHost;
+		}
+		return true;
+	}
+
+	return false;
+};
+
+export const isTrustedURL = (
+	url: string | undefined,
+	label: string,
+	trustedOrigins: string[],
+): boolean => {
+	if (!url) {
+		return true;
+	}
+	return trustedOrigins.some(
+		(origin) =>
+			matchesPattern(url, origin) ||
+			(url.startsWith("/") &&
+				label !== "origin" &&
+				/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)),
+	);
+};
+
 /**
  * A middleware to validate callbackURL and origin against
  * trustedOrigins.
@@ -27,31 +81,11 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 			];
 	const usesCookies = ctx.headers?.has("cookie");
 
-	const matchesPattern = (url: string, pattern: string): boolean => {
-		if (url.startsWith("/")) {
-			return false;
-		}
-		if (pattern.includes("*")) {
-			return wildcardMatch(pattern)(getHost(url));
-		}
-
-		const protocol = getProtocol(url);
-		return protocol === "http:" || protocol === "https:" || !protocol
-			? pattern === getOrigin(url)
-			: url.startsWith(pattern);
-	};
 	const validateURL = (url: string | undefined, label: string) => {
 		if (!url) {
 			return;
 		}
-		const isTrustedOrigin = trustedOrigins.some(
-			(origin) =>
-				matchesPattern(url, origin) ||
-				(url?.startsWith("/") &&
-					label !== "origin" &&
-					/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(url)),
-		);
-		if (!isTrustedOrigin) {
+		if (!isTrustedURL(url, label, trustedOrigins)) {
 			ctx.context.logger.error(`Invalid ${label}: ${url}`);
 			ctx.context.logger.info(
 				`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
@@ -87,33 +121,11 @@ export const originCheck = (
 					...((await context.options.trustedOrigins?.(ctx.request)) || []),
 				];
 
-		const matchesPattern = (url: string, pattern: string): boolean => {
-			if (url.startsWith("/")) {
-				return false;
-			}
-			if (pattern.includes("*")) {
-				return wildcardMatch(pattern)(getHost(url));
-			}
-			const protocol = getProtocol(url);
-			return protocol === "http:" || protocol === "https:" || !protocol
-				? pattern === getOrigin(url)
-				: url.startsWith(pattern);
-		};
-
 		const validateURL = (url: string | undefined, label: string) => {
 			if (!url) {
 				return;
 			}
-			const isTrustedOrigin = trustedOrigins.some(
-				(origin) =>
-					matchesPattern(url, origin) ||
-					(url?.startsWith("/") &&
-						label !== "origin" &&
-						/^\/(?!\/|\\|%2f|%5c)[\w\-.\+/@]*(?:\?[\w\-.\+/=&%@]*)?$/.test(
-							url,
-						)),
-			);
-			if (!isTrustedOrigin) {
+			if (!isTrustedURL(url, label, trustedOrigins)) {
 				ctx.context.logger.error(`Invalid ${label}: ${url}`);
 				ctx.context.logger.info(
 					`If it's a valid URL, please add ${url} to trustedOrigins in your auth config\n`,
