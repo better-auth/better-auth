@@ -23,22 +23,41 @@ import {
 
 describe("Init CLI - env utility functions", () => {
 	describe("getEnvFiles", () => {
+		testWithTmpDir("should prefer .env.local over .env", async ({ tmp }) => {
+			await fs.writeFile(path.join(tmp, ".env"), "TEST=value");
+			await fs.writeFile(path.join(tmp, ".env.local"), "TEST=value");
+			await fs.writeFile(path.join(tmp, ".env.production"), "TEST=value");
+
+			const envFiles = await getEnvFiles(tmp);
+			expect(envFiles).toEqual([path.join(tmp, ".env.local")]);
+		});
+
+		testWithTmpDir("should fall back to .env", async ({ tmp }) => {
+			await fs.writeFile(path.join(tmp, ".env"), "TEST=value");
+			await fs.mkdir(path.join(tmp, ".env.local"));
+
+			const envFiles = await getEnvFiles(tmp);
+			expect(envFiles).toEqual([path.join(tmp, ".env")]);
+		});
+
 		testWithTmpDir(
-			"should return only .env files with full paths",
+			"should ignore templates and environment specific files",
 			async ({ tmp }) => {
-				await fs.writeFile(path.join(tmp, ".env"), "TEST=value");
-				await fs.writeFile(path.join(tmp, ".env.local"), "TEST=value");
-				await fs.writeFile(path.join(tmp, ".env.production"), "TEST=value");
-				await fs.writeFile(path.join(tmp, "not-env.txt"), "content");
-				await fs.writeFile(path.join(tmp, "config.js"), "content");
+				const names = [
+					".env.development",
+					".env.production",
+					".env.example",
+					".env.sample",
+					".env.template",
+					".env.dist",
+					".envrc",
+				];
+				for (const name of names) {
+					await fs.writeFile(path.join(tmp, name), "TEST=value");
+				}
 
 				const envFiles = await getEnvFiles(tmp);
-				expect(envFiles).toHaveLength(3);
-				expect(envFiles).toContain(path.join(tmp, ".env"));
-				expect(envFiles).toContain(path.join(tmp, ".env.local"));
-				expect(envFiles).toContain(path.join(tmp, ".env.production"));
-				expect(envFiles).not.toContain(path.join(tmp, "not-env.txt"));
-				expect(envFiles).not.toContain(path.join(tmp, "config.js"));
+				expect(envFiles).toHaveLength(0);
 			},
 		);
 
@@ -110,6 +129,35 @@ describe("Init CLI - env utility functions", () => {
 				const result = await parseEnvFiles([envFile]);
 
 				expect(result.get(envFile)).toEqual(["VAR_1", "VAR_2"]);
+			},
+		);
+
+		testWithTmpDir("should read keys declared with export", async ({ tmp }) => {
+			const envFile = path.join(tmp, ".env");
+			await fs.writeFile(envFile, "export VAR_1=value1\nVAR_2=value2");
+
+			const result = await parseEnvFiles([envFile]);
+
+			expect(result.get(envFile)).toEqual(["VAR_1", "VAR_2"]);
+		});
+
+		testWithTmpDir(
+			"should read keys the same way dotenv loads them",
+			async ({ tmp }) => {
+				const envFile = path.join(tmp, ".env");
+				await fs.writeFile(
+					envFile,
+					[
+						'PRIVATE_KEY="-----BEGIN KEY-----',
+						"abc",
+						'-----END KEY-----"',
+						"VAR_1 = value1",
+					].join("\n"),
+				);
+
+				const result = await parseEnvFiles([envFile]);
+
+				expect(result.get(envFile)).toEqual(["PRIVATE_KEY", "VAR_1"]);
 			},
 		);
 	});
