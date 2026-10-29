@@ -523,6 +523,7 @@ function sanitizeProvider(
 					discoveryEndpoint: oidcConfig.discoveryEndpoint,
 					clientIdLastFour: maskClientId(oidcConfig.clientId),
 					pkce: oidcConfig.pkce,
+					disableIdTokenNonceBinding: oidcConfig.disableIdTokenNonceBinding,
 					authorizationEndpoint: oidcConfig.authorizationEndpoint,
 					tokenEndpoint: oidcConfig.tokenEndpoint,
 					userInfoEndpoint: oidcConfig.userInfoEndpoint,
@@ -798,6 +799,8 @@ function mergeOIDCConfig(
 		...updates,
 		issuer,
 		pkce: updates.pkce ?? current.pkce ?? true,
+		disableIdTokenNonceBinding:
+			updates.disableIdTokenNonceBinding ?? current.disableIdTokenNonceBinding,
 		clientId: updates.clientId ?? current.clientId,
 		clientSecret: updates.clientSecret ?? current.clientSecret,
 		discoveryEndpoint: updates.discoveryEndpoint ?? current.discoveryEndpoint,
@@ -894,6 +897,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						body.issuer !== undefined &&
 						body.issuer !== existingProvider.issuer;
 					let trustAnchorsChanged = false;
+					let idTokenNonceBindingChanged = false;
 
 					if (body.issuer !== undefined) {
 						updateData.issuer = body.issuer;
@@ -1020,6 +1024,11 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						) {
 							providerIdentityBoundaryChanged = true;
 						}
+						// Nonce binding is ID token verification policy: guards see it as an
+						// authentication-boundary change, but linked accounts keep their identity.
+						idTokenNonceBindingChanged =
+							(currentOidcConfig.disableIdTokenNonceBinding === true) !==
+							(updatedOidcConfig.disableIdTokenNonceBinding === true);
 
 						updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
 					}
@@ -1029,7 +1038,9 @@ export const updateSSOProvider = (options: SSOOptions) => {
 						{
 							action: "update",
 							isAuthenticationBoundaryChange:
-								providerIdentityBoundaryChanged || trustAnchorsChanged,
+								providerIdentityBoundaryChanged ||
+								trustAnchorsChanged ||
+								idTokenNonceBindingChanged,
 						},
 						existingProvider,
 						trx,

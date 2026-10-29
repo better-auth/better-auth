@@ -1465,6 +1465,49 @@ kBGIJYs=
 			expect(serializedGuardInput).not.toContain("clientSecret");
 		});
 
+		it("classifies OIDC ID token nonce binding as an authentication-boundary change without blocking linked accounts", async () => {
+			const boundaryChanges: boolean[] = [];
+			const { auth, getAuthHeaders, createOIDCProviderData, data } =
+				createTestAuth(false, false, {
+					guardProviderMutation(input) {
+						if (input.action === "update") {
+							boundaryChanges.push(input.isAuthenticationBoundaryChange);
+						}
+					},
+				});
+			const headers = await getAuthHeaders({
+				email: "owner@example.com",
+				password: "password123",
+				name: "Owner",
+			});
+			const owner = data.user.find(
+				(user) => user.email === "owner@example.com",
+			);
+			createOIDCProviderData(owner!.id, "nonce-policy", "workforce-client");
+			data.account.push({
+				id: "linked-nonce-policy-account",
+				userId: owner!.id,
+				providerId: "nonce-policy",
+				accountId: "oidc-account-id",
+			});
+			const setNonceBindingOptOut = (disableIdTokenNonceBinding: boolean) =>
+				auth.api.updateSSOProvider({
+					body: {
+						providerId: "nonce-policy",
+						oidcConfig: { disableIdTokenNonceBinding },
+					},
+					headers,
+				});
+
+			// An unset option and `false` both keep binding on.
+			await setNonceBindingOptOut(false);
+			await setNonceBindingOptOut(true);
+			await setNonceBindingOptOut(true);
+			await setNonceBindingOptOut(false);
+
+			expect(boundaryChanges).toEqual([false, true, false, true]);
+		});
+
 		it("classifies the signed-assertion policy as an authentication-boundary change", async () => {
 			let isAuthenticationBoundaryChange: boolean | undefined;
 			const { auth, getAuthHeaders, registerSAMLProvider } = createTestAuth(
