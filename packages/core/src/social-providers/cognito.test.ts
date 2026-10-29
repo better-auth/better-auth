@@ -178,7 +178,8 @@ it.each(["cognito-idp", "issuer-cognito-idp", "other-pool"])(
 		expect(await verifyProviderIdToken(cognito(options), token)).toBe(
 			host !== "other-pool",
 		);
-		expect(mockedBetterFetch).toHaveBeenCalledWith(
+		expect(mockedBetterFetch).toHaveBeenCalledOnce();
+		expect(mockedBetterFetch.mock.calls[0]?.[0]).toBe(
 			`${trustedIssuer}/.well-known/jwks.json`,
 		);
 	},
