@@ -1072,6 +1072,87 @@ describe("stripe checkout", () => {
 			expect(location).not.toContain("%7BCHECKOUT_SESSION_ID%7D");
 		});
 
+		describe("callbackURL origin after {CHECKOUT_SESSION_ID} replacement", () => {
+			const originCheckTest = test.extend<{
+				requestSuccess: (
+					callbackURL: string,
+					checkoutSessionId: string,
+				) => Promise<Response>;
+			}>({
+				requestSuccess: async ({ memory, stripeOptions }, use) => {
+					const { client, auth, sessionSetter } = await getTestInstance(
+						{
+							database: memory,
+							plugins: [stripe(stripeOptions)],
+							advanced: {
+								disableOriginCheck: false,
+							},
+						},
+						{
+							disableTestUser: true,
+							clientOptions: {
+								plugins: [stripeClient({ subscription: true })],
+							},
+						},
+					);
+					const headers = new Headers();
+					await client.signUp.email(testUser, { throw: true });
+					await client.signIn.email(testUser, {
+						throw: true,
+						onSuccess: sessionSetter(headers),
+					});
+					await use((callbackURL, checkoutSessionId) =>
+						auth.handler(
+							new Request(
+								`http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}&checkoutSessionId=${encodeURIComponent(checkoutSessionId)}`,
+								{
+									method: "GET",
+									headers,
+									redirect: "manual",
+								},
+							),
+						),
+					);
+				},
+			});
+
+			originCheckTest(
+				"should reject a checkoutSessionId that moves callbackURL to an untrusted origin",
+				async ({ stripeMock, requestSuccess }) => {
+					stripeMock.checkout.sessions.retrieve.mockRejectedValue(
+						new Error("No such checkout session"),
+					);
+
+					const response = await requestSuccess(
+						"http://{CHECKOUT_SESSION_ID}@localhost:3000/",
+						"evil.example/",
+					);
+
+					expect(response.status).toBe(403);
+					expect(response.headers.get("location")).toBeNull();
+				},
+			);
+
+			originCheckTest(
+				"should redirect to the replaced callbackURL on a trusted origin",
+				async ({ stripeMock, requestSuccess }) => {
+					stripeMock.checkout.sessions.retrieve.mockRejectedValue(
+						new Error("No such checkout session"),
+					);
+
+					const response = await requestSuccess(
+						"http://localhost:3000/billing?session_id={CHECKOUT_SESSION_ID}",
+						"cs_test_a1B2c3",
+					);
+
+					expect(response.status).toBe(302);
+					expect(response.headers.get("location")).toBe(
+						"http://localhost:3000/billing?session_id=cs_test_a1B2c3",
+					);
+				},
+			);
+		});
+
 		test("should redirect when checkout session retrieval fails", async ({
 			memory,
 			stripeOptions,
