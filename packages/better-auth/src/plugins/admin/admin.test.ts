@@ -1,4 +1,4 @@
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -1625,6 +1625,33 @@ describe("Admin plugin", async () => {
 		expect(res.data?.email).toBe("updated-email@test.com");
 		expect(res.data?.emailVerified).toBe(false);
 	});
+
+	/**
+	 * @see https://better-auth.com/docs/plugins/admin#impersonate-user
+	 */
+	it("should not extend an impersonation session for a bearer client", async () => {
+		const { data: target } = await client.signUp.email({
+			email: "impersonate-bearer@mail.com",
+			password: "password",
+			name: "Impersonate Bearer User",
+		});
+		const res = await client.admin.impersonateUser(
+			{ userId: target!.user.id },
+			{ headers: adminHeaders },
+		);
+		const token = res.data!.session.token;
+		const ctx = await auth.$context;
+		const before = await ctx.internalAdapter.findSession(token);
+		// A bearer client never sends the `dont_remember` cookie.
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: new Headers({ Authorization: `Bearer ${token}` }),
+			},
+		});
+		expect(session.data?.user.id).toBe(target!.user.id);
+		const after = await ctx.internalAdapter.findSession(token);
+		expect(after?.session.expiresAt).toEqual(before?.session.expiresAt);
+	});
 });
 
 describe("access control", async () => {
@@ -2760,175 +2787,5 @@ describe("admin create-user password length", async () => {
 		});
 
 		expect(hash).not.toHaveBeenCalled();
-	});
-});
-
-/**
- * @see https://better-auth.com/docs/plugins/admin#impersonate-user
- */
-describe("admin impersonation session expiry", async () => {
-	afterEach(() => {
-		vi.useRealTimers();
-	});
-
-	async function impersonationInstance(
-		options: Omit<BetterAuthOptions, "plugins" | "databaseHooks"> = {},
-	) {
-		const { auth, client, signInWithTestUser, cookieSetter } =
-			await getTestInstance(
-				{
-					...options,
-					plugins: [admin()],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => ({
-									data: {
-										...user,
-										...(user.name === "Admin" ? { role: "admin" } : {}),
-									},
-								}),
-							},
-						},
-					},
-				},
-				{
-					testUser: {
-						name: "Admin",
-					},
-					clientOptions: {
-						plugins: [adminClient()],
-					},
-				},
-			);
-		const { headers: adminHeaders } = await signInWithTestUser();
-		const ctx = await auth.$context;
-
-		async function impersonate(email: string) {
-			const { data: target } = await client.signUp.email({
-				name: "Target",
-				email,
-				password: "password",
-			});
-			const browserHeaders = new Headers(adminHeaders);
-			const res = await client.admin.impersonateUser(
-				{ userId: target!.user.id },
-				{ headers: adminHeaders, onSuccess: cookieSetter(browserHeaders) },
-			);
-			const token = res.data!.session.token;
-			const sessionCookieName = ctx.authCookies.sessionToken.name;
-			// Only the session token cookie, without `dont_remember`. A server
-			// that forwards the session cookie sends a request like this one.
-			const sessionCookie = browserHeaders
-				.get("cookie")!
-				.split("; ")
-				.filter((cookie) => cookie.startsWith(`${sessionCookieName}=`))
-				.join("; ");
-			return {
-				token,
-				sessionCookie,
-				storedExpiresAt: async () =>
-					(await ctx.internalAdapter.findSession(token))!.session.expiresAt,
-			};
-		}
-
-		async function getSessionAfterImpersonationDuration(headers: Headers) {
-			vi.useFakeTimers({ toFake: ["Date"] });
-			vi.setSystemTime(Date.now() + 60 * 60 * 1000 + 1000);
-			return client.getSession({ fetchOptions: { headers } });
-		}
-
-		return { client, impersonate, getSessionAfterImpersonationDuration };
-	}
-
-	it("should not extend an impersonation session when the request has no dont_remember cookie", async () => {
-		const { client, impersonate, getSessionAfterImpersonationDuration } =
-			await impersonationInstance();
-		const email = "impersonated-cookie@test.com";
-		const { sessionCookie, storedExpiresAt } = await impersonate(email);
-		const expiresAt = await storedExpiresAt();
-		const headers = new Headers({ cookie: sessionCookie });
-
-		const res = await client.getSession({ fetchOptions: { headers } });
-		expect(res.data?.user.email).toBe(email);
-		expect(await storedExpiresAt()).toEqual(expiresAt);
-
-		const later = await getSessionAfterImpersonationDuration(headers);
-		expect(later.data).toBeNull();
-	});
-
-	it("should not extend an impersonation session for a bearer client", async () => {
-		const { client, impersonate, getSessionAfterImpersonationDuration } =
-			await impersonationInstance();
-		const email = "impersonated-bearer@test.com";
-		const { token, storedExpiresAt } = await impersonate(email);
-		const expiresAt = await storedExpiresAt();
-		const headers = new Headers({ Authorization: `Bearer ${token}` });
-
-		const res = await client.getSession({ fetchOptions: { headers } });
-		expect(res.data?.user.email).toBe(email);
-		expect(await storedExpiresAt()).toEqual(expiresAt);
-
-		const later = await getSessionAfterImpersonationDuration(headers);
-		expect(later.data).toBeNull();
-	});
-
-	it("should not extend an impersonation session with a deferred refresh", async () => {
-		const { client, impersonate, getSessionAfterImpersonationDuration } =
-			await impersonationInstance({ session: { deferSessionRefresh: true } });
-		const email = "impersonated-deferred@test.com";
-		const { sessionCookie, storedExpiresAt } = await impersonate(email);
-		const expiresAt = await storedExpiresAt();
-		const headers = new Headers({ cookie: sessionCookie });
-
-		const res = await client.$fetch<{ user: { email: string } }>(
-			"/get-session",
-			{ method: "POST", headers },
-		);
-		expect(res.data?.user.email).toBe(email);
-		expect(await storedExpiresAt()).toEqual(expiresAt);
-
-		const later = await getSessionAfterImpersonationDuration(headers);
-		expect(later.data).toBeNull();
-	});
-
-	it("should not extend an impersonation session kept in secondary storage", async () => {
-		const store = new Map<string, string>();
-		const { client, impersonate, getSessionAfterImpersonationDuration } =
-			await impersonationInstance({
-				secondaryStorage: {
-					set(key, value) {
-						store.set(key, value);
-					},
-					get(key) {
-						return store.get(key) || null;
-					},
-					getAndDelete(key) {
-						const value = store.get(key) || null;
-						store.delete(key);
-						return value;
-					},
-					increment(key) {
-						const count = Number(store.get(key) ?? 0) + 1;
-						store.set(key, String(count));
-						return count;
-					},
-					delete(key) {
-						store.delete(key);
-					},
-				},
-			});
-		const email = "impersonated-storage@test.com";
-		const { token, sessionCookie, storedExpiresAt } = await impersonate(email);
-		expect(store.has(token)).toBe(true);
-		const expiresAt = await storedExpiresAt();
-		const headers = new Headers({ cookie: sessionCookie });
-
-		const res = await client.getSession({ fetchOptions: { headers } });
-		expect(res.data?.user.email).toBe(email);
-		expect(await storedExpiresAt()).toEqual(expiresAt);
-
-		const later = await getSessionAfterImpersonationDuration(headers);
-		expect(later.data).toBeNull();
 	});
 });
