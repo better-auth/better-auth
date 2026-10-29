@@ -10,6 +10,7 @@ import type {
 } from "@better-fetch/fetch";
 import type { DeepReadonly, Ref, WatchSource } from "vue";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
+import { trimTrailingSlashes } from "../../utils/url";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
 import type {
@@ -150,13 +151,17 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 	const basePath = options?.basePath ?? "/api/auth"; // Preserve an empty root path.
 	const sessionCacheKey = `better-auth:session:${baseURLKey}:${basePath}`;
 
+	const sessionPath = trimTrailingSlashes(
+		basePath.startsWith("/") ? basePath : `/${basePath}`,
+	);
+
 	/**
 	 * Stays relative without an explicit `baseURL` so the SSR session fetch
 	 * forwards the incoming cookies.
 	 *
 	 * @see https://nuxt.com/docs/4.x/getting-started/data-fetching
 	 */
-	const sessionURL = `${options?.baseURL ? baseURL : basePath}/get-session`;
+	const sessionURL = `${options?.baseURL ? baseURL : sessionPath}/get-session`;
 
 	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {

@@ -48,16 +48,20 @@ it.for([
 	},
 );
 
-it("keeps the vue session fetch on a custom basePath", () => {
+it.for([
+	{ basePath: "/auth", url: "/auth/get-session" },
+	{ basePath: "/", url: "/get-session" },
+	{ basePath: "auth/", url: "/auth/get-session" },
+])("keeps the vue session fetch on basePath $basePath", ({ basePath, url }) => {
 	const pendingFetch = new Promise<never>(() => undefined);
 	const useFetch = vi.fn(() => pendingFetch);
 	const client = createVueClient({
-		basePath: "/auth",
+		basePath,
 	});
 
 	void client.useSession(useFetch);
 
-	expect(useFetch).toHaveBeenCalledWith("/auth/get-session", expect.anything());
+	expect(useFetch).toHaveBeenCalledWith(url, expect.anything());
 });
 
 /**
