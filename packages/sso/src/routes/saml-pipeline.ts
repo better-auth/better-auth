@@ -800,7 +800,7 @@ export async function processSAMLResponse(
 
 	if (result.error) {
 		throw ctx.redirect(
-			buildSAMLRedirectUrl(callbackUrl, {
+			buildSAMLRedirectUrl(samlErrorRedirectUrl, {
 				error: result.error.split(" ").join("_"),
 			}),
 		);
