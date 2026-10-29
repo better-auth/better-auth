@@ -241,6 +241,18 @@ describe("encodeDeterministicId", () => {
 		},
 	);
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12071
+	 */
+	it("encodes a 24-character hex id when ids are database-generated", () => {
+		const options = {
+			advanced: { database: { generateId: false } },
+		} as const;
+		const id = encodeDeterministicId(digest(1), options);
+		expect(id).toMatch(/^[0-9a-f]{24}$/);
+		expect(encodeDeterministicId(digest(1), options)).toBe(id);
+	});
+
 	it("formats a uuid when ids are uuids", () => {
 		const id = encodeDeterministicId(digest(1), {
 			advanced: { database: { generateId: "uuid" } },

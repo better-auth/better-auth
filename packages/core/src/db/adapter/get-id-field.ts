@@ -18,7 +18,9 @@ let warnedSerialDeterministicId = false;
  * replaces a forced id that does not fit the strategy with a fresh one, which
  * would let every insert win. Under `"uuid"` the first 16 bytes are formatted
  * with version 5 and RFC 9562 variant bits, the shape the id field accepts.
- * Other string strategies get the base64url digest. Under `"serial"` the
+ * Other string strategies get the base64url digest. When `generateId` is
+ * `false`, the first 12 digest bytes become a 24-character hex string so
+ * database-owned ObjectId columns accept the id. Under `"serial"` the
  * base64url digest is still replaced by a database number, so the record is
  * not single use; this logs a warning once per process.
  *
@@ -39,6 +41,9 @@ export function encodeDeterministicId(
 		logger.warn(
 			'Single-use checks (such as SAML assertion IDs, DPoP proofs, and private_key_jwt assertions) need string ids and are not enforced with `advanced.database.generateId: "serial"`.',
 		);
+	}
+	if (generateId === false) {
+		return hex.encode(digest.slice(0, 12));
 	}
 	if (generateId !== "uuid") {
 		return base64Url.encode(digest, { padding: false });
