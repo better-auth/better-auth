@@ -421,10 +421,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						);
 					}
 
-					const username =
-						options?.validationOrder?.username === "pre-normalization"
-							? normalizer(ctx.body.username)
-							: ctx.body.username;
+					const username = getUsernameToValidate(ctx.body.username);
 
 					const minUsernameLength = options?.minUsernameLength || 3;
 					const maxUsernameLength = options?.maxUsernameLength || 30;
@@ -465,7 +462,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						where: [
 							{
 								field: "username",
-								value: normalizer(username),
+								value: normalizer(ctx.body.username),
 							},
 						],
 					});
@@ -584,17 +581,18 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						);
 					}
 
+					const usernameToValidate = getUsernameToValidate(username);
 					const minUsernameLength = options?.minUsernameLength || 3;
 					const maxUsernameLength = options?.maxUsernameLength || 30;
 
-					if (username.length < minUsernameLength) {
+					if (usernameToValidate.length < minUsernameLength) {
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
 							ERROR_CODES.USERNAME_TOO_SHORT,
 						);
 					}
 
-					if (username.length > maxUsernameLength) {
+					if (usernameToValidate.length > maxUsernameLength) {
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
 							ERROR_CODES.USERNAME_TOO_LONG,
@@ -604,7 +602,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 					const validator =
 						options?.usernameValidator || defaultUsernameValidator;
 
-					const valid = await validator(username);
+					const valid = await validator(usernameToValidate);
 					if (!valid) {
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
