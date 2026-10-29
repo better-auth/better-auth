@@ -288,7 +288,9 @@ async function setupOpenCode(args: string[]) {
 			return;
 		}
 		console.log(
-			chalk.yellow(`\n⚠ Could not parse ${display}, so it was left unchanged.`),
+			chalk.yellow(
+				`\n⚠ Could not read ${display} as a JSON object, so it was left unchanged.`,
+			),
 		);
 	}
 
@@ -354,7 +356,9 @@ async function writeMcpConfigInteractive(
 			return;
 		}
 		console.log(
-			chalk.yellow(`\n⚠ Could not parse ${display}, so it was left unchanged.`),
+			chalk.yellow(
+				`\n⚠ Could not read ${display} as a JSON object, so it was left unchanged.`,
+			),
 		);
 	}
 	showJsonConfig(entry);
