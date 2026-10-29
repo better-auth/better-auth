@@ -7,7 +7,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { mergeScopes } from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
@@ -552,6 +552,14 @@ export async function handleOAuthUserInfo(
 						},
 						source,
 					);
+					if (!createdUser) {
+						// A `user.create.before` hook returned false: the app rejected
+						// this sign-up, the same outcome email sign-up reports.
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+						);
+					}
 					const createdAccount = await c.context.internalAdapter.createAccount({
 						...accountData,
 						userId: createdUser.id,
