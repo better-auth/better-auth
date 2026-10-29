@@ -71,7 +71,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	return {
 		id: "admin",
 		version: PACKAGE_VERSION,
-		init() {
+		init(authContext) {
 			return {
 				options: {
 					databaseHooks: {
@@ -90,10 +90,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 						session: {
 							create: {
 								async before(session, ctx) {
-									if (!ctx) {
-										return;
-									}
-									const user = (await ctx.context.internalAdapter.findUserById(
+									const internalAdapter =
+										ctx?.context.internalAdapter ?? authContext.internalAdapter;
+									const user = (await internalAdapter.findUserById(
 										session.userId,
 									)) as (UserWithRole & Record<string, unknown>) | null;
 
@@ -102,14 +101,11 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											user.banExpires &&
 											new Date(user.banExpires).getTime() < Date.now()
 										) {
-											await ctx.context.internalAdapter.updateUser(
-												session.userId,
-												{
-													banned: false,
-													banReason: null,
-													banExpires: null,
-												},
-											);
+											await internalAdapter.updateUser(session.userId, {
+												banned: false,
+												banReason: null,
+												banExpires: null,
+											});
 											return;
 										}
 

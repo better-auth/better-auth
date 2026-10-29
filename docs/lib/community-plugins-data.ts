@@ -497,6 +497,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "tauri-plugin-better-auth",
+		url: "https://github.com/laakal/tauri-plugin-better-auth",
+		description:
+			"Better Auth for Tauri desktop apps: browser sign-in with PKCE handed back by deep link or loopback, a session held in Rust (OS keychain), and a webview that never sees a token. Tauri 2 (0.1) and Tauri 3 alpha (0.2).",
+		author: {
+			name: "Enes Koç",
+			github: "laakal",
+			avatar: "https://github.com/laakal.png",
+		},
+	},
+  {
 		name: "better-auth-loginllama",
 		url: "https://github.com/joshghent/better-auth-loginllama",
 		description:
