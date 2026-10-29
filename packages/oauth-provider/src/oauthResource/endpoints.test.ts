@@ -15,6 +15,7 @@ import type {
 	OAuthResource,
 	Scope,
 } from "../types";
+import { adminCreateOAuthResource, adminUpdateOAuthResource } from "./index";
 
 beforeEach(() => {
 	vi.spyOn(logger, "warn").mockImplementation(() => undefined);
@@ -164,6 +165,216 @@ describe("resource admin CRUD", () => {
 		expect(fetched.accessTokenTtl).toBe(60);
 		expect(fetched.name).toBe("Original"); // untouched
 		expect(fetched.allowedScopes).toEqual(["read"]); // untouched
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("rejects allowedScopes: [] in admin create schema and HTTP endpoint", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/admin-create-empty";
+
+		const createEndpoint = adminCreateOAuthResource(instance.opts);
+		const parseResult = createEndpoint.options.body.safeParse({
+			identifier,
+			allowedScopes: [],
+		});
+		expect(parseResult.success).toBe(false);
+		if (!parseResult.success) {
+			expect(parseResult.error.issues[0]?.message).toMatch(/disabled: true/);
+			expect(parseResult.error.issues[0]?.message).toMatch(/null/);
+		}
+
+		await expect(
+			instance.auth.api.adminCreateOAuthResource({
+				body: { identifier, allowedScopes: [] },
+				headers,
+			}),
+		).rejects.toThrow(/disabled: true/);
+
+		const createdNull = (await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier, allowedScopes: null },
+			headers,
+		})) as OAuthResource;
+		expect(createdNull.allowedScopes).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("rejects allowedScopes: [] in admin update schema and HTTP endpoint", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/admin-update-empty";
+
+		await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier, allowedScopes: ["read"] },
+			headers,
+		});
+
+		const updateEndpoint = adminUpdateOAuthResource(instance.opts);
+		const parseResult = updateEndpoint.options.body.safeParse({
+			allowedScopes: [],
+		});
+		expect(parseResult.success).toBe(false);
+		if (!parseResult.success) {
+			expect(parseResult.error.issues[0]?.message).toMatch(/disabled: true/);
+			expect(parseResult.error.issues[0]?.message).toMatch(/null/);
+		}
+
+		await expect(
+			instance.auth.api.adminUpdateOAuthResource({
+				params: { identifier },
+				body: { allowedScopes: [] },
+				headers,
+			}),
+		).rejects.toThrow(/disabled: true/);
+
+		const updatedNull = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { allowedScopes: null },
+			headers,
+		})) as OAuthResource;
+		expect(updatedNull.allowedScopes).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("unrestricted resource with stored allowedScopes: [] updates by omitting the field", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/round-trip-unrestricted";
+
+		await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier, name: "Unrestricted Resource" },
+			headers,
+		});
+
+		const fetched = (await instance.auth.api.adminGetOAuthResource({
+			params: { identifier },
+			headers,
+		})) as OAuthResource;
+		expect(fetched.allowedScopes).toBeNull();
+
+		// An explicit `[]` is rejected even though storage holds `[]` —
+		// clients must omit the field (or pass `null`) instead.
+		await expect(
+			instance.auth.api.adminUpdateOAuthResource({
+				params: { identifier },
+				body: {
+					name: "Updated Name",
+					allowedScopes: [],
+				},
+				headers,
+			}),
+		).rejects.toThrow(/disabled: true/);
+
+		// The fetched `null` echoes back cleanly.
+		const echoed = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: {
+				name: "Updated Name",
+				allowedScopes: fetched.allowedScopes,
+			},
+			headers,
+		})) as OAuthResource;
+		expect(echoed.allowedScopes).toBeNull();
+
+		const updated = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { name: "Updated Name" },
+			headers,
+		})) as OAuthResource;
+		expect(updated.name).toBe("Updated Name");
+		expect(updated.allowedScopes).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("admin update with allowedScopes: undefined does not modify existing allowedScopes", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/scope-preserve-undefined";
+
+		await instance.auth.api.adminCreateOAuthResource({
+			body: {
+				identifier,
+				name: "Original Name",
+				allowedScopes: ["read", "write"],
+			},
+			headers,
+		});
+
+		const updated = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: {
+				name: "Updated Name",
+				allowedScopes: undefined,
+			},
+			headers,
+		})) as OAuthResource;
+
+		expect(updated.name).toBe("Updated Name");
+		expect(updated.allowedScopes).toEqual(["read", "write"]);
+
+		const ctx = await instance.auth.$context;
+		const row = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(row?.name).toBe("Updated Name");
+		expect(row?.allowedScopes).toEqual(["read", "write"]);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("admin create with omitted allowedScopes stores [] and admin update with allowedScopes: null stores []", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/scope-storable-admin";
+		const created = (await instance.auth.api.adminCreateOAuthResource({
+			body: {
+				identifier,
+				name: "Scope Storable Admin",
+			},
+			headers,
+		})) as OAuthResource;
+		expect(created.allowedScopes).toBeNull();
+
+		const ctx = await instance.auth.$context;
+		const rowAfterCreate = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rowAfterCreate?.allowedScopes).toEqual([]);
+
+		await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { allowedScopes: ["read", "write"] },
+			headers,
+		});
+		const rowWithScopes = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rowWithScopes?.allowedScopes).toEqual(["read", "write"]);
+
+		const cleared = (await instance.auth.api.adminUpdateOAuthResource({
+			params: { identifier },
+			body: { allowedScopes: null },
+			headers,
+		})) as OAuthResource;
+		expect(cleared.allowedScopes).toBeNull();
+
+		const rowAfterClear = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(rowAfterClear?.allowedScopes).toEqual([]);
 	});
 
 	it("update on a missing identifier returns 404", async () => {
@@ -643,5 +854,73 @@ describe("path-param decoding for URI-valued identifiers", () => {
 		).rejects.toMatchObject({
 			body: expect.objectContaining({ error: "not_found" }),
 		});
+	});
+});
+
+describe("resource allowedScopes — legacy NULL / explicit null gaps", () => {
+	/**
+	 * Explicit `null` on create is the storable-unrestricted insert path:
+	 * the admin schema accepts it, storage persists `[]`, and the wire
+	 * contract returns `null`.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("explicit null on create stores [] and returns null on the wire", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/null-create-stores-empty";
+
+		const created = (await instance.auth.api.adminCreateOAuthResource({
+			body: { identifier, allowedScopes: null },
+			headers,
+		})) as OAuthResource;
+		expect(created.allowedScopes).toBeNull();
+
+		const ctx = await instance.auth.$context;
+		const row = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(row?.allowedScopes).toEqual([]);
+	});
+
+	/**
+	 * Pre-migration rows may hold SQL `NULL` in `allowedScopes`. The admin
+	 * read path must surface those as unrestricted (`null` on the wire),
+	 * never as `[]` or a crash. Runs against the in-memory SQLite adapter,
+	 * so no docker-gated PG run is needed for this pin.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/11725
+	 */
+	it("legacy NULL row reads as unrestricted (null on the wire)", async () => {
+		const instance = await boot();
+		const headers = await signedInHeaders(instance);
+		const identifier = "https://api.example.com/legacy-null-row";
+
+		const ctx = await instance.auth.$context;
+		await ctx.adapter.create({
+			model: "oauthResource",
+			data: {
+				identifier,
+				name: "Legacy Null",
+				allowedScopes: null,
+				disabled: false,
+				policyVersion: 1,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		const raw = await ctx.adapter.findOne<OAuthResource>({
+			model: "oauthResource",
+			where: [{ field: "identifier", value: identifier }],
+		});
+		expect(raw?.allowedScopes).toBeNull();
+
+		const fetched = (await instance.auth.api.adminGetOAuthResource({
+			params: { identifier },
+			headers,
+		})) as OAuthResource;
+		expect(fetched.allowedScopes).toBeNull();
 	});
 });
