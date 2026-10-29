@@ -1,25 +1,25 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { parse } from "dotenv";
+
+// Templates and per-mode files such as `.env.production` are often committed,
+// so secrets only go to the local override or the base file every loader reads.
+const envFileNames = [".env.local", ".env"];
 
 export const getEnvFiles = async (cwd: string): Promise<string[]> => {
-	const envFiles = await fs.readdir(cwd, "utf-8");
-	return envFiles
-		.filter((file) => file.startsWith(".env") && file !== ".env.example")
-		.map((file) => path.join(cwd, file));
+	for (const name of envFileNames) {
+		const file = path.join(cwd, name);
+		const stat = await fs.stat(file).catch(() => null);
+		if (stat?.isFile()) return [file];
+	}
+	return [];
 };
 
 export const parseEnvFiles = async (envFiles: string[]) => {
 	const result = new Map<string, string[]>();
 	for (const file of envFiles) {
 		const content = await fs.readFile(file, "utf-8");
-		const existingVars = content
-			.split("\n")
-			.filter((line) => line.trim())
-			.map((x) => x.split("=")[0])
-			.filter((x) => x && x.trim())
-			.filter((x) => !x?.includes(" "))
-			.filter((x) => !x?.startsWith("#")) as string[];
-		result.set(file, existingVars);
+		result.set(file, Object.keys(parse(content)));
 	}
 
 	return result;

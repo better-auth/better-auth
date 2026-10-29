@@ -498,83 +498,48 @@ export async function initAction(opts: any) {
 
 		await nextStep("Set Environment Variables");
 
-		// If only one file is missing env variables, just show confirmation prompt
-		if (missingEnvVars.length === 1) {
-			const { file, var: missingVars } = missingEnvVars[0]!;
-			const confirmed = await confirm({
-				message: `Add required environment variables to ${chalk.bold(file.split("/").pop())}? (${missingVars.map((v) => chalk.cyan(v)).join(", ")})`,
-			});
-			if (isCancel(confirmed)) {
-				cancel("✋ Operation cancelled.");
-				process.exit(0);
-			}
-			if (confirmed) {
-				const envs: string[] = [];
-
-				for (const v of missingVars) {
-					if (v === "BETTER_AUTH_SECRET") {
-						const { providedSecret } = await prompts({
-							type: "text",
-							name: "providedSecret",
-							message: `Better Auth secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
-						});
-						if (isCancel(providedSecret)) {
-							cancel("✋ Operation cancelled.");
-							process.exit(0);
-						}
-						envs.push(
-							`BETTER_AUTH_SECRET="${providedSecret || generateSecretHash()}"`,
-						);
-					} else if (v === "BETTER_AUTH_URL") {
-						const { providedURL } = await prompts({
-							type: "text",
-							name: "providedURL",
-							message: `Better Auth base URL (your auth server URL):`,
-							initial: "http://localhost:3000",
-						});
-						if (isCancel(providedURL)) {
-							cancel("✋ Operation cancelled.");
-							process.exit(0);
-						}
-						envs.push(`BETTER_AUTH_URL="${providedURL}"`);
-					}
-				}
-				envFiles.set(file, envs);
-				filesToWrite.push(() => updateEnvFiles([file], envs));
-			}
-			return;
-		}
-
-		// If multiple files are missing env variables, ask to select the files to update.
-		const filesToUpdate = await multiselect({
-			message: `Add required environment variables to the following files?`,
-			options: missingEnvVars.map((x) => ({
-				value: x.file,
-				label: `${chalk.bold(x.file)}: ${x.var.map((v) => chalk.cyan(v)).join(", ")}`,
-			})),
+		// Only one env file is ever offered, so confirm before appending to it.
+		const { file, var: missingVars } = missingEnvVars[0]!;
+		const confirmed = await confirm({
+			message: `Add required environment variables to ${chalk.bold(file.split("/").pop())}? (${missingVars.map((v) => chalk.cyan(v)).join(", ")})`,
 		});
-
-		if (isCancel(filesToUpdate)) {
+		if (isCancel(confirmed)) {
 			cancel("✋ Operation cancelled.");
 			process.exit(0);
 		}
-		if (filesToUpdate) {
-			const secretHash = generateSecretHash();
-			for (const file of filesToUpdate) {
-				const envs = missingEnvVars
-					.find((x) => x.file === file)!
-					.var.map((v) => {
-						if (v === "BETTER_AUTH_SECRET") {
-							return `BETTER_AUTH_SECRET="${secretHash}"`;
-						}
-						if (v === "BETTER_AUTH_URL") {
-							return 'BETTER_AUTH_URL="http://localhost:3000"';
-						}
-						return `${v}=${v}`;
+		if (confirmed) {
+			const envs: string[] = [];
+
+			for (const v of missingVars) {
+				if (v === "BETTER_AUTH_SECRET") {
+					const { providedSecret } = await prompts({
+						type: "text",
+						name: "providedSecret",
+						message: `Better Auth secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
 					});
-				filesToWrite.push(() => updateEnvFiles([file], envs));
+					if (isCancel(providedSecret)) {
+						cancel("✋ Operation cancelled.");
+						process.exit(0);
+					}
+					envs.push(
+						`BETTER_AUTH_SECRET="${providedSecret || generateSecretHash()}"`,
+					);
+				} else if (v === "BETTER_AUTH_URL") {
+					const { providedURL } = await prompts({
+						type: "text",
+						name: "providedURL",
+						message: `Better Auth base URL (your auth server URL):`,
+						initial: "http://localhost:3000",
+					});
+					if (isCancel(providedURL)) {
+						cancel("✋ Operation cancelled.");
+						process.exit(0);
+					}
+					envs.push(`BETTER_AUTH_URL="${providedURL}"`);
+				}
 			}
-			return;
+			envFiles.set(file, envs);
+			filesToWrite.push(() => updateEnvFiles([file], envs));
 		}
 	})();
 

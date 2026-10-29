@@ -1282,6 +1282,68 @@ describe("initAction", () => {
 		expect(envLocalContent).toBeTruthy();
 	});
 
+	testWithTmpDir(
+		"should write env variables only to .env.local when several env files exist",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({ name: "test-project", version: "1.0.0" }),
+			);
+			await fs.writeFile(path.join(tmp, ".env.local"), "FOO=bar\n");
+			await fs.writeFile(path.join(tmp, ".env.production"), "FOO=bar\n");
+			await fs.writeFile(path.join(tmp, ".env.template"), "FOO=\n");
+
+			mockPrompts.mockImplementation(async (questions: any) => {
+				const question = Array.isArray(questions) ? questions[0] : questions;
+
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
+				}
+				if (question.message?.includes("Add required environment variables")) {
+					return { value: true };
+				}
+				if (question.name === "providedSecret") {
+					return { providedSecret: "" };
+				}
+				if (question.name === "providedURL") {
+					return { providedURL: "http://localhost:3000" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("auth instance")
+				) {
+					return { filePath: "auth.ts" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("route handler")
+				) {
+					return { filePath: "src/app/api/auth/[...all]/route.ts" };
+				}
+				if (question.message?.includes("configure a database")) {
+					return { value: "skip" };
+				}
+				if (question.message?.includes("auth client configuration")) {
+					return { value: false };
+				}
+
+				return {};
+			});
+
+			await initAction({ cwd: tmp });
+
+			expect(await fs.readFile(path.join(tmp, ".env.local"), "utf-8")).toMatch(
+				/BETTER_AUTH_SECRET="[0-9a-f]{64}"/,
+			);
+			expect(
+				await fs.readFile(path.join(tmp, ".env.production"), "utf-8"),
+			).toBe("FOO=bar\n");
+			expect(await fs.readFile(path.join(tmp, ".env.template"), "utf-8")).toBe(
+				"FOO=\n",
+			);
+		},
+	);
+
 	testWithTmpDir("should use different package managers", async ({ tmp }) => {
 		await fs.writeFile(
 			path.join(tmp, "package.json"),
