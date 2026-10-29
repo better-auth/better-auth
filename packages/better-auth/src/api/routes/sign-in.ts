@@ -23,7 +23,10 @@ import {
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { getOAuthCallbackPath } from "../../oauth2/utils";
 import { generateIdTokenNonce, generateState } from "../../utils";
-import { assertPasswordNotTooLong } from "../../utils/password";
+import {
+	assertPasswordNotTooLong,
+	rehashPasswordIfNeeded,
+} from "../../utils/password";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
@@ -602,6 +605,16 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 
 				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED);
 			}
+
+			// Re-hash after the checks above, so requests they reject never write the
+			// credential. Later steps (session hooks, two-factor) can still withhold
+			// the session; the upgraded hash is valid either way.
+			await rehashPasswordIfNeeded(ctx, {
+				accountId: credentialAccount.id,
+				password,
+				currentHash: currentPassword,
+				verifyResult: validPassword,
+			});
 
 			const session = await ctx.context.internalAdapter.createSession(
 				user.id,

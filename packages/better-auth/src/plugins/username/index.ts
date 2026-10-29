@@ -11,7 +11,10 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
-import { assertPasswordNotTooLong } from "../../utils/password";
+import {
+	assertPasswordNotTooLong,
+	rehashPasswordIfNeeded,
+} from "../../utils/password";
 import { PACKAGE_VERSION } from "../../version";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
@@ -542,6 +545,16 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 
 						throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
 					}
+
+					// Re-hash after the checks above, so requests they reject never write
+					// the credential. Later steps (session hooks, two-factor) can still
+					// withhold the session; the upgraded hash is valid either way.
+					await rehashPasswordIfNeeded(ctx, {
+						accountId: account.id,
+						password: ctx.body.password,
+						currentHash: currentPassword,
+						verifyResult: validPassword,
+					});
 
 					const session = await ctx.context.internalAdapter.createSession(
 						user.id,
