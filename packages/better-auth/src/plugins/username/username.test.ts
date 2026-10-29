@@ -724,133 +724,117 @@ describe("post normalization flow", async () => {
 });
 
 describe("username validation order", async () => {
+	// Shortens input so length limits differ between raw and normalized values.
 	const usernameNormalization = (username: string) =>
-		username.split(" ").join("_").toLowerCase();
+		username.split(" ").join("").toLowerCase();
 
-	it("should sign in with the username used at sign-up under post-normalization", async () => {
+	const createAuth = async (
+		validationOrder: "pre-normalization" | "post-normalization",
+	) => {
 		const { auth } = await getTestInstance({
 			plugins: [
 				username({
 					validationOrder: {
-						username: "post-normalization",
+						username: validationOrder,
 					},
 					usernameNormalization,
 				}),
 			],
 		});
-		await auth.api.signUpEmail({
-			body: {
-				email: "post-normalization@email.com",
-				username: "Test Username",
-				password: "test-password",
-				name: "test-name",
-			},
-		});
-		const res = await auth.api.signInUsername({
-			body: {
-				username: "Test Username",
-				password: "test-password",
-			},
-			asResponse: true,
-		});
-		expect(res.status).toBe(200);
-	});
+		return auth;
+	};
 
-	it("should validate the raw username under pre-normalization", async () => {
-		const { auth } = await getTestInstance({
-			plugins: [
-				username({
-					validationOrder: {
-						username: "pre-normalization",
-					},
-					usernameNormalization,
-				}),
-			],
-		});
-		await auth.api.signUpEmail({
-			body: {
-				email: "pre-normalization@email.com",
-				username: "Test_Username",
-				password: "test-password",
-				name: "test-name",
-			},
-		});
-		const rejected = await auth.api.signInUsername({
-			body: {
-				username: "Test Username",
-				password: "test-password",
-			},
-			asResponse: true,
-		});
-		expect(rejected.status).toBe(422);
-		const res = await auth.api.signInUsername({
-			body: {
-				username: "Test_Username",
-				password: "test-password",
-			},
-			asResponse: true,
-		});
-		expect(res.status).toBe(200);
-	});
+	const accepted = [
+		{ validationOrder: "post-normalization", username: "Test User" },
+		{ validationOrder: "pre-normalization", username: "TestUser" },
+	] as const;
 
-	it("should check availability of the normalized username under post-normalization", async () => {
-		const { auth } = await getTestInstance({
-			plugins: [
-				username({
-					validationOrder: {
-						username: "post-normalization",
-					},
-					usernameNormalization,
-				}),
-			],
-		});
-		const available = await auth.api.isUsernameAvailable({
-			body: {
-				username: "Test Username",
-			},
-		});
-		expect(available.available).toBe(true);
-		await auth.api.signUpEmail({
-			body: {
-				email: "post-normalization@email.com",
-				username: "Test Username",
-				password: "test-password",
-				name: "test-name",
-			},
-		});
-		const taken = await auth.api.isUsernameAvailable({
-			body: {
-				username: "Test Username",
-			},
-		});
-		expect(taken.available).toBe(false);
-	});
+	const rejected = [
+		{
+			validationOrder: "post-normalization",
+			username: "a b",
+			code: "USERNAME_TOO_SHORT",
+		},
+		{
+			validationOrder: "pre-normalization",
+			username: "Test User",
+			code: "INVALID_USERNAME",
+		},
+	] as const;
 
-	it("should validate the raw username for availability under pre-normalization", async () => {
-		const { auth } = await getTestInstance({
-			plugins: [
-				username({
-					validationOrder: {
-						username: "pre-normalization",
+	it.for(accepted)(
+		"should sign in with $username under $validationOrder",
+		async ({ validationOrder, username }) => {
+			const auth = await createAuth(validationOrder);
+			await auth.api.signUpEmail({
+				body: {
+					email: "test-user@email.com",
+					username: "TestUser",
+					password: "test-password",
+					name: "test-name",
+				},
+			});
+			await expect(
+				auth.api.signInUsername({
+					body: {
+						username,
+						password: "test-password",
 					},
-					usernameNormalization,
 				}),
-			],
-		});
-		const rejected = await auth.api.isUsernameAvailable({
-			body: {
-				username: "Test Username",
-			},
-			asResponse: true,
-		});
-		expect(rejected.status).toBe(422);
-		const available = await auth.api.isUsernameAvailable({
-			body: {
-				username: "Test_Username",
-			},
-		});
-		expect(available.available).toBe(true);
-	});
+			).resolves.toMatchObject({
+				user: { username: "testuser" },
+			});
+		},
+	);
+
+	it.for(rejected)(
+		"should reject sign-in with $username under $validationOrder",
+		async ({ validationOrder, username, code }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.signInUsername({
+					body: {
+						username,
+						password: "test-password",
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "UNPROCESSABLE_ENTITY",
+				body: { code },
+			});
+		},
+	);
+
+	it.for(accepted)(
+		"should report $username as available under $validationOrder",
+		async ({ validationOrder, username }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.isUsernameAvailable({
+					body: {
+						username,
+					},
+				}),
+			).resolves.toEqual({ available: true });
+		},
+	);
+
+	it.for(rejected)(
+		"should reject availability of $username under $validationOrder",
+		async ({ validationOrder, username, code }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.isUsernameAvailable({
+					body: {
+						username,
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "UNPROCESSABLE_ENTITY",
+				body: { code },
+			});
+		},
+	);
 });
 
 describe("username email verification flow (no info leak)", async () => {
