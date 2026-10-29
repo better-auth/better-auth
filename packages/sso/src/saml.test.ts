@@ -2259,7 +2259,7 @@ describe("SAML SSO", async () => {
 			expected.searchParams.set("error", error);
 			expect(response.status).toBe(302);
 			expect(response.headers.get("location")).toBe(expected.toString());
-			expect(response.headers.get("set-cookie")).not.toContain(
+			expect(response.headers.get("set-cookie") ?? "").not.toContain(
 				"better-auth.session_token=",
 			);
 		},
