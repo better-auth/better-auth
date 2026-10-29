@@ -362,6 +362,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						);
 					}
 				} catch (e) {
+					if (ctx.context.adapter.isRetryableError?.(e)) throw e;
 					if (isAPIError(e)) {
 						// Under generic-duplicate mode, a gate rejection (403) returns the
 						// same opaque success as an existing email to prevent account

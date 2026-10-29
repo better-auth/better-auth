@@ -34,7 +34,11 @@ import {
 import { findSchemaProblems } from "./schema-check";
 import type { KyselyDatabaseType } from "./types";
 
-interface KyselyAdapterConfig {
+export interface KyselyAdapterConfig {
+	/** Identify confirmed aborts for an adapter-owned transaction retry implementation. */
+	isRetryableError?: DBAdapter["isRetryableError"];
+	/** Supply a migration plan for an adapter package reusing Kysely operations. */
+	getMigrations?: DBAdapter["getMigrations"];
 	/**
 	 * Database type.
 	 *
@@ -1057,6 +1061,8 @@ export const kyselyAdapter = (
 	adapterOptions = {
 		config: {
 			adapterId: "kysely",
+			isRetryableError: config?.isRetryableError,
+			getMigrations: config?.getMigrations,
 			adapterName: "Kysely Adapter",
 			usePlural: config?.usePlural,
 			debugLogs: config?.debugLogs,

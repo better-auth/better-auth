@@ -15,10 +15,7 @@ import {
 	PostgresQueryCompiler,
 } from "kysely";
 import { describe, expect, it, vi } from "vitest";
-import {
-	createD1IndexIntrospector,
-	D1SqliteDialect,
-} from "./d1-sqlite-dialect";
+import { createD1Profile } from "./d1-sqlite-dialect";
 import { createKyselyAdapter } from "./dialect";
 
 class StubDriver implements Driver {
@@ -67,6 +64,41 @@ function fakeD1Database() {
 }
 
 describe("createKyselyAdapter transaction detection", () => {
+	it("accepts explicit dialect profiles with their index introspector", async () => {
+		const introspectIndexes = vi.fn(async () => []);
+		const profile = {
+			dialect: postgresDialect(),
+			type: "postgres" as const,
+			transaction: true,
+			introspectIndexes,
+		};
+		const result = await createKyselyAdapter({ database: profile });
+		expect(result.introspectIndexes).toBe(introspectIndexes);
+		expect(result.transaction).toBe(true);
+	});
+
+	it("uses the same D1 capabilities through explicit and legacy configuration", async () => {
+		const database = fakeD1Database();
+		const profile = createD1Profile(database);
+		const explicit = await createKyselyAdapter({ database: profile });
+		const legacy = await createKyselyAdapter({ database });
+		expect(explicit.databaseType).toBe(legacy.databaseType);
+		expect(explicit.transaction).toBe(false);
+		expect(explicit.introspectIndexes).toBe(profile.introspectIndexes);
+		expect(legacy.introspectIndexes).toBeTypeOf("function");
+		await explicit.kysely?.destroy();
+		await legacy.kysely?.destroy();
+	});
+
+	it("retains profile introspection when an existing Kysely instance is supplied", async () => {
+		const db = new Kysely<unknown>({ dialect: postgresDialect() });
+		const introspectIndexes = vi.fn(async () => []);
+		const result = await createKyselyAdapter({
+			database: { db, type: "postgres", introspectIndexes },
+		});
+		expect(result.introspectIndexes).toBe(introspectIndexes);
+		await db.destroy();
+	});
 	it("reports native transaction support for a raw node:sqlite database", async () => {
 		const sqlite = new DatabaseSync(":memory:");
 		const { transaction, databaseType } = await createKyselyAdapter({
@@ -146,7 +178,7 @@ describe("D1 index introspection", () => {
 			prepare,
 		} as unknown as D1Database;
 
-		const indexes = await createD1IndexIntrospector(database)([
+		const indexes = await createD1Profile(database).introspectIndexes!([
 			"users'archive",
 		]);
 
@@ -214,7 +246,7 @@ describe("D1 table introspection", () => {
 			prepare,
 		} as unknown as D1Database;
 		const db = new Kysely<unknown>({
-			dialect: new D1SqliteDialect({ database }),
+			dialect: createD1Profile(database).dialect,
 		});
 		onTestFinished(() => db.destroy());
 
@@ -276,7 +308,7 @@ describe("D1 table introspection", () => {
 			prepare,
 		} as unknown as D1Database;
 		const db = new Kysely<unknown>({
-			dialect: new D1SqliteDialect({ database }),
+			dialect: createD1Profile(database).dialect,
 		});
 		onTestFinished(() => db.destroy());
 

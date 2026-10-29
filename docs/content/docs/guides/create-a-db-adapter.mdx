@@ -417,6 +417,34 @@ createSchema: async ({ file, tables }) => {
 };
 ```
 
+## Adapter-owned migrations
+
+An adapter can supply `config.getMigrations(options)` to `createAdapterFactory`. The CLI uses this hook before its built-in Kysely planner, regardless of the adapter ID. Return a `DBAdapterMigrationPlan` with `toBeCreated`, `toBeAdded`, `toBeAddedIndexes`, `schemaProblems`, and `runMigrations`.
+
+Planning must not apply schema changes. The CLI displays the planned tables, fields, and indexes and asks for confirmation before calling `runMigrations`. An empty plan is skipped, and any `schemaProblems` prevent execution. The adapter remains responsible for refusing unsafe changes and handling database-specific execution, such as asynchronous DDL. Schema generation continues to use the existing `createSchema` method.
+
+## Preserving retryable errors
+
+Use `config.isRetryableError(error)` to identify confirmed transaction aborts that must reach your adapter unchanged. For example, sign-up checks this function before replacing a user-creation error with `FAILED_TO_CREATE_USER`. Without the hook, existing error handling remains unchanged.
+
+This hook does not run retries. Your adapter owns retry limits, backoff, and restarting the entire transaction. Do not retry uncertain commit outcomes or individual statements inside an aborted transaction. Transaction callbacks and before hooks can run again; use `queueAfterTransactionHook` for external effects that should run once after a successful commit.
+
+## Reusing Kysely dialects
+
+Database packages can supply an explicit `KyselyAdapterProfile` from `@better-auth/kysely-adapter`: a `dialect`, SQL `type`, `transaction` capability, and optional `introspectIndexes` callback. The same callback is accepted alongside an existing `{ db, type }` connection. This lets a package provide its own dialect and index metadata without adding detection branches to the shared adapter.
+
+For example, D1 exposes its existing capabilities as a profile:
+
+```ts
+import { createD1Profile } from "@better-auth/kysely-adapter";
+
+const auth = betterAuth({
+  database: createD1Profile(env.DB),
+});
+```
+
+Passing the raw D1 binding still works and resolves through the same profile. D1 continues to use `transaction: false` because it has no interactive transactions. An adapter package reusing `kyselyAdapter` can also supply `isRetryableError` and `getMigrations` in its config.
+
 ## Test your adapter
 
 We've provided a test suite via the `@better-auth/test-utils` package that you can use to test your adapter. It requires you to use `vitest`.

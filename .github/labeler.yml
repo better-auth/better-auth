@@ -29,6 +29,7 @@ database:
       - 'packages/prisma-adapter/**'
       - 'packages/mongo-adapter/**'
       - 'packages/kysely-adapter/**'
+      - 'packages/dsql-adapter/**'
       - 'packages/memory-adapter/**'
 
 oauth:

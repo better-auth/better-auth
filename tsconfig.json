@@ -6,6 +6,7 @@
     "./*.js"
   ],
   "references": [
+    { "path": "./packages/dsql-adapter/tsconfig.json" },
     {
       "path": "./packages/api-key/tsconfig.json"
     },

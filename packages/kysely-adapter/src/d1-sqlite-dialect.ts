@@ -27,7 +27,18 @@ import {
 	sqliteIntegerPrimaryKeyColumn,
 	toSqliteTableMetadata,
 } from "./sqlite-introspector";
-import type { DatabaseIndexIntrospector } from "./types";
+import type { DatabaseIndexIntrospector, KyselyAdapterProfile } from "./types";
+
+/** Configure D1's dialect and metadata without automatic database detection. */
+export function createD1Profile(database: D1Database): KyselyAdapterProfile {
+	return {
+		dialect: new D1SqliteDialect({ database }),
+		type: "sqlite",
+		// D1 supports batch(), but has no interactive transactions.
+		transaction: false,
+		introspectIndexes: createD1IndexIntrospector(database),
+	};
+}
 
 interface D1IndexInfoRow {
 	name: string | null;
@@ -38,7 +49,7 @@ function quoteSqliteStringLiteral(value: string) {
 	return `'${value.replaceAll("'", "''")}'`;
 }
 
-export function createD1IndexIntrospector(
+function createD1IndexIntrospector(
 	database: D1Database,
 ): DatabaseIndexIntrospector {
 	return async (tableNames) => {
@@ -267,7 +278,7 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 
 class D1SqliteQueryCompiler extends SqliteQueryCompiler {}
 
-export class D1SqliteDialect implements Dialect {
+class D1SqliteDialect implements Dialect {
 	readonly #config: D1SqliteDialectConfig;
 
 	constructor(config: D1SqliteDialectConfig) {

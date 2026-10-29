@@ -80,7 +80,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: null,
 			databaseType: null,
-			introspectIndexes: undefined,
+			introspectIndexes: undefined as DatabaseIndexIntrospector | undefined,
 			schemaName: undefined,
 			transaction: undefined,
 		};
@@ -92,7 +92,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: schemaName ? db.db.withSchema(schemaName) : db.db,
 			databaseType: db.type,
-			introspectIndexes: undefined,
+			introspectIndexes: db.introspectIndexes,
 			schemaName,
 			transaction: db.transaction,
 		};
@@ -105,7 +105,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		return {
 			kysely: schemaName ? kysely.withSchema(schemaName) : kysely,
 			databaseType: db.type,
-			introspectIndexes: undefined,
+			introspectIndexes: db.introspectIndexes,
 			schemaName,
 			transaction: db.transaction,
 		};
@@ -183,15 +183,11 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 
 	// Cloudflare D1
 	if ("batch" in db && "exec" in db && "prepare" in db) {
-		const { createD1IndexIntrospector, D1SqliteDialect } = await import(
-			"./d1-sqlite-dialect"
-		);
-		dialect = new D1SqliteDialect({
-			database: db,
-		});
-		introspectIndexes = createD1IndexIntrospector(db);
-		// D1 has no interactive transactions; only its batch() API.
-		transaction = false;
+		const { createD1Profile } = await import("./d1-sqlite-dialect");
+		const profile = createD1Profile(db);
+		dialect = profile.dialect;
+		introspectIndexes = profile.introspectIndexes;
+		transaction = profile.transaction;
 	}
 
 	return {

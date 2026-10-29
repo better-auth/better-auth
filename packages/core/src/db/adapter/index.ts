@@ -1,5 +1,6 @@
 import type { BetterAuthOptions } from "../../types";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
+import type { DBAdapterMigrationPlan } from "./types";
 
 export type DBAdapterDebugLogOption =
 	| boolean
@@ -78,6 +79,16 @@ export interface DBAdapterFactoryConfig<
 	 * Adapter id
 	 */
 	adapterId: string;
+	/**
+	 * Identify confirmed transaction aborts that must reach the adapter unchanged.
+	 * The adapter owns retry execution, limits, and backoff. Do not classify
+	 * errors with an uncertain commit outcome as retryable.
+	 */
+	isRetryableError?: ((error: unknown) => boolean) | undefined;
+	/** Plan migrations owned by the adapter. Schema changes run only after CLI confirmation. */
+	getMigrations?:
+		| ((options: Options) => Promise<DBAdapterMigrationPlan>)
+		| undefined;
 	/**
 	 * If the database supports numeric ids, set this to `true`.
 	 *
@@ -402,6 +413,10 @@ export type DBTransactionAdapter<
 
 export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	id: string;
+	/** Identify errors core must preserve for the adapter's transaction retry implementation. */
+	isRetryableError?: DBAdapterFactoryConfig<Options>["isRetryableError"];
+	/** Plan migrations for `auth migrate`, taking priority over built-in planners. */
+	getMigrations?: DBAdapterFactoryConfig<Options>["getMigrations"];
 	create: <T extends Record<string, any>, R = T>(data: {
 		model: string;
 		data: Omit<T, "id">;

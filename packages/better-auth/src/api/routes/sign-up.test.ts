@@ -1519,3 +1519,50 @@ describe("sign-up side effects run after the commit", async () => {
 		expect(await ctx.internalAdapter.findUserByEmail(email)).not.toBeNull();
 	});
 });
+
+/** @see https://github.com/better-auth/better-auth/issues/12088 */
+describe("adapter retry error classification", () => {
+	it.each(["40001", "CUSTOM_RETRY"])(
+		"preserves adapter-classified %s errors",
+		async (code) => {
+			const { auth } = await getTestInstance({}, { disableTestUser: true });
+			const ctx = await auth.$context;
+			const error = Object.assign(new Error("serialization abort"), {
+				code,
+			});
+			ctx.adapter.isRetryableError = (candidate) =>
+				typeof candidate === "object" &&
+				candidate !== null &&
+				"code" in candidate &&
+				candidate.code === code;
+			vi.spyOn(ctx.internalAdapter, "createUser").mockRejectedValueOnce(error);
+			await expect(
+				auth.api.signUpEmail({
+					body: {
+						name: "Retry",
+						email: "retry@example.test",
+						password: "test-password-123",
+					},
+				}),
+			).rejects.toBe(error);
+		},
+	);
+
+	it("keeps ordinary database errors wrapped without retry classification", async () => {
+		const { auth } = await getTestInstance({}, { disableTestUser: true });
+		const ctx = await auth.$context;
+		const error = Object.assign(new Error("unclassified database error"), {
+			code: "40001",
+		});
+		vi.spyOn(ctx.internalAdapter, "createUser").mockRejectedValueOnce(error);
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					name: "Retry",
+					email: "retry@example.test",
+					password: "test-password-123",
+				},
+			}),
+		).rejects.toMatchObject({ body: { code: "FAILED_TO_CREATE_USER" } });
+	});
+});

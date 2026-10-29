@@ -54,7 +54,7 @@ If `--adapter` is omitted, the CLI uses the adapter configured in your Better Au
 
 ## Migrate
 
-The migrate command applies the Better Auth schema directly to your database. This is available if you're using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
+The migrate command applies the Better Auth schema directly to your database. It supports the built-in Kysely adapter and adapters that provide a `getMigrations` hook. The CLI displays the adapter's plan and asks for confirmation before applying it. For adapters without this hook, use your ORM's migration tool.
 
 ```package-install title="Terminal"
 npx auth@latest migrate

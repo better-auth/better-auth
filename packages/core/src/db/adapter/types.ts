@@ -14,6 +14,47 @@ export type AdapterFactoryOptions = {
 	adapter: AdapterFactoryCustomizeAdapterCreator;
 };
 
+/** A migration plan displayed and executed by `auth migrate`. Planning must not apply schema changes. */
+export interface DBAdapterMigrationPlan {
+	/** Tables the migration will create, with their logical fields. */
+	toBeCreated: { table: string; fields: Record<string, DBFieldAttribute> }[];
+	/** Fields the migration will add to existing tables. */
+	toBeAdded: { table: string; fields: Record<string, DBFieldAttribute> }[];
+	/** Indexes the migration will create. */
+	toBeAddedIndexes: {
+		table: string;
+		index: { columns: readonly string[]; unique?: boolean | undefined };
+	}[];
+	/** Problems that must prevent migration execution. */
+	schemaProblems: string[];
+	/** Apply the plan after the user confirms it. Reject unsafe changes before applying them. */
+	runMigrations: () => Promise<void>;
+}
+
+/** Metadata for a column participating in a database index. */
+export interface DatabaseIndexColumnMetadata {
+	/** Whether the complete column value, rather than a prefix, is indexed. */
+	readonly fullLength: boolean;
+	readonly name: string | null;
+	readonly position: number;
+}
+
+/** Normalized index metadata supplied by a database adapter. */
+export interface DatabaseIndexMetadata {
+	readonly columns: readonly DatabaseIndexColumnMetadata[];
+	readonly name: string;
+	readonly partial: boolean;
+	readonly table: string;
+	readonly unique: boolean;
+	/** Whether the database reports the index as complete and usable. */
+	readonly valid: boolean;
+}
+
+/** Read normalized index metadata for the requested physical tables. */
+export type DatabaseIndexIntrospector = (
+	tableNames: readonly string[],
+) => Promise<readonly DatabaseIndexMetadata[]>;
+
 export interface AdapterFactoryConfig
 	extends Omit<DBAdapterFactoryConfig<BetterAuthOptions>, "transaction"> {
 	/**

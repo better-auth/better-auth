@@ -11,6 +11,7 @@
     "@better-auth/sso": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "@better-auth/oauth-provider": "workspace:*",
-    "@better-auth/mcp": "workspace:*"
+    "@better-auth/mcp": "workspace:*",
+    "@better-auth/kysely-adapter": "workspace:*"
   }
 }

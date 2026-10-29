@@ -195,3 +195,67 @@ Reconnect after changing this default. Run `SHOW search_path` to verify the acti
 PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
 
 If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+
+## Amazon Aurora DSQL
+
+Use the separate `@better-auth/dsql-adapter` package for Aurora DSQL. It reuses Kysely's PostgreSQL operations and Better Auth's schema planner, and keeps DSQL-specific retries, SQL compilation, and index jobs in the adapter package.
+
+Install the adapter and [AWS node-postgres connector](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/SECTION_program-with-dsql-connector-for-node-postgres.html):
+
+```sh
+pnpm add @better-auth/dsql-adapter kysely pg @aws/aurora-dsql-node-postgres-connector @aws-sdk/credential-providers @aws-sdk/dsql-signer
+pnpm add -D @types/pg
+```
+
+```ts title="auth.ts"
+import { AuroraDSQLPool } from "@aws/aurora-dsql-node-postgres-connector";
+import { dsqlAdapter, dsqlDialect } from "@better-auth/dsql-adapter";
+import { betterAuth } from "better-auth";
+import { Kysely } from "kysely";
+
+const pool = new AuroraDSQLPool({
+  host: process.env.DSQL_ENDPOINT!,
+  user: process.env.DSQL_USER!,
+  max: 3,
+});
+
+export const db = new Kysely({ dialect: dsqlDialect({ pool }) });
+export const auth = betterAuth({
+  database: dsqlAdapter(db),
+  rateLimit: { storage: "database" },
+});
+```
+
+Grant the application's IAM role access to the cluster and map it to the database user. The connector generates fresh IAM tokens when opening connections. Keep the pool outside your Lambda request handler so warm invocations reuse connections. For a non-default schema, pass the same `{ schemaName: "auth" }` to `dsqlAdapter` and `getDsqlMigrations`.
+
+### Migrations
+
+The adapter provides schema generation and migration hooks. Run migrations separately from application requests:
+
+```sh
+npx auth@latest migrate
+```
+
+Use `npx auth@latest generate` to inspect the SQL without applying it. You can also run migrations programmatically:
+
+```ts title="migrate.ts"
+import { getDsqlMigrations } from "@better-auth/dsql-adapter/migration";
+import { auth, db } from "./auth";
+
+try {
+  const migration = await getDsqlMigrations(auth.options, db);
+  await migration.runMigrations();
+} finally {
+  await db.destroy();
+}
+```
+
+Both paths use the adapter's migration plan, which reuses the shared planner and refuses unsafe changes and schema problems. The DSQL dialect creates indexes with `CREATE INDEX ASYNC` and waits for each job on the same connection. Rerunning a migration resumes matching pending jobs and restores missing field indexes. Failed or incompatible indexes require inspection in `sys.jobs` and correction before retrying.
+
+When applying generated SQL yourself, execute statements individually and wait for each returned job ID using `CALL sys.wait_for_job('<job_id>');` before relying on the index. See [DSQL asynchronous indexes](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-create-index-async.html).
+
+### Transactions and storage
+
+The adapter enables transactions. A serialization abort (`40001`) retries the complete transaction, or a single adapter operation outside a transaction, up to three times with backoff. Other errors propagate immediately. Before hooks and transactional callbacks may repeat; send emails and call external services from after hooks, which run after a successful commit. Email signup uses the existing shared after-commit mechanism. Persistently contended operations can still fail after the retry limit.
+
+String IDs remain the default. Numeric IDs (`advanced.database.generateId: "serial"`) use `bigint` identity columns with `CACHE 1`; gaps are possible. Sessions and verification records use the database without secondary storage. Rate limiting defaults to process memory without secondary storage; set `rateLimit.storage: "database"` explicitly for Lambda deployments. This adapter currently rejects `secondaryStorage`: transaction retries cannot roll back external cache writes. DSQL's SQL and transaction limits still apply to custom schemas and plugins.

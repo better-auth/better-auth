@@ -20,6 +20,7 @@ describe("change classification", () => {
 		["expo", "platform"],
 		["session", "core"],
 		["prisma-adapter", "database"],
+		["dsql-adapter", "database"],
 	])("maps the %s scope to the %s domain", (scope, domain) => {
 		expect(resolveDomain(scope, [])).toBe(domain);
 	});
@@ -28,6 +29,7 @@ describe("change classification", () => {
 		["packages/expo/src/index.ts", "platform"],
 		["packages/sso/src/index.ts", "enterprise"],
 		["packages/better-auth/src/db/index.ts", "database"],
+		["packages/dsql-adapter/src/index.ts", "database"],
 		["docs/content/docs/index.mdx", "docs"],
 	])("maps %s to the %s domain", (path, domain) => {
 		expect(resolveDomain(undefined, [path])).toBe(domain);
@@ -38,8 +40,15 @@ describe("change classification", () => {
 		["sso", "@better-auth/sso"],
 		["cli", "auth"],
 		["session", "better-auth"],
+		["dsql-adapter", "@better-auth/dsql-adapter"],
 	])("maps the %s scope to the %s package", (scope, packageName) => {
 		expect(resolvePackage(scope, [])).toBe(packageName);
+	});
+
+	it("maps DSQL file changes to the adapter package without a scope", () => {
+		expect(
+			resolvePackage(undefined, ["packages/dsql-adapter/src/index.ts"]),
+		).toBe("@better-auth/dsql-adapter");
 	});
 
 	it("prefers a specific package over the core catch-all", () => {

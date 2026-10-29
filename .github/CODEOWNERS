@@ -15,6 +15,7 @@
 /packages/prisma-adapter/                          @better-auth/data
 /packages/mongo-adapter/                           @better-auth/data
 /packages/kysely-adapter/                          @better-auth/data
+/packages/dsql-adapter/                            @better-auth/data
 /packages/memory-adapter/                          @better-auth/data
 
 # ── Identity & Auth ──

@@ -68,6 +68,26 @@ function createTestAdapter({
 }
 
 describe("createAdapterFactory model identity", () => {
+	it("exposes adapter-owned error classification and migrations", async () => {
+		const isRetryableError = vi.fn((error: unknown) => error === "retry");
+		const getMigrations = vi.fn(async () => ({
+			toBeCreated: [],
+			toBeAdded: [],
+			toBeAddedIndexes: [],
+			schemaProblems: [],
+			runMigrations: async () => {},
+		}));
+		const adapter = createAdapterFactory({
+			config: { adapterId: "custom", isRetryableError, getMigrations },
+			adapter: () => createCustomAdapter(),
+		})({});
+
+		expect(adapter.isRetryableError?.("retry")).toBe(true);
+		expect(adapter.isRetryableError?.("other")).toBe(false);
+		await adapter.getMigrations?.({});
+		expect(getMigrations).toHaveBeenCalledWith({});
+	});
+
 	it("keeps the schema model when its custom name matches another schema key", async () => {
 		const findOne = vi.fn(async () => null);
 		const adapter = createAdapterFactory<BetterAuthOptions>({

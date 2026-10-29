@@ -1,35 +1,22 @@
+import type { DatabaseIndexIntrospector } from "@better-auth/core/db/adapter";
+import type { Dialect } from "kysely";
+
+export type {
+	DatabaseIndexColumnMetadata,
+	DatabaseIndexIntrospector,
+	DatabaseIndexMetadata,
+} from "@better-auth/core/db/adapter";
+
 export type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 
-/**
- * Metadata for a column that participates in a database index.
- */
-export interface DatabaseIndexColumnMetadata {
-	/**
-	 * Whether the index covers the complete column value rather than a prefix.
-	 */
-	readonly fullLength: boolean;
-	readonly name: string | null;
-	readonly position: number;
+/** Explicit dialect capabilities, accepted by Better Auth's database configuration. */
+export interface KyselyAdapterProfile {
+	/** A dialect owned by the database package. */
+	dialect: Dialect;
+	/** SQL semantics shared with the existing Kysely operations and migration planner. */
+	type: KyselyDatabaseType;
+	/** Whether the dialect supports interactive transactions. Defaults to false. */
+	transaction?: boolean;
+	/** Optional index metadata for dialects whose catalogs differ from the SQL family. */
+	introspectIndexes?: DatabaseIndexIntrospector;
 }
-
-/**
- * Database-agnostic metadata for an index.
- */
-export interface DatabaseIndexMetadata {
-	readonly columns: readonly DatabaseIndexColumnMetadata[];
-	readonly name: string;
-	readonly partial: boolean;
-	readonly table: string;
-	readonly unique: boolean;
-	/**
-	 * Whether the database reports the index as complete and usable.
-	 */
-	readonly valid: boolean;
-}
-
-/**
- * Reads normalized index metadata for the provided database tables.
- */
-export type DatabaseIndexIntrospector = (
-	tableNames: readonly string[],
-) => Promise<readonly DatabaseIndexMetadata[]>;

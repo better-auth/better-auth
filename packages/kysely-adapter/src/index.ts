@@ -1,3 +1,4 @@
+export { createD1Profile } from "./d1-sqlite-dialect";
 export * from "./dialect";
 export * from "./kysely-adapter";
 export {
