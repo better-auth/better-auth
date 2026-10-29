@@ -50,4 +50,12 @@ export type InferSessionAPI<API> = API extends {
 		>
 	: never;
 
-export type InferAPI<API> = InferSessionAPI<API> & FilteredAPI<API>;
+type CallableAPI<API> = InferSessionAPI<API> & FilteredAPI<API>;
+
+export type InferAPI<API> = CallableAPI<API> & {
+	/**
+	 * Run `auth.api` methods as `userId` from trusted server code.
+	 * Permission checks still apply. HTTP requests cannot call this.
+	 */
+	$asUser: (userId: string) => CallableAPI<API>;
+};
