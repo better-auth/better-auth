@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type {
 	AdapterFactoryCustomizeAdapterCreator,
 	AdapterFactoryOptions,
+	CustomAdapter,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
@@ -15,6 +16,7 @@ import {
 	registerSchemaCheck,
 } from "@better-auth/core/db/internal";
 import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
@@ -23,6 +25,7 @@ import type {
 	UpdateQueryBuilder,
 } from "kysely";
 import { sql } from "kysely";
+import { withDsqlRetry } from "./dsql";
 import {
 	insensitiveEq,
 	insensitiveIlike,
@@ -71,12 +74,26 @@ interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Enable Aurora DSQL async index migrations and bounded retries of aborted
+	 * transactions. PostgreSQL only; requires transactions to remain enabled.
+	 * @default false
+	 */
+	dsql?: boolean;
 }
 
 export const kyselyAdapter = (
 	db: Kysely<any>,
 	config?: KyselyAdapterConfig | undefined,
 ) => {
+	if (
+		config?.dsql &&
+		(config.type !== "postgres" || config.transaction === false)
+	) {
+		throw new BetterAuthError(
+			"Aurora DSQL requires PostgreSQL and enabled transactions.",
+		);
+	}
 	let lazyOptions: BetterAuthOptions | null = null;
 	let mysqlNoIdWarned = false;
 	const createCustomAdapter = (
@@ -578,7 +595,7 @@ export const kyselyAdapter = (
 				return result;
 			}
 
-			return {
+			const customAdapter: CustomAdapter = {
 				async create({ data, model, modelKey = model }) {
 					const builder = db.insertInto(model).values(data);
 					const returned = await withReturning(
@@ -1014,6 +1031,24 @@ export const kyselyAdapter = (
 				},
 				options: config,
 			};
+			if (!config?.dsql || inTransaction) return customAdapter;
+			return {
+				...customAdapter,
+				create: (data) => withDsqlRetry(() => customAdapter.create(data)),
+				findOne: (data) => withDsqlRetry(() => customAdapter.findOne(data)),
+				findMany: (data) => withDsqlRetry(() => customAdapter.findMany(data)),
+				update: (data) => withDsqlRetry(() => customAdapter.update(data)),
+				updateMany: (data) =>
+					withDsqlRetry(() => customAdapter.updateMany(data)),
+				delete: (data) => withDsqlRetry(() => customAdapter.delete(data)),
+				deleteMany: (data) =>
+					withDsqlRetry(() => customAdapter.deleteMany(data)),
+				count: (data) => withDsqlRetry(() => customAdapter.count(data)),
+				consumeOne: (data) =>
+					withDsqlRetry(() => customAdapter.consumeOne!(data)),
+				incrementOne: (data) =>
+					withDsqlRetry(() => customAdapter.incrementOne!(data)),
+			};
 		};
 	};
 	let adapterOptions: AdapterFactoryOptions | null = null;
@@ -1040,19 +1075,23 @@ export const kyselyAdapter = (
 					: false,
 			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
 			supportsUUIDs: config?.type === "postgres" ? true : false,
-			transaction: config?.transaction
-				? (cb) =>
-						db.transaction().execute((trx) => {
-							const adapter = createAdapterFactory({
-								config: {
-									...adapterOptions!.config,
-									transaction: false,
-								},
-								adapter: createCustomAdapter(trx, true),
-							})(lazyOptions!);
-							return cb(adapter);
-						})
-				: false,
+			transaction:
+				config?.transaction || config?.dsql
+					? (cb) => {
+							const execute = () =>
+								db.transaction().execute((trx) => {
+									const adapter = createAdapterFactory({
+										config: {
+											...adapterOptions!.config,
+											transaction: false,
+										},
+										adapter: createCustomAdapter(trx, true),
+									})(lazyOptions!);
+									return cb(adapter);
+								});
+							return config?.dsql ? withDsqlRetry(execute) : execute();
+						}
+					: false,
 		},
 		adapter: createCustomAdapter(db),
 	};

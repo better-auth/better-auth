@@ -1,4 +1,5 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { withDsqlRetry } from "@better-auth/kysely-adapter";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { admin } from "../../plugins/admin/admin";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -1174,5 +1175,87 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 		expect(secondUser.banned).toBe(false);
 		expect(secondUser.banReason).toBeNull();
 		expect(secondUser.banExpires).toBeNull();
+	});
+});
+
+/** @see https://github.com/better-auth/better-auth/issues/12088 */
+describe("sign-up with serialization retries", () => {
+	const body = {
+		name: "Retry",
+		email: "retry@example.test",
+		password: "test-password-123",
+	};
+	const conflict = () =>
+		Object.assign(new Error("serialization abort"), { code: "40001" });
+
+	it.each([1, 4])(
+		"publishes email and cookies only for a committed attempt (%s aborts)",
+		async (failures) => {
+			const sendVerificationEmail = vi.fn(async () => {});
+			const { auth, db } = await getTestInstance(
+				{ emailVerification: { sendOnSignUp: true, sendVerificationEmail } },
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+			const transaction = ctx.adapter.transaction;
+			let attempts = 0;
+			vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
+				withDsqlRetry(() =>
+					transaction(async (trx) => {
+						attempts++;
+						const result = await cb(trx);
+						expect(sendVerificationEmail).not.toHaveBeenCalled();
+						if (attempts <= failures) throw conflict();
+						return result;
+					}),
+				),
+			);
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-up/email", {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: "http://localhost:3000",
+					},
+					body: JSON.stringify(body),
+				}),
+			);
+			if (failures === 1) {
+				expect(response.status).toBe(200);
+				expect(attempts).toBe(2);
+				expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+				expect(response.headers.get("set-cookie")).toContain("session_token");
+			} else {
+				expect(response.status).toBe(500);
+				expect(attempts).toBe(4);
+				expect(sendVerificationEmail).not.toHaveBeenCalled();
+				expect(response.headers.get("set-cookie")).toBeNull();
+				expect(await db.findMany({ model: "user" })).toHaveLength(0);
+			}
+		},
+	);
+
+	it("preserves a statement abort so the complete sign-up transaction retries", async () => {
+		const { auth } = await getTestInstance({}, { disableTestUser: true });
+		const ctx = await auth.$context;
+		const transaction = ctx.adapter.transaction;
+		let attempts = 0;
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
+			withDsqlRetry(() =>
+				transaction(async (trx) => {
+					attempts++;
+					const create = trx.create;
+					if (attempts === 1)
+						vi.spyOn(trx, "create").mockImplementation(async (data) => {
+							if (data.model === "user") throw conflict();
+							return create(data);
+						});
+					return cb(trx);
+				}),
+			),
+		);
+		const result = await auth.api.signUpEmail({ body });
+		expect(result.user.email).toBe(body.email);
+		expect(attempts).toBe(2);
 	});
 });

@@ -10,7 +10,7 @@ export async function getAdapter(
 		const { createKyselyAdapter, kyselyAdapter } = await import(
 			"../adapters/kysely-adapter"
 		);
-		const { kysely, databaseType, transaction } =
+		const { kysely, databaseType, transaction, dsql } =
 			await createKyselyAdapter(opts);
 		if (!kysely) {
 			throw new BetterAuthError("Failed to initialize database adapter");
@@ -22,6 +22,7 @@ export async function getAdapter(
 					? opts.database.debugLogs
 					: false,
 			transaction,
+			dsql,
 		})(opts);
 	});
 }

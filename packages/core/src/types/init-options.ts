@@ -652,6 +652,13 @@ export type BetterAuthOptions = {
 						 */
 						transaction?: boolean;
 						/**
+						 * Enable Aurora DSQL async index migrations and bounded retries of aborted
+						 * transactions. PostgreSQL only; requires transactions to remain enabled.
+						 * @default false
+						 */
+						dsql?: boolean;
+
+						/**
 						 * The database schema (namespace) for Better Auth's tables.
 						 * PostgreSQL only. Qualifies every adapter and CLI statement,
 						 * so Better Auth stops depending on the connection's
@@ -691,6 +698,13 @@ export type BetterAuthOptions = {
 						 * @default false
 						 */
 						transaction?: boolean;
+						/**
+						 * Enable Aurora DSQL async index migrations and bounded retries of aborted
+						 * transactions. PostgreSQL only; requires transactions to remain enabled.
+						 * @default false
+						 */
+						dsql?: boolean;
+
 						/**
 						 * The database schema (namespace) for Better Auth's tables.
 						 * PostgreSQL only. Qualifies every adapter and CLI statement,

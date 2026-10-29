@@ -1,6 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { runWithTransaction } from "@better-auth/core/context";
+import {
+	queueAfterTransactionHook,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
@@ -348,6 +351,14 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						);
 					}
 				} catch (e) {
+					// Preserve serialization aborts so the adapter can restart this transaction.
+					if (
+						typeof e === "object" &&
+						e !== null &&
+						"code" in e &&
+						e.code === "40001"
+					)
+						throw e;
 					if (isAPIError(e)) {
 						// Under generic-duplicate mode, a gate rejection (403) returns the
 						// same opaque success as an existing email to prevent account
@@ -393,17 +404,21 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
-					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
-						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-								safeCloneRequest(ctx.request),
-							),
-						);
+					const sendVerificationEmail =
+						ctx.context.options.emailVerification?.sendVerificationEmail;
+					if (sendVerificationEmail) {
+						await queueAfterTransactionHook(async () => {
+							await ctx.context.runInBackgroundOrAwait(
+								sendVerificationEmail(
+									{
+										user: createdUser,
+										url,
+										token,
+									},
+									safeCloneRequest(ctx.request),
+								),
+							);
+						});
 					}
 				}
 
@@ -430,14 +445,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
 					);
 				}
-				await setSessionCookie(
-					ctx,
-					{
-						session,
-						user: createdUser,
-					},
-					rememberMe === false,
-				);
+				await queueAfterTransactionHook(async () => {
+					await setSessionCookie(
+						ctx,
+						{
+							session,
+							user: createdUser,
+						},
+						rememberMe === false,
+					);
+				});
 				return ctx.json({
 					token: session.token,
 					user: parseUserOutput(ctx.context.options, createdUser) as User<

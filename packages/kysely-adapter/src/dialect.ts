@@ -83,23 +83,35 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			introspectIndexes: undefined,
 			schemaName: undefined,
 			transaction: undefined,
+			dsql: undefined,
 		};
 	}
 
 	if ("db" in db) {
 		const schemaName = db.schemaName;
+		if (db.dsql && (db.type !== "postgres" || db.transaction === false)) {
+			throw new BetterAuthError(
+				"Aurora DSQL requires PostgreSQL and enabled transactions.",
+			);
+		}
 		checkSchemaName(schemaName, db.type);
 		return {
 			kysely: schemaName ? db.db.withSchema(schemaName) : db.db,
 			databaseType: db.type,
 			introspectIndexes: undefined,
 			schemaName,
-			transaction: db.transaction,
+			transaction: db.transaction ?? (db.dsql ? true : undefined),
+			dsql: db.dsql,
 		};
 	}
 
 	if ("dialect" in db) {
 		const schemaName = db.schemaName;
+		if (db.dsql && (db.type !== "postgres" || db.transaction === false)) {
+			throw new BetterAuthError(
+				"Aurora DSQL requires PostgreSQL and enabled transactions.",
+			);
+		}
 		checkSchemaName(schemaName, db.type);
 		const kysely = new Kysely<any>({ dialect: db.dialect });
 		return {
@@ -107,7 +119,8 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 			databaseType: db.type,
 			introspectIndexes: undefined,
 			schemaName,
-			transaction: db.transaction,
+			transaction: db.transaction ?? (db.dsql ? true : undefined),
+			dsql: db.dsql,
 		};
 	}
 
@@ -201,6 +214,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		// A raw pool, database handle, or dialect carries no adapter options,
 		// so a schema can only be declared through the object config forms.
 		schemaName: undefined,
+		dsql: undefined,
 		transaction,
 	};
 };

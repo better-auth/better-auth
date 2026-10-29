@@ -195,3 +195,43 @@ Reconnect after changing this default. Run `SHOW search_path` to verify the acti
 PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
 
 If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+
+## Amazon Aurora DSQL
+
+Use the built-in Kysely PostgreSQL adapter with `database.dsql: true` for Aurora DSQL. This enables asynchronous index migrations and retries serialization conflicts. It does not configure the Prisma or Drizzle adapters.
+
+Install the [AWS node-postgres connector](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/SECTION_program-with-dsql-connector-for-node-postgres.html) and its peer dependencies:
+
+```sh
+pnpm add kysely pg @aws/aurora-dsql-node-postgres-connector @aws-sdk/credential-providers @aws-sdk/dsql-signer
+```
+
+```ts title="auth.ts"
+import { AuroraDSQLPool } from "@aws/aurora-dsql-node-postgres-connector";
+import { betterAuth } from "better-auth";
+import { PostgresDialect } from "kysely";
+
+const pool = new AuroraDSQLPool({
+  host: process.env.DSQL_ENDPOINT!,
+  user: process.env.DSQL_USER!,
+  max: 3,
+});
+
+export const auth = betterAuth({
+  database: {
+    dialect: new PostgresDialect({ pool }),
+    type: "postgres",
+    dsql: true,
+  },
+});
+```
+
+Grant the application's IAM role access to the cluster and map it to the database user. The connector generates fresh IAM authentication tokens when opening connections. Keep the pool outside your Lambda request handler so warm invocations can reuse connections.
+
+Transactions are enabled automatically; `transaction: false` is rejected. A serialization abort (`40001`) retries the entire transaction, or a single adapter operation outside a transaction, up to three times with backoff. Other errors propagate immediately. Transaction callbacks and hooks that run before commit can run again: keep external side effects out of them. Better Auth's queued after-transaction hooks run only after a successful commit. A persistently contended operation can still fail after the retry limit.
+
+Run `npx auth@latest migrate` separately from application requests. Migrations create indexes with `CREATE INDEX ASYNC` and wait for each job before reporting success. Rerunning an interrupted migration resumes matching pending index jobs and adds missing field indexes. Failed or incompatible indexes require inspection in `sys.jobs` and correction before retrying.
+
+`npx auth@latest generate` emits asynchronous index statements. When applying the generated SQL yourself, execute statements individually and wait for each returned job ID using `CALL sys.wait_for_job('<job_id>');` before relying on the index. See [DSQL asynchronous indexes](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-create-index-async.html).
+
+String IDs remain the default. Numeric IDs (`advanced.database.generateId: "serial"`) use a `bigint` identity column with `CACHE 1`; gaps are possible. Database sessions, verification records and rate limits use the same database without requiring secondary storage. DSQL's SQL and transaction limits still apply to custom schemas and plugins.
