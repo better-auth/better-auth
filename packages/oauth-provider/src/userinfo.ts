@@ -23,18 +23,19 @@ import { getClient, resolveSubjectIdentifier } from "./utils";
  *
  * A claim is included when its backing scope was granted, or when it was named
  * individually through the `claims.userinfo` request parameter (§5.4, §5.5).
- * `sub` is always present. Values come from the one claim registry, so the
- * advertisement, the scope mapping, and the resolution cannot drift apart.
+ * `sub` is not included: it is provider-owned and added by the UserInfo endpoint.
+ * Values come from the one claim registry, so the advertisement, the scope
+ * mapping, and the resolution cannot drift apart.
  *
  * @see https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
  */
-function userNormalClaims(
+export function userNormalClaims(
 	user: User,
 	scopes: string[],
 	requestedClaims: string[] = [],
 ) {
 	const requested = new Set(requestedClaims);
-	const claims: Record<string, unknown> = { sub: user.id ?? undefined };
+	const claims: Record<string, unknown> = {};
 	for (const [name, definition] of Object.entries(STANDARD_CLAIMS)) {
 		if (scopes.includes(definition.scope) || requested.has(name)) {
 			claims[name] = definition.resolve(user);
@@ -181,7 +182,10 @@ export async function userInfoEndpoint(
 		});
 	}
 
-	const baseUserClaims = userNormalClaims(user, scopes ?? [], requestedClaims);
+	const baseUserClaims: Record<string, unknown> = {
+		sub: user.id,
+		...userNormalClaims(user, scopes ?? [], requestedClaims),
+	};
 	const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
 	// Load the client only when something needs it: pairwise subject resolution
 	// or a UserInfo claim extension. The token was already validated against its
