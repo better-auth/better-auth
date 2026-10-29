@@ -7,6 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { additionalAuthorizationParamsSchema } from "@better-auth/core/oauth2";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { setOAuthState } from "../../api/state/oauth";
@@ -150,6 +151,7 @@ const oauthPopupStart = createAuthEndpoint(
 			scopes: z.string().optional(),
 			requestSignUp: z.string().optional(),
 			additionalData: z.string().optional(),
+			additionalParams: z.string().optional(),
 		}),
 		metadata: HIDE_METADATA,
 	},
@@ -211,6 +213,22 @@ const oauthPopupStart = createAuthEndpoint(
 			);
 		}
 
+		// Same validation as `/sign-in/social`: string values only, no reserved
+		// OAuth parameters (`state`, `redirect_uri`, PKCE, ...).
+		let additionalParams: Record<string, string> | undefined;
+		if (c.query.additionalParams) {
+			const parsed = additionalAuthorizationParamsSchema.safeParse(
+				safeJSONParse(c.query.additionalParams),
+			);
+			if (!parsed.success) {
+				return fail(
+					"invalid_additional_params",
+					parsed.error.issues[0]?.message,
+				);
+			}
+			additionalParams = parsed.data;
+		}
+
 		const callbackURL = c.query.callbackURL || c.context.baseURL;
 
 		let url: URL;
@@ -255,6 +273,7 @@ const oauthPopupStart = createAuthEndpoint(
 				idTokenNonce,
 				redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 				scopes: c.query.scopes ? c.query.scopes.split(",") : undefined,
+				additionalParams,
 			});
 		} catch (error) {
 			c.context.logger.error("OAuth popup failed to start", error);

@@ -23,6 +23,12 @@ export interface SignInPopupOptions {
 	requestSignUp?: boolean;
 	scopes?: string[];
 	additionalData?: Record<string, unknown>;
+	/**
+	 * Extra query parameters appended to the provider authorization URL, as in
+	 * `signIn.social` (e.g. `{ ui_locales: "fr" }`). Reserved OAuth parameters
+	 * such as `state` and `redirect_uri` are rejected.
+	 */
+	additionalParams?: Record<string, string>;
 	/** `window.open` feature string; defaults to a centered 500x600 window. */
 	windowFeatures?: string;
 	/** How long (ms) to wait for the popup to complete. Default 5 minutes. */
@@ -234,6 +240,7 @@ export function createSignInPopup({
 			provider,
 			providerId,
 			additionalData,
+			additionalParams,
 			windowFeatures,
 			timeoutMs = DEFAULT_TIMEOUT_MS,
 			callbackURL,
@@ -276,6 +283,11 @@ export function createSignInPopup({
 			startUrl.searchParams.set(
 				"additionalData",
 				JSON.stringify(additionalData),
+			);
+		if (additionalParams)
+			startUrl.searchParams.set(
+				"additionalParams",
+				JSON.stringify(additionalParams),
 			);
 
 		// Open synchronously in the user gesture so the browser doesn't block it.

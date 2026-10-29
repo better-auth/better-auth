@@ -256,6 +256,46 @@ describe("oauth popup server flow", async () => {
 		expect(stored?.link).toBeUndefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12119
+	 */
+	describe("additionalParams", () => {
+		it("forwards additionalParams to the provider authorization URL", async () => {
+			const additionalParams = encodeURIComponent(
+				JSON.stringify({ ui_locales: "fr" }),
+			);
+			const startRes = await customFetchImpl(
+				`${startUrl}&additionalParams=${additionalParams}`,
+				{ method: "GET", redirect: "manual" },
+			);
+			const location = new URL(startRes.headers.get("location") || "");
+			expect(location.searchParams.get("ui_locales")).toBe("fr");
+		});
+
+		it("rejects reserved authorization parameters", async () => {
+			const additionalParams = encodeURIComponent(
+				JSON.stringify({ state: "attacker-state" }),
+			);
+			const res = await customFetchImpl(
+				`${startUrl}&additionalParams=${additionalParams}`,
+				{ method: "GET", redirect: "manual" },
+			);
+			expect(res.status).toBe(200);
+			expect(await res.text()).toContain("invalid_additional_params");
+		});
+
+		it("rejects additionalParams that are not a string record", async () => {
+			const additionalParams = encodeURIComponent(
+				JSON.stringify({ ui_locales: 1 }),
+			);
+			const res = await customFetchImpl(
+				`${startUrl}&additionalParams=${additionalParams}`,
+				{ method: "GET", redirect: "manual" },
+			);
+			expect(await res.text()).toContain("invalid_additional_params");
+		});
+	});
+
 	it("rejects an untrusted callbackURL at start", async () => {
 		const res = await customFetchImpl(
 			`${popupOrigin}/api/auth/oauth-popup/start?provider=${providerId}&popupOrigin=${encodeURIComponent(popupOrigin)}&popupNonce=n1&callbackURL=${encodeURIComponent("https://evil.example.com")}`,
