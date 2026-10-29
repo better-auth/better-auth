@@ -90,8 +90,10 @@ describe.skipIf(process.platform === "win32")("login and logout", () => {
 		expect(server.requests).toEqual(["POST /api/auth/device/code "]);
 	});
 
-	it("login polls until approval and stores the token for the current user only", async () => {
+	it("login polls until approval and stores the token readable only by its owner", async () => {
 		const { tokenFile, run } = await setupCli();
+		await fs.mkdir(path.dirname(tokenFile), { mode: 0o755 });
+		await fs.writeFile(tokenFile, "{}", { mode: 0o644 });
 		const server = await startServer({
 			"/api/auth/device/code": [
 				{
@@ -121,13 +123,14 @@ describe.skipIf(process.platform === "win32")("login and logout", () => {
 			serverUrl: server.url,
 			access_token: "session-token",
 		});
+		expect((await fs.stat(path.dirname(tokenFile))).mode & 0o777).toBe(0o700);
 		expect((await fs.stat(tokenFile)).mode & 0o777).toBe(0o600);
 	});
 
 	it("logout revokes the session and removes the token without spawning another CLI", async () => {
 		const { tokenFile, run, npxCalls } = await setupCli();
 		const server = await startServer({
-			"/api/auth/sign-out": [{ success: true }],
+			"/api/auth/revoke-session": [{ status: true }],
 		});
 		await fs.mkdir(path.dirname(tokenFile), { recursive: true });
 		await fs.writeFile(
@@ -142,7 +145,7 @@ describe.skipIf(process.platform === "win32")("login and logout", () => {
 
 		expect(await npxCalls()).toEqual([]);
 		expect(server.requests).toEqual([
-			"POST /api/auth/sign-out Bearer session-token",
+			"POST /api/auth/revoke-session Bearer session-token",
 		]);
 		await expect(fs.access(tokenFile)).rejects.toThrow();
 	});

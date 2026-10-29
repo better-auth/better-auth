@@ -63,6 +63,8 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 		}
 
 		await fs.mkdir(path.dirname(TOKEN_FILE), { recursive: true, mode: 0o700 });
+		// `mode` only applies on create, so tighten what an older login left behind too.
+		await fs.chmod(path.dirname(TOKEN_FILE), 0o700);
 		await fs.writeFile(
 			TOKEN_FILE,
 			JSON.stringify({
@@ -71,7 +73,6 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 			}),
 			{ mode: 0o600 },
 		);
-		// `mode` only applies on create, so tighten a token file left by an older login too.
 		await fs.chmod(TOKEN_FILE, 0o600);
 		outro(chalk.green("Demo login successful!"));
 		return;
@@ -107,8 +108,11 @@ async function logoutAction() {
 	const authClient = createAuthClient({
 		baseURL: stored.serverUrl ?? DEMO_URL,
 	});
+	// Unlike sign-out, revoke-session rejects a request it cannot authenticate,
+	// so a server without bearer support is reported instead of silently kept.
 	const result = await authClient
-		.signOut({
+		.revokeSession({
+			token: stored.access_token,
 			fetchOptions: {
 				headers: {
 					Authorization: `Bearer ${stored.access_token}`,
