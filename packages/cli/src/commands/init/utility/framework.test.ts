@@ -345,9 +345,9 @@ describe("Init CLI - framework utility", () => {
 			},
 			{
 				id: "react-router-v7",
-				typeImport: `import type { Route } from "./+types/api.auth.$"`,
-				loaderArgs: "Route.LoaderArgs",
-				actionArgs: "Route.ActionArgs",
+				typeImport: `import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router"`,
+				loaderArgs: "LoaderFunctionArgs",
+				actionArgs: "ActionFunctionArgs",
 			},
 		])(
 			"should mount auth.handler in a $id resource route",

@@ -1233,6 +1233,7 @@ export const auth = betterAuth({
 	})();
 
 	// Generate the route handler file.
+	let routeHandlerNextStep: string | undefined;
 	await (async () => {
 		// Skip route handler generation if framework wasn't detected
 		if (!frameworkWasDetected) {
@@ -1299,9 +1300,15 @@ export const auth = betterAuth({
 		];
 
 		for (const pattern of importPatterns) {
-			if (!pattern.test(updatedCode)) continue;
-			updatedCode = updatedCode.replace(pattern, `from "${authImportPath}"`);
-			break;
+			const newCode = updatedCode.replace(pattern, `from "${authImportPath}"`);
+			if (newCode !== updatedCode) {
+				updatedCode = newCode;
+				break;
+			}
+		}
+
+		if ("nextStep" in routeHandler) {
+			routeHandlerNextStep = routeHandler.nextStep;
 		}
 
 		filesToWrite.push(async () => {
@@ -1569,6 +1576,11 @@ export const auth = betterAuth({
 			`     Use ${chalk.cyan("auth.handler")} with a Web API compatible request object\n` +
 				`     Default route: ${chalk.cyan('"/api/auth"')} (configurable via ${chalk.cyan("basePath")})`,
 		);
+		nextStepNum++;
+	}
+
+	if (routeHandlerNextStep) {
+		logs.push(`  ${nextStepNum}. ${routeHandlerNextStep}`);
 		nextStepNum++;
 	}
 

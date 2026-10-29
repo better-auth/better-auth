@@ -431,7 +431,7 @@ describe("initAction", () => {
 	);
 
 	testWithTmpDir(
-		"should keep the route type import in a React Router route handler",
+		"should tell the user to register the React Router route handler",
 		async ({ tmp }) => {
 			await fs.writeFile(
 				path.join(tmp, "package.json"),
@@ -475,6 +475,9 @@ describe("initAction", () => {
 				if (question.message?.includes("auth client configuration")) {
 					return { value: false };
 				}
+				if (question.name === "connect") {
+					return { connect: false };
+				}
 
 				return {};
 			});
@@ -487,8 +490,10 @@ describe("initAction", () => {
 			);
 			expect(routeCode).toContain(`import { auth } from "~/lib/auth.server";`);
 			expect(routeCode).toContain(
-				`import type { Route } from "./+types/api.auth.$";`,
+				`import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";`,
 			);
+			const output = vi.mocked(console.log).mock.calls.flat().join("\n");
+			expect(output).toContain("app/routes.ts");
 		},
 	);
 

@@ -57,15 +57,16 @@ export async function action({ request }: ActionFunctionArgs) {
 		routeHandler: {
 			path: "app/routes/api.auth.$.ts",
 			code: `import { auth } from "~/lib/auth.server";
-import type { Route } from "./+types/api.auth.$";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request }: LoaderFunctionArgs) {
 	return auth.handler(request);
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function action({ request }: ActionFunctionArgs) {
 	return auth.handler(request);
 }`,
+			nextStep: `Register the route in app/routes.ts unless it uses flatRoutes()`,
 		},
 		configPaths: ["react-router.config.ts"],
 	},
@@ -230,6 +231,7 @@ export const Route = createFileRoute('/api/auth/$')({
 	routeHandler: {
 		path: string;
 		code: string;
+		nextStep?: string;
 	} | null;
 	configPaths: string[] | null;
 }[];
