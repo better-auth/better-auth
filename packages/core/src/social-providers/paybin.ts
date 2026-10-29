@@ -7,6 +7,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { appendURLPath } from "../utils/url";
 
 export interface PaybinProfile {
 	sub: string;
@@ -30,8 +31,8 @@ export interface PaybinOptions extends ProviderOptions<PaybinProfile> {
 
 export const paybin = (options: PaybinOptions) => {
 	const issuer = options.issuer || "https://idp.paybin.io";
-	const authorizationEndpoint = `${issuer}/oauth2/authorize`;
-	const tokenEndpoint = `${issuer}/oauth2/token`;
+	const authorizationEndpoint = appendURLPath(issuer, "/oauth2/authorize");
+	const tokenEndpoint = appendURLPath(issuer, "/oauth2/token");
 
 	return {
 		id: "paybin",
