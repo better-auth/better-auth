@@ -430,6 +430,68 @@ describe("initAction", () => {
 		},
 	);
 
+	testWithTmpDir(
+		"should keep the route type import in a React Router route handler",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({ name: "test-project", version: "1.0.0" }),
+			);
+			mockHasDependency.mockImplementation(
+				(_packageJson, dependency) => dependency === "react-router",
+			);
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				JSON.stringify({ compilerOptions: { paths: { "~/*": ["./app/*"] } } }),
+			);
+
+			mockPrompts.mockImplementation(async (questions: any) => {
+				const question = Array.isArray(questions) ? questions[0] : questions;
+
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
+				}
+				if (question.name === "providedSecret") {
+					return { providedSecret: "" };
+				}
+				if (question.name === "providedURL") {
+					return { providedURL: "http://localhost:3000" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("auth instance")
+				) {
+					return { filePath: "app/lib/auth.server.ts" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("route handler")
+				) {
+					return { filePath: "app/routes/api.auth.$.ts" };
+				}
+				if (question.message?.includes("configure a database")) {
+					return { value: "stateless" };
+				}
+				if (question.message?.includes("auth client configuration")) {
+					return { value: false };
+				}
+
+				return {};
+			});
+
+			await initAction({ cwd: tmp });
+
+			const routeCode = await fs.readFile(
+				path.join(tmp, "app/routes/api.auth.$.ts"),
+				"utf-8",
+			);
+			expect(routeCode).toContain(`import { auth } from "~/lib/auth.server";`);
+			expect(routeCode).toContain(
+				`import type { Route } from "./+types/api.auth.$";`,
+			);
+		},
+	);
+
 	testWithTmpDir("should handle existing auth config file", async ({ tmp }) => {
 		await fs.writeFile(
 			path.join(tmp, "package.json"),

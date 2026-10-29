@@ -1299,11 +1299,9 @@ export const auth = betterAuth({
 		];
 
 		for (const pattern of importPatterns) {
-			const newCode = updatedCode.replace(pattern, `from "${authImportPath}"`);
-			if (newCode !== updatedCode) {
-				updatedCode = newCode;
-				break;
-			}
+			if (!pattern.test(updatedCode)) continue;
+			updatedCode = updatedCode.replace(pattern, `from "${authImportPath}"`);
+			break;
 		}
 
 		filesToWrite.push(async () => {

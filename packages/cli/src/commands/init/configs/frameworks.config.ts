@@ -33,15 +33,17 @@ export const ALL: APIRoute = async (ctx) => {
 			importPath: "better-auth/react",
 		},
 		routeHandler: {
-			path: "app/lib/auth.server.ts",
-			code: `import { betterAuth } from "better-auth"
+			path: "app/routes/api.auth.$.ts",
+			code: `import { auth } from "~/lib/auth.server";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 
-export const auth = betterAuth({
-    database: {
-        provider: "postgres", //change this to your database provider
-        url: process.env.DATABASE_URL, // path to your database or connection string
-    }
-})`,
+export async function loader({ request }: LoaderFunctionArgs) {
+	return auth.handler(request);
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+	return auth.handler(request);
+}`,
 		},
 		configPaths: ["remix.config.js"],
 	},
@@ -53,15 +55,17 @@ export const auth = betterAuth({
 			importPath: "better-auth/react",
 		},
 		routeHandler: {
-			path: "app/lib/auth.server.ts",
-			code: `import { betterAuth } from "better-auth"
+			path: "app/routes/api.auth.$.ts",
+			code: `import { auth } from "~/lib/auth.server";
+import type { Route } from "./+types/api.auth.$";
 
-export const auth = betterAuth({
-    database: {
-        provider: "postgres", //change this to your database provider
-        url: process.env.DATABASE_URL, // path to your database or connection string
-    }
-})`,
+export async function loader({ request }: Route.LoaderArgs) {
+	return auth.handler(request);
+}
+
+export async function action({ request }: Route.ActionArgs) {
+	return auth.handler(request);
+}`,
 		},
 		configPaths: ["react-router.config.ts"],
 	},
