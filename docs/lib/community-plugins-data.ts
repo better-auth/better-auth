@@ -507,7 +507,7 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/laakal.png",
 		},
 	},
-  {
+	{
 		name: "better-auth-loginllama",
 		url: "https://github.com/joshghent/better-auth-loginllama",
 		description:
