@@ -58,12 +58,12 @@ import {
 } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
+	checkOAuthQueryParams,
 	getJwtPlugin,
 	isSessionFreshForSignedQuery,
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
-	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
@@ -656,13 +656,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					handler: createAuthMiddleware(async (ctx) => {
 						// Verify query signature
 						const query = ctx.body.oauth_query;
-						const isValid = await verifyOAuthQueryParams(
+						const status = await checkOAuthQueryParams(
 							query,
 							ctx.context.secret,
 						);
-						if (!isValid) {
+						if (status !== "valid") {
 							throw new APIError("BAD_REQUEST", {
-								error: "invalid_signature",
+								error:
+									status === "expired"
+										? "expired_request"
+										: "invalid_signature",
 							});
 						}
 						const signed = readSignedOAuthQuery(query);
