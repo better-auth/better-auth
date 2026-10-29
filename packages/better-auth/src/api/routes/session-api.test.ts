@@ -284,6 +284,34 @@ describe("session", async () => {
 		vi.useRealTimers();
 	});
 
+	it("should refresh a session with an impersonatedBy field when the admin plugin is not installed", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			session: {
+				updateAge: 0,
+				additionalFields: {
+					impersonatedBy: { type: "string", required: false },
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const session = await client.getSession({ fetchOptions: { headers } });
+		const token = session.data!.session.token;
+		await ctx.internalAdapter.updateSession(token, {
+			impersonatedBy: "app-value",
+		});
+		const expiresAt = (await ctx.internalAdapter.findSession(token))!.session
+			.expiresAt;
+
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(Date.now() + 60 * 1000);
+		await client.getSession({ fetchOptions: { headers } });
+		const refreshed = (await ctx.internalAdapter.findSession(token))!.session
+			.expiresAt;
+		vi.useRealTimers();
+		expect(refreshed.getTime()).toBeGreaterThan(expiresAt.getTime());
+	});
+
 	it("should update the session every time when set to 0", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
 			session: {

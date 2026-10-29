@@ -304,9 +304,16 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				}
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
-				 * or if the session refresh is disabled
+				 * or if the session refresh is disabled.
+				 *
+				 * An admin impersonation session keeps the expiry from `impersonationSessionDuration`.
+				 * Check the stored session, because a bearer client never sends the `dont_remember` cookie.
 				 */
-				if (dontRememberMe || ctx.query?.disableRefresh) {
+				if (
+					dontRememberMe ||
+					ctx.query?.disableRefresh ||
+					(ctx.context.hasPlugin("admin") && session.session.impersonatedBy)
+				) {
 					// Parse session and user to ensure additionalFields are included
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
