@@ -518,4 +518,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/joshghent.png",
 		},
 	},
+	{
+		name: "better-auth-waitlist",
+		url: "https://github.com/slargat/better-auth-waitlist",
+		description:
+			"A complete waitlist: a live queue with positions, status links, referrals, single-use invites, manager tools, and invite-only sign-up across every sign-up method.",
+		author: {
+			name: "Seifeddine Largat",
+			github: "slargat",
+			avatar: "https://github.com/slargat.png",
+		},
+	},
 ];
