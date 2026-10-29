@@ -31,9 +31,13 @@ export const oauthProviderClient = () => {
 							window?.location?.search &&
 							!(ctx.method === "GET" || ctx.method === "DELETE")
 						) {
+							const oauthQuery = buildSignedOAuthQuery(window.location.search);
+							if (oauthQuery === undefined) {
+								return;
+							}
 							ctx.body = JSON.stringify({
 								...body,
-								oauth_query: buildSignedOAuthQuery(window.location.search),
+								oauth_query: oauthQuery,
 							});
 						}
 					},
