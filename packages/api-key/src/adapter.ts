@@ -159,23 +159,19 @@ function serializeApiKey(apiKey: ApiKey): string {
  * Deserialize API key from storage
  */
 function deserializeApiKey(data: unknown): ApiKey | null {
-	if (!data || typeof data !== "string") {
+	const parsed = safeJSONParse<ApiKey>(data);
+	if (!parsed) {
 		return null;
 	}
 
-	try {
-		const parsed = JSON.parse(data);
-		return {
-			...parsed,
-			createdAt: new Date(parsed.createdAt),
-			updatedAt: new Date(parsed.updatedAt),
-			expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
-			lastRefillAt: parsed.lastRefillAt ? new Date(parsed.lastRefillAt) : null,
-			lastRequest: parsed.lastRequest ? new Date(parsed.lastRequest) : null,
-		} as ApiKey;
-	} catch {
-		return null;
-	}
+	return {
+		...parsed,
+		createdAt: new Date(parsed.createdAt),
+		updatedAt: new Date(parsed.updatedAt),
+		expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
+		lastRefillAt: parsed.lastRefillAt ? new Date(parsed.lastRefillAt) : null,
+		lastRequest: parsed.lastRequest ? new Date(parsed.lastRequest) : null,
+	};
 }
 
 /**

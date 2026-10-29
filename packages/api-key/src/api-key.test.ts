@@ -5285,6 +5285,76 @@ describe("concurrent verification enforces atomic counters", async () => {
 	});
 });
 
+describe("secondary storage that returns parsed JSON", async () => {
+	const store = new Map<string, string>();
+
+	// Mirrors storage clients that parse JSON values on read.
+	const read = (key: string) => {
+		const value = store.get(key);
+		if (value === undefined) return null;
+		try {
+			return JSON.parse(value);
+		} catch {
+			return value;
+		}
+	};
+
+	const secondaryStorage: SecondaryStorage = {
+		set(key, value) {
+			store.set(key, value as string);
+		},
+		get(key) {
+			return read(key);
+		},
+		getAndDelete(key) {
+			const value = read(key);
+			store.delete(key);
+			return value;
+		},
+		increment(key) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, String(count));
+			return count;
+		},
+		delete(key) {
+			store.delete(key);
+		},
+	};
+
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			secondaryStorage,
+			plugins: [apiKey({ storage: "secondary-storage" })],
+		},
+		{
+			clientOptions: {
+				plugins: [apiKeyClient()],
+			},
+		},
+	);
+
+	it("verifies, gets, and lists keys", async () => {
+		const { headers } = await signInWithTestUser();
+		const { data: created } = await client.apiKey.create({}, { headers });
+		expect(created).not.toBeNull();
+
+		const verified = await auth.api.verifyApiKey({
+			body: { key: created!.key },
+		});
+		expect(verified.valid).toBe(true);
+
+		const { data: got } = await client.apiKey.get(
+			{ query: { id: created!.id } },
+			{ headers },
+		);
+		expect(got?.id).toBe(created!.id);
+		expect(got?.createdAt).toBeInstanceOf(Date);
+
+		const listed = await auth.api.listApiKeys({ headers });
+		expect(listed.apiKeys.map((k) => k.id)).toContain(created!.id);
+	});
+});
+
 describe("listApiKeys with integer user.id (postgres + serial)", async () => {
 	const testUserEmail = `api-key-serial-${crypto.randomUUID()}@test.com`;
 	const { auth, signInWithTestUser } = await getTestInstance(
