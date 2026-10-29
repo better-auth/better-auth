@@ -1153,6 +1153,33 @@ describe("stripe checkout", () => {
 			);
 		});
 
+		test("should reject a duplicated callbackURL query parameter", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const { auth: testAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const response = await testAuth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/subscription/success?callbackURL=%2Fa&callbackURL=%2Fb&checkoutSessionId=cs_test_123",
+					{
+						method: "GET",
+						redirect: "manual",
+					},
+				),
+			);
+
+			expect(response.status).toBe(400);
+		});
+
 		test("should redirect when checkout session retrieval fails", async ({
 			memory,
 			stripeOptions,

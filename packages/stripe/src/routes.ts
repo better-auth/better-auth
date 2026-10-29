@@ -1676,7 +1676,12 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 	);
 };
 
-const subscriptionSuccessQuerySchema = z.record(z.string(), z.any()).optional();
+const subscriptionSuccessQuerySchema = z
+	.object({
+		callbackURL: z.string().optional(),
+		checkoutSessionId: z.string().optional(),
+	})
+	.optional();
 
 /**
  * Fill the Stripe "{CHECKOUT_SESSION_ID}" template variable in callbackURL.
