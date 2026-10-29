@@ -10,6 +10,7 @@ import { Command } from "commander";
 import open from "open";
 import yoctoSpinner from "yocto-spinner";
 
+const DEMO_URL = "https://demo.better-auth.com";
 const TOKEN_FILE = path.join(os.homedir(), ".better-auth", "token.json");
 
 async function loginAction(options: { serverUrl: string; clientId: string }) {
@@ -25,7 +26,7 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 	});
 	if (!code) {
 		log.error(
-			`Failed to request device authorization: ${error.error_description}`,
+			`Failed to request device authorization: ${error.error_description ?? error.statusText}`,
 		);
 		process.exit(1);
 	}
@@ -57,14 +58,17 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 		}
 		spinner.stop();
 		if (!token) {
-			log.error(error.error_description);
+			log.error(error.error_description ?? error.statusText);
 			process.exit(1);
 		}
 
 		await fs.mkdir(path.dirname(TOKEN_FILE), { recursive: true, mode: 0o700 });
 		await fs.writeFile(
 			TOKEN_FILE,
-			JSON.stringify({ access_token: token.access_token }),
+			JSON.stringify({
+				serverUrl: options.serverUrl,
+				access_token: token.access_token,
+			}),
 			{ mode: 0o600 },
 		);
 		// `mode` only applies on create, so tighten a token file left by an older login too.
@@ -82,19 +86,45 @@ export const login = new Command("login")
 	.description(
 		"Demo: Test device authorization flow with Better Auth demo server",
 	)
-	.option(
-		"--server-url <url>",
-		"The Better Auth server URL",
-		"https://demo.better-auth.com",
-	)
+	.option("--server-url <url>", "The Better Auth server URL", DEMO_URL)
 	.option("--client-id <id>", "The OAuth client ID", "better-auth-cli")
 	.action(loginAction);
 
 async function logoutAction() {
+	const stored = await fs
+		.readFile(TOKEN_FILE, "utf-8")
+		.then((content): { serverUrl?: string; access_token: string } =>
+			JSON.parse(content),
+		)
+		.catch(() => null);
 	await fs.rm(TOKEN_FILE, { force: true });
-	log.success("Logged out from the Better Auth demo server");
+	if (!stored) {
+		log.info("Not logged in");
+		return;
+	}
+
+	// Tokens saved before `serverUrl` was stored came from the demo server.
+	const authClient = createAuthClient({
+		baseURL: stored.serverUrl ?? DEMO_URL,
+	});
+	const result = await authClient
+		.signOut({
+			fetchOptions: {
+				headers: {
+					Authorization: `Bearer ${stored.access_token}`,
+				},
+			},
+		})
+		.catch(() => null);
+	if (!result?.data) {
+		log.warn(
+			"Removed the local token, but could not revoke the session on the server",
+		);
+		return;
+	}
+	log.success("Logged out");
 }
 
 export const logout = new Command("logout")
-	.description("Remove the token stored by the demo login")
+	.description("Revoke and remove the token stored by the demo login")
 	.action(logoutAction);
