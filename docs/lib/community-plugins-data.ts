@@ -496,4 +496,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/aarmful.png",
 		},
 	},
+	{
+		name: "irondome-gates",
+		url: "https://github.com/IrondomeDev/GATES",
+		description:
+			"Disposable-email screening and verified, alias-aware mailbox ownership for Better Auth with PostgreSQL.",
+		author: {
+			name: "IronDome",
+			github: "IrondomeDev",
+			avatar: "https://github.com/IrondomeDev.png",
+		},
+	},
 ];
