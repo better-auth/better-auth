@@ -421,36 +421,11 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						);
 					}
 
-					const username = getUsernameToValidate(ctx.body.username);
-
-					const minUsernameLength = options?.minUsernameLength || 3;
-					const maxUsernameLength = options?.maxUsernameLength || 30;
-
-					if (username.length < minUsernameLength) {
-						ctx.context.logger.warn("Username too short");
-						throw APIError.from(
-							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.USERNAME_TOO_SHORT,
-						);
-					}
-
-					if (username.length > maxUsernameLength) {
-						ctx.context.logger.warn("Username too long");
-						throw APIError.from(
-							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.USERNAME_TOO_LONG,
-						);
-					}
-
-					const validator =
-						options?.usernameValidator || defaultUsernameValidator;
-
-					const valid = await validator(username);
-					if (!valid) {
-						throw APIError.from(
-							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.INVALID_USERNAME,
-						);
+					const validationError = await validateUsernameValue(
+						ctx.body.username,
+					);
+					if (validationError) {
+						throw APIError.from("UNPROCESSABLE_ENTITY", validationError);
 					}
 
 					assertPasswordNotTooLong(ctx, ctx.body.password);
@@ -581,33 +556,9 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 						);
 					}
 
-					const usernameToValidate = getUsernameToValidate(username);
-					const minUsernameLength = options?.minUsernameLength || 3;
-					const maxUsernameLength = options?.maxUsernameLength || 30;
-
-					if (usernameToValidate.length < minUsernameLength) {
-						throw APIError.from(
-							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.USERNAME_TOO_SHORT,
-						);
-					}
-
-					if (usernameToValidate.length > maxUsernameLength) {
-						throw APIError.from(
-							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.USERNAME_TOO_LONG,
-						);
-					}
-
-					const validator =
-						options?.usernameValidator || defaultUsernameValidator;
-
-					const valid = await validator(usernameToValidate);
-					if (!valid) {
-						throw APIError.from(
-							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.INVALID_USERNAME,
-						);
+					const validationError = await validateUsernameValue(username);
+					if (validationError) {
+						throw APIError.from("UNPROCESSABLE_ENTITY", validationError);
 					}
 					const user = await ctx.context.adapter.findOne<User>({
 						model: "user",
