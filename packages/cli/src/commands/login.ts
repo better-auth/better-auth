@@ -61,11 +61,14 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 			process.exit(1);
 		}
 
-		await fs.mkdir(path.dirname(TOKEN_FILE), { recursive: true });
+		await fs.mkdir(path.dirname(TOKEN_FILE), { recursive: true, mode: 0o700 });
 		await fs.writeFile(
 			TOKEN_FILE,
 			JSON.stringify({ access_token: token.access_token }),
+			{ mode: 0o600 },
 		);
+		// `mode` only applies on create, so tighten a token file left by an older login too.
+		await fs.chmod(TOKEN_FILE, 0o600);
 		outro(chalk.green("Demo login successful!"));
 		return;
 	}
