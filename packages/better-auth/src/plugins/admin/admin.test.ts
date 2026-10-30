@@ -10,6 +10,7 @@ import {
 	beforeAll,
 	describe,
 	expect,
+	expectTypeOf,
 	it,
 	vi,
 } from "vitest";
@@ -2774,6 +2775,40 @@ describe("admin authorization is revocation-aware with cookie cache", async () =
 			fetchOptions: { headers: attackerHeaders },
 		});
 		expect(listUsers.error?.status).toBe(401);
+	});
+
+	it("should expose UserWithRole fields on auth.$Infer.User and client.$Infer.User", () => {
+		expectTypeOf<typeof auth.$Infer.User>().toHaveProperty("role");
+		expectTypeOf<typeof auth.$Infer.User>().toHaveProperty("banned");
+		expectTypeOf<typeof auth.$Infer.User>().toHaveProperty("banReason");
+		expectTypeOf<typeof auth.$Infer.User>().toHaveProperty("banExpires");
+		expectTypeOf<typeof client.$Infer.User>().toHaveProperty("role");
+		expectTypeOf<typeof client.$Infer.User>().toHaveProperty("banned");
+	});
+
+	it("should narrow role type on $Infer.User when custom roles are configured", () => {
+		const customAdmin = admin({
+			roles: {
+				moderator: {},
+				superadmin: {},
+			},
+		});
+		type InferredCustomUser = typeof customAdmin.$Infer.User;
+		expectTypeOf<InferredCustomUser["role"]>().toEqualTypeOf<
+			"moderator" | "superadmin" | "user" | undefined
+		>();
+
+		const customWithDefault = admin({
+			roles: {
+				moderator: {},
+				superadmin: {},
+			},
+			defaultRole: "moderator",
+		});
+		type InferredWithDefaultUser = typeof customWithDefault.$Infer.User;
+		expectTypeOf<InferredWithDefaultUser["role"]>().toEqualTypeOf<
+			"moderator" | "superadmin" | undefined
+		>();
 	});
 });
 
