@@ -720,6 +720,7 @@ async function dispatchVerificationEmail(
 				user.email,
 				undefined,
 				c.context.options.emailVerification?.expiresIn,
+				{ userId: user.id },
 			);
 			const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 				callbackURL || "/",

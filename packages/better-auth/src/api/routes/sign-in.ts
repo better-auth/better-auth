@@ -585,6 +585,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 						user.email,
 						undefined,
 						ctx.context.options.emailVerification?.expiresIn,
+						{ userId: user.id },
 					);
 					const callbackURL = ctx.body.callbackURL
 						? encodeURIComponent(ctx.body.callbackURL)
