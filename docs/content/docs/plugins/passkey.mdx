@@ -472,10 +472,17 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
   * `discouraged`: No credential storage required (fastest experience)
   * Default: `preferred`
 * `userVerification`: Controls biometric/PIN verification during authentication:
+
   * `required`: User MUST verify identity (highest security)
   * `preferred`: Verification encouraged but not mandatory
   * `discouraged`: No verification required (fastest experience)
   * Default: `preferred`
+
+  <Callout type="warn">
+    `userVerification` only tells the browser what to ask the authenticator for. It is not enforced on the server. Use `requireUserVerification` to enforce it.
+  </Callout>
+
+**requireUserVerification**: Requires user verification (biometric, PIN, etc.) for both passkey registration and authentication. When `true`, the generated options request `userVerification: "required"` (overriding `authenticatorSelection.userVerification`), and the server rejects any registration or authentication response whose authenticator data lacks the user-verified (UV) flag. Recommended when passkeys are used as the only factor. Default: `false`.
 
 **advanced**: Advanced options
 

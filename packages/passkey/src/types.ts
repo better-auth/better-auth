@@ -125,6 +125,17 @@ export interface PasskeyOptions {
 	 */
 	authenticatorSelection?: AuthenticatorSelectionCriteria | undefined;
 	/**
+	 * Require user verification (biometric, PIN, etc.) for both passkey
+	 * registration and authentication.
+	 *
+	 * When enabled, the generated options request `userVerification: "required"`
+	 * and the server rejects any response whose authenticator data lacks the
+	 * user-verified (UV) flag.
+	 *
+	 * @default false
+	 */
+	requireUserVerification?: boolean | undefined;
+	/**
 	 * Advanced options
 	 */
 	advanced?:
