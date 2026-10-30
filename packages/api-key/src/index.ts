@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin, HookEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { getIP } from "@better-auth/core/utils/ip";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { BetterAuthError } from "better-auth";
@@ -171,102 +172,121 @@ export function apiKey(
 				{
 					matcher: (ctx) => !!findApiKeyAndConfig(ctx),
 					handler: createAuthMiddleware(async (ctx) => {
-						const result = findApiKeyAndConfig(ctx)!;
-						const { key, config } = result;
+						try {
+							const result = findApiKeyAndConfig(ctx)!;
+							const { key, config } = result;
 
-						if (typeof key !== "string") {
-							throw APIError.from(
-								"BAD_REQUEST",
-								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
-							);
-						}
+							if (typeof key !== "string") {
+								throw APIError.from(
+									"BAD_REQUEST",
+									API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
+								);
+							}
 
-						if (key.length < config.defaultKeyLength) {
-							throw APIError.from(
-								"FORBIDDEN",
-								API_KEY_ERROR_CODES.INVALID_API_KEY,
-							);
-						}
-
-						if (config.customAPIKeyValidator) {
-							const isValid = await config.customAPIKeyValidator({
-								ctx,
-								key,
-							});
-							if (!isValid) {
+							if (key.length < config.defaultKeyLength) {
 								throw APIError.from(
 									"FORBIDDEN",
 									API_KEY_ERROR_CODES.INVALID_API_KEY,
 								);
 							}
-						}
 
-						const { apiKey } = await validateApiKey({
-							key,
-							ctx,
-							lookupOpts: config,
-							configurations,
-							schema,
-							expectedConfigId: config.configId,
-						});
+							if (config.customAPIKeyValidator) {
+								const isValid = await config.customAPIKeyValidator({
+									ctx,
+									key,
+								});
+								if (!isValid) {
+									throw APIError.from(
+										"FORBIDDEN",
+										API_KEY_ERROR_CODES.INVALID_API_KEY,
+									);
+								}
+							}
 
-						const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
-							(err) => {
-								ctx.context.logger.error(
-									"Failed to delete expired API keys:",
-									err,
-								);
-							},
-						);
-						if (config.deferUpdates) {
-							ctx.context.runInBackground(cleanupTask);
-						}
+							const { apiKey } = await validateApiKey({
+								key,
+								ctx,
+								lookupOpts: config,
+								configurations,
+								schema,
+								expectedConfigId: config.configId,
+							});
 
-						// Session mocking only works for user-owned API keys
-						// Determine the reference type from the configuration
-						const referencesType = config.references ?? "user";
-						if (referencesType !== "user") {
-							const msg = API_KEY_ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY;
-							throw APIError.from("UNAUTHORIZED", msg);
-						}
+							const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
+								(err) => {
+									ctx.context.logger.error(
+										"Failed to delete expired API keys:",
+										err,
+									);
+								},
+							);
+							if (config.deferUpdates) {
+								ctx.context.runInBackground(cleanupTask);
+							}
 
-						const user = await ctx.context.internalAdapter.findUserById(
-							apiKey.referenceId,
-						);
-						if (!user) {
-							const msg = API_KEY_ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY;
-							throw APIError.from("UNAUTHORIZED", msg);
-						}
+							// Session mocking only works for user-owned API keys
+							// Determine the reference type from the configuration
+							const referencesType = config.references ?? "user";
+							if (referencesType !== "user") {
+								const msg =
+									API_KEY_ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY;
+								throw APIError.from("UNAUTHORIZED", msg);
+							}
 
-						const session = {
-							user,
-							session: {
-								id: apiKey.id,
-								token: key,
-								userId: apiKey.referenceId,
-								userAgent: ctx.request?.headers.get("user-agent") ?? null,
-								ipAddress: ctx.request
-									? getIP(ctx.request, ctx.context.options)
-									: null,
-								createdAt: new Date(),
-								updatedAt: new Date(),
-								expiresAt:
-									apiKey.expiresAt ||
-									getDate(
-										ctx.context.options.session?.expiresIn || 60 * 60 * 24 * 7, // 7 days
-										"ms",
-									),
-							},
-						};
+							const user = await ctx.context.internalAdapter.findUserById(
+								apiKey.referenceId,
+							);
+							if (!user) {
+								const msg =
+									API_KEY_ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY;
+								throw APIError.from("UNAUTHORIZED", msg);
+							}
 
-						ctx.context.session = session;
-
-						if (ctx.path === "/get-session") {
-							return session;
-						} else {
-							return {
-								context: ctx,
+							const session = {
+								user,
+								session: {
+									id: apiKey.id,
+									token: key,
+									userId: apiKey.referenceId,
+									userAgent: ctx.request?.headers.get("user-agent") ?? null,
+									ipAddress: ctx.request
+										? getIP(ctx.request, ctx.context.options)
+										: null,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+									expiresAt:
+										apiKey.expiresAt ||
+										getDate(
+											ctx.context.options.session?.expiresIn ||
+												60 * 60 * 24 * 7, // 7 days
+											"ms",
+										),
+								},
 							};
+
+							ctx.context.session = session;
+
+							if (ctx.path === "/get-session") {
+								return session;
+							} else {
+								return {
+									context: ctx,
+								};
+							}
+						} catch (error) {
+							if (isAPIError(error)) {
+								throw error;
+							}
+							ctx.context.logger.error("Failed to validate API key:", error);
+							const apiError = APIError.fromStatus("INTERNAL_SERVER_ERROR", {
+								message: "Internal error during API key verification.",
+							});
+							Object.defineProperty(apiError, "cause", {
+								value: error,
+								writable: true,
+								configurable: true,
+							});
+							throw apiError;
 						}
 					}),
 				},
@@ -298,6 +318,9 @@ export function apiKey(
 			 *
 			 * **server:**
 			 * `auth.api.verifyApiKey`
+			 *
+			 * Returns validation rejections as results. Storage and callback
+			 * execution failures throw an APIError.
 			 *
 			 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/api-key#api-method-api-key-verify)
 			 */
