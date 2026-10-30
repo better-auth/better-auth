@@ -893,4 +893,37 @@ describe("useAuthQuery - error handling", () => {
 		expect(fetchCallCount).toBe(2);
 		expect(session().data).toBe(initialData);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12074
+	 */
+	it("should not set isPending true on refetch when signed out", async () => {
+		let fetchCount = 0;
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async () => {
+					fetchCount++;
+					return new Response(JSON.stringify({ session: null, user: null }), {
+						status: 200,
+					});
+				},
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		const session = client.useSession();
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(1);
+		expect(session().data).toBeNull();
+		expect(session().isPending).toBe(false);
+		expect(session().isRefetching).toBe(false);
+
+		await session().refetch();
+		await vi.runAllTimersAsync();
+		expect(fetchCount).toBe(2);
+		expect(session().isPending).toBe(false);
+		expect(session().isRefetching).toBe(false);
+		expect(session().data).toBeNull();
+	});
 });
