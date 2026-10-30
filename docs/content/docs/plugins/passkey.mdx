@@ -479,8 +479,8 @@ passkey({
   * `preferred`: Encourages credential storage but not mandatory
   * `discouraged`: No credential storage required (fastest experience)
   * Default: `preferred`
-* `userVerification`: Controls biometric/PIN verification during registration and authentication. With `required`, responses without user verification are rejected.
-  * `required`: User MUST verify identity (highest security)
+* `userVerification`: Controls biometric/PIN verification during registration and authentication:
+  * `required`: User MUST verify identity (highest security). Responses without user verification are rejected.
   * `preferred`: Verification encouraged but not mandatory
   * `discouraged`: No verification required (fastest experience)
   * Default: `preferred`
