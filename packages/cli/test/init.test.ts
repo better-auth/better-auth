@@ -1297,57 +1297,190 @@ describe("initAction", () => {
 		},
 	);
 
-	testWithTmpDir("should handle multiple env files", async ({ tmp }) => {
-		await fs.writeFile(
-			path.join(tmp, "package.json"),
-			JSON.stringify({ name: "test-project", version: "1.0.0" }),
-		);
-		await fs.writeFile(path.join(tmp, ".env"), "EXISTING_VAR=value");
-		await fs.writeFile(path.join(tmp, ".env.local"), "OTHER_VAR=value");
+	testWithTmpDir(
+		"should write env variables only to .env.local when several env files exist",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({ name: "test-project", version: "1.0.0" }),
+			);
+			await fs.writeFile(path.join(tmp, ".env.local"), "FOO=bar\n");
+			await fs.writeFile(path.join(tmp, ".env.production"), "FOO=bar\n");
+			await fs.writeFile(path.join(tmp, ".env.template"), "FOO=\n");
 
-		mockPrompts.mockImplementation(async (questions: any) => {
-			const question = Array.isArray(questions) ? questions[0] : questions;
+			mockPrompts.mockImplementation(async (questions: any) => {
+				const question = Array.isArray(questions) ? questions[0] : questions;
 
-			if (question.message?.includes("install better-auth")) {
-				return { value: true };
-			}
-			if (
-				question.name === "filePath" &&
-				question.message?.includes("auth instance")
-			) {
-				return { filePath: "auth.ts" };
-			}
-			if (
-				question.name === "filePath" &&
-				question.message?.includes("route handler")
-			) {
-				return { filePath: "src/app/api/auth/[...all]/route.ts" };
-			}
-			if (question.message?.includes("configure a database")) {
-				return { value: "skip" };
-			}
-			if (question.message?.includes("auth client configuration")) {
-				return { value: false };
-			}
-			// Select which env files to update
-			if (question.message?.includes("Add required environment variables")) {
-				return [path.join(tmp, ".env"), path.join(tmp, ".env.local")];
-			}
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
+				}
+				if (question.message?.includes("Add required environment variables")) {
+					return { value: true };
+				}
+				if (question.name === "providedSecret") {
+					return { providedSecret: "" };
+				}
+				if (question.name === "providedURL") {
+					return { providedURL: "http://localhost:3000" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("auth instance")
+				) {
+					return { filePath: "auth.ts" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("route handler")
+				) {
+					return { filePath: "src/app/api/auth/[...all]/route.ts" };
+				}
+				if (question.message?.includes("configure a database")) {
+					return { value: "skip" };
+				}
+				if (question.message?.includes("auth client configuration")) {
+					return { value: false };
+				}
 
-			return {};
-		});
+				return {};
+			});
 
-		await initAction({ cwd: tmp });
+			await initAction({ cwd: tmp });
 
-		// Both env files should have been checked
-		const envContent = await fs.readFile(path.join(tmp, ".env"), "utf-8");
-		const envLocalContent = await fs.readFile(
-			path.join(tmp, ".env.local"),
-			"utf-8",
-		);
-		expect(envContent).toBeTruthy();
-		expect(envLocalContent).toBeTruthy();
-	});
+			expect(await fs.readFile(path.join(tmp, ".env.local"), "utf-8")).toMatch(
+				/BETTER_AUTH_SECRET="[0-9a-f]{64}"/,
+			);
+			expect(
+				await fs.readFile(path.join(tmp, ".env.production"), "utf-8"),
+			).toBe("FOO=bar\n");
+			expect(await fs.readFile(path.join(tmp, ".env.template"), "utf-8")).toBe(
+				"FOO=\n",
+			);
+			await expect(fs.access(path.join(tmp, ".env"))).rejects.toThrow();
+		},
+	);
+
+	testWithTmpDir(
+		"should not add variables to .env.local that are already defined in .env",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({ name: "test-project", version: "1.0.0" }),
+			);
+			await fs.writeFile(
+				path.join(tmp, ".env"),
+				'BETTER_AUTH_SECRET="existing"\nBETTER_AUTH_URL="http://localhost:3000"\n',
+			);
+			await fs.writeFile(path.join(tmp, ".env.local"), "FOO=bar\n");
+
+			mockPrompts.mockImplementation(async (questions: any) => {
+				const question = Array.isArray(questions) ? questions[0] : questions;
+
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("auth instance")
+				) {
+					return { filePath: "auth.ts" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("route handler")
+				) {
+					return { filePath: "src/app/api/auth/[...all]/route.ts" };
+				}
+				if (question.message?.includes("configure a database")) {
+					return { value: "skip" };
+				}
+				if (question.message?.includes("auth client configuration")) {
+					return { value: false };
+				}
+				if (question.message?.includes("Add required environment variables")) {
+					return { value: true };
+				}
+				if (question.name === "providedSecret") {
+					return { providedSecret: "" };
+				}
+				if (question.name === "providedURL") {
+					return { providedURL: "http://localhost:3000" };
+				}
+
+				return {};
+			});
+
+			await initAction({ cwd: tmp });
+
+			expect(await fs.readFile(path.join(tmp, ".env.local"), "utf-8")).toBe(
+				"FOO=bar\n",
+			);
+		},
+	);
+
+	testWithTmpDir(
+		"should keep existing social provider credentials when adding variables",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({ name: "test-project", version: "1.0.0" }),
+			);
+			await fs.writeFile(
+				path.join(tmp, ".env.local"),
+				'GITHUB_CLIENT_ID="id"\nGITHUB_CLIENT_SECRET="secret"\n',
+			);
+
+			mockPrompts.mockImplementation(async (questions: any) => {
+				const question = Array.isArray(questions) ? questions[0] : questions;
+
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("auth instance")
+				) {
+					return { filePath: "auth.ts" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("route handler")
+				) {
+					return { filePath: "src/app/api/auth/[...all]/route.ts" };
+				}
+				if (question.message?.includes("configure a database")) {
+					return { value: "skip" };
+				}
+				if (question.message?.includes("auth client configuration")) {
+					return { value: false };
+				}
+				if (question.message?.includes("Add required environment variables")) {
+					return { value: true };
+				}
+				if (question.name === "providedSecret") {
+					return { providedSecret: "" };
+				}
+				if (question.name === "providedURL") {
+					return { providedURL: "http://localhost:3000" };
+				}
+				if (question.message?.includes("setup social providers")) {
+					return { value: true };
+				}
+				if (question.message?.includes("Select the social providers")) {
+					return { value: ["github"] };
+				}
+
+				return {};
+			});
+
+			await initAction({ cwd: tmp });
+
+			const content = await fs.readFile(path.join(tmp, ".env.local"), "utf-8");
+			expect(content).toMatch(/BETTER_AUTH_SECRET="[0-9a-f]{64}"/);
+			expect(content).not.toContain('GITHUB_CLIENT_ID=""');
+			expect(content).not.toContain('GITHUB_CLIENT_SECRET=""');
+		},
+	);
 
 	testWithTmpDir("should use different package managers", async ({ tmp }) => {
 		await fs.writeFile(
