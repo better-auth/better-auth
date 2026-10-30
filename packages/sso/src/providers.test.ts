@@ -12,7 +12,7 @@ import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { getMigrations } from "better-auth/db/migration";
 import { organization } from "better-auth/plugins";
-import { getHttpTestInstance } from "better-auth/test";
+import { getHttpTestInstance, getTestInstance } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
 import { describe, expect, expectTypeOf, it, onTestFinished } from "vitest";
 import { sso } from ".";
@@ -4122,5 +4122,95 @@ describe("SSO providerId namespace collisions", () => {
 			asResponse: true,
 		});
 		expect(response.status).toBe(200);
+	});
+});
+
+/**
+ * Deleting the user who registered a provider must not delete the provider:
+ * an organization's SSO connection outlives the admin who set it up.
+ *
+ * @see https://github.com/better-auth/better-auth/pull/4973
+ */
+describe("ssoProvider.userId foreign key", () => {
+	const samlConfig = {
+		entryPoint: "https://idp.example.com/sso",
+		cert: TEST_CERT,
+		audience: "my-audience",
+		wantAssertionsSigned: true,
+		idpMetadata: { entityID: "https://idp.example.com" },
+		spMetadata: {},
+	};
+
+	type StoredProvider = {
+		userId: string | null;
+		organizationId: string | null;
+	};
+	const byProviderId = (providerId: string) => ({
+		model: "ssoProvider",
+		where: [{ field: "providerId", value: providerId }],
+	});
+
+	it("keeps the provider and clears userId when its creator is deleted", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "creator-deleted",
+				issuer: "https://idp.example.com",
+				domain: "example.com",
+				samlConfig,
+			},
+			headers,
+		});
+		expect(
+			(
+				await ctx.adapter.findOne<StoredProvider>(
+					byProviderId("creator-deleted"),
+				)
+			)?.userId,
+		).toBe(user.id);
+
+		await ctx.internalAdapter.deleteUser(user.id);
+
+		const provider = await ctx.adapter.findOne<StoredProvider>(
+			byProviderId("creator-deleted"),
+		);
+		expect(provider).not.toBeNull();
+		expect(provider?.userId).toBeNull();
+	});
+
+	it("keeps an organization's provider when the member who registered it is deleted", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso(), organization()],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const org = await auth.api.createOrganization({
+			body: { name: "Acme", slug: "acme-sso-fk" },
+			headers,
+		});
+		if (!org) throw new Error("Expected the organization to be created");
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "org-creator-deleted",
+				issuer: "https://idp.example.com",
+				domain: "acme.example.com",
+				organizationId: org.id,
+				samlConfig,
+			},
+			headers,
+		});
+
+		await ctx.internalAdapter.deleteUser(user.id);
+
+		const provider = await ctx.adapter.findOne<StoredProvider>(
+			byProviderId("org-creator-deleted"),
+		);
+		expect(provider).not.toBeNull();
+		expect(provider?.userId).toBeNull();
+		expect(provider?.organizationId).toBe(org.id);
 	});
 });
