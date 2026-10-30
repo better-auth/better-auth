@@ -16,10 +16,10 @@ import {
 } from "./connection-authentication";
 import { createDecommissionSCIMConnectionEndpoint } from "./connection-decommission";
 import {
-	getSCIMResourceType,
-	getSCIMResourceTypes,
-	getSCIMSchema,
-	getSCIMSchemas,
+	createGetSCIMResourceType,
+	createGetSCIMResourceTypes,
+	createGetSCIMSchema,
+	createGetSCIMSchemas,
 	getSCIMServiceProviderConfig,
 } from "./discovery";
 import {
@@ -59,6 +59,10 @@ import {
 	patchSCIMUser,
 	replaceSCIMUser,
 } from "./user-provisioning";
+import {
+	buildSCIMUserSchemaContext,
+	validateMappedUserFields,
+} from "./user-schema-context";
 import { PACKAGE_VERSION } from "./version";
 
 const SCIM_RESPONSE_MARKER = "x-better-auth-scim-response";
@@ -249,6 +253,17 @@ function validateConnections(options: SCIMOptions): void {
  * provisioned identity as an authentication account.
  */
 function createSCIMPlugin(options: SCIMOptions) {
+	const userSchemaContext = buildSCIMUserSchemaContext(options);
+	// Attribute names of the custom User extensions, so the ingress canonicalizer
+	// can rewrite case-variant keys (SCIM names are case-insensitive).
+	const userExtensionAttributeNames = userSchemaContext.customDescriptors.map(
+		(descriptor) => ({
+			id: descriptor.id,
+			attributes: descriptor.attributes.map((attribute) => ({
+				name: attribute.name,
+			})),
+		}),
+	);
 	const connectionMiddleware = createSCIMConnectionMiddleware(options);
 	const identity = createSCIMIdentityCoordinator(options);
 	const projection = createSCIMProjectionCoordinator(options);
@@ -265,6 +280,18 @@ function createSCIMPlugin(options: SCIMOptions) {
 		version: PACKAGE_VERSION,
 		init(ctx) {
 			assertNativeSCIMTransactions(ctx.adapter);
+			validateMappedUserFields(
+				userSchemaContext,
+				ctx.options.user?.additionalFields,
+				{
+					fail: (message) => {
+						throw new BetterAuthError(message);
+					},
+					warn: (message) => {
+						ctx.logger.warn(message);
+					},
+				},
+			);
 		},
 		async onRequest(request) {
 			const path = new URL(request.url).pathname;
@@ -332,6 +359,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 									canonicalizeSCIMResourceAttributeNames(
 										isUserMutation ? "User" : "Group",
 										body,
+										isUserMutation ? userExtensionAttributeNames : [],
 									),
 								);
 				} catch (error) {
@@ -401,25 +429,36 @@ function createSCIMPlugin(options: SCIMOptions) {
 				connectionMiddleware,
 				identity,
 				projection,
+				userSchemaContext,
 			),
 			deleteSCIMUser: deleteSCIMUser(
 				connectionMiddleware,
 				identity,
 				projection,
 			),
-			getSCIMUser: getSCIMUser(connectionMiddleware),
-			listSCIMUsers: listSCIMUsers(connectionMiddleware),
-			patchSCIMUser: patchSCIMUser(connectionMiddleware, identity, projection),
+			getSCIMUser: getSCIMUser(connectionMiddleware, userSchemaContext),
+			listSCIMUsers: listSCIMUsers(connectionMiddleware, userSchemaContext),
+			patchSCIMUser: patchSCIMUser(
+				connectionMiddleware,
+				identity,
+				projection,
+				userSchemaContext,
+			),
 			replaceSCIMUser: replaceSCIMUser(
 				connectionMiddleware,
 				identity,
 				projection,
+				userSchemaContext,
 			),
 			getSCIMServiceProviderConfig,
-			getSCIMSchemas,
-			getSCIMSchema,
-			getSCIMResourceTypes,
-			getSCIMResourceType,
+			getSCIMSchemas: createGetSCIMSchemas(userSchemaContext.discoverySchemas),
+			getSCIMSchema: createGetSCIMSchema(userSchemaContext.discoverySchemas),
+			getSCIMResourceTypes: createGetSCIMResourceTypes(
+				userSchemaContext.resourceTypes,
+			),
+			getSCIMResourceType: createGetSCIMResourceType(
+				userSchemaContext.resourceTypes,
+			),
 		},
 		async onResponse(response) {
 			if (response.headers.get(SCIM_RESPONSE_MARKER) !== "1") return;
