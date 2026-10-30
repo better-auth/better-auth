@@ -74,7 +74,7 @@ export function runtimeSchemaCheckFor(
 /**
  * Turns a schema comparison into a check shared by one adapter instance.
  *
- * The first call runs `find` and every concurrent call shares that promise. A
+ * Each call runs its own `find` until a completed result is available. A
  * clean result is cached until invalidation. A mismatch is kept as one
  * {@link SchemaMismatchError} and rethrown on every later call without asking
  * the store again, until a migration invalidates it. When a database identity is supplied,
@@ -102,33 +102,43 @@ export function createSchemaCheck(
 		revision = { value: 0 };
 		schemaRevisions.set(database, revision);
 	}
-	let checkedRevision = revision?.value;
-	let clean = false;
-	let verdict: Promise<void> | undefined;
+	let verdict:
+		| {
+				revision: number | undefined;
+				sequence: number;
+				error: SchemaMismatchError | undefined;
+		  }
+		| undefined;
+	let lookupSequence = 0;
 	const checkSchema: SchemaCheck = function checkSchema():
 		| Promise<void>
 		| undefined {
 		const currentRevision = revision?.value;
-		if (checkedRevision !== currentRevision) {
-			checkedRevision = currentRevision;
-			clean = false;
-			verdict = undefined;
+		if (verdict && verdict.revision === currentRevision) {
+			return verdict.error ? Promise.reject(verdict.error) : undefined;
 		}
-		if (clean) return;
-		return (verdict ??= Promise.resolve()
+		const sequence = ++lookupSequence;
+		return Promise.resolve()
 			.then(find)
 			.then(
 				(findings) => {
-					if (revision?.value !== currentRevision) return checkSchema();
-					if (findings.length) throw new SchemaMismatchError(findings, source);
-					if (checkedRevision === currentRevision) clean = true;
+					if (
+						revision?.value !== currentRevision ||
+						(verdict && sequence < verdict.sequence)
+					) {
+						return checkSchema();
+					}
+					const error = findings.length
+						? new SchemaMismatchError(findings, source)
+						: undefined;
+					verdict = { revision: currentRevision, sequence, error };
+					if (error) throw error;
 				},
 				(error: unknown) => {
 					if (revision?.value !== currentRevision) return checkSchema();
-					if (checkedRevision === currentRevision) verdict = undefined;
 					throw error;
 				},
-			));
+			);
 	};
 	checkSchema.source = source;
 	return checkSchema;
