@@ -43,9 +43,10 @@ function pruneMemoryStore() {
 
 /**
  * Decide an atomic rate-limit step against an in-memory `RateLimit` snapshot
- * for the rolling `window` (seconds) and `max`. Shared by the memory backend
- * (read-decide-write is atomic under single-threaded JS) and as the fallback
- * for storages lacking an atomic primitive.
+ * for the fixed `window` (seconds) and `max`. The window opens at the first
+ * request and `lastRequest` keeps that time until the window elapses. Shared
+ * by the memory backend (read-decide-write is atomic under single-threaded JS)
+ * and as the fallback for storages lacking an atomic primitive.
  */
 function decideConsume(
 	data: RateLimit | null | undefined,
@@ -84,7 +85,7 @@ function decideConsume(
 		};
 	}
 	return {
-		next: { ...data, count: data.count + 1, lastRequest: now },
+		next: { ...data, count: data.count + 1 },
 		update: true,
 		allowed: true,
 		retryAfter: null,
@@ -193,7 +194,8 @@ function createDatabaseStorageWrapper(
 
 		// Within the window and under the max: increment guarded on both the
 		// window and the max, so a burst of concurrent requests can never exceed
-		// the limit.
+		// the limit. `lastRequest` is left alone so the window stays anchored to
+		// the request that opened it.
 		const windowStart = now - windowInMs;
 		const incremented = await db.incrementOne<RateLimit>({
 			model,
@@ -203,7 +205,6 @@ function createDatabaseStorageWrapper(
 				{ field: "count", operator: "lt", value: rule.max },
 			],
 			increment: { count: 1 },
-			set: { lastRequest: now },
 		});
 		if (incremented) {
 			return { allowed: true, retryAfter: null };
@@ -315,7 +316,7 @@ function getRateLimitStorage(
 				if (decision.allowed) {
 					memory.set(key, {
 						data: { ...decision.next, key },
-						expiresAt: now + ttlFor(rule.window) * 1000,
+						expiresAt: decision.next.lastRequest + ttlFor(rule.window) * 1000,
 					});
 				}
 				return {
