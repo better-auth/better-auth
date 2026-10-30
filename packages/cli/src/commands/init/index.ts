@@ -1533,7 +1533,7 @@ export const auth = betterAuth({
 			})
 			.join("");
 		logs.push(
-			`  ${nextStepNum}. Add social provider credentials to .env:${providerList}`,
+			`  ${nextStepNum}. Add social provider credentials to ${envFile ? path.basename(envFile) : ".env"}:${providerList}`,
 		);
 		nextStepNum++;
 	}

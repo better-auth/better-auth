@@ -18,7 +18,14 @@ export const readEnv = async (cwd: string) => {
 	const files = await Promise.all(
 		envFileNames.map(async (name) => {
 			const file = path.join(cwd, name);
-			const content = await fs.readFile(file, "utf-8").catch(() => null);
+			// Only a missing file counts as absent. Other read errors surface so an
+			// unreadable file is never skipped or overwritten.
+			const content = await fs
+				.readFile(file, "utf-8")
+				.catch((error: NodeJS.ErrnoException) => {
+					if (error.code === "ENOENT" || error.code === "EISDIR") return null;
+					throw error;
+				});
 			if (content === null) return null;
 			return { file, keys: Object.keys(parse(content)) };
 		}),

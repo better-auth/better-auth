@@ -66,6 +66,22 @@ describe("Init CLI - env utility functions", () => {
 			},
 		);
 
+		testWithTmpDir(
+			"should throw when an env file exists but cannot be read",
+			async ({ tmp }) => {
+				await fs.writeFile(path.join(tmp, ".env.local"), "TEST=value");
+				await fs.writeFile(path.join(tmp, ".env"), "TEST=value");
+				const readFile = vi.spyOn(fs, "readFile").mockRejectedValueOnce(
+					Object.assign(new Error("EACCES: permission denied"), {
+						code: "EACCES",
+					}),
+				);
+
+				await expect(readEnv(tmp)).rejects.toThrow("EACCES");
+				readFile.mockRestore();
+			},
+		);
+
 		testWithTmpDir("should read keys declared with export", async ({ tmp }) => {
 			await fs.writeFile(
 				path.join(tmp, ".env"),

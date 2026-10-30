@@ -1402,6 +1402,9 @@ describe("initAction", () => {
 				if (question.message?.includes("Select the social providers")) {
 					return { value: ["github"] };
 				}
+				if (question.name === "connect") {
+					return { connect: false };
+				}
 
 				return {};
 			});
@@ -1412,6 +1415,11 @@ describe("initAction", () => {
 			expect(content).toMatch(/BETTER_AUTH_SECRET="[0-9a-f]{64}"/);
 			expect(content).not.toContain('GITHUB_CLIENT_ID=""');
 			expect(content).not.toContain('GITHUB_CLIENT_SECRET=""');
+			expect(console.log).toHaveBeenCalledWith(
+				expect.stringContaining(
+					"Add social provider credentials to .env.local",
+				),
+			);
 		},
 	);
 
