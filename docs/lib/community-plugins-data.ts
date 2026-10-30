@@ -478,7 +478,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "better-auth-multi-tenant",
 		url: "https://github.com/Weesofficial/better-auth-multi-tenant",
 		description:
-			"Subdomain-based multi-tenancy: resolves the tenant from the request host, binds each session to its tenant, and rejects cross-tenant requests and unbound sessions.",
+			"Multi-tenancy by subdomain, custom domain or path: resolves the tenant from the request, binds each session to its tenant, rejects cross-tenant requests and unbound sessions, and scopes the organization, admin, SSO and API key plugins to the tenant.",
 		author: {
 			name: "Weesofficial",
 			github: "Weesofficial",
@@ -494,6 +494,39 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "aarmful",
 			github: "aarmful",
 			avatar: "https://github.com/aarmful.png",
+		},
+	},
+	{
+		name: "tauri-plugin-better-auth",
+		url: "https://github.com/laakal/tauri-plugin-better-auth",
+		description:
+			"Better Auth for Tauri desktop apps: browser sign-in with PKCE handed back by deep link or loopback, a session held in Rust (OS keychain), and a webview that never sees a token. Tauri 2 (0.1) and Tauri 3 alpha (0.2).",
+		author: {
+			name: "Enes Koç",
+			github: "laakal",
+			avatar: "https://github.com/laakal.png",
+		},
+	},
+	{
+		name: "better-auth-loginllama",
+		url: "https://github.com/joshghent/better-auth-loginllama",
+		description:
+			"Scores each email/password sign-in for account takeover risk (Tor, VPN, impossible travel, bots) with LoginLlama and blocks risky ones before the session is created. Fails open if the API is slow or down.",
+		author: {
+			name: "Josh Ghent",
+			github: "joshghent",
+			avatar: "https://github.com/joshghent.png",
+		},
+	},
+	{
+		name: "better-auth-waitlist",
+		url: "https://github.com/slargat/better-auth-waitlist",
+		description:
+			"A complete waitlist: a live queue with positions, status links, referrals, single-use invites, manager tools, and invite-only sign-up across every sign-up method.",
+		author: {
+			name: "Seifeddine Largat",
+			github: "slargat",
+			avatar: "https://github.com/slargat.png",
 		},
 	},
 ];

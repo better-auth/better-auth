@@ -9,6 +9,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 
 /**
  * Profile data from a Cognito ID token or userinfo response.
@@ -271,7 +272,7 @@ export const getCognitoPublicKey = async (
 	const COGNITO_JWKS_URI = `${issuer}/.well-known/jwks.json`;
 
 	try {
-		const { data } = await betterFetch<{
+		const { data } = await fetchRefusingRedirects<{
 			keys: Array<{
 				kid: string;
 				alg: string;
