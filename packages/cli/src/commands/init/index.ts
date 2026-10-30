@@ -283,8 +283,6 @@ const generateAuthImportPath = async (
 		// Normalize the base path (handle . and ./ and empty string)
 		const normalizedBasePath = path.normalize(aliasBasePath);
 
-		console.log(chalk.dim(`    normalizedBasePath: ${normalizedBasePath}`));
-
 		// If base path is "." or empty, it means the alias points to the project root
 		if (
 			normalizedBasePath === "." ||

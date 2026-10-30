@@ -494,6 +494,7 @@ describe("initAction", () => {
 			);
 			const output = vi.mocked(console.log).mock.calls.flat().join("\n");
 			expect(output).toContain("app/routes.ts");
+			expect(output).not.toContain("normalizedBasePath");
 		},
 	);
 
