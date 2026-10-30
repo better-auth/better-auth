@@ -3,7 +3,7 @@ import { hex } from "@better-auth/utils/hex";
 import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
 import { generateId as defaultGenerateId } from "../../utils/id";
-import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
+import type { BetterAuthDBSchema, DBFieldAttribute, ModelNames } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
 let warnedSerialDeterministicId = false;
@@ -18,16 +18,22 @@ let warnedSerialDeterministicId = false;
  * replaces a forced id that does not fit the strategy with a fresh one, which
  * would let every insert win. Under `"uuid"` the first 16 bytes are formatted
  * with version 5 and RFC 9562 variant bits, the shape the id field accepts.
- * Other string strategies get the base64url digest. Under `"serial"` the
+ * Other string strategies get the base64url digest. When the adapter keys
+ * rows by ObjectId (Prisma on MongoDB) and the database generates ids for
+ * `model`, the first 12 digest bytes become a 24-character hex string so the
+ * ObjectId column accepts the id. Under `"serial"` the
  * base64url digest is still replaced by a database number, so the record is
  * not single use; this logs a warning once per process.
  *
  * @internal Shared by Better Auth packages; not a supported public API.
  * @param digest - A hash of the guarded value, at least 16 bytes long.
+ * @param target - The model the id is for, and whether the adapter stores
+ * ids as ObjectId (see {@link usesObjectIdKeys}).
  */
 export function encodeDeterministicId(
 	digest: Uint8Array,
 	options: Pick<BetterAuthOptions, "advanced">,
+	target?: { model: string; objectIdKeys?: boolean } | undefined,
 ): string {
 	const generateId = options.advanced?.database?.generateId;
 	if (generateId === "serial" && !warnedSerialDeterministicId) {
@@ -40,6 +46,15 @@ export function encodeDeterministicId(
 			'Single-use checks (such as SAML assertion IDs, DPoP proofs, and private_key_jwt assertions) need string ids and are not enforced with `advanced.database.generateId: "serial"`.',
 		);
 	}
+	if (target?.objectIdKeys) {
+		const databaseGenerated =
+			generateId === false ||
+			(typeof generateId === "function" &&
+				generateId({ model: target.model as ModelNames }) === false);
+		if (databaseGenerated) {
+			return hex.encode(digest.slice(0, 12));
+		}
+	}
 	if (generateId !== "uuid") {
 		return base64Url.encode(digest, { padding: false });
 	}
@@ -48,6 +63,18 @@ export function encodeDeterministicId(
 	bytes[8] = (bytes[8]! & 0x3f) | 0x80;
 	const value = hex.encode(bytes);
 	return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
+/**
+ * Whether `adapter` stores primary keys as MongoDB ObjectIds, which only
+ * accept 24-character hex strings when the database owns id generation.
+ *
+ * @internal Shared by Better Auth packages; not a supported public API.
+ */
+export function usesObjectIdKeys(adapter: {
+	options?: Record<string, unknown> | undefined;
+}): boolean {
+	return adapter.options?.provider === "mongodb";
 }
 
 export const initGetIdField = ({
