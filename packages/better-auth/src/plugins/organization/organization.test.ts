@@ -42,6 +42,33 @@ describe("organization type", () => {
 	});
 
 	/**
+	 * A member's or invitation's stored role can be several roles persisted comma-joined
+	 * (e.g. `"owner,analyst"`) and may include custom role names, so the returned `role`
+	 * type must accept an arbitrary string, not only the configured single-role union.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/10533
+	 */
+	it("member/invitation role output accepts comma-joined and custom roles", () => {
+		type Options = {
+			roles: {
+				owner: typeof ownerAc;
+				admin: typeof adminAc;
+				member: typeof memberAc;
+				analyst: typeof memberAc;
+			};
+		};
+		// Known roles still keep autocomplete...
+		expectTypeOf<InferMember<Options>["role"]>().toEqualTypeOf<
+			"owner" | "admin" | "member" | "analyst" | (string & {})
+		>();
+		// ...while the comma-joined / custom string the runtime returns stays assignable.
+		const memberRole: InferMember<Options>["role"] = "owner,analyst";
+		const invitationRole: InferInvitation<Options>["role"] = "owner,analyst";
+		expect(memberRole).toBe("owner,analyst");
+		expect(invitationRole).toBe("owner,analyst");
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/9135
 	 */
 	it("allows dynamic roles in create invitation input", async () => {
@@ -2778,7 +2805,7 @@ describe("Additional Fields", async () => {
 			{
 				id: string;
 				organizationId: string;
-				role: "member" | "admin" | "owner";
+				role: "member" | "admin" | "owner" | (string & {});
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -2840,7 +2867,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			userId: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			createdAt: Date;
 			teamId?: string | undefined;
 			user: {
@@ -3074,7 +3101,7 @@ describe("Additional Fields", async () => {
 		type ExpectedMembers = {
 			id: string;
 			organizationId: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			createdAt: Date;
 			userId: string;
 			teamId?: string | undefined;
@@ -3092,7 +3119,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			email: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			status: InvitationStatus;
 			inviterId: string;
 			expiresAt: Date;
@@ -3194,7 +3221,7 @@ describe("Additional Fields", async () => {
 			members: ({
 				id: string;
 				organizationId: string;
-				role: "member" | "admin" | "owner";
+				role: "member" | "admin" | "owner" | (string & {});
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -3263,7 +3290,7 @@ describe("Additional Fields", async () => {
 			member: {
 				id: string;
 				organizationId: string;
-				role: "member" | "admin" | "owner";
+				role: "member" | "admin" | "owner" | (string & {});
 				createdAt: Date;
 				userId: string;
 				teamId?: string | undefined;
@@ -3291,7 +3318,7 @@ describe("Additional Fields", async () => {
 		id: string;
 		organizationId: string;
 		email: string;
-		role: "member" | "admin" | "owner";
+		role: "member" | "admin" | "owner" | (string & {});
 		status: InvitationStatus;
 		inviterId: string;
 		expiresAt: Date;
@@ -3384,7 +3411,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			email: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			status: InvitationStatus;
 			inviterId: string;
 			createdAt: Date;
@@ -3418,7 +3445,7 @@ describe("Additional Fields", async () => {
 				id: string;
 				organizationId: string;
 				email: string;
-				role: "member" | "admin" | "owner";
+				role: "member" | "admin" | "owner" | (string & {});
 				status: InvitationStatus;
 				inviterId: string;
 				createdAt: Date;
@@ -3464,7 +3491,7 @@ describe("Additional Fields", async () => {
 			id: string;
 			organizationId: string;
 			email: string;
-			role: "member" | "admin" | "owner";
+			role: "member" | "admin" | "owner" | (string & {});
 			status: InvitationStatus;
 			createdAt: Date;
 			expiresAt: Date;
