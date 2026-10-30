@@ -10,7 +10,11 @@ import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
+import {
+	getOrgSessionFromCtx,
+	orgMiddleware,
+	orgSessionMiddleware,
+} from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
@@ -1175,7 +1179,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			const session = await getOrgSessionFromCtx(ctx);
 			if (!session) {
 				throw APIError.fromStatus("UNAUTHORIZED", {
 					message: "Not authenticated",
@@ -1386,7 +1390,7 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			const session = await getOrgSessionFromCtx(ctx);
 
 			if (ctx.request && ctx.query?.email) {
 				throw APIError.fromStatus("BAD_REQUEST", {
