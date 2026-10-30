@@ -54,7 +54,11 @@ function makeEmbedded() {
  * promise and the nonce the client put in the start URL (so a test can forge a
  * completion message that passes — or fails — the gate).
  */
-function startPopup() {
+function startPopup(
+	options: Parameters<ReturnType<typeof createSignInPopup>>[0] = {
+		provider: "google",
+	},
+) {
 	const open = vi.fn((..._args: unknown[]) => fakePopup());
 	vi.stubGlobal("open", open);
 	const $fetch = vi.fn().mockResolvedValue({
@@ -65,9 +69,13 @@ function startPopup() {
 		$fetch: $fetch as unknown as BetterFetch,
 		options: { baseURL: AUTH_ORIGIN },
 		notifySessionSignal: vi.fn(),
-	})({ provider: "google" });
+	})(options);
 	const startUrl = new URL(`${open.mock.calls[0]?.[0]}`);
-	return { result, nonce: startUrl.searchParams.get("popupNonce") ?? "" };
+	return {
+		result,
+		nonce: startUrl.searchParams.get("popupNonce") ?? "",
+		startUrl,
+	};
 }
 
 function post(origin: string, data: unknown) {
@@ -133,6 +141,35 @@ describe("signIn.popup completion gate", () => {
 			data: null,
 			error: { code: "access_denied", message: "denied" },
 		});
+	});
+});
+
+describe("signIn.popup start URL", () => {
+	// `signIn.popup` allows one popup at a time, so settle each before the next.
+	async function startAndSettle(options?: Parameters<typeof startPopup>[0]) {
+		const { result, nonce, startUrl } = startPopup(options);
+		post(AUTH_ORIGIN, {
+			type: OAUTH_POPUP_MESSAGE_TYPE,
+			nonce,
+			error: { code: "cancelled" },
+		});
+		await result;
+		return startUrl;
+	}
+
+	it("serializes additionalParams into the start URL", async () => {
+		const startUrl = await startAndSettle({
+			provider: "google",
+			additionalParams: { ui_locales: "fr" },
+		});
+		expect(startUrl.searchParams.get("additionalParams")).toBe(
+			JSON.stringify({ ui_locales: "fr" }),
+		);
+	});
+
+	it("omits additionalParams when none are given", async () => {
+		const startUrl = await startAndSettle();
+		expect(startUrl.searchParams.has("additionalParams")).toBe(false);
 	});
 });
 
