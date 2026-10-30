@@ -2292,6 +2292,29 @@ describe("api-key", async () => {
 		}
 	});
 
+	it("should verify an API key whose metadata has a constructor key", async () => {
+		const metadata = {
+			constructor: "acme",
+		};
+		const apiKey = await auth.api.createApiKey({
+			body: {
+				userId: user.id,
+				metadata,
+			},
+			headers,
+		});
+
+		const result = await auth.api.verifyApiKey({
+			body: {
+				key: apiKey.key,
+			},
+			headers,
+		});
+
+		expect(result.valid).toBe(true);
+		expect(result.key?.metadata).toEqual(metadata);
+	});
+
 	it("should verify an API key with matching permissions", async () => {
 		const permissions = {
 			files: ["read", "write"],
