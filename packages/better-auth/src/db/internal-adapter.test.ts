@@ -1303,6 +1303,240 @@ describe("internal adapter test", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11735
+	 */
+	describe("secondary-only session in a transaction that does not commit", () => {
+		async function setup() {
+			const testMap = new Map<string, string>();
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(testMap),
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{ name: "rollback-user", email: "rollback-session@example.com" },
+				{ method: "test" },
+			);
+			return { testMap, testCtx, user };
+		}
+
+		it("removes the cached session and its index entry on rollback", async () => {
+			const { testMap, testCtx, user } = await setup();
+			const existing = await testCtx.internalAdapter.createSession(user.id);
+			let rolledBackToken = "";
+
+			await expect(
+				runWithTransaction(testCtx.adapter, async () => {
+					const session = await testCtx.internalAdapter.createSession(user.id);
+					rolledBackToken = session.token;
+					expect(testMap.has(session.token)).toBe(true);
+					throw new Error("rollback");
+				}),
+			).rejects.toThrow("rollback");
+
+			expect(testMap.has(rolledBackToken)).toBe(false);
+			expect(testMap.has(existing.token)).toBe(true);
+			const index = safeJSONParse<{ token: string }[]>(
+				testMap.get(`active-sessions-${user.id}`) ?? "",
+			);
+			expect(index?.map((entry) => entry.token)).toEqual([existing.token]);
+		});
+
+		it("keeps only the session of the attempt that commits when the adapter retries", async () => {
+			const { testMap, testCtx, user } = await setup();
+			const retryingAdapter = {
+				...testCtx.adapter,
+				transaction: async <R>(
+					callback: Parameters<typeof testCtx.adapter.transaction<R>>[0],
+				) => {
+					await testCtx.adapter
+						.transaction(async (trx) => {
+							await callback(trx);
+							throw new Error("transient abort");
+						})
+						.catch(() => {});
+					return testCtx.adapter.transaction(callback);
+				},
+			} as typeof testCtx.adapter;
+			const tokens: string[] = [];
+
+			await runWithTransaction(retryingAdapter, async () => {
+				const session = await testCtx.internalAdapter.createSession(user.id);
+				tokens.push(session.token);
+			});
+
+			expect(tokens).toHaveLength(2);
+			expect(testMap.has(tokens[0]!)).toBe(false);
+			expect(testMap.has(tokens[1]!)).toBe(true);
+			const index = safeJSONParse<{ token: string }[]>(
+				testMap.get(`active-sessions-${user.id}`) ?? "",
+			);
+			expect(index?.map((entry) => entry.token)).toEqual([tokens[1]]);
+		});
+
+		it("keeps a session added by a concurrent sign-in while the cleanup runs", async () => {
+			const testMap = new Map<string, string>();
+			const base = createStringSecondaryStorage(testMap);
+			const listKey = (id: string) => `active-sessions-${id}`;
+			let concurrent: { userId: string; token: string } | null = null;
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: {
+					...base,
+					get(key) {
+						const value = base.get(key);
+						// Another sign-in lands right after the cleanup read the list.
+						if (concurrent && key === listKey(concurrent.userId)) {
+							const { userId, token } = concurrent;
+							concurrent = null;
+							const list = safeJSONParse<
+								{ token: string; expiresAt: number }[]
+							>(testMap.get(listKey(userId)) ?? "");
+							testMap.set(
+								listKey(userId),
+								JSON.stringify([
+									...(list ?? []),
+									{ token, expiresAt: Date.now() + 60_000 },
+								]),
+							);
+						}
+						return value;
+					},
+				},
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{ name: "race-user", email: "rollback-race@example.com" },
+				{ method: "test" },
+			);
+
+			await expect(
+				runWithTransaction(testCtx.adapter, async () => {
+					await testCtx.internalAdapter.createSession(user.id);
+					concurrent = { userId: user.id, token: "concurrent-token" };
+					throw new Error("rollback");
+				}),
+			).rejects.toThrow("rollback");
+
+			const index = safeJSONParse<{ token: string }[]>(
+				testMap.get(listKey(user.id)) ?? "",
+			);
+			expect(index?.map((entry) => entry.token)).toEqual(["concurrent-token"]);
+		});
+
+		it("compares the list by value when the store returns fresh parsed objects", async () => {
+			const testMap = new Map<string, string>();
+			const base = createStringSecondaryStorage(testMap);
+			const listKey = (id: string) => `active-sessions-${id}`;
+			const watched = { key: "", reads: 0 };
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: {
+					...base,
+					get(key) {
+						const value = base.get(key);
+						if (key === watched.key) watched.reads++;
+						// A new object per call, so a reference check always differs.
+						return typeof value === "string" && value.startsWith("[")
+							? JSON.parse(value)
+							: value;
+					},
+				},
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{ name: "parsed-user", email: "rollback-parsed@example.com" },
+				{ method: "test" },
+			);
+			const existing = await testCtx.internalAdapter.createSession(user.id);
+
+			await expect(
+				runWithTransaction(testCtx.adapter, async () => {
+					await testCtx.internalAdapter.createSession(user.id);
+					watched.key = listKey(user.id);
+					throw new Error("rollback");
+				}),
+			).rejects.toThrow("rollback");
+
+			// One read plus one re-read; an unstable check would retry 3 times.
+			expect(watched.reads).toBe(2);
+			const index = safeJSONParse<{ token: string }[]>(
+				testMap.get(listKey(user.id)) ?? "",
+			);
+			expect(index?.map((entry) => entry.token)).toEqual([existing.token]);
+		});
+
+		it("skips the write instead of storing a stale list when the list keeps changing", async () => {
+			const testMap = new Map<string, string>();
+			const base = createStringSecondaryStorage(testMap);
+			const listKey = (id: string) => `active-sessions-${id}`;
+			let concurrentUserId: string | null = null;
+			let added = 0;
+			const testOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: {
+					...base,
+					get(key) {
+						const value = base.get(key);
+						// Another sign-in lands after every read, including the last one.
+						if (concurrentUserId && key === listKey(concurrentUserId)) {
+							const list = safeJSONParse<
+								{ token: string; expiresAt: number }[]
+							>(testMap.get(key) ?? "");
+							testMap.set(
+								key,
+								JSON.stringify([
+									...(list ?? []),
+									{
+										token: `concurrent-${added++}`,
+										expiresAt: Date.now() + 60_000,
+									},
+								]),
+							);
+						}
+						return value;
+					},
+				},
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(testOpts)).runMigrations();
+			const testCtx = await init(testOpts);
+			const user = await testCtx.internalAdapter.createUser(
+				{ name: "busy-user", email: "rollback-busy@example.com" },
+				{ method: "test" },
+			);
+
+			await expect(
+				runWithTransaction(testCtx.adapter, async () => {
+					await testCtx.internalAdapter.createSession(user.id);
+					concurrentUserId = user.id;
+					throw new Error("rollback");
+				}),
+			).rejects.toThrow("rollback");
+
+			const tokens = (
+				safeJSONParse<{ token: string }[]>(
+					testMap.get(listKey(user.id)) ?? "",
+				) ?? []
+			).map((entry) => entry.token);
+			expect(added).toBeGreaterThan(0);
+			for (let i = 0; i < added; i++) {
+				expect(tokens).toContain(`concurrent-${i}`);
+			}
+		});
+
+		it("keeps the session when the transaction commits", async () => {
+			const { testMap, testCtx, user } = await setup();
+			const session = await runWithTransaction(testCtx.adapter, () =>
+				testCtx.internalAdapter.createSession(user.id),
+			);
+			expect(testMap.has(session.token)).toBe(true);
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10390#discussion_r3585595438
 	 */
 	it("preserves sessions created after user session deletion is requested", async () => {
