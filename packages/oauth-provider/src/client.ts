@@ -1,3 +1,4 @@
+import { logger } from "@better-auth/core/env";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthDeviceAuthorization } from "./device-code";
@@ -8,7 +9,8 @@ import { PACKAGE_VERSION } from "./version";
 function parseJSONBody(body: string): Record<string, unknown> | null {
 	try {
 		return JSON.parse(body || "{}");
-	} catch {
+	} catch (e) {
+		logger.error("Error parsing JSON", { error: e });
 		return null;
 	}
 }
