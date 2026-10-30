@@ -752,6 +752,17 @@ export interface OAuthOptions<
 	 */
 	assertionMaxLifetime?: number;
 	/**
+	 * Seconds of clock skew allowed when verifying built-in
+	 * `private_key_jwt` assertions with `jwtVerify`.
+	 *
+	 * Use this when an OAuth client (for example an MCP host) mints
+	 * assertions whose `nbf` is a few seconds ahead of this server.
+	 * `0` keeps the previous fail-closed check.
+	 *
+	 * @default 0
+	 */
+	assertionClockTolerance?: number;
+	/**
 	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
 	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
 	 * signed with one of its current keys. No user session is involved.
