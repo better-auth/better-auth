@@ -9,6 +9,7 @@ export const nl: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "Sessie aanmaken mislukt",
 	FAILED_TO_UPDATE_USER: "Gebruiker bijwerken mislukt",
 	FAILED_TO_GET_SESSION: "Sessie ophalen mislukt",
+	FAILED_TO_DELETE_SESSION: "Sessie verwijderen mislukt",
 	INVALID_PASSWORD: "Ongeldig wachtwoord",
 	INVALID_EMAIL: "Ongeldig e-mailadres",
 	INVALID_EMAIL_OR_PASSWORD: "Ongeldig e-mailadres of wachtwoord",
