@@ -12,7 +12,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import type { Passkey } from ".";
+import type { Passkey, PasskeyOptions } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
 
@@ -1668,5 +1668,76 @@ describe("passkey expirationTime per-request", () => {
 		const expiresAt = new Date(passkeyVerification.expiresAt).getTime();
 
 		expect(expiresAt).toBeGreaterThan(currentTime);
+	});
+});
+
+/**
+ * The required policy must check the signed user verification flag.
+ *
+ * @see https://www.w3.org/TR/webauthn-2/#sctn-registering-a-new-credential
+ */
+describe("passkey user verification policy at registration", () => {
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+	});
+
+	async function runRegistration(
+		authenticatorSelection?: PasskeyOptions["authenticatorSelection"],
+	) {
+		const { auth, client, cookieSetter, signInWithTestUser } =
+			await getTestInstance({
+				plugins: [
+					passkey({
+						authenticatorSelection,
+					}),
+				],
+			});
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		await auth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+			},
+		});
+	}
+
+	it("enforces user verification when required", async () => {
+		await runRegistration({
+			userVerification: "required",
+		});
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requireUserVerification: true,
+			}),
+		);
+	});
+
+	it("keeps user verification optional by default", async () => {
+		await runRegistration();
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requireUserVerification: false,
+			}),
+		);
+	});
+
+	it("does not enforce user verification when discouraged", async () => {
+		await runRegistration({
+			userVerification: "discouraged",
+		});
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requireUserVerification: false,
+			}),
+		);
 	});
 });

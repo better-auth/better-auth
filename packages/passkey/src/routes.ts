@@ -544,7 +544,8 @@ export const generatePasskeyAuthenticationOptions = (
 			);
 			const options = await generateAuthenticationOptions({
 				rpID: getRpID(opts, baseURLString),
-				userVerification: "preferred",
+				userVerification:
+					opts.authenticatorSelection?.userVerification ?? "preferred",
 				extensions: authenticationExtensions,
 				...(userPasskeys.length
 					? {
@@ -726,15 +727,21 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					typeof ctx.context.options.baseURL === "string"
 						? ctx.context.options.baseURL
 						: undefined;
+				// The verifier throws on a rejected response (origin, user verification),
+				// which is a client error, not a server failure.
 				const verification = await verifyRegistrationResponse({
 					response: resp,
 					expectedChallenge,
 					expectedOrigin,
 					expectedRPID: getRpID(options, verifyBaseURL),
-					requireUserVerification: false,
+					requireUserVerification:
+						options.authenticatorSelection?.userVerification === "required",
+				}).catch((e) => {
+					ctx.context.logger.error("Failed to verify registration", e);
+					return null;
 				});
-				const { verified, registrationInfo } = verification;
-				if (!verified || !registrationInfo) {
+				const registrationInfo = verification?.registrationInfo;
+				if (!verification?.verified || !registrationInfo) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
@@ -984,7 +991,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 							",",
 						) as AuthenticatorTransportFuture[],
 					},
-					requireUserVerification: false,
+					requireUserVerification:
+						options.authenticatorSelection?.userVerification === "required",
 				});
 				const { verified } = verification;
 				if (!verified)
