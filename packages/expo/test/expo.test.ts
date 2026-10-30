@@ -3,7 +3,15 @@ import { createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink, oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	onTestFinished,
+	vi,
+} from "vitest";
 import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { expo } from "../src";
 import { expoClient, normalizeCookieName, storageAdapter } from "../src/client";
@@ -1795,5 +1803,80 @@ describe("expo authorization proxy", async () => {
 			"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc";
 		const res = await proxy(target);
 		expect(res.headers.get("location")).toBe(target);
+	});
+
+	const signIn = () =>
+		auth.api.signInSocial({
+			body: {
+				provider: "google",
+				callbackURL: "/",
+				disableRedirect: true,
+			},
+		});
+
+	it("sets the signed state cookie for a state the server issued", async () => {
+		const { url } = await signIn();
+		const state = new URL(url!).searchParams.get("state");
+		const res = await proxy(url!);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(url);
+		expect(res.headers.get("set-cookie")).toContain(
+			`better-auth.state=${state}.`,
+		);
+	});
+
+	it("does not sign a state the server did not issue", async () => {
+		const res = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=Zx9fA1bC2dE3fG4hI5jK6lM7nO8pQ9rS",
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("set-cookie")).toBeNull();
+	});
+
+	it("does not sign an expired state", async () => {
+		const { url } = await signIn();
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+		const res = await proxy(url!);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("set-cookie")).toBeNull();
+	});
+
+	it("redirects without a state cookie when oauth-proxy rewrites the state", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "https://preview.example",
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+			plugins: [
+				expo(),
+				oAuthProxy({
+					productionURL: "https://prod.example",
+					currentURL: "https://preview.example",
+				}),
+			],
+		});
+		const { url } = await auth.api.signInSocial({
+			body: {
+				provider: "google",
+				callbackURL: "/",
+				disableRedirect: true,
+			},
+		});
+		const res = await auth.handler(
+			new Request(
+				`https://preview.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+					url!,
+				)}`,
+			),
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(url);
+		expect(res.headers.get("set-cookie")).toBeNull();
 	});
 });

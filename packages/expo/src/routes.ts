@@ -1,4 +1,4 @@
-import { HIDE_METADATA } from "better-auth";
+import { getAuthStateVerificationIdentifier, HIDE_METADATA } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
 
@@ -66,6 +66,14 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				message: "Unexpected error",
 			});
+		}
+		// Only sign a state this server issued and still holds.
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(
+				getAuthStateVerificationIdentifier(state),
+			);
+		if (!verification || new Date(verification.expiresAt) < new Date()) {
+			return ctx.redirect(authorizationURL);
 		}
 		const stateCookie = ctx.context.createAuthCookie("state", {
 			maxAge: 5 * 60, // 5 minutes

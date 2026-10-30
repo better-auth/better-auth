@@ -42,7 +42,9 @@ const stateDataSchema = z.looseObject({
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
-/** Verification key for database-backed OAuth and SAML relay state. */
+/**
+ * Verification key for database-backed OAuth and SAML relay state.
+ */
 export const getAuthStateVerificationIdentifier = (state: string) =>
 	`auth-state:${state}`;
 
