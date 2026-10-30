@@ -326,9 +326,10 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 
 * `client_secret_basic`
 * `client_secret_post`
+* `private_key_jwt` (see [Private key JWT client authentication](#private-key-jwt-client-authentication))
 
 <Callout type="warning">
-  If your IdP advertises only unsupported methods (e.g., `private_key_jwt`, `tls_client_auth`, or `"none"` for public clients), you can explicitly override the method:
+  If your IdP advertises only unsupported methods (e.g., `tls_client_auth`, or `"none"` for public clients), you can explicitly override the method:
 
   ```ts
   oidcConfig: {
@@ -340,6 +341,47 @@ If the Identity Provider is misconfigured or unreachable, registration will fail
 
   This is especially common with mock OIDC servers or development IdPs that only advertise `"none"` as the supported method.
 </Callout>
+
+#### Private key JWT client authentication
+
+With `tokenEndpointAuthentication: "private_key_jwt"`, the code exchange is authenticated with a signed JWT instead of a client secret. Keys stay out of the database: `resolvePrivateKey` supplies them at token exchange.
+
+```ts title="auth.ts"
+sso({
+    resolvePrivateKey: async ({ providerId, keyId }) => ({
+        privateKeyPem: await loadPrivateKeyPem(providerId),
+        kid: keyId,
+        algorithm: "PS256",
+    }),
+})
+```
+
+Better Auth's assertion header carries only `alg`, `typ` and `kid`. If your provider needs more, return `clientAssertion` and sign the JWT yourself; it receives `{ clientId, tokenEndpoint, grantType }`. For example, Microsoft Entra ID identifies the certificate by `x5t#S256`:
+
+```ts title="auth.ts"
+import { importPKCS8, SignJWT } from "jose"
+
+sso({
+    resolvePrivateKey: async ({ providerId }) => {
+        const { privateKeyPem, x5tS256 } = await loadCertificate(providerId)
+        const key = await importPKCS8(privateKeyPem, "PS256")
+        return {
+            clientAssertion: async ({ clientId, tokenEndpoint }) => {
+                const now = Math.floor(Date.now() / 1000)
+                return new SignJWT({})
+                    .setProtectedHeader({ alg: "PS256", typ: "JWT", "x5t#S256": x5tS256 })
+                    .setIssuer(clientId)
+                    .setSubject(clientId)
+                    .setAudience(tokenEndpoint)
+                    .setIssuedAt(now)
+                    .setExpirationTime(now + 120)
+                    .setJti(crypto.randomUUID())
+                    .sign(key)
+            },
+        }
+    },
+})
+```
 
 #### Summary
 
