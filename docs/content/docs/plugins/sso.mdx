@@ -1105,8 +1105,6 @@ Changing the certificates keeps the accounts already linked to the provider. Who
 
 If your IdP publishes a metadata XML document, pass it as `idpMetadata.metadata` instead and leave `cert` unset. The certificates come from the document and rotation happens when the IdP republishes it. If a config supplies neither `cert` nor `idpMetadata.metadata`, registration fails with `CERT_SOURCE_MISSING`, since samlify has nothing to verify SAML responses against.
 
-Applications can use `guardProviderMutation` to coordinate SSO changes with a paired directory-sync control plane. IdP entity IDs, endpoints, signing certificates, SP entity IDs, NameID formats, POST assertion-consumer URLs, and assertion-signing policy are authentication-boundary changes. If the guard blocks authentication-boundary changes while a directory is paired, unpair the directory, update the IdP trust configuration, and then re-pair it. OIDC client-secret rotation and SAML SP private-key rotation do not change the authentication boundary.
-
 ### SAML Attribute Mapping
 
 Configure how SAML attributes map to user fields:
@@ -1749,6 +1747,32 @@ For a detailed guide on setting up SAML SSO with examples for Okta and testing w
 
 If you want to allow account linking for specific trusted providers, enable the `accountLinking` option in your auth config and specify those providers in the `trustedProviders` list.
 
+#### Provider mutation guards
+
+Applications can use `guardProviderMutation` to coordinate SSO changes with a paired directory-sync control plane. IdP entity IDs, endpoints, signing certificates, SP entity IDs, NameID formats, POST assertion-consumer URLs, and assertion-signing policy are authentication-boundary changes. If the guard blocks authentication-boundary changes while a directory is paired, unpair the directory, update the IdP trust configuration, and then re-pair it. OIDC client-secret rotation and SAML SP private-key rotation do not change the authentication boundary.
+
+```ts title="auth.ts"
+sso({
+    guardProviderMutation: async ({ action, provider, providerReference }, { database }) => {
+        // Read the current provider state or your own policy tables.
+        // For updates, inspect isAuthenticationBoundaryChange through the
+        // discriminated union before deciding. Throw to reject the mutation.
+    },
+})
+```
+
+When the database adapter supports native interactive transactions, the guard runs after the provider row is locked and before any provider or linked account write, so those writes commit or roll back together.
+
+Adapters that cannot run an interactive transaction callback, such as Drizzle on Cloudflare D1, use optimistic concurrency instead. Leave the adapter's transaction capability disabled (the Drizzle default) so Better Auth selects this path. The guard runs against a snapshot of the provider row, and the update or deletion is applied only while the provider's scalar columns are unchanged. If another request changes the provider in the meantime, the endpoint responds with `409` and the `SSO_PROVIDER_CHANGED` code without applying the mutation; retry the request to evaluate the guard against the new state. In this mode the guard's `database` handle is not transactional, so keep guards read-only: writes made by the guard before a lost concurrency check are not rolled back.
+
+Optimistic mode cannot serialize account linking with the provider write, and its equality predicates only cover scalar columns. For that reason it rejects operations whose safety depends on those guarantees:
+
+* Changing provider identity fields returns `501` with `SSO_PROVIDER_IDENTITY_CHANGE_REQUIRES_NATIVE_TRANSACTIONS`. Use an adapter with native transactions to change the issuer, OIDC identity fields, or SAML identity fields.
+* Deleting a provider that still has linked accounts returns `501` with `SSO_PROVIDER_DELETE_WITH_LINKED_ACCOUNTS_REQUIRES_NATIVE_TRANSACTIONS`. Remove the linked accounts first, or use an adapter with native transactions. Deletion of a provider with no linked accounts is supported.
+* Writing a non-scalar additional field returns `501` with `SSO_PROVIDER_NON_SCALAR_UPDATE_REQUIRES_NATIVE_TRANSACTIONS`. Optimistic equality predicates can only fence scalar columns.
+
+Updates that do not change the identity boundary and only write scalar fields, such as domain, client-secret, and signing-certificate changes, and deletion of providers without linked accounts remain available. A deletion checks linked accounts before deleting the provider row. A concurrent account link that already passed its own provider check can still complete after that check; fully closing this window requires accounts bound to an immutable provider instance, so use an adapter with native transactions when that guarantee is required.
+
 export const ssoOptionsType = {
 	provisionUser: {
 		description: "A custom function to provision a user when they sign in with an SSO provider.",
@@ -1789,6 +1813,10 @@ export const ssoOptionsType = {
 		description: "Disable implicit sign up for new users. When set to true, sign-in needs to be called with requestSignUp as true to create new users.",
 		type: "boolean",
 		default: false,
+	},
+	guardProviderMutation: {
+		description: "Authorize updates and deletion of a persisted SSO provider. Runs inside a native transaction, or against a provider snapshot with optimistic concurrency when the adapter cannot run interactive transactions. Throw to reject the mutation. Keep the guard read-only in the optimistic mode, where its writes are not rolled back.",
+		type: "function",
 	},
 	providersLimit: {
 		description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
