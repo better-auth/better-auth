@@ -39,7 +39,7 @@ import type {
 	PasskeyRegistrationUser,
 	WebAuthnChallengeValue,
 } from "./types";
-import { getRpID } from "./utils";
+import { getExpectedOrigins, getRpID } from "./utils";
 
 type PasskeyCeremony = "registration" | "authentication";
 
@@ -92,6 +92,18 @@ type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 
 type RequiredPassKeyOptions = WithRequired<PasskeyOptions, "advanced"> & {
 	advanced: Required<PasskeyOptions["advanced"]>;
+	/**
+	 * Set at init when no `baseURL` is configured, so the core derives it per request.
+	 */
+	baseURLFromRequest: boolean;
+};
+
+const expectedOriginUnavailable = (ctx: GenericEndpointContext) => {
+	ctx.context.logger.error(PASSKEY_ERROR_CODES.ORIGIN_NOT_CONFIGURED.message);
+	return APIError.from(
+		"INTERNAL_SERVER_ERROR",
+		PASSKEY_ERROR_CODES.ORIGIN_NOT_CONFIGURED,
+	);
 };
 
 const resolveExtensions = async (
@@ -639,14 +651,15 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 			},
 		},
 		async (ctx) => {
-			const origin = options?.origin || ctx.headers?.get("origin") || "";
-			if (!origin) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
-				);
-			}
 			const resp = ctx.body.response;
+			const expectedOrigin = getExpectedOrigins(
+				options,
+				ctx,
+				resp?.response?.clientDataJSON,
+			);
+			if (expectedOrigin.length === 0) {
+				throw expectedOriginUnavailable(ctx);
+			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
@@ -716,7 +729,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				const verification = await verifyRegistrationResponse({
 					response: resp,
 					expectedChallenge,
-					expectedOrigin: origin,
+					expectedOrigin,
 					expectedRPID: getRpID(options, verifyBaseURL),
 					requireUserVerification: false,
 				});
@@ -896,13 +909,15 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			},
 		},
 		async (ctx) => {
-			const origin = options?.origin || ctx.headers?.get("origin") || "";
-			if (!origin) {
-				throw new APIError("BAD_REQUEST", {
-					message: "origin missing",
-				});
-			}
 			const resp = ctx.body.response;
+			const expectedOrigin = getExpectedOrigins(
+				options,
+				ctx,
+				resp?.response?.clientDataJSON,
+			);
+			if (expectedOrigin.length === 0) {
+				throw expectedOriginUnavailable(ctx);
+			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
 				options.advanced.webAuthnChallengeCookie,
 			);
@@ -959,7 +974,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				const verification = await verifyAuthenticationResponse({
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
-					expectedOrigin: origin,
+					expectedOrigin,
 					expectedRPID: getRpID(options, authBaseURL),
 					credential: {
 						id: passkey.credentialID,

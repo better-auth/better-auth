@@ -460,7 +460,13 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
 
 **rpName**: Human-readable title for your website.
 
-**origin**: The origin URL at which your better-auth server is hosted. `http://localhost` and `http://localhost:PORT` are also valid. Do NOT include any trailing /.
+**origin**: The origin, or list of origins, where passkey registration and authentication run, without a trailing `/`. Defaults to the origin of `baseURL`, plus a frontend origin listed exactly in `trustedOrigins`. Set it when `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it.
+
+```ts title="auth.ts"
+passkey({
+  origin: ["https://app.example.com", "https://admin.example.com"],
+});
+```
 
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
 
