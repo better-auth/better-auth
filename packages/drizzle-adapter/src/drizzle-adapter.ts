@@ -181,6 +181,22 @@ export interface DrizzleAdapterConfig {
 	 * @default undefined
 	 */
 	schemaName?: string | undefined;
+	/**
+	 * Override whether the adapter handles JSON serialization directly.
+	 * Defaults to `true` as Drizzle handles JSON-mode and native JSON columns across all supported providers.
+	 *
+	 * @default true
+	 * @see https://github.com/better-auth/better-auth/issues/8655
+	 */
+	supportsJSON?: boolean | undefined;
+	/**
+	 * Override whether the adapter handles array serialization directly.
+	 * Defaults to `true` as Drizzle handles JSON-mode arrays on SQLite/MySQL and native arrays on PostgreSQL.
+	 *
+	 * @default true
+	 * @see https://github.com/better-auth/better-auth/issues/7440
+	 */
+	supportsArrays?: boolean | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
@@ -1232,11 +1248,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,
-			supportsJSON:
-				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
-					? true
-					: false,
-			supportsArrays: config.provider === "pg" ? true : false,
+			// All providers generate schemas where Drizzle handles JSON serialization:
+			//   - PostgreSQL: native `jsonb` column.
+			//   - MySQL: `json()` column (Drizzle stringifies the driver value).
+			//   - SQLite: `text(..., { mode: "json" })` column (Drizzle stringifies).
+			// If Better Auth also pre-stringified, the value would be JSON-encoded twice.
+			// See: https://github.com/better-auth/better-auth/issues/7440
+			// See: https://github.com/better-auth/better-auth/issues/8655
+			supportsJSON: config.supportsJSON ?? true,
+			// For SQLite and MySQL, the generated schema uses JSON-mode columns
+			// (`text({ mode: "json" })` / `json()`) which means Drizzle handles
+			// serialization. So we don't need to pre-stringify arrays (which would
+			// cause double-stringification). For PostgreSQL, native arrays are used.
+			// See: https://github.com/better-auth/better-auth/issues/7440
+			supportsArrays: config.supportsArrays ?? true,
 			customTransformInput: ({ data, fieldAttributes, model, field }) => {
 				if (fieldAttributes.type !== "date") return data;
 				const schema = config.schema || db._.fullSchema;
