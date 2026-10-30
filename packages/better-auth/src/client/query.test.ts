@@ -899,14 +899,22 @@ describe("useAuthQuery - error handling", () => {
 	 */
 	it("should not set isPending true on refetch when signed out", async () => {
 		let fetchCount = 0;
+		let resolveSecond: (value: Response) => void;
+		const secondResponse = new Promise<Response>((resolve) => {
+			resolveSecond = resolve;
+		});
+
 		const client = createAuthClient({
 			plugins: [testClientPlugin()],
 			fetchOptions: {
 				customFetchImpl: async () => {
 					fetchCount++;
-					return new Response(JSON.stringify({ session: null, user: null }), {
-						status: 200,
-					});
+					if (fetchCount === 1) {
+						return new Response(JSON.stringify({ session: null, user: null }), {
+							status: 200,
+						});
+					}
+					return secondResponse;
 				},
 				baseURL: "http://localhost:3000",
 			},
@@ -919,9 +927,20 @@ describe("useAuthQuery - error handling", () => {
 		expect(session().isPending).toBe(false);
 		expect(session().isRefetching).toBe(false);
 
-		await session().refetch();
+		const refetchPromise = session().refetch();
 		await vi.runAllTimersAsync();
 		expect(fetchCount).toBe(2);
+		expect(session().isPending).toBe(false);
+		expect(session().isRefetching).toBe(true);
+		expect(session().data).toBeNull();
+
+		resolveSecond!(
+			new Response(JSON.stringify({ session: null, user: null }), {
+				status: 200,
+			}),
+		);
+		await refetchPromise;
+		await vi.runAllTimersAsync();
 		expect(session().isPending).toBe(false);
 		expect(session().isRefetching).toBe(false);
 		expect(session().data).toBeNull();
