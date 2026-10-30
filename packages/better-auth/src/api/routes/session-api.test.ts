@@ -82,6 +82,41 @@ describe("session", async () => {
 		expect(response.data).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11327
+	 */
+	it("should keep the store failure as a server-only cause", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			logger: { disabled: true },
+		});
+		const { headers } = await signInWithTestUser();
+		const { adapter } = await auth.$context;
+		const findOne = adapter.findOne.bind(adapter);
+		const cause = {
+			code: "STORE_UNAVAILABLE",
+			detail: "Private store details",
+		};
+		vi.spyOn(adapter, "findOne").mockImplementation(async (input) => {
+			if (input.model === "session") throw cause;
+			return findOne(input);
+		});
+
+		await expect(auth.api.getSession({ headers })).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+			body: { code: "FAILED_TO_GET_SESSION", message: "Failed to get session" },
+			cause,
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", { headers }),
+		);
+		expect(response.status).toBe(500);
+		await expect(response.json()).resolves.toEqual({
+			code: "FAILED_TO_GET_SESSION",
+			message: "Failed to get session",
+		});
+	});
+
 	it("should require a fresh session based on session creation time", async () => {
 		vi.useFakeTimers();
 		const now = new Date("2026-01-01T00:00:00.000Z");
@@ -185,68 +220,135 @@ describe("session", async () => {
 		});
 	});
 
-	it("should update session when update age is reached", async () => {
-		const { client, testUser } = await getTestInstance({
-			session: {
-				updateAge: 60,
-				expiresIn: 60 * 2,
-			},
-		});
-		const headers = new Headers();
+	describe("session refresh and expiration", () => {
+		const startedAt = new Date("2026-01-01T00:00:00Z").getTime();
 
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess: cookieSetter(headers),
-			},
-		);
-
-		const data = await client.getSession({
-			fetchOptions: {
-				headers,
-				throw: true,
-			},
+		beforeEach(() => {
+			vi.setSystemTime(startedAt);
 		});
 
-		if (!data) {
-			throw new Error("No session found");
-		}
-		expect(new Date(data?.session.expiresAt).getTime()).toBeGreaterThan(
-			new Date(Date.now() + 1000 * 2 * 59).getTime(),
+		it.each([
+			{ elapsedSeconds: 0, expiresAfterSeconds: 120, cookieMaxAge: undefined },
+			{ elapsedSeconds: 59, expiresAfterSeconds: 120, cookieMaxAge: undefined },
+			{ elapsedSeconds: 60, expiresAfterSeconds: 180, cookieMaxAge: 120 },
+			{ elapsedSeconds: 61, expiresAfterSeconds: 181, cookieMaxAge: 120 },
+		])(
+			"returns the expected session expiration after $elapsedSeconds seconds",
+			async ({ elapsedSeconds, expiresAfterSeconds, cookieMaxAge }) => {
+				const { client, signInWithTestUser } = await getTestInstance({
+					session: {
+						updateAge: 60,
+						expiresIn: 120,
+					},
+				});
+				const { headers } = await signInWithTestUser();
+
+				vi.setSystemTime(startedAt + elapsedSeconds * 1000);
+				const response = await client.getSession({
+					fetchOptions: {
+						headers,
+						onSuccess(context) {
+							const cookies = parseSetCookieHeader(
+								context.response.headers.get("set-cookie") || "",
+							);
+							expect(
+								cookies.get("better-auth.session_token")?.["max-age"],
+							).toBe(cookieMaxAge);
+						},
+					},
+				});
+
+				expect(response.error).toBeNull();
+				expect(response.data).not.toBeNull();
+				expect(new Date(response.data!.session.expiresAt).getTime()).toBe(
+					startedAt + expiresAfterSeconds * 1000,
+				);
+			},
 		);
 
-		expect(new Date(data?.session.expiresAt).getTime()).toBeLessThan(
-			new Date(Date.now() + 1000 * 2 * 60).getTime(),
-		);
-		for (const t of [60, 80, 100, 121]) {
-			const span = new Date();
-			span.setSeconds(span.getSeconds() + t);
-			vi.setSystemTime(span);
+		it("persists successive session refreshes beyond the original expiration", async () => {
+			const { client, signInWithTestUser } = await getTestInstance({
+				session: {
+					updateAge: 60,
+					expiresIn: 120,
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			const initial = await client.getSession({ fetchOptions: { headers } });
+			expect(initial.data).not.toBeNull();
+			expect(new Date(initial.data!.session.expiresAt).getTime()).toBe(
+				startedAt + 120_000,
+			);
+
+			for (const elapsedSeconds of [60, 140, 240]) {
+				vi.setSystemTime(startedAt + elapsedSeconds * 1000);
+				const response = await client.getSession({
+					fetchOptions: {
+						headers,
+						onSuccess(context) {
+							const cookies = parseSetCookieHeader(
+								context.response.headers.get("set-cookie") || "",
+							);
+							expect(
+								cookies.get("better-auth.session_token")?.["max-age"],
+							).toBe(120);
+						},
+					},
+				});
+
+				expect(response.error).toBeNull();
+				expect(response.data?.session.id).toBe(initial.data!.session.id);
+				expect(new Date(response.data!.session.expiresAt).getTime()).toBe(
+					startedAt + (elapsedSeconds + 120) * 1000,
+				);
+			}
+
+			vi.setSystemTime(startedAt + 361_000);
 			const response = await client.getSession({
 				fetchOptions: {
 					headers,
 					onSuccess(context) {
-						const parsed = parseSetCookieHeader(
+						const cookies = parseSetCookieHeader(
 							context.response.headers.get("set-cookie") || "",
 						);
-						const maxAge = parsed.get("better-auth.session_token")?.["max-age"];
-						expect(maxAge).toBe(t === 121 ? 0 : 60 * 2);
+						expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(
+							0,
+						);
 					},
 				},
 			});
-			if (t === 121) {
-				//expired
-				expect(response.data).toBeNull();
-			} else {
-				expect(
-					new Date(response.data?.session.expiresAt!).getTime(),
-				).toBeGreaterThan(new Date(Date.now() + 1000 * 2 * 59).getTime());
-			}
-		}
-		vi.useRealTimers();
+
+			expect(response.error).toBeNull();
+			expect(response.data).toBeNull();
+		});
+
+		it("clears an expired session without refreshing it", async () => {
+			const { client, signInWithTestUser } = await getTestInstance({
+				session: {
+					updateAge: 60,
+					expiresIn: 120,
+				},
+			});
+			const { headers } = await signInWithTestUser();
+
+			vi.setSystemTime(startedAt + 121_000);
+			const response = await client.getSession({
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(
+							0,
+						);
+					},
+				},
+			});
+
+			expect(response.error).toBeNull();
+			expect(response.data).toBeNull();
+		});
 	});
 
 	it("should update the session every time when set to 0", async () => {

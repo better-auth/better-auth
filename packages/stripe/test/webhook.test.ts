@@ -1203,6 +1203,7 @@ describe("stripe webhook", () => {
 					reason: "cancellation_requested",
 					comment: "Customer canceled subscription",
 					feedback: null,
+					feedback_option: null,
 				},
 				items: {
 					object: "list",

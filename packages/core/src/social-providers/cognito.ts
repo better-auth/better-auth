@@ -9,6 +9,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 
 export interface CognitoProfile {
 	sub: string;
@@ -161,6 +162,7 @@ export const cognito = (options: CognitoOptions) => {
 				getCognitoPublicKey(header.kid!, options.region, options.userPoolId),
 			issuer: `https://cognito-idp.${options.region}.amazonaws.com/${options.userPoolId}`,
 			audience: options.clientId,
+			algorithms: ["RS256"],
 			maxTokenAge: "1h",
 		},
 
@@ -246,7 +248,7 @@ export const getCognitoPublicKey = async (
 	const COGNITO_JWKS_URI = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}/.well-known/jwks.json`;
 
 	try {
-		const { data } = await betterFetch<{
+		const { data } = await fetchRefusingRedirects<{
 			keys: Array<{
 				kid: string;
 				alg: string;

@@ -6,12 +6,15 @@ import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
+import * as z from "zod";
 
 const PROTOCOL_URL = "https://agent-auth-protocol.com";
 const AGENT_CLI_PKG = "@auth/agent-cli";
 const AGENT_PLUGIN_PKG = "@better-auth/agent-auth";
 const DEFAULT_REGISTRY = "https://agent-auth.directory";
 const SKILLS_REPO = "better-auth/agent-auth";
+
+const jsonObjectSchema = z.record(z.string(), z.unknown());
 
 interface McpEntry {
 	command: string;
@@ -280,39 +283,42 @@ async function setupOpenCode(args: string[]) {
 	});
 
 	if (write) {
-		writeOpenCodeConfig(configPath, openCodeEntry);
-		console.log(chalk.green(`\n✓ Written to ${display}`));
-	} else {
-		const json = JSON.stringify(
-			{
-				$schema: "https://opencode.ai/config.json",
-				mcp: { "agent-auth": openCodeEntry },
-			},
-			null,
-			2,
-		);
-		console.log(chalk.bold.white("\nAdd to your opencode.json:\n"));
+		if (writeOpenCodeConfig(configPath, openCodeEntry)) {
+			console.log(chalk.green(`\n✓ Written to ${display}`));
+			return;
+		}
 		console.log(
-			json
-				.split("\n")
-				.map((line) => chalk.cyan(`  ${line}`))
-				.join("\n"),
+			chalk.yellow(
+				`\n⚠ Could not read ${display} as a JSON object, so it was left unchanged.`,
+			),
 		);
-		console.log();
 	}
+
+	const json = JSON.stringify(
+		{
+			$schema: "https://opencode.ai/config.json",
+			mcp: { "agent-auth": openCodeEntry },
+		},
+		null,
+		2,
+	);
+	console.log(chalk.bold.white("\nAdd to your opencode.json:\n"));
+	console.log(
+		json
+			.split("\n")
+			.map((line) => chalk.cyan(`  ${line}`))
+			.join("\n"),
+	);
+	console.log();
 }
 
 function writeOpenCodeConfig(
 	configPath: string,
 	entry: { type: string; command: string; args: string[]; enabled: boolean },
 ) {
-	let config: { mcp?: Record<string, unknown>; [key: string]: unknown } = {};
-	if (fs.existsSync(configPath)) {
-		try {
-			config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-		} catch {
-			/* start fresh */
-		}
+	const config = readJsonConfig(configPath);
+	if (!config) {
+		return false;
 	}
 	const mcp = (config.mcp as Record<string, unknown> | undefined) ?? {};
 	mcp["agent-auth"] = entry;
@@ -320,6 +326,7 @@ function writeOpenCodeConfig(
 	config.mcp = mcp;
 
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+	return true;
 }
 
 async function writeMcpConfigInteractive(
@@ -344,11 +351,17 @@ async function writeMcpConfigInteractive(
 	});
 
 	if (write) {
-		writeMcpConfig(configPath, entry);
-		console.log(chalk.green(`\n✓ Written to ${display}`));
-	} else {
-		showJsonConfig(entry);
+		if (writeMcpConfig(configPath, entry)) {
+			console.log(chalk.green(`\n✓ Written to ${display}`));
+			return;
+		}
+		console.log(
+			chalk.yellow(
+				`\n⚠ Could not read ${display} as a JSON object, so it was left unchanged.`,
+			),
+		);
 	}
+	showJsonConfig(entry);
 }
 
 // ── CLI Setup ─────────────────────────────────────
@@ -717,14 +730,26 @@ function getMcpConfigPath(
 	}
 }
 
+/**
+ * Returns `null` when the file exists but is not a JSON object, such as JSONC,
+ * because overwriting it would drop entries we could not read.
+ */
+function readJsonConfig(configPath: string) {
+	if (!fs.existsSync(configPath)) {
+		return {};
+	}
+	try {
+		const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+		return jsonObjectSchema.safeParse(raw).data ?? null;
+	} catch {
+		return null;
+	}
+}
+
 function writeMcpConfig(configPath: string, entry: McpEntry) {
-	let config: Record<string, unknown> = {};
-	if (fs.existsSync(configPath)) {
-		try {
-			config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-		} catch {
-			/* start fresh */
-		}
+	const config = readJsonConfig(configPath);
+	if (!config) {
+		return false;
 	}
 	const servers =
 		(config.mcpServers as Record<string, unknown> | undefined) ?? {};
@@ -736,6 +761,7 @@ function writeMcpConfig(configPath: string, entry: McpEntry) {
 		fs.mkdirSync(dir, { recursive: true });
 	}
 	fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+	return true;
 }
 
 function displayPath(filePath: string, scope: "project" | "global"): string {

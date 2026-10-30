@@ -238,6 +238,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "@agentaos/better-auth",
+		url: "https://github.com/AgentaOS/agentaos/tree/main/packages/better-auth",
+		description:
+			"Better Auth plugin for AgentaOS merchant-of-record checkouts, subscriptions, and verified webhooks.",
+		author: {
+			name: "AgentaOS",
+			github: "AgentaOS",
+			avatar: "https://github.com/AgentaOS.png",
+		},
+	},
+	{
 		name: "better-invite",
 		url: "https://github.com/better-invite/better-invite",
 		description:
@@ -321,6 +332,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "Shivam Gupta",
 			github: "shivamrun",
 			avatar: "https://github.com/shivamrun.png",
+		},
+	},
+	{
+		name: "@amank-root/better-auth-razorpay",
+		url: "https://github.com/Amank-root/better-auth-razorpay",
+		description:
+			"Full Razorpay integration plugin for Better Auth — subscriptions, one-time payments, invoices, refunds, customers, add-ons, items, and webhook handling.",
+		author: {
+			name: "Aman Kushwaha",
+			github: "Amank-root",
+			avatar: "https://github.com/Amank-root.png",
 		},
 	},
 	{
@@ -439,6 +461,72 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "Panagiotis Plytas",
 			github: "pplytas",
 			avatar: "https://github.com/pplytas.png",
+		},
+	},
+	{
+		name: "better-auth-saml-idp",
+		url: "https://github.com/mmcintosh/better-auth-saml-idp",
+		description:
+			"Turn Better Auth into a SAML 2.0 identity provider for Microsoft 365, Google Workspace, Okta, Salesforce, AWS and other service providers. SP registry with metadata import, signed and encrypted assertions, Single Logout, and step-up MFA.",
+		author: {
+			name: "Mark McIntosh",
+			github: "mmcintosh",
+			avatar: "https://github.com/mmcintosh.png",
+		},
+	},
+	{
+		name: "better-auth-multi-tenant",
+		url: "https://github.com/Weesofficial/better-auth-multi-tenant",
+		description:
+			"Multi-tenancy by subdomain, custom domain or path: resolves the tenant from the request, binds each session to its tenant, rejects cross-tenant requests and unbound sessions, and scopes the organization, admin, SSO and API key plugins to the tenant.",
+		author: {
+			name: "Weesofficial",
+			github: "Weesofficial",
+			avatar: "https://github.com/Weesofficial.png",
+		},
+	},
+	{
+		name: "better-auth-captcha",
+		url: "https://github.com/klynglabs/better-auth-captcha",
+		description:
+			"Client half of the captcha plugin. Solves Cloudflare Turnstile, reCAPTCHA v3, hCaptcha, or CaptchaFox challenges in the background and attaches the token to protected requests automatically. Requires better-auth 1.7+.",
+		author: {
+			name: "aarmful",
+			github: "aarmful",
+			avatar: "https://github.com/aarmful.png",
+		},
+	},
+	{
+		name: "tauri-plugin-better-auth",
+		url: "https://github.com/laakal/tauri-plugin-better-auth",
+		description:
+			"Better Auth for Tauri desktop apps: browser sign-in with PKCE handed back by deep link or loopback, a session held in Rust (OS keychain), and a webview that never sees a token. Tauri 2 (0.1) and Tauri 3 alpha (0.2).",
+		author: {
+			name: "Enes Koç",
+			github: "laakal",
+			avatar: "https://github.com/laakal.png",
+		},
+	},
+	{
+		name: "better-auth-loginllama",
+		url: "https://github.com/joshghent/better-auth-loginllama",
+		description:
+			"Scores each email/password sign-in for account takeover risk (Tor, VPN, impossible travel, bots) with LoginLlama and blocks risky ones before the session is created. Fails open if the API is slow or down.",
+		author: {
+			name: "Josh Ghent",
+			github: "joshghent",
+			avatar: "https://github.com/joshghent.png",
+		},
+	},
+	{
+		name: "better-auth-waitlist",
+		url: "https://github.com/slargat/better-auth-waitlist",
+		description:
+			"A complete waitlist: a live queue with positions, status links, referrals, single-use invites, manager tools, and invite-only sign-up across every sign-up method.",
+		author: {
+			name: "Seifeddine Largat",
+			github: "slargat",
+			avatar: "https://github.com/slargat.png",
 		},
 	},
 ];
