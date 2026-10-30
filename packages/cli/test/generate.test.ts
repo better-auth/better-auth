@@ -2721,4 +2721,65 @@ describe("--dialect flag support", () => {
 		expect(schema.code).not.toContain("SkippedTable");
 		expect(schema.code).not.toContain("skippedtable");
 	});
+
+	it("should not duplicate back-relations when model already has unnamed relation to related model", async () => {
+		const existingSchema = `
+model User {
+  id           String    @id
+  name         String
+  email        String    @unique
+  userSessions Session[]
+  userAccounts Account[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session")
+}
+
+model Account {
+  id         String @id
+  accountId  String
+  providerId String
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("account")
+}
+`;
+
+		const tempFile = path.join(os.tmpdir(), `test-back-relation-${Date.now()}.prisma`);
+		fs.writeFileSync(tempFile, existingSchema);
+
+		try {
+			const schema = await generatePrismaSchema({
+				file: tempFile,
+				adapter: prismaAdapter(
+					{},
+					{ provider: "postgresql" },
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter({}, { provider: "postgresql" }),
+				},
+			});
+
+			expect(schema.code).toContain("userSessions Session[]");
+			expect(schema.code).toContain("userAccounts Account[]");
+			expect(schema.code).not.toContain("sessions Session[]");
+			expect(schema.code).not.toContain("accounts Account[]");
+		} finally {
+			if (fs.existsSync(tempFile)) {
+				fs.unlinkSync(tempFile);
+			}
+		}
+	});
 });
