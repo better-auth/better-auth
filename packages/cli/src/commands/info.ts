@@ -187,7 +187,6 @@ const sensitiveKeys = [
 	"privateKeyPass",
 	"passphrase",
 	"publicKey",
-	"key",
 	"password",
 	"token",
 	"webhook",
@@ -227,7 +226,7 @@ const isSensitiveKey = (key: string) => {
 };
 
 // Sensitivity flows down, so nested fields of a secret (e.g. a JWK) are
-// redacted too. Only flags are kept since they help debugging.
+// redacted too. Secrets are strings, so numbers and flags stay for debugging.
 const redactSensitive = (value: unknown, sensitive = false): unknown => {
 	if (Array.isArray(value)) {
 		return sensitive
@@ -242,8 +241,7 @@ const redactSensitive = (value: unknown, sensitive = false): unknown => {
 			]),
 		);
 	}
-	const keep = !sensitive || value === null || typeof value === "boolean";
-	return keep ? value : "[REDACTED]";
+	return sensitive && typeof value === "string" ? "[REDACTED]" : value;
 };
 
 function sanitizeBetterAuthConfig(config: any): any {
