@@ -729,6 +729,37 @@ describe("Admin plugin", async () => {
 		expect(signIn.error?.status).toBe(403);
 	});
 
+	it("should not create a session for a banned user outside an endpoint context", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Out Of Context User",
+				email: "out-of-context@email.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user.id || "";
+		await client.admin.banUser(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const ctx = await auth.$context;
+		await expect(
+			ctx.internalAdapter.createSession(userId),
+		).rejects.toMatchObject({
+			body: {
+				code: "BANNED_USER",
+			},
+		});
+	});
+
 	it("should allow to unban user", async () => {
 		const res = await client.admin.unbanUser(
 			{
@@ -1531,6 +1562,26 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER");
+	});
+
+	it("should not allow updating the user id through update-user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					id: "new-user-id",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("USER_ID_CANNOT_BE_UPDATED");
+
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.findUserById(testNonAdminUser.id);
+		expect(user?.id).toBe(testNonAdminUser.id);
 	});
 
 	it("should revoke sessions when banning a user via update-user", async () => {

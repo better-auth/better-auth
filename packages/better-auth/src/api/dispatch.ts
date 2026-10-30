@@ -424,7 +424,8 @@ export async function dispatchAuthEndpoint(
 				}
 
 				internalContext.context.returned = result.response;
-				internalContext.context.responseHeaders = result.headers ?? undefined;
+				// Merge onto what the before hooks set, so the handler wins on overlap.
+				mergeResponseHeaders(internalContext.context, result.headers);
 
 				const after = await runAfterHooks(
 					internalContext,

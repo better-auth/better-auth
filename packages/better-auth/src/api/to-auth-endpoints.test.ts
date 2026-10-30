@@ -7,6 +7,7 @@ import { kAPIErrorHeaderSymbol } from "better-call";
 import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { init } from "../context/init";
+import { parseSetCookieHeader } from "../cookies";
 import { getTestInstance } from "../test-utils/test-instance";
 import { isAPIError } from "../utils/is-api-error";
 import { toAuthEndpoints } from "./to-auth-endpoints";
@@ -1418,6 +1419,55 @@ describe("before hook response headers", async () => {
 		expect(await response.json()).toMatchObject({ shortCircuited: true });
 		expect(response.headers.get("x-before")).toBe("yes");
 		expect(response.headers.get("set-cookie")).toContain("from_before=1");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8789
+ */
+describe("before hook response headers without short-circuit", async () => {
+	const endpoints = {
+		ok: createAuthEndpoint("/ok", { method: "GET" }, async () => ({
+			ok: true,
+		})),
+		overlap: createAuthEndpoint("/overlap", { method: "GET" }, async (c) => {
+			c.setHeader("x-shared", "handler");
+			c.setCookie("shared", "handler");
+			return { ok: true };
+		}),
+	};
+	const authContext = init({
+		hooks: {
+			before: createAuthMiddleware(async (c) => {
+				c.setHeader("x-before", "yes");
+				c.setHeader("x-shared", "before");
+				c.setCookie("from_before", "1");
+				c.setCookie("shared", "before");
+			}),
+		},
+	});
+	const api = toAuthEndpoints(endpoints, authContext);
+
+	it("keeps headers and cookies a before hook set on the response", async () => {
+		const response = await api.ok({ asResponse: true });
+		expect(response.status).toBe(200);
+		expect(response.headers.get("x-before")).toBe("yes");
+		expect(response.headers.get("set-cookie")).toContain("from_before=1");
+	});
+
+	it("keeps headers and cookies a before hook set with returnHeaders", async () => {
+		const { headers } = await api.ok({ returnHeaders: true });
+		expect(headers.get("x-before")).toBe("yes");
+		expect(headers.get("set-cookie")).toContain("from_before=1");
+	});
+
+	it("lets the handler win when it sets the same header or cookie", async () => {
+		const { headers } = await api.overlap({ returnHeaders: true });
+		expect(headers.get("x-before")).toBe("yes");
+		expect(headers.get("x-shared")).toBe("handler");
+		const cookies = parseSetCookieHeader(headers.get("set-cookie") ?? "");
+		expect(cookies.get("from_before")?.value).toBe("1");
+		expect(cookies.get("shared")?.value).toBe("handler");
 	});
 });
 
