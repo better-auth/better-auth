@@ -33,12 +33,12 @@ And in this file, import Better Auth and create your instance.
 
 ```ts title="app/lib/auth.server.ts"
 import { betterAuth } from "better-auth"
+import { Pool } from "pg"
 
 export const auth = betterAuth({
-    database: {
-        provider: "postgres", //change this to your database provider
-        url: process.env.DATABASE_URL, // path to your database or connection string
-    }
+    database: new Pool({
+        connectionString: process.env.DATABASE_URL,
+    }),
 })
 ```
 
@@ -50,20 +50,31 @@ We need to mount the handler to a API route. Create a resource route file `api.a
 
 ```ts title="app/routes/api.auth.$.ts"
 import { auth } from '~/lib/auth.server' // Adjust the path as necessary
-import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router"
+import type { Route } from "./+types/api.auth.$"
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request }: Route.LoaderArgs) {
     return auth.handler(request)
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request }: Route.ActionArgs) {
     return auth.handler(request)
 }
 ```
 
+Files in `app/routes/` only become routes when `app/routes.ts` uses [`flatRoutes()`](https://reactrouter.com/how-to/file-route-conventions). Otherwise, register the resource route there:
+
+```ts title="app/routes.ts"
+import { type RouteConfig, index, route } from "@react-router/dev/routes"
+
+export default [
+    index("routes/home.tsx"),
+    route("api/auth/*", "routes/api.auth.$.ts"),
+] satisfies RouteConfig
+```
+
 ### Remix v2 (Legacy)
 
-If you're still using Remix v2, the only difference is the import:
+If you're still using Remix v2, import the argument types from `@remix-run/node` instead:
 
 ```ts title="app/routes/api.auth.$.ts"
 import { auth } from '~/lib/auth.server' // Adjust the path as necessary
