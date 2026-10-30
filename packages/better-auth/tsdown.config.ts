@@ -38,6 +38,7 @@ export default defineConfig({
 		"./src/integrations/tanstack-start.ts",
 		"./src/integrations/tanstack-start-solid.ts",
 		"./src/integrations/node.ts",
+		"./src/integrations/cloudflare.ts",
 		"./src/plugins/admin/index.ts",
 		"./src/plugins/admin/access/index.ts",
 		"./src/plugins/anonymous/index.ts",

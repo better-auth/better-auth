@@ -146,6 +146,7 @@ describe.each([
 			.mockResolvedValueOnce([]);
 		const { auth, log } = createAuth(find);
 
+		await auth.$context;
 		await vi.waitFor(() => {
 			expect(log).toHaveBeenCalledWith(
 				"error",
