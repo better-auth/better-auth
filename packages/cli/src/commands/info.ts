@@ -185,7 +185,10 @@ function sanitizeBetterAuthConfig(config: any): any {
 		"apiKey",
 		"apiSecret",
 		"privateKey",
+		"privateKeyPass",
+		"encPrivateKeyPass",
 		"publicKey",
+		"key",
 		"password",
 		"token",
 		"webhook",
@@ -210,31 +213,38 @@ function sanitizeBetterAuthConfig(config: any): any {
 		"trustedOrigins",
 		"appName",
 	];
+	const normalizeKey = (key: string) =>
+		key.replaceAll(/[_-]/g, "").toLowerCase();
+	const isAllowedKey = (key: string) =>
+		allowedKeys.some(
+			(allowedKey) => normalizeKey(key) === normalizeKey(allowedKey),
+		);
+	const isSensitiveKey = (key: string) => {
+		if (isAllowedKey(key)) {
+			return false;
+		}
+
+		const normalizedKey = normalizeKey(key);
+		return sensitiveKeys.some((sensitiveKey) => {
+			const normalizedSensitiveKey = normalizeKey(sensitiveKey);
+			return (
+				normalizedKey === normalizedSensitiveKey ||
+				normalizedKey.endsWith(normalizedSensitiveKey) ||
+				normalizedKey.endsWith(`${normalizedSensitiveKey}s`)
+			);
+		});
+	};
 
 	function redactSensitive(obj: any, parentKey?: string): any {
 		if (typeof obj !== "object" || obj === null) {
 			// Check if the parent key is sensitive
 			if (parentKey && typeof obj === "string" && obj.length > 0) {
 				// First check if it's in the allowed list
-				if (
-					allowedKeys.some(
-						(allowed) => parentKey.toLowerCase() === allowed.toLowerCase(),
-					)
-				) {
+				if (isAllowedKey(parentKey)) {
 					return obj;
 				}
 
-				const lowerKey = parentKey.toLowerCase();
-				if (
-					sensitiveKeys.some((key) => {
-						const lowerSensitiveKey = key.toLowerCase();
-						// Exact match or the key ends with the sensitive key
-						return (
-							lowerKey === lowerSensitiveKey ||
-							lowerKey.endsWith(lowerSensitiveKey)
-						);
-					})
-				) {
+				if (isSensitiveKey(parentKey)) {
 					return "[REDACTED]";
 				}
 			}
@@ -248,28 +258,13 @@ function sanitizeBetterAuthConfig(config: any): any {
 		const result: any = {};
 		for (const [key, value] of Object.entries(obj)) {
 			// First check if this key is in the allowed list
-			if (
-				allowedKeys.some(
-					(allowed) => key.toLowerCase() === allowed.toLowerCase(),
-				)
-			) {
+			if (isAllowedKey(key)) {
 				result[key] = value;
 				continue;
 			}
 
-			const lowerKey = key.toLowerCase();
-
 			// Check if this key should be redacted
-			if (
-				sensitiveKeys.some((sensitiveKey) => {
-					const lowerSensitiveKey = sensitiveKey.toLowerCase();
-					// Exact match or the key ends with the sensitive key
-					return (
-						lowerKey === lowerSensitiveKey ||
-						lowerKey.endsWith(lowerSensitiveKey)
-					);
-				})
-			) {
+			if (isSensitiveKey(key)) {
 				if (typeof value === "string" && value.length > 0) {
 					result[key] = "[REDACTED]";
 				} else if (Array.isArray(value)) {
