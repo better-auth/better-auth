@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
 
@@ -855,12 +856,21 @@ describe("delete user", async () => {
 			expect(token.length).toBe(32);
 			const session = await client.getSession();
 			expect(session.data).toBeDefined();
+			let setCookieHeader = "";
 			const deleteCallbackRes = await client.deleteUser({
 				token,
+				fetchOptions: {
+					onSuccess(context) {
+						setCookieHeader = context.response.headers.get("set-cookie") || "";
+					},
+				},
 			});
 			expect(deleteCallbackRes.data).toMatchObject({
 				success: true,
 			});
+			const cookies = parseSetCookieHeader(setCookieHeader);
+			expect(cookies.get("better-auth.session_token")?.value).toBe("");
+			expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(0);
 			const nullSession = await client.getSession();
 			expect(nullSession.data).toBeNull();
 		});
