@@ -1676,6 +1676,33 @@ describe("Admin plugin", async () => {
 		expect(res.data?.email).toBe("updated-email@test.com");
 		expect(res.data?.emailVerified).toBe(false);
 	});
+
+	/**
+	 * @see https://better-auth.com/docs/plugins/admin#impersonate-user
+	 */
+	it("should not extend an impersonation session for a bearer client", async () => {
+		const { data: target } = await client.signUp.email({
+			email: "impersonate-bearer@mail.com",
+			password: "password",
+			name: "Impersonate Bearer User",
+		});
+		const res = await client.admin.impersonateUser(
+			{ userId: target!.user.id },
+			{ headers: adminHeaders },
+		);
+		const token = res.data!.session.token;
+		const ctx = await auth.$context;
+		const before = await ctx.internalAdapter.findSession(token);
+		// A bearer client never sends the `dont_remember` cookie.
+		const session = await client.getSession({
+			fetchOptions: {
+				headers: new Headers({ Authorization: `Bearer ${token}` }),
+			},
+		});
+		expect(session.data?.user.id).toBe(target!.user.id);
+		const after = await ctx.internalAdapter.findSession(token);
+		expect(after?.session.expiresAt).toEqual(before?.session.expiresAt);
+	});
 });
 
 describe("access control", async () => {
