@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { sessionMiddleware } from "../../api";
+import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
 import type { Session, User } from "../../types";
 import type { Role } from "../access";
 import type { defaultRoles } from "./access/statement";
@@ -29,6 +29,29 @@ export const orgMiddleware = createAuthMiddleware(async () => {
 export const orgSessionMiddleware = createAuthMiddleware(
 	{
 		use: [sessionMiddleware],
+	},
+	async (ctx) => {
+		const session = ctx.context.session as {
+			session: Session & {
+				activeTeamId?: string | undefined;
+				activeOrganizationId?: string | undefined;
+			};
+			user: User;
+		};
+		return {
+			session,
+		};
+	},
+);
+
+/**
+ * Like `orgSessionMiddleware`, but with a server-side session store (`database`
+ * or `secondaryStorage`) it re-reads the session from that store instead of the
+ * cookie cache. Stateless deployments keep the signed cookie as the session.
+ */
+export const orgSensitiveSessionMiddleware = createAuthMiddleware(
+	{
+		use: [sensitiveSessionMiddleware],
 	},
 	async (ctx) => {
 		const session = ctx.context.session as {
