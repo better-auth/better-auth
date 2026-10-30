@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { describe, expect, it, vi } from "vitest";
 import {
 	capitalizeFirstLetter,
 	toCamelCase,
@@ -6,6 +7,55 @@ import {
 	toPascalCase,
 	toSnakeCase,
 } from "./string";
+
+describe("Lynx compatibility", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11591
+	 */
+	it("does not use Unicode property escapes in regex literals", () => {
+		const source = readFileSync(new URL("./string.ts", import.meta.url), "utf8");
+
+		expect(source).not.toMatch(/\/(?:\\.|[^/])*\\p\{/);
+	});
+
+	it("preserves word boundaries when Unicode property escapes are unsupported", async () => {
+		const unicodeWordPattern =
+			"[\\p{Ll}\\d]+|\\p{Lu}+(?!\\p{Ll})|\\p{Lu}[\\p{Ll}\\d]+|\\p{Lo}+";
+		const NativeRegExp = RegExp;
+		const UnsupportedUnicodePropertyRegExp = function (
+			pattern?: string | RegExp,
+			flags?: string,
+		) {
+			if (pattern === unicodeWordPattern) {
+				throw new SyntaxError("Unicode property escapes are unsupported");
+			}
+			return new NativeRegExp(pattern ?? "", flags);
+		} as unknown as RegExpConstructor;
+
+		vi.stubGlobal("RegExp", UnsupportedUnicodePropertyRegExp);
+		try {
+			vi.resetModules();
+			const {
+				toCamelCase: fallbackToCamelCase,
+				toKebabCase: fallbackToKebabCase,
+				toSnakeCase: fallbackToSnakeCase,
+			} = await import("./string");
+
+			expect(fallbackToSnakeCase("URL2Path")).toBe("url_2_path");
+			expect(fallbackToCamelCase("user-id")).toBe("userId");
+			expect(fallbackToSnakeCase("my-kebab-case")).toBe("my_kebab_case");
+			expect(fallbackToSnakeCase("café·Bar")).toBe("café_bar");
+			expect(fallbackToSnakeCase("caféÉclair")).toBe("café_éclair");
+			expect(fallbackToSnakeCase("hello—world")).toBe("hello_world");
+			expect(fallbackToSnakeCase("한글Test")).toBe("한글_test");
+			expect(fallbackToKebabCase("foo한글")).toBe("foo-한글");
+			expect(fallbackToKebabCase("cafe\u0301Bar")).toBe("café-bar");
+		} finally {
+			vi.unstubAllGlobals();
+			vi.resetModules();
+		}
+	});
+});
 
 describe("capitalizeFirstLetter", () => {
 	it("uppercases the first character only", () => {
@@ -23,6 +73,7 @@ describe("toSnakeCase", () => {
 		["USER_ID", "user_id"],
 		["URL", "url"],
 		["URLPath", "url_path"],
+		["URL2Path", "url_2_path"],
 		["my-kebab-case", "my_kebab_case"],
 		["foo123Bar", "foo123_bar"],
 		["", ""],
@@ -30,6 +81,7 @@ describe("toSnakeCase", () => {
 		["한글Test", "한글_test"],
 		["user_한글_id", "user_한글_id"],
 		["caféBar", "café_bar"],
+		["café·Bar", "café_bar"],
 	])("%s -> %s", (input, expected) => {
 		expect(toSnakeCase(input)).toBe(expected);
 	});
