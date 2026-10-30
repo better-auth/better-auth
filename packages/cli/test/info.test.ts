@@ -452,6 +452,61 @@ describe("info command", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11738
+	 */
+	it("should redact object values and snake_case or kebab-case sensitive keys", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				version: "1.0.0",
+				dependencies: {
+					"better-auth": "^1.0.0",
+				},
+			}),
+		);
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			export const auth = betterAuth({
+				plugins: [
+					{
+						id: "custom",
+						options: {
+							issuer: "https://idp.example.com",
+							privateKey: {
+								privateKeyPem: "pem-value-should-be-redacted",
+								privateKeyJwk: { d: "jwk-d-value-should-be-redacted" },
+							},
+							encPrivateKeyPass: "passphrase-should-be-redacted",
+							client_secret: "snake-secret-should-be-redacted",
+							"api-key": "kebab-key-should-be-redacted",
+						},
+					},
+				],
+			})`,
+		);
+
+		const { stdout } = await runInfoCommand();
+		const { stdout: text } = await runInfoTextCommand();
+
+		const options =
+			JSON.parse(stdout).betterAuth.config.plugins[0].config.options;
+		expect(options.issuer).toBe("https://idp.example.com");
+		expect(options.privateKey).toEqual({
+			privateKeyPem: "[REDACTED]",
+			privateKeyJwk: { d: "[REDACTED]" },
+		});
+		expect(options.encPrivateKeyPass).toBe("[REDACTED]");
+		expect(options.client_secret).toBe("[REDACTED]");
+		expect(options["api-key"]).toBe("[REDACTED]");
+		for (const output of [stdout, text]) {
+			expect(output).not.toContain("should-be-redacted");
+		}
+	});
+
 	it("should handle missing package.json gracefully", async () => {
 		// Don't create package.json
 		const { stdout } = await runInfoCommand();

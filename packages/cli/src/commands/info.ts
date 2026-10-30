@@ -169,123 +169,82 @@ function getDatabaseInfo(projectRoot: string) {
 	}
 }
 
+// camelCase, snake_case and kebab-case name the same key
+const normalizeKey = (key: string) =>
+	key.replaceAll("-", "").replaceAll("_", "").toLowerCase();
+
+// List of sensitive keys to redact
+const sensitiveKeys = [
+	"secret",
+	"secrets",
+	"secretKey",
+	"clientSecret",
+	"clientId",
+	"authToken",
+	"apiKey",
+	"apiSecret",
+	"privateKey",
+	"privateKeyPass",
+	"passphrase",
+	"publicKey",
+	"password",
+	"token",
+	"webhook",
+	"connectionString",
+	"databaseUrl",
+	"databaseURL",
+	"TURSO_AUTH_TOKEN",
+	"TURSO_DATABASE_URL",
+	"MYSQL_DATABASE_URL",
+	"DATABASE_URL",
+	"POSTGRES_URL",
+	"MONGODB_URI",
+	"stripeKey",
+	"stripeWebhookSecret",
+].map(normalizeKey);
+
+// Keys that should NOT be redacted even if they contain sensitive keywords
+const allowedKeys = [
+	"baseURL",
+	"callbackURL",
+	"redirectURL",
+	"trustedOrigins",
+	"appName",
+].map(normalizeKey);
+
+const isSensitiveKey = (key: string) => {
+	const normalized = normalizeKey(key);
+	// Exact match or the key ends with the sensitive key
+	return (
+		!allowedKeys.includes(normalized) &&
+		sensitiveKeys.some((sensitiveKey) => normalized.endsWith(sensitiveKey))
+	);
+};
+
+// Sensitivity flows down, so nested fields of a secret (e.g. a JWK) are
+// redacted too. Only flags are kept since they help debugging.
+const redactSensitive = (value: unknown, sensitive = false): unknown => {
+	if (Array.isArray(value)) {
+		return sensitive
+			? "[REDACTED]"
+			: value.map((item) => redactSensitive(item));
+	}
+	if (typeof value === "object" && value !== null) {
+		return Object.fromEntries(
+			Object.entries(value).map(([key, child]) => [
+				key,
+				redactSensitive(child, sensitive || isSensitiveKey(key)),
+			]),
+		);
+	}
+	const keep = !sensitive || value === null || typeof value === "boolean";
+	return keep ? value : "[REDACTED]";
+};
+
 function sanitizeBetterAuthConfig(config: any): any {
 	if (!config) return null;
 
 	const sanitized = JSON.parse(JSON.stringify(config));
-
-	// List of sensitive keys to redact
-	const sensitiveKeys = [
-		"secret",
-		"secrets",
-		"secretKey",
-		"clientSecret",
-		"clientId",
-		"authToken",
-		"apiKey",
-		"apiSecret",
-		"privateKey",
-		"publicKey",
-		"password",
-		"token",
-		"webhook",
-		"connectionString",
-		"databaseUrl",
-		"databaseURL",
-		"TURSO_AUTH_TOKEN",
-		"TURSO_DATABASE_URL",
-		"MYSQL_DATABASE_URL",
-		"DATABASE_URL",
-		"POSTGRES_URL",
-		"MONGODB_URI",
-		"stripeKey",
-		"stripeWebhookSecret",
-	];
-
-	// Keys that should NOT be redacted even if they contain sensitive keywords
-	const allowedKeys = [
-		"baseURL",
-		"callbackURL",
-		"redirectURL",
-		"trustedOrigins",
-		"appName",
-	];
-
-	function redactSensitive(obj: any, parentKey?: string): any {
-		if (typeof obj !== "object" || obj === null) {
-			// Check if the parent key is sensitive
-			if (parentKey && typeof obj === "string" && obj.length > 0) {
-				// First check if it's in the allowed list
-				if (
-					allowedKeys.some(
-						(allowed) => parentKey.toLowerCase() === allowed.toLowerCase(),
-					)
-				) {
-					return obj;
-				}
-
-				const lowerKey = parentKey.toLowerCase();
-				if (
-					sensitiveKeys.some((key) => {
-						const lowerSensitiveKey = key.toLowerCase();
-						// Exact match or the key ends with the sensitive key
-						return (
-							lowerKey === lowerSensitiveKey ||
-							lowerKey.endsWith(lowerSensitiveKey)
-						);
-					})
-				) {
-					return "[REDACTED]";
-				}
-			}
-			return obj;
-		}
-
-		if (Array.isArray(obj)) {
-			return obj.map((item) => redactSensitive(item, parentKey));
-		}
-
-		const result: any = {};
-		for (const [key, value] of Object.entries(obj)) {
-			// First check if this key is in the allowed list
-			if (
-				allowedKeys.some(
-					(allowed) => key.toLowerCase() === allowed.toLowerCase(),
-				)
-			) {
-				result[key] = value;
-				continue;
-			}
-
-			const lowerKey = key.toLowerCase();
-
-			// Check if this key should be redacted
-			if (
-				sensitiveKeys.some((sensitiveKey) => {
-					const lowerSensitiveKey = sensitiveKey.toLowerCase();
-					// Exact match or the key ends with the sensitive key
-					return (
-						lowerKey === lowerSensitiveKey ||
-						lowerKey.endsWith(lowerSensitiveKey)
-					);
-				})
-			) {
-				if (typeof value === "string" && value.length > 0) {
-					result[key] = "[REDACTED]";
-				} else if (Array.isArray(value)) {
-					result[key] = "[REDACTED]";
-				} else if (typeof value === "object" && value !== null) {
-					// Still recurse into objects but mark them as potentially sensitive
-					result[key] = redactSensitive(value, key);
-				} else {
-					result[key] = value;
-				}
-			} else {
-				result[key] = redactSensitive(value, key);
-			}
-		}
-		return result;
-	}
 
 	// Special handling for specific config sections
 	if (sanitized.database) {
@@ -297,18 +256,6 @@ function sanitizeBetterAuthConfig(config: any): any {
 		}
 		if (sanitized.database.authToken) {
 			sanitized.database.authToken = "[REDACTED]";
-		}
-	}
-
-	if (sanitized.socialProviders) {
-		// Redact all social provider secrets
-		for (const provider in sanitized.socialProviders) {
-			if (sanitized.socialProviders[provider]) {
-				sanitized.socialProviders[provider] = redactSensitive(
-					sanitized.socialProviders[provider],
-					provider,
-				);
-			}
 		}
 	}
 
