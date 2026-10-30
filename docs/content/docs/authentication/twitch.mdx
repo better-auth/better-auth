@@ -56,3 +56,9 @@ description: Twitch provider setup and usage.
     </Callout>
   </Step>
 </Steps>
+
+### User Profile
+
+The provider retrieves profiles from Twitch's [Get Users API](https://dev.twitch.tv/docs/api/reference/#get-users) with the access token. Profile callbacks receive the corresponding `TwitchProfile` fields rather than ID-token claims. Direct ID-token sign-in enabled through a custom `verifyIdToken` must also supply `accessToken` when using the default `getUserInfo`.
+
+When an ID token is also provided, its subject must match the fetched account.
