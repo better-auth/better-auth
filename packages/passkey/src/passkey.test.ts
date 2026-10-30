@@ -93,6 +93,82 @@ describe("passkey", async () => {
 		expect(serverMocks.verifyRegistrationResponse).not.toHaveBeenCalled();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11729
+	 */
+	it("should answer 400 when the registration response fails verification", async () => {
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		headers.set("content-type", "application/json");
+		// @simplewebauthn/server throws on a challenge/origin/RP ID mismatch
+		// instead of returning `verified: false`.
+		serverMocks.verifyRegistrationResponse.mockRejectedValue(
+			new Error(
+				'Unexpected registration response challenge "wrong", expected "secret-challenge"',
+			),
+		);
+
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/passkey/verify-registration",
+			{
+				method: "POST",
+				headers,
+				body: JSON.stringify({ response: mockRegistrationResponse }),
+			},
+		);
+
+		expect(response.status).toBe(400);
+		const body = await response.text();
+		expect(body).toContain("FAILED_TO_VERIFY_REGISTRATION");
+		expect(body).not.toContain("secret-challenge");
+	});
+
+	it("should still answer 500 when registration fails after verification", async () => {
+		const {
+			auth: failingAuth,
+			client: failingClient,
+			cookieSetter: failingCookieSetter,
+		} = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "after-verification-user",
+							name: "after-verification@example.com",
+						}),
+						afterVerification: async () => {
+							throw new Error("database unavailable");
+						},
+					},
+				}),
+			],
+		});
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		await failingClient.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			onResponse: failingCookieSetter(headers),
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+
+		await expect(
+			failingAuth.api.verifyPasskeyRegistration({
+				headers,
+				body: { response: mockRegistrationResponse },
+			}),
+		).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+			body: { code: "FAILED_TO_VERIFY_REGISTRATION" },
+		});
+	});
+
 	it("should generate register options", async () => {
 		const { headers } = await signInWithTestUser();
 		const options = await auth.api.generatePasskeyRegistrationOptions({
