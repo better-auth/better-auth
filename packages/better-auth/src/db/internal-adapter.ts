@@ -1143,6 +1143,13 @@ export const createInternalAdapter = (
 				},
 			});
 			if (!result) return null;
+			// The database's equality may be looser than ours: accent-insensitive
+			// collations match look-alike addresses to this row. Only hand back a
+			// row whose stored address is the one that was asked for.
+			const normalize = (value: string) => value.normalize("NFC").toLowerCase();
+			if (normalize(result.email) !== normalize(email)) {
+				return null;
+			}
 			const { account: accounts, ...user } = result;
 			return {
 				user,
