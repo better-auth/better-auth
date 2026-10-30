@@ -5,6 +5,7 @@ import { APIError } from "../../api";
 import { defaultRoles } from "./access";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
+import { parseRoleList } from "./roles";
 import type { OrganizationRole } from "./schema";
 
 const rolePermissionsSchema = z.record(z.string(), z.array(z.string()));
@@ -110,4 +111,45 @@ export const hasPermission = async (
 
 	cache?.set(input.organizationId, acRoles);
 	return hasPermissionFn(input, acRoles);
+};
+
+/**
+ * Whether a member may see the organization's pending invitations.
+ *
+ * Invitation ids act as invitation links. Members who can create invitations
+ * can mint such links anyway; any other role, including one that may only
+ * cancel, must not see them.
+ */
+export const canViewInvitations = (
+	input: Pick<
+		Parameters<typeof hasPermission>[0],
+		"organizationId" | "role" | "options"
+	>,
+	ctx: GenericEndpointContext,
+) =>
+	hasPermission(
+		{
+			...input,
+			permissions: {
+				invitation: ["create"],
+			},
+		},
+		ctx,
+	);
+
+/**
+ * Drops invitations that grant the creator role unless the member holds it,
+ * matching the rule that only the creator role can hand it out.
+ */
+export const withoutCreatorRoleInvitations = <
+	T extends Pick<HasPermissionBaseInput, "role">,
+>(
+	invitations: T[],
+	input: Pick<HasPermissionBaseInput, "role" | "options">,
+) => {
+	const creatorRole = input.options.creatorRole || "owner";
+	if (parseRoleList(input.role).includes(creatorRole)) return invitations;
+	return invitations.filter(
+		(invitation) => !parseRoleList(invitation.role).includes(creatorRole),
+	);
 };

@@ -12,7 +12,11 @@ import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
+import {
+	canViewInvitations,
+	hasPermission,
+	withoutCreatorRoleInvitations,
+} from "../has-permission";
 import { parseRoleList, parseRoles } from "../roles";
 import type {
 	InferInvitation,
@@ -370,8 +374,17 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			// If resend is true and there's an existing invitation, reuse it
-			if (alreadyInvited.length && ctx.body.resend) {
-				const existingInvitation = alreadyInvited[0];
+			const existingInvitation = alreadyInvited[0];
+			if (existingInvitation && ctx.body.resend) {
+				if (
+					!parseRoleList(member.role).includes(creatorRole) &&
+					parseRoleList(existingInvitation.role).includes(creatorRole)
+				) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
+					);
+				}
 
 				// Update the invitation's expiration date using the same logic as createInvitation
 				const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
@@ -385,7 +398,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					where: [
 						{
 							field: "id",
-							value: existingInvitation!.id,
+							value: existingInvitation.id,
 						},
 					],
 					update: {
@@ -1290,10 +1303,29 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 					message: "You are not a member of this organization",
 				});
 			}
+			const canList = await canViewInvitations(
+				{
+					role: isMember.role,
+					options: ctx.context.orgOptions,
+					organizationId: orgId,
+				},
+				ctx,
+			);
+			if (!canList) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_INVITATIONS,
+				);
+			}
 			const invitations = await adapter.listInvitations({
 				organizationId: orgId,
 			});
-			return ctx.json(invitations);
+			return ctx.json(
+				withoutCreatorRoleInvitations(invitations, {
+					role: isMember.role,
+					options: ctx.context.orgOptions,
+				}),
+			);
 		},
 	);
 
