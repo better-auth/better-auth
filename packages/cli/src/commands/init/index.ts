@@ -41,13 +41,7 @@ import {
 	isDirectAdapter,
 	isKyselyDialect,
 } from "./utility/database";
-import {
-	createEnvFile,
-	getEnvFiles,
-	getMissingEnvVars,
-	parseEnvFiles,
-	updateEnvFiles,
-} from "./utility/env";
+import { createEnvFile, readEnv, updateEnvFile } from "./utility/env";
 import { detectFramework } from "./utility/framework";
 import { getFlagVariable } from "./utility/prompt";
 
@@ -437,14 +431,12 @@ export async function initAction(opts: any) {
 		}
 	})();
 
-	let envFiles = new Map<string, string[]>();
+	const env = await readEnv(cwd);
 
 	// Handle ENV files
-	await (async () => {
-		envFiles = await parseEnvFiles(await getEnvFiles(cwd));
-
+	const envFile = await (async () => {
 		// If no existing ENV files, ask to allow creation of a new one.
-		if (envFiles.size === 0) {
+		if (!env.file) {
 			await nextStep("Set Environment Variables");
 
 			const shouldCreateEnv = await confirm({
@@ -480,26 +472,24 @@ export async function initAction(opts: any) {
 					`BETTER_AUTH_SECRET="${secret}"`,
 					`BETTER_AUTH_URL="${providedURL}"`,
 				];
-				envFiles.set(".env", envs);
 				filesToWrite.push(() => createEnvFile(cwd, envs));
+				return path.join(cwd, ".env");
 			}
-			return;
+			return null;
 		}
 
 		// Check for missing ENV variables (basic ones only - social providers handled later)
-		const missingEnvVars = await getMissingEnvVars(envFiles, [
-			"BETTER_AUTH_SECRET",
-			"BETTER_AUTH_URL",
-		]);
+		const file = env.file;
+		const missingVars = ["BETTER_AUTH_SECRET", "BETTER_AUTH_URL"].filter(
+			(v) => !env.keys.has(v),
+		);
 
-		if (!missingEnvVars.length) {
-			return;
+		if (!missingVars.length) {
+			return file;
 		}
 
 		await nextStep("Set Environment Variables");
 
-		// Only one env file is ever offered, so confirm before appending to it.
-		const { file, var: missingVars } = missingEnvVars[0]!;
 		const confirmed = await confirm({
 			message: `Add required environment variables to ${chalk.bold(file.split("/").pop())}? (${missingVars.map((v) => chalk.cyan(v)).join(", ")})`,
 		});
@@ -538,9 +528,9 @@ export async function initAction(opts: any) {
 					envs.push(`BETTER_AUTH_URL="${providedURL}"`);
 				}
 			}
-			envFiles.set(file, envs);
-			filesToWrite.push(() => updateEnvFiles([file], envs));
+			filesToWrite.push(() => updateEnvFile(file, envs));
 		}
+		return file;
 	})();
 
 	// Auto-detect framework silently
@@ -922,7 +912,7 @@ export const auth = betterAuth({
 	// Add social provider environment variables
 	if (selectedSocialProviders.length > 0) {
 		await (async () => {
-			if (envFiles.size === 0) return; // No env files to update
+			if (!envFile) return; // No env files to update
 
 			const socialProviderEnvVars = selectedSocialProviders.flatMap(
 				(provider) => {
@@ -942,26 +932,12 @@ export const auth = betterAuth({
 				},
 			);
 
-			const missingSocialEnvVars = await getMissingEnvVars(
-				envFiles,
-				socialProviderEnvVars,
-			);
+			const envVarsToAdd = socialProviderEnvVars
+				.filter((v) => !env.keys.has(v))
+				.map((v) => `${v}=""`);
 
-			if (missingSocialEnvVars.length > 0 && envFiles.size > 0) {
-				// Add missing social provider env vars to the file with shortest length
-				const firstEnvFile = [...envFiles.keys()].sort(
-					(a, b) => path.basename(a).length - path.basename(b).length,
-				)[0]!;
-				const envVarsToAdd = missingSocialEnvVars
-					.filter((x) => x.file === firstEnvFile)
-					.flatMap((x) => x.var.map((v) => `${v}=""`));
-
-				if (envVarsToAdd.length > 0) {
-					const resolvedPath = path.isAbsolute(firstEnvFile)
-						? firstEnvFile
-						: path.join(cwd, firstEnvFile);
-					filesToWrite.push(() => updateEnvFiles([resolvedPath], envVarsToAdd));
-				}
+			if (envVarsToAdd.length > 0) {
+				filesToWrite.push(() => updateEnvFile(envFile, envVarsToAdd));
 			}
 		})();
 	}
