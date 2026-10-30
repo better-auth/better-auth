@@ -5,6 +5,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
+import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
@@ -363,6 +364,389 @@ describe("private_key_jwt authentication", async () => {
 
 		expect(transportA).toHaveBeenCalledTimes(1);
 		expect(transportB).toHaveBeenCalledTimes(1);
+	});
+
+	describe("jwks_uri key rotation refetch", () => {
+		async function setup(name: string) {
+			const clientId = `https://${name}.example.com/client.json`;
+			const audience = `https://${name}-provider.example.com/oauth2/token`;
+			const [oldPair, newPair] = await Promise.all([
+				generateKeyPair("RS256", { extractable: true }),
+				generateKeyPair("RS256", { extractable: true }),
+			]);
+			const [oldJwk, newJwk] = await Promise.all([
+				exportJWK(oldPair.publicKey),
+				exportJWK(newPair.publicKey),
+			]);
+			const published: JWK[] = [{ ...oldJwk, kid: "old", alg: "RS256" }];
+			const transport = vi
+				.fn()
+				.mockImplementation(() =>
+					Promise.resolve(Response.json({ keys: published })),
+				);
+			const provider = await createDiscoveredClientVerifier({
+				baseURL: new URL(audience).origin,
+				clientId,
+				clientDiscoveryId: `${name}-discovery`,
+				fetchClientMetadataResource: transport,
+				jwksUri: `https://${name}.example.com/jwks.json`,
+			});
+			const verify = async (keyId: string, key: CryptoKey) =>
+				verifyClientAssertion(
+					provider.ctx,
+					provider.opts,
+					await signDiscoveredClientAssertion({
+						audience,
+						clientId,
+						key,
+						keyId,
+					}),
+					CLIENT_ASSERTION_TYPE,
+					clientId,
+					audience,
+				);
+			const verifyRaw = async (
+				key: CryptoKey,
+				header: { alg: string; kid?: string },
+				expiresIn = 120,
+			) => {
+				const now = Math.floor(Date.now() / 1000);
+				return verifyClientAssertion(
+					provider.ctx,
+					provider.opts,
+					await new SignJWT({})
+						.setProtectedHeader(header)
+						.setIssuer(clientId)
+						.setSubject(clientId)
+						.setAudience(audience)
+						.setIssuedAt(now)
+						.setExpirationTime(now + expiresIn)
+						.setJti(crypto.randomUUID())
+						.sign(key),
+					CLIENT_ASSERTION_TYPE,
+					clientId,
+					audience,
+				);
+			};
+			const sign = (keyId: string, key: CryptoKey) =>
+				signDiscoveredClientAssertion({ audience, clientId, key, keyId });
+			const verifySigned = (assertion: string) =>
+				verifyClientAssertion(
+					provider.ctx,
+					provider.opts,
+					assertion,
+					CLIENT_ASSERTION_TYPE,
+					clientId,
+					audience,
+				);
+			return {
+				sign,
+				verifySigned,
+				verifyRaw,
+				clientId,
+				oldKey: oldPair.privateKey as CryptoKey,
+				newKey: newPair.privateKey as CryptoKey,
+				publish: (jwk: JWK) => published.push(jwk),
+				publishNewKey: () =>
+					published.push({ ...newJwk, kid: "new", alg: "RS256" }),
+				transport,
+				verify,
+			};
+		}
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it("refetches once when the kid is not in the cached JWKS", async () => {
+			const fixture = await setup("kid-unknown");
+			await fixture.verify("old", fixture.oldKey);
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+
+			fixture.publishNewKey();
+			await expect(fixture.verify("new", fixture.newKey)).resolves.toEqual({
+				clientId: fixture.clientId,
+			});
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+
+			await fixture.verify("new", fixture.newKey);
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("suppresses repeated refetches during the cooldown", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			const fixture = await setup("kid-cooldown");
+			await fixture.verify("old", fixture.oldKey);
+
+			await expect(
+				fixture.verify("ghost", fixture.oldKey),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+			await expect(
+				fixture.verify("ghost", fixture.oldKey),
+			).rejects.toBeDefined();
+			await expect(
+				fixture.verify("ghost2", fixture.oldKey),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+
+			vi.setSystemTime(Date.now() + 60_000 + 1);
+			await expect(
+				fixture.verify("ghost", fixture.oldKey),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+
+		it("does not refetch for a known kid with a bad signature", async () => {
+			const fixture = await setup("kid-known");
+			await fixture.verify("old", fixture.oldKey);
+
+			await expect(fixture.verify("old", fixture.newKey)).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("never refetches for an assertion without a kid", async () => {
+			const fixture = await setup("kid-missing");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+
+			await expect(
+				fixture.verifyRaw(fixture.newKey, { alg: "RS256" }),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("does not refetch for a claim failure under a known kid", async () => {
+			const fixture = await setup("kid-claims");
+			await fixture.verify("old", fixture.oldKey);
+
+			await expect(
+				fixture.verifyRaw(fixture.oldKey, { alg: "RS256", kid: "old" }, -10),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("refetches for an unknown kid even when the claims also fail", async () => {
+			const fixture = await setup("kid-unknown-expired");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+
+			await expect(
+				fixture.verifyRaw(fixture.newKey, { alg: "RS256", kid: "new" }, -10),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("consumes the cooldown when the refetch fails", async () => {
+			const fixture = await setup("kid-failed-fetch");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.transport.mockImplementationOnce(() =>
+				Promise.resolve(new Response("nope", { status: 500 })),
+			);
+
+			await expect(fixture.verify("new", fixture.newKey)).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+
+			fixture.publishNewKey();
+			await expect(fixture.verify("new", fixture.newKey)).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("consumes the cooldown when the refetched JWKS is invalid", async () => {
+			const fixture = await setup("kid-invalid-fetch");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.transport.mockImplementationOnce(() =>
+				Promise.resolve(Response.json({ keys: "not-an-array" })),
+			);
+
+			await expect(fixture.verify("new", fixture.newKey)).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+
+			fixture.publishNewKey();
+			await expect(fixture.verify("new", fixture.newKey)).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("shares one refetch across concurrent unknown-kid assertions", async () => {
+			const fixture = await setup("kid-concurrent");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+			const fetchJwks = fixture.transport.getMockImplementation()!;
+			fixture.transport.mockImplementation(async (...args) => {
+				await new Promise((resolve) => setTimeout(resolve, 50));
+				return fetchJwks(...args);
+			});
+
+			const results = await Promise.allSettled(
+				Array.from({ length: 5 }, () => fixture.verify("new", fixture.newKey)),
+			);
+			expect(results.map((r) => r.status)).toEqual(Array(5).fill("fulfilled"));
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("uses a key set another request refetched after this one read the cache", async () => {
+			const fixture = await setup("kid-refetched-elsewhere");
+			await fixture.verify("old", fixture.oldKey);
+			fixture.publishNewKey();
+			// A transport that settles without network I/O lets the first
+			// request's refetch finish before the second reaches its refresh.
+			const [first, second] = await Promise.all([
+				fixture.sign("new", fixture.newKey),
+				fixture.sign("new", fixture.newKey),
+			]);
+
+			await expect(
+				Promise.all([
+					fixture.verifySigned(first),
+					fixture.verifySigned(second),
+				]),
+			).resolves.toEqual([
+				{ clientId: fixture.clientId },
+				{ clientId: fixture.clientId },
+			]);
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("does not refetch a key set fetched by the same request", async () => {
+			const fixture = await setup("kid-cold");
+
+			await expect(
+				fixture.verify("ghost", fixture.oldKey),
+			).rejects.toBeDefined();
+			expect(fixture.transport).toHaveBeenCalledTimes(1);
+		});
+
+		it("refetches when a kid-less assertion matches no cached key type", async () => {
+			const fixture = await setup("kid-less-key-type");
+			await fixture.verify("old", fixture.oldKey);
+			const ecPair = await generateKeyPair("ES256", { extractable: true });
+			fixture.publish({ ...(await exportJWK(ecPair.publicKey)), alg: "ES256" });
+
+			await expect(
+				fixture.verifyRaw(ecPair.privateKey as CryptoKey, { alg: "ES256" }),
+			).resolves.toEqual({ clientId: fixture.clientId });
+			expect(fixture.transport).toHaveBeenCalledTimes(2);
+		});
+
+		it("replaces a fetch that outlived its timeout", async () => {
+			const fixture = await setup("kid-dead-fetch");
+			await fixture.verify("old", fixture.oldKey);
+			vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+			let fetchStarted!: () => void;
+			const started = new Promise<void>((resolve) => {
+				fetchStarted = resolve;
+			});
+			// A fetch whose request was canceled never settles.
+			fixture.transport.mockImplementationOnce(() => {
+				fetchStarted();
+				return new Promise(() => {});
+			});
+
+			const stuck = fixture.verify("new", fixture.newKey);
+			const stuckResult = expect(stuck).rejects.toBeDefined();
+			await started;
+			await vi.advanceTimersByTimeAsync(5_000);
+			await stuckResult;
+
+			// Past the stale-cache grace period, so only a new fetch can verify.
+			vi.setSystemTime(Date.now() + 10 * 60 * 1000 + 1);
+			await expect(fixture.verify("old", fixture.oldKey)).resolves.toEqual({
+				clientId: fixture.clientId,
+			});
+			expect(fixture.transport).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	it("keeps cached key sets when other clients' jwks_uri fetches fail", async () => {
+		const audience = "https://evict-provider.example.com/oauth2/token";
+		const goodClientId = "https://evict-good.example.com/client.json";
+		const goodJwksUri = "https://evict-good.example.com/jwks.json";
+		const keyPair = await generateKeyPair("ES256", { extractable: true });
+		const publicJwk = await exportJWK(keyPair.publicKey);
+		const transport = vi.fn((url: string | URL | Request) =>
+			Promise.resolve(
+				String(url) === goodJwksUri
+					? Response.json({ keys: [{ ...publicJwk, kid: "k", alg: "ES256" }] })
+					: new Response("unavailable", { status: 503 }),
+			),
+		);
+		const opts = {
+			loginPage: "/login",
+			consentPage: "/consent",
+			extensions: [
+				{
+					clientDiscovery: {
+						id: "evict-discovery",
+						matches: (candidateClientId: string) =>
+							candidateClientId.startsWith("https://evict-"),
+						resolve: (
+							_ctx: GenericEndpointContext,
+							_clientId: string,
+							existingClient: SchemaClient<Scope[]> | null,
+						) => existingClient,
+						fetchClientMetadataResource: transport,
+					},
+				},
+			],
+		} satisfies OAuthOptions<Scope[]>;
+		const instance = await getTestInstance({
+			baseURL: new URL(audience).origin,
+			plugins: [jwt(), oauthProvider(opts)],
+		});
+		const context = await instance.auth.$context;
+		const ctx = { context } as unknown as GenericEndpointContext;
+		const failingClientIds = Array.from(
+			{ length: 500 },
+			(_, index) => `https://evict-${index}.example.com/client.json`,
+		);
+		for (const clientId of [goodClientId, ...failingClientIds]) {
+			await context.adapter.create<SchemaClient<Scope[]>>({
+				model: "oauthClient",
+				data: {
+					clientId,
+					clientDiscoveryId: "evict-discovery",
+					name: "Discovered private_key_jwt client",
+					redirectUris: ["https://client.example.com/callback"],
+					tokenEndpointAuthMethod: "private_key_jwt",
+					applicationType: "web",
+					grantTypes: ["authorization_code"],
+					responseTypes: ["code"],
+					jwksUri: clientId.replace("client.json", "jwks.json"),
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+		}
+		const verify = async (clientId: string) => {
+			const now = Math.floor(Date.now() / 1000);
+			return verifyClientAssertion(
+				ctx,
+				opts,
+				await new SignJWT({})
+					.setProtectedHeader({ alg: "ES256", kid: "k" })
+					.setIssuer(clientId)
+					.setSubject(clientId)
+					.setAudience(audience)
+					.setIssuedAt(now)
+					.setExpirationTime(now + 120)
+					.setJti(crypto.randomUUID())
+					.sign(keyPair.privateKey),
+				CLIENT_ASSERTION_TYPE,
+				clientId,
+				audience,
+			);
+		};
+
+		await verify(goodClientId);
+		for (const clientId of failingClientIds) {
+			await expect(verify(clientId)).rejects.toBeDefined();
+		}
+		await verify(goodClientId);
+
+		const goodFetches = transport.mock.calls.filter(
+			([url]) => String(url) === goodJwksUri,
+		);
+		expect(goodFetches).toHaveLength(1);
 	});
 
 	it.each([
