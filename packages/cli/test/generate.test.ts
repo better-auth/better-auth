@@ -2757,20 +2757,29 @@ model Account {
 }
 `;
 
-		const schema = await generatePrismaSchema({
-			file: existingSchema,
-			adapter: prismaAdapter(
-				{},
-				{ provider: "postgresql" },
-			)({} as BetterAuthOptions),
-			options: {
-				database: prismaAdapter({}, { provider: "postgresql" }),
-			},
-		});
+		const tempFile = path.join(os.tmpdir(), `test-back-relation-${Date.now()}.prisma`);
+		fs.writeFileSync(tempFile, existingSchema);
 
-		expect(schema.code).toContain("userSessions Session[]");
-		expect(schema.code).toContain("userAccounts Account[]");
-		expect(schema.code).not.toContain("sessions Session[]");
-		expect(schema.code).not.toContain("accounts Account[]");
+		try {
+			const schema = await generatePrismaSchema({
+				file: tempFile,
+				adapter: prismaAdapter(
+					{},
+					{ provider: "postgresql" },
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter({}, { provider: "postgresql" }),
+				},
+			});
+
+			expect(schema.code).toContain("userSessions Session[]");
+			expect(schema.code).toContain("userAccounts Account[]");
+			expect(schema.code).not.toContain("sessions Session[]");
+			expect(schema.code).not.toContain("accounts Account[]");
+		} finally {
+			if (fs.existsSync(tempFile)) {
+				fs.unlinkSync(tempFile);
+			}
+		}
 	});
 });
