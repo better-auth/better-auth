@@ -282,12 +282,14 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 
-			const roles = parseRoles(ctx.body.role);
-
-			const rolesArray = roles
+			const rolesArray = parseRoles(ctx.body.role)
 				.split(",")
 				.map((r) => r.trim())
 				.filter(Boolean);
+			// Store the same trimmed list that is validated below, so a role
+			// written as "member, admin" is not saved as " admin" and then
+			// ignored by every permission check.
+			const roles = parseRoles(rolesArray);
 			const defaults = Object.keys(defaultRoles);
 			const customRoles = Object.keys(ctx.context.orgOptions.roles || {});
 			const validStaticRoles = new Set([...defaults, ...customRoles]);
@@ -327,7 +329,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					.split(",")
 					.map((r) => r.trim())
 					.includes(creatorRole) &&
-				roles.split(",").includes(creatorRole)
+				rolesArray.includes(creatorRole)
 			) {
 				throw APIError.from(
 					"FORBIDDEN",
