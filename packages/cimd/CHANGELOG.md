@@ -1,5 +1,11 @@
 # @better-auth/cimd
 
+## 1.7.15
+
+### Patch Changes
+
+- [#12103](https://github.com/better-auth/better-auth/pull/12103) [`4592923`](https://github.com/better-auth/better-auth/commit/4592923869aa3714be41fd5d01629f65e80fcdc7) Thanks [@bytaesu](https://github.com/bytaesu)! - The Node metadata transport now rejects responses with an out-of-range status or an invalid reason phrase, so the client is reported as `invalid_client` instead of the error escaping the request and crashing the process.
+
 ## 1.7.14
 
 ## 1.7.13

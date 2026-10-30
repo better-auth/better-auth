@@ -1,5 +1,11 @@
 # @better-auth/api-key
 
+## 1.7.15
+
+### Patch Changes
+
+- [#12107](https://github.com/better-auth/better-auth/pull/12107) [`9ce8b2c`](https://github.com/better-auth/better-auth/commit/9ce8b2c725ef7e088e83a675fe427d92b0c1010d) Thanks [@bytaesu](https://github.com/bytaesu)! - API keys stored in secondary storage now verify, load, and list correctly when the storage client returns already-parsed JSON objects, such as `@upstash/redis`.
+
 ## 1.7.14
 
 ## 1.7.13

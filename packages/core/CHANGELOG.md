@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.7.15
+
+### Patch Changes
+
+- [#12106](https://github.com/better-auth/better-auth/pull/12106) [`9ef0c5b`](https://github.com/better-auth/better-auth/commit/9ef0c5bda9c5ebc46d2c5d93fc0874893d1c6256) Thanks [@bytaesu](https://github.com/bytaesu)! - Built-in social providers no longer follow HTTP redirects on token exchange, refresh, verification, and signing key (JWKS) requests, matching the other server-side OAuth requests.
+
 ## 1.7.14
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @better-auth/stripe
 
+## 1.7.15
+
+### Patch Changes
+
+- [#12102](https://github.com/better-auth/better-auth/pull/12102) [`3b3a595`](https://github.com/better-auth/better-auth/commit/3b3a5957a0ce1bde906954c5490735706a5202f9) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now checks the `callbackURL` against trusted origins after replacing `{CHECKOUT_SESSION_ID}`, so a `checkoutSessionId` value can no longer redirect to an untrusted origin.
+
+- [#12105](https://github.com/better-auth/better-auth/pull/12105) [`4af793f`](https://github.com/better-auth/better-auth/commit/4af793f1c8db057d2822b59c2d9099d76a0fb279) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now rejects non-string `callbackURL` and `checkoutSessionId` query values, such as duplicated parameters, with a 400 instead of failing with a 500.
+
 ## 1.7.14
 
 ## 1.7.13
