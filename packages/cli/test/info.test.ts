@@ -455,7 +455,7 @@ describe("info command", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11738
 	 */
-	it("should redact object values and snake_case or kebab-case sensitive keys", async () => {
+	it("should redact nested values and sensitive key variants", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "package.json"),
 			JSON.stringify({
@@ -483,6 +483,10 @@ describe("info command", () => {
 							encPrivateKeyPass: "passphrase-should-be-redacted",
 							client_secret: "snake-secret-should-be-redacted",
 							"api-key": "kebab-key-should-be-redacted",
+							encryptionKey: "bare-key-should-be-redacted",
+							authTokens: "plural-token-should-be-redacted",
+							apiKeyHeaders: "x-api-key",
+							tokenUrl: "https://idp.example.com/token",
 						},
 					},
 				],
@@ -502,6 +506,10 @@ describe("info command", () => {
 		expect(options.encPrivateKeyPass).toBe("[REDACTED]");
 		expect(options.client_secret).toBe("[REDACTED]");
 		expect(options["api-key"]).toBe("[REDACTED]");
+		expect(options.encryptionKey).toBe("[REDACTED]");
+		expect(options.authTokens).toBe("[REDACTED]");
+		expect(options.apiKeyHeaders).toBe("x-api-key");
+		expect(options.tokenUrl).toBe("https://idp.example.com/token");
 		for (const output of [stdout, text]) {
 			expect(output).not.toContain("should-be-redacted");
 		}

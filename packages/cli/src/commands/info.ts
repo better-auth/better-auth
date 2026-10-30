@@ -187,6 +187,7 @@ const sensitiveKeys = [
 	"privateKeyPass",
 	"passphrase",
 	"publicKey",
+	"key",
 	"password",
 	"token",
 	"webhook",
@@ -214,10 +215,14 @@ const allowedKeys = [
 
 const isSensitiveKey = (key: string) => {
 	const normalized = normalizeKey(key);
-	// Exact match or the key ends with the sensitive key
+	// Exact match or the key ends with the sensitive key or its plural
 	return (
 		!allowedKeys.includes(normalized) &&
-		sensitiveKeys.some((sensitiveKey) => normalized.endsWith(sensitiveKey))
+		sensitiveKeys.some(
+			(sensitiveKey) =>
+				normalized.endsWith(sensitiveKey) ||
+				normalized.endsWith(`${sensitiveKey}s`),
+		)
 	);
 };
 
