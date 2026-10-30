@@ -33,6 +33,13 @@ import * as z from "zod";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 
+const { lookupMock } = vi.hoisted(() => ({ lookupMock: vi.fn() }));
+vi.mock("node:dns/promises", () => ({ lookup: lookupMock }));
+
+beforeEach(() => {
+	lookupMock.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+});
+
 interface ReceivedLogoutRequest {
 	contentType: string | undefined;
 	logoutToken: string | undefined;
@@ -681,6 +688,136 @@ describe("oauth back-channel logout", async () => {
 				expect(token.revoked).toBeInstanceOf(Date);
 			}
 		}
+	});
+
+	/**
+	 * Registration only classifies the literal hostname, so a public-looking
+	 * name whose DNS answer is internal must be rejected at delivery time.
+	 *
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#Security
+	 */
+	describe("delivery address validation", () => {
+		async function expectDeliverySkipped() {
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+			const warn = vi.spyOn((await auth.$context).logger, "warn");
+
+			const result = await client.signOut({ fetchOptions: { headers } });
+			expect(result.error).toBeNull();
+			await vi.waitFor(() =>
+				expect(warn).toHaveBeenCalledWith(
+					expect.stringContaining(
+						`back-channel logout to client ${oauthClient.client_id} skipped`,
+					),
+				),
+			);
+
+			expect(lookupMock).toHaveBeenCalledWith(new URL(rp.publicUrl).hostname, {
+				all: true,
+			});
+			expect(rp.received).toHaveLength(0);
+			const tokens = await readClientTokenRevocation(oauthClient.client_id);
+			expect(tokens.accessTokens.length).toBeGreaterThan(0);
+			for (const token of tokens.accessTokens) {
+				expect(token.revoked).toBeInstanceOf(Date);
+			}
+		}
+
+		it.each([
+			["a private address", "10.0.0.5"],
+			["loopback", "127.0.0.1"],
+			["the cloud metadata address", "169.254.169.254"],
+			["an IPv4-mapped IPv6 loopback", "::ffff:127.0.0.1"],
+		])("skips a hostname that resolves to %s", async (_label, address) => {
+			lookupMock.mockResolvedValue([
+				{ address, family: address.includes(":") ? 6 : 4 },
+			]);
+			await expectDeliverySkipped();
+		});
+
+		it("skips a hostname when any resolved address is not public", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "10.0.0.5", family: 4 },
+			]);
+			await expectDeliverySkipped();
+		});
+
+		it("skips a hostname that cannot be resolved", async () => {
+			lookupMock.mockRejectedValue(new Error("ENOTFOUND"));
+			await expectDeliverySkipped();
+		});
+
+		it("delivers to a hostname that resolves only to public addresses", async () => {
+			lookupMock.mockResolvedValue([
+				{ address: "93.184.216.34", family: 4 },
+				{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+			]);
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+
+			await client.signOut({ fetchOptions: { headers } });
+			await waitForDispatches();
+
+			expect(lookupMock).toHaveBeenCalledWith(new URL(rp.publicUrl).hostname, {
+				all: true,
+			});
+			expect(rp.received).toHaveLength(1);
+		});
+
+		it("delivers to a public IP literal without a DNS lookup", async () => {
+			const literalOrigin = "https://93.184.216.34";
+			const networkFetch = globalThis.fetch;
+			vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+				const requestedUrl =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requestedUrl.startsWith(literalOrigin)) {
+					return networkFetch(
+						`${rp.url}${requestedUrl.slice(literalOrigin.length)}`,
+						init,
+					);
+				}
+				return networkFetch(input, init);
+			});
+			const oauthClient = await registerClient({
+				backchannel_logout_uri: `${literalOrigin}/logout/backchannel`,
+			});
+			await issueTokens({ client: oauthClient });
+
+			await client.signOut({ fetchOptions: { headers } });
+			await waitForDispatches();
+
+			expect(lookupMock).not.toHaveBeenCalled();
+			expect(rp.received).toHaveLength(1);
+		});
+
+		it("skips a stored private target that bypassed registration checks", async () => {
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+			const ctx = await auth.$context;
+			await ctx.adapter.update({
+				model: "oauthClient",
+				where: [{ field: "clientId", value: oauthClient.client_id }],
+				update: { backchannelLogoutUri: `${rp.url}/logout/backchannel` },
+			});
+			const warn = vi.spyOn(ctx.logger, "warn");
+
+			await client.signOut({ fetchOptions: { headers } });
+			await vi.waitFor(() =>
+				expect(warn).toHaveBeenCalledWith(
+					expect.stringContaining(
+						`back-channel logout to client ${oauthClient.client_id} skipped`,
+					),
+				),
+			);
+
+			expect(lookupMock).not.toHaveBeenCalled();
+			expect(rp.received).toHaveLength(0);
+		});
 	});
 });
 
