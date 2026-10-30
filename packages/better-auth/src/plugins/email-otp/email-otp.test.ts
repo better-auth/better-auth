@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getCookieCache } from "../../cookies";
 import { parseSetCookieHeader } from "../../cookies/cookie-utils";
@@ -535,6 +535,36 @@ describe("email-otp", async () => {
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe("INVALID_EMAIL");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11972
+	 */
+	it.for([
+		{
+			endpoint: "requestPasswordReset",
+			request: (email: string) =>
+				client.emailOtp.requestPasswordReset({ email }),
+		},
+		{
+			endpoint: "forgetPassword",
+			request: (email: string) => client.forgetPassword.emailOtp({ email }),
+		},
+	])(
+		"should fail on invalid email for $endpoint without storing an OTP",
+		async ({ request }) => {
+			const ctx = await auth.$context;
+			const createVerificationValue = vi.spyOn(
+				ctx.internalAdapter,
+				"createVerificationValue",
+			);
+			onTestFinished(() => createVerificationValue.mockRestore());
+
+			const res = await request("invalid-email");
+			expect(createVerificationValue).not.toHaveBeenCalled();
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.code).toBe("INVALID_EMAIL");
+		},
+	);
 
 	it("should reject change-email type", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
