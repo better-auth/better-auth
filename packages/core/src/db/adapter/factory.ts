@@ -827,7 +827,6 @@ export const createAdapterFactory =
 					where,
 					limit: joinConfig.limit,
 				});
-				console.error(error);
 				throw error;
 			}
 			return result;

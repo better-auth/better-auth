@@ -97,6 +97,50 @@ describe("createAdapterFactory model identity", () => {
 	});
 });
 
+describe("createAdapterFactory fallback joins", () => {
+	it("reports a failed fallback join through the configured logger without writing the raw error to the console", async () => {
+		const driverError = new Error(
+			"select * from user where id = $1 -- params: secret-user-id",
+		);
+		const findOne = vi.fn(
+			async ({ model }: { model: string }): Promise<any> => {
+				if (model === "session") {
+					return { id: "session-id", userId: "secret-user-id" };
+				}
+				throw driverError;
+			},
+		);
+		const log = vi.fn();
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+
+		try {
+			const adapter = createAdapterFactory<BetterAuthOptions>({
+				config: { adapterId: "test-adapter" },
+				adapter: () => createCustomAdapter({ findOne }),
+			})({ logger: { level: "error", log } });
+
+			await expect(
+				adapter.findOne({
+					model: "session",
+					where: [{ field: "id", value: "session-id" }],
+					join: { user: true },
+				}),
+			).rejects.toBe(driverError);
+
+			expect(log).toHaveBeenCalledWith(
+				"error",
+				expect.stringContaining("Failed to query fallback join"),
+				expect.anything(),
+			);
+			expect(consoleError).not.toHaveBeenCalled();
+		} finally {
+			consoleError.mockRestore();
+		}
+	});
+});
+
 describe("createAdapterFactory atomic primitives", () => {
 	it("delegates consumeOne to the native adapter with transformed where and output", async () => {
 		const adapter = createTestAdapter({
