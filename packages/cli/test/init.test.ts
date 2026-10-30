@@ -1297,6 +1297,73 @@ describe("initAction", () => {
 		},
 	);
 
+	testWithTmpDir(
+		"should run the migration without waiting for confirmation",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({ name: "test-project", version: "1.0.0" }),
+			);
+
+			mockPrompts.mockImplementation(async (questions: any) => {
+				const question = Array.isArray(questions) ? questions[0] : questions;
+
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
+				}
+				if (
+					question.type === "confirm" &&
+					question.message?.includes(".env file")
+				) {
+					return { value: false };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("auth instance")
+				) {
+					return { filePath: "auth.ts" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("route handler")
+				) {
+					return { filePath: "src/app/api/auth/[...all]/route.ts" };
+				}
+				if (question.message?.includes("configure a database")) {
+					return { value: "yes" };
+				}
+				if (question.message?.includes("Select the database")) {
+					return { value: "sqlite-better-sqlite3" };
+				}
+				if (question.name === "shouldInstallDeps") {
+					return { shouldInstallDeps: false };
+				}
+				if (question.name === "shouldMigrate") {
+					return { shouldMigrate: true };
+				}
+				if (question.message?.includes("email & password")) {
+					return { value: true };
+				}
+				if (question.message?.includes("setup social providers")) {
+					return { value: false };
+				}
+				if (question.message?.includes("auth client configuration")) {
+					return { value: false };
+				}
+
+				return {};
+			});
+
+			await initAction({ cwd: tmp });
+
+			expect(mockExec).toHaveBeenCalledWith(
+				"npx auth migrate --yes",
+				{ cwd: tmp },
+				expect.any(Function),
+			);
+		},
+	);
+
 	testWithTmpDir("should handle multiple env files", async ({ tmp }) => {
 		await fs.writeFile(
 			path.join(tmp, "package.json"),
