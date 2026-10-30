@@ -385,57 +385,67 @@ describe("removeMember with >100 members", async () => {
 	const ctx = await auth.$context;
 	const { headers } = await signInWithTestUser();
 
-	const org = await auth.api.createOrganization({
-		body: {
-			name: "large-owner-org",
-			slug: "large-owner-org",
-		},
-		headers,
-	});
-	if (!org) throw new Error("Organization not created");
+	/**
+	 * The signed-in user creates the organization as its only owner, then
+	 * 110 members whose role contains the creator role without being it
+	 * ("co-owner") are inserted, so that a `contains` lookup capped at 100
+	 * rows sees none of what follows.
+	 */
+	async function createLargeOrganization(slug: string) {
+		const org = await auth.api.createOrganization({
+			body: { name: slug, slug },
+			headers,
+		});
+		if (!org) throw new Error("Organization not created");
+		for (let i = 0; i < 110; i++) {
+			const user = await ctx.adapter.create<{ id: string }>({
+				model: "user",
+				data: { email: `${slug}-${i}@test.com`, name: `${slug}-${i}` },
+			});
+			await ctx.adapter.create({
+				model: "member",
+				data: {
+					organizationId: org.id,
+					userId: user.id,
+					role: "co-owner",
+					createdAt: new Date(),
+				},
+			});
+		}
+		const creator = await auth.api.getActiveMember({
+			query: { organizationId: org.id },
+			headers,
+		});
+		if (!creator) throw new Error("Creator not found");
+		return { org, creator };
+	}
 
-	// Creator + 110 members, then a second owner as the 112th member.
-	for (let i = 0; i < 110; i++) {
-		const user = await ctx.adapter.create({
+	it("should remove the creator when the other owner sits past the first 100 members", async () => {
+		const { org, creator } = await createLargeOrganization("late-owner-org");
+		const secondOwnerUser = await ctx.adapter.create<{ id: string }>({
 			model: "user",
 			data: {
-				email: `large-owner-org-${i}@test.com`,
-				name: `large-owner-org-${i}`,
+				email: "late-owner-org-second-owner@test.com",
+				name: "late-owner-org-second-owner",
 			},
 		});
-		await auth.api.addMember({
+		const secondOwner = await auth.api.addMember({
 			body: {
 				organizationId: org.id,
-				userId: user.id,
-				role: "member",
+				userId: secondOwnerUser.id,
+				role: "owner",
 			},
 		});
-	}
-	const secondOwnerUser = await ctx.adapter.create({
-		model: "user",
-		data: {
-			email: "large-owner-org-second-owner@test.com",
-			name: "large-owner-org-second-owner",
-		},
-	});
-	const secondOwner = await auth.api.addMember({
-		body: {
-			organizationId: org.id,
-			userId: secondOwnerUser.id,
-			role: "owner",
-		},
-	});
-	if (!secondOwner) throw new Error("Second owner not added");
+		if (!secondOwner) throw new Error("Second owner not added");
 
-	it("should remove an owner when another owner exists beyond the first 100 members", async () => {
 		const removed = await auth.api.removeMember({
 			body: {
 				organizationId: org.id,
-				memberIdOrEmail: secondOwner.id,
+				memberIdOrEmail: creator.id,
 			},
 			headers,
 		});
-		expect(removed?.member.id).toBe(secondOwner.id);
+		expect(removed?.member.id).toBe(creator.id);
 		expect(
 			await ctx.adapter.count({
 				model: "member",
@@ -444,16 +454,13 @@ describe("removeMember with >100 members", async () => {
 		).toBe(111);
 	});
 
-	it("should still refuse to remove the only remaining owner", async () => {
-		const self = await auth.api.getActiveMember({
-			query: { organizationId: org.id },
-			headers,
-		});
+	it("should refuse to remove the only owner of an organization above 100 members", async () => {
+		const { org, creator } = await createLargeOrganization("single-owner-org");
 		await expect(
 			auth.api.removeMember({
 				body: {
 					organizationId: org.id,
-					memberIdOrEmail: self.id,
+					memberIdOrEmail: creator.id,
 				},
 				headers,
 			}),
