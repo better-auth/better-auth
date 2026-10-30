@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import type { BetterAuthOptions } from "@better-auth/core";
 import { CamelCasePlugin, Kysely, PostgresDialect } from "kysely";
@@ -212,6 +213,26 @@ describe.runIf(isPostgresAvailable)(
 			// Session, account, verification tables should need to be created
 			const sessionTable = toBeCreated.find((t) => t.table === "session");
 			expect(sessionTable).toBeDefined();
+		});
+
+		it("ignores other schemas that are dropped while it reads", async () => {
+			const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+			const dropped = `ba_dropped_${randomUUID().replaceAll("-", "")}`;
+			await publicPool.query(`CREATE SCHEMA "${dropped}"`);
+			await publicPool.query(`CREATE TABLE "${dropped}".session (id serial)`);
+
+			// The snapshot predates the drop, so the catalog still lists the dropped
+			// table while lookups by name no longer find it.
+			await pool.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+			try {
+				await pool.query("SELECT 1");
+				await publicPool.query(`DROP SCHEMA "${dropped}" CASCADE`);
+				const { toBeCreated } = await getMigrations({ database: pool });
+				expect(toBeCreated.map(({ table }) => table)).toContain("session");
+			} finally {
+				await pool.query("ROLLBACK");
+				await pool.end();
+			}
 		});
 
 		it("should create tables in custom schema when running migrations", async () => {
