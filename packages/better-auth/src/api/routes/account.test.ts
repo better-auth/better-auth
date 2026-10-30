@@ -3,6 +3,7 @@ import type {
 	CognitoProfile,
 	GoogleProfile,
 } from "@better-auth/core/social-providers";
+import { UnsecuredJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type { MockInstance } from "vitest";
@@ -2922,4 +2923,59 @@ describe("account resolution in stateless mode", async () => {
 		expect(accountCookie?.value).toBeTruthy();
 		expect(accountCookie?.maxAge).not.toBe(0);
 	});
+});
+
+/**
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
+ */
+it("reads paybin account info when refresh omits a new ID token", async () => {
+	const { auth } = await getTestInstance({
+		socialProviders: {
+			paybin: { clientId: "profile-client", clientSecret: "secret" },
+		},
+		account: { encryptOAuthTokens: false },
+	});
+	const ctx = await auth.$context;
+	const user = await ctx.internalAdapter.createUser(
+		{ name: "Stored User", email: "stored@example.com" },
+		{ method: "test" },
+	);
+	const account = await ctx.internalAdapter.createAccount({
+		userId: user.id,
+		providerId: "paybin",
+		accountId: "provider-user",
+		accessToken: "old-access-token",
+		refreshToken: "old-refresh-token",
+		accessTokenExpiresAt: new Date(0),
+		idToken: new UnsecuredJWT({
+			sub: "provider-user",
+			email: "stale@example.com",
+			exp: 0,
+		}).encode(),
+	});
+	server.use(
+		http.post("https://idp.paybin.io/oauth/token", async ({ request }) => {
+			const body = new URLSearchParams(await request.text());
+			expect(body.get("grant_type")).toBe("refresh_token");
+			expect(body.get("refresh_token")).toBe("old-refresh-token");
+			return HttpResponse.json({
+				access_token: "refreshed-access-token",
+				token_type: "Bearer",
+				expires_in: 3600,
+			});
+		}),
+		http.get("https://idp.paybin.io/oauth/userinfo", ({ request }) => {
+			expect(request.headers.get("authorization")).toBe(
+				"Bearer refreshed-access-token",
+			);
+			return HttpResponse.json({
+				sub: "provider-user",
+				email: "current@example.com",
+			});
+		}),
+	);
+	const result = await auth.api.accountInfo({
+		query: { accountId: account.id, userId: user.id },
+	});
+	expect(result.user.email).toBe("current@example.com");
 });

@@ -82,10 +82,13 @@ export const auth = betterAuth({
 
 ### User Profile Mapping
 
-Paybin returns user information in the ID token following OpenID Connect standards. The provider automatically extracts:
+The provider retrieves profiles with the access token from `<issuer>/oauth/userinfo`, following the endpoints published by [Paybin’s discovery document](https://idp.paybin.io/.well-known/openid-configuration). The `sub` claim identifies the provider account. It maps:
 
-* `id` from `sub` claim
-* `name` from `name`, `preferred_username`, or `email` (in order of preference)
+* `name` from `name` or `preferred_username`, or an empty string when both are absent
 * `email` from `email` claim
 * `image` from `picture` claim
 * `emailVerified` from `email_verified` claim
+
+Direct ID-token sign-in enabled through a custom `verifyIdToken` must also supply `accessToken` when using the default `getUserInfo`. Profile callbacks receive the UserInfo response rather than ID-token claims.
+
+When an ID token is also provided, its subject must match the fetched account.

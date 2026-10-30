@@ -1,3 +1,4 @@
+import { betterFetch } from "@better-fetch/fetch";
 import { decodeJwt } from "jose";
 import { logger } from "../env";
 import { BetterAuthError } from "../error";
@@ -10,7 +11,7 @@ import {
 
 export interface PaybinProfile {
 	sub: string;
-	email: string;
+	email?: string;
 	email_verified?: boolean | undefined;
 	name?: string | undefined;
 	preferred_username?: string | undefined;
@@ -30,8 +31,10 @@ export interface PaybinOptions extends ProviderOptions<PaybinProfile> {
 
 export const paybin = (options: PaybinOptions) => {
 	const issuer = options.issuer || "https://idp.paybin.io";
-	const authorizationEndpoint = `${issuer}/oauth2/authorize`;
-	const tokenEndpoint = `${issuer}/oauth2/token`;
+	const issuerBaseURL = issuer.endsWith("/") ? issuer : `${issuer}/`;
+	const authorizationEndpoint = new URL("oauth/authorize", issuerBaseURL).href;
+	const tokenEndpoint = new URL("oauth/token", issuerBaseURL).href;
+	const userInfoEndpoint = new URL("oauth/userinfo", issuerBaseURL).href;
 
 	return {
 		id: "paybin",
@@ -99,10 +102,27 @@ export const paybin = (options: PaybinOptions) => {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
 			}
-			if (!token.idToken) {
+			if (!token.accessToken) {
 				return null;
 			}
-			const user = decodeJwt(token.idToken) as PaybinProfile;
+			const { data: user } = await betterFetch<PaybinProfile>(
+				userInfoEndpoint,
+				{
+					headers: { Authorization: `Bearer ${token.accessToken}` },
+				},
+			);
+			if (typeof user?.sub !== "string" || !user.sub) {
+				return null;
+			}
+			// Keep the fetched account bound to a supplied ID token.
+			if (token.idToken) {
+				try {
+					if (decodeJwt(token.idToken).sub !== user.sub) return null;
+				} catch {
+					return null;
+				}
+			}
+
 			const userMap = await options.mapProfileToUser?.(user);
 			return {
 				user: {
