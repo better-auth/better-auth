@@ -159,19 +159,25 @@ function serializeApiKey(apiKey: ApiKey): string {
  * Deserialize API key from storage
  */
 function deserializeApiKey(data: unknown): ApiKey | null {
-	const parsed = safeJSONParse<ApiKey>(data);
-	if (!parsed) {
+	if (!data) {
 		return null;
 	}
 
-	return {
-		...parsed,
-		createdAt: new Date(parsed.createdAt),
-		updatedAt: new Date(parsed.updatedAt),
-		expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
-		lastRefillAt: parsed.lastRefillAt ? new Date(parsed.lastRefillAt) : null,
-		lastRequest: parsed.lastRequest ? new Date(parsed.lastRequest) : null,
-	};
+	try {
+		const parsed = (
+			typeof data === "string" ? JSON.parse(data) : data
+		) as ApiKey;
+		return {
+			...parsed,
+			createdAt: new Date(parsed.createdAt),
+			updatedAt: new Date(parsed.updatedAt),
+			expiresAt: parsed.expiresAt ? new Date(parsed.expiresAt) : null,
+			lastRefillAt: parsed.lastRefillAt ? new Date(parsed.lastRefillAt) : null,
+			lastRequest: parsed.lastRequest ? new Date(parsed.lastRequest) : null,
+		};
+	} catch {
+		return null;
+	}
 }
 
 /**
