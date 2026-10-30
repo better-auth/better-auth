@@ -990,6 +990,68 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12051
+	 */
+	it("should send verification email when a background task handler is configured", async () => {
+		let committed = false;
+		let transactional = false;
+		let sentBeforeCommit = false;
+		const sendVerificationEmail = vi.fn().mockImplementation(async () => {
+			if (transactional && !committed) {
+				sentBeforeCommit = true;
+			}
+		});
+		const backgroundTasks: Promise<unknown>[] = [];
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				advanced: {
+					backgroundTasks: {
+						handler: (promise) => {
+							backgroundTasks.push(promise);
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		transactional = !!ctx.adapter.options?.adapterConfig.transaction;
+		if (transactional) {
+			const transaction = ctx.adapter.transaction.bind(ctx.adapter);
+			vi.spyOn(ctx.adapter, "transaction").mockImplementation((cb) =>
+				transaction(async (trx) => {
+					const result = await cb(trx);
+					committed = true;
+					return result;
+				}),
+			);
+		}
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "bg-handler@test.com",
+				password: "password123",
+				name: "BG Handler",
+			},
+		});
+
+		await Promise.all(backgroundTasks);
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+		expect(sentBeforeCommit).toBe(false);
+	});
 });
 
 describe("sign-up enumeration protection — indistinguishable response", async () => {
