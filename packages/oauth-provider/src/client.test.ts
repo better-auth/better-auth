@@ -50,4 +50,33 @@ describe("oauthProviderClient", () => {
 		const body = JSON.parse(ctx.body);
 		expect(new URLSearchParams(body.oauth_query).get("sig")).toBe("test-sig");
 	});
+
+	it("keeps signed form bodies form encoded", async () => {
+		const params = new URLSearchParams({ client_id: "client-a" });
+		setSignedOAuthQueryParameterNames(params);
+		params.set("sig", "test-sig");
+		vi.stubGlobal("window", { location: { search: `?${params}` } });
+
+		const ctx = requestContext("a=1", "application/x-www-form-urlencoded");
+		await onRequest(ctx);
+		const sent = new URLSearchParams(ctx.body);
+		expect(sent.get("a")).toBe("1");
+		expect(new URLSearchParams(sent.get("oauth_query")!).get("sig")).toBe(
+			"test-sig",
+		);
+	});
+
+	it("does not rewrite date strings on signed pages", async () => {
+		const params = new URLSearchParams({ client_id: "client-a" });
+		setSignedOAuthQueryParameterNames(params);
+		params.set("sig", "test-sig");
+		vi.stubGlobal("window", { location: { search: `?${params}` } });
+
+		const ctx = requestContext(
+			JSON.stringify({ at: "2026-10-27T10:00:00Z" }),
+			"application/json",
+		);
+		await onRequest(ctx);
+		expect(JSON.parse(ctx.body).at).toBe("2026-10-27T10:00:00Z");
+	});
 });
