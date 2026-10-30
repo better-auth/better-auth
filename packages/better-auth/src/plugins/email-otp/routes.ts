@@ -153,6 +153,20 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			}
 			const identifier = toOTPIdentifier(ctx.body.type, email);
 			const otp = await resolveOTP(ctx, opts, email, ctx.body.type);
+			/**
+			 * An already verified address is only re-verified as a step-up by its
+			 * owner (`changeEmail.verifyCurrentEmail`). Any other caller gets the
+			 * same response as for an unverified address and the code is stored
+			 * but not mailed, so the endpoint cannot be used to mail a code to
+			 * someone else's verified email, and wrong codes count against the
+			 * same attempt limit. Server-side calls that carry no request or
+			 * headers are trusted, as elsewhere. The session is resolved for every
+			 * address so the reply does not differ between them.
+			 */
+			const ownerOnlyIfVerified =
+				ctx.body.type === "email-verification" &&
+				!!(ctx.request || ctx.headers);
+			const session = ownerOnlyIfVerified ? await getSessionFromCtx(ctx) : null;
 
 			const shouldSendOTP = ctx.body.type === "sign-in" && !opts.disableSignUp;
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
@@ -160,6 +174,13 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					identifier,
 				);
+				return ctx.json({ success: true });
+			}
+			if (
+				ownerOnlyIfVerified &&
+				user?.user.emailVerified &&
+				session?.user.id !== user.user.id
+			) {
 				return ctx.json({ success: true });
 			}
 
