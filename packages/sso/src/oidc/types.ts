@@ -174,7 +174,8 @@ export interface HydratedOIDCConfig {
 	tokenEndpointAuthentication?:
 		| "client_secret_basic"
 		| "client_secret_post"
-		| "private_key_jwt";
+		| "private_key_jwt"
+		| "none";
 
 	/** Scopes supported by the IdP */
 	scopesSupported?: string[];
