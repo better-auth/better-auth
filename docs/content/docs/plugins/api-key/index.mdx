@@ -205,6 +205,8 @@ type Result = {
 };
 ```
 
+A user-owned key is only valid while its owner exists and is not banned. If the owner has been deleted, verification fails with `INVALID_REFERENCE_ID_FROM_API_KEY`. If the owner is banned through the [admin plugin](/docs/plugins/admin), it fails with `USER_BANNED` until the ban is lifted or `banExpires` passes. A rejected key does not use up its `remaining` count or rate limit. Organization-owned keys are not affected.
+
 ***
 
 ### Get an API key

@@ -5514,3 +5514,162 @@ describe("api key creation uses a fresh session", async () => {
 		expect(second.error?.status).toBe(401);
 	});
 });
+
+describe("api keys owned by banned or deleted users", async () => {
+	const { admin } = await import("../../better-auth/src/plugins/admin");
+
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [admin(), apiKey({ enableSessionForAPIKeys: true })],
+		},
+		{
+			clientOptions: {
+				plugins: [apiKeyClient()],
+			},
+		},
+	);
+	const ctx = await auth.$context;
+	const { headers: adminHeaders, user: adminUser } = await signInWithTestUser();
+	await ctx.internalAdapter.updateUser(adminUser.id, { role: "admin" });
+
+	async function createOwnerWithKey(body?: { remaining?: number }) {
+		const { user } = await auth.api.signUpEmail({
+			body: {
+				email: `owner-${crypto.randomUUID()}@test.com`,
+				password: "password1234",
+				name: "Key Owner",
+			},
+		});
+		const key = await auth.api.createApiKey({
+			body: { userId: user.id, ...body },
+		});
+		return { user, key };
+	}
+
+	function apiKeyHeaders(key: string) {
+		return new Headers({ "x-api-key": key });
+	}
+
+	it("rejects verification when the owner is banned", async () => {
+		const { user, key } = await createOwnerWithKey();
+		const before = await auth.api.verifyApiKey({ body: { key: key.key } });
+		expect(before.valid).toBe(true);
+
+		await auth.api.banUser({
+			headers: adminHeaders,
+			body: { userId: user.id },
+		});
+
+		const after = await auth.api.verifyApiKey({ body: { key: key.key } });
+		expect(after.valid).toBe(false);
+		expect(after.key).toBeNull();
+		expect(after.error?.code).toBe(ERROR_CODES.USER_BANNED.code);
+	});
+
+	it("does not consume quota when the owner is banned", async () => {
+		const { user, key } = await createOwnerWithKey({ remaining: 5 });
+		await auth.api.banUser({
+			headers: adminHeaders,
+			body: { userId: user.id },
+		});
+
+		const rejected = await auth.api.verifyApiKey({ body: { key: key.key } });
+		expect(rejected.valid).toBe(false);
+
+		await auth.api.unbanUser({
+			headers: adminHeaders,
+			body: { userId: user.id },
+		});
+		const accepted = await auth.api.verifyApiKey({ body: { key: key.key } });
+		expect(accepted.valid).toBe(true);
+		expect(accepted.key?.remaining).toBe(4);
+	});
+
+	it("rejects sessions created from the key of a banned owner", async () => {
+		const { user, key } = await createOwnerWithKey();
+		const before = await auth.api.getSession({
+			headers: apiKeyHeaders(key.key),
+		});
+		expect(before?.user.id).toBe(user.id);
+
+		await auth.api.banUser({
+			headers: adminHeaders,
+			body: { userId: user.id },
+		});
+
+		const getSessionError = await auth.api
+			.getSession({ headers: apiKeyHeaders(key.key) })
+			.then(() => null)
+			.catch((error: unknown) => error);
+		expect(isAPIError(getSessionError)).toBe(true);
+		expect((getSessionError as APIError).body?.code).toBe(
+			ERROR_CODES.USER_BANNED.code,
+		);
+
+		const listSessionsError = await auth.api
+			.listSessions({ headers: apiKeyHeaders(key.key) })
+			.then(() => null)
+			.catch((error: unknown) => error);
+		expect(isAPIError(listSessionsError)).toBe(true);
+		expect((listSessionsError as APIError).body?.code).toBe(
+			ERROR_CODES.USER_BANNED.code,
+		);
+	});
+
+	it("accepts keys once a temporary ban has expired", async () => {
+		const { user, key } = await createOwnerWithKey();
+		// An expired ban the admin plugin has not lazily cleared yet.
+		await ctx.internalAdapter.updateUser(user.id, {
+			banned: true,
+			banReason: "Temporary",
+			banExpires: new Date(Date.now() - 1000),
+		});
+
+		const result = await auth.api.verifyApiKey({ body: { key: key.key } });
+		expect(result.valid).toBe(true);
+
+		const session = await auth.api.getSession({
+			headers: apiKeyHeaders(key.key),
+		});
+		expect(session?.user.id).toBe(user.id);
+	});
+
+	it("rejects keys while a temporary ban is still active", async () => {
+		const { user, key } = await createOwnerWithKey();
+		await auth.api.banUser({
+			headers: adminHeaders,
+			body: { userId: user.id, banExpiresIn: 60 * 60 },
+		});
+
+		const result = await auth.api.verifyApiKey({ body: { key: key.key } });
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe(ERROR_CODES.USER_BANNED.code);
+	});
+
+	it("rejects keys whose owner no longer exists", async () => {
+		const { user, key } = await createOwnerWithKey({ remaining: 5 });
+		// Delete only the user row: API keys have no foreign key to the user, so
+		// the key row is left behind.
+		await ctx.adapter.delete({
+			model: "user",
+			where: [{ field: "id", value: user.id }],
+		});
+		const orphan = await ctx.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [{ field: "id", value: key.id }],
+		});
+		expect(orphan).not.toBeNull();
+
+		const result = await auth.api.verifyApiKey({ body: { key: key.key } });
+		expect(result.valid).toBe(false);
+		expect(result.error?.code).toBe(
+			ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY.code,
+		);
+
+		const untouched = await ctx.adapter.findOne<ApiKey>({
+			model: "apikey",
+			where: [{ field: "id", value: key.id }],
+		});
+		expect(untouched?.remaining).toBe(5);
+	});
+});
