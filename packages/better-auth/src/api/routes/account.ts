@@ -12,7 +12,10 @@ import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
-import { shouldBindAccountCookieToSessionUser } from "../../context/store-capabilities";
+import {
+	hasServerAccountStore,
+	shouldBindAccountCookieToSessionUser,
+} from "../../context/store-capabilities";
 import {
 	getAccountCookie,
 	setAccountCookie,
@@ -631,6 +634,217 @@ async function resolveUserAccount(
 	throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 }
 
+type RefreshedAccount = {
+	/** The refreshed tokens in plaintext, with unchanged fields carried over. */
+	tokens: OAuth2Tokens;
+	/** The account fields as stored, to merge into the account cookie. */
+	stored: Partial<Account>;
+};
+
+/**
+ * Refreshes running in this process, per auth instance and keyed by account
+ * ID and the stored refresh token they spend, so concurrent callers share one
+ * provider call.
+ */
+const inFlightRefreshes = new WeakMap<
+	object,
+	Map<string, Promise<RefreshedAccount>>
+>();
+
+/**
+ * Waits between re-reads of the account after a refresh is rejected as
+ * `invalid_grant`, up to 500 ms in total. Another worker that spent the same
+ * refresh token may still be storing the rotated tokens; `null` marks the
+ * last read.
+ */
+const REFRESH_RETRY_DELAYS_MS = [100, 150, 250, null] as const;
+
+/**
+ * Whether a refresh failure says the refresh token was rejected, which is how
+ * providers answer a rotated token that was already spent. The token endpoint
+ * throws its JSON error body; custom `refreshAccessToken` functions may throw
+ * an `Error` instead.
+ */
+function isInvalidGrantError(error: unknown) {
+	if (error instanceof Error) {
+		return error.message.includes("invalid_grant");
+	}
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"error" in error &&
+		error.error === "invalid_grant"
+	);
+}
+
+async function findStoredAccount(
+	ctx: GenericEndpointContext,
+	account: Account,
+) {
+	const accounts = await ctx.context.internalAdapter.findAccounts(
+		account.userId,
+	);
+	return accounts.find((candidate) => candidate.id === account.id) ?? null;
+}
+
+async function readStoredTokens(
+	ctx: GenericEndpointContext,
+	account: Account,
+): Promise<RefreshedAccount> {
+	return {
+		tokens: {
+			accessToken: await decryptOAuthToken(
+				account.accessToken ?? "",
+				ctx.context,
+			),
+			refreshToken: await decryptOAuthToken(
+				account.refreshToken ?? "",
+				ctx.context,
+			),
+			accessTokenExpiresAt: account.accessTokenExpiresAt ?? undefined,
+			refreshTokenExpiresAt: account.refreshTokenExpiresAt ?? undefined,
+			idToken: account.idToken ?? undefined,
+		},
+		stored: account,
+	};
+}
+
+/**
+ * Refreshes an account's provider tokens and stores them.
+ *
+ * Providers that rotate refresh tokens accept each one once, so two refreshes
+ * of the same account would spend it twice and the second would fail.
+ * Concurrent callers in this process share one refresh. Across processes, the
+ * write only lands while the stored refresh token is still the one spent:
+ * when another worker or a re-link replaced it first, its tokens are returned
+ * instead of being overwritten.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11561
+ */
+async function refreshAccountTokens(
+	ctx: GenericEndpointContext,
+	account: Account & { refreshToken: string },
+	refreshAccessToken: (
+		refreshToken: string,
+		ctx: GenericEndpointContext,
+	) => Promise<OAuth2Tokens>,
+): Promise<RefreshedAccount> {
+	const spentRefreshToken = account.refreshToken;
+	const isGuarded = !!account.id && hasServerAccountStore(ctx.context.options);
+
+	const refresh = async (): Promise<RefreshedAccount> => {
+		const decryptedRefreshToken = await decryptOAuthToken(
+			spentRefreshToken,
+			ctx.context,
+		);
+		let tokens: OAuth2Tokens;
+		try {
+			tokens = await refreshAccessToken(decryptedRefreshToken, ctx);
+		} catch (error) {
+			// The refresh token may have been spent by another worker. Check once,
+			// and when the provider says so, re-read briefly in case that worker's
+			// write is still in flight.
+			if (isGuarded) {
+				const delays = isInvalidGrantError(error)
+					? REFRESH_RETRY_DELAYS_MS
+					: [null];
+				for (const delay of delays) {
+					const current = await findStoredAccount(ctx, account);
+					if (!current?.refreshToken) {
+						break;
+					}
+					if (current.refreshToken !== spentRefreshToken) {
+						return readStoredTokens(ctx, current);
+					}
+					if (delay === null) {
+						break;
+					}
+					await new Promise((resolve) => setTimeout(resolve, delay));
+				}
+			}
+			throw error;
+		}
+
+		const refreshed: OAuth2Tokens = {
+			...tokens,
+			refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
+			refreshTokenExpiresAt:
+				tokens.refreshTokenExpiresAt ??
+				account.refreshTokenExpiresAt ??
+				undefined,
+			idToken: tokens.idToken || account.idToken || undefined,
+		};
+		/**
+		 * `scope` intentionally omitted. Refresh response may be narrower.
+		 *
+		 * @see {@link Account.scope}
+		 */
+		const updatedData: Partial<Account> = {
+			accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
+			accessTokenExpiresAt: tokens.accessTokenExpiresAt,
+			refreshToken: tokens.refreshToken
+				? await setTokenUtil(tokens.refreshToken, ctx.context)
+				: spentRefreshToken,
+			refreshTokenExpiresAt: refreshed.refreshTokenExpiresAt,
+			idToken: refreshed.idToken,
+		};
+
+		if (!isGuarded) {
+			const updatedAccount = account.id
+				? await ctx.context.internalAdapter.updateAccount(
+						account.id,
+						updatedData,
+					)
+				: null;
+			return { tokens: refreshed, stored: updatedAccount ?? updatedData };
+		}
+
+		const updatedAccount =
+			await ctx.context.internalAdapter.updateAccountIfRefreshTokenMatches(
+				account.id,
+				spentRefreshToken,
+				updatedData,
+			);
+		if (updatedAccount) {
+			return { tokens: refreshed, stored: updatedAccount };
+		}
+		// Another worker or a re-link stored newer tokens while this refresh
+		// was in flight. Keep them rather than overwriting them.
+		const current = await findStoredAccount(ctx, account);
+		if (!current) {
+			// The account was unlinked while the refresh was in flight.
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+		}
+		if (current.refreshToken && current.refreshToken !== spentRefreshToken) {
+			return readStoredTokens(ctx, current);
+		}
+		// Nothing replaced the refresh token, so the write was skipped for
+		// another reason, such as an `update.before` hook returning `false`.
+		return { tokens: refreshed, stored: updatedData };
+	};
+
+	if (!isGuarded) {
+		return refresh();
+	}
+	// The internal adapter is created once per auth instance.
+	const instance = ctx.context.internalAdapter;
+	let refreshes = inFlightRefreshes.get(instance);
+	if (refreshes === undefined) {
+		refreshes = new Map();
+		inFlightRefreshes.set(instance, refreshes);
+	}
+	const key = `${account.id}:${spentRefreshToken}`;
+	let pending = refreshes.get(key);
+	if (pending === undefined) {
+		const instanceRefreshes = refreshes;
+		pending = refresh().finally(() => {
+			instanceRefreshes.delete(key);
+		});
+		refreshes.set(key, pending);
+	}
+	return pending;
+}
+
 /**
  * Fetches a currently-valid access token for a user's provider account,
  * refreshing and persisting it when it is within five seconds of expiry.
@@ -691,32 +905,16 @@ async function getValidAccessToken(
 			accessTokenExpired &&
 			provider.refreshAccessToken
 		) {
-			const refreshToken = await decryptOAuthToken(
-				account.refreshToken,
-				ctx.context,
+			const refreshed = await refreshAccountTokens(
+				ctx,
+				{ ...account, refreshToken: account.refreshToken },
+				provider.refreshAccessToken,
 			);
-			newTokens = await provider.refreshAccessToken(refreshToken, ctx);
-			const updatedData = {
-				accessToken: await setTokenUtil(newTokens?.accessToken, ctx.context),
-				accessTokenExpiresAt: newTokens?.accessTokenExpiresAt,
-				refreshToken: newTokens?.refreshToken
-					? await setTokenUtil(newTokens.refreshToken, ctx.context)
-					: account.refreshToken,
-				refreshTokenExpiresAt:
-					newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
-				idToken: newTokens?.idToken || account.idToken,
-			};
-			let updatedAccount: Partial<Account> | null = null;
-			if (account.id) {
-				updatedAccount = await ctx.context.internalAdapter.updateAccount(
-					account.id,
-					updatedData,
-				);
-			}
+			newTokens = refreshed.tokens;
 			if (ctx.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(ctx, {
 					...account,
-					...(updatedAccount ?? updatedData),
+					...refreshed.stored,
 				});
 			}
 		}
@@ -886,59 +1084,26 @@ export const refreshToken = createAuthEndpoint(
 		}
 
 		try {
-			const decryptedRefreshToken = await decryptOAuthToken(
-				refreshToken,
-				ctx.context,
-			);
-			const tokens: OAuth2Tokens = await provider.refreshAccessToken(
-				decryptedRefreshToken,
+			const { tokens, stored } = await refreshAccountTokens(
 				ctx,
+				{ ...account, refreshToken },
+				provider.refreshAccessToken,
 			);
-
-			const resolvedRefreshToken = tokens.refreshToken
-				? await setTokenUtil(tokens.refreshToken, ctx.context)
-				: refreshToken;
-			const resolvedRefreshTokenExpiresAt =
-				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
-			const updatedTokenData: Partial<Account> = {
-				accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-				refreshToken: resolvedRefreshToken,
-				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				idToken: tokens.idToken || account.idToken,
-			};
-			let updatedAccount: Account | null = null;
-
-			if (account.id) {
-				/**
-				 * `scope` intentionally omitted. Refresh response may be narrower.
-				 *
-				 * @see {@link Account.scope}
-				 */
-				updatedAccount = await ctx.context.internalAdapter.updateAccount(
-					account.id,
-					updatedTokenData,
-				);
-			}
 
 			if (
 				accountCookie?.id === account.id &&
 				ctx.context.options.account?.storeAccountCookie
 			) {
-				const updateData = {
-					...accountCookie,
-					...(updatedAccount ?? updatedTokenData),
-				};
-				await setAccountCookie(ctx, updateData);
+				await setAccountCookie(ctx, { ...accountCookie, ...stored });
 			}
-			const responseScope = updatedAccount?.scope ?? account.scope;
 			return ctx.json({
 				accessToken: tokens.accessToken,
-				refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
+				refreshToken: tokens.refreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
-				scope: responseScope,
-				idToken: tokens.idToken || account.idToken,
+				refreshTokenExpiresAt:
+					tokens.refreshTokenExpiresAt ?? stored.refreshTokenExpiresAt,
+				scope: stored.scope ?? account.scope,
+				idToken: tokens.idToken ?? stored.idToken,
 				providerId: account.providerId,
 				accountId: account.id,
 			});
