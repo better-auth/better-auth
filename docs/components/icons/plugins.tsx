@@ -20,6 +20,7 @@ export const pluginIcons = {
 	pluginsUsername: () => <UserSquare2 className="w-4 h-4" />,
 	pluginsAnonymous: () => <UserCircle className="w-4 h-4" />,
 	pluginsPhoneNumber: () => <Phone className="w-4 h-4" />,
+	pluginsPin: () => <KeyRound className="w-4 h-4" />,
 	pluginsMagicLink: () => <Mailbox className="w-4 h-4" />,
 	pluginsEmailOTP: () => <Mail className="w-4 h-4" />,
 	pluginsPasskey: () => (
