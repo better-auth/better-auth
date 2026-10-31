@@ -789,4 +789,146 @@ describe("updateOrganization", async () => {
 		});
 		expect(org?.logo).toBeNull();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12149
+	 */
+	describe("organizationLimit and concurrency", () => {
+		it("should enforce organizationLimit numeric limit", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					organization({
+						organizationLimit: 2,
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+			const org1 = await auth.api.createOrganization({
+				body: {
+					name: "Org 1",
+					slug: "org-limit-test-1",
+				},
+				headers,
+			});
+			expect(org1?.id).toBeDefined();
+
+			const org2 = await auth.api.createOrganization({
+				body: {
+					name: "Org 2",
+					slug: "org-limit-test-2",
+				},
+				headers,
+			});
+			expect(org2?.id).toBeDefined();
+
+			await expect(
+				auth.api.createOrganization({
+					body: {
+						name: "Org 3",
+						slug: "org-limit-test-3",
+					},
+					headers,
+				}),
+			).rejects.toThrow();
+		});
+
+		it("should enforce organizationLimit function limit", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					organization({
+						organizationLimit: async () => true,
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+			await expect(
+				auth.api.createOrganization({
+					body: {
+						name: "Org Limit Function",
+						slug: "org-limit-func-test",
+					},
+					headers,
+				}),
+			).rejects.toThrow();
+		});
+
+		it("should not exceed organizationLimit under concurrent requests", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					organization({
+						organizationLimit: 2,
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			const firstOrg = await auth.api.createOrganization({
+				body: {
+					name: "First Org",
+					slug: "concurrent-org-initial",
+				},
+				headers,
+			});
+			expect(firstOrg?.id).toBeDefined();
+
+			const results = await Promise.allSettled([
+				auth.api.createOrganization({
+					body: {
+						name: "Concurrent Org A",
+						slug: "concurrent-org-a",
+					},
+					headers,
+				}),
+				auth.api.createOrganization({
+					body: {
+						name: "Concurrent Org B",
+						slug: "concurrent-org-b",
+					},
+					headers,
+				}),
+			]);
+
+			const fulfilled = results.filter((r) => r.status === "fulfilled");
+			const rejected = results.filter((r) => r.status === "rejected");
+
+			expect(fulfilled).toHaveLength(1);
+			expect(rejected).toHaveLength(1);
+
+			const userOrgs = await auth.api.listOrganizations({
+				headers,
+			});
+			expect(userOrgs).toHaveLength(2);
+		});
+
+		it("should roll back organization creation when member creation fails", async () => {
+			const { auth, signInWithTestUser, db } = await getTestInstance({
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeAddMember: () => {
+								throw new Error("Simulated member creation failure");
+							},
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.createOrganization({
+					body: {
+						name: "Rollback Org",
+						slug: "rollback-org-test",
+					},
+					headers,
+				}),
+			).rejects.toThrow("Simulated member creation failure");
+
+			const orphanedOrg = await db.findOne({
+				model: "organization",
+				where: [{ field: "slug", value: "rollback-org-test" }],
+			});
+			expect(orphanedOrg).toBeNull();
+		});
+	});
 });

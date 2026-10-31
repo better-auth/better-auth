@@ -1,4 +1,5 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { runWithTransaction } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
@@ -53,6 +54,30 @@ const baseOrganizationSchema = z.object({
 		})
 		.optional(),
 });
+
+const userOrgCreationLocks = new Map<string, Promise<void>>();
+
+async function withUserOrgCreationLock<T>(
+	userId: string,
+	fn: () => Promise<T>,
+): Promise<T> {
+	const previous = userOrgCreationLocks.get(userId) ?? Promise.resolve();
+	let release!: () => void;
+	const current = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const next = previous.catch(() => {}).then(() => current);
+	userOrgCreationLocks.set(userId, next);
+	await previous.catch(() => {});
+	try {
+		return await fn();
+	} finally {
+		release();
+		if (userOrgCreationLocks.get(userId) === next) {
+			userOrgCreationLocks.delete(userId);
+		}
+	}
+}
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -131,172 +156,183 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
 
-			const userOrganizations = await adapter.listOrganizations(user.id);
-			const hasReachedOrgLimit =
-				typeof options.organizationLimit === "number"
-					? userOrganizations.length >= options.organizationLimit
-					: typeof options.organizationLimit === "function"
-						? await options.organizationLimit(user)
-						: false;
+			return withUserOrgCreationLock(user.id, async () => {
+				const userOrganizations = await adapter.listOrganizations(user.id);
+				const hasReachedOrgLimit =
+					typeof options.organizationLimit === "number"
+						? userOrganizations.length >= options.organizationLimit
+						: typeof options.organizationLimit === "function"
+							? await options.organizationLimit(user)
+							: false;
 
-			if (hasReachedOrgLimit) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS,
-				);
-			}
-
-			const existingOrganization = await adapter.findOrganizationBySlug(
-				ctx.body.slug,
-			);
-			if (existingOrganization) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
-				);
-			}
-
-			let {
-				keepCurrentActiveOrganization: _,
-				userId: __,
-				...orgData
-			} = ctx.body;
-
-			if (options?.organizationHooks?.beforeCreateOrganization) {
-				const response =
-					await options?.organizationHooks.beforeCreateOrganization({
-						organization: orgData,
-						user,
-					});
-				if (response && typeof response === "object" && "data" in response) {
-					orgData = {
-						...ctx.body,
-						...response.data,
-					};
+				if (hasReachedOrgLimit) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS,
+					);
 				}
-			}
 
-			const organization = await adapter.createOrganization({
-				organization: {
-					...orgData,
-					createdAt: new Date(),
-				},
-			});
-
-			let member:
-				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
-				| undefined;
-			let teamMember: TeamMember | null = null;
-			let data = {
-				userId: user.id,
-				organizationId: organization.id,
-				role: ctx.context.orgOptions.creatorRole || "owner",
-			};
-			if (options?.organizationHooks?.beforeAddMember) {
-				const response = await options?.organizationHooks.beforeAddMember({
-					member: {
-						userId: user.id,
-						organizationId: organization.id,
-						role: ctx.context.orgOptions.creatorRole || "owner",
-					},
-					user,
-					organization,
-				});
-				if (response && typeof response === "object" && "data" in response) {
-					data = {
-						...data,
-						...response.data,
-					};
+				const existingOrganization = await adapter.findOrganizationBySlug(
+					ctx.body.slug,
+				);
+				if (existingOrganization) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+					);
 				}
-			}
-			member = await adapter.createMember(data);
-			if (options?.organizationHooks?.afterAddMember) {
-				await options?.organizationHooks.afterAddMember({
-					member,
-					user,
-					organization,
-				});
-			}
-			if (
-				options?.teams?.enabled &&
-				options.teams.defaultTeam?.enabled !== false
-			) {
-				let teamData = {
-					organizationId: organization.id,
-					name: `${organization.name}`,
-					createdAt: new Date(),
-				};
-				if (options?.organizationHooks?.beforeCreateTeam) {
-					const response = await options?.organizationHooks.beforeCreateTeam({
-						team: {
-							organizationId: organization.id,
-							name: `${organization.name}`,
-						},
-						user,
-						organization,
-					});
+
+				let {
+					keepCurrentActiveOrganization: _,
+					userId: __,
+					...orgData
+				} = ctx.body;
+
+				if (options?.organizationHooks?.beforeCreateOrganization) {
+					const response =
+						await options?.organizationHooks.beforeCreateOrganization({
+							organization: orgData,
+							user,
+						});
 					if (response && typeof response === "object" && "data" in response) {
-						teamData = {
-							...teamData,
+						orgData = {
+							...ctx.body,
 							...response.data,
 						};
 					}
 				}
-				const defaultTeam =
-					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
-						organization,
-						ctx,
-					)) || (await adapter.createTeam(teamData));
 
-				teamMember = await adapter.findOrCreateTeamMember({
-					teamId: defaultTeam.id,
-					userId: user.id,
-				});
+				const { organization, member, teamMember } = await runWithTransaction(
+					ctx.context.adapter,
+					async () => {
+						const organization = await adapter.createOrganization({
+							organization: {
+								...orgData,
+								createdAt: new Date(),
+							},
+						});
 
-				if (options?.organizationHooks?.afterCreateTeam) {
-					await options?.organizationHooks.afterCreateTeam({
-						team: defaultTeam,
+						let member:
+							| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
+							| undefined;
+						let teamMember: TeamMember | null = null;
+						let data = {
+							userId: user.id,
+							organizationId: organization.id,
+							role: ctx.context.orgOptions.creatorRole || "owner",
+						};
+						if (options?.organizationHooks?.beforeAddMember) {
+							const response = await options?.organizationHooks.beforeAddMember({
+								member: {
+									userId: user.id,
+									organizationId: organization.id,
+									role: ctx.context.orgOptions.creatorRole || "owner",
+								},
+								user,
+								organization,
+							});
+							if (response && typeof response === "object" && "data" in response) {
+								data = {
+									...data,
+									...response.data,
+								};
+							}
+						}
+						member = await adapter.createMember(data);
+
+						if (
+							options?.teams?.enabled &&
+							options.teams.defaultTeam?.enabled !== false
+						) {
+							let teamData = {
+								organizationId: organization.id,
+								name: `${organization.name}`,
+								createdAt: new Date(),
+							};
+							if (options?.organizationHooks?.beforeCreateTeam) {
+								const response = await options?.organizationHooks.beforeCreateTeam({
+									team: {
+										organizationId: organization.id,
+										name: `${organization.name}`,
+									},
+									user,
+									organization,
+								});
+								if (response && typeof response === "object" && "data" in response) {
+									teamData = {
+										...teamData,
+										...response.data,
+									};
+								}
+							}
+							const defaultTeam =
+								(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
+									organization,
+									ctx,
+								)) || (await adapter.createTeam(teamData));
+
+							teamMember = await adapter.findOrCreateTeamMember({
+								teamId: defaultTeam.id,
+								userId: user.id,
+							});
+
+							if (options?.organizationHooks?.afterCreateTeam) {
+								await options?.organizationHooks.afterCreateTeam({
+									team: defaultTeam,
+									user,
+									organization,
+								});
+							}
+						}
+
+						return { organization, member, teamMember };
+					},
+				);
+
+				if (options?.organizationHooks?.afterAddMember) {
+					await options?.organizationHooks.afterAddMember({
+						member,
 						user,
 						organization,
 					});
 				}
-			}
 
-			if (options?.organizationHooks?.afterCreateOrganization) {
-				await options?.organizationHooks.afterCreateOrganization({
-					organization,
-					user,
-					member,
+				if (options?.organizationHooks?.afterCreateOrganization) {
+					await options?.organizationHooks.afterCreateOrganization({
+						organization,
+						user,
+						member,
+					});
+				}
+
+				if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
+					await adapter.setActiveOrganization(
+						ctx.context.session.session.token,
+						organization.id,
+						ctx,
+					);
+				}
+
+				if (
+					teamMember &&
+					ctx.context.session &&
+					!ctx.body.keepCurrentActiveOrganization
+				) {
+					await adapter.setActiveTeam(
+						ctx.context.session.session.token,
+						teamMember.teamId,
+						ctx,
+					);
+				}
+
+				return ctx.json({
+					...organization,
+					metadata:
+						organization.metadata && typeof organization.metadata === "string"
+							? JSON.parse(organization.metadata)
+							: organization.metadata,
+					members: [member],
 				});
-			}
-
-			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
-				await adapter.setActiveOrganization(
-					ctx.context.session.session.token,
-					organization.id,
-					ctx,
-				);
-			}
-
-			if (
-				teamMember &&
-				ctx.context.session &&
-				!ctx.body.keepCurrentActiveOrganization
-			) {
-				await adapter.setActiveTeam(
-					ctx.context.session.session.token,
-					teamMember.teamId,
-					ctx,
-				);
-			}
-
-			return ctx.json({
-				...organization,
-				metadata:
-					organization.metadata && typeof organization.metadata === "string"
-						? JSON.parse(organization.metadata)
-						: organization.metadata,
-				members: [member],
 			});
 		},
 	);
