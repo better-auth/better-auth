@@ -518,15 +518,18 @@ async function createOpaqueAccessToken(
 }
 
 /**
- * Tear down the entire refresh-token family for a (client, user) pair, plus
- * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
- * Access tokens are deleted first so the parent rows' foreign-key children
- * do not block the refresh-row delete.
+ * Tear down the refresh-token family descending from the compromised grant,
+ * plus any opaque access tokens referencing those refresh rows, per RFC 9700 §4.14.2.
+ * When `authorizationCodeId` is present, invalidation is scoped to that specific grant
+ * family so other independent grants held by the same user and client remain intact.
+ * When `authorizationCodeId` is omitted, it falls back to scoping by (clientId, userId).
+ * JWT access tokens and unlinked access tokens are not revoked and remain valid until expiry.
+ * Access tokens are deleted first so foreign-key constraints do not block the refresh delete.
  *
  * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
  * with respect to each other. Between them, a concurrent rotation in a
  * different worker can `create` a fresh refresh row (and, immediately after,
- * an access-token row referencing it) for the same (client, user) pair,
+ * an access-token row referencing it) for the same grant or (client, user) pair,
  * leaving the family partially rebuilt and the new refresh row orphaned of
  * any deletion. Closing this window requires the same transactional adapter
  * contract tracked under FIXME(strict-family-invalidation) in
@@ -562,18 +565,6 @@ export async function invalidateRefreshFamily(
 				},
 			],
 		});
-	}
-	if (authorizationCodeId) {
-		try {
-			await ctx.context.adapter.deleteMany({
-				model: "oauthAccessToken",
-				where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
-			});
-		} catch (error) {
-			ctx.context.logger.error(
-				`Failed to delete access tokens for authorization code ${authorizationCodeId}: ${error}`,
-			);
-		}
 	}
 	await ctx.context.adapter.deleteMany({
 		model: "oauthRefreshToken",

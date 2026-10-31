@@ -2208,6 +2208,27 @@ describe("oauth token - refresh_token reuse interval", async () => {
 		const childRefreshB = await refresh(refreshB.data!.refresh_token!);
 		expect(childRefreshB.error).toBeNull();
 		expect(childRefreshB.data?.refresh_token).toBeDefined();
+
+		// Assert that Grant A's access tokens are removed while Grant B's remain
+		const remainingAccessTokens = await context.adapter.findMany<{
+			id: string;
+			refreshId?: string;
+		}>({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: oauthClient!.client_id }],
+		});
+		const remainingRefreshRows = await context.adapter.findMany<{ id: string }>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient!.client_id }],
+		});
+		const remainingRefreshIds = new Set(remainingRefreshRows.map((r) => r.id));
+
+		expect(remainingAccessTokens.length).toBeGreaterThan(0);
+		for (const accessToken of remainingAccessTokens) {
+			if (accessToken.refreshId) {
+				expect(remainingRefreshIds.has(accessToken.refreshId)).toBe(true);
+			}
+		}
 	});
 });
 
