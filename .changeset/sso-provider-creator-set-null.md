@@ -19,7 +19,7 @@ ALTER TABLE "ssoProvider" ADD CONSTRAINT "ssoProvider_userId_fkey"
 COMMIT;
 ```
 
-MySQL: find the constraint first. If the query returns no row, the database has no foreign key on this column (MySQL before 9.0 ignores a `REFERENCES` written inside a column definition, which is how `auth migrate` writes it); run only the `MODIFY`.
+MySQL: find the constraint first. If the query returns no row, the database has no foreign key on this column (MySQL before 9.0 ignores a `REFERENCES` written inside a column definition, which is how `auth migrate` writes it): skip the `DROP FOREIGN KEY`, and run the `UPDATE` before adding the constraint, because a `userId` whose user was already deleted would make `ADD CONSTRAINT` fail. In the `MODIFY`, keep the type `SHOW CREATE TABLE ssoProvider` shows for `userId` and drop only `NOT NULL`: `varchar(36)` is the default string id; with `advanced.database.generateId: "serial"` it is `int`.
 
 ```sql
 SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
@@ -27,11 +27,13 @@ SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE
     AND COLUMN_NAME = 'userId' AND REFERENCED_TABLE_NAME = 'user';
 ALTER TABLE `ssoProvider` DROP FOREIGN KEY `<name from the query>`;
 ALTER TABLE `ssoProvider` MODIFY `userId` varchar(36) NULL;
+UPDATE `ssoProvider` SET `userId` = NULL
+  WHERE `userId` IS NOT NULL AND `userId` NOT IN (SELECT `id` FROM `user`);
 ALTER TABLE `ssoProvider` ADD CONSTRAINT `ssoProvider_userId_fkey`
   FOREIGN KEY (`userId`) REFERENCES `user` (`id`) ON DELETE SET NULL;
 ```
 
-SQLite cannot alter a foreign key, so the table is rebuilt ([SQLite: making other kinds of table schema changes](https://www.sqlite.org/lang_altertable.html#otheralter)). This is the default column set; if `.schema ssoProvider` shows more (for example `domainVerified` with `domainVerification.enabled`), copy your own `CREATE TABLE` and change only the `userId` line.
+SQLite cannot alter a foreign key, so the table is rebuilt ([SQLite: making other kinds of table schema changes](https://www.sqlite.org/lang_altertable.html#otheralter)). Copy your own `CREATE TABLE` from `.schema ssoProvider`, rename it to `ssoProvider_new`, and change only the `userId` line: remove `not null` and make it `on delete set null`. The statement below is the default column set with string ids, as an example. With `generateId: "serial"`, `id` stays `integer not null primary key` and `userId` is `integer`; if `.schema` shows more columns (for example `domainVerified` with `domainVerification.enabled`), list them in the `INSERT` too.
 
 ```sql
 PRAGMA foreign_keys = OFF;
