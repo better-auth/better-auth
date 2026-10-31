@@ -252,6 +252,274 @@ describe("atomic concurrent enforcement", () => {
 	}
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11660
+ */
+describe("fixed window anchoring", () => {
+	for (const storage of ["memory", "database"] as const) {
+		describe(`${storage} storage`, async () => {
+			const { auth } = await getTestInstance(
+				{
+					rateLimit: {
+						enabled: true,
+						storage,
+						window: 60,
+						max: 20,
+					},
+				},
+				{ disableTestUser: true },
+			);
+
+			// The memory backend keeps a process-global store shared across test
+			// instances (see "atomic concurrent enforcement" above).
+			afterEach(() => {
+				vi.useRealTimers();
+			});
+
+			it("does not reject steady traffic below the limit", async () => {
+				vi.useFakeTimers();
+				// Start far past any prior window and give each storage its own
+				// key so cases never collide.
+				vi.advanceTimersByTime(10_000_000);
+				const ip = storage === "memory" ? "203.0.113.7" : "203.0.113.8";
+				// One request every 59s: never more than 2 in any 60s window.
+				for (let i = 0; i < 22; i++) {
+					const res = await auth.handler(
+						new Request("http://localhost:3000/api/auth/get-session", {
+							headers: { "x-forwarded-for": ip },
+						}),
+					);
+					expect(res.status).toBe(200);
+					vi.advanceTimersByTime(59_000);
+				}
+			});
+
+			it("reports a retry-after of at least 1 second", async () => {
+				vi.useFakeTimers();
+				vi.advanceTimersByTime(20_000_000);
+				const ip = storage === "memory" ? "203.0.113.9" : "203.0.113.10";
+				const request = () =>
+					new Request("http://localhost:3000/api/auth/sign-in/email", {
+						method: "POST",
+						headers: {
+							"content-type": "application/json",
+							"x-forwarded-for": ip,
+						},
+						body: JSON.stringify({ email: "none@example.com", password: "x" }),
+					});
+
+				// `/sign-in/email` uses a special 10s window with max 3.
+				for (let i = 0; i < 3; i++) {
+					expect((await auth.handler(request())).status).not.toBe(429);
+				}
+				const limited = await auth.handler(request());
+				expect(limited.status).toBe(429);
+				// A window that elapsed between deciding and responding must not
+				// produce `0` or a negative header.
+				expect(Number(limited.headers.get("x-retry-after"))).toBeGreaterThan(0);
+			});
+		});
+	}
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/11694
+ */
+describe("database rate-limit pruning with active long windows", async () => {
+	const backgroundTasks: Promise<unknown>[] = [];
+	const { client, auth, db, testUser } = await getTestInstance({
+		rateLimit: {
+			enabled: true,
+			storage: "database",
+			window: 10,
+			max: 10,
+			customRules: {
+				"/get-session": () => ({ window: 120, max: 10 }),
+			},
+		},
+		advanced: {
+			backgroundTasks: {
+				handler(promise) {
+					backgroundTasks.push(promise);
+				},
+			},
+		},
+	});
+
+	beforeEach(() => {
+		backgroundTasks.length = 0;
+	});
+
+	// Restore the clock even when an assertion fails, so a failure here cannot
+	// leak fake timers into the suites that follow.
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("keeps a long window's counter while that window is still open", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(30_000_000);
+		const longWindowKey = createRateLimitKey("127.0.0.1", "/get-session");
+
+		const getSession = () =>
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "127.0.0.1" },
+				}),
+			);
+
+		// Open the 120s window and use part of its budget. Both requests land in
+		// the same instant, so the window start stays at t0.
+		await getSession();
+		await getSession();
+		// Seed the short-window sign-in counter so the request below takes the
+		// window-elapsed reset path, which is what runs the cleanup sweep.
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		backgroundTasks.length = 0;
+
+		vi.advanceTimersByTime(70_000);
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const row = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: longWindowKey }],
+		});
+		expect(row).not.toBeNull();
+		expect(Number(row?.count)).toBe(2);
+	});
+
+	it("prunes a counter once its own window has elapsed", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(40_000_000);
+		// A counter whose own 120s window closed 1s ago, on a key no live
+		// request touches.
+		const expiredKey = createRateLimitKey("127.0.0.2", "/get-session");
+		const windowStart = Date.now() - 121_000;
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: expiredKey,
+				count: 4,
+				lastRequest: windowStart,
+				windowExpiresAt: windowStart + 120_000,
+			},
+		});
+		// The sweep runs on the window-elapsed reset path, so open a sign-in
+		// window here and let it lapse: a fresh sign-in counter never runs the
+		// sweep and would make this case depend on the rows left behind by the
+		// previous one.
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		vi.advanceTimersByTime(11_000);
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		await Promise.all(backgroundTasks);
+
+		const row = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: expiredKey }],
+		});
+		expect(row).toBeNull();
+	});
+
+	it("allows an under-limit request when a later rule returns a shorter window", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(50_000_000);
+		const { auth: shortRuleAuth } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+					storage: "database",
+					window: 120,
+					max: 10,
+					customRules: {
+						// Long for the first request, then short.
+						"/get-session": (req) =>
+							req.headers.get("x-short") === "1"
+								? { window: 10, max: 10 }
+								: { window: 120, max: 10 },
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const getSession = (short?: boolean) =>
+			shortRuleAuth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: {
+						"x-forwarded-for": "127.0.0.3",
+						...(short ? { "x-short": "1" } : {}),
+					},
+				}),
+			);
+
+		// Open a 120s window and use a single slot of the ten.
+		expect((await getSession()).status).toBe(200);
+		vi.advanceTimersByTime(70_000);
+		// The rule now reports 10s, but the stored 120s window is still open and
+		// there is budget left, so this must not be rejected.
+		expect((await getSession(true)).status).toBe(200);
+	});
+
+	it("allows an under-limit request when a later rule returns a longer window", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(60_000_000);
+		const { auth: longRuleAuth } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+					storage: "database",
+					window: 10,
+					max: 10,
+					customRules: {
+						// Short for the first request, then long.
+						"/get-session": (req) =>
+							req.headers.get("x-long") === "1"
+								? { window: 120, max: 10 }
+								: { window: 10, max: 10 },
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const getSession = (long?: boolean) =>
+			longRuleAuth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: {
+						"x-forwarded-for": "127.0.0.4",
+						...(long ? { "x-long": "1" } : {}),
+					},
+				}),
+			);
+
+		// Open a 10s window and use a single slot of the ten.
+		expect((await getSession()).status).toBe(200);
+		// Let the stored 10s deadline lapse, then switch to a 120s window.
+		vi.advanceTimersByTime(15_000);
+		// The long window measured from the same start is still open and nine
+		// slots of the ten remain, so this must not be rejected even though the
+		// stored 10s deadline already elapsed.
+		expect((await getSession(true)).status).toBe(200);
+		// A follow-up request in the same instant is counted by the same window.
+		expect((await getSession(true)).status).toBe(200);
+	});
+});
+
 describe("database rate-limit pruning", async () => {
 	const backgroundTasks: Promise<unknown>[] = [];
 	const { client, db, testUser } = await getTestInstance({
