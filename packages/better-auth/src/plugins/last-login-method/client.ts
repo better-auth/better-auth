@@ -13,10 +13,11 @@ export interface LastLoginMethodClientConfig {
 	cookieName?: string | undefined;
 	/**
 	 * Domain for the cookie. Required when using cross-subdomain cookies
-	 * so the client can properly clear the cookie set by the server.
+	 * or custom cookieAttributes domain so the client can properly clear
+	 * the cookie set by the server.
 	 *
 	 * Should match the `domain` value in your server's
-	 * `crossSubDomainCookies` configuration.
+	 * `crossSubDomainCookies` or `cookieAttributes` configuration.
 	 *
 	 * @example ".example.com"
 	 */

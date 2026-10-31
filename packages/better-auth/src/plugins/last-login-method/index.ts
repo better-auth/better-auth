@@ -3,6 +3,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import type { CookieOptions } from "better-call";
 import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
@@ -26,6 +27,11 @@ export interface LastLoginMethodOptions {
 	 * @default 2592000 (30 days)
 	 */
 	maxAge?: number | undefined;
+	/**
+	 * Custom cookie attributes to override the default inherited session cookie attributes.
+	 * Useful for setting a custom domain or sameSite policy without enabling global crossSubDomainCookies.
+	 */
+	cookieAttributes?: Partial<CookieOptions> | undefined;
 	/**
 	 * Custom method to resolve the last login method
 	 * @param ctx - The context from the hook
@@ -184,6 +190,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 									...ctx.context.authCookies.sessionToken.attributes,
 									maxAge: config.maxAge,
 									httpOnly: false, // Override: plugin cookies are not httpOnly
+									...config.cookieAttributes,
 								};
 
 								let isPermitted = true;

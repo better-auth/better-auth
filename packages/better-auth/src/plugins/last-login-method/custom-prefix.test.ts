@@ -177,4 +177,49 @@ describe("lastLoginMethod cookie attributes", () => {
 			);
 		});
 	});
+
+	describe("with custom cookieAttributes domain", () => {
+		test.override("options", {
+			baseURL: "https://api.example.com",
+		});
+		test.override("pluginOptions", {
+			cookieAttributes: {
+				domain: "example.com",
+			},
+		});
+
+		test("applies custom domain while keeping session cookie host-only", ({
+			cookies,
+		}) => {
+			const cookie = cookies.get(DEFAULT_COOKIE_NAME);
+
+			expect(scopeAttributes(cookie)).toMatchObject({
+				domain: "example.com",
+				samesite: "lax",
+				secure: true,
+			});
+			expect(scopeAttributes(cookies.session)?.domain).toBeUndefined();
+		});
+	});
+
+	describe("with custom cookieAttributes overriding sameSite", () => {
+		test.override("options", {
+			baseURL: "https://api.example.com",
+		});
+		test.override("pluginOptions", {
+			cookieAttributes: {
+				sameSite: "strict",
+			},
+		});
+
+		test("applies custom sameSite attribute", ({ cookies }) => {
+			const cookie = cookies.get(DEFAULT_COOKIE_NAME);
+
+			expect(scopeAttributes(cookie)).toMatchObject({
+				samesite: "strict",
+				secure: true,
+			});
+			expect(scopeAttributes(cookies.session)?.samesite).toBe("lax");
+		});
+	});
 });
