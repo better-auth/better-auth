@@ -373,8 +373,9 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 											},
 											userId: {
 												type: "string",
+												nullable: true,
 												description:
-													"ID of the user who registered the provider",
+													"ID of the user who registered the provider, or null once that user is deleted",
 											},
 											providerId: {
 												type: "string",

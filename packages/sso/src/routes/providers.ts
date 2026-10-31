@@ -61,7 +61,7 @@ interface SSOProviderRecord {
 	domain: string;
 	organizationId?: string | null;
 	domainVerified?: boolean;
-	userId: string;
+	userId: string | null;
 	oidcConfig?: string | null;
 	samlConfig?: string | null;
 }
@@ -70,7 +70,7 @@ type ProviderIdentitySnapshot = {
 	id?: string | undefined;
 	providerId: string;
 	issuer: string;
-	userId?: string | undefined;
+	userId?: string | null | undefined;
 	oidcConfig?: OIDCConfig | string | null | undefined;
 	samlConfig?: SAMLConfig | string | null | undefined;
 };

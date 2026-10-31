@@ -232,7 +232,8 @@ type BaseSSOProvider = {
 	issuer: string;
 	oidcConfig?: OIDCConfig | undefined;
 	samlConfig?: SAMLConfig | undefined;
-	userId: string;
+	/** `null` once the user who registered the provider is deleted. */
+	userId: string | null;
 	providerId: string;
 	organizationId?: string | undefined;
 	domain: string;
