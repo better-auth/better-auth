@@ -649,7 +649,7 @@ export const deleteUserCallback = createAuthEndpoint(
 		// get null.
 		const token =
 			await ctx.context.internalAdapter.consumeVerificationValue(id);
-		if (!token) {
+		if (!token || token.value !== session.user.id) {
 			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;

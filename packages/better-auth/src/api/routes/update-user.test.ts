@@ -1115,6 +1115,12 @@ describe("delete user", async () => {
 		);
 		expect(ownerResponse.status).toBe(200);
 
+		const deletedUserA = await db.findOne({
+			model: "user",
+			where: [{ field: "email", value: userAEmail }],
+		});
+		expect(deletedUserA).toBeNull();
+
 		// Token is now consumed
 		const storedTokenFinal = await db.findOne({
 			model: "verification",
