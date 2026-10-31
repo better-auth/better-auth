@@ -1,6 +1,11 @@
 import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { setCookieCache } from "../../cookies";
+import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { makeSignature } from "../../crypto";
 import type { TestCookie } from "./types";
+
+type TestSession = Parameters<typeof setCookieCache>[1];
 
 /**
  * Signs a cookie value using HMAC-SHA256
@@ -15,11 +20,11 @@ async function signCookieValue(value: string, secret: string): Promise<string> {
  */
 export async function createTestCookie(
 	ctx: AuthContext,
-	sessionToken: string,
+	session: TestSession,
 	domain?: string,
 ): Promise<TestCookie[]> {
 	const secret = ctx.secret;
-	const signedToken = await signCookieValue(sessionToken, secret);
+	const signedToken = await signCookieValue(session.session.token, secret);
 
 	const cookieName = ctx.authCookies.sessionToken.name;
 	const cookieAttrs = ctx.authCookies.sessionToken.attributes;
@@ -39,6 +44,39 @@ export async function createTestCookie(
 		},
 	];
 
+	if (ctx.options.session?.cookieCache?.enabled) {
+		const createCacheCookies = createAuthEndpoint.serverOnly(
+			{ method: "GET" },
+			async (endpointCtx) => {
+				await setCookieCache(endpointCtx, session, false);
+			},
+		);
+		const { headers } = await createCacheCookies({
+			context: ctx,
+			returnHeaders: true,
+		});
+		for (const [name, attributes] of parseSetCookieHeader(
+			headers.get("set-cookie") || "",
+		)) {
+			cookies.push({
+				name,
+				value: attributes.value,
+				domain:
+					domain || attributes.domain || getDomainFromBaseURL(ctx.baseURL),
+				path: attributes.path || "/",
+				httpOnly: attributes.httponly ?? false,
+				secure: attributes.secure ?? false,
+				sameSite: normalizeSameSite(attributes.samesite),
+				expires:
+					attributes["max-age"] !== undefined
+						? Math.floor(Date.now() / 1000) + attributes["max-age"]
+						: attributes.expires
+							? Math.floor(attributes.expires.getTime() / 1000)
+							: undefined,
+			});
+		}
+	}
+
 	return cookies;
 }
 
@@ -47,14 +85,15 @@ export async function createTestCookie(
  */
 export async function createCookieHeaders(
 	ctx: AuthContext,
-	sessionToken: string,
+	session: TestSession,
 ): Promise<Headers> {
-	const secret = ctx.secret;
-	const signedToken = await signCookieValue(sessionToken, secret);
-	const cookieName = ctx.authCookies.sessionToken.name;
+	const cookies = await createTestCookie(ctx, session);
 
 	const headers = new Headers();
-	headers.set("cookie", `${cookieName}=${signedToken}`);
+	headers.set(
+		"cookie",
+		cookies.map(({ name, value }) => `${name}=${value}`).join("; "),
+	);
 
 	return headers;
 }
