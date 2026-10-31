@@ -235,39 +235,34 @@ function createDatabaseStorageWrapper(
 			return consume(key, rule);
 		}
 
-		// Within the window and under the max: increment the count only, keeping the
-		// window's start and deadline so the window does not slide. The guard is
-		// the row's own deadline, not the current rule's window, so a shorter
-		// window returned later cannot reject a request that still has budget.
-		// Rows without the deadline fall back to the window-start comparison.
+		// Within the window and under the max: increment the count and keep the
+		// window anchored to its start on `lastRequest` so it does not slide.
+		// The set persists the effective deadline computed above in the same
+		// write, so a longer window that becomes active extends the stored one,
+		// a shorter window returned later never shortens it, and rows without a
+		// stored deadline (written before the column existed) are normalized on
+		// their first increment without a separate fallback write. Guarding on
+		// `lastRequest` keeps a concurrent window reset between the read and the
+		// write from being clobbered by a deadline set for the older window.
 		const incremented = await db.incrementOne<RateLimit>({
 			model,
 			where: [
 				{ field: "key", value: key },
-				{ field: "windowExpiresAt", operator: "gt", value: now },
+				{ field: "lastRequest", operator: "eq", value: data.lastRequest },
 				{ field: "count", operator: "lt", value: rule.max },
 			],
 			increment: { count: 1 },
+			set: {
+				windowExpiresAt,
+			},
 		});
 		if (incremented) {
 			return { allowed: true, retryAfter: null };
 		}
-		const incrementedLegacy = await db.incrementOne<RateLimit>({
-			model,
-			where: [
-				{ field: "key", value: key },
-				{ field: "windowExpiresAt", operator: "eq", value: null },
-				{ field: "lastRequest", operator: "gt", value: now - windowInMs },
-				{ field: "count", operator: "lt", value: rule.max },
-			],
-			increment: { count: 1 },
-		});
-		if (incrementedLegacy) {
-			return { allowed: true, retryAfter: null };
-		}
 
-		// Guard missed: the window rolled or the max was reached between the read
-		// and the write. Re-read and re-decide.
+		// Guard missed: the window rolled, the max was reached, or the row was
+		// reset or normalized by another request between the read and the write.
+		// Re-read and decide on the fresh snapshot.
 		const fresh = await readRow(key);
 		if (!fresh) {
 			return consume(key, rule);
@@ -279,10 +274,16 @@ function createDatabaseStorageWrapper(
 		if (now >= freshExpiresAt) {
 			return consume(key, rule);
 		}
-		return {
-			allowed: false,
-			retryAfter: getRetryAfter(freshExpiresAt),
-		};
+		if (fresh.count >= rule.max) {
+			return {
+				allowed: false,
+				retryAfter: getRetryAfter(freshExpiresAt),
+			};
+		}
+		// Under the max inside an open window: another request won the guard
+		// while this request's budget is still free, so re-run the decision from
+		// the top with the fresh snapshot rather than rejecting it.
+		return consume(key, rule);
 	};
 
 	// Best-effort sweep of rows whose own window has elapsed, to bound table
@@ -293,7 +294,7 @@ function createDatabaseStorageWrapper(
 	// counter that a longer window (including one returned by a `customRules`
 	// function) still has open. Rows written before that field existed fall
 	// back to the longest window this instance has observed, which is the
-	// previous behaviour for them.
+	// previous behavior for them.
 	const deleteExpiredRows = async (now: number) => {
 		const legacyCutoff = now - longestObservedWindow * 1000;
 		const prune = db
