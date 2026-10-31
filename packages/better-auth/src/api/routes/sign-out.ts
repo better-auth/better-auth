@@ -103,14 +103,18 @@ export const signOut = createAuthEndpoint(
 				if (!currentSession) {
 					return null;
 				}
+				const logoutProviders = ctx.context.socialProviders.filter(
+					(provider) => provider.createEndSessionURL,
+				);
+				// Skip the account read when no provider can build a logout URL.
+				if (logoutProviders.length === 0) {
+					return null;
+				}
 				const accounts = await ctx.context.internalAdapter.findAccounts(
 					currentSession.user.id,
 				);
 				const providersById = new Map(
-					ctx.context.socialProviders.map((provider) => [
-						provider.id,
-						provider,
-					]),
+					logoutProviders.map((provider) => [provider.id, provider]),
 				);
 				const logoutAccounts = accounts
 					.filter((account) =>

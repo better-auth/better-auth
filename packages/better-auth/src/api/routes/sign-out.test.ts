@@ -54,6 +54,32 @@ describe("sign-out", async () => {
 		expect(cookies.get("better-auth.session_token")?.["max-age"]).toBe(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12144
+	 */
+	it("should not read accounts when no provider can build a logout URL", async () => {
+		const instance = await getTestInstance();
+		const { headers } = await instance.signInWithTestUser();
+		const context = await instance.auth.$context;
+		// A runtime role without access to the account table rejects the read.
+		const findAccounts = vi
+			.spyOn(context.internalAdapter, "findAccounts")
+			.mockRejectedValue(new Error("permission denied for table account"));
+		const loggerError = vi.spyOn(context.logger, "error");
+
+		const res = await instance.client.signOut({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data).toEqual({
+			success: true,
+		});
+		expect(findAccounts).not.toHaveBeenCalled();
+		expect(loggerError).not.toHaveBeenCalled();
+	});
+
 	const baseOAuthConfig = {
 		providerId: "oidc-provider",
 		clientId: "test-client-id",
