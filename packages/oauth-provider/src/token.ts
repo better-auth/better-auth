@@ -538,13 +538,18 @@ export async function invalidateRefreshFamily(
 	ctx: GenericEndpointContext,
 	clientId: string,
 	userId: string,
+	authorizationCodeId?: string,
 ) {
+	const where = [
+		{ field: "clientId", value: clientId },
+		{ field: "userId", value: userId },
+	];
+	if (authorizationCodeId) {
+		where.push({ field: "authorizationCodeId", value: authorizationCodeId });
+	}
 	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
 		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
+		where,
 	});
 	if (refreshTokens.length) {
 		await ctx.context.adapter.deleteMany({
@@ -558,12 +563,21 @@ export async function invalidateRefreshFamily(
 			],
 		});
 	}
+	if (authorizationCodeId) {
+		try {
+			await ctx.context.adapter.deleteMany({
+				model: "oauthAccessToken",
+				where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
+			});
+		} catch (error) {
+			ctx.context.logger.error(
+				`Failed to delete access tokens for authorization code ${authorizationCodeId}: ${error}`,
+			);
+		}
+	}
 	await ctx.context.adapter.deleteMany({
 		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
+		where,
 	});
 }
 
@@ -1932,7 +1946,12 @@ async function handleRefreshTokenGrant(
 				error: "invalid_grant",
 			});
 		}
-		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
+		await invalidateRefreshFamily(
+			ctx,
+			client_id,
+			refreshToken.userId,
+			refreshToken.authorizationCodeId,
+		);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",

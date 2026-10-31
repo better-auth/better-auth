@@ -2151,6 +2151,64 @@ describe("oauth token - refresh_token reuse interval", async () => {
 			"invalid_grant",
 		);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12154
+	 */
+	it("scopes refresh-token reuse invalidation to the compromised grant family, preserving other grants for the same user and client", async () => {
+		oauthClient = await createOAuthClient();
+		const scopes = ["openid", "profile", "offline_access"];
+
+		// Grant A
+		const grantA = await authorizeForRefreshToken(scopes);
+		const refreshA = await refresh(grantA.refresh_token!);
+		expect(refreshA.error).toBeNull();
+		expect(refreshA.data?.refresh_token).toBeDefined();
+
+		// Grant B for the same user and client
+		const grantB = await authorizeForRefreshToken(scopes);
+		const refreshB = await refresh(grantB.refresh_token!);
+		expect(refreshB.error).toBeNull();
+		expect(refreshB.data?.refresh_token).toBeDefined();
+
+		// Expire Grant A's reuse window to trigger family invalidation
+		const context = await authorizationServer.$context;
+		const rotatedRows = await context.adapter.findMany<{
+			id: string;
+			rotationReplayResponse?: string | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "clientId", value: oauthClient!.client_id }],
+		});
+		for (const row of rotatedRows) {
+			if (row.rotationReplayResponse) {
+				await context.adapter.update({
+					model: "oauthRefreshToken",
+					where: [{ field: "id", value: row.id }],
+					update: {
+						rotationReplayExpiresAt: new Date(0),
+					},
+				});
+			}
+		}
+
+		// Replay Grant A's old refresh token -> triggers reuse detection & family invalidation
+		const replayA = await refresh(grantA.refresh_token!);
+		expect((replayA.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		// Grant A's child token is now invalidated
+		const childReplayA = await refresh(refreshA.data!.refresh_token!);
+		expect((childReplayA.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		// Grant B's child token MUST still work per RFC 9700 §4.14.2
+		const childRefreshB = await refresh(refreshB.data!.refresh_token!);
+		expect(childRefreshB.error).toBeNull();
+		expect(childRefreshB.data?.refresh_token).toBeDefined();
+	});
 });
 
 describe("oauth token - client_credentials", async () => {
