@@ -370,6 +370,17 @@ export const verifyEmail = createAuthEndpoint(
 				 */
 				case "change-email-verification": {
 					let activeSession = session;
+					const updatedUser =
+						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
+							email: parsed.updateTo,
+							emailVerified: true,
+						});
+					if (ctx.context.options.emailVerification?.afterEmailVerification) {
+						await ctx.context.options.emailVerification.afterEmailVerification(
+							updatedUser,
+							ctx.request,
+						);
+					}
 					if (!activeSession) {
 						const newSession = await ctx.context.internalAdapter.createSession(
 							user.user.id,
@@ -384,17 +395,6 @@ export const verifyEmail = createAuthEndpoint(
 							session: newSession,
 							user: user.user,
 						};
-					}
-					const updatedUser =
-						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
-							email: parsed.updateTo,
-							emailVerified: true,
-						});
-					if (ctx.context.options.emailVerification?.afterEmailVerification) {
-						await ctx.context.options.emailVerification.afterEmailVerification(
-							updatedUser,
-							ctx.request,
-						);
 					}
 					await setSessionCookie(ctx, {
 						session: activeSession.session,
@@ -420,21 +420,6 @@ export const verifyEmail = createAuthEndpoint(
 				 */
 				default: {
 					let activeSession = session;
-					if (!activeSession) {
-						const newSession = await ctx.context.internalAdapter.createSession(
-							user.user.id,
-						);
-						if (!newSession) {
-							throw APIError.from(
-								"INTERNAL_SERVER_ERROR",
-								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							);
-						}
-						activeSession = {
-							session: newSession,
-							user: user.user,
-						};
-					}
 					const updatedUser =
 						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 							email: parsed.updateTo,
@@ -458,6 +443,21 @@ export const verifyEmail = createAuthEndpoint(
 								safeCloneRequest(ctx.request),
 							),
 						);
+					}
+					if (!activeSession) {
+						const newSession = await ctx.context.internalAdapter.createSession(
+							user.user.id,
+						);
+						if (!newSession) {
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+							);
+						}
+						activeSession = {
+							session: newSession,
+							user: user.user,
+						};
 					}
 					await setSessionCookie(ctx, {
 						session: activeSession.session,
