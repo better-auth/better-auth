@@ -412,6 +412,15 @@ describe("database rate-limit pruning with active long windows", async () => {
 				windowExpiresAt: windowStart + 120_000,
 			},
 		});
+		// The sweep runs on the window-elapsed reset path, so open a sign-in
+		// window here and let it lapse: a fresh sign-in counter never runs the
+		// sweep and would make this case depend on the rows left behind by the
+		// previous one.
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		vi.advanceTimersByTime(11_000);
 
 		await client.signIn.email({
 			email: testUser.email,
@@ -463,6 +472,50 @@ describe("database rate-limit pruning with active long windows", async () => {
 		vi.advanceTimersByTime(70_000);
 		// The rule now reports 10s, but the stored 120s window is still open and
 		// there is budget left, so this must not be rejected.
+		expect((await getSession(true)).status).toBe(200);
+	});
+
+	it("allows an under-limit request when a later rule returns a longer window", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(60_000_000);
+		const { auth: longRuleAuth } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+					storage: "database",
+					window: 10,
+					max: 10,
+					customRules: {
+						// Short for the first request, then long.
+						"/get-session": (req) =>
+							req.headers.get("x-long") === "1"
+								? { window: 120, max: 10 }
+								: { window: 10, max: 10 },
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const getSession = (long?: boolean) =>
+			longRuleAuth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: {
+						"x-forwarded-for": "127.0.0.4",
+						...(long ? { "x-long": "1" } : {}),
+					},
+				}),
+			);
+
+		// Open a 10s window and use a single slot of the ten.
+		expect((await getSession()).status).toBe(200);
+		// Let the stored 10s deadline lapse, then switch to a 120s window.
+		vi.advanceTimersByTime(15_000);
+		// The long window measured from the same start is still open and nine
+		// slots of the ten remain, so this must not be rejected even though the
+		// stored 10s deadline already elapsed.
+		expect((await getSession(true)).status).toBe(200);
+		// A follow-up request in the same instant is counted by the same window.
 		expect((await getSession(true)).status).toBe(200);
 	});
 });
