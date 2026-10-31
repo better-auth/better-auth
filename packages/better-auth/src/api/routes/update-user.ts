@@ -633,14 +633,23 @@ export const deleteUserCallback = createAuthEndpoint(
 				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 			);
 		}
+		const id = `delete-account-${ctx.query.token}`;
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(id);
+		if (
+			!verification ||
+			verification.expiresAt < new Date() ||
+			verification.value !== session.user.id
+		) {
+			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
+		}
 		// Consume the single-use delete token atomically before any
 		// destructive work so concurrent callbacks with the same token can
 		// only delete the account once: the first caller wins, later racers
-		// get null. A wrong-owner token is still burned by this consume.
-		const token = await ctx.context.internalAdapter.consumeVerificationValue(
-			`delete-account-${ctx.query.token}`,
-		);
-		if (!token || token.value !== session.user.id) {
+		// get null.
+		const token =
+			await ctx.context.internalAdapter.consumeVerificationValue(id);
+		if (!token) {
 			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;

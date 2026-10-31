@@ -1039,6 +1039,89 @@ describe("delete user", async () => {
 		);
 		expect(response.status).toBe(404);
 	});
+
+	it("does not consume delete token when visited by a different signed-in user", async () => {
+		let token = "";
+		const { client, auth, db, sessionSetter } = await getTestInstance(
+			{
+				baseURL: "http://localhost:3000",
+				user: {
+					deleteUser: {
+						enabled: true,
+						async sendDeleteAccountVerification(data) {
+							token = data.token;
+						},
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		// 1. Create User A (the owner)
+		const userAEmail = `delete-owner-${Date.now()}@test.com`;
+		const password = "testPassword123";
+		await client.signUp.email({ email: userAEmail, password, name: "User A" });
+		const headersA = new Headers();
+		await client.signIn.email({
+			email: userAEmail,
+			password,
+			fetchOptions: { onSuccess: sessionSetter(headersA) },
+		});
+
+		// User A requests account deletion to get token
+		await client.deleteUser({ password, fetchOptions: { headers: headersA } });
+		expect(token.length).toBe(32);
+
+		// Verify token exists in verification storage
+		const tokenKey = `delete-account-${token}`;
+		const storedTokenBefore = await db.findOne({
+			model: "verification",
+			where: [{ field: "identifier", value: tokenKey }],
+		});
+		expect(storedTokenBefore).toBeDefined();
+
+		// 2. Create User B (different signed-in user / wrong owner)
+		const userBEmail = `delete-bystander-${Date.now()}@test.com`;
+		await client.signUp.email({ email: userBEmail, password, name: "User B" });
+		const headersB = new Headers();
+		await client.signIn.email({
+			email: userBEmail,
+			password,
+			fetchOptions: { onSuccess: sessionSetter(headersB) },
+		});
+
+		// User B visits User A's deletion callback link
+		const bystanderResponse = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/delete-user/callback?token=${token}`,
+				{ method: "GET", headers: { cookie: headersB.get("cookie") ?? "" } },
+			),
+		);
+		expect(bystanderResponse.status).toBe(404);
+
+		// Assert that the token was NOT consumed by the bystander's attempt
+		const storedTokenAfterBystander = await db.findOne({
+			model: "verification",
+			where: [{ field: "identifier", value: tokenKey }],
+		});
+		expect(storedTokenAfterBystander).toBeDefined();
+
+		// 3. User A (the actual owner) visits the deletion callback link
+		const ownerResponse = await auth.handler(
+			new Request(
+				`http://localhost:3000/api/auth/delete-user/callback?token=${token}`,
+				{ method: "GET", headers: { cookie: headersA.get("cookie") ?? "" } },
+			),
+		);
+		expect(ownerResponse.status).toBe(200);
+
+		// Token is now consumed
+		const storedTokenFinal = await db.findOne({
+			model: "verification",
+			where: [{ field: "identifier", value: tokenKey }],
+		});
+		expect(storedTokenFinal).toBeNull();
+	});
 });
 
 describe("change-email enumeration protection", async () => {
