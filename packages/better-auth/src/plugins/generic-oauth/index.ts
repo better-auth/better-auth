@@ -443,8 +443,17 @@ export const genericOAuth = <const ID extends string>(
 				},
 				async getUserInfo(tokens) {
 					const { expectedIdTokenNonce, ...oauthTokens } = tokens;
-					// Fail closed: when discovery published a JWKS, an id_token
-					// that cannot be verified must not become an identity source.
+					// Fail closed: when discovery published a JWKS or ID token verification
+					// is required, an id_token must be present and verified.
+					if (
+						(provider.idToken || c.requireIdTokenVerification) &&
+						!oauthTokens.idToken
+					) {
+						ctx.logger.error(
+							`Provider "${c.providerId}": token response is missing id_token, but id_token verification is required`,
+						);
+						return null;
+					}
 					if (oauthTokens.idToken && provider.idToken) {
 						const verified = await verifyProviderIdToken(
 							provider,
