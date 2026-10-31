@@ -30,9 +30,12 @@ describe("validateIssuerUrl (RFC 9207)", () => {
 		);
 	});
 
-	it("should convert HTTP to HTTPS for non-localhost", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11740
+	 */
+	it("should keep a configured HTTP issuer for non-localhost", () => {
 		expect(validateIssuerUrl("http://auth.example.com")).toBe(
-			"https://auth.example.com",
+			"http://auth.example.com",
 		);
 	});
 
@@ -81,7 +84,7 @@ describe("validateIssuerUrl (RFC 9207)", () => {
 	it("should handle complex invalid URL and sanitize", () => {
 		expect(
 			validateIssuerUrl("http://auth.example.com:8080/path?query=1#hash"),
-		).toBe("https://auth.example.com:8080/path");
+		).toBe("http://auth.example.com:8080/path");
 	});
 });
 

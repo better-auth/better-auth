@@ -46,14 +46,14 @@ function httpGet(
 test.describe("dynamic baseURL (HTTP)", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8447
+	 * @see https://github.com/better-auth/better-auth/issues/11740
 	 */
 	test("oauthProviderAuthServerMetadata resolves issuer from request host", async () => {
 		const { port, stop } = await setupServer(
 			{
 				baseURL: {
-					// Non-loopback hosts: `validateIssuerUrl` must upgrade the
-					// advertised issuer to https per RFC 9207, even though the
-					// configured protocol is http and the wire request is HTTP.
+					// The advertised issuer keeps the configured http protocol so
+					// it matches the `iss` claim in issued tokens.
 					// `:*` makes the ephemeral test port match the pattern.
 					allowedHosts: ["tenant-a.example.com:*", "tenant-b.example.com:*"],
 					protocol: "http",
@@ -73,8 +73,7 @@ test.describe("dynamic baseURL (HTTP)", () => {
 				);
 				expect(res.status).toBe(200);
 				const body = JSON.parse(res.body) as { issuer?: string };
-				// `validateIssuerUrl` forces https for non-loopback hostnames (RFC 9207).
-				expect(body.issuer).toBe(`https://${host}/api/auth`);
+				expect(body.issuer).toBe(`http://${host}/api/auth`);
 			}
 		} finally {
 			await stop();
