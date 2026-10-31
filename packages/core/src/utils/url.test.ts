@@ -4,7 +4,117 @@ import {
 	isReverseDomainPrivateUseRedirectUri,
 	SafeUrlSchema,
 } from "./redirect-uri";
-import { appendQueryParams, isSafeUrlScheme, normalizePathname } from "./url";
+import {
+	appendQueryParams,
+	appendURLPath,
+	appendURLSegments,
+	isSafeUrlScheme,
+	normalizePathname,
+} from "./url";
+
+describe("appendURLPath", () => {
+	it.for([
+		[
+			"https://Auth.Example.com:443/api/auth",
+			"https://Auth.Example.com:443/api/auth/token",
+		],
+		["https://example.com", "https://example.com/token"],
+		["https://example.com/auth/", "https://example.com/auth/token"],
+		["https://example.com/auth///", "https://example.com/auth///token"],
+		["/api//auth/", "/api//auth/token"],
+		["", "/token"],
+		["foo://host", "foo://host/token"],
+	] as const)("appends a path to %s", ([base, expected]) => {
+		expect(appendURLPath(base, "/token")).toBe(expected);
+	});
+
+	it("preserves URL spelling and existing components", () => {
+		expect(
+			appendURLPath(
+				"https://bücher.example/a^b/%2f?next=a%20b#",
+				"/사용자/a b/%zz",
+			),
+		).toBe("https://bücher.example/a^b/%2f/사용자/a b/%zz?next=a%20b#");
+	});
+
+	/** @see https://url.spec.whatwg.org/#url-path-segment */
+	it.for([
+		"/a/..//evil.example",
+		"/%2e//evil.example",
+	])("preserves dot segments without creating an authority: %s", (base) => {
+		const result = appendURLPath(base, "/callback");
+		expect(result).toBe(`${base}/callback`);
+		expect(new URL(result, "https://app.example").origin).toBe(
+			"https://app.example",
+		);
+	});
+
+	it("preserves dot segments in the appended path", () => {
+		expect(appendURLPath("/auth", "/a/../%2e%2e/b")).toBe(
+			"/auth/a/../%2e%2e/b",
+		);
+	});
+
+	it.for([
+		"//evil.example",
+		"/\\evil.example",
+		"mailto:user@example.com",
+		"not-a-url",
+		" https://example.com",
+		"https://example.com/a\nb",
+	])("rejects an invalid base: %j", (base) => {
+		expect(() => appendURLPath(base, "/token")).toThrow(TypeError);
+	});
+
+	it.for([
+		"",
+		"token",
+		"//evil.example",
+		"/token?x=1",
+		"/token#x",
+		"/a\\b",
+		"/a\tb",
+		"/a\u0000b",
+		"/a\u007fb",
+		"/a ",
+	])("rejects an invalid pathname: %j", (path) => {
+		expect(() => appendURLPath("/auth", path)).toThrow(TypeError);
+	});
+});
+
+describe("appendURLSegments", () => {
+	it("encodes raw values without changing path boundaries or existing components", () => {
+		expect(
+			appendURLSegments(
+				"/auth/?x=a%20b#step",
+				"callback",
+				"team/member?x#y%2F",
+			),
+		).toBe("/auth/callback/team%2Fmember%3Fx%23y%252F?x=a%20b#step");
+	});
+
+	/** @see https://www.rfc-editor.org/rfc/rfc3986.html#section-3.3 */
+	it("preserves path-segment punctuation", () => {
+		expect(appendURLSegments("/callback", "!$&'()*+,;=:@~")).toBe(
+			"/callback/!$&'()*+,;=:@~",
+		);
+	});
+
+	it("encodes Unicode, spaces, and backslashes", () => {
+		expect(appendURLSegments("/auth", "한글 a\\b")).toBe(
+			"/auth/%ED%95%9C%EA%B8%80%20a%5Cb",
+		);
+	});
+
+	it.for(["", ".", ".."])("rejects unrepresentable segments: %j", (segment) => {
+		expect(() => appendURLSegments("/auth", segment)).toThrow(TypeError);
+	});
+
+	/** @see https://tc39.es/ecma262/multipage/global-object.html#sec-encode */
+	it("rejects malformed Unicode", () => {
+		expect(() => appendURLSegments("/auth", "\ud800")).toThrow(URIError);
+	});
+});
 
 describe("appendQueryParams", () => {
 	it("should append query parameters before the fragment", () => {
@@ -75,6 +185,27 @@ describe("appendQueryParams", () => {
 				"Expected an absolute or root-relative URL",
 			);
 		}
+	});
+
+	it("preserves the callback spelling when adding query parameters", () => {
+		expect(
+			appendQueryParams(
+				"https://Auth.Example.com:443/a^b?x=1#",
+				new URLSearchParams({ x: "2" }),
+			),
+		).toBe("https://Auth.Example.com:443/a^b?x=1&x=2#");
+	});
+
+	/** @see https://url.spec.whatwg.org/#url-path-segment */
+	it("keeps a normalized double-slash path on the original origin", () => {
+		const result = appendQueryParams(
+			"/a/..//evil.example",
+			new URLSearchParams({ error: "denied" }),
+		);
+		expect(new URL(result, "https://app.example").origin).toBe(
+			"https://app.example",
+		);
+		expect(result).toBe("/a/..//evil.example?error=denied");
 	});
 });
 
