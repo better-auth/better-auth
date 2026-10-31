@@ -1070,3 +1070,121 @@ describe("Email Verification Secondary Storage", async () => {
 		expect(result.status).toBe(true);
 	});
 });
+
+describe("change-email verification failure", () => {
+	it("should not leave a session behind when the email update fails", async () => {
+		let capturedToken: string;
+		const { client, auth, db, signInWithUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail(data) {
+					capturedToken = data.token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				name: "Alice",
+				email: "alice@example.com",
+				password: "password1234",
+			},
+		});
+		const { headers: aliceHeaders } = await signInWithUser(
+			"alice@example.com",
+			"password1234",
+		);
+
+		// Alice requests a change to an address that is still free.
+		await auth.api.changeEmail({
+			body: { newEmail: "bob@example.com" },
+			headers: aliceHeaders,
+		});
+
+		// Before she confirms, Bob registers that address, so the email
+		// update in verifyEmail will violate the unique constraint.
+		await auth.api.signUpEmail({
+			body: {
+				name: "Bob",
+				email: "bob@example.com",
+				password: "password1234",
+			},
+		});
+
+		const sessionsBefore = await db.findMany({ model: "session" });
+
+		// Alice opens her confirmation link in a browser where she is signed
+		// out (no session cookie on the request).
+		const res = await client.verifyEmail({
+			query: { token: capturedToken },
+		});
+		expect(res.error).toBeTruthy();
+
+		const alice = await db.findOne<{ email: string }>({
+			model: "user",
+			where: [{ field: "email", value: "alice@example.com" }],
+		});
+		expect(alice?.email).toBe("alice@example.com");
+
+		const sessionsAfter = await db.findMany({ model: "session" });
+		expect(sessionsAfter.length).toBe(sessionsBefore.length);
+	});
+
+	it("should not create a session when afterEmailVerification throws", async () => {
+		let capturedToken: string;
+		const { client, auth, db, signInWithUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail(data) {
+					capturedToken = data.token;
+				},
+				afterEmailVerification: async () => {
+					throw new Error("hook failed");
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+		});
+
+		await auth.api.signUpEmail({
+			body: {
+				name: "Alice",
+				email: "alice@example.com",
+				password: "password1234",
+			},
+		});
+		const { headers: aliceHeaders } = await signInWithUser(
+			"alice@example.com",
+			"password1234",
+		);
+
+		await auth.api.changeEmail({
+			body: { newEmail: "alice-new@example.com" },
+			headers: aliceHeaders,
+		});
+
+		const sessionsBefore = await db.findMany({ model: "session" });
+
+		// Signed-out verification: the email update succeeds but the
+		// afterEmailVerification hook throws before any cookie is set.
+		const res = await client.verifyEmail({
+			query: { token: capturedToken },
+		});
+		expect(res.error).toBeTruthy();
+
+		const sessionsAfter = await db.findMany({ model: "session" });
+		expect(sessionsAfter.length).toBe(sessionsBefore.length);
+	});
+});
