@@ -105,7 +105,7 @@ describe("genericOAuth discoveryHeaders for JWKS fetch", () => {
 			});
 
 			expect(userInfo).not.toBeNull();
-			expect(userInfo?.data.id).toBe("user-123");
+			expect(userInfo?.data).toMatchObject({ id: "user-123" });
 			expect(userInfo?.user.email).toBe("user@example.com");
 			expect(jwksReceivedHeaders?.["x-gated-header"]).toBe(
 				"secret-bypass-token",
@@ -218,7 +218,7 @@ describe("genericOAuth discoveryHeaders for JWKS fetch", () => {
 			});
 
 			expect(userInfo).not.toBeNull();
-			expect(userInfo?.data.id).toBe("user-cross");
+			expect(userInfo?.data).toMatchObject({ id: "user-cross" });
 			expect(userInfo?.user.email).toBe("cross@example.com");
 			expect(externalJwksHeaders?.["x-confidential-secret"]).toBeUndefined();
 		} finally {
@@ -322,7 +322,7 @@ describe("genericOAuth discoveryHeaders for JWKS fetch", () => {
 			});
 
 			expect(userInfo).not.toBeNull();
-			expect(userInfo?.data.id).toBe("user-relative");
+			expect(userInfo?.data).toMatchObject({ id: "user-relative" });
 			expect(userInfo?.user.email).toBe("rel@example.com");
 			expect(jwksReceivedHeaders?.authorization).toBe("Bearer service-token");
 		} finally {
@@ -418,7 +418,7 @@ describe("genericOAuth discoveryHeaders for JWKS fetch", () => {
 			});
 
 			expect(userInfo).not.toBeNull();
-			expect(userInfo?.data.id).toBe("user-ungated");
+			expect(userInfo?.data).toMatchObject({ id: "user-ungated" });
 			expect(userInfo?.user.email).toBe("ungated@example.com");
 			expect(jwksReceivedHeaders).toBeDefined();
 		} finally {
