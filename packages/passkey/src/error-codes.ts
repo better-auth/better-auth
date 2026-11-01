@@ -18,4 +18,5 @@ export const PASSKEY_ERROR_CODES = defineErrorCodes({
 	RESOLVE_USER_REQUIRED:
 		"Passkey registration requires either an authenticated session or a resolveUser callback when requireSession is false",
 	RESOLVED_USER_INVALID: "Resolved user is invalid",
+	INVALID_USER_HANDLE: "Passkey user handle must be between 1 and 64 bytes",
 });

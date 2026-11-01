@@ -1545,3 +1545,84 @@ describe("passkey expirationTime per-request", () => {
 		expect(expiresAt).toBeGreaterThan(currentTime);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11555
+ */
+describe("passkey user handle", async () => {
+	const decodeUserHandle = (userID: string) =>
+		Buffer.from(userID, "base64url").toString("utf8");
+
+	it("generates a different random handle for every registration by default", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey()],
+		});
+		const { headers, user } = await signInWithTestUser();
+
+		const first = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+		const second = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+
+		expect(first.user.id).not.toBe(second.user.id);
+		expect(decodeUserHandle(first.user.id)).not.toBe(user.id);
+	});
+
+	it("uses the handle returned by getUserHandle for every registration", async () => {
+		const getUserHandle = vi.fn(
+			({ user }: { user: { id: string } }) => user.id,
+		);
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey({ registration: { getUserHandle } })],
+		});
+		const { headers, user } = await signInWithTestUser();
+
+		const first = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+		const second = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+
+		expect(decodeUserHandle(first.user.id)).toBe(user.id);
+		expect(second.user.id).toBe(first.user.id);
+		expect(getUserHandle).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ id: user.id }),
+			}),
+		);
+	});
+
+	it.each([
+		["an empty handle", ""],
+		// 33 two-byte characters are 66 bytes, so the limit counts bytes, not characters.
+		["a handle over 64 bytes", "é".repeat(33)],
+		// Callers without type checking can return a non-string value.
+		["a non-string handle", null as unknown as string],
+	])("rejects %s", async (_, handle) => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey({ registration: { getUserHandle: () => handle } })],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await expect(
+			auth.api.generatePasskeyRegistrationOptions({ headers }),
+		).rejects.toMatchObject({ body: { code: "INVALID_USER_HANDLE" } });
+	});
+
+	it("accepts a handle of exactly 64 bytes", async () => {
+		const handle = "a".repeat(64);
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey({ registration: { getUserHandle: () => handle } })],
+		});
+		const { headers } = await signInWithTestUser();
+
+		const options = await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+
+		expect(decodeUserHandle(options.user.id)).toBe(handle);
+	});
+});

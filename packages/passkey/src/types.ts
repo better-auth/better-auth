@@ -77,6 +77,23 @@ export interface PasskeyRegistrationOptions {
 	 * Optional WebAuthn extensions to include in registration options.
 	 */
 	extensions?: PasskeyExtensionsResolver | undefined;
+	/**
+	 * Return the WebAuthn user handle for the user registering a passkey.
+	 * The value is UTF-8 encoded and must be 1 to 64 bytes.
+	 *
+	 * Return a stable value, such as `user.id`, so password managers replace
+	 * a user's existing passkey instead of saving a second entry. The handle
+	 * must not contain personal information, such as an email or username.
+	 *
+	 * @default a random handle for every registration
+	 * @see https://www.w3.org/TR/webauthn-3/#dom-publickeycredentialuserentity-id
+	 */
+	getUserHandle?:
+		| ((args: {
+				ctx: GenericEndpointContext;
+				user: PasskeyRegistrationUser;
+		  }) => Awaitable<string>)
+		| undefined;
 }
 
 export interface PasskeyAuthenticationOptions {
