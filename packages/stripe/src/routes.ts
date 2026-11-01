@@ -1676,7 +1676,20 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 	);
 };
 
-const subscriptionSuccessQuerySchema = z.record(z.string(), z.any()).optional();
+const subscriptionSuccessQuerySchema = z
+	.object({
+		callbackURL: z.string().optional(),
+		checkoutSessionId: z.string().optional(),
+	})
+	.optional();
+
+/**
+ * Fill the Stripe "{CHECKOUT_SESSION_ID}" template variable in callbackURL.
+ * @see https://docs.stripe.com/payments/checkout/custom-success-page?payment-ui=stripe-hosted#modify-the-success-url
+ */
+function fillCheckoutSessionId(callbackURL: string, checkoutSessionId: string) {
+	return callbackURL.replaceAll("{CHECKOUT_SESSION_ID}", checkoutSessionId);
+}
 
 export const subscriptionSuccess = (options: StripeOptions) => {
 	const client = options.stripeClient;
@@ -1690,7 +1703,19 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 					operationId: "handleSubscriptionSuccess",
 				},
 			},
-			use: [originCheck((ctx) => ctx.query.callbackURL)],
+			use: [
+				originCheck((ctx) => {
+					const { callbackURL, checkoutSessionId } = ctx.query ?? {};
+					if (!callbackURL || !checkoutSessionId) {
+						return callbackURL;
+					}
+					// The handler redirects to the filled value, so check it too.
+					return [
+						callbackURL,
+						fillCheckoutSessionId(callbackURL, checkoutSessionId),
+					];
+				}),
+			],
 		},
 		async (ctx) => {
 			let callbackURL = ctx.query?.callbackURL || "/";
@@ -1706,12 +1731,8 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
-			/**
-			 * Replace the Stripe {CHECKOUT_SESSION_ID} template variable in callbackURL.
-			 * @see https://docs.stripe.com/payments/checkout/custom-success-page?payment-ui=stripe-hosted#modify-the-success-url
-			 */
-			callbackURL = callbackURL.replaceAll(
-				"{CHECKOUT_SESSION_ID}",
+			callbackURL = fillCheckoutSessionId(
+				callbackURL,
 				ctx.query.checkoutSessionId,
 			);
 

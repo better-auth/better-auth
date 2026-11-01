@@ -14,6 +14,8 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.15
+
 ## 1.7.14
 
 ## 1.7.13

@@ -182,5 +182,8 @@ it.each(["cognito-idp", "issuer-cognito-idp", "other-pool"])(
 		expect(mockedBetterFetch.mock.calls[0]?.[0]).toBe(
 			`${trustedIssuer}/.well-known/jwks.json`,
 		);
+		expect(mockedBetterFetch.mock.calls[0]?.[1]).toMatchObject({
+			redirect: "manual",
+		});
 	},
 );
