@@ -190,22 +190,21 @@ SET search_path TO auth;
 
 Reconnect after changing this default. Run `SHOW search_path` to verify the active value.
 
-## Additional Information
-
-PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
-
-If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
-
 ## Amazon Aurora DSQL
 
-Use the separate `@better-auth/dsql-adapter` package for Aurora DSQL. It reuses Kysely's PostgreSQL operations and Better Auth's schema planner, and keeps DSQL-specific retries, SQL compilation, and index jobs in the adapter package.
+[Aurora DSQL](https://aws.amazon.com/rds/aurora/dsql/) is PostgreSQL-compatible, but it behaves differently in two ways that matter to Better Auth: indexes are built asynchronously, and a transaction can be aborted at commit if it conflicts with another one. The `@better-auth/dsql-adapter` package takes care of both and uses the same queries and migrations as PostgreSQL for everything else.
 
-Install the adapter and [AWS node-postgres connector](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/SECTION_program-with-dsql-connector-for-node-postgres.html):
+### Installation
 
-```sh
-pnpm add @better-auth/dsql-adapter kysely pg @aws/aurora-dsql-node-postgres-connector @aws-sdk/credential-providers @aws-sdk/dsql-signer
-pnpm add -D @types/pg
+Install the adapter along with AWS's [node-postgres connector](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/SECTION_program-with-dsql-connector-for-node-postgres.html), which handles IAM authentication for you:
+
+```package-install
+@better-auth/dsql-adapter kysely pg @aws/aurora-dsql-node-postgres-connector
 ```
+
+If you're using TypeScript, also add `@types/pg` as a dev dependency.
+
+### Example Usage
 
 ```ts title="auth.ts"
 import { AuroraDSQLPool } from "@aws/aurora-dsql-node-postgres-connector";
@@ -220,23 +219,54 @@ const pool = new AuroraDSQLPool({
 });
 
 export const db = new Kysely({ dialect: dsqlDialect({ pool }) });
+
 export const auth = betterAuth({
   database: dsqlAdapter(db),
-  rateLimit: { storage: "database" },
+  rateLimit: {
+    storage: "database", // [!code highlight]
+  },
 });
 ```
 
-Grant the application's IAM role access to the cluster and map it to the database user. The connector generates fresh IAM tokens when opening connections. Keep the pool outside your Lambda request handler so warm invocations reuse connections. For a non-default schema, pass the same `{ schemaName: "auth" }` to `dsqlAdapter` and `getDsqlMigrations`.
+The connector creates a fresh IAM token each time it opens a connection, so there's no password to manage. Make sure the IAM role your app runs as is allowed to connect to the cluster and is mapped to the database user.
+
+Without `secondaryStorage`, rate limits are kept in memory by default. On Lambda every instance has its own memory, which is why the example stores them in the database instead.
+
+<Callout>
+  On Lambda, create the pool outside your handler so warm invocations reuse the same connections.
+</Callout>
+
+To use a schema other than `public`, pass `schemaName` to the adapter:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  database: dsqlAdapter(db, { schemaName: "auth" }),
+});
+```
 
 ### Migrations
 
-The adapter provides schema generation and migration hooks. Run migrations separately from application requests:
+Both CLI commands work with the DSQL adapter. Run migrations as a separate step, not from your request handlers.
 
-```sh
-npx auth@latest migrate
-```
+<Tabs items={["migrate", "generate"]}>
+  <Tab value="migrate">
+    ```package-install
+    npx auth@latest migrate
+    ```
+  </Tab>
 
-Use `npx auth@latest generate` to inspect the SQL without applying it. You can also run migrations programmatically:
+  <Tab value="generate">
+    ```package-install
+    npx auth@latest generate
+    ```
+  </Tab>
+</Tabs>
+
+DSQL builds indexes in the background, so the adapter creates them with `CREATE INDEX ASYNC` and waits for each one to finish before moving on. If a migration gets interrupted, just run it again. It waits for any index builds that are still running and creates the ones that are missing. If an index build fails, check `sys.jobs` and fix the index before you run the migration again.
+
+If you apply the SQL from `generate` yourself, run the statements one at a time. Each `CREATE INDEX ASYNC` returns a job ID, and you should wait for it with `CALL sys.wait_for_job('<job_id>');` before relying on the index. AWS covers this in more detail in [asynchronous indexes](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-create-index-async.html).
+
+You can also run migrations from code:
 
 ```ts title="migrate.ts"
 import { getDsqlMigrations } from "@better-auth/dsql-adapter/migration";
@@ -250,12 +280,26 @@ try {
 }
 ```
 
-Both paths use the adapter's migration plan, which reuses the shared planner and refuses unsafe changes and schema problems. The DSQL dialect creates indexes with `CREATE INDEX ASYNC` and waits for each job on the same connection. Rerunning a migration resumes matching pending jobs and restores missing field indexes. Failed or incompatible indexes require inspection in `sys.jobs` and correction before retrying.
+If you set `schemaName` on the adapter, pass the same option here as the third argument.
 
-When applying generated SQL yourself, execute statements individually and wait for each returned job ID using `CALL sys.wait_for_job('<job_id>');` before relying on the index. See [DSQL asynchronous indexes](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-create-index-async.html).
+### Transactions and retries
 
-### Transactions and storage
+DSQL uses optimistic concurrency. When two transactions touch the same rows, one of them is aborted at commit with a serialization error (`40001`). The adapter runs that transaction again, up to three times with a short backoff. Single queries outside a transaction are retried the same way. Any other error is thrown right away.
 
-The adapter enables transactions. A serialization abort (`40001`) retries the complete transaction, or a single adapter operation outside a transaction, up to three times with backoff. Other errors propagate immediately. Before hooks and transactional callbacks may repeat; send emails and call external services from after hooks, which run after a successful commit. Email signup uses the existing shared after-commit mechanism. Persistently contended operations can still fail after the retry limit.
+Since a transaction can run more than once, so can your `before` [database hooks](/docs/concepts/database#database-hooks) and anything else inside it. Send emails and call external services from `after` hooks, which only run once the transaction has committed. Better Auth already does this for sign-up verification emails.
 
-String IDs remain the default. Numeric IDs (`advanced.database.generateId: "serial"`) use `bigint` identity columns with `CACHE 1`; gaps are possible. Sessions and verification records use the database without secondary storage. Rate limiting defaults to process memory without secondary storage; set `rateLimit.storage: "database"` explicitly for Lambda deployments. This adapter currently rejects `secondaryStorage`: transaction retries cannot roll back external cache writes. DSQL's SQL and transaction limits still apply to custom schemas and plugins.
+<Callout type="warn">
+  `secondaryStorage` isn't supported with this adapter. A retried transaction can't undo the writes it already made to an external cache.
+</Callout>
+
+### IDs
+
+String IDs are used by default. If you set `advanced.database.generateId` to `"serial"`, the adapter creates `bigint` identity columns with `CACHE 1`, because DSQL doesn't support `serial`. Expect gaps between IDs.
+
+DSQL doesn't support every PostgreSQL feature. If you add your own tables or plugins, check AWS's [migration guide](https://docs.aws.amazon.com/aurora-dsql/latest/userguide/working-with-postgresql-compatibility-migration-guide.html) for what's different.
+
+## Additional Information
+
+PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
+
+If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

@@ -5,9 +5,9 @@ import type {
 } from "@better-auth/core/db/adapter";
 import { getAdapter } from "better-auth/db/adapter";
 import { getMigrations, UnsafeMigrationError } from "better-auth/db/migration";
-import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getConfig } from "../utils/get-config";
+import { prompt } from "../utils/prompt";
 import { migrateAction } from "./migrate";
 
 vi.mock("../utils/get-config", () => ({ getConfig: vi.fn() }));
@@ -20,7 +20,7 @@ vi.mock("@better-auth/telemetry", () => ({
 	createTelemetry: vi.fn(async () => ({ publish: vi.fn() })),
 	getTelemetryAuthConfig: vi.fn(async () => ({})),
 }));
-vi.mock("prompts", () => ({ default: vi.fn() }));
+vi.mock("../utils/prompt", () => ({ prompt: vi.fn() }));
 vi.mock("yocto-spinner", () => ({
 	default: () => {
 		const spinner = { start: () => spinner, stop: vi.fn() };
@@ -60,7 +60,7 @@ async function run(yes = true) {
 }
 
 describe("adapter-owned migrations", () => {
-	it("preserves the plan receiver when running adapter migrations", async () => {
+	it("calls runMigrations with the plan as this", async () => {
 		plan.runMigrations = vi.fn(async function (this: DBAdapterMigrationPlan) {
 			expect(this.toBeCreated[0]?.table).toBe("user");
 		});
@@ -107,7 +107,7 @@ describe("adapter-owned migrations", () => {
 		expect(process.exit).toHaveBeenCalledWith(1);
 	});
 
-	it("preserves unsafe-change refusal for adapter hooks", async () => {
+	it("still refuses unsafe changes from an adapter plan", async () => {
 		vi.mocked(adapter.getMigrations!).mockRejectedValue(
 			new UnsafeMigrationError("unsafe change"),
 		);
@@ -117,9 +117,9 @@ describe("adapter-owned migrations", () => {
 	});
 
 	it("asks for confirmation before executing the adapter plan", async () => {
-		vi.mocked(prompts).mockResolvedValue({ migrate: false });
+		vi.mocked(prompt).mockResolvedValue({ migrate: false });
 		await run(false);
-		expect(prompts).toHaveBeenCalledOnce();
+		expect(prompt).toHaveBeenCalledOnce();
 		expect(plan.runMigrations).not.toHaveBeenCalled();
 	});
 

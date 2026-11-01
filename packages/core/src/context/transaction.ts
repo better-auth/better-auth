@@ -99,6 +99,38 @@ export const runWithAdapter = async <
 };
 
 /**
+ * Wraps a transaction adapter so the first error that `isRetryableError`
+ * accepts is remembered, even if the caller catches it.
+ */
+const trackRetryableErrors = (
+	trx: StoredAdapter,
+	isRetryableError: (error: unknown) => boolean,
+	abort: { failed: boolean; error?: unknown },
+): StoredAdapter => {
+	const track = (error: unknown): never => {
+		if (!abort.failed && isRetryableError(error)) {
+			abort.failed = true;
+			abort.error = error;
+		}
+		throw error;
+	};
+	return new Proxy(trx, {
+		get(target, property, receiver) {
+			const value = Reflect.get(target, property, receiver);
+			if (typeof value !== "function") return value;
+			return (...args: unknown[]) => {
+				try {
+					const result = value.apply(target, args);
+					return result instanceof Promise ? result.catch(track) : result;
+				} catch (error) {
+					return track(error);
+				}
+			};
+		},
+	});
+};
+
+/**
  * Runs `fn` in a transaction on `adapter`, joining the current one when
  * already inside it, then runs the hooks queued with
  * `queueAfterTransactionHook` once the work commits.
@@ -139,14 +171,43 @@ export const runWithTransaction = async <
 					// An adapter may run this callback again after a transient abort.
 					// Only the hooks of the attempt that commits may run.
 					pendingHooks = [];
-					return als.run(
-						{
-							adapter: trx as unknown as StoredAdapter,
-							pendingHooks,
-							isTransactionActive: true,
-						},
-						fn,
-					);
+					const { isRetryableError } = adapter;
+					if (!isRetryableError) {
+						return als.run(
+							{
+								adapter: trx as unknown as StoredAdapter,
+								pendingHooks,
+								isTransactionActive: true,
+							},
+							fn,
+						);
+					}
+					// Code inside `fn` may catch a database error and throw its own, or
+					// carry on without it. If the adapter marked that error as
+					// retryable, the transaction is already aborted, so the adapter
+					// gets the original error back and can run the callback again.
+					const abort: { failed: boolean; error?: unknown } = {
+						failed: false,
+					};
+					let value: Awaited<R>;
+					try {
+						value = await als.run(
+							{
+								adapter: trackRetryableErrors(
+									trx as unknown as StoredAdapter,
+									isRetryableError,
+									abort,
+								),
+								pendingHooks,
+								isTransactionActive: true,
+							},
+							fn,
+						);
+					} catch (e) {
+						throw abort.failed ? abort.error : e;
+					}
+					if (abort.failed) throw abort.error;
+					return value;
 				});
 			} catch (e) {
 				hasError = true;

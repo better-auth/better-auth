@@ -43,7 +43,12 @@ function columnForDsql(column: ColumnDefinitionNode): ColumnDefinitionNode {
 	return column;
 }
 
-/** @internal Compose the PostgreSQL dialect without changing shared SQL code. */
+/**
+ * Wraps the PostgreSQL dialect: indexes are created with `CREATE INDEX ASYNC`
+ * and waited on, and integer identity columns become `bigint` with `CACHE 1`.
+ *
+ * @internal
+ */
 export function withDsqlDialect(postgres: Dialect): Dialect {
 	return {
 		createAdapter() {
@@ -115,7 +120,11 @@ export function withDsqlDialect(postgres: Dialect): Dialect {
 	};
 }
 
-/** @internal System results must bypass user Kysely result plugins. */
+/**
+ * Runs on the raw connection so user Kysely plugins can't change the result.
+ *
+ * @internal
+ */
 export async function waitForIndex(
 	jobId: string,
 	execute: DatabaseConnection["executeQuery"],
@@ -131,12 +140,19 @@ export async function waitForIndex(
 		);
 }
 
-/** PostgreSQL dialect with DSQL async indexes and numeric identity definitions. */
+/**
+ * PostgreSQL dialect for Aurora DSQL.
+ */
 export function dsqlDialect(config: PostgresDialectConfig): Dialect {
 	return withDsqlDialect(new PostgresDialect(config));
 }
 
-/** @internal Reject a connection that would silently use synchronous DDL. */
+/**
+ * Throws if the Kysely instance wasn't created with `dsqlDialect`, since
+ * plain `CREATE INDEX` fails on DSQL.
+ *
+ * @internal
+ */
 export function assertDsqlDatabase(
 	db: Pick<Kysely<unknown>, "getExecutor">,
 ): void {

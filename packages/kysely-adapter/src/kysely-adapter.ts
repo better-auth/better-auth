@@ -35,10 +35,6 @@ import { findSchemaProblems } from "./schema-check";
 import type { KyselyDatabaseType } from "./types";
 
 export interface KyselyAdapterConfig {
-	/** Identify confirmed aborts for an adapter-owned transaction retry implementation. */
-	isRetryableError?: DBAdapter["isRetryableError"];
-	/** Supply a migration plan for an adapter package reusing Kysely operations. */
-	getMigrations?: DBAdapter["getMigrations"];
 	/**
 	 * Database type.
 	 *
@@ -76,6 +72,16 @@ export interface KyselyAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Passed to the adapter factory. Useful when another package wraps this
+	 * adapter and retries aborted transactions.
+	 */
+	isRetryableError?: DBAdapter["isRetryableError"];
+	/**
+	 * Passed to the adapter factory, so `npx auth migrate` uses this plan
+	 * instead of the built-in one.
+	 */
+	getMigrations?: DBAdapter["getMigrations"];
 }
 
 export const kyselyAdapter = (

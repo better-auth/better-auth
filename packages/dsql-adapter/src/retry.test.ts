@@ -90,7 +90,7 @@ function harness(input?: {
 
 /** @see https://github.com/better-auth/better-auth/issues/12088 */
 describe("Aurora DSQL retries", () => {
-	it("owns its configuration and retains the Kysely schema check", async () => {
+	it("keeps the Kysely schema check registered", async () => {
 		const { db, events, dialect } = harness({ failures: 0 });
 		const plain = new Kysely({ dialect });
 		try {
@@ -114,7 +114,7 @@ describe("Aurora DSQL retries", () => {
 				increment: async () => 1,
 			};
 			expect(() => dsqlAdapter(db)({ ...options, secondaryStorage })).toThrow(
-				"without secondaryStorage",
+				"doesn't support secondaryStorage",
 			);
 		} finally {
 			await db.destroy();
@@ -122,7 +122,7 @@ describe("Aurora DSQL retries", () => {
 		}
 	});
 
-	it("retries an autocommit single-use consume after an aborted statement", async () => {
+	it("retries consumeOne outside a transaction", async () => {
 		const { adapter, events, db } = harness();
 		try {
 			const row = await adapter.consumeOne({
@@ -169,7 +169,7 @@ describe("Aurora DSQL retries", () => {
 		},
 	);
 
-	it("stops after three retries and preserves the last database error", async () => {
+	it("gives up after three retries and throws the last error", async () => {
 		const { adapter, events, db, connection } = harness({ failures: 100 });
 		const failures = Array.from({ length: 4 }, (_, attempt) =>
 			Object.assign(new Error(`abort ${attempt}`), { code: "40001" }),
@@ -219,7 +219,7 @@ describe("Aurora DSQL retries", () => {
 		},
 	);
 
-	it("discards hooks when all transaction attempts fail", async () => {
+	it("drops queued after hooks when every attempt fails", async () => {
 		const { adapter, failure, db } = harness({ commit: true, failures: 100 });
 		const hook = vi.fn(async () => {});
 		try {

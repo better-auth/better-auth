@@ -68,7 +68,7 @@ function createTestAdapter({
 }
 
 describe("createAdapterFactory model identity", () => {
-	it("exposes adapter-owned error classification and migrations", async () => {
+	it("passes isRetryableError and getMigrations through", async () => {
 		const isRetryableError = vi.fn((error: unknown) => error === "retry");
 		const getMigrations = vi.fn(async () => ({
 			toBeCreated: [],

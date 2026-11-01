@@ -29,12 +29,14 @@ import {
 } from "./sqlite-introspector";
 import type { DatabaseIndexIntrospector, KyselyAdapterProfile } from "./types";
 
-/** Configure D1's dialect and metadata without automatic database detection. */
+/**
+ * Sets up D1 explicitly, instead of relying on the binding being detected.
+ */
 export function createD1Profile(database: D1Database): KyselyAdapterProfile {
 	return {
 		dialect: new D1SqliteDialect({ database }),
 		type: "sqlite",
-		// D1 supports batch(), but has no interactive transactions.
+		// D1 has no interactive transactions; only its batch() API.
 		transaction: false,
 		introspectIndexes: createD1IndexIntrospector(database),
 	};

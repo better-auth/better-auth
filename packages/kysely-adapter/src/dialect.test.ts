@@ -77,7 +77,7 @@ describe("createKyselyAdapter transaction detection", () => {
 		expect(result.transaction).toBe(true);
 	});
 
-	it("uses the same D1 capabilities through explicit and legacy configuration", async () => {
+	it("sets up D1 the same way from a profile or a raw binding", async () => {
 		const database = fakeD1Database();
 		const profile = createD1Profile(database);
 		const explicit = await createKyselyAdapter({ database: profile });
@@ -90,7 +90,7 @@ describe("createKyselyAdapter transaction detection", () => {
 		await legacy.kysely?.destroy();
 	});
 
-	it("retains profile introspection when an existing Kysely instance is supplied", async () => {
+	it("keeps introspectIndexes when a Kysely instance is passed", async () => {
 		const db = new Kysely<unknown>({ dialect: postgresDialect() });
 		const introspectIndexes = vi.fn(async () => []);
 		const result = await createKyselyAdapter({

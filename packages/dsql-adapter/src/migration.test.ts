@@ -115,7 +115,7 @@ describe("Aurora DSQL migrations", () => {
 		}
 	});
 
-	it("provides the CLI migration hook without applying the plan during preparation", async () => {
+	it("doesn't change the database while planning", async () => {
 		const { dialect, queries } = postgres();
 		const db = new Kysely<unknown>({ dialect: withDsqlDialect(dialect) });
 		try {
@@ -143,7 +143,7 @@ describe("Aurora DSQL migrations", () => {
 		const db = new Kysely({ dialect: withDsqlDialect(dialect), plugins });
 		return { db, dialect, queries };
 	}
-	it("uses a separate dialect without changing PostgreSQL migrations", async () => {
+	it("leaves plain PostgreSQL migrations unchanged", async () => {
 		const { db, dialect } = fixture();
 		const plan = await getDsqlMigrations({}, db);
 		const ddl = await plan.compileMigrations();
@@ -211,7 +211,7 @@ describe("Aurora DSQL migrations", () => {
 		}
 		expect(jobs).toBeGreaterThan(1);
 	});
-	it("refuses unsuccessful jobs", async () => {
+	it("throws when an index job fails", async () => {
 		const { db } = fixture({ jobSucceeded: false });
 		await expect(
 			(await getDsqlMigrations({}, db)).runMigrations(),

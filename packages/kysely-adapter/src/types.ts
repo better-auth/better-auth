@@ -9,14 +9,24 @@ export type {
 
 export type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
 
-/** Explicit dialect capabilities, accepted by Better Auth's database configuration. */
+/**
+ * A Kysely dialect and what the adapter needs to know about it. You can pass
+ * it to Better Auth as `database`.
+ */
 export interface KyselyAdapterProfile {
-	/** A dialect owned by the database package. */
 	dialect: Dialect;
-	/** SQL semantics shared with the existing Kysely operations and migration planner. */
+	/**
+	 * The SQL family the dialect uses.
+	 */
 	type: KyselyDatabaseType;
-	/** Whether the dialect supports interactive transactions. Defaults to false. */
+	/**
+	 * Whether the dialect supports interactive transactions.
+	 *
+	 * @default false
+	 */
 	transaction?: boolean;
-	/** Optional index metadata for dialects whose catalogs differ from the SQL family. */
+	/**
+	 * Reads index metadata, if the database's catalog doesn't match `type`.
+	 */
 	introspectIndexes?: DatabaseIndexIntrospector;
 }

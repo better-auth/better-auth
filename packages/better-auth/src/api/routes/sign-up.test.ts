@@ -1522,47 +1522,48 @@ describe("sign-up side effects run after the commit", async () => {
 
 /** @see https://github.com/better-auth/better-auth/issues/12088 */
 describe("adapter retry error classification", () => {
+	const body = {
+		name: "Retry",
+		email: "retry@example.test",
+		password: "test-password-123",
+	};
+
+	async function failUserCreation(error: Error) {
+		const { auth } = await getTestInstance({}, { disableTestUser: true });
+		const ctx = await auth.$context;
+		const transaction = ctx.adapter.transaction;
+		vi.spyOn(ctx.adapter, "transaction").mockImplementation((callback) =>
+			transaction((trx) =>
+				callback({
+					...trx,
+					create: async () => {
+						throw error;
+					},
+				}),
+			),
+		);
+		return { auth, ctx };
+	}
+
 	it.each(["40001", "CUSTOM_RETRY"])(
-		"preserves adapter-classified %s errors",
+		"rethrows the original %s error when the adapter marks it as retryable",
 		async (code) => {
-			const { auth } = await getTestInstance({}, { disableTestUser: true });
-			const ctx = await auth.$context;
 			const error = Object.assign(new Error("serialization abort"), {
 				code,
 			});
-			ctx.adapter.isRetryableError = (candidate) =>
-				typeof candidate === "object" &&
-				candidate !== null &&
-				"code" in candidate &&
-				candidate.code === code;
-			vi.spyOn(ctx.internalAdapter, "createUser").mockRejectedValueOnce(error);
-			await expect(
-				auth.api.signUpEmail({
-					body: {
-						name: "Retry",
-						email: "retry@example.test",
-						password: "test-password-123",
-					},
-				}),
-			).rejects.toBe(error);
+			const { auth, ctx } = await failUserCreation(error);
+			ctx.adapter.isRetryableError = (candidate) => candidate === error;
+			await expect(auth.api.signUpEmail({ body })).rejects.toBe(error);
 		},
 	);
 
-	it("keeps ordinary database errors wrapped without retry classification", async () => {
-		const { auth } = await getTestInstance({}, { disableTestUser: true });
-		const ctx = await auth.$context;
+	it("still wraps ordinary database errors", async () => {
 		const error = Object.assign(new Error("unclassified database error"), {
 			code: "40001",
 		});
-		vi.spyOn(ctx.internalAdapter, "createUser").mockRejectedValueOnce(error);
-		await expect(
-			auth.api.signUpEmail({
-				body: {
-					name: "Retry",
-					email: "retry@example.test",
-					password: "test-password-123",
-				},
-			}),
-		).rejects.toMatchObject({ body: { code: "FAILED_TO_CREATE_USER" } });
+		const { auth } = await failUserCreation(error);
+		await expect(auth.api.signUpEmail({ body })).rejects.toMatchObject({
+			body: { code: "FAILED_TO_CREATE_USER" },
+		});
 	});
 });

@@ -378,3 +378,122 @@ describe("runWithTransaction", () => {
 		expect(transactionAdapterCount).toBe(harnesses.length);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12088
+ */
+describe("runWithTransaction with isRetryableError", () => {
+	function createRetryingAdapter(createError: unknown) {
+		const conflict = Object.assign(new Error("serialization failure"), {
+			code: "40001",
+		});
+		let creates = 0;
+		const transactionAdapter = {
+			create: async () => {
+				creates += 1;
+				if (creates === 1) throw createError ?? conflict;
+				return { id: "user-1" };
+			},
+		} as unknown as DBTransactionAdapter;
+		const retried: unknown[] = [];
+		const adapter = {
+			isRetryableError: (error: unknown) => error === conflict,
+			transaction: async <R>(
+				callback: (trx: DBTransactionAdapter) => Promise<R>,
+			) => {
+				for (;;) {
+					try {
+						return await callback(transactionAdapter);
+					} catch (error) {
+						if (error !== conflict) throw error;
+						retried.push(error);
+					}
+				}
+			},
+		} as unknown as DBAdapter;
+		const create = async () =>
+			(await getCurrentAdapter(adapter)).create({
+				model: "user",
+				data: {},
+			});
+		return { adapter, conflict, retried, create };
+	}
+
+	it("gives the adapter the original error when fn throws its own", async () => {
+		const { adapter, conflict, retried, create } =
+			createRetryingAdapter(undefined);
+
+		const user = await runWithTransaction(adapter, async () => {
+			try {
+				return await create();
+			} catch {
+				throw new Error("Failed to create user");
+			}
+		});
+
+		expect(user).toEqual({ id: "user-1" });
+		expect(retried).toEqual([conflict]);
+	});
+
+	it("gives the adapter the original error when fn swallows it", async () => {
+		const { adapter, conflict, retried, create } =
+			createRetryingAdapter(undefined);
+		let attempts = 0;
+
+		const user = await runWithTransaction(adapter, async () => {
+			attempts += 1;
+			try {
+				return await create();
+			} catch {
+				return null;
+			}
+		});
+
+		expect(attempts).toBe(2);
+		expect(user).toEqual({ id: "user-1" });
+		expect(retried).toEqual([conflict]);
+	});
+
+	it("catches errors swallowed inside a nested call", async () => {
+		const { adapter, conflict, retried, create } =
+			createRetryingAdapter(undefined);
+
+		await runWithTransaction(adapter, async () => {
+			await runWithTransaction(adapter, async () => {
+				try {
+					await create();
+				} catch {
+					// Carry on without the user, like a route with a fallback.
+				}
+			});
+		});
+
+		expect(retried).toEqual([conflict]);
+	});
+
+	it("leaves other errors to fn", async () => {
+		const other = new Error("duplicate key");
+		const { adapter, retried, create } = createRetryingAdapter(other);
+
+		const user = await runWithTransaction(adapter, async () => {
+			try {
+				return await create();
+			} catch (error) {
+				return error;
+			}
+		});
+
+		expect(user).toBe(other);
+		expect(retried).toEqual([]);
+	});
+
+	it("keeps the plain transaction adapter without isRetryableError", async () => {
+		const { adapter, transactionAdapter } = createTransactionHarness();
+
+		const current = await runWithTransaction(adapter, () =>
+			getCurrentAdapter(adapter),
+		);
+
+		expect(current).toBe(transactionAdapter);
+	});
+});

@@ -1,6 +1,10 @@
 const MAX_DSQL_RETRIES = 3;
 
-/** @internal Classify only confirmed SQL serialization aborts. */
+/**
+ * DSQL reports a conflicting transaction as a serialization failure.
+ *
+ * @internal
+ */
 export function isSerializationFailure(error: unknown): boolean {
 	return (
 		typeof error === "object" &&
@@ -10,7 +14,10 @@ export function isSerializationFailure(error: unknown): boolean {
 	);
 }
 
-/** Retry only confirmed serialization aborts, never uncertain commit outcomes. */
+/**
+ * Retries serialization failures up to three times. Anything else, including
+ * a commit whose outcome is unknown, is thrown right away.
+ */
 export async function withDsqlRetry<T>(
 	operation: () => Promise<T>,
 ): Promise<T> {

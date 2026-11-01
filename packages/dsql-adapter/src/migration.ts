@@ -16,7 +16,11 @@ import type { DsqlAdapterConfig } from "./adapter";
 import { assertDsqlDatabase, waitForIndex } from "./dialect";
 import { withDsqlRetry } from "./retry";
 
-/** Plan DSQL migrations using the shared PostgreSQL planner and adapter-local recovery. */
+/**
+ * Plans migrations with the PostgreSQL planner. Before planning, it waits for
+ * index builds left over from an interrupted run, and it recreates field
+ * indexes that are missing.
+ */
 export async function getDsqlMigrations<DB>(
 	options: BetterAuthOptions,
 	connection: Kysely<DB>,

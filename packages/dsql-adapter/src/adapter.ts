@@ -9,13 +9,18 @@ import type { Kysely } from "kysely";
 import { assertDsqlDatabase } from "./dialect";
 import { isSerializationFailure, withDsqlRetry } from "./retry";
 
-/** Configuration owned by the DSQL adapter, independent of shared auth options. */
+/**
+ * Options for `dsqlAdapter`.
+ */
 export interface DsqlAdapterConfig {
 	schemaName?: string | undefined;
 	debugLogs?: DBAdapterDebugLogOption | undefined;
 }
 
-/** Reuse Kysely's PostgreSQL operations with bounded DSQL transaction retries. */
+/**
+ * Aurora DSQL adapter. It uses the Kysely adapter's PostgreSQL support and
+ * retries operations that DSQL aborts with a serialization error.
+ */
 export function dsqlAdapter<DB>(
 	database: Kysely<DB>,
 	config: DsqlAdapterConfig = {},
@@ -27,7 +32,7 @@ export function dsqlAdapter<DB>(
 	return (options: BetterAuthOptions): DBAdapter => {
 		if (options.secondaryStorage) {
 			throw new BetterAuthError(
-				"The Aurora DSQL adapter requires database-backed storage without secondaryStorage; transaction retries cannot roll back external writes.",
+				"The Aurora DSQL adapter doesn't support secondaryStorage. A retried transaction can't undo writes it already made there.",
 			);
 		}
 		const adapter = kyselyAdapter(db, {
@@ -41,7 +46,8 @@ export function dsqlAdapter<DB>(
 			},
 		})(options);
 		const raw = { ...adapter };
-		// Keep the registered schema-check identity of the Kysely adapter.
+		// Patch the adapter in place. The schema check is registered against this
+		// exact object, so a copy wouldn't be checked.
 		Object.assign(adapter, {
 			id: "dsql",
 			create: (data) => withDsqlRetry(() => raw.create(data)),
