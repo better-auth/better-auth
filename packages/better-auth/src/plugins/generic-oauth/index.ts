@@ -262,8 +262,21 @@ export const genericOAuth = <const ID extends string>(
 							);
 							continue;
 						}
+						let jwksHeaders: Record<string, string> | undefined;
+						if (c.discoveryHeaders) {
+							try {
+								if (jwksUrl.origin === new URL(c.discoveryUrl).origin) {
+									jwksHeaders = c.discoveryHeaders;
+								}
+							} catch {
+								// Malformed discoveryUrl, do not forward headers
+							}
+						}
 						idTokenConfig = {
-							jwks: createRemoteJWKSet(jwksUrl),
+							jwks: createRemoteJWKSet(
+								jwksUrl,
+								jwksHeaders ? { headers: jwksHeaders } : undefined,
+							),
 							issuer: discovered.issuer,
 							audience: c.clientId,
 							algorithms: isOidc ? signingAlgs : undefined,
