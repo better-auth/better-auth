@@ -81,14 +81,9 @@ export async function createTestCookie(
 }
 
 /**
- * Creates a Headers object with the cookie header set
+ * Creates a Headers object from existing cookies
  */
-export async function createCookieHeaders(
-	ctx: AuthContext,
-	session: TestSession,
-): Promise<Headers> {
-	const cookies = await createTestCookie(ctx, session);
-
+export function createCookieHeaders(cookies: readonly TestCookie[]): Headers {
 	const headers = new Headers();
 	headers.set(
 		"cookie",

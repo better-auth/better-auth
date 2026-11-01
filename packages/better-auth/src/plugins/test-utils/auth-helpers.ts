@@ -3,38 +3,38 @@ import { sessionSchema } from "@better-auth/core/db";
 import { createCookieHeaders, createTestCookie } from "./cookie-builder";
 import type { LoginResult, TestAuthOptions, TestCookie } from "./types";
 
-async function createSession(ctx: AuthContext, opts: TestAuthOptions) {
-	// Find the user first to avoid creating orphaned sessions.
-	const user = await ctx.internalAdapter.findUserById(opts.userId);
+async function getUser(ctx: AuthContext, userId: string) {
+	const user = await ctx.internalAdapter.findUserById(userId);
 	if (!user) {
-		throw new Error(`User not found: ${opts.userId}`);
+		throw new Error(`User not found: ${userId}`);
 	}
+	return user;
+}
 
+function createSession(ctx: AuthContext, opts: TestAuthOptions) {
 	const additionalFields = Object.fromEntries(
 		Object.entries(opts.session ?? {}).filter(
 			([key]) => !Object.hasOwn(sessionSchema.shape, key),
 		),
 	);
 	// Override additional-field defaults without replacing generated session fields.
-	const session = await ctx.internalAdapter.createSession(
+	return ctx.internalAdapter.createSession(
 		opts.userId,
 		false,
 		additionalFields,
 		true,
 	);
-	return { session, user };
 }
 
 export function createLogin(ctx: AuthContext) {
 	return async (opts: TestAuthOptions): Promise<LoginResult> => {
-		// Create a session for the user
-		const { session, user } = await createSession(ctx, opts);
+		// Find the user first to avoid creating orphaned sessions.
+		const user = await getUser(ctx, opts.userId);
+		const session = await createSession(ctx, opts);
 
 		// Create cookies array for browser/e2e testing
 		const cookies = await createTestCookie(ctx, { session, user });
-		const headers = new Headers({
-			cookie: cookies.map(({ name, value }) => `${name}=${value}`).join("; "),
-		});
+		const headers = createCookieHeaders(cookies);
 
 		return {
 			session,
@@ -48,8 +48,10 @@ export function createLogin(ctx: AuthContext) {
 
 export function createGetAuthHeaders(ctx: AuthContext) {
 	return async (opts: TestAuthOptions): Promise<Headers> => {
-		const { session, user } = await createSession(ctx, opts);
-		return createCookieHeaders(ctx, { session, user });
+		const user = await getUser(ctx, opts.userId);
+		const session = await createSession(ctx, opts);
+		const cookies = await createTestCookie(ctx, { session, user });
+		return createCookieHeaders(cookies);
 	};
 }
 
@@ -57,7 +59,8 @@ export function createGetCookies(ctx: AuthContext) {
 	return async (
 		opts: TestAuthOptions & { domain?: string },
 	): Promise<TestCookie[]> => {
-		const { session, user } = await createSession(ctx, opts);
+		const user = await getUser(ctx, opts.userId);
+		const session = await createSession(ctx, opts);
 		return createTestCookie(ctx, { session, user }, opts.domain);
 	};
 }
