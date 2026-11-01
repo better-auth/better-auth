@@ -236,6 +236,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		pathMethods: {
 			"/organization/get-full-organization": "GET",
 			"/organization/list-user-teams": "GET",
+			"/organization/list-roles": "GET",
+			"/organization/get-role": "GET",
 		},
 		atomListeners: [
 			{
@@ -271,6 +273,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				matcher(path) {
 					return (
 						path.includes("/organization/update-member-role") ||
+						path.includes("/organization/update-team-member-role") ||
 						path.startsWith("/organization/set-active")
 					);
 				},
@@ -280,6 +283,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				matcher(path) {
 					return (
 						path.includes("/organization/update-member-role") ||
+						path.includes("/organization/update-team-member-role") ||
 						path.startsWith("/organization/set-active")
 					);
 				},
