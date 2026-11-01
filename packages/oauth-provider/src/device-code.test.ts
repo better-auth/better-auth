@@ -1094,6 +1094,29 @@ describe("oauth-provider device-code grant", async () => {
 		expect(idToken.aud).toBe(clientId);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11933
+	 */
+	it("never writes null to the list fields of a device code", async () => {
+		const adapter = (await auth.$context).adapter;
+		const create = vi.spyOn(adapter, "create");
+		const increment = vi.spyOn(adapter, "incrementOne");
+		const clientId = await createDeviceClient();
+		await approvedDeviceCode(clientId);
+
+		const written = [
+			...create.mock.calls.map(([args]) => args.data),
+			...increment.mock.calls.map(([args]) => args.set),
+		] as Record<string, unknown>[];
+		expect(written.length).toBeGreaterThanOrEqual(2);
+		for (const fields of written) {
+			expect(fields.amr).not.toBeNull();
+			expect(fields.resources).not.toBeNull();
+		}
+		create.mockRestore();
+		increment.mockRestore();
+	});
+
 	it("returns invalid_request when device-code polling omits client_id", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);
