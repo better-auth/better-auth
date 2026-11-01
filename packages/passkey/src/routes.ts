@@ -485,7 +485,8 @@ export const generatePasskeyAuthenticationOptions = (
 			);
 			const options = await generateAuthenticationOptions({
 				rpID: getRpID(opts, baseURLString),
-				userVerification: "preferred",
+				userVerification:
+					opts.authenticatorSelection?.userVerification ?? "preferred",
 				extensions: authenticationExtensions,
 				...(userPasskeys.length
 					? {
@@ -655,7 +656,8 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 					expectedChallenge,
 					expectedOrigin: origin,
 					expectedRPID: getRpID(options, verifyBaseURL),
-					requireUserVerification: false,
+					requireUserVerification:
+						options.authenticatorSelection?.userVerification === "required",
 				});
 				const { verified, registrationInfo } = verification;
 				if (!verified || !registrationInfo) {
@@ -906,7 +908,8 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 							",",
 						) as AuthenticatorTransportFuture[],
 					},
-					requireUserVerification: false,
+					requireUserVerification:
+						options.authenticatorSelection?.userVerification === "required",
 				});
 				const { verified } = verification;
 				if (!verified)
