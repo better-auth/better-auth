@@ -316,6 +316,10 @@ export const genericOAuth = <const ID extends string>(
 			}
 
 			const accountSubject = c.accountSubject;
+			const resolvedEndSessionEndpoint =
+				!c.disableProviderLogout && endSessionEndpoint
+					? endSessionEndpoint
+					: undefined;
 			const provider: OAuthProvider = {
 				id: c.providerId,
 				name: c.name ?? c.providerId,
@@ -335,45 +339,46 @@ export const genericOAuth = <const ID extends string>(
 				requiresIdTokenNonce:
 					idTokenConfig !== undefined && c.disableIdTokenNonceBinding !== true,
 				allowIdpInitiated: c.allowIdpInitiated,
-				async createEndSessionURL(data: {
-					idToken?: string | null | undefined;
-					postLogoutRedirectURI?: string | undefined;
-					state?: string | undefined;
-				}) {
-					if (c.disableProviderLogout) {
-						return null;
-					}
-					if (!endSessionEndpoint) {
-						return null;
-					}
-					let url: URL;
-					try {
-						url = new URL(endSessionEndpoint);
-					} catch {
-						return null;
-					}
-					if (data.idToken) {
-						url.searchParams.set("id_token_hint", data.idToken);
-					}
-					const configuredRedirectURI =
-						data.postLogoutRedirectURI ?? c.postLogoutRedirectURI;
-					const postLogoutRedirectURI = configuredRedirectURI
-						? new URL(configuredRedirectURI, ctx.baseURL).toString()
-						: undefined;
-					if (postLogoutRedirectURI) {
-						url.searchParams.set(
-							"post_logout_redirect_uri",
-							postLogoutRedirectURI,
-						);
-						url.searchParams.set("client_id", c.clientId);
-						if (data.state) {
-							url.searchParams.set("state", data.state);
+				// Omit createEndSessionURL unless an end-session endpoint is known and
+				// provider logout is enabled. signOut gates the account read on method
+				// presence, and discovery already resolved endSessionEndpoint above.
+				...(resolvedEndSessionEndpoint
+					? {
+							async createEndSessionURL(data: {
+								idToken?: string | null | undefined;
+								postLogoutRedirectURI?: string | undefined;
+								state?: string | undefined;
+							}) {
+								let url: URL;
+								try {
+									url = new URL(resolvedEndSessionEndpoint);
+								} catch {
+									return null;
+								}
+								if (data.idToken) {
+									url.searchParams.set("id_token_hint", data.idToken);
+								}
+								const configuredRedirectURI =
+									data.postLogoutRedirectURI ?? c.postLogoutRedirectURI;
+								const postLogoutRedirectURI = configuredRedirectURI
+									? new URL(configuredRedirectURI, ctx.baseURL).toString()
+									: undefined;
+								if (postLogoutRedirectURI) {
+									url.searchParams.set(
+										"post_logout_redirect_uri",
+										postLogoutRedirectURI,
+									);
+									url.searchParams.set("client_id", c.clientId);
+									if (data.state) {
+										url.searchParams.set("state", data.state);
+									}
+								} else if (!data.idToken) {
+									url.searchParams.set("client_id", c.clientId);
+								}
+								return url;
+							},
 						}
-					} else if (!data.idToken) {
-						url.searchParams.set("client_id", c.clientId);
-					}
-					return url;
-				},
+					: {}),
 				createAuthorizationURL(data) {
 					if (!authorizationUrl) {
 						throw APIError.from(

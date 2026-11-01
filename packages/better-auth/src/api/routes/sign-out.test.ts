@@ -162,6 +162,62 @@ describe("sign-out", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/12156#discussion_r4430807001
+	 */
+	it("should not read accounts for generic OAuth without endSessionEndpoint", async () => {
+		const { client, headers, auth } = await setupGenericOAuthSignOut();
+		const context = await auth.$context;
+		expect(
+			context.socialProviders.find((p) => p.id === baseOAuthConfig.providerId)
+				?.createEndSessionURL,
+		).toBeUndefined();
+		const findAccounts = vi
+			.spyOn(context.internalAdapter, "findAccounts")
+			.mockRejectedValue(new Error("permission denied for table account"));
+		const loggerError = vi.spyOn(context.logger, "error");
+
+		const res = await client.signOut({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data).toEqual({
+			success: true,
+		});
+		expect(findAccounts).not.toHaveBeenCalled();
+		expect(loggerError).not.toHaveBeenCalled();
+	});
+
+	it("should not read accounts when generic OAuth provider logout is disabled", async () => {
+		const { client, headers, auth } = await setupGenericOAuthSignOut({
+			endSessionEndpoint: "https://idp.example.com/logout",
+			disableProviderLogout: true,
+		});
+		const context = await auth.$context;
+		expect(
+			context.socialProviders.find((p) => p.id === baseOAuthConfig.providerId)
+				?.createEndSessionURL,
+		).toBeUndefined();
+		const findAccounts = vi
+			.spyOn(context.internalAdapter, "findAccounts")
+			.mockRejectedValue(new Error("permission denied for table account"));
+		const loggerError = vi.spyOn(context.logger, "error");
+
+		const res = await client.signOut({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data).toEqual({
+			success: true,
+		});
+		expect(findAccounts).not.toHaveBeenCalled();
+		expect(loggerError).not.toHaveBeenCalled();
+	});
+
 	it("should keep local-only sign out when provider logout is disabled", async () => {
 		const { client, headers } = await setupGenericOAuthSignOut({
 			endSessionEndpoint: "https://idp.example.com/logout",

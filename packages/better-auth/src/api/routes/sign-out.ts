@@ -106,7 +106,7 @@ export const signOut = createAuthEndpoint(
 				const logoutProviders = ctx.context.socialProviders.filter(
 					(provider) => provider.createEndSessionURL,
 				);
-				// Skip the account read when no provider can build a logout URL.
+				// Skip the account read when no provider exposes createEndSessionURL.
 				if (logoutProviders.length === 0) {
 					return null;
 				}
