@@ -2,6 +2,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
+import { withLock } from "../concurrency";
 import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
@@ -54,30 +55,6 @@ const baseOrganizationSchema = z.object({
 		})
 		.optional(),
 });
-
-const userOrgCreationLocks = new Map<string, Promise<void>>();
-
-async function withUserOrgCreationLock<T>(
-	userId: string,
-	fn: () => Promise<T>,
-): Promise<T> {
-	const previous = userOrgCreationLocks.get(userId) ?? Promise.resolve();
-	let release!: () => void;
-	const current = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	const next = previous.catch(() => {}).then(() => current);
-	userOrgCreationLocks.set(userId, next);
-	await previous.catch(() => {});
-	try {
-		return await fn();
-	} finally {
-		release();
-		if (userOrgCreationLocks.get(userId) === next) {
-			userOrgCreationLocks.delete(userId);
-		}
-	}
-}
 
 export const createOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -156,7 +133,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
 
-			return withUserOrgCreationLock(user.id, async () => {
+			return withLock(`org-create:${user.id}`, async () => {
 				const userOrganizations = await adapter.listOrganizations(user.id);
 				const hasReachedOrgLimit =
 					typeof options.organizationLimit === "number"
