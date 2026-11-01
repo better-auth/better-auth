@@ -905,4 +905,88 @@ describe("invitation teamId must belong to the invitation's organization", async
 		expect(list.data).toBeNull();
 		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
 	});
+
+	it("should not exceed membershipLimit under concurrent accept-invitation requests", async () => {
+		const { client, signInWithTestUser, signInWithUser, cookieSetter, auth } =
+			await getTestInstance(
+				{
+					plugins: [
+						organization({
+							membershipLimit: 2,
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [organizationClient()] } },
+			);
+
+		const { headers: adminHeaders } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Membership Limit Org",
+			slug: "membership-limit-org",
+			fetchOptions: {
+				headers: adminHeaders,
+				onSuccess: cookieSetter(adminHeaders),
+			},
+		});
+
+		const user1Email = "concurrent-invitee-1@example.com";
+		const user2Email = "concurrent-invitee-2@example.com";
+		const password = "password123";
+
+		const invite1 = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: user1Email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		const invite2 = await client.organization.inviteMember({
+			organizationId: org.data!.id,
+			email: user2Email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		await client.signUp.email({
+			email: user1Email,
+			password,
+			name: "Invitee 1",
+		});
+		const { headers: user1Headers } = await signInWithUser(user1Email, password);
+
+		await client.signUp.email({
+			email: user2Email,
+			password,
+			name: "Invitee 2",
+		});
+		const { headers: user2Headers } = await signInWithUser(user2Email, password);
+
+		const results = await Promise.allSettled([
+			client.organization.acceptInvitation({
+				invitationId: String(invite1.data!.id!),
+				fetchOptions: { headers: user1Headers },
+			}),
+			client.organization.acceptInvitation({
+				invitationId: String(invite2.data!.id!),
+				fetchOptions: { headers: user2Headers },
+			}),
+		]);
+
+		const fulfilled = results.filter(
+			(r) => r.status === "fulfilled" && (r.value as any).data,
+		);
+		const rejectedOrError = results.filter(
+			(r) =>
+				r.status === "rejected" ||
+				(r.status === "fulfilled" && (r.value as any).error),
+		);
+
+		expect(fulfilled).toHaveLength(1);
+		expect(rejectedOrError).toHaveLength(1);
+
+		const fullOrg = await auth.api.getFullOrganization({
+			headers: adminHeaders,
+		});
+		expect(fullOrg?.members).toHaveLength(2);
+	});
 });

@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
+import { withLock } from "../concurrency";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db/to-zod";
@@ -135,127 +136,129 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				}
 			}
 
-			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
-			const count = await adapter.countMembers({ organizationId: orgId });
+			return withLock(`org-member:${orgId}`, async () => {
+				const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
+				const count = await adapter.countMembers({ organizationId: orgId });
 
-			const organization = await adapter.findOrganizationById(orgId);
-			if (!organization) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				);
-			}
-
-			const limit =
-				typeof membershipLimit === "number"
-					? membershipLimit
-					: await membershipLimit(user, organization);
-
-			if (count >= limit) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
-				);
-			}
-
-			const {
-				role: _,
-				userId: __,
-				organizationId: ___,
-				...additionalFields
-			} = ctx.body;
-
-			let memberData = {
-				organizationId: orgId,
-				userId: user.id,
-				role: parseRoles(ctx.body.role),
-				createdAt: new Date(),
-				...(additionalFields ? additionalFields : {}),
-			};
-
-			// Run beforeAddMember hook
-			if (option?.organizationHooks?.beforeAddMember) {
-				const response = await option?.organizationHooks.beforeAddMember({
-					member: {
-						userId: user.id,
-						organizationId: orgId,
-						role: parseRoles(ctx.body.role as string | string[]),
-						...additionalFields,
-					},
-					user,
-					organization,
-				});
-				if (response && typeof response === "object" && "data" in response) {
-					memberData = {
-						...memberData,
-						...response.data,
-					};
+				const organization = await adapter.findOrganizationById(orgId);
+				if (!organization) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
 				}
-			}
 
-			const createdMember = await adapter.createMember(memberData);
+				const limit =
+					typeof membershipLimit === "number"
+						? membershipLimit
+						: await membershipLimit(user, organization);
 
-			if (teamId) {
-				try {
-					if (
-						typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
-						"undefined"
-					) {
-						const configuredMaximumMembersPerTeam =
-							ctx.context.orgOptions.teams.maximumMembersPerTeam;
-						let maximumMembersPerTeam: number;
-						if (typeof configuredMaximumMembersPerTeam === "function") {
-							if (!session) {
-								throw APIError.fromStatus("UNAUTHORIZED");
-							}
-							maximumMembersPerTeam = await configuredMaximumMembersPerTeam({
-								teamId,
-								session: {
-									user: session.user,
-									session: session.session,
-								},
-								organizationId: orgId,
-							});
-						} else {
-							maximumMembersPerTeam = configuredMaximumMembersPerTeam;
-						}
-						const result = await adapter.addTeamMemberWithLimit({
+				if (count >= limit) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+					);
+				}
+
+				const {
+					role: _,
+					userId: __,
+					organizationId: ___,
+					...additionalFields
+				} = ctx.body;
+
+				let memberData = {
+					organizationId: orgId,
+					userId: user.id,
+					role: parseRoles(ctx.body.role),
+					createdAt: new Date(),
+					...(additionalFields ? additionalFields : {}),
+				};
+
+				// Run beforeAddMember hook
+				if (option?.organizationHooks?.beforeAddMember) {
+					const response = await option?.organizationHooks.beforeAddMember({
+						member: {
 							userId: user.id,
-							teamId,
-							maximumMembersPerTeam,
-						});
-						if (result.status === "limitReached") {
-							throw APIError.from(
-								"FORBIDDEN",
-								ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
-							);
-						}
-					} else {
-						await adapter.findOrCreateTeamMember({
-							userId: user.id,
-							teamId,
-						});
-					}
-				} catch (error) {
-					await adapter.deleteMember({
-						memberId: createdMember.id,
-						organizationId: orgId,
-						userId: user.id,
+							organizationId: orgId,
+							role: parseRoles(ctx.body.role as string | string[]),
+							...additionalFields,
+						},
+						user,
+						organization,
 					});
-					throw error;
+					if (response && typeof response === "object" && "data" in response) {
+						memberData = {
+							...memberData,
+							...response.data,
+						};
+					}
 				}
-			}
 
-			// Run afterAddMember hook
-			if (option?.organizationHooks?.afterAddMember) {
-				await option?.organizationHooks.afterAddMember({
-					member: createdMember,
-					user,
-					organization,
-				});
-			}
+				const createdMember = await adapter.createMember(memberData);
 
-			return ctx.json(createdMember);
+				if (teamId) {
+					try {
+						if (
+							typeof ctx.context.orgOptions.teams?.maximumMembersPerTeam !==
+							"undefined"
+						) {
+							const configuredMaximumMembersPerTeam =
+								ctx.context.orgOptions.teams.maximumMembersPerTeam;
+							let maximumMembersPerTeam: number;
+							if (typeof configuredMaximumMembersPerTeam === "function") {
+								if (!session) {
+									throw APIError.fromStatus("UNAUTHORIZED");
+								}
+								maximumMembersPerTeam = await configuredMaximumMembersPerTeam({
+									teamId,
+									session: {
+										user: session.user,
+										session: session.session,
+									},
+									organizationId: orgId,
+								});
+							} else {
+								maximumMembersPerTeam = configuredMaximumMembersPerTeam;
+							}
+							const result = await adapter.addTeamMemberWithLimit({
+								userId: user.id,
+								teamId,
+								maximumMembersPerTeam,
+							});
+							if (result.status === "limitReached") {
+								throw APIError.from(
+									"FORBIDDEN",
+									ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
+								);
+							}
+						} else {
+							await adapter.findOrCreateTeamMember({
+								userId: user.id,
+								teamId,
+							});
+						}
+					} catch (error) {
+						await adapter.deleteMember({
+							memberId: createdMember.id,
+							organizationId: orgId,
+							userId: user.id,
+						});
+						throw error;
+					}
+				}
+
+				// Run afterAddMember hook
+				if (option?.organizationHooks?.afterAddMember) {
+					await option?.organizationHooks.afterAddMember({
+						member: createdMember,
+						user,
+						organization,
+					});
+				}
+
+				return ctx.json(createdMember);
+			});
 		},
 	);
 };
