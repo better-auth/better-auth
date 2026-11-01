@@ -18,6 +18,7 @@ beforeEach(() => {
 	mockedFetch.mockImplementation(async (input, init) => {
 		const request = new Request(input, init);
 		expect(request.url).toBe(endpoint);
+		expect(request.method).toBe("GET");
 		expect(request.headers.get("authorization")).toBe("Bearer access-token");
 		expect(request.headers.get("client-id")).toBe(options.clientId);
 		return Response.json({
@@ -37,10 +38,22 @@ afterEach(() => vi.unstubAllGlobals());
 
 /**
  * @see https://dev.twitch.tv/docs/api/reference/#get-users
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
  */
-it("reads the authenticated profile with only an access token", async () => {
+it.each([
+	{ kind: "only an access token", idToken: undefined },
+	{
+		kind: "an expired stored ID token",
+		idToken: new UnsecuredJWT({
+			sub: profile.sub,
+			email: "stale@example.com",
+			exp: 0,
+		}).encode(),
+	},
+])("reads the current profile with $kind", async ({ idToken }) => {
 	const result = await twitch(options).getUserInfo({
 		accessToken: "access-token",
+		idToken,
 	});
 	expect(result?.data).toEqual(profile);
 	expect(result?.user).toEqual({
@@ -49,20 +62,6 @@ it("reads the authenticated profile with only an access token", async () => {
 		emailVerified: true,
 		image: profile.picture,
 	});
-});
-
-/**
- * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfo
- */
-it("uses the access-token response instead of ID-token contents", async () => {
-	const result = await twitch(options).getUserInfo({
-		accessToken: "access-token",
-		idToken: new UnsecuredJWT({
-			sub: profile.sub,
-			email: "ignored@example.com",
-		}).encode(),
-	});
-	expect(result?.data).toEqual(profile);
 });
 
 /**
