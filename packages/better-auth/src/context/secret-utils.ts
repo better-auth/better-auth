@@ -17,18 +17,18 @@ export function parseSecretsEnv(
 	envValue: string | undefined,
 ): Array<{ version: number; value: string }> | null {
 	if (!envValue) return null;
-	const entries = envValue.split(",").map((entry) => {
+	const entries = envValue.split(",").map((entry, index) => {
 		entry = entry.trim();
 		const colonIdx = entry.indexOf(":");
 		if (colonIdx === -1) {
 			throw new BetterAuthError(
-				`Invalid BETTER_AUTH_SECRETS entry: "${entry}". Expected format: "<version>:<secret>"`,
+				`Invalid BETTER_AUTH_SECRETS entry at position ${index + 1}. Expected format: "<version>:<secret>"`,
 			);
 		}
 		const version = parseInt(entry.slice(0, colonIdx), 10);
 		if (!Number.isInteger(version) || version < 0) {
 			throw new BetterAuthError(
-				`Invalid version in BETTER_AUTH_SECRETS: "${entry.slice(0, colonIdx)}". Version must be a non-negative integer.`,
+				`Invalid version in BETTER_AUTH_SECRETS entry at position ${index + 1}. Version must be a non-negative integer.`,
 			);
 		}
 		const value = entry.slice(colonIdx + 1).trim();

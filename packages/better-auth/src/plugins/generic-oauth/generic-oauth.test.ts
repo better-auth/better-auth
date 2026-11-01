@@ -36,6 +36,7 @@ import type { Account } from "../../types";
 import { oauthPopup } from "../oauth-popup";
 import { genericOAuth } from ".";
 import { auth0 } from "./providers/auth0";
+import { hubspot } from "./providers/hubspot";
 import { keycloak } from "./providers/keycloak";
 import { microsoftEntraId } from "./providers/microsoft-entra-id";
 import { okta } from "./providers/okta";
@@ -3536,6 +3537,54 @@ describe("oauth2", async () => {
 			} finally {
 				fetchSpy.mockRestore();
 			}
+		});
+	});
+
+	describe("HubSpot Provider Helper", () => {
+		it("sends the access token as a single path segment encoded once", async () => {
+			const accessToken = "tok/with%reserved";
+			const requestedPaths: string[] = [];
+			mswServer.use(
+				http.get("https://api.hubapi.com/*", ({ request }) => {
+					requestedPaths.push(new URL(request.url).pathname);
+					return HttpResponse.json({
+						user: "hubspot-user@example.com",
+						user_id: "4242",
+						hub_domain: "example.hubspot.com",
+						hub_id: "99",
+					});
+				}),
+			);
+			const hubspotConfig = hubspot({
+				clientId: "hubspot-client-id",
+				clientSecret: "hubspot-client-secret",
+			});
+
+			const userInfo = await hubspotConfig.getUserInfo?.({ accessToken });
+
+			expect(requestedPaths).toEqual([
+				"/oauth/v1/access-tokens/tok%2Fwith%25reserved",
+			]);
+			expect(userInfo?.id).toBe("4242");
+		});
+
+		it("returns null without calling HubSpot when the access token is missing", async () => {
+			const requestedPaths: string[] = [];
+			mswServer.use(
+				http.get("https://api.hubapi.com/*", ({ request }) => {
+					requestedPaths.push(new URL(request.url).pathname);
+					return HttpResponse.json({});
+				}),
+			);
+			const hubspotConfig = hubspot({
+				clientId: "hubspot-client-id",
+				clientSecret: "hubspot-client-secret",
+			});
+
+			const userInfo = await hubspotConfig.getUserInfo?.({});
+
+			expect(userInfo).toBeNull();
+			expect(requestedPaths).toEqual([]);
 		});
 	});
 
