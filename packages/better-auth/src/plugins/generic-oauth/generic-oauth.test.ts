@@ -4810,6 +4810,83 @@ describe("oauth2", async () => {
 			expect(callbackURL).toContain("?error=");
 		});
 
+		it("should reject a token response missing id_token when discovery configured an id_token verifier", async () => {
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "missing-id-token",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "valid-access-token",
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "missing-id-token",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("?error=");
+		});
+
+		it("should reject a token response missing id_token when requireIdTokenVerification is true", async () => {
+			const { customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "missing-id-token-required",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								requireIdTokenVerification: true,
+								clientId,
+								clientSecret,
+								pkce: true,
+								getToken: async () => ({
+									accessToken: "valid-access-token",
+									tokenType: "bearer",
+								}),
+							},
+						],
+					}),
+				],
+			});
+			const client = createAuthClient({
+				baseURL: "http://localhost:3000",
+				fetchOptions: { customFetchImpl },
+			});
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "missing-id-token-required",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			expect(callbackURL).toContain("?error=");
+		});
+
 		it("should use claims from an id_token verified against the discovery JWKS", async () => {
 			const addClaims = (token: { payload: Record<string, unknown> }) => {
 				Object.assign(token.payload, {
