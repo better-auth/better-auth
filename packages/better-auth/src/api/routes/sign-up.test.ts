@@ -422,6 +422,46 @@ describe("validateUserInfo sign-up", async () => {
 		).toBeUndefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/blob/1f0bde1fd/packages/better-auth/src/utils/validate-user-info.ts#L34-L40
+	 */
+	it("should reject email/password sign-up when validateUserInfo throws", async () => {
+		const { auth, db } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+				},
+				user: {
+					validateUserInfo() {
+						throw new Error("policy check unavailable");
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					email: "new@test.com",
+					password: "password",
+					name: "New User",
+				},
+			}),
+		).rejects.toMatchObject({
+			statusCode: 403,
+			body: {
+				code: "validation_failed",
+				message: "User validation failed",
+			},
+		});
+
+		const users = await db.findMany({ model: "user" });
+		expect(users).toHaveLength(0);
+	});
+
 	// A blocking policy must not become an account-existence oracle. When the
 	// generic-duplicate response is enabled, a rejected new email has to return
 	// the same opaque success as an existing email rather than a 403.
