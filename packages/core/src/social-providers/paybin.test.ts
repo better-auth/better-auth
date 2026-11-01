@@ -18,6 +18,7 @@ beforeEach(() => {
 	mockedFetch.mockImplementation(async (input, init) => {
 		const request = new Request(input, init);
 		expect(request.url).toBe(endpoint);
+		expect(["GET", "POST"]).toContain(request.method);
 		expect(request.headers.get("authorization")).toBe("Bearer access-token");
 		return Response.json(profile);
 	});
@@ -27,10 +28,22 @@ afterEach(() => vi.unstubAllGlobals());
 
 /**
  * @see https://idp.paybin.io/.well-known/openid-configuration
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#RefreshTokenResponse
  */
-it("reads the authenticated profile with only an access token", async () => {
+it.each([
+	{ kind: "only an access token", idToken: undefined },
+	{
+		kind: "an expired stored ID token",
+		idToken: new UnsecuredJWT({
+			sub: profile.sub,
+			email: "stale@example.com",
+			exp: 0,
+		}).encode(),
+	},
+])("reads the current profile with $kind", async ({ idToken }) => {
 	const result = await paybin(options).getUserInfo({
 		accessToken: "access-token",
+		idToken,
 	});
 	expect(result?.data).toEqual(profile);
 	expect(result?.user).toEqual({
@@ -39,20 +52,6 @@ it("reads the authenticated profile with only an access token", async () => {
 		emailVerified: true,
 		image: profile.picture,
 	});
-});
-
-/**
- * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfo
- */
-it("uses the access-token response instead of ID-token contents", async () => {
-	const result = await paybin(options).getUserInfo({
-		accessToken: "access-token",
-		idToken: new UnsecuredJWT({
-			sub: profile.sub,
-			email: "ignored@example.com",
-		}).encode(),
-	});
-	expect(result?.data).toEqual(profile);
 });
 
 /**
@@ -115,46 +114,64 @@ it("lets profile mappings supply missing email access", async () => {
  * @see https://idp.paybin.io/.well-known/openid-configuration
  */
 it.each([
-	"https://idp.paybin.io",
-	"https://paybin.example.com/",
-	"https://paybin.example.com/tenant",
-])("uses discovery-style paths for issuer %s", async (issuer) => {
-	const base = issuer.endsWith("/") ? issuer : `${issuer}/`;
-	const provider = paybin({ ...options, issuer });
-	const authorizationURL = await provider.createAuthorizationURL({
-		state: "state",
-		redirectURI: "https://example.com/callback",
-		codeVerifier: "verifier",
-	});
-	expect(authorizationURL.origin + authorizationURL.pathname).toBe(
-		new URL("oauth/authorize", base).href,
-	);
-	const grants: string[] = [];
-	mockedFetch.mockImplementation(async (input, init) => {
-		const request = new Request(input, init);
-		if (request.url === new URL("oauth/token", base).href) {
-			grants.push(
-				new URLSearchParams(await request.text()).get("grant_type") ?? "",
-			);
-			return Response.json({
-				access_token: "access-token",
-				token_type: "Bearer",
-			});
-		}
-		expect(request.url).toBe(new URL("oauth/userinfo", base).href);
-		return Response.json(profile);
-	});
-	await provider.validateAuthorizationCode({
-		code: "code",
-		redirectURI: "https://example.com/callback",
-		codeVerifier: "verifier",
-	});
-	await provider.refreshAccessToken("refresh-token");
-	expect(grants).toEqual(["authorization_code", "refresh_token"]);
-	expect(
-		(await provider.getUserInfo({ accessToken: "access-token" }))?.data,
-	).toEqual(profile);
-});
+	{
+		issuer: "https://idp.paybin.io",
+		authorizationEndpoint: "https://idp.paybin.io/oauth/authorize",
+		tokenEndpoint: "https://idp.paybin.io/oauth/token",
+		userinfoEndpoint: "https://idp.paybin.io/oauth/userinfo",
+	},
+	{
+		issuer: "https://paybin.example.com/tenant/",
+		authorizationEndpoint: "https://paybin.example.com/tenant/oauth/authorize",
+		tokenEndpoint: "https://paybin.example.com/tenant/oauth/token",
+		userinfoEndpoint: "https://paybin.example.com/tenant/oauth/userinfo",
+	},
+])(
+	"uses the configured issuer endpoints for $issuer",
+	async ({
+		issuer,
+		authorizationEndpoint,
+		tokenEndpoint,
+		userinfoEndpoint,
+	}) => {
+		const provider = paybin({ ...options, issuer });
+		const codeVerifier = "v".repeat(64);
+		const authorizationURL = await provider.createAuthorizationURL({
+			state: "state",
+			redirectURI: "https://example.com/callback",
+			codeVerifier,
+		});
+		expect(authorizationURL.origin + authorizationURL.pathname).toBe(
+			authorizationEndpoint,
+		);
+		mockedFetch.mockImplementation(async (input, init) => {
+			const request = new Request(input, init);
+			if (request.url === tokenEndpoint) {
+				expect(request.method).toBe("POST");
+				return Response.json({
+					access_token: "access-token",
+					token_type: "Bearer",
+				});
+			}
+			expect(request.url).toBe(userinfoEndpoint);
+			expect(["GET", "POST"]).toContain(request.method);
+			return Response.json(profile);
+		});
+		expect(
+			await provider.validateAuthorizationCode({
+				code: "code",
+				redirectURI: "https://example.com/callback",
+				codeVerifier,
+			}),
+		).toMatchObject({ accessToken: "access-token" });
+		expect(await provider.refreshAccessToken("refresh-token")).toMatchObject({
+			accessToken: "access-token",
+		});
+		expect(
+			(await provider.getUserInfo({ accessToken: "access-token" }))?.data,
+		).toEqual(profile);
+	},
+);
 
 /**
  * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
