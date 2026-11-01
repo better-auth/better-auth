@@ -315,8 +315,8 @@ async function consumeRateLimit(
 			where: [
 				{ field: "id", value: apiKey.id },
 				{
-					field: "lastRequest",
-					operator: "gt",
+					field: "rateLimitWindowStart",
+					operator: "eq",
 					value: decision.windowStart,
 				},
 				{
@@ -343,22 +343,30 @@ async function consumeRateLimit(
 		return consumeRateLimit(ctx, fresh, opts);
 	}
 
-	// "start" and "reset": set the count to 1 for a fresh window, guarded so a
-	// concurrent increment in the same window cannot be silently overwritten.
+	// "start" and "reset": open a fixed window with count 1, guarded so a
+	// concurrent start/reset/increment cannot be silently overwritten.
 	const windowGuard =
 		decision.type === "reset"
 			? {
-					field: "lastRequest",
-					operator: "lte" as const,
+					field: "rateLimitWindowStart",
+					operator: "eq" as const,
 					value: decision.windowStart,
 				}
-			: { field: "lastRequest", operator: "eq" as const, value: null };
+			: {
+					field: "rateLimitWindowStart",
+					operator: "eq" as const,
+					value: null,
+				};
 
 	const started = await ctx.context.adapter.incrementOne<ApiKey>({
 		model: API_KEY_TABLE_NAME,
 		where: [{ field: "id", value: apiKey.id }, windowGuard],
 		increment: {},
-		set: { requestCount: 1, lastRequest: decision.now },
+		set: {
+			requestCount: 1,
+			lastRequest: decision.now,
+			rateLimitWindowStart: decision.now,
+		},
 	});
 	if (started) {
 		return started;
@@ -471,7 +479,11 @@ function applyRateLimitToSnapshot(
 				: { lastRequest: decision.lastRequest };
 		case "start":
 		case "reset":
-			return { lastRequest: decision.now, requestCount: 1 };
+			return {
+				lastRequest: decision.now,
+				requestCount: 1,
+				rateLimitWindowStart: decision.now,
+			};
 		case "increment":
 			return {
 				lastRequest: decision.now,

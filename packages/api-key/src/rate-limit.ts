@@ -6,6 +6,10 @@ import type { ApiKey } from "./types";
  * The atomic action the verify route must apply for the current request, derived
  * from a single read of the API key. The route translates each variant into a
  * guarded storage operation so concurrent verifications cannot exceed the limit.
+ *
+ * Uses a **fixed window**: at most `rateLimitMax` successful validations within
+ * each `[rateLimitWindowStart, rateLimitWindowStart + rateLimitTimeWindow)`
+ * interval. The window start does not move on each request.
  */
 export type RateLimitDecision =
 	| {
@@ -22,7 +26,7 @@ export type RateLimitDecision =
 			/** Window elapsed: reset `requestCount` to 1, guarded on the window. */
 			type: "reset";
 			now: Date;
-			/** `lastRequest` must still predate this instant for the reset to apply. */
+			/** Observed `rateLimitWindowStart`; reset applies only while it still matches. */
 			windowStart: Date;
 	  }
 	| {
@@ -30,6 +34,7 @@ export type RateLimitDecision =
 			type: "increment";
 			now: Date;
 			max: number;
+			/** Observed `rateLimitWindowStart`; increment applies only in this same window. */
 			windowStart: Date;
 	  }
 	| {
@@ -43,15 +48,19 @@ export type RateLimitDecision =
  * Decides how the current request affects the per-key rate-limit counter, based
  * on the read-in-memory ApiKey. The verify route applies the result atomically;
  * this function performs no writes.
+ *
+ * Fixed-window semantics: `tryAgainIn` is time remaining until
+ * `rateLimitWindowStart + rateLimitTimeWindow`, not idle time since `lastRequest`.
  */
 export function evaluateRateLimit(
 	apiKey: ApiKey,
 	opts: PredefinedApiKeyOptions,
 ): RateLimitDecision {
 	const now = new Date();
-	const lastRequest = apiKey.lastRequest;
+	const nowMs = now.getTime();
 	const rateLimitTimeWindow = apiKey.rateLimitTimeWindow;
 	const rateLimitMax = apiKey.rateLimitMax;
+	const rateLimitWindowStart = apiKey.rateLimitWindowStart;
 
 	if (opts.rateLimit.enabled === false) {
 		return { type: "skip", lastRequest: now };
@@ -66,25 +75,30 @@ export function evaluateRateLimit(
 		return { type: "skip", lastRequest: null };
 	}
 
-	if (lastRequest === null) {
+	// No window yet (new key, or counters reset after config change / migration).
+	if (rateLimitWindowStart == null) {
 		return { type: "start", now };
 	}
 
-	const timeSinceLastRequest = now.getTime() - new Date(lastRequest).getTime();
+	const windowStart = new Date(rateLimitWindowStart);
+	const windowStartMs = windowStart.getTime();
+	const elapsed = nowMs - windowStartMs;
 
-	if (timeSinceLastRequest > rateLimitTimeWindow) {
+	if (elapsed >= rateLimitTimeWindow) {
+		// New window: full quota again until the next boundary.
 		return {
 			type: "reset",
 			now,
-			windowStart: new Date(now.getTime() - rateLimitTimeWindow),
+			windowStart,
 		};
 	}
 
 	if (apiKey.requestCount >= rateLimitMax) {
+		const windowEndMs = windowStartMs + rateLimitTimeWindow;
 		return {
 			type: "deny",
 			message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
-			tryAgainIn: Math.ceil(rateLimitTimeWindow - timeSinceLastRequest),
+			tryAgainIn: Math.max(0, Math.ceil(windowEndMs - nowMs)),
 		};
 	}
 
@@ -92,6 +106,6 @@ export function evaluateRateLimit(
 		type: "increment",
 		now,
 		max: rateLimitMax,
-		windowStart: new Date(now.getTime() - rateLimitTimeWindow),
+		windowStart,
 	};
 }
