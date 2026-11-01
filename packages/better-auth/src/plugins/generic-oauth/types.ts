@@ -51,8 +51,22 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	/**
 	 * URL to fetch OAuth 2.0 configuration.
 	 * If provided, the authorization and token endpoints will be fetched from this URL.
+	 *
+	 * Successful discovery documents are cached in memory and reused across auth
+	 * instances, so runtimes that construct an auth instance per request do not
+	 * fetch the document on every request.
 	 */
 	discoveryUrl?: string | undefined;
+	/**
+	 * Upper bound, in milliseconds, for the discovery request.
+	 *
+	 * A discovery endpoint that stops responding is aborted after this long, and
+	 * the provider is skipped until a later attempt succeeds. Applies to retries
+	 * as well.
+	 *
+	 * @default 10000
+	 */
+	discoveryTimeout?: number | undefined;
 	/**
 	 * Require discovery to provide the issuer and JWKS metadata needed to verify
 	 * ID tokens before this provider is registered.
