@@ -86,4 +86,14 @@ Use [`mapProfileToUser`](/docs/concepts/oauth#mapprofiletouser) to customize pro
 
 ### ID Token Sign-In
 
-When using a custom `verifyIdToken` with the default `getUserInfo`, include `idToken.accessToken` in `signIn.social`.
+When using a custom `verifyIdToken` with the default `getUserInfo`, pass both the ID token and access token.
+
+```ts title="auth-client.ts"
+await authClient.signIn.social({
+    provider: "paybin",
+    idToken: {
+        token: idToken,
+        accessToken, // [!code highlight]
+    },
+})
+```
