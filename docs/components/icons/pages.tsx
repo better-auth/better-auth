@@ -458,6 +458,7 @@ export const pageIcons = {
 	integrationsTanStack: brandIcons.tanstack,
 	integrationsWaku: brandIcons.waku,
 	integrationsHono: brandIcons.hono,
+	integrationsEffect: brandIcons.effect,
 	integrationsFastify: brandIcons.fastify,
 	integrationsEncore: brandIcons.encore,
 	integrationsExpress: brandIcons.express,

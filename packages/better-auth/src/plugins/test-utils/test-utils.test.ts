@@ -223,40 +223,39 @@ describe("testUtils plugin", async () => {
 		);
 		const test = (await auth.$context).test;
 
-		it.each([
-			"login",
-			"getAuthHeaders",
-			"getCookies",
-		] as const)("%s persists required fields and overrides defaults before authenticating", async (helper) => {
-			const user = await test.saveUser(test.createUser());
-			const options = {
-				userId: user.id,
-				session: {
-					providerToken: `token-${helper}`,
-					pluginToken: `plugin-${helper}`,
-					label: "",
-				},
-			};
-			let headers: Headers;
-			if (helper === "login") {
-				const result = await test.login(options);
-				expect(result.session).toMatchObject(options.session);
-				headers = result.headers;
-			} else if (helper === "getAuthHeaders") {
-				headers = await test.getAuthHeaders(options);
-			} else {
-				const cookies = await test.getCookies(options);
-				headers = new Headers({
-					cookie: cookies
-						.map(({ name, value }) => `${name}=${value}`)
-						.join("; "),
-				});
-			}
-			const session = await auth.api.getSession({ headers });
-			expect(session?.user.id).toBe(user.id);
-			expect(session?.session).toMatchObject(options.session);
-			await test.deleteUser(user.id);
-		});
+		it.each(["login", "getAuthHeaders", "getCookies"] as const)(
+			"%s persists required fields and overrides defaults before authenticating",
+			async (helper) => {
+				const user = await test.saveUser(test.createUser());
+				const options = {
+					userId: user.id,
+					session: {
+						providerToken: `token-${helper}`,
+						pluginToken: `plugin-${helper}`,
+						label: "",
+					},
+				};
+				let headers: Headers;
+				if (helper === "login") {
+					const result = await test.login(options);
+					expect(result.session).toMatchObject(options.session);
+					headers = result.headers;
+				} else if (helper === "getAuthHeaders") {
+					headers = await test.getAuthHeaders(options);
+				} else {
+					const cookies = await test.getCookies(options);
+					headers = new Headers({
+						cookie: cookies
+							.map(({ name, value }) => `${name}=${value}`)
+							.join("; "),
+					});
+				}
+				const session = await auth.api.getSession({ headers });
+				expect(session?.user.id).toBe(user.id);
+				expect(session?.session).toMatchObject(options.session);
+				await test.deleteUser(user.id);
+			},
+		);
 
 		it("keeps defaults for omitted fields and generates standard session fields", async () => {
 			const user = await test.saveUser(test.createUser());

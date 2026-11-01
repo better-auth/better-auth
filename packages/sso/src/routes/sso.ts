@@ -355,7 +355,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 																description: "Additional field mappings",
 															},
 														},
-														required: ["email", "name"],
 													},
 												},
 												required: [
@@ -1524,6 +1523,14 @@ async function handleOIDCCallback(
 		const value = claims[claim];
 		return typeof value === "string" && value.length > 0 ? value : undefined;
 	};
+	// Some IdPs send a list of addresses, such as Azure AD B2C's `emails`.
+	const readEmailClaim = (claims: Record<string, unknown>) =>
+		[claims[mapping.email || "email"]]
+			.flat()
+			.find(
+				(value): value is string =>
+					typeof value === "string" && value.length > 0,
+			);
 	// The raw, unmapped provider claims, forwarded to the validateUserInfo gate
 	// as `source.sso.profile` so a policy can inspect provider-specific fields.
 	let rawProfile: Record<string, unknown> | undefined;
@@ -1604,7 +1611,7 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: readStringClaim(rawUserInfo, "sub"),
-			email: readStringClaim(rawUserInfo, mapping.email || "email"),
+			email: readEmailClaim(rawUserInfo),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
@@ -1624,7 +1631,7 @@ async function handleOIDCCallback(
 				]),
 			),
 			id: idToken.sub,
-			email: readStringClaim(idToken, mapping.email || "email"),
+			email: readEmailClaim(idToken),
 			emailVerified: options?.trustEmailVerified
 				? parseProviderEmailVerified(
 						idToken[mapping.emailVerified || "email_verified"],

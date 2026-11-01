@@ -19,6 +19,7 @@ describe("toZodSchema", () => {
 
 			expect(schema.shape).toHaveProperty("name");
 			expect(schema.shape).toHaveProperty("secretField");
+			expectTypeOf<typeof schema.shape>().toHaveProperty("secretField");
 		});
 
 		it("should exclude fields with returned: false from output schema (isClientSide: false)", () => {
@@ -32,6 +33,28 @@ describe("toZodSchema", () => {
 
 			expect(schema.shape).toHaveProperty("name");
 			expect(schema.shape).not.toHaveProperty("secretField");
+			expectTypeOf<typeof schema.shape>().not.toHaveProperty("secretField");
+		});
+
+		it("should account for either shape when the mode is a boolean", () => {
+			const createSchema = (isClientSide: boolean) =>
+				toZodSchema({
+					fields: {
+						name: { type: "string", required: true },
+						secretField: { type: "string", returned: false },
+					},
+					isClientSide,
+				});
+			const schema = createSchema(false);
+
+			expect(schema.shape).not.toHaveProperty("secretField");
+			expect(createSchema(true).shape).toHaveProperty("secretField");
+			expectTypeOf<typeof schema.shape>().toEqualTypeOf<
+				| { name: z.ZodString; secretField: z.ZodString }
+				| {
+						name: z.ZodString;
+				  }
+			>();
 		});
 	});
 
@@ -80,6 +103,12 @@ describe("toZodSchema", () => {
 		>();
 		expectTypeOf<
 			FieldAttributeToSchema<{ type: "string"; input: false }, true>
+		>().toEqualTypeOf<never>();
+		expectTypeOf<
+			FieldAttributeToSchema<
+				{ type: "string"; input: false; returned: false },
+				false
+			>
 		>().toEqualTypeOf<never>();
 	});
 

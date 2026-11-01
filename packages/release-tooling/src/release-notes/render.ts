@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import {
 	containsUnsupportedGeneratedMarkdown,
 	formatUntrustedInlineMarkdown,
+	inlineCodeValues,
 } from "../ai/generated-copy.ts";
 import { FILTERED_DOMAINS } from "../change-classifier.ts";
 import type {
@@ -28,6 +29,39 @@ export function isReleaseEntryVisible(entry: ReleaseEntry): boolean {
 	return !FILTERED_DOMAINS.has(entry.domain) || !!entry.changesetDescription;
 }
 
+function formatPrLink(entry: ReleaseEntry, repository: string): string {
+	return entry.prNumber
+		? ` ([#${entry.prNumber}](https://github.com/${repository}/pull/${entry.prNumber}))`
+		: "";
+}
+
+function formatActionLines(
+	entry: ReleaseEntry,
+	migration: string | undefined,
+	prLink: string,
+): string[] {
+	if (migration) return [`- ${migration}${prLink}`];
+	if (entry.changeType !== "breaking") return [];
+	// Without a reviewed action, name the change and let its changeset explain.
+	const titleLine = `- ${formatUntrustedInlineMarkdown(entry.title)}${prLink}`;
+	if (
+		!entry.changesetDescription ||
+		containsUnsupportedGeneratedMarkdown(
+			entry.changesetDescription,
+			"description",
+		)
+	) {
+		return [titleLine];
+	}
+	return [
+		titleLine,
+		"",
+		...entry.changesetDescription
+			.split("\n")
+			.map((line) => (line ? `  ${line}` : "")),
+	];
+}
+
 export function formatReleaseBody(
 	manifest: ReleaseManifest,
 	rewrites: ReleaseRewrites = {},
@@ -41,6 +75,29 @@ export function formatReleaseBody(
 		const blogSlug = `${minorMatch[1]}-${minorMatch[2]}`;
 		lines.push(
 			`**Blog post:** [Better Auth ${minorMatch[1]}.${minorMatch[2]}](https://better-auth.com/blog/${blogSlug})`,
+			"",
+		);
+	}
+
+	// Collected above every package so a change that spans packages, or one in a
+	// package users never install directly, still reaches everyone once.
+	const actions = new Map<string, string[]>();
+	for (const entry of entries) {
+		if (!isReleaseEntryVisible(entry) || actions.has(entry.rewriteKey))
+			continue;
+		const actionLines = formatActionLines(
+			entry,
+			rewrites[entry.rewriteKey]?.migration,
+			formatPrLink(entry, repository),
+		);
+		if (actionLines.length > 0) actions.set(entry.rewriteKey, actionLines);
+	}
+	if (actions.size > 0) {
+		lines.push(
+			"> [!IMPORTANT]",
+			"> **Action required**",
+			">",
+			...[...actions.values()].flat().map((line) => (line ? `> ${line}` : ">")),
 			"",
 		);
 	}
@@ -101,29 +158,7 @@ export function formatReleaseBody(
 				const rewrite = rewrites[entry.rewriteKey];
 				const title =
 					rewrite?.title ?? formatUntrustedInlineMarkdown(entry.title);
-				const prLink = entry.prNumber
-					? ` ([#${entry.prNumber}](https://github.com/${repository}/pull/${entry.prNumber}))`
-					: "";
-
-				lines.push(`- ${title}${prLink}`);
-
-				if (changeType === "breaking" && rewrite?.migration) {
-					lines.push(`> **Migration:** ${rewrite.migration}`);
-				} else if (
-					changeType === "breaking" &&
-					entry.changesetDescription &&
-					!containsUnsupportedGeneratedMarkdown(
-						entry.changesetDescription,
-						"description",
-					)
-				) {
-					const [migration, ...details] =
-						entry.changesetDescription.split("\n");
-					lines.push(`> **Migration:** ${migration}`);
-					for (const line of details) {
-						lines.push(line ? `> ${line}` : ">");
-					}
-				}
+				lines.push(`- ${title}${formatPrLink(entry, repository)}`);
 			}
 			lines.push("");
 		}
@@ -193,17 +228,15 @@ function readReleaseRewrites(
 		parsed.rewrites.map((rewrite) => [rewrite.id, rewrite]),
 	);
 
-	const breakingKeys = new Set(
-		manifest.entries
-			.filter((entry) => entry.breaking)
-			.map((entry) => entry.rewriteKey),
+	const entriesByKey = new Map(
+		manifest.entries.map((entry) => [entry.rewriteKey, entry]),
 	);
 	const rewrites: ReleaseRewrites = {};
 	for (const [key, value] of generatedByKey) {
 		try {
 			rewrites[key] = validateGeneratedReleaseRewrite(
 				value,
-				breakingKeys.has(key),
+				entriesByKey.get(key)!,
 			);
 		} catch (error) {
 			console.warn(
@@ -217,7 +250,10 @@ function readReleaseRewrites(
 
 export function validateGeneratedReleaseRewrite(
 	value: GeneratedReleaseRewrites[number],
-	breaking: boolean,
+	{
+		changeType,
+		changesetDescription,
+	}: Pick<ReleaseEntry, "changeType" | "changesetDescription">,
 ): ReleaseRewrites[string] {
 	const title = validateGeneratedCopy(value.title, "title", value.id, 300);
 	const migration =
@@ -225,14 +261,17 @@ export function validateGeneratedReleaseRewrite(
 			? undefined
 			: validateGeneratedCopy(value.migration, "migration", value.id, 500);
 
-	if (breaking && !migration) {
+	if (changeType === "breaking" && !migration) {
 		throw new Error(
 			`Breaking AI rewrite ${value.id} must have a single-line migration`,
 		);
 	}
-	if (!breaking && migration !== undefined) {
+
+	// Users act on this line, so it may only quote code a maintainer approved.
+	const quotedCode = inlineCodeValues(migration ?? "");
+	if (quotedCode.some((code) => !changesetDescription?.includes(code))) {
 		throw new Error(
-			`Non-breaking AI rewrite ${value.id} cannot have a migration`,
+			`AI rewrite ${value.id} migration quotes code that is not in the changeset`,
 		);
 	}
 

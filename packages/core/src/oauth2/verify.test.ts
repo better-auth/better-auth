@@ -10,9 +10,11 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { logger } from "../env";
 import {
 	createInsufficientScopeError,
 	isInsufficientScopeError,
+	jwksCache,
 	verifyAccessTokenRequest,
 	verifyBearerToken,
 } from "./verify";
@@ -35,6 +37,11 @@ describe("verifyBearerToken", () => {
 
 	afterEach(() => {
 		mockedFetch.mockReset();
+		vi.useRealTimers();
+		// Tests reuse one JWKS URL with new keys; a cached set would put later
+		// tests' kids inside the refetch cooldown.
+		jwksCache.clear();
+		vi.restoreAllMocks();
 	});
 
 	afterAll(() => {
@@ -166,29 +173,26 @@ describe("verifyBearerToken", () => {
 		);
 	});
 
-	it.each([
-		"",
-		'bad "quote"',
-		"bad\\slash",
-		"bad\r\ncontrol",
-		"café",
-	])("should reject an invalid insufficient-scope error_description at construction: %s", (description) => {
-		expect(() =>
-			createInsufficientScopeError(["files:write"], description),
-		).toThrow(new TypeError("invalid error_description"));
-	});
+	it.each(["", 'bad "quote"', "bad\\slash", "bad\r\ncontrol", "café"])(
+		"should reject an invalid insufficient-scope error_description at construction: %s",
+		(description) => {
+			expect(() =>
+				createInsufficientScopeError(["files:write"], description),
+			).toThrow(new TypeError("invalid error_description"));
+		},
+	);
 
-	it.each([
-		42,
-		null,
-	])("should reject a non-string insufficient-scope error_description at construction: %j", (description) => {
-		expect(() =>
-			Reflect.apply(createInsufficientScopeError, undefined, [
-				["files:write"],
-				description,
-			]),
-		).toThrow(new TypeError("invalid error_description"));
-	});
+	it.each([42, null])(
+		"should reject a non-string insufficient-scope error_description at construction: %j",
+		(description) => {
+			expect(() =>
+				Reflect.apply(createInsufficientScopeError, undefined, [
+					["files:write"],
+					description,
+				]),
+			).toThrow(new TypeError("invalid error_description"));
+		},
+	);
 
 	it("should accept every error_description boundary character", () => {
 		const description = " !#[]~";
@@ -244,26 +248,24 @@ describe("verifyBearerToken", () => {
 		expect(mockedFetch).not.toHaveBeenCalled();
 	});
 
-	it.each([
-		null,
-		[],
-		{ read: true },
-		42,
-	])("should reject a malformed scope claim as an invalid token: %j", async (scope) => {
-		const { publicJWK, privateKey, kid } = await createTestJWKS();
-		const token = await createSignedToken(privateKey, kid, { scope });
-		mockJWKSResponse(publicJWK);
+	it.each([null, [], { read: true }, 42])(
+		"should reject a malformed scope claim as an invalid token: %j",
+		async (scope) => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid, { scope });
+			mockJWKSResponse(publicJWK);
 
-		await expect(
-			verifyBearerToken(token, {
-				jwksUrl,
-				verifyOptions: { issuer, audience },
-			}),
-		).rejects.toMatchObject({
-			status: "UNAUTHORIZED",
-			body: { error: "invalid_token" },
-		});
-	});
+			await expect(
+				verifyBearerToken(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).rejects.toMatchObject({
+				status: "UNAUTHORIZED",
+				body: { error: "invalid_token" },
+			});
+		},
+	);
 
 	it("should treat an absent scope claim as an empty granted-scope set", async () => {
 		const { publicJWK, privateKey, kid } = await createTestJWKS();
@@ -587,6 +589,60 @@ describe("verifyBearerToken", () => {
 		vi.resetModules();
 	});
 
+	it("should sanitize TypeErrors from a function jwks source", async () => {
+		vi.resetModules();
+		const { logger } = await import("../env");
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const { privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const providerError = new TypeError(
+			"fetch failed for https://internal.example/private-jwks",
+		);
+		const loggerError = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const jwksFetch = vi.fn(async () => {
+			throw providerError;
+		});
+
+		const error = await verify(token, {
+			jwksFetch,
+			verifyOptions: { issuer, audience },
+		}).then(
+			() => undefined,
+			(thrown: unknown) => thrown,
+		);
+
+		expect(jwksFetch).toHaveBeenCalledOnce();
+		expect(error).toBeInstanceOf(Error);
+		expect(error).toMatchObject({ message: "JWKS fetch failed" });
+		expect(error).not.toHaveProperty("cause");
+		expect(loggerError).toHaveBeenCalledWith(
+			"JWKS fetch failed:",
+			providerError,
+		);
+		expect(mockedFetch).not.toHaveBeenCalled();
+		vi.resetModules();
+	});
+
+	it("should preserve non-TypeError failures from a function jwks source", async () => {
+		vi.resetModules();
+		const { verifyJwsAccessToken: verify } = await import("./verify");
+		const { privateKey, kid } = await createTestJWKS();
+		const token = await createSignedToken(privateKey, kid);
+		const providerError = new Error("custom JWKS provider failed");
+		const jwksFetch = vi.fn(async () => {
+			throw providerError;
+		});
+
+		await expect(
+			verify(token, {
+				jwksFetch,
+				verifyOptions: { issuer, audience },
+			}),
+		).rejects.toBe(providerError);
+		expect(jwksFetch).toHaveBeenCalledOnce();
+		vi.resetModules();
+	});
+
 	it("should fetch a function jwks source once across verifications sharing a jwksCacheKey", async () => {
 		vi.resetModules();
 		const { verifyJwsAccessToken: verify } = await import("./verify");
@@ -757,6 +813,234 @@ describe("verifyBearerToken", () => {
 		vi.resetModules();
 	});
 
+	describe.each(["url", "function"] as const)(
+		"refetching a cached %s key set for an unknown kid",
+		(sourceType) => {
+			async function setUpSource() {
+				vi.resetModules();
+				const { verifyJwsAccessToken } = await import("./verify");
+				const signingKey = await createTestJWKS();
+				let keys = [signingKey.publicJWK];
+				let fetches = 0;
+				mockedFetch.mockImplementation(() => {
+					fetches++;
+					return Promise.resolve(jwksResponse(...keys));
+				});
+				const jwksCacheKey = {};
+				const verify = (token: string) =>
+					verifyJwsAccessToken(token, {
+						// A fresh closure per call, like per-request callers do.
+						...(sourceType === "url"
+							? { jwksFetch: jwksUrl }
+							: {
+									jwksFetch: async () => {
+										fetches++;
+										return { keys };
+									},
+									jwksCacheKey,
+								}),
+						verifyOptions: { issuer, audience },
+					});
+				await expect(
+					verify(
+						await createSignedToken(signingKey.privateKey, signingKey.kid),
+					),
+				).resolves.toMatchObject({ sub: "user-123" });
+				return {
+					verify,
+					// The source replaces its key; a set with two RS256 keys has no
+					// single match for a token without kid.
+					rotate: (jwk: JWK) => {
+						keys = [jwk];
+					},
+					fetches: () => fetches,
+				};
+			}
+
+			it("should refetch at most once per cooldown for tokens with made-up kids", async () => {
+				const source = await setUpSource();
+				const forger = await createTestJWKS();
+
+				for (let i = 0; i < 10; i++) {
+					const token = await createSignedToken(
+						forger.privateKey,
+						`made-up-${i}`,
+					);
+					await expect(source.verify(token)).rejects.toMatchObject({
+						code: "ERR_JWKS_NO_MATCHING_KEY",
+					});
+				}
+
+				// One fetch fills the cache, one refetch serves the first unknown kid.
+				expect(source.fetches()).toBe(2);
+			});
+
+			it("should verify a newly published kid once the cooldown passes, before the TTL", async () => {
+				const source = await setUpSource();
+				const forger = await createTestJWKS();
+				await expect(
+					source.verify(await createSignedToken(forger.privateKey, "made-up")),
+				).rejects.toThrow();
+
+				const rotated = await createTestJWKS();
+				source.rotate(rotated.publicJWK);
+				const token = await createSignedToken(rotated.privateKey, rotated.kid);
+				await expect(source.verify(token)).rejects.toMatchObject({
+					code: "ERR_JWKS_NO_MATCHING_KEY",
+				});
+
+				vi.useFakeTimers({ now: Date.now() + 30 * 1000 });
+				await expect(source.verify(token)).resolves.toMatchObject({
+					sub: "user-123",
+				});
+				expect(source.fetches()).toBe(3);
+			});
+
+			it("should share one refetch across concurrent tokens signed with a newly published key", async () => {
+				const source = await setUpSource();
+				const rotated = await createTestJWKS();
+				source.rotate(rotated.publicJWK);
+				const token = await createSignedToken(rotated.privateKey, rotated.kid);
+
+				await Promise.all(
+					Array.from({ length: 5 }, () => source.verify(token)),
+				);
+
+				expect(source.fetches()).toBe(2);
+			});
+
+			it("should retry a token without kid against a set another request refetched meanwhile", async () => {
+				const source = await setUpSource();
+				const rotated = await createTestJWKS();
+				source.rotate(rotated.publicJWK);
+				const tokenWithoutKid = await createSignedToken(
+					rotated.privateKey,
+					undefined,
+				);
+				const tokenWithKid = await createSignedToken(
+					rotated.privateKey,
+					rotated.kid,
+				);
+
+				// The first verification reads the cached set before the second
+				// refetches it, then fails against that older set.
+				const withoutKid = source.verify(tokenWithoutKid);
+				await expect(source.verify(tokenWithKid)).resolves.toMatchObject({
+					sub: "user-123",
+				});
+				await expect(withoutKid).resolves.toMatchObject({ sub: "user-123" });
+				expect(source.fetches()).toBe(2);
+			});
+		},
+	);
+
+	it.each(["cached", "uncached"] as const)(
+		"should time out a key set fetch that never settles (%s source)",
+		async (cache) => {
+			vi.resetModules();
+			const { verifyJwsAccessToken: verify } = await import("./verify");
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			// Cloudflare Workers cancels a request's I/O when the request ends, so a
+			// fetch another request started may never settle.
+			const jwksFetch = vi
+				.fn<() => Promise<{ keys: JWK[] }>>()
+				.mockReturnValueOnce(new Promise(() => {}))
+				.mockResolvedValue({ keys: [publicJWK] });
+			const options = {
+				jwksFetch,
+				...(cache === "cached" ? { jwksCacheKey: {} } : {}),
+				verifyOptions: { issuer, audience },
+			};
+
+			vi.useFakeTimers();
+			const hung = expect(verify(token, options)).rejects.toMatchObject({
+				code: "ERR_JWKS_TIMEOUT",
+			});
+			await vi.advanceTimersByTimeAsync(5_000);
+			await hung;
+
+			await expect(verify(token, options)).resolves.toMatchObject({
+				sub: "user-123",
+			});
+			expect(jwksFetch).toHaveBeenCalledTimes(2);
+		},
+	);
+
+	it.each([
+		["has", true],
+		["lacks", false],
+	] as const)(
+		"should verify a token without kid when a late fetch's set %s its key while a replacement is in flight",
+		async (_, lateHasKey) => {
+			vi.resetModules();
+			const { verifyJwsAccessToken: verify } = await import("./verify");
+			const original = await createTestJWKS();
+			const rotated = await createTestJWKS();
+			const lateFetch = Promise.withResolvers<{ keys: JWK[] }>();
+			const replacementFetch = Promise.withResolvers<{ keys: JWK[] }>();
+			const options = {
+				jwksFetch: vi
+					.fn<() => Promise<{ keys: JWK[] }>>()
+					.mockResolvedValueOnce({ keys: [original.publicJWK] })
+					.mockReturnValueOnce(lateFetch.promise)
+					.mockReturnValueOnce(replacementFetch.promise),
+				jwksCacheKey: {},
+				verifyOptions: { issuer, audience },
+			};
+			const originalToken = await createSignedToken(
+				original.privateKey,
+				original.kid,
+			);
+			const withKid = await createSignedToken(rotated.privateKey, rotated.kid);
+			const withoutKidToken = await createSignedToken(
+				rotated.privateKey,
+				undefined,
+			);
+			// Only Date is faked: each fetch's timeout stays real and is cleared once
+			// its fetch settles.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			await verify(originalToken, options);
+
+			// The first refetch outlives its timeout, so after the cooldown another
+			// request replaces it with a fetch that is still in flight.
+			const first = verify(withKid, options);
+			vi.setSystemTime(Date.now() + 31 * 1000);
+			const second = verify(withKid, options);
+			const settled = Promise.allSettled([first, second]);
+
+			// This verification reads the original set, then the late fetch lands a
+			// newer set before it asks for a refresh.
+			const withoutKid = verify(withoutKidToken, options);
+			lateFetch.resolve({
+				keys: [lateHasKey ? rotated.publicJWK : original.publicJWK],
+			});
+
+			// A newer set with the key verifies without waiting for the replacement.
+			// One without it must wait for the replacement, so hold the replacement
+			// until the verification has had time to fail against the late set.
+			if (!lateHasKey) {
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				replacementFetch.resolve({ keys: [rotated.publicJWK] });
+			}
+			await expect(withoutKid).resolves.toMatchObject({ sub: "user-123" });
+			replacementFetch.resolve({ keys: [rotated.publicJWK] });
+			const [firstResult, secondResult] = await settled;
+			// The first verification joined the late fetch, so it fails when that
+			// set lacks its key; the second joined the replacement.
+			expect(firstResult).toMatchObject(
+				lateHasKey
+					? { status: "fulfilled" }
+					: {
+							status: "rejected",
+							reason: { code: "ERR_JWKS_NO_MATCHING_KEY" },
+						},
+			);
+			expect(secondResult).toMatchObject({ status: "fulfilled" });
+		},
+		10_000,
+	);
+
 	it("should cache a string jwks source across verifications within the TTL", async () => {
 		vi.resetModules();
 		const { verifyJwsAccessToken: verify } = await import("./verify");
@@ -806,6 +1090,77 @@ describe("verifyBearerToken", () => {
 		} finally {
 			vi.resetModules();
 		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11611
+	 */
+	describe("rejected JWKS fetch", () => {
+		it("should report the failure even when the logger throws", async () => {
+			const { privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+			vi.spyOn(logger, "error").mockImplementation(() => {
+				throw new TypeError("logger failed");
+			});
+
+			const error = await verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+			}).then(
+				() => undefined,
+				(thrown: unknown) => thrown,
+			);
+
+			expect(error).toMatchObject({ message: "JWKS fetch failed" });
+		});
+
+		it("should report a refused connection instead of a bad token", async () => {
+			const { privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockRejectedValueOnce(new TypeError("fetch failed"));
+
+			const error = await verifyAccessTokenRequest(
+				{
+					authorizationHeader: `Bearer ${token}`,
+					method: "GET",
+					url: audience,
+				},
+				{ jwksUrl, verifyOptions: { issuer, audience } },
+			).then(
+				() => undefined,
+				(thrown: unknown) => thrown,
+			);
+
+			expect(error).not.toBeInstanceOf(APIError);
+			expect(error).toMatchObject({ message: "JWKS fetch failed" });
+		});
+
+		it("should not fall through to opaque verification", async () => {
+			const { privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockRejectedValueOnce(
+				new TypeError("fetch failed for https://internal.example/private-jwks"),
+			);
+
+			const error = await verifyBearerToken(token, {
+				jwksUrl,
+				verifyOptions: { issuer, audience },
+				remoteVerify: {
+					introspectUrl: `${issuer}/oauth2/introspect`,
+					clientId: "rs-client",
+					clientSecret: "rs-secret",
+				},
+			}).then(
+				() => undefined,
+				(thrown: unknown) => thrown,
+			);
+
+			expect(error).toBeInstanceOf(Error);
+			expect(error).toMatchObject({ message: "JWKS fetch failed" });
+			expect(error).not.toHaveProperty("cause");
+			expect(mockedFetch).toHaveBeenCalledOnce();
+		});
 	});
 
 	describe("remote introspection audience validation", () => {

@@ -521,6 +521,8 @@ const adapter = myAdapter({
 
 Whether the adapter supports transactions. If `false`, operations run sequentially; otherwise provide a function that executes a callback with a `TransactionAdapter`.
 
+With `false`, a write is kept even when a later step in the same request fails, so Better Auth still runs that write's `after` [database hooks](/docs/concepts/database#database-hooks) and its secondary-storage cleanup before returning the error.
+
 <Callout type="warn">
   If your database does not support transactions, the error handling and rollback
   will not be as robust. We recommend using a database that supports transactions

@@ -81,7 +81,11 @@ export function createD1IndexIntrospector(
 	};
 }
 
-class D1SqliteAdapter extends SqliteAdapter {}
+class D1SqliteAdapter extends SqliteAdapter {
+	get supportsMultipleConnections(): boolean {
+		return true;
+	}
+}
 
 /**
  * Config for the D1 SQLite dialect.

@@ -15,6 +15,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 
 /**
  * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
@@ -228,6 +229,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 		},
 		idToken: {
 			jwks: (header) => getMicrosoftPublicKey(header.kid!, tenant, authority),
+			algorithms: ["RS256"],
 			audience: options.clientId,
 			maxTokenAge: "1h",
 			/**
@@ -367,10 +369,10 @@ export const getMicrosoftPublicKey = async (
 	tenant: string,
 	authority: string,
 ) => {
-	const { data } = await betterFetch<{
+	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
 			kid: string;
-			alg: string;
+			alg?: string;
 			kty: string;
 			use: string;
 			n: string;
@@ -391,5 +393,6 @@ export const getMicrosoftPublicKey = async (
 		throw new Error(`JWK with kid ${kid} not found`);
 	}
 
-	return await importJWK(jwk, jwk.alg);
+	// Microsoft's key set omits `alg`; Entra ID signs ID tokens with RS256.
+	return await importJWK(jwk, jwk.alg ?? "RS256");
 };

@@ -1,5 +1,35 @@
 # @better-auth/stripe
 
+## 1.7.15
+
+### Patch Changes
+
+- [#12102](https://github.com/better-auth/better-auth/pull/12102) [`3b3a595`](https://github.com/better-auth/better-auth/commit/3b3a5957a0ce1bde906954c5490735706a5202f9) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now checks the `callbackURL` against trusted origins after replacing `{CHECKOUT_SESSION_ID}`, so a `checkoutSessionId` value can no longer redirect to an untrusted origin.
+
+- [#12105](https://github.com/better-auth/better-auth/pull/12105) [`4af793f`](https://github.com/better-auth/better-auth/commit/4af793f1c8db057d2822b59c2d9099d76a0fb279) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now rejects non-string `callbackURL` and `checkoutSessionId` query values, such as duplicated parameters, with a 400 instead of failing with a 500.
+
+## 1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11954](https://github.com/better-auth/better-auth/pull/11954) [`da53fae`](https://github.com/better-auth/better-auth/commit/da53faea2530df6fda47f83f72da3eb5557ae60d) Thanks [@godwit-bo](https://github.com/godwit-bo)! - Support Stripe SDK v23.
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#9684](https://github.com/better-auth/better-auth/pull/9684) [`72a6394`](https://github.com/better-auth/better-auth/commit/72a6394e30ced6654ebffe3c5b74dc1b570f6880) Thanks [@nikhilgupta58](https://github.com/nikhilgupta58)! - Stop logging a "Stripe webhook failed" error when a one-time `payment` mode checkout session completes.
+
 ## 1.7.7
 
 ## 1.7.6

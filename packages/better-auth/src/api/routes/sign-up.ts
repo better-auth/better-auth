@@ -420,6 +420,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const session = await ctx.context.internalAdapter.createSession(
 					createdUser.id,
 					rememberMe === false,
+					undefined,
+					undefined,
+					{ deferSecondaryStorageWrites: true },
 				);
 				if (!session) {
 					throw APIError.from(

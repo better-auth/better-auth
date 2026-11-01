@@ -34,18 +34,21 @@ describe("resolveOAuthAccountKey", () => {
 	it.each([
 		["provider-subject", "provider-subject"],
 		[42, "42"],
-	] as const)("normalizes the account subject resolved from provider data %j", async (accountSubject, accountId) => {
-		await expect(
-			resolveOAuthAccountKey(
-				createProvider({ accountSubject: () => accountSubject }),
-				tokens,
-				result.data,
-			),
-		).resolves.toEqual({
-			providerId: "company-oauth",
-			accountId,
-		});
-	});
+	] as const)(
+		"normalizes the account subject resolved from provider data %j",
+		async (accountSubject, accountId) => {
+			await expect(
+				resolveOAuthAccountKey(
+					createProvider({ accountSubject: () => accountSubject }),
+					tokens,
+					result.data,
+				),
+			).resolves.toEqual({
+				providerId: "company-oauth",
+				accountId,
+			});
+		},
+	);
 
 	it("keeps provider aliases as separate account keys", async () => {
 		const web = createProvider({ id: "company-web" });
@@ -58,23 +61,18 @@ describe("resolveOAuthAccountKey", () => {
 		);
 	});
 
-	it.each([
-		"",
-		"   ",
-		"undefined",
-		"null",
-		Number.NaN,
-		Infinity,
-		-Infinity,
-	])("rejects the invalid account subject %j", async (accountSubject) => {
-		await expect(
-			resolveOAuthAccountKey(
-				createProvider({ accountSubject: () => accountSubject }),
-				tokens,
-				result.data,
-			),
-		).rejects.toThrow("OAUTH_ACCOUNT_SUBJECT_INVALID");
-	});
+	it.each(["", "   ", "undefined", "null", Number.NaN, Infinity, -Infinity])(
+		"rejects the invalid account subject %j",
+		async (accountSubject) => {
+			await expect(
+				resolveOAuthAccountKey(
+					createProvider({ accountSubject: () => accountSubject }),
+					tokens,
+					result.data,
+				),
+			).rejects.toThrow("OAUTH_ACCOUNT_SUBJECT_INVALID");
+		},
+	);
 
 	it("does not expose mapped local-user fields to account-key resolvers", async () => {
 		const accountSubject = vi.fn(({ profile }) => String(profile.subject));

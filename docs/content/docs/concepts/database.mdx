@@ -883,12 +883,12 @@ There are two types of hooks you can define:
 #### 1. Before Hook
 
 * **Purpose**: This hook is called before the respective entity (user, session, or account) is created, updated, or deleted.
-* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload.
+* **Behavior**: If the hook returns `false`, the operation will be aborted. And If it returns a data object, it'll replace the original payload. On MongoDB with transactions, a before hook can run more than once for one operation: when MongoDB aborts the transaction because of a concurrent write, the adapter runs it again. Send emails and call other services from an after hook instead.
 
 #### 2. After Hook
 
 * **Purpose**: This hook is called after the respective entity is created or updated.
-* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated.
+* **Behavior**: You can perform additional actions or modifications after the entity has been successfully created or updated. When the operation is part of a transaction, the hook runs after it commits and is skipped if it rolls back. If transactions aren't enabled for your database adapter, the hook also runs when a later step of the same request fails, because the database change was already applied.
 
 **Example Usage**
 

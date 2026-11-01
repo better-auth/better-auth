@@ -13,6 +13,7 @@ const typecheckTimeoutMilliseconds = 60 * 1000;
 	{ dir: "tsconfig-exact-optional-property-types", skip: false },
 	{ dir: "tsconfig-verbatim-module-syntax-node10", skip: false },
 	{ dir: "tsconfig-isolated-module-bundler", skip: false },
+	{ dir: "tsconfig-skip-lib-check-false", skip: false },
 ].forEach(({ dir, skip }) => {
 	test(`typecheck ${dir}`, { skip }, () => {
 		const cwd = resolve(fixturesDir, dir);

@@ -12,7 +12,7 @@ import {
 	SESSION_COOKIE_JWT_ISSUER,
 	SESSION_COOKIE_JWT_TYPE,
 } from "../../cookies/jwt";
-import { getJwksAdapter } from "./adapter";
+import { getDefaultKeyAlg, getJwksAdapter } from "./adapter";
 import { resolveSigningKey } from "./sign";
 import type { JwtOptions } from "./types";
 
@@ -50,16 +50,8 @@ async function importLocalPublicKey(
 		return null;
 	}
 
-	const alg =
-		key.alg ??
-		options?.jwks?.keyPairConfig?.alg ??
-		(header.alg as string | undefined);
-	if (!alg) {
-		ctx.context.logger.debug(
-			`No JWT algorithm available for cookie-cache JWT kid: ${kid}`,
-		);
-		return null;
-	}
+	// Never from the token header, so it matches the key the token was signed with.
+	const alg = key.alg ?? getDefaultKeyAlg(options);
 
 	return {
 		alg,

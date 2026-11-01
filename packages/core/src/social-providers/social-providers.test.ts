@@ -14,6 +14,7 @@ import { CLIENT_ASSERTION_TYPE } from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { socialProviders } from "./index";
+import { kakao } from "./kakao";
 import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
 import { slack } from "./slack";
@@ -273,6 +274,20 @@ describe("discord provider", () => {
 		});
 		expect(url.searchParams.get("custom")).toBe("value");
 		expect(url.searchParams.get("state")).toBe(baseState);
+	});
+});
+
+describe("kakao provider", () => {
+	/**
+	 * @see https://developers.kakao.com/docs/en/kakaologin/rest-api#request-code-login-hint
+	 */
+	it("forwards loginHint as login_hint", async () => {
+		const provider = kakao({ ...credentials });
+		const url = await provider.createAuthorizationURL({
+			...baseInput,
+			loginHint: "user@example.com",
+		});
+		expect(url.searchParams.get("login_hint")).toBe("user@example.com");
 	});
 });
 

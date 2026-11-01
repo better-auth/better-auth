@@ -3,11 +3,13 @@
   "private": true,
   "dependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/kysely-adapter": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
     "hono": "^4.13.7"
   },
   "devDependencies": {
+    "kysely-029": "npm:kysely@0.29.6",
     "vitest": "catalog:vitest",
     "wrangler": "4.123.0"
   },

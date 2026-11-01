@@ -14,6 +14,7 @@ import { microsoft } from "./microsoft-entra-id";
 const mockedBetterFetch = vi.mocked(betterFetch);
 
 const CLIENT_ID = "ms-app";
+const CLIENT_SECRET = "ms-secret";
 const AUTHORITY = "https://login.microsoftonline.com";
 const CONSUMER_TENANT_ID = "9188040d-6c67-4c5b-b112-36a304b66dad";
 const WORK_TENANT_ID = "11111111-2222-3333-4444-555555555555";
@@ -27,7 +28,6 @@ beforeEach(async () => {
 	privateKey = keyPair.privateKey;
 	publicJWK = await exportJWK(keyPair.publicKey);
 	publicJWK.kid = KID;
-	publicJWK.alg = "RS256";
 	publicJWK.use = "sig";
 
 	mockedBetterFetch.mockReset();
@@ -276,5 +276,66 @@ describe("microsoft account subject", () => {
 			}),
 		).resolves.toBeNull();
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11652
+ */
+describe("microsoft id_token alg omission", () => {
+	it("verifies a token when Microsoft's JWKS keys omit alg", async () => {
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+		});
+
+		const token = await new SignJWT({
+			sub: "user-123",
+			email: "user@example.com",
+			tid: WORK_TENANT_ID,
+		})
+			.setProtectedHeader({ alg: "RS256", kid: KID })
+			.setIssuer(`${AUTHORITY}/${WORK_TENANT_ID}/v2.0`)
+			.setAudience(CLIENT_ID)
+			.setExpirationTime("1h")
+			.setIssuedAt()
+			.sign(privateKey);
+
+		const isValid = await verifyProviderIdToken(provider, token);
+		expect(isValid).toBe(true);
+	});
+
+	it("rejects a token signed with an algorithm other than RS256", async () => {
+		const ecKeyPair = await generateKeyPair("ES256", { extractable: true });
+		const ecJWK = await exportJWK(ecKeyPair.publicKey);
+		const ecKid = "ms-test-es256-key";
+		ecJWK.kid = ecKid;
+		ecJWK.alg = "ES256";
+		ecJWK.use = "sig";
+
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: { keys: [ecJWK] },
+			error: null,
+		} as Awaited<ReturnType<typeof betterFetch>>);
+
+		const provider = microsoft({
+			clientId: CLIENT_ID,
+			clientSecret: CLIENT_SECRET,
+		});
+
+		const token = await new SignJWT({
+			sub: "user-123",
+			email: "user@example.com",
+			tid: WORK_TENANT_ID,
+		})
+			.setProtectedHeader({ alg: "ES256", kid: ecKid })
+			.setIssuer(`${AUTHORITY}/${WORK_TENANT_ID}/v2.0`)
+			.setAudience(CLIENT_ID)
+			.setExpirationTime("1h")
+			.setIssuedAt()
+			.sign(ecKeyPair.privateKey);
+
+		const isValid = await verifyProviderIdToken(provider, token);
+		expect(isValid).toBe(false);
 	});
 });

@@ -1,0 +1,11 @@
+{
+  "name": "@better-auth-test/fixtures-tsconfig-skip-lib-check-false",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*"
+  }
+}
