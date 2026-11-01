@@ -833,7 +833,6 @@ export const refreshToken = createAuthEndpoint(
 
 			if (account.id) {
 				const updateData = {
-					...(account || {}),
 					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
 					refreshToken: resolvedRefreshToken,
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
