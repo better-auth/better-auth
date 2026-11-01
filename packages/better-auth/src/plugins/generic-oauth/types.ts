@@ -177,6 +177,50 @@ export interface GenericOAuthConfig<ID extends string = string> {
 		  }) => Promise<OAuth2Tokens>)
 		| undefined;
 	/**
+	 * Custom function to refresh an access token.
+	 * If provided, this function will be used instead of the standard
+	 * form-encoded token-endpoint POST when refreshing. Named `refreshToken`
+	 * to pair with `getToken`.
+	 *
+	 * Receives the stored refresh token and the optional refresh context, and
+	 * must return the new tokens with a string `accessToken` — the return
+	 * type requires it so omitting it fails at compile time, and anything
+	 * else still fails closed at runtime. `accessTokenExpiresIn` fallback
+	 * is applied to the result
+	 * by the caller, so the hook may omit `accessTokenExpiresAt` when the
+	 * provider gives no expiry signal.
+	 *
+	 * The hook owns the whole request: `refreshTokenParams` and
+	 * `tokenEndpointAuth` do NOT apply here, and neither do the standard
+	 * request protections. The standard path
+	 * (`packages/core/src/oauth2/refresh-access-token.ts`) drops
+	 * `BLOCKED_REFRESH_TOKEN_PARAMS` (`grant_type`, `refresh_token`,
+	 * `__proto__`, `constructor`, `prototype`) from caller-supplied params and
+	 * sends through `fetchRefusingRedirects`
+	 * (`packages/core/src/oauth2/reject-redirects.ts`), which never follows
+	 * redirects — none of that happens for custom `fetch` in the hook. Set
+	 * `grant_type` and `refresh_token` as constants, never from
+	 * request-derived keys or values; pin the fetch URL to the provider's
+	 * token endpoint and never interpolate request input into it (SSRF);
+	 * refuse redirects yourself (send with `redirect: "manual"` and reject
+	 * 3xx/opaque-redirect responses, as `noFollowRedirect` and
+	 * `assertResponseNotRedirect` do in
+	 * `packages/core/src/oauth2/reject-redirects.ts`).
+	 *
+	 * Treat the `refreshToken` argument, returned tokens, `ctx`, and client
+	 * secrets as secrets: never log them.
+	 *
+	 * Headers and cookies on `ctx` are attacker-controlled — validate any value
+	 * derived from them against the authenticated user's entitlements before
+	 * using it.
+	 */
+	refreshToken?:
+		| ((
+				refreshToken: string,
+				ctx?: OAuthRefreshContext,
+		  ) => Awaitable<OAuth2Tokens & { accessToken: string }>)
+		| undefined;
+	/**
 	 * Custom function to fetch user info.
 	 * If provided, this function will be used instead of the default user info fetching logic.
 	 * @param tokens - The OAuth tokens received after successful authentication
