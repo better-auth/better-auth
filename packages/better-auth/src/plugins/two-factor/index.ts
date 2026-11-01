@@ -432,11 +432,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 			after: [
 				{
 					matcher(context) {
-						return (
-							context.path === "/sign-in/email" ||
-							context.path === "/sign-in/username" ||
-							context.path === "/sign-in/phone-number"
-						);
+						const defaultPaths = [
+							"/sign-in/email",
+							"/sign-in/username",
+							"/sign-in/phone-number",
+						];
+						const paths = options?.challengePaths
+							? [...defaultPaths, ...options.challengePaths]
+							: defaultPaths;
+						return paths.includes(context.path);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const data = ctx.context.newSession;
