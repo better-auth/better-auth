@@ -5430,6 +5430,80 @@ describe("oauth2", async () => {
 			);
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12152
+		 */
+		it("should reject a client-submitted id_token when disableIdTokenSignIn is set", async () => {
+			const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+			const { client, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "id-token-enabled",
+								discoveryUrl,
+								clientId,
+								clientSecret,
+								pkce: true,
+							},
+							{
+								providerId: "id-token-disabled",
+								discoveryUrl,
+								clientId,
+								clientSecret,
+								pkce: true,
+								disableIdTokenSignIn: true,
+							},
+						],
+					}),
+				],
+			});
+			const token = await server.issuer.buildToken({
+				scopesOrTransform: (_header, payload) => {
+					Object.assign(payload, {
+						aud: clientId,
+						sub: "disabled-id-token-user",
+						email: "disabled-id-token@test.com",
+						email_verified: true,
+						name: "Disabled Id Token",
+					});
+				},
+			});
+
+			const enabled = await client.signIn.social({
+				provider: "id-token-enabled",
+				idToken: { token },
+			});
+			expect(enabled.error).toBeNull();
+
+			const signIn = await client.signIn.social({
+				provider: "id-token-disabled",
+				idToken: { token },
+			});
+			expect(signIn.error?.status).toBe(404);
+			expect(signIn.error?.code).toBe("ID_TOKEN_NOT_SUPPORTED");
+
+			const { headers } = await signInWithTestUser();
+			const link = await client.linkSocial(
+				{
+					provider: "id-token-disabled",
+					idToken: { token },
+				},
+				{ headers },
+			);
+			expect(link.error?.status).toBe(404);
+			expect(link.error?.code).toBe("ID_TOKEN_NOT_SUPPORTED");
+
+			const redirect = await client.signIn.social({
+				provider: "id-token-disabled",
+				callbackURL: "http://localhost:3000/dashboard",
+			});
+			expect(redirect.error).toBeNull();
+			expect(redirect.data?.url).toContain(
+				`http://localhost:${port}/authorize`,
+			);
+		});
+
 		it("should keep the decode posture for providers without discovery", async () => {
 			const forged = await forgeIdToken();
 			const { customFetchImpl, cookieSetter } = await getTestInstance({

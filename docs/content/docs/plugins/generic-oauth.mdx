@@ -332,6 +332,8 @@ genericOAuth({
 
 **disableSignUp**: (Optional) If true, disables sign-up for new users entirely. Only existing users can sign in.
 
+**disableIdTokenSignIn**: (Optional) If true, `/sign-in/social` and `/link-social` reject a client-submitted `idToken` for this provider with `ID_TOKEN_NOT_SUPPORTED`, so it only signs in through the authorization code redirect.
+
 **authentication**: (Optional) Secret-based token request authentication. Can be `'basic'` or `'post'`. Defaults to `'post'`. `'basic'` requires `clientSecret`. For token endpoint methods beyond client secrets, configure `tokenEndpointAuth`.
 
 For `private_key_jwt`, set `tokenEndpointAuth.method` to `"private_key_jwt"`. You can provide your own `getClientAssertion` function, or use `createPrivateKeyJwtClientAssertionGetter` to sign an RFC 7523 JWT assertion from a private key:
