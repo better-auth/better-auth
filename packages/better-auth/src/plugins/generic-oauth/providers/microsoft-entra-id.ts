@@ -191,6 +191,7 @@ export function microsoftEntraId(
 		pkce: options.pkce,
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,
+		disableIdTokenSignIn: options.disableIdTokenSignIn,
 		overrideUserInfo: options.overrideUserInfo,
 		getUserInfo,
 	};

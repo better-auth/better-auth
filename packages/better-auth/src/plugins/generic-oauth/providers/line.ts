@@ -138,6 +138,7 @@ export function line(options: LineOptions): GenericOAuthConfig {
 		pkce: options.pkce,
 		disableImplicitSignUp: options.disableImplicitSignUp,
 		disableSignUp: options.disableSignUp,
+		disableIdTokenSignIn: options.disableIdTokenSignIn,
 		overrideUserInfo: options.overrideUserInfo,
 		getUserInfo,
 	};
