@@ -77,6 +77,20 @@ export interface PhoneNumberOptions {
 	 */
 	requireVerification?: boolean | undefined;
 	/**
+	 * Treat `phoneNumber` as a non-writable user field (`input: false`).
+	 *
+	 * By default `phoneNumber` can be provided in the sign-up body, before it
+	 * is verified. When this is enabled, passing it at sign-up is rejected with
+	 * a `400` error, so a number can only be attached to an account through a
+	 * flow that verifies ownership of it first:
+	 *
+	 * - `signUpOnVerification` — the account is created after the OTP is verified.
+	 * - a session-bound `/phone-number/verify` with `updatePhoneNumber: true`.
+	 *
+	 * @default false
+	 */
+	disablePhoneNumberInput?: boolean | undefined;
+	/**
 	 * Callback when phone number is verified
 	 */
 	callbackOnVerification?:
