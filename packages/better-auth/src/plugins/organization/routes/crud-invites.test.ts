@@ -1,5 +1,6 @@
 import type { BetterAuthOptions, GenerateIdFn } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
+import { parseSetCookieHeader } from "../../../cookies/cookie-utils";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { organization } from "../organization";
@@ -369,6 +370,106 @@ describe("organization invitation recipient ownership gates", async () => {
 		});
 		const memberEmails = (orgAfter?.members ?? []).map((m) => m.user.email);
 		expect(memberEmails).toContain(VICTIM_EMAIL);
+	});
+
+	describe("with the session cookie cache enabled", () => {
+		const cookieCacheSetup = {
+			authOptions: { session: { cookieCache: { enabled: true } } },
+			organizationOptions: { requireEmailVerificationOnInvitation: true },
+		} satisfies SetupInviteOptions;
+
+		/**
+		 * Signs the recipient up and in while unverified, so the cookie cache holds
+		 * `emailVerified: false`, then verifies the email in the database only.
+		 */
+		async function signInThenVerifyRecipient(
+			setup: Awaited<ReturnType<typeof setupInvite>>,
+		) {
+			await setup.client.signUp.email({
+				email: VICTIM_EMAIL,
+				password: ATTACKER_PASSWORD,
+				name: "recipient",
+			});
+			const headers = new Headers();
+			await setup.client.signIn.email(
+				{ email: VICTIM_EMAIL, password: ATTACKER_PASSWORD },
+				{
+					onSuccess(ctx) {
+						const cookies = parseSetCookieHeader(
+							ctx.response.headers.get("set-cookie") || "",
+						);
+						const token = cookies.get("better-auth.session_token")?.value;
+						const data = cookies.get("better-auth.session_data")?.value;
+						expect(data).toBeDefined();
+						headers.set(
+							"cookie",
+							`better-auth.session_token=${token}; better-auth.session_data=${data}`,
+						);
+					},
+				},
+			);
+			const ctx = await setup.auth.$context;
+			const recipient = await ctx.internalAdapter.findUserByEmail(VICTIM_EMAIL);
+			await ctx.internalAdapter.updateUser(recipient!.user.id, {
+				emailVerified: true,
+			});
+			return headers;
+		}
+
+		it("gets, lists and accepts the invitation once the recipient verifies after signing in", async () => {
+			const setup = await setupInvite(cookieCacheSetup);
+			const headers = await signInThenVerifyRecipient(setup);
+
+			const got = await setup.client.organization.getInvitation({
+				query: { id: setup.invitationId },
+				fetchOptions: { headers },
+			});
+			expect(got.error).toBeNull();
+
+			const list = await setup.client.organization.listUserInvitations({
+				fetchOptions: { headers },
+			});
+			expect(list.error).toBeNull();
+			expect(list.data?.map((invitation) => invitation.id)).toContain(
+				setup.invitationId,
+			);
+
+			const accept = await setup.client.organization.acceptInvitation({
+				invitationId: setup.invitationId,
+				fetchOptions: { headers },
+			});
+			expect(accept.error).toBeNull();
+			expect(accept.data?.invitation?.status).toBe("accepted");
+		});
+
+		it("rejects the invitation once the recipient verifies after signing in", async () => {
+			const setup = await setupInvite(cookieCacheSetup);
+			const headers = await signInThenVerifyRecipient(setup);
+
+			const reject = await setup.client.organization.rejectInvitation({
+				invitationId: setup.invitationId,
+				fetchOptions: { headers },
+			});
+			expect(reject.error).toBeNull();
+		});
+
+		it("does not accept the invitation with a session revoked after the cookie was cached", async () => {
+			const setup = await setupInvite({
+				...cookieCacheSetup,
+				organizationOptions: { requireEmailVerificationOnInvitation: false },
+			});
+			const headers = await signInThenVerifyRecipient(setup);
+			const ctx = await setup.auth.$context;
+			const recipient = await ctx.internalAdapter.findUserByEmail(VICTIM_EMAIL);
+			await ctx.internalAdapter.deleteUserSessions(recipient!.user.id);
+
+			const accept = await setup.client.organization.acceptInvitation({
+				invitationId: setup.invitationId,
+				fetchOptions: { headers },
+			});
+			expect(accept.data).toBeNull();
+			expect(accept.error?.status).toBe(401);
+		});
 	});
 });
 

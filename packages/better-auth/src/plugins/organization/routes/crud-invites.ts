@@ -3,14 +3,21 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../../api/routes";
+import {
+	getAuthoritativeSessionFromCtx,
+	getSessionFromCtx,
+} from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
+import {
+	orgMiddleware,
+	orgSensitiveSessionMiddleware,
+	orgSessionMiddleware,
+} from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
@@ -625,7 +632,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			method: "POST",
 			body: acceptInvitationBodySchema,
 			requireHeaders: true,
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware, orgSensitiveSessionMiddleware],
 			metadata: {
 				openapi: {
 					description: "Accept an invitation to an organization",
@@ -880,7 +887,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			method: "POST",
 			body: rejectInvitationBodySchema,
 			requireHeaders: true,
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware, orgSensitiveSessionMiddleware],
 			metadata: {
 				openapi: {
 					description: "Reject an invitation to an organization",
@@ -1175,7 +1182,7 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 			if (!session) {
 				throw APIError.fromStatus("UNAUTHORIZED", {
 					message: "Not authenticated",
@@ -1386,7 +1393,7 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 
 			if (ctx.request && ctx.query?.email) {
 				throw APIError.fromStatus("BAD_REQUEST", {
