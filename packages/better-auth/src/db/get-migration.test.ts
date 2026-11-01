@@ -13,22 +13,44 @@ it("uses a profile's index introspection during migration planning", async () =>
 	const db = new Kysely<unknown>({
 		dialect: new NodeSqliteDialect({ database: new DatabaseSync(":memory:") }),
 	});
+	const options: BetterAuthOptions = {
+		plugins: [
+			{
+				id: "indexed",
+				schema: {
+					record: {
+						fields: { owner: { type: "string" } },
+						indexes: [{ name: "record_owner_idx", fields: ["owner"] }],
+					},
+				},
+			},
+		],
+	};
 	const introspectIndexes = vi.fn(async (_tables: readonly string[]) => []);
 	try {
-		const initial = await getMigrations({ database: { db, type: "sqlite" } });
+		const initial = await getMigrations({
+			...options,
+			database: { db, type: "sqlite" },
+		});
 		await initial.runMigrations();
-		const baseline = await getMigrations({ database: { db, type: "sqlite" } });
+		const baseline = await getMigrations({
+			...options,
+			database: { db, type: "sqlite" },
+		});
 		expect(baseline.toBeAddedIndexes).toEqual([]);
 
 		// The introspector reports no indexes, so the planner should want to
-		// create the ones SQLite already has.
+		// create the one SQLite already has.
 		const plan = await getMigrations({
+			...options,
 			database: { db, type: "sqlite", introspectIndexes },
 		});
 		expect(introspectIndexes).toHaveBeenCalledOnce();
-		expect(introspectIndexes.mock.calls[0]?.[0]).toContain("user");
+		expect(introspectIndexes.mock.calls[0]?.[0]).toContain("record");
 		expect(plan.toBeCreated).toEqual([]);
-		expect(plan.toBeAddedIndexes).not.toEqual([]);
+		expect(plan.toBeAddedIndexes.map(({ table }) => table)).toEqual([
+			"record",
+		]);
 	} finally {
 		await db.destroy();
 	}
