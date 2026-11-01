@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.6.34
+
+### Patch Changes
+
+- [#11300](https://github.com/better-auth/better-auth/pull/11300) [`54e96dd`](https://github.com/better-auth/better-auth/commit/54e96dd6b0fb37d6934797e046091c1e3544eacc) Thanks [@bytaesu](https://github.com/bytaesu)! - Prevent `ACCOUNT_NOT_FOUND` when retrieving an access token after stateless OAuth sign-in links a new provider to an existing user.
+
+- Updated dependencies []:
+  - @better-auth/core@1.6.34
+  - @better-auth/drizzle-adapter@1.6.34
+  - @better-auth/kysely-adapter@1.6.34
+  - @better-auth/memory-adapter@1.6.34
+  - @better-auth/mongo-adapter@1.6.34
+  - @better-auth/prisma-adapter@1.6.34
+  - @better-auth/telemetry@1.6.34
+
 ## 1.6.33
 
 ### Patch Changes

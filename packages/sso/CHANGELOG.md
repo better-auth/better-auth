@@ -1,5 +1,15 @@
 # @better-auth/sso
 
+## 1.6.34
+
+### Patch Changes
+
+- [#11730](https://github.com/better-auth/better-auth/pull/11730) [`3720d57`](https://github.com/better-auth/better-auth/commit/3720d57fb6234c52bdca23909024a09af1af26c9) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SAML providers that set `samlConfig.callbackUrl` as their Assertion Consumer Service URL, without supplying `spMetadata.metadata`, can sign in again. Since 1.6.21, every response sent to that URL failed with `invalid_saml_response` and a message that the bearer `Recipient` does not match this Service Provider. Providers that supply SP metadata XML were not affected.
+
+- Updated dependencies [[`54e96dd`](https://github.com/better-auth/better-auth/commit/54e96dd6b0fb37d6934797e046091c1e3544eacc)]:
+  - better-auth@1.6.34
+  - @better-auth/core@1.6.34
+
 ## 1.6.33
 
 ### Patch Changes
