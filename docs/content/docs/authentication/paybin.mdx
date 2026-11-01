@@ -83,3 +83,7 @@ export const auth = betterAuth({
 ### User Profile Mapping
 
 Use [`mapProfileToUser`](/docs/concepts/oauth#mapprofiletouser) to customize profile fields.
+
+### ID Token Sign-In
+
+When using a custom `verifyIdToken` with the default `getUserInfo`, include `idToken.accessToken` in `signIn.social`.
