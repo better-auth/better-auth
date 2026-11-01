@@ -1,5 +1,7 @@
 # @better-auth/api-key
 
+## 1.8.0-beta.4
+
 ## 1.8.0-beta.3
 
 ## 1.8.0-beta.2

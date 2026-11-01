@@ -1,5 +1,15 @@
 # @better-auth/core
 
+## 1.8.0-beta.4
+
+### Minor Changes
+
+- [#11865](https://github.com/better-auth/better-auth/pull/11865) [`9854901`](https://github.com/better-auth/better-auth/commit/985490110576062305b4ee2d66b3e8595c87380c) Thanks [@bytaesu](https://github.com/bytaesu)! - Spotify profile mappings must handle nullable display names, omitted email, and nullable image dimensions. A missing display name leaves the local name unset while raw profile fields remain available.
+
+- [#11860](https://github.com/better-auth/better-auth/pull/11860) [`8b2944c`](https://github.com/better-auth/better-auth/commit/8b2944c7d75146ed2cd1c2214a6ac64e7c25de4c) Thanks [@bytaesu](https://github.com/bytaesu)! - Paybin now uses its published `/oauth/*` endpoints and returns UserInfo data instead of stored ID-token claims. Profile mappings must handle omitted email, and custom ID-token sign-ins using the default profile reader must also supply `accessToken`.
+
+- [#11848](https://github.com/better-auth/better-auth/pull/11848) [`93dd5d1`](https://github.com/better-auth/better-auth/commit/93dd5d102eb16a2c96ab808389af953ec8c7d24d) Thanks [@bytaesu](https://github.com/bytaesu)! - Twitch now returns current profile data instead of stored ID-token claims. Profile mappings must handle optional fields, and custom ID-token sign-ins using the default profile reader must also supply `accessToken`.
+
 ## 1.8.0-beta.3
 
 ### Minor Changes
