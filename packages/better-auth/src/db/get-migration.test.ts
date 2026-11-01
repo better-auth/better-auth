@@ -48,9 +48,7 @@ it("uses a profile's index introspection during migration planning", async () =>
 		expect(introspectIndexes).toHaveBeenCalledOnce();
 		expect(introspectIndexes.mock.calls[0]?.[0]).toContain("record");
 		expect(plan.toBeCreated).toEqual([]);
-		expect(plan.toBeAddedIndexes.map(({ table }) => table)).toEqual([
-			"record",
-		]);
+		expect(plan.toBeAddedIndexes.map(({ table }) => table)).toEqual(["record"]);
 	} finally {
 		await db.destroy();
 	}
