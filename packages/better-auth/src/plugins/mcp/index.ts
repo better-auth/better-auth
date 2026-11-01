@@ -506,6 +506,26 @@ export const mcp = (options: MCPOptions) => {
 								});
 							}
 						}
+						// Rotate the refresh token: consume the presented row before the
+						// new pair is issued, so a second presentation, or a concurrent
+						// one, gets `invalid_grant` instead of another live token
+						// (RFC 9700 §4.14.2). The old access token goes with it.
+						const consumedToken =
+							await ctx.context.adapter.consumeOne<OAuthAccessToken>({
+								model: modelName.oauthAccessToken,
+								where: [
+									{
+										field: "refreshToken",
+										value: refresh_token.toString(),
+									},
+								],
+							});
+						if (!consumedToken) {
+							throw new APIError("UNAUTHORIZED", {
+								error_description: "refresh token already used",
+								error: "invalid_grant",
+							});
+						}
 						const accessToken = generateRandomString(32, "a-z", "A-Z");
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
 						const accessTokenExpiresAt = new Date(

@@ -1179,8 +1179,177 @@ describe("mcp refresh_token grant client authentication", () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/11553
+ */
+describe("mcp refresh_token grant rotation", () => {
+	const REFRESH_TOKEN = "mcp-rotation-refresh-token";
+	const ACCESS_TOKEN = "mcp-rotation-access-token";
+	const CLIENT_ID = "mcp-rotation-public-client";
+
+	async function seedPublicClientAndToken(
+		db: Awaited<ReturnType<typeof getTestInstance>>["db"],
+		userId: string,
+	) {
+		await db.create({
+			model: "oauthApplication",
+			data: {
+				clientId: CLIENT_ID,
+				clientSecret: null,
+				type: "public",
+				name: "Rotation Test Client",
+				redirectUrls: "http://localhost/callback",
+				disabled: false,
+				metadata: null,
+				icon: null,
+				userId: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		await db.create({
+			model: "oauthAccessToken",
+			data: {
+				accessToken: ACCESS_TOKEN,
+				refreshToken: REFRESH_TOKEN,
+				accessTokenExpiresAt: new Date(Date.now() + 3600 * 1000),
+				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+				clientId: CLIENT_ID,
+				userId,
+				scopes: "openid profile email offline_access",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+	}
+
+	function refresh(
+		customFetchImpl: Awaited<
+			ReturnType<typeof getTestInstance>
+		>["customFetchImpl"],
+		refreshToken: string,
+	) {
+		return customFetchImpl("http://localhost:3000/api/auth/mcp/token", {
+			method: "POST",
+			headers: { "Content-Type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "refresh_token",
+				refresh_token: refreshToken,
+				client_id: CLIENT_ID,
+			}).toString(),
+		});
+	}
+
+	it("spends the presented refresh token once the new one is issued", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedPublicClientAndToken(db, user.id);
+
+		const first = await refresh(customFetchImpl, REFRESH_TOKEN);
+		const firstBody = await first.json();
+		expect(first.status).toBe(200);
+		expect(firstBody.refresh_token).toBeTypeOf("string");
+		expect(firstBody.refresh_token).not.toBe(REFRESH_TOKEN);
+
+		const reuse = await refresh(customFetchImpl, REFRESH_TOKEN);
+		const reuseBody = await reuse.json().catch(() => null);
+		expect(reuse.status).toBe(401);
+		expect(reuseBody?.error).toBe("invalid_grant");
+		expect(reuseBody?.access_token).toBeUndefined();
+
+		// The old pair is gone; the new refresh token carries the chain on.
+		const oldRow = await db.findOne({
+			model: "oauthAccessToken",
+			where: [{ field: "accessToken", value: ACCESS_TOKEN }],
+		});
+		expect(oldRow).toBeNull();
+		const second = await refresh(customFetchImpl, firstBody.refresh_token);
+		expect(second.status).toBe(200);
+	});
+
+	it("lets only one of two concurrent presentations succeed", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		await seedPublicClientAndToken(db, user.id);
+
+		const responses = await Promise.all([
+			refresh(customFetchImpl, REFRESH_TOKEN),
+			refresh(customFetchImpl, REFRESH_TOKEN),
+		]);
+		const statuses = responses.map((r) => r.status).sort();
+		expect(statuses).toEqual([200, 401]);
+		const rows = await db.findMany({
+			model: "oauthAccessToken",
+			where: [{ field: "clientId", value: CLIENT_ID }],
+		});
+		expect(rows).toHaveLength(1);
+	});
+	it("leaves the token unspent when client authentication fails", async () => {
+		const { customFetchImpl, signInWithTestUser, db } = await getTestInstance({
+			plugins: [mcp({ loginPage: "/login" })],
+		});
+		const { user } = await signInWithTestUser();
+		const confidentialId = "mcp-rotation-confidential-client";
+		const secret = "mcp-rotation-secret";
+		await db.create({
+			model: "oauthApplication",
+			data: {
+				clientId: confidentialId,
+				clientSecret: secret,
+				type: "web",
+				name: "Rotation Confidential Client",
+				redirectUrls: "http://localhost/callback",
+				disabled: false,
+				metadata: null,
+				icon: null,
+				userId: null,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		await db.create({
+			model: "oauthAccessToken",
+			data: {
+				accessToken: `${ACCESS_TOKEN}-confidential`,
+				refreshToken: `${REFRESH_TOKEN}-confidential`,
+				accessTokenExpiresAt: new Date(Date.now() + 3600 * 1000),
+				refreshTokenExpiresAt: new Date(Date.now() + 7 * 24 * 3600 * 1000),
+				clientId: confidentialId,
+				userId: user.id,
+				scopes: "openid profile email offline_access",
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+		const send = (clientSecret: string) =>
+			customFetchImpl("http://localhost:3000/api/auth/mcp/token", {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					refresh_token: `${REFRESH_TOKEN}-confidential`,
+					client_id: confidentialId,
+					client_secret: clientSecret,
+				}).toString(),
+			});
+
+		const rejected = await send("wrong-secret");
+		expect(rejected.status).toBe(401);
+		expect((await rejected.json())?.error).toBe("invalid_client");
+
+		// The failed attempt did not spend the token: the real client still can.
+		const accepted = await send(secret);
+		expect(accepted.status).toBe(200);
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-9h47-pqcx-hjr4
  */
+
 describe("mcp discovery metadata (security)", async () => {
 	const { auth } = await getTestInstance({
 		baseURL: "http://localhost:3000",
