@@ -1200,6 +1200,30 @@ export const createInternalAdapter = (
 				undefined,
 			);
 		},
+		updatePasswordIfUnchanged: async (
+			accountId: string,
+			currentHash: string,
+			newHash: string,
+		) => {
+			const account = await updateWithHooks<Account>(
+				{
+					password: newHash,
+				},
+				[
+					{
+						field: "id",
+						value: accountId,
+					},
+					{
+						field: "password",
+						value: currentHash,
+					},
+				],
+				"account",
+				undefined,
+			);
+			return account !== null;
+		},
 		findAccounts: async (userId: string) => {
 			const accounts = await (
 				await getCurrentAdapter(adapter)

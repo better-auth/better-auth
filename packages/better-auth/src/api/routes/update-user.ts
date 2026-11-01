@@ -277,6 +277,8 @@ export const changePassword = createAuthEndpoint(
 		if (!verify) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 		}
+		// No rehash-on-verify here: the account's password is replaced with the
+		// new hash immediately below, which supersedes any outdated hash.
 		// Revoke before writing, in one transaction, so a failure never commits
 		// the new password while the other sessions stay valid.
 		const newSession = await runWithTransaction(
@@ -489,6 +491,8 @@ export const deleteUser = createAuthEndpoint(
 			if (!verify) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 			}
+			// No rehash-on-verify here: this request deletes (or starts deleting)
+			// the account; a later password sign-in will re-hash if needed.
 		}
 
 		if (ctx.body.token) {

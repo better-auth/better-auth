@@ -248,6 +248,17 @@ export interface InternalAdapter<
 
 	updatePassword(userId: string, password: string): Promise<void>;
 
+	/**
+	 * Replace an account's password hash only if it still equals `currentHash`,
+	 * as a single conditional write. A concurrent change to the hash makes this
+	 * a no-op. Resolves to `true` when the hash was replaced.
+	 */
+	updatePasswordIfUnchanged(
+		accountId: string,
+		currentHash: string,
+		newHash: string,
+	): Promise<boolean>;
+
 	findAccounts(userId: string): Promise<Account[]>;
 
 	/** Find the credential account whose stable local subject is the user ID. */
@@ -318,6 +329,17 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	userId: string,
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
+
+/**
+ * The result of verifying a password.
+ *
+ * - `true`: the password is valid.
+ * - `false`: the password is invalid.
+ * - `"success-rehash-needed"`: the password is valid, but the stored hash is
+ *   outdated (e.g. produced by a different algorithm or cost factor) and should
+ *   be re-hashed and persisted. Better Auth will do this automatically.
+ */
+export type PasswordVerifyResult = boolean | "success-rehash-needed";
 
 export type PluginContext<Options extends BetterAuthOptions> = {
 	getPlugin: <
@@ -465,7 +487,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			secondaryStorage: SecondaryStorage | undefined;
 			password: {
 				hash: (password: string) => Promise<string>;
-				verify: (data: { password: string; hash: string }) => Promise<boolean>;
+				verify: (data: {
+					password: string;
+					hash: string;
+				}) => Promise<PasswordVerifyResult>;
 				config: {
 					minPasswordLength: number;
 					maxPasswordLength: number;

@@ -12,6 +12,7 @@ import { getDate } from "../../utils/date";
 import {
 	assertPasswordNotTooLong,
 	assertPasswordNotTooShort,
+	rehashPasswordIfNeeded,
 	resetCredentialPassword,
 } from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
@@ -177,6 +178,15 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
+			// Re-hash after the checks above, so requests they reject never write the
+			// credential. Later steps (session hooks, two-factor) can still withhold
+			// the session; the upgraded hash is valid either way.
+			await rehashPasswordIfNeeded(ctx, {
+				accountId: credentialAccount.id,
+				password,
+				currentHash: currentPassword,
+				verifyResult: validPassword,
+			});
 			const session = await ctx.context.internalAdapter.createSession(
 				user.id,
 				ctx.body.rememberMe === false,
