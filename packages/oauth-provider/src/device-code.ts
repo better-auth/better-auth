@@ -117,8 +117,14 @@ async function exchangeOAuthDeviceCode(
 	type ClientAuthorization = Awaited<
 		ReturnType<typeof provider.authenticateClient>
 	> & { scopes: string[] };
+	// RFC 6749 §5.2: an unknown or unauthenticated client is `invalid_client`,
+	// so resolve it before the device code lookup can report `invalid_grant`.
+	const authentication = await provider.authenticateClient({
+		requireCredentials: false,
+	});
 	const {
 		authorizationContext: { client, confirmation, scopes },
+		claimedDeviceCode,
 		redemptionContext: resources,
 		user,
 	} = await redeemDeviceCode<
@@ -139,9 +145,6 @@ async function exchangeOAuthDeviceCode(
 			}
 
 			const scopes = parseScopes(record.scope);
-			const authentication = await provider.authenticateClient({
-				requireCredentials: false,
-			});
 			if (record.oauthClientId !== authentication.client.clientId) {
 				tokenError("BAD_REQUEST", "invalid_grant", "Client ID mismatch");
 			}
@@ -187,6 +190,8 @@ async function exchangeOAuthDeviceCode(
 		scopes,
 		user,
 		resources,
+		// Seed refresh tokens with every approved resource, not the narrowed poll.
+		originalResources: claimedDeviceCode.resources ?? undefined,
 		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});

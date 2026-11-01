@@ -1091,7 +1091,9 @@ export type BetterAuthOptions = {
 				 * Set this to true to store the session in the database
 				 * as well.
 				 *
-				 * Reads are always done from the secondary storage.
+				 * When enabled, session token lookups fall back to the database
+				 * for missing secondary-storage entries, unless
+				 * `preserveSessionInDatabase` is enabled.
 				 *
 				 * @default false
 				 */

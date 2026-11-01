@@ -97,5 +97,6 @@ async function postLogin<Result>(
 		state.postLoginClearedForSession === session?.session.id;
 	return await authorize(ctx, {
 		postLogin: postLoginCleared,
+		isPostLoginContinuation: true,
 	});
 }

@@ -650,7 +650,10 @@ describe("requireMcpAuth", () => {
 			const baseURL = "https://app.example.com/api/auth";
 			const resource = "https://app.example.com/api/auth";
 
-			const token = await new SignJWT({ sub: "user-custom" })
+			const token = await new SignJWT({
+				sub: "user-custom",
+				azp: "test-client",
+			})
 				.setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
 				.setIssuer(baseURL)
 				.setAudience(resource)
@@ -795,7 +798,10 @@ describe("requireMcpAuth", () => {
 			const baseURL = "https://worker.customdomain.com/api/auth";
 			const resource = "https://worker.customdomain.com/mcp";
 
-			const token = await new SignJWT({ sub: "worker-user" })
+			const token = await new SignJWT({
+				sub: "worker-user",
+				azp: "test-client",
+			})
 				.setProtectedHeader({ alg: "RS256", kid: publicJwk.kid })
 				.setIssuer(baseURL)
 				.setAudience(resource)

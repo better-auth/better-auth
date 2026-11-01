@@ -96,37 +96,37 @@ describe("getAsyncLocalStorage", () => {
 		});
 
 		describe("unavailable runtime constructor", () => {
-			it.each([
-				undefined,
-				null,
-			])("forwards the native error when the global is %s and recovers later", async (constructor) => {
-				const error = new Error("Native export is unavailable");
-				mockNativeConstructorError(error);
-				vi.stubGlobal("AsyncLocalStorage", constructor);
-				const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-				const { getAsyncLocalStorage } = await import("./index");
-				await expect(getAsyncLocalStorage()).rejects.toBe(error);
-				expect(warn).toHaveBeenCalledWith(
-					expect.stringContaining("AsyncLocalStorage is not available"),
-				);
-				vi.stubGlobal("AsyncLocalStorage", AsyncLocalStorage);
-				await expect(getAsyncLocalStorage()).resolves.toBe(AsyncLocalStorage);
-			});
+			it.each([undefined, null])(
+				"forwards the native error when the global is %s and recovers later",
+				async (constructor) => {
+					const error = new Error("Native export is unavailable");
+					mockNativeConstructorError(error);
+					vi.stubGlobal("AsyncLocalStorage", constructor);
+					const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+					const { getAsyncLocalStorage } = await import("./index");
+					await expect(getAsyncLocalStorage()).rejects.toBe(error);
+					expect(warn).toHaveBeenCalledWith(
+						expect.stringContaining("AsyncLocalStorage is not available"),
+					);
+					vi.stubGlobal("AsyncLocalStorage", AsyncLocalStorage);
+					await expect(getAsyncLocalStorage()).resolves.toBe(AsyncLocalStorage);
+				},
+			);
 
-			it.each([
-				undefined,
-				null,
-			])("rejects browser calls without warnings when the global is %s", async (constructor) => {
-				mockNativeConstructorError(new Error("Native export is unavailable"));
-				vi.stubGlobal("AsyncLocalStorage", constructor);
-				vi.stubGlobal("window", {});
-				const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-				const { getAsyncLocalStorage } = await import("./index");
-				await expect(getAsyncLocalStorage()).rejects.toThrow(
-					"getAsyncLocalStorage is only available in server code",
-				);
-				expect(warn).not.toHaveBeenCalled();
-			});
+			it.each([undefined, null])(
+				"rejects browser calls without warnings when the global is %s",
+				async (constructor) => {
+					mockNativeConstructorError(new Error("Native export is unavailable"));
+					vi.stubGlobal("AsyncLocalStorage", constructor);
+					vi.stubGlobal("window", {});
+					const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+					const { getAsyncLocalStorage } = await import("./index");
+					await expect(getAsyncLocalStorage()).rejects.toThrow(
+						"getAsyncLocalStorage is only available in server code",
+					);
+					expect(warn).not.toHaveBeenCalled();
+				},
+			);
 		});
 
 		it("preserves the server-only error for unsupported browser calls", async () => {

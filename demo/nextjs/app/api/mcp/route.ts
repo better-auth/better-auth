@@ -3,9 +3,7 @@ import type { AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { NextResponse } from "next/server";
 import * as z from "zod";
-
-const baseUrl = process.env.BETTER_AUTH_URL || "https://demo.better-auth.com";
-const resource = `${baseUrl}/api/mcp`;
+import { baseURL, mcpResource, organizationClaim } from "@/lib/demo-url";
 
 function extractPresentedAccessToken(request: Request): string {
 	const authorization = request.headers.get("authorization");
@@ -46,7 +44,7 @@ const mcpServerHandler = createMcpHandler(
 	(context) => {
 		const accessTokenClaims = context.authInfo?.extra?.accessTokenClaims;
 		const userId = readStringClaim(accessTokenClaims, "sub");
-		const organization = readStringClaim(accessTokenClaims, `${baseUrl}/org`);
+		const organization = readStringClaim(accessTokenClaims, organizationClaim);
 		const server = new McpServer({
 			name: "demo-better-auth",
 			version: "1.0.0",
@@ -77,9 +75,9 @@ const mcpServerHandler = createMcpHandler(
 
 const protectedMcpRequest = createMcpProtectedRequestHandler(
 	{
-		issuer: baseUrl,
-		audience: resource,
-		jwksUrl: `${baseUrl}/api/auth/jwks`,
+		issuer: baseURL,
+		audience: mcpResource,
+		jwksUrl: `${baseURL}/api/auth/jwks`,
 	},
 	(request, accessTokenClaims) => {
 		const authInfo: AuthInfo = {
@@ -90,7 +88,7 @@ const protectedMcpRequest = createMcpProtectedRequestHandler(
 					? [...new Set(accessTokenClaims.scope.split(" ").filter(Boolean))]
 					: [],
 			expiresAt: accessTokenClaims.exp,
-			resource: new URL(resource),
+			resource: new URL(mcpResource),
 			extra: { accessTokenClaims },
 		};
 		return mcpServerHandler.fetch(request, { authInfo });

@@ -295,6 +295,33 @@ describe("oauth authorize - unauthenticated", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/croffasia/itsaplan/issues/564
+	 */
+	it("reports an unknown client_id as a client that was not found", async () => {
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: "no-such-client",
+			redirect_uri: redirectUri,
+			code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+			code_challenge_method: "S256",
+		}).toString();
+
+		let location = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		const errorUrl = new URL(location, authServerBaseUrl);
+		expect(errorUrl.origin).toBe(authServerBaseUrl);
+		expect(errorUrl.searchParams.get("error")).toBe("invalid_client");
+		expect(errorUrl.searchParams.get("error_description")).toBe(
+			"client not found",
+		);
+	});
+
 	it("should replace incoming sig when signing the login redirect", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");

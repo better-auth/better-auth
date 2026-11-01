@@ -509,6 +509,10 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	/**
 	 * Execute multiple operations in a transaction.
 	 * If the adapter doesn't support transactions, operations will be executed sequentially.
+	 *
+	 * An adapter may run `callback` more than once, for example when MongoDB
+	 * aborts the transaction with a transient error, so work outside the
+	 * database belongs in `queueAfterTransactionHook`.
 	 */
 	transaction: <R>(
 		callback: (trx: DBTransactionAdapter<Options>) => Promise<R>,

@@ -491,7 +491,7 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 		}
 
 		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
-		if (inFlightResolution) return inFlightResolution;
+		if (inFlightResolution !== undefined) return inFlightResolution;
 
 		const releaseMetadataFetchPermit = acquireMetadataFetchPermit(clientId);
 		const resolution = (async () => {

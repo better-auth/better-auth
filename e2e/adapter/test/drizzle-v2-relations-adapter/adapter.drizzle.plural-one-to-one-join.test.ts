@@ -110,18 +110,16 @@ test.for([
 		schemaSetup: "without adapter schema",
 		relations: legacyAuthRelations,
 	},
-] as const)("$method resolves a one-to-one relation with $relationKeys keys $schemaSetup", async ({
-	method,
-	schemaSetup,
-	relations,
-}) => {
-	const sqliteDb = new Database(":memory:");
-	onTestFinished(() => {
-		sqliteDb.close();
-	});
+] as const)(
+	"$method resolves a one-to-one relation with $relationKeys keys $schemaSetup",
+	async ({ method, schemaSetup, relations }) => {
+		const sqliteDb = new Database(":memory:");
+		onTestFinished(() => {
+			sqliteDb.close();
+		});
 
-	const timestamp = 1_700_000_000_000;
-	sqliteDb.exec(`
+		const timestamp = 1_700_000_000_000;
+		sqliteDb.exec(`
 		CREATE TABLE users (
 			id TEXT PRIMARY KEY,
 			name TEXT NOT NULL,
@@ -151,34 +149,35 @@ test.for([
 		);
 	`);
 
-	const db = drizzle({ client: sqliteDb, relations });
-	const adapter = drizzleAdapter(db, {
-		...(schemaSetup === "with adapter schema"
-			? { schema: { ...dbSchema, authRelations: relations } }
-			: {}),
-		provider: "sqlite",
-		usePlural: true,
-	})({
-		advanced: { database: { joins: true } },
-	});
+		const db = drizzle({ client: sqliteDb, relations });
+		const adapter = drizzleAdapter(db, {
+			...(schemaSetup === "with adapter schema"
+				? { schema: { ...dbSchema, authRelations: relations } }
+				: {}),
+			provider: "sqlite",
+			usePlural: true,
+		})({
+			advanced: { database: { joins: true } },
+		});
 
-	const session =
-		method === "findOne"
-			? await adapter.findOne<SessionWithUser>({
-					model: "session",
-					where: [{ field: "token", value: "token-1" }],
-					join: { user: true },
-				})
-			: (
-					await adapter.findMany<SessionWithUser>({
+		const session =
+			method === "findOne"
+				? await adapter.findOne<SessionWithUser>({
 						model: "session",
 						where: [{ field: "token", value: "token-1" }],
 						join: { user: true },
 					})
-				)[0];
+				: (
+						await adapter.findMany<SessionWithUser>({
+							model: "session",
+							where: [{ field: "token", value: "token-1" }],
+							join: { user: true },
+						})
+					)[0];
 
-	expect(session).toMatchObject({
-		id: "session-1",
-		user: { id: "user-1" },
-	});
-});
+		expect(session).toMatchObject({
+			id: "session-1",
+			user: { id: "user-1" },
+		});
+	},
+);

@@ -42,75 +42,72 @@ describe("drizzle-adapter", () => {
 			},
 		] as const;
 
-		it.for(
-			adapterFactories,
-		)("should not initialize a lazy database during $relations adapter construction", ({
-			createAdapter,
-		}) => {
-			const db = new Proxy({} as DB, {
-				get() {
-					throw new Error("DATABASE_URL is not set");
-				},
-			});
-
-			expect(() =>
-				createAdapter(db, { provider: "pg" })({
-					secret: "test-secret-that-is-at-least-32-chars-long!!",
-				}),
-			).not.toThrow();
-		});
-
-		it.for(
-			adapterFactories,
-		)("should support a first $relations joined read inside a transaction", async ({
-			createAdapter,
-			relationMetadata,
-		}) => {
-			const findFirst = vi.fn().mockResolvedValue(null);
-			const transactionDatabase = new Proxy(
-				{
-					query: { user: { findFirst } },
-				} as DB,
-				{
-					get(target, property, receiver) {
-						if (property === "_") {
-							throw new Error("Transaction metadata should not be read");
-						}
-						return Reflect.get(target, property, receiver);
+		it.for(adapterFactories)(
+			"should not initialize a lazy database during $relations adapter construction",
+			({ createAdapter }) => {
+				const db = new Proxy({} as DB, {
+					get() {
+						throw new Error("DATABASE_URL is not set");
 					},
-				},
-			);
-			const database = {
-				_: relationMetadata,
-				transaction: (callback: (transactionDatabase: DB) => unknown) =>
-					callback(transactionDatabase),
-			} as DB;
-			const user = pgTable("user", { id: text("id") });
-			const adapter = createAdapter(database, {
-				provider: "pg",
-				schema: { user },
-				transaction: true,
-			})({
-				advanced: {
-					database: { joins: true, validateSchema: false },
-				},
-			});
+				});
 
-			if (!adapter.transaction) {
-				throw new Error("Transaction support should be enabled");
-			}
-
-			await expect(
-				adapter.transaction((transactionAdapter) =>
-					transactionAdapter.findOne({
-						model: "user",
-						where: [],
-						join: { session: true },
+				expect(() =>
+					createAdapter(db, { provider: "pg" })({
+						secret: "test-secret-that-is-at-least-32-chars-long!!",
 					}),
-				),
-			).resolves.toBeNull();
-			expect(findFirst).toHaveBeenCalledOnce();
-		});
+				).not.toThrow();
+			},
+		);
+
+		it.for(adapterFactories)(
+			"should support a first $relations joined read inside a transaction",
+			async ({ createAdapter, relationMetadata }) => {
+				const findFirst = vi.fn().mockResolvedValue(null);
+				const transactionDatabase = new Proxy(
+					{
+						query: { user: { findFirst } },
+					} as DB,
+					{
+						get(target, property, receiver) {
+							if (property === "_") {
+								throw new Error("Transaction metadata should not be read");
+							}
+							return Reflect.get(target, property, receiver);
+						},
+					},
+				);
+				const database = {
+					_: relationMetadata,
+					transaction: (callback: (transactionDatabase: DB) => unknown) =>
+						callback(transactionDatabase),
+				} as DB;
+				const user = pgTable("user", { id: text("id") });
+				const adapter = createAdapter(database, {
+					provider: "pg",
+					schema: { user },
+					transaction: true,
+				})({
+					advanced: {
+						database: { joins: true, validateSchema: false },
+					},
+				});
+
+				if (!adapter.transaction) {
+					throw new Error("Transaction support should be enabled");
+				}
+
+				await expect(
+					adapter.transaction((transactionAdapter) =>
+						transactionAdapter.findOne({
+							model: "user",
+							where: [],
+							join: { session: true },
+						}),
+					),
+				).resolves.toBeNull();
+				expect(findFirst).toHaveBeenCalledOnce();
+			},
+		);
 	});
 
 	it("should use unique column fallback for MySQL creates without an id", async () => {
@@ -414,48 +411,47 @@ describe("drizzle-adapter", () => {
 				result: { meta: { changes: 2 } },
 				expected: 2,
 			},
-		])("returns the affected-row count for $provider ($expected)", async ({
-			provider,
-			result,
-			expected,
-		}) => {
-			const db = createUpdateDb(result);
-			const adapter = drizzleAdapter(db, { provider })({
-				secret: defaultSecret,
-			});
+		])(
+			"returns the affected-row count for $provider ($expected)",
+			async ({ provider, result, expected }) => {
+				const db = createUpdateDb(result);
+				const adapter = drizzleAdapter(db, { provider })({
+					secret: defaultSecret,
+				});
 
-			const count = await adapter.updateMany({
-				model: "user",
-				where: [{ field: "emailVerified", value: false }],
-				update: { emailVerified: true },
-			});
+				const count = await adapter.updateMany({
+					model: "user",
+					where: [{ field: "emailVerified", value: false }],
+					update: { emailVerified: true },
+				});
 
-			expect(count).toBe(expected);
-		});
+				expect(count).toBe(expected);
+			},
+		);
 
 		it.each([
 			{ provider: "sqlite" as const, result: { changes: Number.NaN } },
 			{ provider: "pg" as const, result: { rowCount: "2" } },
 			{ provider: "mysql" as const, result: [{ affectedRows: Infinity }] },
-		])("throws for invalid affected-row counts from $provider", async ({
-			provider,
-			result,
-		}) => {
-			const db = createUpdateDb(result);
-			const adapter = drizzleAdapter(db, { provider })({
-				secret: defaultSecret,
-			});
+		])(
+			"throws for invalid affected-row counts from $provider",
+			async ({ provider, result }) => {
+				const db = createUpdateDb(result);
+				const adapter = drizzleAdapter(db, { provider })({
+					secret: defaultSecret,
+				});
 
-			await expect(
-				adapter.updateMany({
-					model: "user",
-					where: [{ field: "emailVerified", value: false }],
-					update: { emailVerified: true },
-				}),
-			).rejects.toThrow(
-				"Drizzle adapter updateMany returned an invalid affected row count",
-			);
-		});
+				await expect(
+					adapter.updateMany({
+						model: "user",
+						where: [{ field: "emailVerified", value: false }],
+						update: { emailVerified: true },
+					}),
+				).rejects.toThrow(
+					"Drizzle adapter updateMany returned an invalid affected row count",
+				);
+			},
+		);
 	});
 
 	describe("consumeOne affected-row count", () => {

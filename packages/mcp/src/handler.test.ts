@@ -105,19 +105,19 @@ describe("createMcpProtectedRequestHandler", () => {
 		).rejects.toBe(denial);
 	});
 
-	it.each([
-		"UNAUTHORIZED",
-		"FORBIDDEN",
-	] as const)("propagates a handler-thrown %s API error unchanged", async (status) => {
-		const denial = new APIError(status, { message: "handler denial" });
-		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-3" });
+	it.each(["UNAUTHORIZED", "FORBIDDEN"] as const)(
+		"propagates a handler-thrown %s API error unchanged",
+		async (status) => {
+			const denial = new APIError(status, { message: "handler denial" });
+			verifyAccessTokenRequest.mockResolvedValue({ sub: "user-3" });
 
-		await expect(
-			createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
-				throw denial;
-			})(request()),
-		).rejects.toBe(denial);
-	});
+			await expect(
+				createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
+					throw denial;
+				})(request()),
+			).rejects.toBe(denial);
+		},
+	);
 
 	it("propagates a primitive handler failure unchanged", async () => {
 		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-4" });

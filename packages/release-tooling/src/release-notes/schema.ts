@@ -11,7 +11,8 @@ export const prereleaseStateSchema = z.object({
 	changesets: z.array(z.string()),
 });
 
-const releaseTitleSchema = z.string().min(1).max(500);
+export const releaseTitleMaxLength = 500;
+const releaseTitleSchema = z.string().min(1).max(releaseTitleMaxLength);
 const changesetDescriptionSchema = z.string().max(20_000).nullable();
 const prototypeKeys = new Set(["__proto__", "constructor", "prototype"]);
 export const releaseRewriteKeySchema = z
@@ -70,7 +71,7 @@ const releaseRewriteSchema = z.strictObject({
 		.max(500)
 		.regex(/^[^\r\n]+$/)
 		.nullable()
-		.describe("A migration action for breaking changes, otherwise null"),
+		.describe("An action users must take, otherwise null"),
 });
 
 export const releaseRewritesSchema = z.strictObject({

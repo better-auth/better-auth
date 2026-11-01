@@ -636,6 +636,60 @@ describe("SSO", async () => {
 			}
 		}
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11630
+	 */
+	it("reads the email from a mapped array claim in the ID token (Azure AD B2C)", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "b2c-emails-array",
+				issuer: server.issuer.url!,
+				domain: "b2c-emails-array.com",
+				oidcConfig: {
+					clientId: "b2c-emails-array-client",
+					clientSecret: "test-client-secret",
+					skipDiscovery: true,
+					authorizationEndpoint: `${server.issuer.url!}/authorize`,
+					tokenEndpoint: `${server.issuer.url!}/token`,
+					jwksEndpoint: `${server.issuer.url!}/jwks`,
+					pkce: false,
+					mapping: { email: "emails" },
+				},
+			},
+			headers,
+		});
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "b2c-emails-array-sub";
+			token.payload.name = "Jane Doe";
+			token.payload.emails = ["", "jane@b2c-emails-array.com"];
+		});
+		try {
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "b2c-emails-array",
+				callbackURL: "/dashboard",
+				fetchOptions: { throw: true, onSuccess: cookieSetter(signInHeaders) },
+			});
+			const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+				res.url,
+				signInHeaders,
+			);
+			expect(callbackURL).toContain("/dashboard");
+			const session = await auth.api.getSession({ headers: sessionHeaders });
+			expect(session?.user.email).toBe("jane@b2c-emails-array.com");
+			expect(session?.user.emailVerified).toBe(false);
+		} finally {
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
 });
 
 describe("SSO disable implicit sign in", async () => {

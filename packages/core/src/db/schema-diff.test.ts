@@ -111,17 +111,19 @@ describe("SchemaMismatchError", () => {
 	/**
 	 * @see https://www.better-auth.com/docs/guides/1-7-upgrade-guide
 	 */
-	it.each([
-		"account",
-		"accounts",
-		"plugin_tokens",
-	])("does not assume the origin or index name of %s.issuer", (table) => {
-		const message = formatSchemaFinding({ ...issuerDrift, table }, "database");
-		expect(message).toContain(
-			"If this column came from Better Auth 1.7.0 through 1.7.2",
-		);
-		expect(message).not.toContain(`${table}_issuer_accountId_uidx`);
-	});
+	it.each(["account", "accounts", "plugin_tokens"])(
+		"does not assume the origin or index name of %s.issuer",
+		(table) => {
+			const message = formatSchemaFinding(
+				{ ...issuerDrift, table },
+				"database",
+			);
+			expect(message).toContain(
+				"If this column came from Better Auth 1.7.0 through 1.7.2",
+			);
+			expect(message).not.toContain(`${table}_issuer_accountId_uidx`);
+		},
+	);
 
 	it("words the fix for the source that holds the schema", () => {
 		expect(formatSchemaFinding(issuerDrift, "prisma")).toContain(
@@ -137,38 +139,46 @@ describe("SchemaMismatchError", () => {
  * @see https://www.better-auth.com/docs/guide/create-a-plugin#schema
  */
 describe("shared physical tables", () => {
-	it.each([
-		false,
-		true,
-	])("checks shared tables regardless of model order (reversed=%s)", (reversed) => {
-		const models = [
-			[
-				"managed",
-				{ modelName: "shared", fields: { value: { type: "string" as const } } },
-			],
-			["external", { modelName: "shared", disableMigration: true, fields: {} }],
-		] as const;
-		const schema = getExpectedSchema({
-			plugins: [
-				{
-					id: "shared",
-					schema: Object.fromEntries(reversed ? [...models].reverse() : models),
-				},
-			],
-		});
-		const shared = { shared: schema.shared! };
-		expect(diffSchema(shared, [])).toEqual([
-			{ kind: "missing-table", table: "shared" },
-		]);
-		expect(
-			diffSchema(shared, [{ name: "shared", columns: [column("id")] }]),
-		).toEqual([{ kind: "missing-column", table: "shared", column: "value" }]);
-		expect(
-			diffSchema(shared, [
-				{ name: "shared", columns: [column("id"), column("value")] },
-			]),
-		).toEqual([]);
-	});
+	it.each([false, true])(
+		"checks shared tables regardless of model order (reversed=%s)",
+		(reversed) => {
+			const models = [
+				[
+					"managed",
+					{
+						modelName: "shared",
+						fields: { value: { type: "string" as const } },
+					},
+				],
+				[
+					"external",
+					{ modelName: "shared", disableMigration: true, fields: {} },
+				],
+			] as const;
+			const schema = getExpectedSchema({
+				plugins: [
+					{
+						id: "shared",
+						schema: Object.fromEntries(
+							reversed ? [...models].reverse() : models,
+						),
+					},
+				],
+			});
+			const shared = { shared: schema.shared! };
+			expect(diffSchema(shared, [])).toEqual([
+				{ kind: "missing-table", table: "shared" },
+			]);
+			expect(
+				diffSchema(shared, [{ name: "shared", columns: [column("id")] }]),
+			).toEqual([{ kind: "missing-column", table: "shared", column: "value" }]);
+			expect(
+				diffSchema(shared, [
+					{ name: "shared", columns: [column("id"), column("value")] },
+				]),
+			).toEqual([]);
+		},
+	);
 });
 
 describe("schema diagnostic output", () => {

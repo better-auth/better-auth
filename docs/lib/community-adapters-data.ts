@@ -264,4 +264,15 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/a77ay.png",
 		},
 	},
+	{
+		name: "better-auth-arcadedb",
+		url: "https://github.com/DevSnap/better-auth-arcadedb",
+		database: "ArcadeDB",
+		databaseUrl: "https://arcadedb.com/",
+		author: {
+			name: "DevSnap",
+			url: "https://github.com/DevSnap",
+			avatar: "https://github.com/DevSnap.png",
+		},
+	},
 ];

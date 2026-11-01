@@ -309,6 +309,22 @@ After the user has entered their 2FA code, you can verify it using `twoFactor.ve
   ```
 </APIMethod>
 
+#### Importing Existing TOTP Secrets
+
+To import TOTP secrets from another provider, prefix each Base32 secret with `base32:`, encrypt it with your auth secret, and store it in the `twoFactor` table. Then set `twoFactorEnabled: true` on the user.
+
+```ts
+import { symmetricEncrypt } from "better-auth/crypto";
+
+const ctx = await auth.$context;
+const secret = await symmetricEncrypt({
+    key: ctx.secretConfig,
+    data: `base32:${importedSecret}`,
+});
+```
+
+Remove any spaces from the secret before storing it. Imported secrets must use SHA-1 and the same `digits` and `period` as your TOTP options.
+
 ### OTP
 
 OTP (One-Time Password) is similar to TOTP but a random code is generated and sent to the user's email or phone.
@@ -432,9 +448,9 @@ To display the backup codes to the user, you can call `viewBackupCodes` on the s
   ```ts
   type viewBackupCodes = {
       /**
-       * The user ID to view all backup codes. 
+       * The ID of the user whose backup codes to return.
        */
-      userId?: string | null = "user-id"
+      userId: string = "user-id"
   }
   ```
 </APIMethod>

@@ -568,6 +568,14 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				);
 			}
 
+			// The id is the row's primary key and the identity `adminUserIds` checks against.
+			if (hasDataKey("id")) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.USER_ID_CANNOT_BE_UPDATED,
+				);
+			}
+
 			// Role changes must be guarded by `user:set-role` and validated against the role allow-list.
 			if (Object.prototype.hasOwnProperty.call(ctx.body.data, "role")) {
 				const canSetRole = hasPermission({

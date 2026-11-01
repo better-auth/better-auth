@@ -289,41 +289,44 @@ describe("managed client registration resources", () => {
 	it.each([
 		["missing", "https://api.example.com/managed-missing", "does not exist"],
 		["disabled", "https://api.example.com/managed-unavailable", "disabled"],
-	])("rejects a %s resource before creating a managed client", async (kind, requested, reason) => {
-		const configured = "https://api.example.com/managed-unavailable";
-		const instance = await boot({ resources: [configured] }, true);
-		if (kind === "disabled") {
-			await instance.ctx.adapter.update({
-				model: "oauthResource",
-				where: [{ field: "identifier", value: configured }],
-				update: { disabled: true },
-			});
-		}
-		const { headers } = await instance.signInWithTestUser();
-		const clientName = `managed-${kind}-resource`;
-		await expect(
-			instance.auth.api.adminCreateOAuthClient({
-				headers,
+	])(
+		"rejects a %s resource before creating a managed client",
+		async (kind, requested, reason) => {
+			const configured = "https://api.example.com/managed-unavailable";
+			const instance = await boot({ resources: [configured] }, true);
+			if (kind === "disabled") {
+				await instance.ctx.adapter.update({
+					model: "oauthResource",
+					where: [{ field: "identifier", value: configured }],
+					update: { disabled: true },
+				});
+			}
+			const { headers } = await instance.signInWithTestUser();
+			const clientName = `managed-${kind}-resource`;
+			await expect(
+				instance.auth.api.adminCreateOAuthClient({
+					headers,
+					body: {
+						client_name: clientName,
+						grant_types: ["client_credentials"],
+						resources: [requested],
+					},
+				}),
+			).rejects.toMatchObject({
+				statusCode: 400,
 				body: {
-					client_name: clientName,
-					grant_types: ["client_credentials"],
-					resources: [requested],
+					error: "invalid_target",
+					error_description: expect.stringContaining(reason),
 				},
-			}),
-		).rejects.toMatchObject({
-			statusCode: 400,
-			body: {
-				error: "invalid_target",
-				error_description: expect.stringContaining(reason),
-			},
-		});
-		expect(
-			await instance.ctx.adapter.findOne({
-				model: "oauthClient",
-				where: [{ field: "name", value: clientName }],
-			}),
-		).toBeNull();
-	});
+			});
+			expect(
+				await instance.ctx.adapter.findOne({
+					model: "oauthClient",
+					where: [{ field: "name", value: clientName }],
+				}),
+			).toBeNull();
+		},
+	);
 
 	it.each([
 		["relative", "managed-relative", "must be an absolute URI"],
@@ -332,36 +335,39 @@ describe("managed client registration resources", () => {
 			"https://api.example.com/managed-unavailable#part",
 			"must not contain a fragment",
 		],
-	])("rejects a %s resource URI in the request body", async (kind, requested, reason) => {
-		const instance = await boot(
-			{ resources: ["https://api.example.com/managed-unavailable"] },
-			true,
-		);
-		const { headers } = await instance.signInWithTestUser();
-		const clientName = `managed-${kind}-resource`;
-		await expect(
-			instance.auth.api.adminCreateOAuthClient({
-				headers,
+	])(
+		"rejects a %s resource URI in the request body",
+		async (kind, requested, reason) => {
+			const instance = await boot(
+				{ resources: ["https://api.example.com/managed-unavailable"] },
+				true,
+			);
+			const { headers } = await instance.signInWithTestUser();
+			const clientName = `managed-${kind}-resource`;
+			await expect(
+				instance.auth.api.adminCreateOAuthClient({
+					headers,
+					body: {
+						client_name: clientName,
+						grant_types: ["client_credentials"],
+						resources: [requested],
+					},
+				}),
+			).rejects.toMatchObject({
+				statusCode: 400,
 				body: {
-					client_name: clientName,
-					grant_types: ["client_credentials"],
-					resources: [requested],
+					code: "VALIDATION_ERROR",
+					message: expect.stringContaining(reason),
 				},
-			}),
-		).rejects.toMatchObject({
-			statusCode: 400,
-			body: {
-				code: "VALIDATION_ERROR",
-				message: expect.stringContaining(reason),
-			},
-		});
-		expect(
-			await instance.ctx.adapter.findOne({
-				model: "oauthClient",
-				where: [{ field: "name", value: clientName }],
-			}),
-		).toBeNull();
-	});
+			});
+			expect(
+				await instance.ctx.adapter.findOne({
+					model: "oauthClient",
+					where: [{ field: "name", value: clientName }],
+				}),
+			).toBeNull();
+		},
+	);
 
 	it("ignores resources sent to the session-facing create endpoint", async () => {
 		const resource = "https://api.example.com/session-facing";
