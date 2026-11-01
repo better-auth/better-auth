@@ -21,7 +21,7 @@ import { getDsqlMigrations } from "./migration";
 function postgres(options?: {
 	tables?: TableMetadata[];
 	jobSucceeded?: boolean;
-	pendingJob?: string;
+	pendingJob?: { id: string; index: string; schema?: string };
 	indexes?: {
 		table_name: string;
 		index_name: string;
@@ -31,6 +31,28 @@ function postgres(options?: {
 	}[];
 }) {
 	let indexJobs = 0;
+	// Like the real query, only return the job when it was asked for by index
+	// name (and schema, when the test sets one).
+	const pendingJobRows = (parameters: readonly unknown[]) => {
+		const job = options?.pendingJob;
+		if (!job || !parameters.includes(job.index)) return [];
+		if (job.schema && !parameters.includes(job.schema)) return [];
+		return [{ job_id: job.id }];
+	};
+	// Rows for the catalog query `introspectPostgresTables` runs, one per column.
+	const tableColumnRows = (parameters: readonly unknown[]) =>
+		(options?.tables ?? [])
+			.filter((table) => parameters.includes(table.schema ?? "public"))
+			.flatMap(({ name, schema, isView, columns }) =>
+				columns.map(({ name: column, ...metadata }) => ({
+					schema: schema ?? "public",
+					table: name,
+					isView,
+					isForeign: false,
+					column,
+					...metadata,
+				})),
+			);
 	const queries: { sql: string; parameters: readonly unknown[] }[] = [];
 	const connection: DatabaseConnection = {
 		async executeQuery<R>(query: CompiledQuery) {
@@ -38,14 +60,14 @@ function postgres(options?: {
 			const rows = /^create (unique )?index async/.test(query.sql)
 				? [{ job_id: `index-job-${++indexJobs}` }]
 				: query.sql.includes("from sys.jobs")
-					? options?.pendingJob
-						? [{ job_id: options.pendingJob }]
-						: []
+					? pendingJobRows(query.parameters)
 					: query.sql.startsWith("select t.relname as table_name")
 						? (options?.indexes ?? [])
 						: query.sql.includes("sys.wait_for_job")
 							? [{ succeeded: options?.jobSucceeded ?? true }]
-							: [];
+							: query.sql.includes("FROM pg_catalog.pg_attribute")
+								? tableColumnRows(query.parameters)
+								: [];
 			return { rows: rows as R[] };
 		},
 		async *streamQuery() {
@@ -179,7 +201,13 @@ describe("Aurora DSQL migrations", () => {
 		],
 	};
 	it("resumes matching jobs in the configured schema", async () => {
-		const { db, queries } = fixture({ pendingJob: "pending-index" });
+		const { db, queries } = fixture({
+			pendingJob: {
+				id: "pending-index",
+				index: "record_owner_unique",
+				schema: "auth",
+			},
+		});
 		const plan = await getDsqlMigrations(indexed, db, { schemaName: "auth" });
 		expect(await plan.compileMigrations()).toContain(
 			'create unique index async "record_owner_unique" on "auth"."record"',
@@ -188,10 +216,28 @@ describe("Aurora DSQL migrations", () => {
 		expect(queries[resumed]!.parameters).toContain("auth");
 		expect(queries[resumed + 1]!.parameters).toEqual(["pending-index"]);
 	});
+	it.each([
+		{ index: "unrelated_idx" },
+		{ index: "record_owner_unique", schema: "public" },
+	])("doesn't wait for a pending job on another index (%o)", async (job) => {
+		const { db, queries } = fixture({
+			pendingJob: { id: "other-job", ...job },
+		});
+		await getDsqlMigrations(indexed, db, { schemaName: "auth" });
+		expect(
+			queries.some(({ parameters }) => parameters.includes("other-job")),
+		).toBe(false);
+	});
 	it("keeps system result keys unchanged with CamelCasePlugin", async () => {
-		const { db, queries } = fixture({ pendingJob: "pending-index" }, [
-			new CamelCasePlugin(),
-		]);
+		const { db, queries } = fixture(
+			{
+				pendingJob: {
+					id: "pending-index",
+					index: "verification_identifier_idx",
+				},
+			},
+			[new CamelCasePlugin()],
+		);
 		await (await getDsqlMigrations({}, db)).runMigrations();
 		const calls = queries.filter((q) =>
 			q.sql.startsWith("call sys.wait_for_job"),

@@ -17,12 +17,18 @@ it("uses a profile's index introspection during migration planning", async () =>
 	try {
 		const initial = await getMigrations({ database: { db, type: "sqlite" } });
 		await initial.runMigrations();
+		const baseline = await getMigrations({ database: { db, type: "sqlite" } });
+		expect(baseline.toBeAddedIndexes).toEqual([]);
+
+		// The introspector reports no indexes, so the planner should want to
+		// create the ones SQLite already has.
 		const plan = await getMigrations({
 			database: { db, type: "sqlite", introspectIndexes },
 		});
 		expect(introspectIndexes).toHaveBeenCalledOnce();
 		expect(introspectIndexes.mock.calls[0]?.[0]).toContain("user");
 		expect(plan.toBeCreated).toEqual([]);
+		expect(plan.toBeAddedIndexes).not.toEqual([]);
 	} finally {
 		await db.destroy();
 	}

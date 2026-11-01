@@ -52,12 +52,14 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:^",
     "@better-auth/kysely-adapter": "workspace:^",
+    "@better-auth/utils": "catalog:peer",
     "better-auth": "workspace:^",
     "kysely": "catalog:"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/utils": "catalog:",
     "better-auth": "workspace:*",
     "kysely": "catalog:",
     "tsdown": "catalog:",

@@ -430,6 +430,7 @@ Cloudflare D1 is set up this way:
 
 ```ts title="auth.ts"
 import { createD1Profile } from "@better-auth/kysely-adapter";
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
   database: createD1Profile(env.DB),
