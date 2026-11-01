@@ -9,6 +9,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 export interface FacebookGraphProfile {
 	id: string;
 	name: string;
@@ -68,15 +69,14 @@ async function verifyFacebookAccessToken(
 		? options.clientId
 		: [options.clientId];
 	const appAccessToken = `${primaryClientId}|${options.clientSecret}`;
-	const { data, error } = await betterFetch<{ data?: FacebookDebugTokenData }>(
-		"https://graph.facebook.com/debug_token",
-		{
-			query: {
-				input_token: accessToken,
-				access_token: appAccessToken,
-			},
+	const { data, error } = await fetchRefusingRedirects<{
+		data?: FacebookDebugTokenData;
+	}>("https://graph.facebook.com/debug_token", {
+		query: {
+			input_token: accessToken,
+			access_token: appAccessToken,
 		},
-	);
+	});
 	if (error || !data?.data) {
 		return null;
 	}
