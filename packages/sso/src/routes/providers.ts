@@ -472,13 +472,14 @@ async function batchCheckOrgAdmin(
 				],
 				limit: PAGE_SIZE,
 				offset: memberOffset,
+				sortBy: { field: "id", direction: "asc" },
 			});
 
 			for (const member of members) {
-			if (hasOrgAdminRole(member)) {
-				adminOrgIds.add(member.organizationId);
+				if (hasOrgAdminRole(member)) {
+					adminOrgIds.add(member.organizationId);
+				}
 			}
-		}
 
 			if (members.length < PAGE_SIZE) {
 				break;
