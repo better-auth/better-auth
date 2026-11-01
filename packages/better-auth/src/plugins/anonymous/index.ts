@@ -20,6 +20,7 @@ import {
 	deleteSessionCookie,
 	parseSetCookieHeader,
 	setSessionCookie,
+	toCookieOptions,
 } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db/schema";
 import type { Session, User } from "../../types";
@@ -33,6 +34,27 @@ import type {
 } from "./types";
 
 /**
+ * Forwards the cookie deletions from an isolated session lookup to the response,
+ * so obsolete cache chunks and `dont_remember` are still cleared. Skips any exact
+ * name the response already sets, which keeps the new session's cookies, and
+ * drops the lookup's other cookies because they describe the previous session.
+ */
+function forwardCookieDeletions(
+	ctx: GenericEndpointContext,
+	lookupHeaders: Headers,
+	responseCookies: ReadonlyMap<string, unknown>,
+) {
+	const lookupCookies = parseSetCookieHeader(
+		lookupHeaders.get("set-cookie") || "",
+	);
+	for (const [name, attributes] of lookupCookies) {
+		if (attributes["max-age"] === 0 && !responseCookies.has(name)) {
+			ctx.setCookie(name, "", toCookieOptions(attributes));
+		}
+	}
+}
+
+/**
  * Resolves the anonymous session being upgraded during an account-link callback.
  *
  * The anonymous session is normally read from the request cookie. When the
@@ -41,7 +63,10 @@ import type {
  * user id captured at sign-in is recovered from the server-only OAuth state
  * instead. Returns `null` when there is no anonymous session to link.
  */
-async function resolveAnonymousSession(ctx: GenericEndpointContext): Promise<{
+async function resolveAnonymousSession(
+	ctx: GenericEndpointContext,
+	responseCookies: ReadonlyMap<string, unknown>,
+): Promise<{
 	session: Session & Record<string, any>;
 	user: UserWithAnonymous & Record<string, any>;
 } | null> {
@@ -49,15 +74,17 @@ async function resolveAnonymousSession(ctx: GenericEndpointContext): Promise<{
 	// already sets the new session cookie, and clearing a revoked or expired
 	// previous session cookie would remove that new cookie and sign the user out.
 	const context = { ...ctx.context, responseHeaders: undefined };
+	const lookupHeaders = new Headers();
 	const cookieSession = await getSessionFromCtx<{
 		isAnonymous: boolean | null;
 	}>(
-		{ ...ctx, context, responseHeaders: new Headers() },
+		{ ...ctx, context, responseHeaders: lookupHeaders },
 		{ disableRefresh: true },
 	);
 	// Keep the previous session on the real context, as `getSessionFromCtx`
 	// normally does, for `onLinkAccount` and later hooks.
 	ctx.context.session = context.session;
+	forwardCookieDeletions(ctx, lookupHeaders, responseCookies);
 	if (cookieSession?.user.isAnonymous) {
 		return {
 			session: cookieSession.session,
@@ -368,7 +395,8 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						/**
 						 * The user is about to link their account.
 						 */
-						const sessionCookie = parseSetCookieHeader(setCookie || "")
+						const responseCookies = parseSetCookieHeader(setCookie || "");
+						const sessionCookie = responseCookies
 							.get(sessionTokenName)
 							?.value.split(".")[0]!;
 
@@ -380,7 +408,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						 * server-only OAuth state when the callback arrives without the
 						 * anonymous session cookie (for example Expo).
 						 */
-						const session = await resolveAnonymousSession(ctx);
+						const session = await resolveAnonymousSession(ctx, responseCookies);
 						if (!session) {
 							return;
 						}

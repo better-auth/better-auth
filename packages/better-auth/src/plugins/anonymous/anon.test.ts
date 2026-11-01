@@ -13,9 +13,10 @@ import {
 	vi,
 } from "vitest";
 import * as apiModule from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
-import { signJWT } from "../../crypto";
+import { getCookieCache, parseSetCookieHeader } from "../../cookies";
+import { signJWT, symmetricEncodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { BetterAuthOptions } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { genericOAuth } from "../generic-oauth";
 import { anonymous } from ".";
@@ -698,7 +699,7 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 		await server.stop();
 	});
 
-	const { client, sessionSetter, cookieSetter, customFetchImpl } =
+	const { client, sessionSetter, cookieSetter, customFetchImpl, ...instance } =
 		await getTestInstance(
 			{
 				plugins: [
@@ -779,6 +780,55 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 		});
 
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11533
+	 */
+	it("keeps the new session and clears an old cache cookie on a callback over a revoked session", async () => {
+		const { headers } = await instance.signInWithTestUser();
+		const previous = await instance.auth.api.getSession({ headers });
+		const previousToken = previous?.session.token ?? "";
+		expect(previousToken).toBeTruthy();
+		const signInRes = await client.signIn.social({
+			provider: providerId,
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers), headers },
+		});
+		let callbackLocation: string | null = null;
+		await betterFetch(signInRes.data?.url || "", {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				callbackLocation = context.response.headers.get("location");
+			},
+		});
+		if (!callbackLocation) throw new Error("No redirect location found");
+		const { internalAdapter } = await instance.auth.$context;
+		await internalAdapter.deleteSession(previousToken);
+		headers.set(
+			"cookie",
+			`${headers.get("cookie")}; better-auth.session_data=stale`,
+		);
+
+		let response: Response | undefined;
+		await betterFetch(callbackLocation, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				response = context.response;
+			},
+		});
+
+		expect(response?.status).toBe(302);
+		const cookies = parseSetCookieHeader(
+			response?.headers.get("set-cookie") || "",
+		);
+		expect(cookies.get("better-auth.session_data")?.["max-age"]).toBe(0);
+		const newToken = cookies.get("better-auth.session_token")?.value;
+		expect(newToken?.split(".")[0]).toBeTruthy();
+		expect(newToken?.split(".")[0]).not.toBe(previousToken);
 	});
 });
 
@@ -865,5 +915,354 @@ describe("anonymous after-hook on sign-in over a previous session cookie", async
 		);
 		expect(contextSessionUserId).toBe(anonymousUser.data?.user.id);
 		expect(sessionCookie?.value.split(".")[0]).toBe(token);
+	});
+});
+
+/**
+ * The previous session lookup cleans up cookies that the new session does not
+ * replace, and must never touch the ones it does.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11533
+ */
+describe("anonymous after-hook cookie cleanup on a new session", () => {
+	const sessionToken = "better-auth.session_token";
+	const sessionData = "better-auth.session_data";
+	const accountData = "better-auth.account_data";
+	const dontRemember = "better-auth.dont_remember";
+	/** Long enough for the cookie cache to split into chunks. */
+	const longName = "a".repeat(5000);
+
+	/**
+	 * A browser's cookie jar: applies `Set-Cookie` entries in order and sends back
+	 * the raw `name=value` pairs.
+	 */
+	function createCookieJar() {
+		const cookies = new Map<string, string>();
+		return {
+			apply(response: Response) {
+				for (const entry of response.headers.getSetCookie()) {
+					const pair = entry.split(";", 1)[0] ?? "";
+					const separator = pair.indexOf("=");
+					const name = pair.slice(0, separator);
+					if (/;\s*max-age=0\s*(;|$)/i.test(entry)) {
+						cookies.delete(name);
+					} else {
+						cookies.set(name, pair.slice(separator + 1));
+					}
+				}
+			},
+			set: (name: string, value: string) => cookies.set(name, value),
+			delete: (name: string) => cookies.delete(name),
+			get: (name: string) => cookies.get(name),
+			names: () => [...cookies.keys()].sort(),
+			headers: () =>
+				new Headers({
+					cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join("; "),
+				}),
+		};
+	}
+
+	async function setup(
+		options: BetterAuthOptions = {},
+		{ name }: { name?: string } = {},
+	) {
+		const instance = await getTestInstance(
+			{ ...options, plugins: [anonymous()] },
+			name ? { testUser: { name } } : undefined,
+		);
+		const { auth, testUser } = instance;
+		const context = await auth.$context;
+		const jar = createCookieJar();
+
+		async function signIn(
+			headers: Headers,
+			{ rememberMe }: { rememberMe?: boolean } = {},
+		) {
+			return auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+					rememberMe,
+				},
+				headers,
+				asResponse: true,
+			});
+		}
+		let signUps = 0;
+		async function signUp(
+			headers: Headers,
+			{ rememberMe }: { rememberMe?: boolean } = {},
+		) {
+			return auth.api.signUpEmail({
+				body: {
+					email: `new-${++signUps}@test.com`,
+					password: testUser.password,
+					name: testUser.name,
+					rememberMe,
+				},
+				headers,
+				asResponse: true,
+			});
+		}
+		return {
+			auth,
+			context,
+			jar,
+			startSession: { "sign-in": signIn, "sign-up": signUp },
+			/** Signs in, so the jar holds that session's cookies, and returns its token. */
+			async signInToJar(opts?: { rememberMe?: boolean }) {
+				const response = await signIn(new Headers(), opts);
+				jar.apply(response);
+				return ((await response.json()) as { token: string }).token;
+			},
+		};
+	}
+
+	/** The token inside the jar's signed session cookie. */
+	function tokenIn(jar: ReturnType<typeof createCookieJar>) {
+		return jar.get(sessionToken)?.split(".")[0];
+	}
+
+	describe.each(["sign-in", "sign-up"] as const)("on %s", (action) => {
+		it("clears old cache cookie chunks over a revoked session after the cache is disabled", async () => {
+			const { context, jar, signInToJar, startSession } = await setup(
+				{ session: { cookieCache: { enabled: true } } },
+				{ name: longName },
+			);
+			await context.internalAdapter.deleteSession(await signInToJar());
+			expect(jar.names()).toEqual(
+				expect.arrayContaining([`${sessionData}.0`, `${sessionData}.1`]),
+			);
+			context.options.session = { cookieCache: { enabled: false } };
+
+			const response = await startSession[action](jar.headers());
+			jar.apply(response);
+
+			const { token } = (await response.json()) as { token: string };
+			expect(jar.names()).toEqual([sessionToken]);
+			expect(tokenIn(jar)).toBe(token);
+		});
+
+		it("clears dont_remember over a revoked session and the new session refreshes", async () => {
+			const { auth, context, jar, signInToJar, startSession } = await setup({
+				session: { expiresIn: 60, updateAge: 1 },
+			});
+			await context.internalAdapter.deleteSession(
+				await signInToJar({ rememberMe: false }),
+			);
+			expect(jar.names()).toContain(dontRemember);
+
+			const response = await startSession[action](jar.headers(), {
+				rememberMe: true,
+			});
+			jar.apply(response);
+
+			const { token } = (await response.json()) as { token: string };
+			expect(jar.names()).toEqual([sessionToken]);
+			expect(tokenIn(jar)).toBe(token);
+
+			const before = await context.internalAdapter.findSession(token);
+			vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 1250 });
+			try {
+				const refreshed = await auth.api.getSession({
+					headers: jar.headers(),
+					asResponse: true,
+				});
+				const { session } = (await refreshed.json()) as {
+					session: { expiresAt: string };
+				};
+				expect(new Date(session.expiresAt).getTime()).toBeGreaterThan(
+					before?.session.expiresAt.getTime() ?? Number.POSITIVE_INFINITY,
+				);
+				expect(
+					refreshed.headers
+						.getSetCookie()
+						.some((entry) => entry.startsWith(`${sessionToken}=${token}.`)),
+				).toBe(true);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("keeps a dont_remember the new session set over a revoked one", async () => {
+			const { context, jar, signInToJar, startSession } = await setup();
+			await context.internalAdapter.deleteSession(
+				await signInToJar({ rememberMe: false }),
+			);
+
+			const response = await startSession[action](jar.headers(), {
+				rememberMe: false,
+			});
+			jar.apply(response);
+
+			expect(jar.names()).toEqual([dontRemember, sessionToken]);
+			expect(jar.get(dontRemember)).toMatch(/^true\./);
+		});
+
+		it("keeps new cache cookie chunks that share names with the old ones", async () => {
+			const { context, jar, signInToJar, startSession } = await setup(
+				{ session: { cookieCache: { enabled: true } } },
+				{ name: longName },
+			);
+			await context.internalAdapter.deleteSession(await signInToJar());
+			// An unreadable cache sends the lookup to the revoked session's row.
+			jar.set(`${sessionData}.0`, "unreadable");
+
+			const response = await startSession[action](jar.headers());
+			jar.apply(response);
+
+			const { token } = (await response.json()) as { token: string };
+			const cached = await getCookieCache(jar.headers(), {
+				secret: context.secret,
+				isSecure: false,
+			});
+			expect(cached?.session.token).toBe(token);
+		});
+
+		it("clears account_data and its chunks over a revoked session", async () => {
+			const { context, jar, signInToJar, startSession } = await setup({
+				account: { storeAccountCookie: true },
+			});
+			await context.internalAdapter.deleteSession(await signInToJar());
+			jar.set(accountData, "stale");
+			jar.set(`${accountData}.0`, "stale");
+			jar.set(`${accountData}.1`, "stale");
+
+			const response = await startSession[action](jar.headers());
+			jar.apply(response);
+
+			expect(jar.names()).toEqual([sessionToken]);
+		});
+
+		it("clears a cache cookie left without a session cookie while the cache is disabled", async () => {
+			const { jar, startSession } = await setup();
+			jar.set(sessionData, "stale");
+			jar.set(`${sessionData}.0`, "stale");
+
+			const response = await startSession[action](jar.headers());
+			jar.apply(response);
+
+			const { token } = (await response.json()) as { token: string };
+			expect(jar.names()).toEqual([sessionToken]);
+			expect(tokenIn(jar)).toBe(token);
+		});
+
+		it("clears an old cache cookie over a live session while the cache is disabled", async () => {
+			const { jar, signInToJar, startSession } = await setup();
+			await signInToJar();
+			jar.set(sessionData, "stale");
+
+			const response = await startSession[action](jar.headers());
+			jar.apply(response);
+
+			const { token } = (await response.json()) as { token: string };
+			expect(jar.names()).toEqual([sessionToken]);
+			expect(tokenIn(jar)).toBe(token);
+		});
+
+		it("keeps the new session when the live previous session's cache is due for a refresh", async () => {
+			const { context, jar, signInToJar, startSession } = await setup({
+				database: undefined,
+				session: {
+					cookieCache: { enabled: true, maxAge: 300, refreshCache: true },
+				},
+			});
+			const previous = await signInToJar();
+
+			vi.useFakeTimers({ toFake: ["Date"], now: Date.now() + 250_000 });
+			try {
+				const response = await startSession[action](jar.headers());
+				jar.apply(response);
+
+				const { token } = (await response.json()) as { token: string };
+				expect(token).not.toBe(previous);
+				expect(tokenIn(jar)).toBe(token);
+				// Without a database the cache defaults to the `jwe` strategy.
+				const cached = await getCookieCache(jar.headers(), {
+					secret: context.secret,
+					isSecure: false,
+					strategy: "jwe",
+				});
+				expect(cached?.session.token).toBe(token);
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+	});
+
+	it("clears dont_remember over an expired session", async () => {
+		const { context, jar, signInToJar, startSession } = await setup();
+		await context.internalAdapter.updateSession(
+			await signInToJar({ rememberMe: false }),
+			{ expiresAt: new Date(Date.now() - 1000) },
+		);
+
+		const response = await startSession["sign-in"](jar.headers(), {
+			rememberMe: true,
+		});
+		jar.apply(response);
+
+		const { token } = (await response.json()) as { token: string };
+		expect(jar.names()).toEqual([sessionToken]);
+		expect(tokenIn(jar)).toBe(token);
+	});
+
+	it("keeps an account_data cookie the new session re-issued over a revoked one", async () => {
+		const { context, jar, signInToJar, startSession } = await setup({
+			account: { storeAccountCookie: true },
+			session: { cookieCache: { enabled: true } },
+		});
+		const previous = await signInToJar();
+		const stored = await context.internalAdapter.findSession(previous);
+		const staleAccount = await symmetricEncodeJWT(
+			{ id: "account-id", userId: stored?.user.id, providerId: "credential" },
+			context.secretConfig,
+			"better-auth-account",
+			300,
+		);
+		jar.set(accountData, staleAccount);
+		// Without a cache cookie the lookup reaches the revoked session's row.
+		jar.delete(sessionData);
+		await context.internalAdapter.deleteSession(previous);
+
+		const response = await startSession["sign-in"](jar.headers());
+		jar.apply(response);
+
+		expect(jar.get(accountData)).toBeTruthy();
+		expect(jar.get(accountData)).not.toBe(staleAccount);
+	});
+
+	it("keeps the attributes a deletion needs to match the cookie", async () => {
+		const secureDontRemember = `__Secure-${dontRemember}`;
+		const { context, jar, signInToJar, startSession } = await setup({
+			advanced: {
+				useSecureCookies: true,
+				crossSubDomainCookies: { enabled: true, domain: "example.com" },
+			},
+		});
+		await context.internalAdapter.deleteSession(
+			await signInToJar({ rememberMe: false }),
+		);
+		expect(jar.names()).toContain(secureDontRemember);
+
+		const response = await startSession["sign-in"](jar.headers(), {
+			rememberMe: true,
+		});
+
+		const deletion = response.headers
+			.getSetCookie()
+			.find((entry) => entry.startsWith(`${secureDontRemember}=`));
+		expect(deletion).toBeDefined();
+		expect(
+			parseSetCookieHeader(deletion ?? "").get(secureDontRemember),
+		).toMatchObject({
+			value: "",
+			"max-age": 0,
+			path: "/",
+			domain: "example.com",
+			secure: true,
+			httponly: true,
+			samesite: "lax",
+		});
 	});
 });
