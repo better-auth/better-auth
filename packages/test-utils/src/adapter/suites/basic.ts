@@ -3451,6 +3451,32 @@ export const getNormalTestSuiteTests = (
 				});
 				expect(after!.emailVerified).toBe(!user.emailVerified);
 			},
+		// A range guard on a field the update changes, such as a refresh that
+		// extends `expiresAt` only while `expiresAt > now`. MySQL adapters reread
+		// the row after the update; the reread must keep the guard's original
+		// value, or it misses the row it just updated.
+		"update - should return the row when a range guard covers an updated field":
+			async () => {
+				const [, inserted] = await insertRandom("session");
+				// The fixture's session has already ended; make it live first.
+				const session = (await adapter.update<Session>({
+					model: "session",
+					where: [{ field: "token", value: inserted.token }],
+					update: { expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
+				}))!;
+				const extended = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+				const result = await adapter.update<Session>({
+					model: "session",
+					where: [
+						{ field: "token", value: session.token },
+						{ field: "expiresAt", value: new Date(), operator: "gt" },
+					],
+					update: { expiresAt: extended },
+				});
+				expect(result).not.toBeNull();
+				expect(result!.token).toBe(session.token);
+				expect(new Date(result!.expiresAt).getTime()).toBe(extended.getTime());
+			},
 	};
 };
 
