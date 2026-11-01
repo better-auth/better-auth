@@ -7,6 +7,7 @@ import { getSessionFromCtx } from "../../../api/routes";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
+import type { Session } from "../../../types";
 import { getDate } from "../../../utils/date";
 import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
@@ -753,6 +754,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			}
 
 			const member = await runWithTransaction(ctx.context.adapter, async () => {
+				// The latest session row written below; a `session.update.before` hook
+				// returning false skips an update and leaves it unchanged.
+				let updatedSession: Session | null = null;
 				if (
 					ctx.context.orgOptions.teams &&
 					ctx.context.orgOptions.teams.enabled &&
@@ -814,16 +818,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 
 					if (onlyOne) {
 						const teamId = teamIds[0]!;
-						const updatedSession = await adapter.setActiveTeam(
+						updatedSession = await adapter.setActiveTeam(
 							session.session.token,
 							teamId,
 							ctx,
 						);
-
-						await setSessionCookie(ctx, {
-							session: updatedSession,
-							user: session.user,
-						});
 					}
 				}
 
@@ -834,11 +833,20 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					createdAt: new Date(),
 				});
 
-				await adapter.setActiveOrganization(
-					session.session.token,
-					acceptedI.organizationId,
-					ctx,
-				);
+				updatedSession =
+					(await adapter.setActiveOrganization(
+						session.session.token,
+						acceptedI.organizationId,
+						ctx,
+					)) ?? updatedSession;
+				// Sign the cookie after the last active-pointer write so the cookie
+				// cache carries both the accepted organization and any active team.
+				if (updatedSession) {
+					await setSessionCookie(ctx, {
+						session: updatedSession,
+						user: session.user,
+					});
+				}
 
 				return createdMember;
 			}).catch(async (error) => {
