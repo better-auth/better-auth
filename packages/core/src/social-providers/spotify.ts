@@ -6,12 +6,17 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 
+/**
+ * Profile fields from Spotify's current user endpoint.
+ */
 export interface SpotifyProfile {
 	id: string;
-	display_name: string;
-	email: string;
+	display_name: string | null;
+	email?: string | undefined;
 	images: {
 		url: string;
+		height: number | null;
+		width: number | null;
 	}[];
 }
 
@@ -24,6 +29,8 @@ export const spotify = (options: SpotifyOptions) => {
 	return {
 		id: "spotify",
 		name: "Spotify",
+		// TODO: Migrate account linking to account_id while preserving existing id-based accounts.
+		// https://developer.spotify.com/documentation/web-api/reference/get-current-users-profile
 		accountSubject: ({ profile }) => profile.id,
 		createAuthorizationURL({
 			state,
@@ -87,7 +94,7 @@ export const spotify = (options: SpotifyOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile);
 			return {
 				user: {
-					name: profile.display_name,
+					name: profile.display_name ?? undefined,
 					email: profile.email,
 					image: profile.images[0]?.url,
 					emailVerified: false,
