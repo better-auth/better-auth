@@ -462,19 +462,28 @@ async function batchCheckOrgAdmin(
 
 	for (let i = 0; i < organizationIds.length; i += PAGE_SIZE) {
 		const chunk = organizationIds.slice(i, i + PAGE_SIZE);
-		const members = await ctx.context.adapter.findMany<Member>({
-			model: "member",
-			where: [
-				{ field: "userId", value: userId },
-				{ field: "organizationId", value: chunk, operator: "in" },
-			],
-			limit: chunk.length,
-		});
+		let memberOffset = 0;
+		while (true) {
+			const members = await ctx.context.adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{ field: "userId", value: userId },
+					{ field: "organizationId", value: chunk, operator: "in" },
+				],
+				limit: PAGE_SIZE,
+				offset: memberOffset,
+			});
 
-		for (const member of members) {
+			for (const member of members) {
 			if (hasOrgAdminRole(member)) {
 				adminOrgIds.add(member.organizationId);
 			}
+		}
+
+			if (members.length < PAGE_SIZE) {
+				break;
+			}
+			memberOffset += members.length;
 		}
 	}
 

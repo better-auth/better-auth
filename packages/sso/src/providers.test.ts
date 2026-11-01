@@ -797,8 +797,8 @@ describe("SSO provider read endpoints", () => {
 			// Seed 100 ssoProvider rows directly with other organizationIds
 			for (let i = 1; i <= 100; i++) {
 				data.ssoProvider.push({
-					id: `unrelated-provider-${i}`,
-					providerId: `unrelated-provider-${i}`,
+					id: `aaa-unrelated-provider-${i}`,
+					providerId: `aaa-unrelated-provider-${i}`,
 					issuer: `https://unrelated-${i}.com`,
 					domain: `unrelated-${i}.com`,
 					userId: `other-user-${i}`,
@@ -885,6 +885,96 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			expect(response.providers).toHaveLength(101);
+		});
+
+		it("should return providers even when candidate organizations have duplicate memberships", async () => {
+			const { auth, getAuthHeaders, data } = createTestAuth(true);
+
+			const ownerHeaders = await getAuthHeaders({
+				email: "dupowner@example.com",
+				password: "password123",
+				name: "Dup Owner",
+			});
+
+			const ownerUser = (data.user as { id: string; email: string }[]).find(
+				(u) => u.email === "dupowner@example.com",
+			);
+
+			// Org 1 has duplicate membership rows for the user
+			data.organization.push({
+				id: "org-1",
+				name: "Organization 1",
+				slug: "org-1",
+				createdAt: new Date(),
+			});
+			data.member.push({
+				id: "member-1a",
+				userId: ownerUser!.id,
+				organizationId: "org-1",
+				role: "owner",
+				createdAt: new Date(),
+			});
+			data.member.push({
+				id: "member-1b",
+				userId: ownerUser!.id,
+				organizationId: "org-1",
+				role: "owner",
+				createdAt: new Date(),
+			});
+			data.ssoProvider.push({
+				id: "provider-1",
+				providerId: "provider-1",
+				issuer: "https://idp-1.com",
+				domain: "idp-1.com",
+				userId: ownerUser!.id,
+				organizationId: "org-1",
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp-1.com/sso",
+					cert: TEST_CERT,
+					audience: "audience-1",
+					wantAssertionsSigned: true,
+					spMetadata: {},
+				}),
+			});
+
+			// Org 2 has normal membership
+			data.organization.push({
+				id: "org-2",
+				name: "Organization 2",
+				slug: "org-2",
+				createdAt: new Date(),
+			});
+			data.member.push({
+				id: "member-2",
+				userId: ownerUser!.id,
+				organizationId: "org-2",
+				role: "owner",
+				createdAt: new Date(),
+			});
+			data.ssoProvider.push({
+				id: "provider-2",
+				providerId: "provider-2",
+				issuer: "https://idp-2.com",
+				domain: "idp-2.com",
+				userId: ownerUser!.id,
+				organizationId: "org-2",
+				samlConfig: JSON.stringify({
+					entryPoint: "https://idp-2.com/sso",
+					cert: TEST_CERT,
+					audience: "audience-2",
+					wantAssertionsSigned: true,
+					spMetadata: {},
+				}),
+			});
+
+			const response = await auth.api.listSSOProviders({
+				headers: ownerHeaders,
+			});
+
+			expect(response.providers).toHaveLength(2);
+			const returnedIds = response.providers.map((p) => p.providerId);
+			expect(returnedIds).toContain("provider-1");
+			expect(returnedIds).toContain("provider-2");
 		});
 	});
 
