@@ -11,6 +11,7 @@ export const PHONE_NUMBER_ERROR_CODES = defineErrorCodes({
 	INVALID_OTP: "Invalid OTP",
 	PHONE_NUMBER_NOT_VERIFIED: "Phone number not verified",
 	PHONE_NUMBER_CANNOT_BE_UPDATED: "Phone number cannot be updated",
+	PHONE_NUMBER_CANNOT_BE_SET: "Phone number can only be set by verifying it",
 	SEND_OTP_NOT_IMPLEMENTED: "sendOTP not implemented",
 	TOO_MANY_ATTEMPTS: "Too many attempts",
 });

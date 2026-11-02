@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
+import { emailOTP } from "../email-otp";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
 
@@ -1189,7 +1190,7 @@ describe("reset password onPasswordReset callback", async () => {
 
 describe("phone number verification requirement", async () => {
 	let otp = "";
-	const { client } = await getTestInstance(
+	const { client, db } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -1222,11 +1223,15 @@ describe("phone number verification requirement", async () => {
 	const testEmail = "test2@test.com";
 
 	it("should not allow sign in with unverified phone number and trigger OTP send", async () => {
-		await client.signUp.email({
+		const signUp = await client.signUp.email({
 			email: testEmail,
 			password: testPassword,
 			name: "test",
-			phoneNumber: testPhoneNumber,
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: signUp.data!.user.id }],
+			update: { phoneNumber: testPhoneNumber },
 		});
 		const signInRes = await client.signIn.phoneNumber({
 			phoneNumber: testPhoneNumber,
@@ -1235,6 +1240,280 @@ describe("phone number verification requirement", async () => {
 		expect(signInRes.error?.status).toBe(401);
 		expect(signInRes.error?.code).toMatch("PHONE_NUMBER_NOT_VERIFIED");
 		expect(otp).toHaveLength(6);
+	});
+});
+
+describe("phone number at user creation", () => {
+	const phoneNumberValue = "+251911121330";
+
+	it("rejects a phone number sent with email sign-up", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [phoneNumber()],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		const res = await client.signUp.email({
+			email: "claimant@test.com",
+			password: "password123",
+			name: "claimant",
+			phoneNumber: phoneNumberValue,
+		});
+
+		expect(res.error?.code).toBe("PHONE_NUMBER_CANNOT_BE_SET");
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toHaveLength(0);
+	});
+
+	it("rejects a phone number sent with email OTP sign-in", async () => {
+		let otp = "";
+		const { auth, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber(),
+					emailOTP({
+						async sendVerificationOTP(data) {
+							otp = data.otp;
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const email = "otp-claimant@test.com";
+		await auth.api.sendVerificationOTP({
+			body: {
+				email,
+				type: "sign-in",
+			},
+		});
+
+		await expect(
+			auth.api.signInEmailOTP({
+				body: {
+					email,
+					otp,
+					phoneNumber: phoneNumberValue,
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				code: "PHONE_NUMBER_CANNOT_BE_SET",
+			},
+		});
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toHaveLength(0);
+	});
+
+	it("drops a phone number mapped from a social provider profile", async () => {
+		const email = "social-claimant@test.com";
+		const { auth, db } = await getTestInstance(
+			{
+				plugins: [phoneNumber()],
+				socialProviders: {
+					google: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						verifyIdToken: async () => true,
+						mapProfileToUser: () => ({
+							phoneNumber: phoneNumberValue,
+						}),
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const claims = {
+			sub: "google-social-claimant",
+			email,
+			email_verified: true,
+			name: "Social Claimant",
+		};
+		const encode = (value: object) =>
+			Buffer.from(JSON.stringify(value)).toString("base64url");
+		const idToken = `${encode({ alg: "none" })}.${encode(claims)}.signature`;
+
+		const res = await auth.api.signInSocial({
+			body: {
+				provider: "google",
+				idToken: {
+					token: idToken,
+				},
+			},
+		});
+
+		expect(res).toMatchObject({
+			user: {
+				email,
+			},
+		});
+		const user = await db.findOne<{ phoneNumber: string | null }>({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user?.phoneNumber ?? null).toBeNull();
+	});
+
+	it("still stores a number verified through the plugin", async () => {
+		let otp = "";
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP({ code }) {
+							otp = code;
+						},
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+		await client.phoneNumber.sendOtp({ phoneNumber: phoneNumberValue });
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: phoneNumberValue,
+			code: otp,
+		});
+
+		expect(res.error).toBeNull();
+		expect(
+			await db.findOne({
+				model: "user",
+				where: [{ field: "phoneNumber", value: phoneNumberValue }],
+			}),
+		).toMatchObject({
+			phoneNumberVerified: true,
+		});
+	});
+});
+
+/**
+ * @see https://owasp.org/www-community/attacks/Account_Takeover
+ */
+describe("phone number on account linking", () => {
+	const phoneNumberValue = "+251911121331";
+	const email = "linked@test.com";
+	const encode = (value: object) =>
+		Buffer.from(JSON.stringify(value)).toString("base64url");
+	const idToken = `${encode({ alg: "none" })}.${encode({
+		sub: "google-linked",
+		email,
+		email_verified: true,
+		name: "Linked",
+	})}.signature`;
+
+	const setup = async () => {
+		const { auth, db } = await getTestInstance(
+			{
+				plugins: [phoneNumber()],
+				account: {
+					accountLinking: {
+						updateUserInfoOnLink: true,
+					},
+				},
+				socialProviders: {
+					google: {
+						clientId: "test-client",
+						clientSecret: "test-secret",
+						verifyIdToken: async () => true,
+						mapProfileToUser: () => ({
+							phoneNumber: phoneNumberValue,
+						}),
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.createUser(
+			{
+				email,
+				name: "Linked",
+				emailVerified: true,
+			},
+			{ method: "test" },
+		);
+		const link = () =>
+			auth.api.signInSocial({
+				body: {
+					provider: "google",
+					idToken: {
+						token: idToken,
+					},
+				},
+			});
+		const stored = () =>
+			db.findOne<{
+				phoneNumber: string | null;
+				phoneNumberVerified: boolean | null;
+			}>({
+				model: "user",
+				where: [{ field: "id", value: user.id }],
+			});
+		return { ctx, user, link, stored };
+	};
+
+	it("does not store a number mapped from the linked provider profile", async () => {
+		const { link, stored } = await setup();
+
+		await link();
+
+		expect((await stored())?.phoneNumber ?? null).toBeNull();
+	});
+
+	it("keeps a verified number when the provider maps the same number", async () => {
+		const { ctx, user, link, stored } = await setup();
+		await ctx.internalAdapter.updateUser(user.id, {
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+
+		await link();
+
+		expect(await stored()).toMatchObject({
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+	});
+
+	it("control: stores a number written by server code outside a request", async () => {
+		const { ctx, user, stored } = await setup();
+
+		await ctx.internalAdapter.updateUser(user.id, {
+			phoneNumber: phoneNumberValue,
+		});
+
+		expect((await stored())?.phoneNumber).toBe(phoneNumberValue);
 	});
 });
 
@@ -1766,13 +2045,15 @@ describe("phone-number sign-in password length", async () => {
 	});
 
 	it("should reject a password longer than maxPasswordLength before hashing", async () => {
-		await auth.api.signUpEmail({
+		const { user } = await auth.api.signUpEmail({
 			body: {
 				email: "long-password@test.com",
 				password: "password",
 				name: "Long Password",
-				phoneNumber: "+251911121314",
 			},
+		});
+		await (await auth.$context).internalAdapter.updateUser(user.id, {
+			phoneNumber: "+251911121314",
 		});
 		hash.mockClear();
 		verify.mockClear();
