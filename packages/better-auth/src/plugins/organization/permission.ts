@@ -1,11 +1,11 @@
-import type { Role } from "../access";
+import type { Role, Statements } from "../access";
 import { parseRoleList } from "./roles";
 import type { OrganizationOptions } from "./types";
 
 export const hasPermissionFn = (
 	input: HasPermissionBaseInput,
 	acRoles: {
-		[x: string]: Role<any> | undefined;
+		[x: string]: Role<Statements> | undefined;
 	},
 ) => {
 	if (!input.permissions) return false;
@@ -30,13 +30,6 @@ export const hasPermissionFn = (
 export type PermissionExclusive = {
 	permissions: { [key: string]: string[] };
 };
-
-export const cacheAllRoles = new Map<
-	string,
-	{
-		[x: string]: Role<any> | undefined;
-	}
->();
 
 export type HasPermissionBaseInput = {
 	role: string;
