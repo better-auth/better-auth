@@ -1051,6 +1051,28 @@ export type BetterAuthOptions = {
 					 * @default 1 day (60 * 60 * 24) in seconds
 					 */
 					deleteTokenExpiresIn?: number;
+					/**
+					 * How the emailed link resolves the deletion.
+					 *
+					 * - `"instant"`: clicking the link deletes the account immediately (`GET`).
+					 * - `"explicit"`: the link only previews the deletion; the app must call
+					 *   the confirm endpoint (`POST`) to apply it. Use this when the emailed
+					 *   link can be visited by something other than the user, e.g. mail
+					 *   clients and security scanners that open links automatically
+					 *   (Outlook Safe Links, link-preview proxies).
+					 *
+					 * In `"explicit"` mode the emailed link is built from the request's
+					 * `callbackURL`, so every deletion request that sends a verification
+					 * email must include one: an absolute URL to the app's confirmation
+					 * page that doesn't point at `/delete-user/callback` and doesn't
+					 * already carry a `token` query parameter. For HTTP requests its origin must be in
+					 * `trustedOrigins`; calls made directly through `auth.api` skip that
+					 * check, so pass a URL you control. Otherwise the request is rejected
+					 * with `CALLBACK_URL_REQUIRED` or `INVALID_CALLBACK_URL`.
+					 *
+					 * @default "instant"
+					 */
+					confirmationMode?: "instant" | "explicit";
 				};
 		  })
 		| undefined;
