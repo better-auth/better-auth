@@ -1993,6 +1993,132 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	});
 
 	/**
+	 * Two overlapping `refresh_token` grants with the same parent must both
+	 * receive the rotated response inside the reuse interval. The CAS loser
+	 * used to return `invalid_grant` before the winner stored the replay.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("replays the same response for concurrent refresh_token grants inside the reuse interval", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const [first, second] = await Promise.all([
+			refresh(tokens.refresh_token!),
+			refresh(tokens.refresh_token!),
+		]);
+
+		expect(first.error).toBeNull();
+		expect(second.error).toBeNull();
+		expect(second.data).toMatchObject({
+			access_token: first.data?.access_token,
+			expires_at: first.data?.expires_at,
+			token_type: first.data?.token_type,
+			refresh_token: first.data?.refresh_token,
+			scope: first.data?.scope,
+			id_token: first.data?.id_token,
+			refresh_call: first.data?.refresh_call,
+		});
+		// Both requests can enter `createUserTokens` and run
+		// `customTokenResponseFields` before the CAS; only one rotation
+		// is stored, and the loser replays that response.
+		expect(refreshTokenResponseCalls).toBeGreaterThanOrEqual(1);
+		expect(refreshTokenResponseCalls).toBeLessThanOrEqual(2);
+
+		const next = await refresh(first.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+		expect(next.data?.refresh_token).not.toEqual(first.data?.refresh_token);
+	});
+
+	/**
+	 * The second request can also arrive after the parent is already revoked
+	 * but before `storeRefreshTokenRotationReplay` writes. That used to miss
+	 * the replay cache and return `invalid_grant` inside the reuse interval.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("waits for the stored replay when a concurrent refresh arrives mid-rotation", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				holdReplayStore = true;
+				reached.resolve();
+				await released.promise;
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			released.resolve();
+			const [first, second] = await Promise.all([rotating, overlapping]);
+
+			expect(first.error).toBeNull();
+			expect(second.error).toBeNull();
+			expect(second.data).toMatchObject({
+				access_token: first.data?.access_token,
+				expires_at: first.data?.expires_at,
+				token_type: first.data?.token_type,
+				refresh_token: first.data?.refresh_token,
+				scope: first.data?.scope,
+				id_token: first.data?.id_token,
+				refresh_call: "1",
+			});
+			expect(refreshTokenResponseCalls).toBe(1);
+		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			released.resolve();
+		}
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8512
 	 */
 	it("replays equivalent requests when scope and resource order differ", async () => {

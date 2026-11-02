@@ -543,6 +543,111 @@ describe("mcp plugin", async () => {
 			});
 			expect(replay.expires_in).toBeLessThanOrEqual(firstRefresh.expires_in!);
 		});
+
+		/**
+		 * `mcp()` defaults `refreshTokenReuseInterval` to 30 seconds, but
+		 * overlapping refresh_token grants used to let one caller win and the
+		 * other receive `invalid_grant` before the replay was stored.
+		 *
+		 * @see https://github.com/better-auth/better-auth/issues/12087
+		 */
+		it("returns the same tokens for concurrent refresh_token grants", async () => {
+			const codeVerifier = generateRandomString(64);
+			const authUrl = await createAuthorizationURL({
+				id: providerId,
+				options: {
+					clientId: publicClientId,
+					redirectURI: redirectUri,
+				},
+				redirectURI: "",
+				authorizationEndpoint: `${baseURL}/oauth2/authorize`,
+				state: "mcp-concurrent-refresh",
+				scopes: ["openid", "offline_access"],
+				codeVerifier,
+			});
+
+			let redirectUrl = "";
+			await serverClient.$fetch(authUrl.toString(), {
+				method: "GET",
+				onError(context) {
+					redirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+
+			let code: string;
+			if (redirectUrl.includes("/consent")) {
+				vi.stubGlobal("window", {
+					location: {
+						search: new URL(redirectUrl, authServerBaseUrl).search,
+					},
+				});
+				onTestFinished(() => {
+					vi.unstubAllGlobals();
+				});
+				const consentRes = await serverClient.oauth2.consent(
+					{ accept: true },
+					{ headers, throw: true },
+				);
+				code = new URL(consentRes.url).searchParams.get("code")!;
+			} else {
+				code = new URL(redirectUrl).searchParams.get("code")!;
+			}
+			expect(code).toBeTruthy();
+			const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+				code,
+				codeVerifier,
+				redirectURI: redirectUri,
+				options: {
+					clientId: publicClientId,
+					redirectURI: redirectUri,
+				},
+			});
+			const tokenResponse = await customFetchImpl(`${baseURL}/oauth2/token`, {
+				method: "POST",
+				body: body.toString(),
+				headers: tokenHeaders,
+			});
+			const tokens = (await tokenResponse.json()) as {
+				refresh_token?: string;
+			};
+			expect(tokens.refresh_token).toBeDefined();
+
+			const refresh = async () => {
+				const { body: refreshBody, headers: refreshHeaders } =
+					await refreshAccessTokenRequest({
+						refreshToken: tokens.refresh_token!,
+						options: {
+							clientId: publicClientId,
+							redirectURI: redirectUri,
+						},
+					});
+				return customFetchImpl(`${baseURL}/oauth2/token`, {
+					method: "POST",
+					body: refreshBody.toString(),
+					headers: refreshHeaders,
+				});
+			};
+
+			const [firstResponse, secondResponse] = await Promise.all([
+				refresh(),
+				refresh(),
+			]);
+			expect(firstResponse.status).toBe(200);
+			expect(secondResponse.status).toBe(200);
+			const first = (await firstResponse.json()) as {
+				access_token?: string;
+				refresh_token?: string;
+				expires_at?: number;
+				id_token?: string;
+			};
+			const second = (await secondResponse.json()) as typeof first;
+			expect(second).toMatchObject({
+				access_token: first.access_token,
+				expires_at: first.expires_at,
+				refresh_token: first.refresh_token,
+				id_token: first.id_token,
+			});
+		});
 	});
 });
 
