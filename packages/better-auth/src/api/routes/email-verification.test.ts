@@ -1,6 +1,8 @@
 import { APIError } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import type { Session, User } from "../../types";
+import { createEmailVerificationToken } from "./email-verification";
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/8969
@@ -1068,5 +1070,357 @@ describe("Email Verification Secondary Storage", async () => {
 			headers,
 		});
 		expect(result.status).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11754
+ *
+ * Change-email verification links clicked in an unauthenticated context
+ * (separate browser, incognito window, expired session) must not mint a
+ * session or set a session cookie unless autoSignInAfterVerification is
+ * explicitly enabled - the same contract the plain verification path
+ * (email-verification.ts) and the email-OTP path already enforce.
+ */
+describe("Email change verification - auto sign-in contract", async () => {
+	let confirmationToken: string;
+	let verificationToken: string;
+	const {
+		client,
+		auth,
+		testUser,
+		signInWithTestUser,
+		signInWithUser,
+		cookieSetter,
+		db,
+	} = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+		emailVerification: {
+			sendOnSignUp: false,
+			async sendVerificationEmail({ token: _token }) {
+				verificationToken = _token;
+			},
+			// The contract under test: auto sign-in is opt-in and defaults to false.
+			autoSignInAfterVerification: false,
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+				async sendChangeEmailConfirmation(data) {
+					confirmationToken = data.token;
+				},
+			},
+		},
+	});
+
+	it("should not mint a session for an unauthenticated change-email verification click when autoSignInAfterVerification is false", async () => {
+		// Verify the test user so change-email takes the two-step flow
+		await auth.api.sendVerificationEmail({
+			body: {
+				email: testUser.email,
+			},
+		});
+		const plainHeaders = new Headers();
+		await client.verifyEmail({
+			query: {
+				token: verificationToken,
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(plainHeaders),
+			},
+		});
+		const plainSession = await client.getSession({
+			fetchOptions: { headers: plainHeaders },
+		});
+		// sanity: the plain verification path already respects the flag
+		expect(plainSession.data).toBeNull();
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
+			await auth.api.changeEmail({
+				body: {
+					newEmail: "unauth-new@email.com",
+				},
+				headers,
+			});
+		});
+		expect(confirmationToken).toBeTruthy();
+
+		// Baseline for the persistence assertions below: the explicit
+		// sign-in above must be the only source of the user's session rows.
+		const dbUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		const changeUserId = dbUser?.id as string;
+		expect(changeUserId).toBeTruthy();
+		const sessionsBefore = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: changeUserId }],
+		});
+		expect(sessionsBefore.length).toBeGreaterThan(0);
+
+		// Click the confirmation link in a separate browser (no session)
+		await client.verifyEmail({
+			query: {
+				token: confirmationToken,
+			},
+		});
+		expect(verificationToken).toBeTruthy();
+		const changeVerificationToken = verificationToken;
+
+		// Click the final verification link unauthenticated (incognito window)
+		const capturedHeaders = new Headers();
+		const res = await client.verifyEmail({
+			query: {
+				token: changeVerificationToken,
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(capturedHeaders),
+			},
+		});
+
+		// The email change must still complete...
+		expect(res.data?.status).toBe(true);
+
+		// ...but no session may be minted and no session cookie set
+		const session = await client.getSession({
+			fetchOptions: { headers: capturedHeaders },
+		});
+		expect(session.data).toBeNull();
+
+		// ...and no session row may be persisted either: getSession alone
+		// cannot tell a minted-but-cookie-less session from no session at all
+		const sessionsAfter = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: changeUserId }],
+		});
+		expect(sessionsAfter.map((row) => row.id).sort()).toEqual(
+			sessionsBefore.map((row) => row.id).sort(),
+		);
+
+		// The account is intact and usable with the new email
+		const signInRes = await client.signIn.email({
+			email: "unauth-new@email.com",
+			password: testUser.password,
+		});
+		expect(signInRes.data?.user?.email).toBe("unauth-new@email.com");
+		expect(signInRes.data?.user?.emailVerified).toBe(true);
+	});
+
+	it("should keep refreshing the session cookie for an authenticated change-email verification click when autoSignInAfterVerification is false", async () => {
+		// fresh, verified user so change-email takes the two-step flow
+		const secondUser = {
+			name: "second user",
+			email: "second@test.com",
+			password: "test123456",
+		};
+		await client.signUp.email({
+			name: secondUser.name,
+			email: secondUser.email,
+			password: secondUser.password,
+		});
+		await auth.api.sendVerificationEmail({
+			body: { email: secondUser.email },
+		});
+		const plainHeaders = new Headers();
+		await client.verifyEmail({
+			query: { token: verificationToken },
+			fetchOptions: { onSuccess: cookieSetter(plainHeaders) },
+		});
+
+		const { headers } = await signInWithUser(
+			secondUser.email,
+			secondUser.password,
+		);
+		await auth.api.changeEmail({
+			body: { newEmail: "with-session-new@email.com" },
+			headers,
+		});
+		expect(confirmationToken).toBeTruthy();
+		await client.verifyEmail({
+			query: { token: confirmationToken },
+			fetchOptions: { headers },
+		});
+		const changeVerificationToken = verificationToken;
+
+		const capturedHeaders = new Headers();
+		await client.verifyEmail({
+			query: { token: changeVerificationToken },
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(capturedHeaders),
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers: capturedHeaders },
+		});
+		expect(session.data?.user.email).toBe("with-session-new@email.com");
+		expect(session.data?.user.emailVerified).toBe(true);
+	});
+});
+
+describe("Legacy change-email verification - auto sign-in contract", async () => {
+	const { client, db, cookieSetter } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+		},
+		emailVerification: {
+			sendOnSignUp: false,
+			async sendVerificationEmail() {},
+			autoSignInAfterVerification: false,
+		},
+	});
+
+	it("should not mint a session for an unauthenticated legacy change-email token when autoSignInAfterVerification is false", async () => {
+		const legacyUser = {
+			name: "legacy user",
+			email: "legacy@test.com",
+			password: "test123456",
+		};
+		await client.signUp.email({
+			name: legacyUser.name,
+			email: legacyUser.email,
+			password: legacyUser.password,
+		});
+
+		// Baseline: the user's session rows before the legacy click
+		const dbUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: legacyUser.email }],
+		});
+		const legacyUserId = dbUser?.id as string;
+		expect(legacyUserId).toBeTruthy();
+		const sessionsBefore = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: legacyUserId }],
+		});
+
+		// Legacy token shape: updateTo set, no requestType
+		const legacyToken = await createEmailVerificationToken(
+			"better-auth-secret-that-is-long-enough-for-validation-test",
+			legacyUser.email,
+			"legacy-new@test.com",
+		);
+
+		const capturedHeaders = new Headers();
+		const res = await client.verifyEmail({
+			query: { token: legacyToken },
+			fetchOptions: {
+				onSuccess: cookieSetter(capturedHeaders),
+			},
+		});
+
+		expect(res.data?.status).toBe(true);
+
+		const session = await client.getSession({
+			fetchOptions: { headers: capturedHeaders },
+		});
+		expect(session.data).toBeNull();
+
+		// Same persistence guard as the two-step flow: no session row either
+		const sessionsAfter = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: legacyUserId }],
+		});
+		expect(sessionsAfter.map((row) => row.id).sort()).toEqual(
+			sessionsBefore.map((row) => row.id).sort(),
+		);
+
+		const signInRes = await client.signIn.email({
+			email: "legacy-new@test.com",
+			password: legacyUser.password,
+		});
+		expect(signInRes.data?.user?.email).toBe("legacy-new@test.com");
+		// the legacy flow updates the email but leaves it unverified
+		expect(signInRes.data?.user?.emailVerified).toBe(false);
+	});
+});
+
+describe("Change-email verification auto sign-in opt-in", async () => {
+	let confirmationToken: string;
+	let verificationToken: string;
+	const { client, auth, testUser, signInWithTestUser, db, cookieSetter } =
+		await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				sendOnSignUp: false,
+				async sendVerificationEmail({ token: _token }) {
+					verificationToken = _token;
+				},
+				autoSignInAfterVerification: true,
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					async sendChangeEmailConfirmation(data) {
+						confirmationToken = data.token;
+					},
+				},
+			},
+		});
+
+	it("should mint a session for an unauthenticated change-email verification click when autoSignInAfterVerification is true", async () => {
+		await auth.api.sendVerificationEmail({
+			body: { email: testUser.email },
+		});
+		await client.verifyEmail({
+			query: { token: verificationToken },
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async (headers) => {
+			await auth.api.changeEmail({
+				body: { newEmail: "optin-new@email.com" },
+				headers,
+			});
+		});
+		await client.verifyEmail({
+			query: { token: confirmationToken },
+		});
+		const changeVerificationToken = verificationToken;
+
+		// Baseline before the minting click
+		const dbUser = await db.findOne<User>({
+			model: "user",
+			where: [{ field: "email", value: testUser.email }],
+		});
+		const optInUserId = dbUser?.id as string;
+		expect(optInUserId).toBeTruthy();
+		const sessionsBefore = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: optInUserId }],
+		});
+
+		const capturedHeaders = new Headers();
+		await client.verifyEmail({
+			query: { token: changeVerificationToken },
+			fetchOptions: {
+				onSuccess: cookieSetter(capturedHeaders),
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers: capturedHeaders },
+		});
+		expect(session.data?.user.email).toBe("optin-new@email.com");
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		// Control for the negative tests above: the opt-in path must persist
+		// exactly one new session row
+		const sessionsAfter = await db.findMany<Session>({
+			model: "session",
+			where: [{ field: "userId", value: optInUserId }],
+		});
+		expect(sessionsAfter).toHaveLength(sessionsBefore.length + 1);
+		const added = sessionsAfter.filter(
+			(row) => !sessionsBefore.some((before) => before.id === row.id),
+		);
+		expect(added).toHaveLength(1);
 	});
 });

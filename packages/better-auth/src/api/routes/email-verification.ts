@@ -370,7 +370,10 @@ export const verifyEmail = createAuthEndpoint(
 				 */
 				case "change-email-verification": {
 					let activeSession = session;
-					if (!activeSession) {
+					if (
+						!activeSession &&
+						ctx.context.options.emailVerification?.autoSignInAfterVerification
+					) {
 						const newSession = await ctx.context.internalAdapter.createSession(
 							user.user.id,
 						);
@@ -396,14 +399,16 @@ export const verifyEmail = createAuthEndpoint(
 							ctx.request,
 						);
 					}
-					await setSessionCookie(ctx, {
-						session: activeSession.session,
-						user: {
-							...activeSession.user,
-							email: parsed.updateTo,
-							emailVerified: true,
-						},
-					});
+					if (activeSession) {
+						await setSessionCookie(ctx, {
+							session: activeSession.session,
+							user: {
+								...activeSession.user,
+								email: parsed.updateTo,
+								emailVerified: true,
+							},
+						});
+					}
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
 					}
@@ -420,7 +425,10 @@ export const verifyEmail = createAuthEndpoint(
 				 */
 				default: {
 					let activeSession = session;
-					if (!activeSession) {
+					if (
+						!activeSession &&
+						ctx.context.options.emailVerification?.autoSignInAfterVerification
+					) {
 						const newSession = await ctx.context.internalAdapter.createSession(
 							user.user.id,
 						);
@@ -459,14 +467,16 @@ export const verifyEmail = createAuthEndpoint(
 							),
 						);
 					}
-					await setSessionCookie(ctx, {
-						session: activeSession.session,
-						user: {
-							...activeSession.user,
-							email: parsed.updateTo,
-							emailVerified: false,
-						},
-					});
+					if (activeSession) {
+						await setSessionCookie(ctx, {
+							session: activeSession.session,
+							user: {
+								...activeSession.user,
+								email: parsed.updateTo,
+								emailVerified: false,
+							},
+						});
+					}
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
 					}
