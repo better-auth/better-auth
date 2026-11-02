@@ -1,4 +1,5 @@
 import type { User } from "better-auth";
+import type { memoryAdapter } from "better-auth/adapters/memory";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import { assert, describe, expect, vi } from "vitest";
@@ -699,8 +700,8 @@ describe("stripe webhook", () => {
 
 		expect(subscriptions.length).toBe(1);
 
-		// Verify callback was NOT called (early return due to existing subscription)
-		expect(onSubscriptionCreatedCallback).not.toHaveBeenCalled();
+		// A redelivery re-runs the callback in case the first delivery's callback failed
+		expect(onSubscriptionCreatedCallback).toHaveBeenCalledTimes(1);
 	});
 
 	test("should skip subscription creation when user not found", async ({
@@ -1779,13 +1780,17 @@ describe("stripe webhook", () => {
 			expect(data.message).toContain("Failed to construct Stripe event");
 		});
 
-		test("should handle async errors in webhook event processing", async ({
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10534
+		 */
+		test("should return non-2xx when webhook event processing fails", async ({
 			memory,
 			stripeOptions,
 		}) => {
 			const errorThrowingHandler = vi
 				.fn()
 				.mockRejectedValue(new Error("Event processing failed"));
+			const onEvent = vi.fn();
 
 			const mockEvent = {
 				type: "checkout.session.completed",
@@ -1815,6 +1820,7 @@ describe("stripe webhook", () => {
 				...stripeOptions,
 				stripeClient: stripeForTest as unknown as Stripe,
 				stripeWebhookSecret: "test_secret",
+				onEvent,
 				subscription: {
 					...stripeOptions.subscription,
 					onSubscriptionComplete: errorThrowingHandler,
@@ -1855,13 +1861,10 @@ describe("stripe webhook", () => {
 			);
 
 			const response = await testAuth.handler(mockRequest);
-			// Errors inside event handlers are caught and logged but don't fail the webhook
-			// This prevents Stripe from retrying and is the expected behavior
-			expect(response.status).toBe(200);
-			const data = await response.json();
-			expect(data).toEqual({ success: true });
-			// Verify the error was logged (via the stripeClient.subscriptions.retrieve rejection)
+			// A non-2xx response makes Stripe redeliver the event
+			expect(response.status).toBe(400);
 			expect(stripeForTest.subscriptions.retrieve).toHaveBeenCalled();
+			expect(onEvent).not.toHaveBeenCalled();
 		});
 
 		test("should successfully process webhook with valid async signature verification", async ({
@@ -2777,5 +2780,372 @@ describe("stripe webhook", () => {
 				expect(onSubscriptionComplete).not.toHaveBeenCalled();
 			},
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10534
+	 */
+	describe("webhook: failure propagation", () => {
+		const subscriptionItems = {
+			object: "list" as const,
+			data: [
+				createSubscriptionItem({
+					price: createPrice({ id: TEST_PRICES.starter }),
+				}),
+			],
+			has_more: false,
+			url: "/v1/subscription_items",
+		};
+
+		async function setup(
+			memory: ReturnType<typeof memoryAdapter>,
+			stripeOptions: StripeOptions,
+			events: Stripe.Event[],
+			subscriptionOverrides: Partial<
+				NonNullable<StripeOptions["subscription"]>
+			> = {},
+		) {
+			const onEvent = vi.fn();
+			const constructEventAsync = vi.fn();
+			for (const event of events) {
+				constructEventAsync.mockResolvedValueOnce(event);
+			}
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: {
+					...stripeOptions.stripeClient,
+					webhooks: { constructEventAsync },
+				} as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				onEvent,
+				subscription: {
+					...stripeOptions.subscription,
+					...subscriptionOverrides,
+				},
+			} as StripeOptions;
+			const { auth } = await getTestInstance(
+				{ database: memory, plugins: [stripe(testOptions)] },
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+			const { id: referenceId } = await ctx.adapter.create({
+				model: "user",
+				data: {
+					email: "propagation@email.com",
+					stripeCustomerId: "cus_propagation",
+				},
+			});
+			const createRow = (data: Partial<Subscription>) =>
+				ctx.adapter.create<Subscription>({
+					model: "subscription",
+					data: {
+						referenceId,
+						stripeCustomerId: "cus_propagation",
+						stripeSubscriptionId: "sub_propagation",
+						status: "active",
+						plan: "starter",
+						...data,
+					},
+				});
+			const findRow = (id: string) =>
+				ctx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "id", value: id }],
+				});
+			const send = () =>
+				auth.handler(
+					new Request("http://localhost:3000/api/auth/stripe/webhook", {
+						method: "POST",
+						headers: { "stripe-signature": "test_signature" },
+						body: "{}",
+					}),
+				);
+			return { ctx, createRow, findRow, onEvent, send };
+		}
+
+		test("should return non-2xx when onSubscriptionUpdate throws", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const event = createSubscriptionEvent("customer.subscription.updated", {
+				id: "sub_propagation",
+				customer: "cus_propagation",
+				status: "past_due",
+				items: subscriptionItems,
+			});
+			const { createRow, findRow, onEvent, send } = await setup(
+				memory,
+				stripeOptions,
+				[event],
+				{
+					onSubscriptionUpdate: vi
+						.fn()
+						.mockRejectedValue(new Error("callback failed")),
+				},
+			);
+			const { id } = await createRow({});
+
+			const response = await send();
+
+			expect(response.status).toBe(400);
+			expect(onEvent).not.toHaveBeenCalled();
+			expect((await findRow(id))?.status).toBe("past_due");
+		});
+
+		test("should return non-2xx when onSubscriptionDeleted throws", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const event = createSubscriptionEvent("customer.subscription.deleted", {
+				id: "sub_propagation",
+				customer: "cus_propagation",
+				status: "canceled",
+				items: subscriptionItems,
+			});
+			const { createRow, onEvent, send } = await setup(
+				memory,
+				stripeOptions,
+				[event],
+				{
+					onSubscriptionDeleted: vi
+						.fn()
+						.mockRejectedValue(new Error("callback failed")),
+				},
+			);
+			await createRow({});
+
+			const response = await send();
+
+			expect(response.status).toBe(400);
+			expect(onEvent).not.toHaveBeenCalled();
+		});
+
+		test("should re-run a failed onTrialEnd when Stripe redelivers the event", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const event = {
+				...createSubscriptionEvent("customer.subscription.updated", {
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "active",
+					items: subscriptionItems,
+				}),
+				data: {
+					object: createSubscription({
+						id: "sub_propagation",
+						customer: "cus_propagation",
+						status: "active",
+						items: subscriptionItems,
+					}),
+					previous_attributes: { status: "trialing" },
+				},
+			} as Stripe.Event;
+			const onTrialEnd = vi
+				.fn()
+				.mockRejectedValueOnce(new Error("callback failed"))
+				.mockResolvedValue(undefined);
+			const { createRow, send } = await setup(
+				memory,
+				stripeOptions,
+				[event, event],
+				{
+					plans: [
+						{
+							priceId: TEST_PRICES.starter,
+							name: "starter",
+							freeTrial: { days: 7, onTrialEnd },
+						},
+					],
+				},
+			);
+			await createRow({ status: "trialing" });
+
+			expect((await send()).status).toBe(400);
+			expect((await send()).status).toBe(200);
+			expect(onTrialEnd).toHaveBeenCalledTimes(2);
+		});
+
+		test("should re-run a failed onSubscriptionCancel when Stripe redelivers the event", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const stripeSubscription = createSubscription({
+				id: "sub_propagation",
+				customer: "cus_propagation",
+				status: "active",
+				cancel_at_period_end: true,
+				items: subscriptionItems,
+			});
+			const event = {
+				...createSubscriptionEvent("customer.subscription.updated"),
+				data: {
+					object: stripeSubscription,
+					previous_attributes: { cancel_at_period_end: false },
+				},
+			} as Stripe.Event;
+			const onSubscriptionCancel = vi
+				.fn()
+				.mockRejectedValueOnce(new Error("callback failed"))
+				.mockResolvedValue(undefined);
+			const { createRow, send } = await setup(
+				memory,
+				stripeOptions,
+				[event, event],
+				{ onSubscriptionCancel },
+			);
+			await createRow({});
+
+			expect((await send()).status).toBe(400);
+			expect((await send()).status).toBe(200);
+			expect(onSubscriptionCancel).toHaveBeenCalledTimes(2);
+		});
+
+		test("should re-run a failed onSubscriptionCreated when Stripe redelivers the event", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const event = createSubscriptionEvent("customer.subscription.created", {
+				id: "sub_propagation",
+				customer: "cus_propagation",
+				status: "active",
+				items: subscriptionItems,
+			});
+			const onSubscriptionCreated = vi
+				.fn()
+				.mockRejectedValueOnce(new Error("callback failed"))
+				.mockResolvedValue(undefined);
+			const { ctx, onEvent, send } = await setup(
+				memory,
+				stripeOptions,
+				[event, event],
+				{ onSubscriptionCreated },
+			);
+
+			expect((await send()).status).toBe(400);
+			expect((await send()).status).toBe(200);
+			expect(onSubscriptionCreated).toHaveBeenCalledTimes(2);
+			expect(onEvent).toHaveBeenCalledTimes(1);
+
+			const rows = await ctx.adapter.findMany<Subscription>({
+				model: "subscription",
+				where: [{ field: "stripeSubscriptionId", value: "sub_propagation" }],
+			});
+			expect(rows).toHaveLength(1);
+		});
+
+		test("should not let a late customer.subscription.created restore a deleted subscription", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const createdEvent = createSubscriptionEvent(
+				"customer.subscription.created",
+				{
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "active",
+					items: subscriptionItems,
+				},
+			);
+			const onSubscriptionCreated = vi.fn();
+			const { createRow, findRow, send } = await setup(
+				memory,
+				stripeOptions,
+				[createdEvent],
+				{ onSubscriptionCreated },
+			);
+			// customer.subscription.deleted was already processed
+			const { id } = await createRow({ status: "canceled" });
+
+			expect((await send()).status).toBe(200);
+			expect((await findRow(id))?.status).toBe("canceled");
+			expect(onSubscriptionCreated).not.toHaveBeenCalled();
+		});
+
+		test("should retry an update that arrives before customer.subscription.created", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const createdEvent = createSubscriptionEvent(
+				"customer.subscription.created",
+				{
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "active",
+					items: subscriptionItems,
+				},
+			);
+			const updatedEvent = createSubscriptionEvent(
+				"customer.subscription.updated",
+				{
+					id: "sub_propagation",
+					customer: "cus_propagation",
+					status: "past_due",
+					items: subscriptionItems,
+				},
+			);
+			const onSubscriptionUpdate = vi.fn();
+			const { ctx, send } = await setup(
+				memory,
+				stripeOptions,
+				[updatedEvent, createdEvent, updatedEvent],
+				{ onSubscriptionUpdate },
+			);
+
+			expect((await send()).status).toBe(400);
+			expect((await send()).status).toBe(200);
+			expect((await send()).status).toBe(200);
+
+			const rows = await ctx.adapter.findMany<Subscription>({
+				model: "subscription",
+				where: [{ field: "stripeSubscriptionId", value: "sub_propagation" }],
+			});
+			expect(rows).toHaveLength(1);
+			expect(rows[0]?.status).toBe("past_due");
+			expect(onSubscriptionUpdate).toHaveBeenCalledTimes(1);
+		});
+
+		test("should acknowledge customer.subscription.updated when no subscription row exists", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const event = createSubscriptionEvent("customer.subscription.updated", {
+				id: "sub_unknown",
+				customer: "cus_unknown",
+				status: "active",
+				items: subscriptionItems,
+			});
+			const onSubscriptionUpdate = vi.fn();
+			const { onEvent, send } = await setup(memory, stripeOptions, [event], {
+				onSubscriptionUpdate,
+			});
+
+			expect((await send()).status).toBe(200);
+			expect(onSubscriptionUpdate).not.toHaveBeenCalled();
+			expect(onEvent).toHaveBeenCalledTimes(1);
+		});
+
+		test("should acknowledge an update for a known customer's subscription with no configured plan", async ({
+			memory,
+			stripeOptions,
+		}) => {
+			const event = createSubscriptionEvent("customer.subscription.updated", {
+				id: "sub_other_product",
+				customer: "cus_propagation",
+				status: "active",
+				items: {
+					...subscriptionItems,
+					data: [
+						createSubscriptionItem({
+							price: createPrice({ id: "price_not_configured" }),
+						}),
+					],
+				},
+			});
+			const { onEvent, send } = await setup(memory, stripeOptions, [event]);
+
+			expect((await send()).status).toBe(200);
+			expect(onEvent).toHaveBeenCalledTimes(1);
+		});
 	});
 });

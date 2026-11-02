@@ -147,6 +147,7 @@ export async function onCheckoutSessionCompleted(
 		}
 	} catch (e: any) {
 		ctx.context.logger.error(`Stripe webhook failed. Error: ${e.message}`);
+		throw e;
 	}
 }
 
@@ -186,9 +187,41 @@ export async function onSubscriptionCreated(
 						], // Probably won't match since it's not set yet
 			});
 		if (existingSubscription) {
+			// checkout.session.completed owns rows that checkout pre-created
+			if (subscriptionId) {
+				ctx.context.logger.info(
+					`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), skipping creation`,
+				);
+				return;
+			}
+
+			// A redelivery of this event after its row was written: the first attempt's
+			// onSubscriptionCreated may have failed. The row is left as is so an older
+			// event can't overwrite newer state.
+			if (
+				existingSubscription.status === "canceled" ||
+				existingSubscription.status === "incomplete_expired"
+			) {
+				ctx.context.logger.info(
+					`Stripe webhook: Subscription ${existingSubscription.id} has already ended, skipping onSubscriptionCreated`,
+				);
+				return;
+			}
 			ctx.context.logger.info(
-				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), skipping creation`,
+				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), re-running onSubscriptionCreated`,
 			);
+			const resolvedExisting = await resolvePlanItem(
+				options,
+				stripeSubscriptionCreated.items.data,
+			);
+			if (resolvedExisting?.plan) {
+				await options.subscription.onSubscriptionCreated?.({
+					event,
+					subscription: existingSubscription,
+					stripeSubscription: stripeSubscriptionCreated,
+					plan: resolvedExisting.plan,
+				});
+			}
 			return;
 		}
 
@@ -275,6 +308,7 @@ export async function onSubscriptionCreated(
 		});
 	} catch (error: any) {
 		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
+		throw error;
 	}
 }
 
@@ -332,8 +366,24 @@ export async function onSubscriptionUpdated(
 					return;
 				}
 				subscription = activeSub;
+			} else if (subs[0]) {
+				subscription = subs[0];
 			} else {
-				subscription = subs[0]!;
+				// An update can arrive before customer.subscription.created. Retry it when that
+				// event would create the row: a configured plan and a known user or organization.
+				const reference =
+					plan && customerId
+						? await findReferenceByStripeCustomerId(ctx, options, customerId)
+						: null;
+				if (reference) {
+					throw new Error(
+						`No subscription row yet for ${stripeSubscriptionUpdated.id} (${reference.customerType} ${reference.referenceId})`,
+					);
+				}
+				ctx.context.logger.warn(
+					`Stripe webhook warning: No subscription found for subscriptionId: ${stripeSubscriptionUpdated.id} or customerId: ${customerId}`,
+				);
+				return;
 			}
 		}
 
@@ -396,16 +446,28 @@ export async function onSubscriptionUpdated(
 		});
 		// Practically unreachable. A null here means the row was deleted between the read above and this update.
 		if (!subscriptionUpdated) {
-			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently), skipping callbacks`,
+			throw new Error(
+				`Subscription ${subscription.id} update returned no row (likely deleted concurrently)`,
 			);
-			return;
 		}
+
+		// Stripe's state before this event. A redelivery sees the row already
+		// updated, so transitions are also read from the event's previous_attributes.
+		const stripeSubscriptionBefore: Stripe.Subscription = {
+			...stripeSubscriptionUpdated,
+			...(event.type === "customer.subscription.updated"
+				? event.data.previous_attributes
+				: {}),
+		};
+		const wasTrialing =
+			subscription.status === "trialing" ||
+			stripeSubscriptionBefore.status === "trialing";
 
 		const isNewCancellation =
 			stripeSubscriptionUpdated.status === "active" &&
 			isStripePendingCancel(stripeSubscriptionUpdated) &&
-			!isPendingCancel(subscription);
+			(!isPendingCancel(subscription) ||
+				!isStripePendingCancel(stripeSubscriptionBefore));
 		if (isNewCancellation) {
 			await options.subscription.onSubscriptionCancel?.({
 				event,
@@ -423,7 +485,7 @@ export async function onSubscriptionUpdated(
 		if (plan) {
 			if (
 				stripeSubscriptionUpdated.status === "active" &&
-				subscription.status === "trialing" &&
+				wasTrialing &&
 				plan.freeTrial?.onTrialEnd
 			) {
 				await plan.freeTrial.onTrialEnd(
@@ -433,7 +495,7 @@ export async function onSubscriptionUpdated(
 			}
 			if (
 				stripeSubscriptionUpdated.status === "incomplete_expired" &&
-				subscription.status === "trialing" &&
+				wasTrialing &&
 				plan.freeTrial?.onTrialExpired
 			) {
 				await plan.freeTrial.onTrialExpired(subscriptionUpdated, ctx);
@@ -441,6 +503,7 @@ export async function onSubscriptionUpdated(
 		}
 	} catch (error: any) {
 		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
+		throw error;
 	}
 }
 
@@ -503,10 +566,9 @@ export async function onSubscriptionDeleted(
 				});
 			// Practically unreachable. A null here means the row was deleted between the read above and this update.
 			if (!subscriptionUpdated) {
-				ctx.context.logger.warn(
-					`Stripe webhook warning: Subscription ${subscription.id} update returned no row (likely deleted concurrently), skipping callbacks`,
+				throw new Error(
+					`Subscription ${subscription.id} update returned no row (likely deleted concurrently)`,
 				);
-				return;
 			}
 			await options.subscription.onSubscriptionDeleted?.({
 				event,
@@ -520,5 +582,6 @@ export async function onSubscriptionDeleted(
 		}
 	} catch (error: any) {
 		ctx.context.logger.error(`Stripe webhook failed. Error: ${error}`);
+		throw error;
 	}
 }
