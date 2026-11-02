@@ -827,9 +827,9 @@ describe("delete user", async () => {
 			},
 		});
 
-		// All sessions should be gone now
+		// Only the revocation cutoff remains after deleting all sessions.
 		expect(store.get(`active-sessions-${userId}`)).toBeUndefined();
-		expect(store.size).toBe(0);
+		expect([...store.keys()]).toEqual([`revoked-sessions-before-${userId}`]);
 	});
 
 	it("should delete with verification flow and password", async () => {
