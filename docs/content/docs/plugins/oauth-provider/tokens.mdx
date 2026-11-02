@@ -209,7 +209,7 @@ A refresh keeps the `sid` of the session that authorized the grant while that se
 
 Tokens from the device authorization and [CIBA](/docs/plugins/ciba) grants have no associated session, so neither case applies to them.
 
-Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. The retry gets that response only when it uses the same client, scopes, resources, and DPoP key as the first refresh. A retry that differs but is otherwise valid gets `invalid_grant`.
+Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. Overlapping in-flight refreshes of the same token get that response too. The retry gets that response only when it uses the same client, scopes, resources, and DPoP key as the first refresh. A retry that differs but is otherwise valid gets `invalid_grant`.
 
 Inside the window, reuse is not treated as replay, and the token family is never revoked. A stolen rotated token that passes these checks therefore gets the replacement refresh token. Keep the interval short.
 
