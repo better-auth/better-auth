@@ -280,6 +280,8 @@ To initiate a request password reset flow using `phoneNumber`, you can start by 
 
 Then, you can reset the password by calling `resetPassword` on the client with the OTP code and the new password.
 
+Reset works only for a verified phone number. For an unverified number, `requestPasswordReset` still returns `{ status: true }` but sends no code, and `resetPassword` returns `PHONE_NUMBER_PENDING_VERIFICATION`.
+
 <APIMethod path="/phone-number/reset-password" method="POST">
   ```ts
   type resetPasswordPhoneNumber = {
@@ -341,7 +343,7 @@ export const auth = betterAuth({
 
 ### `sendPasswordResetOTP`
 
-A function that sends the OTP code to the user's phone number for password reset. It takes the phone number and the OTP code as arguments.
+A function that sends the OTP code to the user's phone number for password reset. It takes the phone number and the OTP code as arguments. It is called only for verified phone numbers.
 
 ### `phoneNumberValidator`
 

@@ -859,9 +859,9 @@ export const requestPasswordResetPhoneNumber = (
 				identifier: phoneNumberResetIdentifier(ctx.body.phoneNumber),
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
-			// Answer the same for a missing number and, with requireVerification, an
-			// unverified one, so the response does not reveal either.
-			if (!user || (opts.requireVerification && !user.phoneNumberVerified)) {
+			// Answer the same for a missing or unverified number, so the response
+			// does not reveal either.
+			if (!user?.phoneNumberVerified) {
 				return ctx.json({
 					status: true,
 				});
@@ -971,7 +971,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 			}
 			// An unverified number does not prove the account is the caller's.
-			if (opts.requireVerification && !user.phoneNumberVerified) {
+			if (!user.phoneNumberVerified) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_PENDING_VERIFICATION,

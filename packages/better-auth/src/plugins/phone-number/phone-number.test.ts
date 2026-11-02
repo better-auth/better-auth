@@ -856,6 +856,7 @@ describe("reset password flow attempts", async () => {
 				name: "Test User",
 				email: testUser2.email,
 				phoneNumber: testUser2.phoneNumber,
+				phoneNumberVerified: true,
 			},
 		});
 		await client.phoneNumber.requestPasswordReset({
@@ -1436,16 +1437,21 @@ describe("phone number verification requirement", async () => {
  */
 describe("phone proof requires ownership of an unverified account", () => {
 	let otp = "";
+	let resetOtp = "";
 	const onVerification = vi.fn();
+	const onPasswordReset = vi.fn();
 	const setup = async (authOptions: Partial<BetterAuthOptions> = {}) => {
 		const instance = await getTestInstance(
 			{
 				...authOptions,
-				emailAndPassword: { enabled: true },
+				emailAndPassword: { enabled: true, onPasswordReset },
 				plugins: [
 					phoneNumber({
 						sendOTP({ code }) {
 							otp = code;
+						},
+						sendPasswordResetOTP({ code }) {
+							resetOtp = code;
 						},
 						callbackOnVerification: onVerification,
 						signUpOnVerification: {
@@ -1617,6 +1623,54 @@ describe("phone proof requires ownership of an unverified account", () => {
 			fetchOptions: { headers: otherHeaders },
 		});
 		expect(refused.error?.code).toBe("PHONE_NUMBER_EXIST");
+	});
+
+	it("does not reset an unverified row through a phone OTP", async () => {
+		const { auth, client, db } = await setup();
+		const phoneNumber = "+15550000102";
+		await client.signUp.email({
+			email: "phone-owner-2@example.test",
+			name: "owner",
+			password: "owner-password",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "phone-owner-2@example.test" }],
+			update: { phoneNumber },
+		});
+		const requested = await client.phoneNumber.requestPasswordReset({
+			phoneNumber,
+		});
+		expect(requested.data?.status).toBe(true);
+		expect(resetOtp).toBe("");
+
+		const ctx = await auth.$context;
+		const stored = await ctx.internalAdapter.findVerificationValue(
+			`phone-number-reset-${phoneNumber}`,
+		);
+		const result = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: stored!.value.split(":")[0]!,
+			newPassword: "new-password",
+		});
+		expect(result.error?.code).toBe("PHONE_NUMBER_PENDING_VERIFICATION");
+		expect(onPasswordReset).not.toHaveBeenCalled();
+		expect(
+			(
+				await client.signIn.email({
+					email: "phone-owner-2@example.test",
+					password: "owner-password",
+				})
+			).error,
+		).toBeNull();
+		expect(
+			(
+				await client.signIn.email({
+					email: "phone-owner-2@example.test",
+					password: "new-password",
+				})
+			).data,
+		).toBeNull();
 	});
 });
 
