@@ -52,6 +52,7 @@ describe("OAuth account identity contract", () => {
 	const providers: OAuthProvider[] = [
 		socialProviders.apple(providerOptions),
 		socialProviders.atlassian(providerOptions),
+		socialProviders.cloudflare(providerOptions),
 		socialProviders.cognito(providerOptions),
 		socialProviders.discord(providerOptions),
 		socialProviders.dropbox(providerOptions),
@@ -90,8 +91,22 @@ describe("OAuth account identity contract", () => {
 		socialProviders.zoom(providerOptions),
 	];
 
+	it("covers every built-in provider", () => {
+		expect(providers.map((provider) => provider.id).sort()).toEqual(
+			Object.keys(socialProviders).sort(),
+		);
+	});
+
 	it.each(providers)("$id declares a stable account subject", (provider) => {
 		expect(provider.accountSubject).toBeDefined();
+	});
+
+	it.for(providers)("$id exposes its configured options", (provider) => {
+		expect(provider.options).toMatchObject(
+			provider.id === "tiktok"
+				? { clientKey: providerOptions.clientKey }
+				: { clientId: providerOptions.clientId },
+		);
 	});
 
 	it("keeps mapped local-user fields separate from provider identity", () => {
