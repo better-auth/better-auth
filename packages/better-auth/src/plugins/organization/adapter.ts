@@ -175,6 +175,47 @@ function stripTeamMembershipKeys(members: StoredTeamMember[]): TeamMember[] {
 	return members.map(stripTeamMembershipKey);
 }
 
+/**
+ * Attaches each team's membership rows so callers can relate the organization
+ * members to the teams they belong to.
+ */
+async function attachTeamMembers<T extends Team>(
+	adapter: DBTransactionAdapter,
+	teams: T[],
+): Promise<(T & { members: TeamMember[] })[]> {
+	const teamIds = teams.map((team) => team.id);
+	const teamMembers: StoredTeamMember[] = [];
+	if (teamIds.length > 0) {
+		// Some adapters default `findMany` to 100 rows, so page through every
+		// team membership instead of relying on a single unbounded query.
+		const pageSize = 100;
+		for (let offset = 0; ; offset += pageSize) {
+			const page = await adapter.findMany<StoredTeamMember>({
+				model: "teamMember",
+				where: [{ field: "teamId", value: teamIds, operator: "in" }],
+				sortBy: { field: "id", direction: "asc" },
+				limit: pageSize,
+				offset,
+			});
+			teamMembers.push(...page);
+			if (page.length < pageSize) break;
+		}
+	}
+	const membersByTeamId = new Map<string, TeamMember[]>();
+	for (const member of stripTeamMembershipKeys(teamMembers)) {
+		const members = membersByTeamId.get(member.teamId);
+		if (members) {
+			members.push(member);
+		} else {
+			membersByTeamId.set(member.teamId, [member]);
+		}
+	}
+	return teams.map((team) => ({
+		...team,
+		members: membersByTeamId.get(team.id) ?? [],
+	}));
+}
+
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
@@ -732,12 +773,15 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const filteredTeams = teams?.map((team) =>
 				filterOutputFields(team, teamAdditionalFields),
 			);
+			const teamsWithMembers = filteredTeams
+				? await attachTeamMembers(adapter, filteredTeams)
+				: undefined;
 
 			return {
 				...filteredOrg,
 				invitations: filteredInvitations,
 				members: membersWithUsers,
-				teams: filteredTeams,
+				teams: teamsWithMembers,
 			};
 		},
 		listOrganizations: async (

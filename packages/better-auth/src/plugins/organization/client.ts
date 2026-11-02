@@ -9,6 +9,7 @@ import type {
 	InferMember,
 	InferOrganization,
 	InferTeam,
+	InferTeamWithMembers,
 	Member,
 } from "../../plugins/organization/schema";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
@@ -117,7 +118,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		? {
 				members: InferMember<CO>[];
 				invitations: InferInvitation<CO>[];
-				teams: InferTeam<CO>[];
+				teams: InferTeamWithMembers<CO>[];
 			} & InferOrganization<CO>
 		: {
 				members: InferMember<CO>[];

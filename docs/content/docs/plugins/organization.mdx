@@ -778,6 +778,8 @@ By default, if you don't pass any properties, it will use the active organizatio
   ```
 </APIMethod>
 
+When [teams](#teams) are enabled, each team in the response also includes a `members` array with its team membership records (`id`, `teamId`, `userId`, and `createdAt`). You can use it together with the top-level `members` array to map organization members to the teams they belong to without making additional requests.
+
 ### Update Organization
 
 To update organization info, you can use `organization.update`

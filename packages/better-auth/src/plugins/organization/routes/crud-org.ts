@@ -14,6 +14,7 @@ import type {
 	InferMember,
 	InferOrganization,
 	InferTeam,
+	InferTeamWithMembers,
 	Member,
 	TeamMember,
 } from "../schema";
@@ -809,7 +810,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				? {
 						members: InferMember<O>[];
 						invitations: InferInvitation<O>[];
-						teams: InferTeam<O>[];
+						teams: InferTeamWithMembers<O>[];
 					} & InferOrganization<O>
 				: {
 						members: InferMember<O>[];

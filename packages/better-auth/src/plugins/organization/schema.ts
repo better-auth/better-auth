@@ -462,6 +462,15 @@ export type InferTeam<
 	isClientSide extends boolean = true,
 > = Prettify<Team & InferAdditionalFieldsOutput<"team", O, isClientSide>>;
 
+/**
+ * A team with its team memberships attached, as returned by endpoints such as
+ * `getFullOrganization` when teams are enabled.
+ */
+export type InferTeamWithMembers<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<InferTeam<O, isClientSide> & { members: TeamMember[] }>;
+
 export type InferInvitation<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
