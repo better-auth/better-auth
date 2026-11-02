@@ -5121,6 +5121,9 @@ describe("oauth token - DPoP", async () => {
 				consentPage: "/consent",
 				allowDynamicClientRegistration: true,
 				refreshTokenReuseInterval: 30,
+				dpop: {
+					proofMaxAgeSeconds: 1,
+				},
 				resources: [
 					jwtResource,
 					{
@@ -5670,6 +5673,108 @@ describe("oauth token - DPoP", async () => {
 			scope: first.data?.scope,
 			id_token: first.data?.id_token,
 		});
+	});
+
+	/**
+	 * The CAS loser already verified its DPoP proof during issuance. Recovery
+	 * must reuse that binding; re-checking iat can exceed proofMaxAgeSeconds
+	 * while the winner is still storing the replay.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("recovers a concurrent DPoP refresh after the proof max age elapses", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const issueProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "stale-dpop-issue-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			issueProof,
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		async function refresh(dpopProof: string) {
+			const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const refreshHeaders = new Headers(reqHeaders);
+			refreshHeaders.set("DPoP", dpopProof);
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+		}
+
+		const context = await auth.$context;
+		const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+		const bothCas = Promise.withResolvers<void>();
+		const releaseCas = Promise.withResolvers<void>();
+		let casCalls = 0;
+		const spy = vi.spyOn(context.adapter, "incrementOne");
+		spy.mockImplementation(async (...args) => {
+			if (args[0].model === "oauthRefreshToken") {
+				casCalls += 1;
+				if (casCalls === 2) {
+					bothCas.resolve();
+				}
+				await releaseCas.promise;
+			}
+			return incrementOne(...args);
+		});
+
+		try {
+			const [firstProof, secondProof] = await Promise.all([
+				createDpopProof({
+					privateKey: dpopKey.privateKey,
+					publicJwk: dpopKey.publicJwk,
+					method: "POST",
+					url: tokenEndpoint,
+					jti: "stale-dpop-refresh-proof-1",
+				}),
+				createDpopProof({
+					privateKey: dpopKey.privateKey,
+					publicJwk: dpopKey.publicJwk,
+					method: "POST",
+					url: tokenEndpoint,
+					jti: "stale-dpop-refresh-proof-2",
+				}),
+			]);
+			const rotating = refresh(firstProof);
+			const overlapping = refresh(secondProof);
+			await bothCas.promise;
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, 2_100);
+			});
+			releaseCas.resolve();
+			const [first, second] = await Promise.all([rotating, overlapping]);
+
+			expect(first.error).toBeNull();
+			expect(second.error).toBeNull();
+			expect(second.data).toMatchObject({
+				access_token: first.data?.access_token,
+				token_type: "DPoP",
+				refresh_token: first.data?.refresh_token,
+			});
+		} finally {
+			spy.mockRestore();
+			releaseCas.resolve();
+		}
 	});
 
 	it("rejects a replayed DPoP proof at the token endpoint", async () => {

@@ -688,7 +688,7 @@ async function createRefreshToken(
 
 	if (!won) {
 		if (reuseInterval > 0) {
-			throwRefreshTokenRotationInFlight();
+			throwRefreshTokenRotationInFlight(confirmation);
 		}
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
@@ -799,7 +799,6 @@ async function resolveDpopTokenBinding(
 		grantIssuance: ResourceGrantIssuance;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
-		skipReplayReservation?: boolean;
 	},
 ): Promise<Confirmation | undefined> {
 	const authCodeDpopJkt = params.verificationValue?.query.dpop_jkt;
@@ -829,9 +828,7 @@ async function resolveDpopTokenBinding(
 			expectedJkt,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: params.skipReplayReservation
-				? undefined
-				: createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
 		});
 		return { jkt: proof.jkt };
 	} catch (error) {
@@ -1072,13 +1069,18 @@ const wait = (ms: number) =>
 	});
 
 const refreshTokenRotationInFlightErrors = new WeakSet<object>();
+const refreshTokenRotationInFlightBindings = new WeakMap<
+	object,
+	Confirmation | undefined
+>();
 
-function throwRefreshTokenRotationInFlight(): never {
+function throwRefreshTokenRotationInFlight(confirmation?: Confirmation): never {
 	const error = new APIError("BAD_REQUEST", {
 		error_description: "invalid refresh token",
 		error: "invalid_grant",
 	});
 	refreshTokenRotationInFlightErrors.add(error);
+	refreshTokenRotationInFlightBindings.set(error, confirmation);
 	throw error;
 }
 
@@ -1088,6 +1090,13 @@ function isRefreshTokenRotationInFlightError(error: unknown) {
 		error !== null &&
 		refreshTokenRotationInFlightErrors.has(error)
 	);
+}
+
+function getRefreshTokenRotationInFlightBinding(error: unknown) {
+	if (typeof error !== "object" || error === null) {
+		return undefined;
+	}
+	return refreshTokenRotationInFlightBindings.get(error);
 }
 
 function refreshTokenReplayWaitDeadline(
@@ -1150,7 +1159,8 @@ async function replayRefreshTokenRotationOrThrow(
 		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
 		scopes: string[];
 		resources?: string[];
-		skipDpopReplayReservation?: boolean;
+		verifiedConfirmation?: Confirmation;
+		skipDpopVerification?: boolean;
 	},
 ) {
 	const replayRequest = await resolveRefreshTokenRotationReplayRequest(
@@ -1180,7 +1190,8 @@ async function resolveRefreshTokenRotationReplayRequest(
 		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
 		scopes: string[];
 		resources?: string[];
-		skipDpopReplayReservation?: boolean;
+		verifiedConfirmation?: Confirmation;
+		skipDpopVerification?: boolean;
 	},
 ) {
 	const iat = Math.floor(Date.now() / 1000);
@@ -1192,12 +1203,13 @@ async function resolveRefreshTokenRotationReplayRequest(
 		iat,
 		scopeExpiresAtSeconds: iat + (opts.accessTokenExpiresIn ?? 3600),
 	});
-	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
-		client: params.client,
-		grantIssuance,
-		refreshToken: params.refreshToken,
-		skipReplayReservation: params.skipDpopReplayReservation,
-	});
+	const confirmation = params.skipDpopVerification
+		? params.verifiedConfirmation
+		: await resolveDpopTokenBinding(ctx, opts, {
+				client: params.client,
+				grantIssuance,
+				refreshToken: params.refreshToken,
+			});
 	return buildRefreshTokenRotationReplayRequest({
 		effectiveScopes: grantIssuance.effectiveScopes,
 		requestedResources: params.resources,
@@ -2096,7 +2108,8 @@ async function handleRefreshTokenGrant(
 			refreshToken: latest,
 			scopes: requestedScopes ?? scopes,
 			resources: resources ?? latest.resources,
-			skipDpopReplayReservation: true,
+			verifiedConfirmation: getRefreshTokenRotationInFlightBinding(error),
+			skipDpopVerification: true,
 		});
 	}
 }
