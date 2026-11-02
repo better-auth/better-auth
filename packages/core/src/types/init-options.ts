@@ -25,6 +25,7 @@ import type { BaseSession } from "../db/schema/session";
 import type { BaseUser } from "../db/schema/user";
 import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
+import type { APIError } from "../error";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
 import type { D1Database } from "./database";
@@ -1736,10 +1737,16 @@ export type BetterAuthOptions = {
 				/**
 				 * Custom error handler
 				 *
+				 * May return or throw an `APIError` to replace the response. Any other
+				 * thrown value is logged and the original error response is kept.
+				 *
 				 * @param error
 				 * @param ctx - Auth context
 				 */
-				onError?: (error: unknown, ctx: AuthContext) => void | Promise<void>;
+				onError?: (
+					error: unknown,
+					ctx: AuthContext,
+				) => Awaitable<void | APIError>;
 				/**
 				 * The URL to redirect to on error
 				 *
