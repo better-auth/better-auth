@@ -388,6 +388,55 @@ An object with the following properties:
 
 When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE\_NUMBER\_NOT\_VERIFIED) and automatically trigger an OTP send to start the verification process.
 
+### `storeOTP`
+
+The method used to transform the OTP before it is stored by Better Auth's verification layer: `plain` (default), `hashed`, or `encrypted`. It does not affect the code sent to the user, only the value persisted at rest. The attempt counter is stored alongside the transformed value, so [`allowedAttempts`](#otp-verification-attempts) keeps working with hashed and encrypted codes.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { phoneNumber } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        phoneNumber({
+            sendOTP: ({ phoneNumber, code }) => {
+                // Send the OTP via SMS
+            },
+            storeOTP: "hashed", // [!code highlight]
+        })
+    ]
+})
+```
+
+You can also pass a custom hasher or encryptor to control how the value is persisted.
+
+**Custom hasher**
+
+```ts title="auth.ts"
+phoneNumber({
+    storeOTP: {
+        hash: async (otp) => {
+            return myCustomHasher(otp);
+        },
+    }
+})
+```
+
+**Custom encryptor**
+
+```ts title="auth.ts"
+phoneNumber({
+    storeOTP: {
+        encrypt: async (otp) => myCustomEncryptor(otp),
+        decrypt: async (storedOtp) => myCustomDecryptor(storedOtp),
+    }
+})
+```
+
+<Callout>
+  The stored value uses the plugin's verification records, so if you configure [`secondaryStorage`](/docs/concepts/database#secondary-storage), these records can live there instead of the database.
+</Callout>
+
 ## Schema
 
 The plugin requires 2 fields to be added to the user table
