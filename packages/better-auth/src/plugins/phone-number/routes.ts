@@ -15,7 +15,11 @@ import {
 	resetCredentialPassword,
 } from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
-import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
+import type {
+	PhoneNumberOptions,
+	PhoneNumberOTPType,
+	UserWithPhoneNumber,
+} from "./types";
 
 export type RequiredPhoneNumberOptions = PhoneNumberOptions & {
 	expiresIn: number;
@@ -334,6 +338,7 @@ async function verifyAndConsumePhoneNumberOTP(
 			phoneNumber,
 			code,
 			phoneNumber,
+			"phone-verification",
 		);
 		return;
 	}
@@ -348,8 +353,9 @@ async function verifyWithCustomVerifier(
 	phoneNumber: string,
 	code: string,
 	identifier: string,
+	type: PhoneNumberOTPType,
 ) {
-	const isValid = await verifyOTP({ phoneNumber, code }, ctx);
+	const isValid = await verifyOTP({ phoneNumber, code, type }, ctx);
 	if (!isValid) {
 		throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
 	}
@@ -825,6 +831,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					ctx.body.phoneNumber,
 					ctx.body.otp,
 					phoneResetIdentifier,
+					"password-reset",
 				);
 				otpConsumed = true;
 			} else if (

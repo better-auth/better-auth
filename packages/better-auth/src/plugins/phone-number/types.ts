@@ -8,6 +8,8 @@ export interface UserWithPhoneNumber extends User {
 	phoneNumberVerified: boolean;
 }
 
+export type PhoneNumberOTPType = "phone-verification" | "password-reset";
+
 export interface PhoneNumberOptions {
 	/**
 	 * Length of the OTP code
@@ -31,7 +33,7 @@ export interface PhoneNumberOptions {
 	 * If provided, this function will be called instead of the internal verification logic.
 	 * This is useful when using SMS providers that handle their own OTP generation and verification.
 	 *
-	 * @param data - Contains phone number and OTP code
+	 * @param data - Contains phone number, OTP code, and purpose (`type`)
 	 * @param request - The request object
 	 * @returns true if OTP is valid, false otherwise
 	 */
@@ -40,6 +42,7 @@ export interface PhoneNumberOptions {
 				data: {
 					phoneNumber: string;
 					code: string;
+					type: PhoneNumberOTPType;
 				},
 				ctx?: GenericEndpointContext,
 		  ) => Awaitable<boolean>)

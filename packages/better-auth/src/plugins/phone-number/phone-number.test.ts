@@ -1409,6 +1409,7 @@ describe("custom verifyOTP", async () => {
 			{
 				phoneNumber: testPhoneNumber,
 				code: "123456",
+				type: "phone-verification",
 			},
 			expect.anything(),
 		);
@@ -1435,6 +1436,7 @@ describe("custom verifyOTP", async () => {
 			{
 				phoneNumber: newPhoneNumber,
 				code: "wrong-code",
+				type: "phone-verification",
 			},
 			expect.anything(),
 		);
@@ -1461,6 +1463,7 @@ describe("custom verifyOTP", async () => {
 			{
 				phoneNumber: anotherPhoneNumber,
 				code: "external-code",
+				type: "phone-verification",
 			},
 			expect.anything(),
 		);
@@ -1521,7 +1524,7 @@ describe("custom verifyOTP", async () => {
 
 			expect(res.error).toBe(null);
 			expect(mockVerifyOTP).toHaveBeenCalledWith(
-				{ phoneNumber, code: "999999" },
+				{ phoneNumber, code: "999999", type: "password-reset" },
 				expect.anything(),
 			);
 			const signIn = await client.signIn.phoneNumber({
@@ -1560,7 +1563,7 @@ describe("custom verifyOTP", async () => {
 
 			expect(res.error?.code).toBe("INVALID_OTP");
 			expect(mockVerifyOTP).toHaveBeenCalledWith(
-				{ phoneNumber, code: resetOtp },
+				{ phoneNumber, code: resetOtp, type: "password-reset" },
 				expect.anything(),
 			);
 		});
@@ -1585,9 +1588,66 @@ describe("custom verifyOTP", async () => {
 			{
 				phoneNumber: externalPhoneNumber,
 				code: "external-code",
+				type: "phone-verification",
 			},
 			expect.anything(),
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11747
+	 */
+	it("should distinguish verification and password reset via type in verifyOTP", async () => {
+		const typesSeen: string[] = [];
+		const verifier = vi.fn().mockImplementation(async ({ type }) => {
+			typesSeen.push(type);
+			return true;
+		});
+
+		const { auth: customAuth, client: customClient } = await getTestInstance(
+			{
+				plugins: [
+					phoneNumber({
+						async sendOTP() {},
+						async sendPasswordResetOTP() {},
+						verifyOTP: verifier,
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		const testPhoneNumber = "+19998887777";
+		await customClient.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: "123456",
+		});
+		await customAuth.api.consumePhoneNumberOTP({
+			body: { phoneNumber: testPhoneNumber, code: "123456" },
+		});
+		await customClient.phoneNumber.requestPasswordReset({
+			phoneNumber: testPhoneNumber,
+		});
+		await customClient.phoneNumber.resetPassword({
+			phoneNumber: testPhoneNumber,
+			otp: "123456",
+			newPassword: "password-12345",
+		});
+
+		expect(typesSeen).toEqual([
+			"phone-verification",
+			"phone-verification",
+			"password-reset",
+		]);
 	});
 });
 
