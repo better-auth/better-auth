@@ -906,3 +906,251 @@ describe("invitation teamId must belong to the invitation's organization", async
 		expect(list.error?.code).toBe("USER_IS_NOT_A_MEMBER_OF_THE_TEAM");
 	});
 });
+
+describe("invitation roles written with spaces after the comma", async () => {
+	const INVITEE_EMAIL = "spaced-roles@example.com";
+	const ADMIN_EMAIL = "org-admin@example.com";
+	const PASSWORD = "test-password-123";
+
+	async function setup() {
+		const helpers = await getTestInstance(
+			{
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => ({
+								data: { ...user, emailVerified: true },
+							}),
+						},
+					},
+				},
+				plugins: [organization({ async sendInvitationEmail() {} })],
+			},
+			{ clientOptions: { plugins: [organizationClient()] } },
+		);
+		const { client, signInWithTestUser, cookieSetter } = helpers;
+		const { headers: ownerHeaders } = await signInWithTestUser();
+		const org = await client.organization.create({
+			name: "Spaced",
+			slug: "spaced",
+			fetchOptions: {
+				headers: ownerHeaders,
+				onSuccess: cookieSetter(ownerHeaders),
+			},
+		});
+		return { ...helpers, ownerHeaders, orgId: org.data!.id };
+	}
+
+	it("grants every role in the list once the invitation is accepted", async () => {
+		const { client, auth, ownerHeaders, orgId, signInWithUser } = await setup();
+
+		const invite = await auth.api.createInvitation({
+			body: {
+				organizationId: orgId,
+				email: INVITEE_EMAIL,
+				role: "member, admin" as "member",
+			},
+			headers: ownerHeaders,
+		});
+		expect(invite.role).toBe("member,admin");
+
+		await client.signUp.email({
+			email: INVITEE_EMAIL,
+			password: PASSWORD,
+			name: "Invitee",
+		});
+		const { headers: inviteeHeaders } = await signInWithUser(
+			INVITEE_EMAIL,
+			PASSWORD,
+		);
+		const accepted = await auth.api.acceptInvitation({
+			body: { invitationId: invite.id },
+			headers: inviteeHeaders,
+		});
+		expect(accepted?.member.role).toBe("member,admin");
+
+		const canInvite = await auth.api.hasPermission({
+			body: {
+				organizationId: orgId,
+				permissions: { invitation: ["create"] },
+			},
+			headers: inviteeHeaders,
+		});
+		expect(canInvite.success).toBe(true);
+	});
+
+	it("does not let a non-owner invite with the owner role", async () => {
+		const { client, auth, ownerHeaders, orgId, signInWithUser } = await setup();
+
+		await client.signUp.email({
+			email: ADMIN_EMAIL,
+			password: PASSWORD,
+			name: "Org Admin",
+		});
+		const { headers: adminHeaders, res } = await signInWithUser(
+			ADMIN_EMAIL,
+			PASSWORD,
+		);
+		await auth.api.addMember({
+			body: { organizationId: orgId, userId: res.user.id, role: "admin" },
+			headers: ownerHeaders,
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: INVITEE_EMAIL,
+			role: "member, owner" as "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+		expect(invite.data).toBeNull();
+		expect(invite.error?.code).toBe(
+			"YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE",
+		);
+	});
+
+	it("rejects a padded creator role from a non-creator", async () => {
+		const { client, auth, ownerHeaders, orgId, signInWithUser } = await setup();
+
+		await client.signUp.email({
+			email: ADMIN_EMAIL,
+			password: PASSWORD,
+			name: "Org Admin",
+		});
+		const { headers: adminHeaders, res } = await signInWithUser(
+			ADMIN_EMAIL,
+			PASSWORD,
+		);
+		await auth.api.addMember({
+			body: { organizationId: orgId, userId: res.user.id, role: "admin" },
+			headers: ownerHeaders,
+		});
+
+		// Before the fix this passed the creator-role guard because the raw
+		// string was split without trimming (" owner" !== "owner"), and the
+		// invited member later matched the trimmed owner checks.
+		await expect(
+			auth.api.createInvitation({
+				body: {
+					organizationId: orgId,
+					email: INVITEE_EMAIL,
+					role: "admin, owner" as "admin",
+				},
+				headers: adminHeaders,
+			}),
+		).rejects.toMatchObject({
+			body: { code: "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE" },
+		});
+		await expect(
+			auth.api.createInvitation({
+				body: {
+					organizationId: orgId,
+					email: INVITEE_EMAIL,
+					role: ["admin", " owner " as "owner"],
+				},
+				headers: adminHeaders,
+			}),
+		).rejects.toMatchObject({
+			body: { code: "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE" },
+		});
+	});
+
+	it("rejects an invitation whose role list is empty after trimming", async () => {
+		const { auth, ownerHeaders, orgId } = await setup();
+
+		await expect(
+			auth.api.createInvitation({
+				body: {
+					organizationId: orgId,
+					email: INVITEE_EMAIL,
+					role: " , " as "member",
+				},
+				headers: ownerHeaders,
+			}),
+		).rejects.toMatchObject({
+			status: "BAD_REQUEST",
+			body: { code: "ROLE_NOT_FOUND" },
+		});
+	});
+
+	it("normalizes a padded role that was stored on an invitation before accepting it", async () => {
+		const { client, auth, ownerHeaders, orgId, signInWithUser } = await setup();
+
+		const invite = await auth.api.createInvitation({
+			body: { organizationId: orgId, email: INVITEE_EMAIL, role: "member" },
+			headers: ownerHeaders,
+		});
+		// Stand in for an invitation persisted before roles were trimmed on
+		// create.
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "invitation",
+			where: [{ field: "id", value: invite.id }],
+			update: { role: "member, admin" },
+		});
+
+		await client.signUp.email({
+			email: INVITEE_EMAIL,
+			password: PASSWORD,
+			name: "Invitee",
+		});
+		const { headers: inviteeHeaders } = await signInWithUser(
+			INVITEE_EMAIL,
+			PASSWORD,
+		);
+		const accepted = await auth.api.acceptInvitation({
+			body: { invitationId: invite.id },
+			headers: inviteeHeaders,
+		});
+		expect(accepted?.member.role).toBe("member,admin");
+	});
+
+	it("evaluates a padded role already stored on a member consistently", async () => {
+		const { client, auth, ownerHeaders, orgId, signInWithUser } = await setup();
+
+		await client.signUp.email({
+			email: INVITEE_EMAIL,
+			password: PASSWORD,
+			name: "Invitee",
+		});
+		const { headers: memberHeaders, res } = await signInWithUser(
+			INVITEE_EMAIL,
+			PASSWORD,
+		);
+		const added = await auth.api.addMember({
+			body: { organizationId: orgId, userId: res.user.id, role: "member" },
+			headers: ownerHeaders,
+		});
+		// Stand in for a member row persisted with a padded role.
+		const ctx = await auth.$context;
+		await ctx.adapter.update({
+			model: "member",
+			where: [{ field: "id", value: added!.id }],
+			update: { role: "member, admin" },
+		});
+
+		// Permission checks honor the trimmed role...
+		const canInvite = await auth.api.hasPermission({
+			body: {
+				organizationId: orgId,
+				permissions: { invitation: ["create"] },
+			},
+			headers: memberHeaders,
+		});
+		expect(canInvite.success).toBe(true);
+
+		// ...and the creator-role guard does not treat a padded non-owner as
+		// an owner, nor let them hand out the owner role.
+		await expect(
+			auth.api.createInvitation({
+				body: {
+					organizationId: orgId,
+					email: "someone-else@example.com",
+					role: "owner",
+				},
+				headers: memberHeaders,
+			}),
+		).rejects.toMatchObject({
+			body: { code: "YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE" },
+		});
+	});
+});

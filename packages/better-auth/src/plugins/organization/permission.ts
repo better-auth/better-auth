@@ -1,4 +1,5 @@
 import type { Role } from "../access";
+import { parseRoleList } from "./roles";
 import type { OrganizationOptions } from "./types";
 
 export const hasPermissionFn = (
@@ -9,7 +10,7 @@ export const hasPermissionFn = (
 ) => {
 	if (!input.permissions) return false;
 
-	const roles = input.role.split(",");
+	const roles = parseRoleList(input.role);
 	const creatorRole = input.options.creatorRole || "owner";
 	const isCreator = roles.includes(creatorRole);
 
