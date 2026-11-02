@@ -1,5 +1,5 @@
 import type { BetterAuthOptions, GenerateIdFn } from "@better-auth/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../../test-utils/test-instance";
 import { createAccessControl } from "../../access";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "../access";
@@ -1474,5 +1474,63 @@ describe("creator-role invitations are limited to the creator role", async () =>
 			fetchOptions: { headers: ownerHeaders },
 		});
 		expect(byOwner.data?.id).toBe(ownerInvitationId);
+	});
+});
+
+describe("invitation ids", () => {
+	async function createInvitation(authOptions: Partial<BetterAuthOptions>) {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			...authOptions,
+			plugins: [organization()],
+		});
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Acme",
+				slug: "acme",
+			},
+			headers,
+		});
+		const context = await auth.$context;
+		const create = vi.spyOn(context.adapter, "create");
+		const invitation = await auth.api.createInvitation({
+			body: {
+				organizationId: org!.id,
+				email: "invitee@example.com",
+				role: "member",
+			},
+			headers,
+		});
+		const insert = create.mock.calls.find(
+			([args]) => args.model === "invitation",
+		);
+		create.mockRestore();
+		return {
+			invitation,
+			insert: insert?.[0],
+		};
+	}
+
+	it("generates a random 32-character id when database id generation is not configured", async () => {
+		const { invitation, insert } = await createInvitation({});
+
+		expect(insert?.data.id).toMatch(/^[A-Za-z0-9]{32}$/);
+		expect(insert?.forceAllowId).toBe(true);
+		expect(invitation.id).toBe(insert?.data.id);
+	});
+
+	it("leaves the id to the database when database id generation is configured", async () => {
+		const { invitation, insert } = await createInvitation({
+			advanced: {
+				database: {
+					generateId: "uuid",
+				},
+			},
+		});
+
+		expect(insert?.data).not.toHaveProperty("id");
+		expect(invitation.id).toMatch(
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+		);
 	});
 });
