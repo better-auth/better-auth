@@ -2351,6 +2351,105 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	});
 
 	/**
+	 * A failed replay store must not look like an in-flight write. Concurrent
+	 * retries would otherwise poll until the reuse window expires.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("does not wait out the reuse interval when storing the replay cache fails", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		let replayStoreWrites = 0;
+		let pendingParentReads = 0;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		const loggerError = vi
+			.spyOn(context.logger, "error")
+			.mockImplementation(() => undefined);
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				replayStoreWrites += 1;
+				if (replayStoreWrites === 1) {
+					holdReplayStore = true;
+					reached.resolve();
+					await released.promise;
+					throw new Error("replay cache unavailable");
+				}
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				pendingParentReads += 1;
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			released.resolve();
+			const settled = await Promise.race([
+				Promise.all([rotating, overlapping]),
+				new Promise<"timeout">((resolve) => {
+					setTimeout(() => resolve("timeout"), 1_000);
+				}),
+			]);
+			expect(settled).not.toBe("timeout");
+			if (settled === "timeout") {
+				return;
+			}
+			const [first, second] = settled;
+			expect(first.error).toBeNull();
+			expect(first.data?.refresh_token).toBeDefined();
+			expect((second.error as { error?: string } | null)?.error).toBe(
+				"invalid_grant",
+			);
+			expect(pendingParentReads).toBeLessThan(20);
+			expect(loggerError).toHaveBeenCalledWith(
+				"failed to store refresh token rotation replay",
+				expect.any(Error),
+			);
+		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			loggerError.mockRestore();
+			released.resolve();
+		}
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8512
 	 */
 	it("does not replay a cached response for a different resource", async () => {
