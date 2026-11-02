@@ -63,7 +63,13 @@ export const hasPermission = async (
 
 			const merged: Record<string, string[]> = { ...acRoles[role]?.statements };
 			for (const [key, actions] of Object.entries(result.data)) {
-				merged[key] = [...new Set([...(merged[key] ?? []), ...actions])];
+				// Guard against keys that collide with Object.prototype members
+				// (e.g. `constructor`): without an own-property check the read
+				// returns an inherited member and the spread below throws.
+				const existing = Object.prototype.hasOwnProperty.call(merged, key)
+					? merged[key]
+					: [];
+				merged[key] = [...new Set([...existing, ...actions])];
 			}
 			acRoles[role] = input.options.ac.newRole(merged);
 		}
