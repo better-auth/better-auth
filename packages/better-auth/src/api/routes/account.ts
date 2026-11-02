@@ -291,11 +291,14 @@ export const linkSocialAccount = createAuthEndpoint(
 				throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
 			}
 
-			const linkingUserInfo = await provider.getUserInfo({
+			const oauthTokens = {
 				idToken: token,
 				accessToken: c.body.idToken.accessToken,
 				refreshToken: c.body.idToken.refreshToken,
-			});
+			};
+			const linkingUserInfo = provider.getUserInfoFromIdToken
+				? await provider.getUserInfoFromIdToken(token)
+				: await provider.getUserInfo(oauthTokens);
 
 			if (!linkingUserInfo || !linkingUserInfo?.user) {
 				c.context.logger.error("Failed to get user info", {

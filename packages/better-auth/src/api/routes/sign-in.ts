@@ -299,7 +299,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					refreshToken: c.body.idToken.refreshToken,
 					user: c.body.idToken.user,
 				};
-				const userInfo = await provider.getUserInfo(oauthTokens);
+				const userInfo = provider.getUserInfoFromIdToken
+					? await provider.getUserInfoFromIdToken(token)
+					: await provider.getUserInfo(oauthTokens);
 				if (!userInfo || !userInfo?.user) {
 					c.context.logger.error("Failed to get user info", {
 						provider: c.body.provider,
