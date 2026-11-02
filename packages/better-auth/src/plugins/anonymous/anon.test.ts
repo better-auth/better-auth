@@ -612,6 +612,7 @@ describe("anonymous", async () => {
 					options: {},
 					secret: "secret",
 					setNewSession: vi.fn(),
+					getPlugin: () => null,
 				},
 				headers: new Headers(),
 				query: {},
