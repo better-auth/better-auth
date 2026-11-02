@@ -638,13 +638,23 @@ describe("mcp plugin", async () => {
 				access_token?: string;
 				refresh_token?: string;
 				expires_at?: number;
+				expires_in?: number;
+				token_type?: string;
+				scope?: string;
 				id_token?: string;
 			};
+			expect(first.access_token).toBeDefined();
+			expect(first.refresh_token).toBeDefined();
+			expect(first.expires_at).toBeDefined();
+			expect(first.token_type).toBeDefined();
+			expect(first.scope).toBeDefined();
 			const second = (await secondResponse.json()) as typeof first;
 			expect(second).toMatchObject({
 				access_token: first.access_token,
 				expires_at: first.expires_at,
 				refresh_token: first.refresh_token,
+				token_type: first.token_type,
+				scope: first.scope,
 				id_token: first.id_token,
 			});
 		});

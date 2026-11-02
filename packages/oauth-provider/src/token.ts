@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError, isAPIError } from "better-auth/api";
+import { APIError } from "better-auth/api";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -687,6 +687,9 @@ async function createRefreshToken(
 	});
 
 	if (!won) {
+		if (reuseInterval > 0) {
+			throwRefreshTokenRotationInFlight();
+		}
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",
@@ -796,6 +799,7 @@ async function resolveDpopTokenBinding(
 		grantIssuance: ResourceGrantIssuance;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+		skipReplayReservation?: boolean;
 	},
 ): Promise<Confirmation | undefined> {
 	const authCodeDpopJkt = params.verificationValue?.query.dpop_jkt;
@@ -825,7 +829,9 @@ async function resolveDpopTokenBinding(
 			expectedJkt,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			replayStore: params.skipReplayReservation
+				? undefined
+				: createDpopReplayStore(ctx.context.internalAdapter),
 		});
 		return { jkt: proof.jkt };
 	} catch (error) {
@@ -1059,17 +1065,44 @@ async function lookupRefreshTokenRotationReplay(
 }
 
 const REFRESH_TOKEN_REPLAY_POLL_INTERVAL_MS = 25;
-const REFRESH_TOKEN_REPLAY_WAIT_MS = 2_000;
 
 const wait = (ms: number) =>
 	new Promise<void>((resolve) => {
 		setTimeout(resolve, ms);
 	});
 
+const refreshTokenRotationInFlightErrors = new WeakSet<object>();
+
+function throwRefreshTokenRotationInFlight(): never {
+	const error = new APIError("BAD_REQUEST", {
+		error_description: "invalid refresh token",
+		error: "invalid_grant",
+	});
+	refreshTokenRotationInFlightErrors.add(error);
+	throw error;
+}
+
+function isRefreshTokenRotationInFlightError(error: unknown) {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		refreshTokenRotationInFlightErrors.has(error)
+	);
+}
+
+function refreshTokenReplayWaitDeadline(
+	refreshToken: OAuthRefreshToken<Scope[]>,
+) {
+	return refreshToken.rotationReplayExpiresAt?.getTime() ?? Date.now();
+}
+
 /**
  * Wait for a concurrent rotation to store its replay. The winner's CAS revokes
  * the parent before `storeRefreshTokenRotationReplay` runs, so a same-interval
  * loser must poll the parent row instead of returning `invalid_grant`.
+ *
+ * The wait ends when the replay appears, the request is not pending, or
+ * `rotationReplayExpiresAt` elapses — the reuse window, not a shorter cap.
  *
  * Mismatched replay requests fail immediately. Coordination is through the
  * adapter so overlapping grants on different instances can still recover.
@@ -1079,7 +1112,6 @@ async function waitForRefreshTokenRotationReplay(
 	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
 	request: RefreshTokenRotationReplayRequest,
 ) {
-	const deadline = Date.now() + REFRESH_TOKEN_REPLAY_WAIT_MS;
 	let latest = refreshToken;
 	let polled = false;
 	while (true) {
@@ -1087,7 +1119,10 @@ async function waitForRefreshTokenRotationReplay(
 		if (lookup.status === "hit") {
 			return lookup.response;
 		}
-		if (lookup.status !== "pending" || Date.now() >= deadline) {
+		if (
+			lookup.status !== "pending" ||
+			Date.now() >= refreshTokenReplayWaitDeadline(latest)
+		) {
 			return undefined;
 		}
 		if (polled) {
@@ -1115,6 +1150,7 @@ async function replayRefreshTokenRotationOrThrow(
 		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
 		scopes: string[];
 		resources?: string[];
+		skipDpopReplayReservation?: boolean;
 	},
 ) {
 	const replayRequest = await resolveRefreshTokenRotationReplayRequest(
@@ -1136,13 +1172,6 @@ async function replayRefreshTokenRotationOrThrow(
 	});
 }
 
-function isInvalidGrantError(error: unknown) {
-	return (
-		isAPIError(error) &&
-		(error.body as { error?: unknown } | undefined)?.error === "invalid_grant"
-	);
-}
-
 async function resolveRefreshTokenRotationReplayRequest(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1151,6 +1180,7 @@ async function resolveRefreshTokenRotationReplayRequest(
 		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
 		scopes: string[];
 		resources?: string[];
+		skipDpopReplayReservation?: boolean;
 	},
 ) {
 	const iat = Math.floor(Date.now() / 1000);
@@ -1166,6 +1196,7 @@ async function resolveRefreshTokenRotationReplayRequest(
 		client: params.client,
 		grantIssuance,
 		refreshToken: params.refreshToken,
+		skipReplayReservation: params.skipDpopReplayReservation,
 	});
 	return buildRefreshTokenRotationReplayRequest({
 		effectiveScopes: grantIssuance.effectiveScopes,
@@ -2047,7 +2078,7 @@ async function handleRefreshTokenGrant(
 	} catch (error) {
 		if (
 			(opts.refreshTokenReuseInterval ?? 0) <= 0 ||
-			!isInvalidGrantError(error)
+			!isRefreshTokenRotationInFlightError(error)
 		) {
 			throw error;
 		}
@@ -2065,6 +2096,7 @@ async function handleRefreshTokenGrant(
 			refreshToken: latest,
 			scopes: requestedScopes ?? scopes,
 			resources: resources ?? latest.resources,
+			skipDpopReplayReservation: true,
 		});
 	}
 }
