@@ -1065,16 +1065,20 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				opts.generateOTP({ email: newEmail, type: "change-email" }, ctx) ||
 				defaultOTPGenerator(opts);
 			const storedOTP = await storeOTP(ctx, opts, otp);
+			const identifier = toOTPIdentifier(
+				"change-email",
+				`${ctx.context.session.user.id}:${newEmail}`,
+			);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
-				identifier: toOTPIdentifier("change-email", `${email}-${newEmail}`),
+				identifier,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (user) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					toOTPIdentifier("change-email", `${email}-${newEmail}`),
+					identifier,
 				);
 				return ctx.json({
 					success: true,
@@ -1179,7 +1183,7 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			await atomicVerifyOTP(
 				ctx,
 				opts,
-				toOTPIdentifier("change-email", `${email}-${newEmail}`),
+				toOTPIdentifier("change-email", `${session.user.id}:${newEmail}`),
 				ctx.body.otp,
 			);
 

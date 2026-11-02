@@ -1240,6 +1240,167 @@ describe("change email", async () => {
 	});
 });
 
+describe("change email code binding", () => {
+	// The two (current, new) pairs join to the same string with a "-" separator
+	const first = {
+		email: "a@binding.test",
+		newEmail: "y.org-target@example.com",
+	};
+	const second = {
+		email: "a@binding.test-y.org",
+		newEmail: "target@example.com",
+	};
+	const password = "binding-password-123";
+
+	async function setup() {
+		const otps = new Map<string, string>();
+		const { auth, signInWithUser } = await getTestInstance({
+			plugins: [
+				emailOTP({
+					generateOTP: ({ email }) =>
+						email === first.newEmail ? "123456" : "654321",
+					async sendVerificationOTP({ email, otp }) {
+						otps.set(email, otp);
+					},
+					changeEmail: { enabled: true },
+				}),
+			],
+		});
+		for (const { email } of [first, second]) {
+			await auth.api.signUpEmail({
+				body: {
+					email,
+					password,
+					name: email,
+				},
+			});
+		}
+		const { headers: firstHeaders } = await signInWithUser(
+			first.email,
+			password,
+		);
+		const { headers: secondHeaders } = await signInWithUser(
+			second.email,
+			password,
+		);
+		return { auth, otps, firstHeaders, secondHeaders };
+	}
+
+	it("should not accept a code issued to another account", async () => {
+		const { auth, otps, firstHeaders, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: first.newEmail,
+			},
+		});
+		const otp = otps.get(first.newEmail);
+		expect.assert.isDefined(otp);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.email);
+	});
+
+	it("should not accept another account's code when both accounts requested one", async () => {
+		const { auth, otps, firstHeaders, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+			},
+		});
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: first.newEmail,
+			},
+		});
+		const firstOTP = otps.get(first.newEmail);
+		const secondOTP = otps.get(second.newEmail);
+		expect.assert.isDefined(firstOTP);
+		expect.assert.isDefined(secondOTP);
+		expect(firstOTP).not.toBe(secondOTP);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp: firstOTP,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.email);
+	});
+
+	it("should not accept a code for a different new address", async () => {
+		const { auth, otps, firstHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: "requested@binding.test",
+			},
+		});
+		const otp = otps.get("requested@binding.test");
+		expect.assert.isDefined(otp);
+		const res = auth.api.changeEmailEmailOTP({
+			headers: firstHeaders,
+			body: {
+				newEmail: "other@binding.test",
+				otp,
+			},
+		});
+
+		await expect(res).rejects.toMatchObject({
+			body: {
+				code: "INVALID_OTP",
+			},
+		});
+		const session = await auth.api.getSession({ headers: firstHeaders });
+		expect(session?.user.email).toBe(first.email);
+	});
+
+	it("should change email with a code issued to the same account", async () => {
+		const { auth, otps, secondHeaders } = await setup();
+		await auth.api.requestEmailChangeEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+			},
+		});
+		const otp = otps.get(second.newEmail);
+		expect.assert.isDefined(otp);
+		const res = await auth.api.changeEmailEmailOTP({
+			headers: secondHeaders,
+			body: {
+				newEmail: second.newEmail,
+				otp,
+			},
+		});
+
+		expect(res.success).toBe(true);
+		const session = await auth.api.getSession({ headers: secondHeaders });
+		expect(session?.user.email).toBe(second.newEmail);
+		expect(session?.user.emailVerified).toBe(true);
+	});
+});
+
 describe("email-otp-verify", async () => {
 	const otpFn = vi.fn();
 	const otp = [""];
