@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	afterEach,
 	beforeEach,
@@ -7,6 +8,7 @@ import {
 	it,
 	vi,
 } from "vitest";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { emailOTP } from "../email-otp";
@@ -1313,6 +1315,67 @@ describe("reset password onPasswordReset callback", async () => {
 	});
 });
 
+/**
+ * @see https://www.better-auth.com/docs/plugins/phone-number#sendotp
+ */
+describe("phone verification without OTP delivery configured", () => {
+	// @ts-expect-error Model configuration supplied by an untyped caller.
+	const plugin = phoneNumber({ requireVerification: true });
+	const phone = "+15550000109";
+	const setup = async () => {
+		const instance = await getTestInstance(
+			{ plugins: [plugin] },
+			{
+				disableTestUser: true,
+				clientOptions: { plugins: [phoneNumberClient()] },
+			},
+		);
+		const signup = await instance.client.signUp.email({
+			email: "phone-delivery@example.test",
+			password: "owner-password",
+			name: "owner",
+		});
+		await instance.db.update({
+			model: "user",
+			where: [{ field: "email", value: "phone-delivery@example.test" }],
+			update: { phoneNumber: phone },
+		});
+		expect(signup.error).toBeNull();
+		return { ...instance, signup };
+	};
+
+	it("rejects missing delivery before creating verification state", async () => {
+		const { auth, db, signup } = await setup();
+		const response = await auth.api.signInPhoneNumber({
+			body: { phoneNumber: phone, password: "owner-password" },
+			asResponse: true,
+		});
+		expect(response.status).toBe(501);
+		expect(await response.json()).toMatchObject({
+			code: "SEND_OTP_NOT_IMPLEMENTED",
+		});
+		expect(response.headers.get("set-cookie")).toBeNull();
+		expect(await db.findMany({ model: "verification" })).toHaveLength(0);
+		expect(await db.findMany({ model: "session" })).toHaveLength(1);
+		const user = await db.findOne<{ phoneNumberVerified: boolean }>({
+			model: "user",
+			where: [{ field: "id", value: signup.data!.user.id }],
+		});
+		expect(user?.phoneNumberVerified).not.toBe(true);
+	});
+
+	it("keeps invalid credentials ahead of the delivery configuration error", async () => {
+		const { client, db } = await setup();
+		const records = await db.findMany({ model: "verification" });
+		const result = await client.signIn.phoneNumber({
+			phoneNumber: phone,
+			password: "wrong-password",
+		});
+		expect(result.error?.code).toBe("INVALID_PHONE_NUMBER_OR_PASSWORD");
+		expect(await db.findMany({ model: "verification" })).toEqual(records);
+	});
+});
+
 describe("phone number verification requirement", async () => {
 	let otp = "";
 	const { client, db } = await getTestInstance(
@@ -1365,6 +1428,418 @@ describe("phone number verification requirement", async () => {
 		expect(signInRes.error?.status).toBe(401);
 		expect(signInRes.error?.code).toMatch("PHONE_NUMBER_NOT_VERIFIED");
 		expect(otp).toHaveLength(6);
+	});
+});
+
+/**
+ * @see https://www.better-auth.com/docs/plugins/phone-number#verify-phone-number
+ */
+describe("phone proof requires ownership of an unverified account", () => {
+	let otp = "";
+	const onVerification = vi.fn();
+	const setup = async (authOptions: Partial<BetterAuthOptions> = {}) => {
+		const instance = await getTestInstance(
+			{
+				...authOptions,
+				emailAndPassword: { enabled: true },
+				plugins: [
+					phoneNumber({
+						sendOTP({ code }) {
+							otp = code;
+						},
+						callbackOnVerification: onVerification,
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `temp-${phoneNumber}@example.test`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [phoneNumberClient()] },
+				disableTestUser: true,
+			},
+		);
+		return instance;
+	};
+
+	it("refuses anonymous promotion and preserves the pending row", async () => {
+		const { client, db, sessionSetter } = await setup();
+		const phoneNumber = "+15550000101";
+		const ownerHeaders = new Headers();
+		const signup = await client.signUp.email(
+			{
+				email: "phone-owner-1@example.test",
+				name: "owner",
+				password: "owner-password",
+			},
+			{ onSuccess: sessionSetter(ownerHeaders) },
+		);
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "phone-owner-1@example.test" }],
+			update: { phoneNumber },
+		});
+		expect(signup.error).toBeNull();
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const refused = await client.phoneNumber.verify({ phoneNumber, code: otp });
+		expect(refused.error?.code).toBe("PHONE_NUMBER_PENDING_VERIFICATION");
+		expect(onVerification).not.toHaveBeenCalled();
+		const row = await db.findOne<{ phoneNumberVerified: boolean }>({
+			model: "user",
+			where: [{ field: "id", value: signup.data!.user.id }],
+		});
+		expect(row?.phoneNumberVerified).not.toBe(true);
+
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const accepted = await client.phoneNumber.verify({
+			phoneNumber,
+			code: otp,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(accepted.error).toBeNull();
+		expect(accepted.data?.user.id).toBe(signup.data?.user.id);
+	});
+
+	it("moves an unverified claim to the signed-in user who proves the number", async () => {
+		const { client, db, sessionSetter } = await setup();
+		const phoneNumber = "+15550000110";
+		const claimant = await client.signUp.email({
+			email: "phone-claimant-10@example.test",
+			name: "claimant",
+			password: "claimant-password",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "phone-claimant-10@example.test" }],
+			update: { phoneNumber },
+		});
+		const ownerHeaders = new Headers();
+		const owner = await client.signUp.email(
+			{
+				email: "phone-owner-10@example.test",
+				name: "owner",
+				password: "owner-password",
+			},
+			{ onSuccess: sessionSetter(ownerHeaders) },
+		);
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const bound = await client.phoneNumber.verify({
+			phoneNumber,
+			code: otp,
+			updatePhoneNumber: true,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(bound.error).toBeNull();
+		expect(bound.data?.user.id).toBe(owner.data?.user.id);
+		expect(bound.data?.user.phoneNumberVerified).toBe(true);
+		const released = await db.findOne<{
+			phoneNumber: string | null;
+			phoneNumberVerified: boolean | null;
+		}>({
+			model: "user",
+			where: [{ field: "id", value: claimant.data!.user.id }],
+		});
+		expect(released?.phoneNumber).toBeNull();
+		expect(released?.phoneNumberVerified).not.toBe(true);
+	});
+
+	it("keeps the claimant's number when an update hook vetoes the move", async () => {
+		const { client, db, sessionSetter } = await setup({
+			databaseHooks: {
+				user: {
+					update: {
+						before: async (data) => {
+							// Veto only the write that verifies the number for the caller.
+							if (data.phoneNumberVerified) return false;
+						},
+					},
+				},
+			},
+		});
+		const phoneNumber = "+15550000112";
+		const claimant = await client.signUp.email({
+			email: "phone-claimant-12@example.test",
+			name: "claimant",
+			password: "claimant-password",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "phone-claimant-12@example.test" }],
+			update: { phoneNumber },
+		});
+		const ownerHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "phone-owner-12@example.test",
+				name: "owner",
+				password: "owner-password",
+			},
+			{ onSuccess: sessionSetter(ownerHeaders) },
+		);
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const vetoed = await client.phoneNumber.verify({
+			phoneNumber,
+			code: otp,
+			updatePhoneNumber: true,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		expect(vetoed.error?.status).toBe(500);
+		const kept = await db.findOne<{ phoneNumber: string | null }>({
+			model: "user",
+			where: [{ field: "id", value: claimant.data!.user.id }],
+		});
+		expect(kept?.phoneNumber).toBe(phoneNumber);
+	});
+
+	it("keeps rejecting a number verified on another account", async () => {
+		const { client, sessionSetter } = await setup();
+		const phoneNumber = "+15550000111";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const holder = await client.phoneNumber.verify({ phoneNumber, code: otp });
+		expect(holder.data?.user.phoneNumberVerified).toBe(true);
+		const otherHeaders = new Headers();
+		await client.signUp.email(
+			{
+				email: "phone-other-11@example.test",
+				name: "other",
+				password: "other-password",
+			},
+			{ onSuccess: sessionSetter(otherHeaders) },
+		);
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		const refused = await client.phoneNumber.verify({
+			phoneNumber,
+			code: otp,
+			updatePhoneNumber: true,
+			fetchOptions: { headers: otherHeaders },
+		});
+		expect(refused.error?.code).toBe("PHONE_NUMBER_EXIST");
+	});
+});
+
+/**
+ * @see https://www.better-auth.com/docs/plugins/phone-number#requireverification
+ */
+describe("sessionless phone verification after a correct password", () => {
+	let otp = "";
+	const setup = async () => {
+		const instance = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true },
+				plugins: [
+					phoneNumber({
+						requireVerification: true,
+						sendOTP({ code }) {
+							otp = code;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [phoneNumberClient()] },
+				disableTestUser: true,
+			},
+		);
+		return instance;
+	};
+
+	it("binds the OTP completion to the credential check", async () => {
+		const { auth, client, db } = await setup();
+		const phoneNumber = "+15550000103";
+		const signup = await client.signUp.email({
+			email: "phone-owner-3@example.test",
+			name: "owner",
+			password: "owner-password",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "phone-owner-3@example.test" }],
+			update: { phoneNumber },
+		});
+		expect(signup.error).toBeNull();
+		const wrong = await client.signIn.phoneNumber({
+			phoneNumber,
+			password: "wrong-password",
+		});
+		expect(wrong.error?.code).toBe("INVALID_PHONE_NUMBER_OR_PASSWORD");
+		expect(otp).toBe("");
+
+		const response = await auth.api.signInPhoneNumber({
+			body: { phoneNumber, password: "owner-password" },
+			asResponse: true,
+		});
+		expect(response.status).toBe(401);
+		const cookies = parseSetCookieHeader(
+			response.headers.get("set-cookie") ?? "",
+		);
+		const proof = cookies.get("better-auth.phone_credential_proof")?.value;
+		expect(proof).toBeTruthy();
+		const verified = await client.phoneNumber.verify({
+			phoneNumber,
+			code: otp,
+			fetchOptions: {
+				headers: new Headers({
+					cookie: `better-auth.phone_credential_proof=${proof}`,
+				}),
+			},
+		});
+		expect(verified.error).toBeNull();
+		expect(verified.data?.user.id).toBe(signup.data?.user.id);
+	});
+
+	it("does not let a credential proof select another pending account", async () => {
+		const { auth, client, db } = await setup();
+		const firstPhone = "+15550000104";
+		const secondPhone = "+15550000105";
+		for (const [phoneNumber, email] of [
+			[firstPhone, "phone-owner-4@example.test"],
+			[secondPhone, "phone-owner-5@example.test"],
+		] as const) {
+			await client.signUp.email({
+				email,
+				name: "owner",
+				password: "owner-password",
+			});
+			await db.update({
+				model: "user",
+				where: [{ field: "email", value: email }],
+				update: { phoneNumber },
+			});
+		}
+		const response = await auth.api.signInPhoneNumber({
+			body: { phoneNumber: firstPhone, password: "owner-password" },
+			asResponse: true,
+		});
+		const cookies = parseSetCookieHeader(
+			response.headers.get("set-cookie") ?? "",
+		);
+		const proof = cookies.get("better-auth.phone_credential_proof")?.value;
+		expect(proof).toBeTruthy();
+		await client.phoneNumber.sendOtp({ phoneNumber: secondPhone });
+		const refused = await client.phoneNumber.verify({
+			phoneNumber: secondPhone,
+			code: otp,
+			fetchOptions: {
+				headers: new Headers({
+					cookie: `better-auth.phone_credential_proof=${proof}`,
+				}),
+			},
+		});
+		expect(refused.error?.code).toBe("PHONE_NUMBER_PENDING_VERIFICATION");
+	});
+});
+
+/**
+ * @see https://www.better-auth.com/docs/plugins/phone-number#verifyotp
+ */
+describe("phone verification with a custom OTP provider", () => {
+	const callbackOnVerification = vi.fn();
+	const setup = async () => {
+		const instance = await getTestInstance(
+			{
+				emailAndPassword: { enabled: true },
+				plugins: [
+					phoneNumber({
+						sendOTP() {},
+						verifyOTP() {
+							return true;
+						},
+						callbackOnVerification,
+						signUpOnVerification: {
+							getTempEmail(phoneNumber) {
+								return `phone-${phoneNumber.slice(1)}@example.test`;
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: { plugins: [phoneNumberClient()] },
+				disableTestUser: true,
+			},
+		);
+		return instance;
+	};
+
+	it("does not promote a pending row even with disableSession", async () => {
+		const { client, db } = await setup();
+		const phoneNumber = "+15550000106";
+		await client.signUp.email({
+			email: "phone-owner-6@example.test",
+			name: "owner",
+			password: "owner-password",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "phone-owner-6@example.test" }],
+			update: { phoneNumber },
+		});
+		const refused = await client.phoneNumber.verify({
+			phoneNumber,
+			code: "synthetic-code",
+			disableSession: true,
+		});
+		expect(refused.error?.code).toBe("PHONE_NUMBER_PENDING_VERIFICATION");
+		expect(callbackOnVerification).not.toHaveBeenCalled();
+	});
+
+	it("lets the owner verify a pending row without creating another session", async () => {
+		const { client, db, sessionSetter } = await setup();
+		callbackOnVerification.mockClear();
+		const phoneNumber = "+15550000107";
+		const ownerHeaders = new Headers();
+		const signup = await client.signUp.email(
+			{
+				email: "phone-owner-7@example.test",
+				name: "owner",
+				password: "owner-password",
+			},
+			{ onSuccess: sessionSetter(ownerHeaders) },
+		);
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "phone-owner-7@example.test" }],
+			update: { phoneNumber },
+		});
+		expect(signup.error).toBeNull();
+
+		const verified = await client.phoneNumber.verify({
+			phoneNumber,
+			code: "synthetic-code",
+			disableSession: true,
+			fetchOptions: { headers: ownerHeaders },
+		});
+		expect(verified.error).toBeNull();
+		expect(verified.data?.token).toBeNull();
+		expect(verified.data?.user.id).toBe(signup.data?.user.id);
+		expect(verified.data?.user.phoneNumberVerified).toBe(true);
+		expect(callbackOnVerification).toHaveBeenCalledOnce();
+	});
+
+	it("preserves new-user and verified-user completion with a custom provider", async () => {
+		const { client } = await setup();
+		callbackOnVerification.mockClear();
+		const phoneNumber = "+15550000108";
+		const created = await client.phoneNumber.verify({
+			phoneNumber,
+			code: "synthetic-code",
+			disableSession: true,
+		});
+		expect(created.error).toBeNull();
+		expect(created.data?.token).toBeNull();
+		expect(created.data?.user.phoneNumberVerified).toBe(true);
+
+		const signedIn = await client.phoneNumber.verify({
+			phoneNumber,
+			code: "synthetic-code",
+		});
+		expect(signedIn.error).toBeNull();
+		expect(signedIn.data?.token).toBeTruthy();
+		expect(signedIn.data?.user.id).toBe(created.data?.user.id);
+		expect(callbackOnVerification).toHaveBeenCalledTimes(2);
 	});
 });
 
@@ -2161,7 +2636,7 @@ describe("phone-number sign-in password length", async () => {
 		async ({ hash, password }: { hash: string; password: string }) =>
 			hash === `hashed:${password}`,
 	);
-	const { auth } = await getTestInstance({
+	const { auth, db } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
 			password: { hash, verify },
@@ -2170,15 +2645,17 @@ describe("phone-number sign-in password length", async () => {
 	});
 
 	it("should reject a password longer than maxPasswordLength before hashing", async () => {
-		const { user } = await auth.api.signUpEmail({
+		await auth.api.signUpEmail({
 			body: {
 				email: "long-password@test.com",
 				password: "password",
 				name: "Long Password",
 			},
 		});
-		await (await auth.$context).internalAdapter.updateUser(user.id, {
-			phoneNumber: "+251911121314",
+		await db.update({
+			model: "user",
+			where: [{ field: "email", value: "long-password@test.com" }],
+			update: { phoneNumber: "+251911121314" },
 		});
 		hash.mockClear();
 		verify.mockClear();
