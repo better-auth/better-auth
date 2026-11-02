@@ -518,6 +518,117 @@ describe("database rate-limit pruning with active long windows", async () => {
 		// A follow-up request in the same instant is counted by the same window.
 		expect((await getSession(true)).status).toBe(200);
 	});
+
+	it("does not let a concurrent shorter window shorten an extended deadline", async () => {
+		const { auth: raceAuth, db: raceDb } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+					storage: "database",
+					window: 10,
+					max: 10,
+					customRules: {
+						"/get-session": (req) =>
+							req.headers.get("x-long") === "1"
+								? { window: 120, max: 10 }
+								: { window: 10, max: 10 },
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+		const raceCtx = await raceAuth.$context;
+
+		// A row whose own window is open with budget left: both rules below
+		// decide against this same snapshot.
+		const rowKey = createRateLimitKey("127.0.0.5", "/get-session");
+		const windowStart = Date.now() - 2_000;
+		await raceDb.create({
+			model: "rateLimit",
+			data: {
+				key: rowKey,
+				count: 1,
+				lastRequest: windowStart,
+				windowExpiresAt: windowStart + 10_000,
+			},
+		});
+
+		// Hold each request's increment until both have read the row, then let
+		// the long window's write land before the short window's so the race
+		// runs the way it would under load.
+		const originalIncrementOne = raceCtx.adapter.incrementOne.bind(
+			raceCtx.adapter,
+		);
+		let incrementCalls = 0;
+		let releaseLongIncrement!: () => void;
+		const longIncrementGate = new Promise<void>((resolve) => {
+			releaseLongIncrement = resolve;
+		});
+		let releaseShortIncrement!: () => void;
+		const shortIncrementGate = new Promise<void>((resolve) => {
+			releaseShortIncrement = resolve;
+		});
+		const incrementOne = vi
+			.spyOn(raceCtx.adapter, "incrementOne")
+			.mockImplementation(async (args) => {
+				incrementCalls += 1;
+				if (incrementCalls === 1) {
+					await longIncrementGate;
+				} else if (incrementCalls === 2) {
+					await shortIncrementGate;
+				}
+				return originalIncrementOne(args);
+			});
+
+		const getSession = (long?: boolean) =>
+			raceAuth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: {
+						"x-forwarded-for": "127.0.0.5",
+						...(long ? { "x-long": "1" } : {}),
+					},
+				}),
+			);
+
+		try {
+			// The long-window request reads the row, then pends on its increment.
+			const longRequest = getSession(true);
+			await vi.waitFor(() => expect(incrementCalls).toBe(1));
+			// The short request reads the same row while the long one is held,
+			// so both decide against the same stored deadline.
+			const shortRequest = getSession();
+			await vi.waitFor(() => expect(incrementCalls).toBe(2));
+
+			releaseLongIncrement();
+			await vi.waitFor(() =>
+				expect(
+					raceDb
+						.findMany<RateLimit>({
+							model: "rateLimit",
+							where: [{ field: "key", value: rowKey }],
+						})
+						.then(([found]) => Number(found?.count))
+						.catch(() => 0),
+				).resolves.toBe(2),
+			);
+
+			releaseShortIncrement();
+			const [long, short] = await Promise.all([longRequest, shortRequest]);
+			expect(long.status).toBe(200);
+			expect(short.status).toBe(200);
+
+			// Both requests counted, and the deadline held at 120s from the same
+			// start rather than shortened by the shorter rule's write.
+			const row = await raceDb.findMany<RateLimit>({
+				model: "rateLimit",
+				where: [{ field: "key", value: rowKey }],
+			});
+			expect(Number(row[0]?.count)).toBe(3);
+			expect(Number(row[0]?.windowExpiresAt)).toBe(windowStart + 120_000);
+		} finally {
+			incrementOne.mockRestore();
+		}
+	});
 });
 
 describe("database rate-limit pruning", async () => {

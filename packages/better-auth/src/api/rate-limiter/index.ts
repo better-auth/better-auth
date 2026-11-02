@@ -208,8 +208,11 @@ function createDatabaseStorageWrapper(
 			data.lastRequest + windowInMs,
 		);
 
-		// Window elapsed: reset to a single request, guarded on the window so a
-		// concurrent increment in a new window cannot be clobbered.
+		// Window elapsed: reset to a single request. The compare-and-swap guards
+		// cover the start and the stored deadline read for the decision, so a
+		// concurrent increment or extension between the read and the write
+		// cannot be clobbered; the miss re-reads and re-decides on the row as
+		// it now stands.
 		if (now >= windowExpiresAt) {
 			const reset = await db.incrementOne<RateLimit>({
 				model,
@@ -219,6 +222,11 @@ function createDatabaseStorageWrapper(
 						field: "lastRequest",
 						operator: "lte",
 						value: data.lastRequest,
+					},
+					{
+						field: "windowExpiresAt",
+						operator: "eq",
+						value: data.windowExpiresAt ?? null,
 					},
 				],
 				increment: {},
@@ -238,17 +246,25 @@ function createDatabaseStorageWrapper(
 		// Within the window and under the max: increment the count and keep the
 		// window anchored to its start on `lastRequest` so it does not slide.
 		// The set persists the effective deadline computed above in the same
-		// write, so a longer window that becomes active extends the stored one,
-		// a shorter window returned later never shortens it, and rows without a
-		// stored deadline (written before the column existed) are normalized on
-		// their first increment without a separate fallback write. Guarding on
-		// `lastRequest` keeps a concurrent window reset between the read and the
-		// write from being clobbered by a deadline set for the older window.
+		// write, so a longer window that becomes active extends the stored one
+		// and a shorter window returned later never shortens it. The guards
+		// compare-and-swap on the start and stored deadline read for the
+		// decision: with concurrent requests deciding on different windows, a
+		// write may only land on the row its decision saw, so a fresher
+		// extension or reset is never overwritten and the loser re-reads and
+		// re-decides below. Rows written before the column existed (null
+		// deadline) match the null in the compare-and-swap value and are
+		// normalized here on their first increment.
 		const incremented = await db.incrementOne<RateLimit>({
 			model,
 			where: [
 				{ field: "key", value: key },
 				{ field: "lastRequest", operator: "eq", value: data.lastRequest },
+				{
+					field: "windowExpiresAt",
+					operator: "eq",
+					value: data.windowExpiresAt ?? null,
+				},
 				{ field: "count", operator: "lt", value: rule.max },
 			],
 			increment: { count: 1 },
@@ -261,8 +277,8 @@ function createDatabaseStorageWrapper(
 		}
 
 		// Guard missed: the window rolled, the max was reached, or the row was
-		// reset or normalized by another request between the read and the write.
-		// Re-read and decide on the fresh snapshot.
+		// reset, extended, or normalized by another request between the read
+		// and the write. Re-read and decide on the fresh snapshot.
 		const fresh = await readRow(key);
 		if (!fresh) {
 			return consume(key, rule);
