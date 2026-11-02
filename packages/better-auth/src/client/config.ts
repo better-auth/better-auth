@@ -51,6 +51,7 @@ export const matchesSessionSignal = (path: string) =>
 	path === "/revoke-session" ||
 	path === "/revoke-other-sessions" ||
 	path === "/change-email" ||
+	path === "/change-email/confirm" ||
 	path === "/change-password";
 
 export const getClientConfig = (

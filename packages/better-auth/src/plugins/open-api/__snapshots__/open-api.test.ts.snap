@@ -826,6 +826,307 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         ],
       },
     },
+    "/change-email/confirm": {
+      "post": {
+        "description": "Confirm and apply a pending email change. Used by explicit confirmation mode.",
+        "operationId": undefined,
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "token": {
+                    "description": "The token to confirm the pending email change",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "token",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "type": "boolean",
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User",
+                      "type": "object",
+                    },
+                  },
+                  "required": [
+                    "status",
+                    "user",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Email successfully changed",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication.",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Not Found. The requested resource was not found.",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+        ],
+        "tags": [
+          "Default",
+        ],
+      },
+    },
+    "/change-email/preview": {
+      "get": {
+        "description": "Preview a pending email change without applying it. Used by explicit confirmation mode.",
+        "operationId": undefined,
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "schema": {
+              "description": "The token to preview the pending email change",
+              "type": "string",
+            },
+          },
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "email": {
+                      "description": "The current email address",
+                      "type": "string",
+                    },
+                    "newEmail": {
+                      "description": "The email address the change would apply",
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "email",
+                    "newEmail",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "The pending email change, not yet applied",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication.",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Not Found. The requested resource was not found.",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+        ],
+        "tags": [
+          "Default",
+        ],
+      },
+    },
     "/change-password": {
       "post": {
         "description": "Change the password of the user",
