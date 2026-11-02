@@ -130,7 +130,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					const otp = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
-						identifier: phoneNumber,
+						identifier: phoneNumberOTPIdentifier(phoneNumber),
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
 					if (opts.sendOTP) {
@@ -289,7 +289,7 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 			const code = generateOTP(opts.otpLength);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
-				identifier: ctx.body.phoneNumber,
+				identifier: phoneNumberOTPIdentifier(ctx.body.phoneNumber),
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 			const sendOTPResult = opts.sendOTP(
@@ -328,18 +328,19 @@ async function verifyAndConsumePhoneNumberOTP(
 	},
 ) {
 	const { phoneNumber, code } = body;
+	const identifier = phoneNumberOTPIdentifier(phoneNumber);
 	if (opts.verifyOTP) {
 		await verifyWithCustomVerifier(
 			ctx,
 			opts.verifyOTP,
 			phoneNumber,
 			code,
-			phoneNumber,
+			identifier,
 		);
 		return;
 	}
 
-	await verifyPhoneNumberOTP(ctx, opts, phoneNumber, code);
+	await verifyPhoneNumberOTP(ctx, opts, identifier, code);
 }
 
 /** Checks the code with `verifyOTP`, then drops the code stored under `identifier`. */
@@ -746,7 +747,7 @@ export const requestPasswordResetPhoneNumber = (
 			const code = generateOTP(opts.otpLength);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
-				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+				identifier: phoneNumberResetIdentifier(ctx.body.phoneNumber),
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 			// to avoid leaking the existence of the phone number
@@ -819,7 +820,9 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			},
 		},
 		async (ctx) => {
-			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
+			const phoneResetIdentifier = phoneNumberResetIdentifier(
+				ctx.body.phoneNumber,
+			);
 			assertPasswordNotTooShort(ctx, ctx.body.newPassword);
 			assertPasswordNotTooLong(ctx, ctx.body.newPassword);
 			// A custom verifier spends the code. The built-in check goes through the
@@ -979,6 +982,15 @@ async function verifyPhoneNumberOTP(
 function parseVerificationAttempts(value: string | undefined) {
 	const attempts = Number(value ?? 0);
 	return Number.isSafeInteger(attempts) && attempts > 0 ? attempts : 0;
+}
+
+// The prefix keeps a phone number from addressing another flow's verification record.
+function phoneNumberOTPIdentifier(phoneNumber: string) {
+	return `phone-number-otp-${phoneNumber}`;
+}
+
+function phoneNumberResetIdentifier(phoneNumber: string) {
+	return `phone-number-reset-${phoneNumber}`;
 }
 
 function generateOTP(size: number) {

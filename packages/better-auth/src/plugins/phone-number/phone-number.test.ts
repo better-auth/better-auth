@@ -149,9 +149,26 @@ describe("consume phone-number OTP", async () => {
 		).toHaveLength(0);
 		expect(
 			await (await auth.$context).internalAdapter.findVerificationValue(
-				phoneNumber,
+				`phone-number-otp-${phoneNumber}`,
 			),
 		).toBeNull();
+	});
+
+	it("keeps a reset request from replacing another number's code", async () => {
+		const phoneNumber = "+251911121302";
+		const lookalike = `${phoneNumber}-request-password-reset`;
+		await client.phoneNumber.sendOtp({ phoneNumber: lookalike });
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+
+		await expect(
+			auth.api.consumePhoneNumberOTP({
+				body: {
+					phoneNumber: lookalike,
+					code: otp,
+				},
+			}),
+		).resolves.toEqual({ status: true });
 	});
 
 	it("is exposed through the server API only", async () => {
@@ -662,7 +679,7 @@ describe("verify phone-number race condition protection", async () => {
 			const result = await (
 				originalFind as (...args: unknown[]) => Promise<unknown>
 			)(identifier, ...rest);
-			if (identifier === phoneNumber) {
+			if (identifier === `phone-number-otp-${phoneNumber}`) {
 				entered++;
 				if (entered >= 2) releaseBarrier();
 				await barrier;
@@ -689,7 +706,9 @@ describe("verify phone-number race condition protection", async () => {
 		}
 
 		const verificationValue =
-			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			await authCtx.internalAdapter.findVerificationValue(
+				`phone-number-otp-${phoneNumber}`,
+			);
 		expect(verificationValue).toBeNull();
 	});
 
@@ -706,8 +725,9 @@ describe("verify phone-number race condition protection", async () => {
 			expect(res.error?.status).toBe(400);
 			expect(res.error?.message).toBe("Invalid OTP");
 
-			const stored =
-				await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+			const stored = await authCtx.internalAdapter.findVerificationValue(
+				`phone-number-otp-${phoneNumber}`,
+			);
 			expect(stored).not.toBeNull();
 			const [storedValue, attempts] = stored!.value.split(":");
 			// The original code survives each wrong attempt so the user can
@@ -723,8 +743,9 @@ describe("verify phone-number race condition protection", async () => {
 		expect(res.error).toBe(null);
 		expect(res.data?.status).toBe(true);
 
-		const consumed =
-			await authCtx.internalAdapter.findVerificationValue(phoneNumber);
+		const consumed = await authCtx.internalAdapter.findVerificationValue(
+			`phone-number-otp-${phoneNumber}`,
+		);
 		expect(consumed).toBeNull();
 	});
 });
