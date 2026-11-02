@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, test, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -484,4 +484,31 @@ describe("cognito provider", () => {
 		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
 	});
+
+	test.for([
+		[true, true],
+		["true", true],
+		["false", false],
+		["TRUE", false],
+		[["true"], false],
+	] as const)(
+		"reads a UserInfo email_verified %j as verified=%s",
+		async ([claim, verified]) => {
+			mockedBetterFetch.mockResolvedValueOnce({
+				data: {
+					sub: "cognito-user",
+					email: "user@example.com",
+					email_verified: claim,
+				},
+				error: null,
+			} as Awaited<ReturnType<typeof betterFetch>>);
+			const provider = cognito(cognitoConfig);
+
+			const result = await provider.getUserInfo({
+				accessToken: "cognito-access-token",
+			});
+
+			expect(result?.user.emailVerified).toBe(verified);
+		},
+	);
 });

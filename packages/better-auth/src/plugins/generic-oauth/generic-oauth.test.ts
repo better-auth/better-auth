@@ -5838,6 +5838,147 @@ describe("oauth2", async () => {
 			}
 		});
 	});
+
+	describe("string email_verified claims", () => {
+		const verifiedEmail = "owner@example.com";
+
+		/**
+		 * Creates an instance with an email-verified owner and a helper that
+		 * signs in through the mock IdP.
+		 */
+		async function setup() {
+			let verificationUrl = "";
+			const { client, auth, cookieSetter, customFetchImpl } =
+				await getTestInstance({
+					emailAndPassword: {
+						enabled: true,
+					},
+					emailVerification: {
+						async sendVerificationEmail({ url }) {
+							verificationUrl = url;
+						},
+					},
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "string-claims",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId: "client",
+									clientSecret: "secret",
+									pkce: true,
+								},
+								{
+									providerId: "string-claims-strict",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId: "client",
+									clientSecret: "secret",
+									pkce: true,
+									requireEmailVerification: true,
+								},
+							],
+						}),
+					],
+				});
+
+			const signUp = await client.signUp.email({
+				email: verifiedEmail,
+				password: "owner-password-123",
+				name: "Owner",
+			});
+			const ownerId = signUp.data!.user.id;
+			await client.sendVerificationEmail({
+				email: verifiedEmail,
+			});
+			await betterFetch(verificationUrl, {
+				customFetchImpl,
+				redirect: "manual",
+			});
+
+			async function signInThroughIdp(providerId: string) {
+				const headers = new Headers();
+				const start = await client.signIn.social({
+					provider: providerId,
+					callbackURL: "http://localhost:3000/dashboard",
+					fetchOptions: {
+						onSuccess: cookieSetter(headers),
+					},
+				});
+				const { callbackURL, headers: sessionHeaders } =
+					await simulateOAuthFlow(start.data!.url!, headers, customFetchImpl);
+				const session = await client.getSession({
+					fetchOptions: {
+						headers: sessionHeaders,
+					},
+				});
+				return { location: callbackURL, session: session.data };
+			}
+			return { auth, ownerId, signInThroughIdp };
+		}
+
+		it('does not link a string "false" claim to an existing verified user', async () => {
+			mockUserInfo({
+				sub: "string-false-link",
+				email: verifiedEmail,
+				name: "Other",
+				email_verified: "false",
+			});
+			const { signInThroughIdp } = await setup();
+			const { location, session } = await signInThroughIdp("string-claims");
+			expect(location).toContain("error=account_not_linked");
+			expect(session).toBeNull();
+		});
+
+		it('stores a new user with a string "false" claim as unverified', async () => {
+			mockUserInfo({
+				sub: "string-false-new",
+				email: "string-false-new@example.com",
+				name: "Newcomer",
+				email_verified: "false",
+			});
+			const { auth, signInThroughIdp } = await setup();
+			const { session } = await signInThroughIdp("string-claims");
+			const ctx = await auth.$context;
+			const found = await ctx.internalAdapter.findUserByEmail(
+				"string-false-new@example.com",
+			);
+			expect(found?.user.emailVerified).toBe(false);
+			expect(session?.user.emailVerified).toBe(false);
+		});
+
+		it('issues no session for a string "false" claim when email verification is required', async () => {
+			mockUserInfo({
+				sub: "string-false-strict",
+				email: "string-false-strict@example.com",
+				name: "Strict",
+				email_verified: "false",
+			});
+			const { signInThroughIdp } = await setup();
+			const { location, session } = await signInThroughIdp(
+				"string-claims-strict",
+			);
+			expect(location).toContain("error=email_not_verified");
+			expect(session).toBeNull();
+		});
+
+		it.for([
+			["string", "true"],
+			["boolean", true],
+		] as const)(
+			"links a %s true claim to the existing verified user",
+			async ([_, emailVerified]) => {
+				mockUserInfo({
+					sub: `verified-${typeof emailVerified}`,
+					email: verifiedEmail,
+					name: "Owner",
+					email_verified: emailVerified,
+				});
+				const { ownerId, signInThroughIdp } = await setup();
+				const { session } = await signInThroughIdp("string-claims");
+				expect(session?.user.id).toBe(ownerId);
+			},
+		);
+	});
 });
 
 /**

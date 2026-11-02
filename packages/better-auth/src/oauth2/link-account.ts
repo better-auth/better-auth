@@ -17,6 +17,7 @@ import { derivePurposeKey } from "../crypto/purpose";
 import { parseAdditionalUserInputFromProviderProfile } from "../db";
 import type { StateData } from "../state";
 import type { Account, User } from "../types";
+import { toBoolean } from "../utils/boolean";
 import { isAPIError } from "../utils/is-api-error";
 import { assertValidUserInfo } from "../utils/validate-user-info";
 import { OAUTH_CALLBACK_ERROR_CODES, redirectOnError } from "./errors";
@@ -90,8 +91,13 @@ async function isLinkSessionLive(
 
 export async function linkOAuthAccount(
 	c: GenericEndpointContext,
-	{ link, userInfo, account, profile, scopes }: LinkOAuthAccountOptions,
+	opts: LinkOAuthAccountOptions,
 ): Promise<LinkOAuthAccountResult> {
+	const { link, account, profile, scopes } = opts;
+	const userInfo = {
+		...opts.userInfo,
+		emailVerified: toBoolean(opts.userInfo.emailVerified),
+	};
 	if (!(await isLinkSessionLive(c, link))) {
 		return linkOAuthAccountFailure(
 			OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_LINK_ACCOUNT,
@@ -208,8 +214,11 @@ export async function handleOAuthUserInfo(
 		requireExactAccountBinding?: boolean | undefined;
 	},
 ) {
-	const { userInfo, account, callbackURL, disableSignUp, overrideUserInfo } =
-		opts;
+	const { account, callbackURL, disableSignUp, overrideUserInfo } = opts;
+	const userInfo = {
+		...opts.userInfo,
+		emailVerified: toBoolean(opts.userInfo.emailVerified),
+	};
 	const source = opts.source ?? {
 		method: "oauth",
 		oauth: { providerId: account.providerId },

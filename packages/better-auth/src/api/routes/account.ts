@@ -29,6 +29,7 @@ import {
 	getOAuthCallbackPath,
 	setTokenUtil,
 } from "../../oauth2/utils";
+import { toBoolean } from "../../utils/boolean";
 import {
 	freshSessionMiddleware,
 	getSessionFromCtx,
@@ -375,7 +376,8 @@ export const linkSocialAccount = createAuthEndpoint(
 				provider.id,
 			);
 			if (
-				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
+				(!isTrustedProvider &&
+					!toBoolean(linkingUserInfo.user.emailVerified)) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				throw APIError.from("UNAUTHORIZED", {

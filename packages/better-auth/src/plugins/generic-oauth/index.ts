@@ -17,6 +17,7 @@ import {
 import { betterFetch } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, decodeJwt } from "jose";
+import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type {
@@ -165,7 +166,7 @@ async function fetchUserInfo(
 		if (decoded?.sub && decoded?.email) {
 			return {
 				id: decoded.sub,
-				emailVerified: decoded.email_verified,
+				emailVerified: toBoolean(decoded.email_verified),
 				image: decoded.picture,
 				...decoded,
 			};
@@ -195,7 +196,7 @@ async function fetchUserInfo(
 	return {
 		...userInfo.data,
 		email: userInfo.data.email,
-		emailVerified: userInfo.data.email_verified ?? false,
+		emailVerified: toBoolean(userInfo.data.email_verified),
 		image: userInfo.data.picture,
 		name: userInfo.data.name,
 	};
@@ -348,7 +349,7 @@ export const genericOAuth = <const ID extends string>(
 				const mapped = c.mapProfileToUser ? await c.mapProfileToUser(raw) : {};
 				const user = {
 					email: raw.email,
-					emailVerified: raw.emailVerified,
+					emailVerified: toBoolean(raw.emailVerified),
 					image: raw.image,
 					name: raw.name,
 					...mapped,
