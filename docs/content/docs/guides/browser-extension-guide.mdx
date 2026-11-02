@@ -117,7 +117,7 @@ Browser extensions (Manifest V3) present unique authentication challenges. Exten
 
 ## Social OAuth in Extensions
 
-Social sign-in (`authClient.signIn.social()`) normally redirects the current page to the OAuth provider. In an extension popup, that destroys the popup context: the popup closes and the provider cannot redirect to a `chrome-extension://` URL.
+Social sign-in (`authClient.signIn.social()`) normally redirects the current page to the OAuth provider. In an extension popup, that navigation replaces the popup, the popup closes as soon as it loses focus, and the flow finishes on your server's callback rather than in the extension.
 
 For Google, request an OIDC ID token with `chrome.identity.launchWebAuthFlow()`, then exchange that token for a Better Auth session. This avoids putting a Google access token in the redirect URL.
 
@@ -248,7 +248,7 @@ This pattern requires a provider that can return an OIDC `id_token` in the URL f
   <Step>
     #### Exchange the ID token with Better Auth
 
-    Send the ID token to Better Auth's `signIn.social` method with the `idToken` parameter. Better Auth verifies the token cryptographically using the provider's public JWKS keys — no client secret is needed on the extension side.
+    Send the ID token to Better Auth's `signIn.social` method with the `idToken` parameter. Better Auth verifies the token cryptographically using the provider's public JWKS keys, so the extension does not need a client secret.
 
     ```ts title="src/background.ts"
     import { createAuthClient } from "better-auth/client"
@@ -336,14 +336,14 @@ This pattern requires a provider that can return an OIDC `id_token` in the URL f
     ```
 
     <Callout type="info">
-      Use the <Link href="/docs/plugins/bearer">Bearer plugin</Link> on the server so Better Auth accepts the session token in the `Authorization` header. This is the recommended approach for extensions — it avoids cookie issues entirely.
+      Use the <Link href="/docs/plugins/bearer">Bearer plugin</Link> on the server so Better Auth accepts the session token in the `Authorization` header. This is the recommended approach for extensions because it does not depend on cookies.
     </Callout>
   </Step>
 </Steps>
 
 ### Providers without an ID token redirect
 
-Do not send a Better Auth session token from a website to an extension ID supplied in a URL. That creates a token-exfiltration vulnerability. Providers such as GitHub and browser flows with special callback requirements need a hosted callback designed for your application.
+Do not send a Better Auth session token from a website to an extension ID supplied in a URL. A crafted link could then send the session token to an attacker's extension. Providers such as GitHub and browser flows with special callback requirements need a hosted callback designed for your application.
 
 A safe hosted flow should:
 
@@ -354,28 +354,14 @@ A safe hosted flow should:
 
 Website-to-extension messaging through `externally_connectable` is not supported by Firefox. Treat such a bridge as Chromium-specific and provide a separate browser-specific implementation when supporting Firefox.
 
-## Cookie Configuration
+## Cookie-Based Sessions
 
-If you use cookie-based sessions instead of Bearer tokens, the default `SameSite: Lax` setting **blocks cookies from `chrome-extension://` origins** in production. You'll see auth working on localhost but failing when deployed.
+If you use cookie-based sessions instead of Bearer tokens, Chrome treats requests from extension pages and the service worker to a host listed in `host_permissions` as same-site. The default `SameSite: Lax` session cookie is sent to that host, so you do not need to change the cookie settings.
 
-```ts title="auth.ts"
-export const auth = betterAuth({
-    trustedOrigins: ["chrome-extension://YOUR_EXTENSION_ID"],
-    advanced: {
-        cookies: {
-            session_token: {
-                attributes: {
-                    sameSite: "none",
-                    secure: true,
-                },
-            },
-        },
-    },
-})
-```
+Requests to a host that is not in `host_permissions` do not get this treatment, and Chrome withholds `SameSite: Lax` cookies from them. Add your production backend to `host_permissions` instead of setting `SameSite: None`, which would send the session cookie on cross-site requests from any website.
 
-<Callout type="warn">
-  `SameSite: None` requires `Secure: true`, which means HTTPS only. This won't work on `http://localhost`. The recommended approach for extensions is to use the <Link href="/docs/plugins/bearer">Bearer plugin</Link> instead, which avoids cookie issues entirely.
+<Callout type="info">
+  The recommended approach for extensions is to use the <Link href="/docs/plugins/bearer">Bearer plugin</Link> instead, which does not depend on cookies.
 </Callout>
 
 ## Content Script Authentication
@@ -440,8 +426,9 @@ Keep the destination and allowed operations in the service worker. Do not accept
 
 ### Auth works on localhost but breaks in production
 
-* Check cookie `SameSite` settings — the default `Lax` blocks cross-origin requests from extensions
-* Switch to Bearer tokens (recommended) or set `SameSite: None; Secure: true`
+* Make sure `host_permissions` includes your production backend URL, not only `http://localhost:3000/*`
+* Make sure `trustedOrigins` includes the extension ID you ship. An unpacked build without the pinned `key` has a different ID from the Chrome Web Store build
+* Use Bearer tokens (recommended) so sessions do not depend on cookies
 
 ### Service worker dies during OAuth
 
