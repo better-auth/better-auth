@@ -4,6 +4,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { DBTransactionAdapter } from "@better-auth/core/db/adapter";
 import type { Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type {
@@ -357,6 +358,20 @@ export interface OrganizationOptions {
 	 * @default false
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
+	/** Runs native role updates, removals, leaves, and invitation acceptance in an application policy transaction. */
+	withMembershipMutation?: <T>(input: {
+		organizationId: string;
+		database: DBTransactionAdapter;
+		operation: "mutation" | "invitation_acceptance";
+		mutate: () => Promise<T>;
+	}) => Awaitable<T>;
+	/** Authorizes invitation acceptance after native recipient and membership limit checks. */
+	authorizeInvitationAcceptance?: (input: {
+		organizationId: string;
+		database: DBTransactionAdapter;
+	}) => Awaitable<
+		{ allowed: true } | { allowed: false; code: string; message: string }
+	>;
 	/**
 	 * Hooks for organization
 	 */
