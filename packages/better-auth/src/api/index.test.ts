@@ -6,7 +6,7 @@ import type {
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
-import { createAuthEndpoint, getEndpoints } from "./index";
+import { APIError, createAuthEndpoint, getEndpoints } from "./index";
 
 describe("getEndpoints", () => {
 	it("should await promise-based context before passing to middleware", async () => {
@@ -343,5 +343,55 @@ describe("onAPIError.onError", () => {
 			expect.stringContaining("onAPIError.onError"),
 			expect.anything(),
 		);
+	});
+
+	it("uses an APIError thrown from the hook as the response", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [failingPlugin],
+			onAPIError: {
+				onError() {
+					throw new APIError("SERVICE_UNAVAILABLE", {
+						message: "database unavailable",
+						code: "DB_DOWN",
+					});
+				},
+			},
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/fail"),
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(503);
+		expect(body).toMatchObject({
+			message: "database unavailable",
+			code: "DB_DOWN",
+		});
+	});
+
+	it("uses an APIError returned from the hook as the response", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [failingPlugin],
+			onAPIError: {
+				onError() {
+					return new APIError("SERVICE_UNAVAILABLE", {
+						message: "database unavailable",
+						code: "DB_DOWN",
+					});
+				},
+			},
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/fail"),
+		);
+		const body = await response.json();
+
+		expect(response.status).toBe(503);
+		expect(body).toMatchObject({
+			message: "database unavailable",
+			code: "DB_DOWN",
+		});
 	});
 });
