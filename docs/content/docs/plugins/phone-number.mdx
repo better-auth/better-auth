@@ -388,6 +388,8 @@ An object with the following properties:
 
 When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE\_NUMBER\_NOT\_VERIFIED) and automatically trigger an OTP send to start the verification process.
 
+Password reset also needs a verified number. No reset code is sent to an unverified number, and `resetPassword` returns a 400 error (PHONE\_NUMBER\_PENDING\_VERIFICATION) without adding or changing a password.
+
 ## Schema
 
 The plugin requires 2 fields to be added to the user table

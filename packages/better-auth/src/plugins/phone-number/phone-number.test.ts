@@ -1,4 +1,12 @@
-import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { emailOTP } from "../email-otp";
@@ -912,7 +920,7 @@ describe("reset password guess accounting", async () => {
 
 	it("does not check guesses while another request holds the code", async () => {
 		const phoneNumber = "+251911121320";
-		const identifier = `${phoneNumber}-request-password-reset`;
+		const identifier = `phone-number-reset-${phoneNumber}`;
 		await client.phoneNumber.sendOtp({ phoneNumber });
 		await client.phoneNumber.verify({ phoneNumber, code: otp });
 		await client.phoneNumber.requestPasswordReset({ phoneNumber });
@@ -963,6 +971,123 @@ describe("reset password guess accounting", async () => {
 		);
 		const stored = await internalAdapter.findVerificationValue(identifier);
 		expect(stored?.value).toBe(`${resetOtp}:0`);
+	});
+});
+
+describe("reset password with requireVerification", async () => {
+	let otp = "";
+	const sendPasswordResetOTP = vi.fn();
+	const { auth, client, db } = await getTestInstance(
+		{
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP,
+					requireVerification: true,
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	beforeEach(() => {
+		sendPasswordResetOTP.mockClear();
+	});
+
+	it("does not reset the password through an unverified number", async () => {
+		const phoneNumber = "+251911121340";
+		const email = "unverified-phone@test.com";
+		const signUp = await client.signUp.email({
+			email,
+			password: "old-password",
+			name: "unverified",
+		});
+		await db.update({
+			model: "user",
+			where: [{ field: "id", value: signUp.data!.user.id }],
+			update: { phoneNumber },
+		});
+
+		const requested = await client.phoneNumber.requestPasswordReset({
+			phoneNumber,
+		});
+		expect(requested.data?.status).toBe(true);
+		expect(sendPasswordResetOTP).not.toHaveBeenCalled();
+
+		const stored = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(
+			`phone-number-reset-${phoneNumber}`,
+		);
+		const reset = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: stored!.value.split(":")[0]!,
+			newPassword: "new-password",
+		});
+		expect(reset.error?.code).toBe("PHONE_NUMBER_PENDING_VERIFICATION");
+		const signIn = await client.signIn.email({
+			email,
+			password: "old-password",
+		});
+		expect(signIn.error).toBeNull();
+	});
+
+	it("does not add a password to a passwordless account through an unverified number", async () => {
+		const phoneNumber = "+251911121342";
+		const user = await db.create<{ id: string }>({
+			model: "user",
+			data: {
+				name: "passwordless",
+				email: "passwordless-phone@test.com",
+				phoneNumber,
+			},
+		});
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		const stored = await (
+			await auth.$context
+		).internalAdapter.findVerificationValue(
+			`phone-number-reset-${phoneNumber}`,
+		);
+
+		const reset = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: stored!.value.split(":")[0]!,
+			newPassword: "new-password",
+		});
+
+		expect(reset.error?.code).toBe("PHONE_NUMBER_PENDING_VERIFICATION");
+		expect(
+			await (await auth.$context).internalAdapter.findCredentialAccount(
+				user.id,
+			),
+		).toBeNull();
+	});
+
+	it("resets the password through a verified number", async () => {
+		const phoneNumber = "+251911121341";
+		await client.phoneNumber.sendOtp({ phoneNumber });
+		await client.phoneNumber.verify({ phoneNumber, code: otp });
+
+		await client.phoneNumber.requestPasswordReset({ phoneNumber });
+		expect(sendPasswordResetOTP).toHaveBeenCalledOnce();
+		const reset = await client.phoneNumber.resetPassword({
+			phoneNumber,
+			otp: sendPasswordResetOTP.mock.calls[0]![0].code,
+			newPassword: "new-password",
+		});
+		expect(reset.error).toBeNull();
 	});
 });
 
