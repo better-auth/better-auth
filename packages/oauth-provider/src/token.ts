@@ -286,6 +286,15 @@ export function getOAuthProviderApi(
 	};
 }
 
+/**
+ * Converts the tracked authentication time to the `auth_time` claim value
+ * (integer seconds). Shared by ID and JWT access tokens so both carry the
+ * same value for the same grant.
+ */
+function toAuthTimeClaim(authTime: Date | undefined) {
+	return authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
+}
+
 // User Jwt SHALL follow oAuth 2
 // NOTE: Requires jwt plugin (assert !opts.disableJwtPlugin)
 async function createJwtAccessToken(
@@ -323,6 +332,12 @@ async function createJwtAccessToken(
 		act?: OAuthActorClaim;
 		/** The refresh-token grant, stamped as `grant_id`. AS-owned, like `sid`. */
 		grantId?: string;
+		/**
+		 * Time of the user's original authentication, emitted as the RFC 9068
+		 * §2.2.1 `auth_time` claim. Omitted when unknown or when no user
+		 * authenticated (client_credentials).
+		 */
+		authTime?: Date;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -374,6 +389,8 @@ async function createJwtAccessToken(
 			// read the consent reference back from here.
 			reference_id: overrides?.referenceId,
 			...(overrides?.grantId ? { grant_id: overrides.grantId } : {}),
+			// RFC 9068 §2.2.1: same meaning as the ID token's `auth_time`.
+			auth_time: user ? toAuthTimeClaim(overrides?.authTime) : undefined,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
@@ -432,8 +449,7 @@ async function createIdToken(
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
-	const authTimeSec =
-		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
+	const authTimeSec = toAuthTimeClaim(authTime);
 
 	const customClaims = stripReservedIdTokenClaims(
 		opts.customIdTokenClaims
@@ -1705,6 +1721,7 @@ async function createUserTokens(
 						act: params.act,
 						// Only read back by the JWT revocation check.
 						grantId: opts.revocableJwtAccessTokens ? grantId : undefined,
+						authTime,
 					},
 				).then((token) => ({ token, id: undefined }))
 			: createOpaqueAccessToken(
