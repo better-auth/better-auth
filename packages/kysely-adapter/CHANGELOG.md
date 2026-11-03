@@ -15,6 +15,12 @@
 - Updated dependencies []:
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, resolve the created row from the id reported by the INSERT itself instead of re-reading `LAST_INSERT_ID()` on a separate connection, and fail instead of guessing when no auto-increment id is reported.
+
 ## 1.7.15
 
 ## 1.7.14

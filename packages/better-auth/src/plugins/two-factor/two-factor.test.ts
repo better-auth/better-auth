@@ -13,6 +13,58 @@ import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
+describe("two-factor enrollment session authority", () => {
+	it("does not complete TOTP enrollment after the source session is revoked", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [twoFactor()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const enrollment = await client.$fetch("/two-factor/enable", {
+			method: "POST",
+			body: { method: "totp", password: testUser.password },
+			headers,
+		});
+		expect(enrollment.error).toBeNull();
+		const ctx = await auth.$context;
+		const twoFactorRecord = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: current.data!.user.id }],
+		});
+		const secret = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactorRecord!.secret,
+		});
+		const code = await createOTP(secret).totp();
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+		const cached = await client.getSession({ fetchOptions: { headers } });
+		expect(cached.data?.user.id).toBe(current.data!.user.id);
+
+		const result = await client.$fetch("/two-factor/verify-totp", {
+			method: "POST",
+			body: { code },
+			headers,
+		});
+		expect(result.error?.status).toBe(401);
+		const stored = await ctx.adapter.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: current.data!.user.id }],
+		});
+		expect(stored?.verified).toBe(false);
+	});
+});
+
 describe("two factor", async () => {
 	let OTP = "";
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =

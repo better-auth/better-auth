@@ -1397,7 +1397,8 @@ describe("organization", async () => {
 				headers: headers,
 			},
 		});
-		expect(invitations.data?.length).toBe(5);
+		// The caller was demoted to admin above, so the owner invitation is hidden.
+		expect(invitations.data?.length).toBe(4);
 	});
 
 	it("should allow listing invitations for a user using authClient", async () => {

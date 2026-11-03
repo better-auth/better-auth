@@ -10,6 +10,7 @@ import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
+import { parseRoleList } from "../roles";
 import type { Member, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -491,8 +492,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				],
 			});
 			const memberWithRole = members.find((member) => {
-				const memberRoles = member.role.split(",").map((r) => r.trim());
-				return memberRoles.includes(roleToDelete);
+				return parseRoleList(member.role).includes(roleToDelete);
 			});
 			if (memberWithRole) {
 				ctx.context.logger.error(
