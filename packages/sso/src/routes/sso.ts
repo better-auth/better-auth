@@ -76,6 +76,7 @@ import {
 	assertSSOUserResolutionNativeTransactionSupport,
 	assertSSOUserResolutionSessionStorage,
 	getFailedSSOAuthenticationResult,
+	mapSSOProfile,
 	requireSuccessfulSSOAuthentication,
 	resolveSSOUser,
 } from "../user-resolution";
@@ -1647,10 +1648,44 @@ async function handleOIDCCallback(
 		);
 	}
 
-	if (!userInfo.email || !userInfo.id) {
+	if (!userInfo.id) {
 		return redirectOIDCError("invalid_provider", "missing_user_info");
 	}
-	const userInfoEmail = userInfo.email;
+	const accountKey = {
+		issuer:
+			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
+			provider.issuer,
+		accountId: userInfo.id,
+	};
+	const mappedUser = await mapSSOProfile(
+		options,
+		{
+			protocol: "oidc",
+			providerId,
+			accountKey,
+			providerUser: {
+				email: userInfo.email,
+				emailVerified: userInfo.emailVerified === true,
+				name: userInfo.name,
+				image: userInfo.image,
+			},
+			providerClaims: rawProfile ?? {},
+		},
+		ctx.context.logger,
+	).catch((e) => {
+		if (isAPIError(e) && e.body?.code) {
+			redirectOIDCError(e.body.code, e.body.message);
+		}
+		throw e;
+	});
+	if (!mappedUser.email) {
+		ctx.context.logger.error(
+			"OIDC provider returned no email. Map an email claim, or create a placeholder with `mapProfileToUser`.",
+			{ providerId },
+		);
+		return redirectOIDCError("invalid_provider", "missing_user_info");
+	}
+	const userInfoEmail = mappedUser.email;
 	const userInfoId = userInfo.id;
 	const providerUserAttributes = Object.fromEntries(
 		Object.entries(userInfo).filter(([key]) => key !== "id"),
@@ -1658,17 +1693,9 @@ async function handleOIDCCallback(
 	const providerUser = {
 		...providerUserAttributes,
 		email: userInfoEmail,
-		name: typeof userInfo.name === "string" ? userInfo.name : "",
-		image: typeof userInfo.image === "string" ? userInfo.image : undefined,
-		emailVerified: options?.trustEmailVerified
-			? userInfo.emailVerified === true
-			: false,
-	};
-	const accountKey = {
-		issuer:
-			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
-			provider.issuer,
-		accountId: userInfoId,
+		name: mappedUser.name ?? "",
+		image: mappedUser.image,
+		emailVerified: mappedUser.emailVerified,
 	};
 	const isTrustedProvider =
 		"domainVerified" in provider &&
@@ -1818,7 +1845,7 @@ async function handleOIDCCallback(
 			providerId: provider.providerId,
 			accountId: userInfoId,
 			email: userInfoEmail,
-			emailVerified: Boolean(userInfo.emailVerified),
+			emailVerified: providerUser.emailVerified,
 			rawAttributes: userInfo,
 		},
 		provider,
