@@ -6,6 +6,7 @@ import { createPool } from "mysql2/promise";
 import {
 	afterAll,
 	afterEach,
+	beforeAll,
 	beforeEach,
 	describe,
 	expect,
@@ -13,8 +14,14 @@ import {
 	vi,
 } from "vitest";
 
+// Its own database, so suites that recreate `better_auth` cannot drop it mid-run.
+const DATABASE = "better_auth_session_cutoff";
+const ROOT_URI = "mysql://root:root_password@localhost:3307/";
+const admin = createPool({
+	uri: ROOT_URI,
+});
 const mysqlDB = createPool({
-	uri: "mysql://user:password@localhost:3307/better_auth",
+	uri: `${ROOT_URI}${DATABASE}`,
 	timezone: "Z",
 });
 
@@ -25,11 +32,15 @@ const tables = {
 	verification: "cutoff_verification",
 };
 
+beforeAll(async () => {
+	await admin.query(`DROP DATABASE IF EXISTS \`${DATABASE}\``);
+	await admin.query(`CREATE DATABASE \`${DATABASE}\``);
+});
+
 afterAll(async () => {
-	for (const table of Object.values(tables).reverse()) {
-		await mysqlDB.query(`DROP TABLE IF EXISTS \`${table}\``);
-	}
 	await mysqlDB.end();
+	await admin.query(`DROP DATABASE IF EXISTS \`${DATABASE}\``);
+	await admin.end();
 });
 
 function createMemoryStorage(store: Map<string, string>): SecondaryStorage {
