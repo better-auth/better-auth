@@ -826,9 +826,11 @@ describe("anonymous linking through generic oauth (Expo)", async () => {
 			response?.headers.get("set-cookie") || "",
 		);
 		expect(cookies.get("better-auth.session_data")?.["max-age"]).toBe(0);
-		const newToken = cookies.get("better-auth.session_token")?.value;
-		expect(newToken?.split(".")[0]).toBeTruthy();
-		expect(newToken?.split(".")[0]).not.toBe(previousToken);
+		const newToken =
+			cookies.get("better-auth.session_token")?.value.split(".")[0] ?? "";
+		expect(newToken).not.toBe(previousToken);
+		const newSession = await internalAdapter.findSession(newToken);
+		expect(newSession?.session.token).toBe(newToken);
 	});
 });
 
@@ -1228,7 +1230,12 @@ describe("anonymous after-hook cookie cleanup on a new session", () => {
 		const response = await startSession["sign-in"](jar.headers());
 		jar.apply(response);
 
-		expect(jar.get(accountData)).toBeTruthy();
+		// The sign-in re-issues the account cookie; the cleanup must not expire it.
+		const issued = parseSetCookieHeader(
+			response.headers.get("set-cookie") || "",
+		).get(accountData);
+		expect(issued?.["max-age"]).toBeGreaterThan(0);
+		expect(jar.get(accountData)).toBe(issued?.value);
 		expect(jar.get(accountData)).not.toBe(staleAccount);
 	});
 
