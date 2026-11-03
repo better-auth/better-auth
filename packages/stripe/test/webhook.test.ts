@@ -1,4 +1,5 @@
 import type { User } from "better-auth";
+import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import { assert, describe, expect, vi } from "vitest";
@@ -497,6 +498,181 @@ describe("stripe webhook", () => {
 		expect(subscription?.plan).toBe("starter");
 		expect(subscription?.seats).toBe(1);
 		expect(subscription?.billingInterval).toBe("year");
+	});
+
+	describe("customer.subscription.created with a shared stripeCustomerId", () => {
+		async function setup(stripeOptions: StripeOptions) {
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				customers: {
+					...stripeOptions.stripeClient.customers,
+					retrieve: vi.fn(),
+				},
+				webhooks: {
+					constructEventAsync: vi.fn(),
+				},
+			};
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						organization(),
+						stripe({
+							...stripeOptions,
+							stripeClient: stripeForTest as unknown as Stripe,
+							stripeWebhookSecret: "test_secret",
+							organization: {
+								enabled: true,
+							},
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+			const ctx = await auth.$context;
+			const createUser = (email: string) =>
+				ctx.adapter.create<User>({
+					model: "user",
+					data: {
+						email,
+						name: email,
+						emailVerified: true,
+						stripeCustomerId: "cus_shared",
+					},
+				});
+			const deliver = async () => {
+				const event = createSubscriptionEvent("customer.subscription.created", {
+					id: "sub_shared",
+					customer: "cus_shared",
+					items: {
+						object: "list",
+						data: [
+							createSubscriptionItem({
+								price: createPrice({
+									id: TEST_PRICES.starter,
+								}),
+							}),
+						],
+						has_more: false,
+						url: "",
+					},
+				});
+				stripeForTest.webhooks.constructEventAsync.mockResolvedValue(event);
+				const response = await auth.handler(
+					new Request("http://localhost:3000/api/auth/stripe/webhook", {
+						method: "POST",
+						headers: {
+							"stripe-signature": "test_signature",
+						},
+						body: JSON.stringify(event),
+					}),
+				);
+				expect(response.status).toBe(200);
+				return ctx.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "stripeSubscriptionId", value: "sub_shared" }],
+				});
+			};
+			return { ctx, stripeForTest, createUser, deliver };
+		}
+
+		test("attributes the subscription to the owner named by the customer metadata", async ({
+			stripeOptions,
+		}) => {
+			const { stripeForTest, createUser, deliver } = await setup(stripeOptions);
+			await createUser("first@test.com");
+			const owner = await createUser("owner@test.com");
+			stripeForTest.customers.retrieve.mockResolvedValue({
+				id: "cus_shared",
+				deleted: false,
+				metadata: {
+					customerType: "user",
+					userId: owner.id,
+				},
+			});
+
+			const subscription = await deliver();
+
+			expect(subscription?.referenceId).toBe(owner.id);
+		});
+
+		test("attributes the subscription to the user when an organization shares the customer id", async ({
+			stripeOptions,
+		}) => {
+			const { ctx, stripeForTest, createUser, deliver } =
+				await setup(stripeOptions);
+			await ctx.adapter.create({
+				model: "organization",
+				data: {
+					name: "Shared",
+					slug: "shared",
+					createdAt: new Date(),
+					stripeCustomerId: "cus_shared",
+				},
+			});
+			const owner = await createUser("owner@test.com");
+			stripeForTest.customers.retrieve.mockResolvedValue({
+				id: "cus_shared",
+				deleted: false,
+				metadata: {
+					customerType: "user",
+					userId: owner.id,
+				},
+			});
+
+			const subscription = await deliver();
+
+			expect(subscription?.referenceId).toBe(owner.id);
+		});
+
+		test("does not attribute the subscription when the customer names no owner", async ({
+			stripeOptions,
+		}) => {
+			const { stripeForTest, createUser, deliver } = await setup(stripeOptions);
+			await createUser("first@test.com");
+			await createUser("second@test.com");
+			stripeForTest.customers.retrieve.mockResolvedValue({
+				id: "cus_shared",
+				deleted: false,
+				metadata: {},
+			});
+
+			const subscription = await deliver();
+
+			expect(subscription).toBeNull();
+		});
+
+		test("does not attribute a shared customer id when the Stripe customer was deleted", async ({
+			stripeOptions,
+		}) => {
+			const { stripeForTest, createUser, deliver } = await setup(stripeOptions);
+			await createUser("first@test.com");
+			await createUser("second@test.com");
+			stripeForTest.customers.retrieve.mockResolvedValue({
+				id: "cus_shared",
+				deleted: true,
+			});
+
+			const subscription = await deliver();
+
+			expect(subscription).toBeNull();
+		});
+
+		test("control: attributes a single stored customer id without calling Stripe", async ({
+			stripeOptions,
+		}) => {
+			const { stripeForTest, createUser, deliver } = await setup(stripeOptions);
+			const owner = await createUser("owner@test.com");
+			stripeForTest.customers.retrieve.mockRejectedValue(
+				new Error("Stripe is unavailable"),
+			);
+
+			const subscription = await deliver();
+
+			expect(stripeForTest.customers.retrieve).not.toHaveBeenCalled();
+			expect(subscription?.referenceId).toBe(owner.id);
+		});
 	});
 
 	test("should store billingInterval as year for annual subscriptions", async ({

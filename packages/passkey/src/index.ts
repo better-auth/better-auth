@@ -12,6 +12,7 @@ import {
 } from "./routes";
 import { schema } from "./schema";
 import type { Passkey, PasskeyOptions } from "./types";
+import { assertOriginForWildcardHosts } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -38,11 +39,16 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			webAuthnChallengeCookie: "better-auth-passkey",
 			...options?.advanced,
 		},
+		baseURLFromRequest: false,
 	};
 
 	return {
 		id: "passkey",
 		version: PACKAGE_VERSION,
+		init(ctx) {
+			assertOriginForWildcardHosts(opts, ctx.options.baseURL);
+			opts.baseURLFromRequest = !ctx.options.baseURL;
+		},
 		endpoints: {
 			generatePasskeyRegistrationOptions: generatePasskeyRegistrationOptions(
 				opts,

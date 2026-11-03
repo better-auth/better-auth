@@ -12,8 +12,12 @@ import { defaultRoles } from "../access/statement";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { hasPermission } from "../has-permission";
-import { parseRoles } from "../organization";
+import {
+	canViewInvitations,
+	hasPermission,
+	withoutCreatorRoleInvitations,
+} from "../has-permission";
+import { parseRoleList, parseRoles } from "../roles";
 import type {
 	InferInvitation,
 	InferOrganizationRolesFromOption,
@@ -282,12 +286,16 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
 
-			const roles = parseRoles(ctx.body.role);
-
-			const rolesArray = roles
-				.split(",")
-				.map((r) => r.trim())
-				.filter(Boolean);
+			// Validate, guard and store the same normalized list so every later
+			// role check sees the roles that were checked here.
+			const rolesArray = parseRoleList(ctx.body.role);
+			if (rolesArray.length === 0) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				);
+			}
+			const roles = parseRoles(rolesArray);
 			const defaults = Object.keys(defaultRoles);
 			const customRoles = Object.keys(ctx.context.orgOptions.roles || {});
 			const validStaticRoles = new Set([...defaults, ...customRoles]);
@@ -323,11 +331,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			if (
-				!member.role
-					.split(",")
-					.map((r) => r.trim())
-					.includes(creatorRole) &&
-				roles.split(",").includes(creatorRole)
+				!parseRoleList(member.role).includes(creatorRole) &&
+				rolesArray.includes(creatorRole)
 			) {
 				throw APIError.from(
 					"FORBIDDEN",
@@ -369,8 +374,17 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			// If resend is true and there's an existing invitation, reuse it
-			if (alreadyInvited.length && ctx.body.resend) {
-				const existingInvitation = alreadyInvited[0];
+			const existingInvitation = alreadyInvited[0];
+			if (existingInvitation && ctx.body.resend) {
+				if (
+					!parseRoleList(member.role).includes(creatorRole) &&
+					parseRoleList(existingInvitation.role).includes(creatorRole)
+				) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE,
+					);
+				}
 
 				// Update the invitation's expiration date using the same logic as createInvitation
 				const defaultExpiration = 60 * 60 * 48; // 48 hours in seconds
@@ -384,7 +398,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					where: [
 						{
 							field: "id",
-							value: existingInvitation!.id,
+							value: existingInvitation.id,
 						},
 					],
 					update: {
@@ -827,10 +841,12 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					}
 				}
 
+				// Normalize again on accept so invitations that were stored before
+				// roles were trimmed on create cannot produce a padded member role.
 				const createdMember = await adapter.createMember({
 					organizationId: acceptedI.organizationId,
 					userId: session.user.id,
-					role: acceptedI.role,
+					role: parseRoles(acceptedI.role),
 					createdAt: new Date(),
 				});
 
@@ -1287,10 +1303,29 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 					message: "You are not a member of this organization",
 				});
 			}
+			const canList = await canViewInvitations(
+				{
+					role: isMember.role,
+					options: ctx.context.orgOptions,
+					organizationId: orgId,
+				},
+				ctx,
+			);
+			if (!canList) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_INVITATIONS,
+				);
+			}
 			const invitations = await adapter.listInvitations({
 				organizationId: orgId,
 			});
-			return ctx.json(invitations);
+			return ctx.json(
+				withoutCreatorRoleInvitations(invitations, {
+					role: isMember.role,
+					options: ctx.context.orgOptions,
+				}),
+			);
 		},
 	);
 
