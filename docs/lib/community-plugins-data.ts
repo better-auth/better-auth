@@ -163,6 +163,17 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
+		name: "better-auth-payload",
+		url: "https://www.npmjs.com/package/better-auth-payload",
+		description:
+			"Payload CMS integration and database adapter for Better Auth. A payload-auth fork adding Payload 4, TanStack Start, and Cloudflare D1 compatibility.",
+		author: {
+			name: "alexasomba",
+			github: "alexasomba",
+			avatar: "https://github.com/alexasomba.png",
+		},
+	},
+	{
 		name: "better-auth-lark",
 		url: "https://github.com/uselark/better-auth-lark",
 		description:
