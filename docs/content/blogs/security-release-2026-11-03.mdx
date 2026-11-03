@@ -1,6 +1,6 @@
 ---
 title: "Security release on Tuesday, November 3, 2026"
-description: "A security release for Better Auth is scheduled for Tuesday, November 3, 2026."
+description: "Better Auth v1.7.16 and v1.8.0-beta.5 fix 12 security issues. Upgrade to the latest release of your line."
 date: 2026-10-30
 author:
   name: "Taesu Kim"
@@ -10,30 +10,92 @@ tags: ["security", "advisories", "release"]
 
 # Security release on Tuesday, November 3, 2026
 
-We are preparing a security release for Better Auth, scheduled for Tuesday, November 3, 2026.
+Better Auth v1.7.16 and v1.8.0-beta.5 are now available on npm. They fix the issues described in 12 security advisories, published today on [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories). Upgrade to the fixed version of your release line.
 
-The related advisories will be published on [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories) at the same time.
-
-<Callout type="info" title="About this release">
-  This advance notice is part of our coordinated security release process. Our ongoing security reviews include work with frontier AI models made available through OSS security programs, and we release security fixes in batches. We are sharing the date ahead of time to give teams running versions outside the covered release lines time to upgrade before the security release.
-</Callout>
+Note: If you've deployed your app on Vercel, we've applied WAF protections against all reasonably identifiable issues. Regardless, we recommend updating to the latest version of Better Auth.
 
 ## Releases
 
-This security release covers 2 release lines.
+* v1.7.x: 1.7.16
+* v1.8.0-beta.x: 1.8.0-beta.5
 
-* v1.7.x
-* v1.8.0-beta.x
+Packages released separately, such as `@better-auth/expo`, `@better-auth/electron`, `@better-auth/passkey`, `@better-auth/stripe` and `@better-auth/kysely-adapter`, ship with the same versions. Update every Better Auth package together.
 
-## How to prepare
+## Advisories
 
-* Stay on the current release of your line, so the security release is a small step.
-* If you pin Better Auth packages, be ready to update to the fixed versions.
-* Watch the [repository's releases on GitHub](https://github.com/better-auth/better-auth/releases) to be notified on Tuesday, November 3, 2026.
+### Core
 
-## On release day
+* **Email-change links stay valid after the address changes hands**
+  * Severity: Medium
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+* **OAuth sign-in can treat an unverified provider email as verified**
+  * Severity: Medium
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+* **MySQL serial IDs can return another request's record** (`@better-auth/kysely-adapter`)
+  * Severity: Medium
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+* **Revoked sessions can stay valid with secondary storage or the cookie cache**
+  * Severity: Medium
+  * Fixed in: 1.7.16, 1.8.0-beta.5
 
-On Tuesday, November 3, 2026, the new versions go out on npm and the advisories are published on GitHub. We will update this post with the versions and advisory links.
+### Expo
+
+* **Authorization proxy can sign values it did not issue**
+  * Severity: Critical
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Phone number
+
+* **Phone numbers can be claimed before they are verified**
+  * Severity: High
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Electron
+
+* **Desktop sign-in can return the server secret and skip two-factor**
+  * Severity: High
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Email OTP
+
+* **Email OTP attempt limit can be raced and codes are loosely bound to addresses**
+  * Severity: High
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Admin
+
+* **Admin roles with user:update can change another user's phone number**
+  * Severity: Medium
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Organization
+
+* **Organization admins can invite an owner with a padded role name**
+  * Severity: Medium
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Stripe
+
+* **Billing actions can target another customer's Stripe account**
+  * Severity: Medium
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Passkey
+
+* **Passkey verification does not enforce origin or user verification**
+  * Severity: Low
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+Each advisory lists the affected versions and the conditions that decide whether you are affected. Advisory links: TBD on publication.
+
+## How to upgrade
+
+* Update `better-auth` and every `@better-auth/*` package to 1.7.16, or to 1.8.0-beta.5 on the beta line.
+* Read the advisories for the plugins you use. Some fixes add a configuration step, such as listing trusted origins.
+
+## Thank you
+
+Thank you to everyone who reported these issues to us privately. Our ongoing security reviews include work with frontier AI models made available through OSS security programs.
 
 ## Contact
 
