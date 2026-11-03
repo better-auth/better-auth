@@ -12,6 +12,7 @@ import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
 	createPrivateKeyJwtClientAssertionGetter,
+	generateIdTokenNonce,
 	generateState,
 	getOAuth2Tokens,
 	HIDE_METADATA,
@@ -119,6 +120,14 @@ const BUILT_IN_ACCOUNT_PROVIDER_IDS = [
 	"anonymous",
 	"siwe",
 ] as const;
+
+/**
+ * Whether the provider binds its ID token to the sign-in with a `nonce`. On by
+ * default; `disableIdTokenNonceBinding` opts a provider out.
+ */
+function requiresIdTokenNonceBinding(config: OIDCConfig) {
+	return config.disableIdTokenNonceBinding !== true;
+}
 
 /**
  * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
@@ -578,6 +587,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 						privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
 						jwksEndpoint: body.oidcConfig.jwksEndpoint,
 						pkce: body.oidcConfig.pkce,
+						disableIdTokenNonceBinding:
+							body.oidcConfig.disableIdTokenNonceBinding,
 						discoveryEndpoint:
 							body.oidcConfig.discoveryEndpoint ||
 							`${body.issuer}/.well-known/openid-configuration`,
@@ -605,6 +616,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 					privateKeyAlgorithm: body.oidcConfig.privateKeyAlgorithm,
 					jwksEndpoint: hydratedOIDCConfig.jwksEndpoint,
 					pkce: body.oidcConfig.pkce,
+					disableIdTokenNonceBinding:
+						body.oidcConfig.disableIdTokenNonceBinding,
 					discoveryEndpoint: hydratedOIDCConfig.discoveryEndpoint,
 					mapping: body.oidcConfig.mapping,
 					scopes: body.oidcConfig.scopes,
@@ -917,7 +930,7 @@ export const signInSSO = (options?: SSOOptions) => {
 											type: "object",
 											additionalProperties: { type: "string" },
 											description:
-												"Extra query parameters to append to the OIDC provider authorization URL. RFC 6749 reserved keys (state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, scope) are rejected. Not supported for SAML providers.",
+												"Extra query parameters to append to the OIDC provider authorization URL. Reserved keys (state, client_id, redirect_uri, response_type, code_challenge, code_challenge_method, nonce, scope) are rejected. Not supported for SAML providers.",
 										},
 										requestSignUp: {
 											type: "boolean",
@@ -1140,7 +1153,10 @@ export const signInSSO = (options?: SSOOptions) => {
 				await addOAuthServerContext({
 					[SSO_PROVIDER_STATE_KEY]: await computeSSOProviderReference(provider),
 				});
-				const state = await generateState(ctx);
+				const idTokenNonce = generateIdTokenNonce({
+					requiresIdTokenNonce: requiresIdTokenNonceBinding(config),
+				});
+				const state = await generateState(ctx, { idTokenNonce });
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
 					provider.providerId,
@@ -1158,6 +1174,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					scopes: ctx.body.scopes ||
 						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
+					nonce: idTokenNonce,
 					authorizationEndpoint: config.authorizationEndpoint,
 					additionalParams: ctx.body.additionalParams,
 				});
@@ -1372,6 +1389,12 @@ async function handleOIDCCallback(
 		return redirectOIDCError("invalid_provider", "provider not found");
 	}
 
+	// Fail closed: without the nonce sent at sign-in, the ID token cannot be
+	// bound to this flow.
+	if (requiresIdTokenNonceBinding(config) && !stateData.idTokenNonce) {
+		return redirectOIDCError("invalid_state", "nonce_binding_missing");
+	}
+
 	try {
 		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
 			ctx.context.isTrustedOrigin(url),
@@ -1545,7 +1568,11 @@ async function handleOIDCCallback(
 		const verified = await validateOIDCIdToken(
 			tokenResponse.idToken,
 			jwksEndpoint!,
-			{ audience: config.clientId, issuer: provider.issuer },
+			{
+				audience: config.clientId,
+				issuer: provider.issuer,
+				nonce: stateData.idTokenNonce,
+			},
 			(url) => ctx.context.isTrustedOrigin(url),
 		).catch((error) => {
 			if (error instanceof DiscoveryError) {
@@ -1938,7 +1965,10 @@ async function bounceIfIdpInitiated(
 	await addOAuthServerContext({
 		[SSO_PROVIDER_STATE_KEY]: await computeSSOProviderReference(provider),
 	});
-	const state = await generateState(ctx);
+	const idTokenNonce = generateIdTokenNonce({
+		requiresIdTokenNonce: requiresIdTokenNonceBinding(config),
+	});
+	const state = await generateState(ctx, { idTokenNonce });
 	const redirectURI = getOIDCRedirectURI(
 		ctx.context.baseURL,
 		provider.providerId,
@@ -1954,6 +1984,7 @@ async function bounceIfIdpInitiated(
 		state: state.state,
 		codeVerifier: config.pkce ? state.codeVerifier : undefined,
 		scopes: config.scopes || ["openid", "email", "profile", "offline_access"],
+		nonce: idTokenNonce,
 		authorizationEndpoint: config.authorizationEndpoint,
 	});
 	throw ctx.redirect(authorizationURL.toString());

@@ -428,6 +428,8 @@ export async function validateOIDCIdToken(
 	options: {
 		audience: string;
 		issuer: string;
+		/** Nonce sent with the authorization request, when one was sent. */
+		nonce?: string | undefined;
 	},
 	isTrustedOrigin: (url: string) => boolean,
 ) {
@@ -435,11 +437,15 @@ export async function validateOIDCIdToken(
 		[customFetch]: (url, init) =>
 			fetchOIDCEndpointResponse("jwksEndpoint", url, init, isTrustedOrigin),
 	});
-	const verified = await verifyIdToken(token, {
-		jwks,
-		audience: options.audience,
-		issuer: options.issuer,
-	});
+	const verified = await verifyIdToken(
+		token,
+		{
+			jwks,
+			audience: options.audience,
+			issuer: options.issuer,
+		},
+		options.nonce,
+	);
 	assertOIDCAuthorizedParty(verified.payload, options.audience);
 	return verified;
 }

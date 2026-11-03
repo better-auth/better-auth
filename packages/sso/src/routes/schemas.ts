@@ -185,6 +185,13 @@ const oidcConfigSchema = z.object({
 		.meta({ description: "Whether to use PKCE for the authorization flow" })
 		.default(true)
 		.optional(),
+	disableIdTokenNonceBinding: z
+		.boolean()
+		.meta({
+			description:
+				"Skip binding the ID token to the sign-in with a nonce. Binding is on by default; set this only for providers that do not return the nonce claim, since it removes ID token replay protection for the provider.",
+		})
+		.optional(),
 	overrideUserInfo: z.boolean().optional(),
 	mapping: oidcMappingSchema,
 });

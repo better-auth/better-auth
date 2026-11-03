@@ -59,6 +59,19 @@ export interface OIDCConfig {
 	 * @default false
 	 */
 	allowIdpInitiated?: boolean | undefined;
+	/**
+	 * Disable OIDC `nonce` binding for this provider's ID token.
+	 *
+	 * By default, Better Auth sends a server-generated `nonce` with every
+	 * authorization request, including an IdP-initiated restart, and rejects an
+	 * ID token that does not return it (OIDC Core 1.0 §3.1.3.7). Set this to
+	 * `true` only for providers that do not return the `nonce` claim in the
+	 * authorization code flow; doing so removes ID token replay protection for
+	 * this provider.
+	 *
+	 * @default false
+	 */
+	disableIdTokenNonceBinding?: boolean | undefined;
 }
 
 interface SAMLIdentityProviderMetadataBase {
