@@ -5451,3 +5451,224 @@ describe("confirmationTokenType", () => {
 		expect(confirmationTokenType(undefined)).toBe("Bearer");
 	});
 });
+
+/**
+ * RFC 9068 §2.2.1: JWT access tokens carry `auth_time` with the same meaning
+ * as the ID token claim (OIDC Core §2), so resource servers can enforce
+ * recent-authentication (step-up) checks.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11267
+ * @see https://datatracker.ietf.org/doc/html/rfc9068#section-2.2.1
+ */
+describe("oauth token - auth_time in JWT access tokens", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const validResource = "https://myapi.example.com";
+	const clientScopes = ["read:posts"];
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [validResource],
+				enforcePerClientResources: false,
+				scopes: ["openid", "profile", "offline_access", ...clientScopes],
+				clientPrivileges: () => true,
+				customAccessTokenClaims: () => ({
+					auth_time: 0,
+					"https://example.com/custom": "kept",
+				}),
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/callback/${providerId}`;
+	const state = "123";
+	let oauthClient: OAuthClient | null;
+	let jwks: ReturnType<typeof createLocalJWKSet>;
+
+	beforeAll(async () => {
+		oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: [
+					"authorization_code",
+					"client_credentials",
+					"refresh_token",
+				],
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+				client_credentials_scopes: clientScopes,
+			},
+		});
+		const jwksResult = await client.$fetch<
+			Parameters<typeof createLocalJWKSet>[0]
+		>("/jwks", { method: "GET" });
+		if (!jwksResult.data) {
+			throw new Error("Unable to fetch jwks");
+		}
+		jwks = createLocalJWKSet(jwksResult.data);
+	});
+
+	function clientOptions() {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		return {
+			clientId: oauthClient.client_id,
+			clientSecret: oauthClient.client_secret,
+			redirectURI: redirectUri,
+		};
+	}
+
+	async function verifyAccessToken(token: string | undefined) {
+		expect(token).toBeDefined();
+		const { payload } = await jwtVerify(token!, jwks, {
+			audience: validResource,
+			issuer: authServerBaseUrl,
+		});
+		return payload;
+	}
+
+	async function exchangeCode(scopes: string[]) {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: clientOptions(),
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code: code!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: clientOptions(),
+			resource: validResource,
+		});
+		const tokens = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+		expect(tokens.data).toBeDefined();
+		return tokens.data!;
+	}
+
+	async function refresh(refreshToken: string | undefined, scopes: string[]) {
+		expect(refreshToken).toBeDefined();
+		const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+			refreshToken: refreshToken!,
+			options: clientOptions(),
+			extraParams: { scope: scopes.join(" ") },
+			resource: validResource,
+		});
+		const tokens = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+		expect(tokens.data).toBeDefined();
+		return tokens.data!;
+	}
+
+	async function sessionAuthTimeSeconds() {
+		const session = await auth.api.getSession({ headers });
+		expect(session).not.toBeNull();
+		return Math.floor(new Date(session!.session.createdAt).getTime() / 1000);
+	}
+
+	it("authorization_code: matches the ID token and the session's authentication time", async () => {
+		const tokens = await exchangeCode(["openid", "profile"]);
+		const accessToken = await verifyAccessToken(tokens.access_token);
+		const idToken = decodeJwt(tokens.id_token!);
+
+		expect(Number.isInteger(accessToken.auth_time)).toBe(true);
+		expect(accessToken.auth_time).toBe(idToken.auth_time);
+		expect(accessToken.auth_time).toBe(await sessionAuthTimeSeconds());
+	});
+
+	it("refresh_token: keeps the original authentication time across rotations", async () => {
+		const scopes = ["openid", "profile", "offline_access"];
+		const initial = await exchangeCode(scopes);
+		const original = (await verifyAccessToken(initial.access_token)).auth_time;
+		expect(original).toBe(await sessionAuthTimeSeconds());
+
+		// Ensure a refresh-time `auth_time` would differ from the original.
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		try {
+			vi.advanceTimersByTime(5_000);
+			const rotated = await refresh(initial.refresh_token, scopes);
+			vi.advanceTimersByTime(5_000);
+			const rotatedAgain = await refresh(rotated.refresh_token, scopes);
+
+			for (const tokens of [rotated, rotatedAgain]) {
+				const accessToken = await verifyAccessToken(tokens.access_token);
+				expect(accessToken.auth_time).toBe(original);
+				expect(accessToken.iat).toBeGreaterThan(original as number);
+				expect(decodeJwt(tokens.id_token!).auth_time).toBe(original);
+			}
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("customAccessTokenClaims cannot set or override auth_time", async () => {
+		const tokens = await exchangeCode(["openid"]);
+		const accessToken = await verifyAccessToken(tokens.access_token);
+
+		expect(accessToken["https://example.com/custom"]).toBe("kept");
+		expect(accessToken.auth_time).not.toBe(0);
+		expect(accessToken.auth_time).toBe(await sessionAuthTimeSeconds());
+	});
+
+	it("client_credentials: omits auth_time", async () => {
+		const { clientId, clientSecret } = clientOptions();
+		const { body, headers: tokenHeaders } = await clientCredentialsTokenRequest(
+			{
+				authentication: "post",
+				scope: clientScopes.join(" "),
+				options: { clientId, clientSecret, redirectURI: redirectUri },
+				resource: validResource,
+			},
+		);
+		const tokens = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+		const accessToken = await verifyAccessToken(tokens.data?.access_token);
+
+		expect(accessToken.sub).toBe(clientId);
+		expect(accessToken).not.toHaveProperty("auth_time");
+	});
+});
