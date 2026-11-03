@@ -657,6 +657,10 @@ export const deviceToken = <Grant extends DeviceAuthorizationGrant | undefined>(
 			error: deviceTokenErrorSchema,
 			metadata: {
 				noStore: true,
+				allowedMediaTypes: [
+					"application/json",
+					"application/x-www-form-urlencoded",
+				],
 				openapi: {
 					description: `Exchange device code for access token
 

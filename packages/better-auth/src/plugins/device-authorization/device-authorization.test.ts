@@ -1396,6 +1396,42 @@ describe("device authorization ownership gate", () => {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12192
+	 */
+	it("accepts form-encoded bodies on /device/token (RFC 8628 section 3.4)", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization()],
+		});
+		const codeResponse = await auth.handler(
+			new Request("http://localhost:3000/api/auth/device/code", {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({ client_id: "test-client" }),
+			}),
+		);
+		expect(codeResponse.status).toBe(200);
+		const { device_code } = (await codeResponse.json()) as {
+			device_code: string;
+		};
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/device/token", {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code,
+					client_id: "test-client",
+				}),
+			}),
+		);
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: "authorization_pending",
+		});
+	});
+
 	it("allows approve when the pre-bound user matches the current user", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
