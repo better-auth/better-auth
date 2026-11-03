@@ -1,5 +1,28 @@
 # better-auth
 
+## 1.8.0-beta.5
+
+### Minor Changes
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - Electron desktop sign-in now completes only after required two-factor verification and the other sign-in after-hooks, regardless of plugin order, and authorization codes require the issuing browser session to remain valid until exchange. Plugin after-hooks on credential sign-in routes now run after the built-in two-factor challenge and must handle a null new session while verification is pending.
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - A phone number is now set only by verifying it: sign-up and sign-in routes reject a `phoneNumber` with `PHONE_NUMBER_CANNOT_BE_SET`, a number mapped from a social profile is dropped, and verifying a number stored unverified on another account requires that account's session, or the cookie from `requireVerification` sign-in, and otherwise returns `PHONE_NUMBER_PENDING_VERIFICATION`, while `updatePhoneNumber: true` moves such a number to the signed-in user. Phone sign-in with `requireVerification` now requires `sendOTP` and returns `SEND_OTP_NOT_IMPLEMENTED` without it.
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - Phone password reset now works only for a phone number already verified on the account. `requestPasswordReset` no longer sends a code for an unverified number, and `resetPassword` returns `PHONE_NUMBER_PENDING_VERIFICATION` without changing the password.
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - With a server-side session store, passkey registration, device-code approval, two-factor enrollment, phone number changes, social account linking, and organization invitations now require a session that is still active in the store, even with cookie caching, so sessions created from API keys with `enableSessionForAPIKeys` are refused there. Social link callbacks also require the session that started the link, so direct `linkOAuthAccount` callers must pass it in OAuth state.
+
+### Patch Changes
+
+- Updated dependencies [[`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda)]:
+  - @better-auth/core@1.8.0-beta.5
+  - @better-auth/drizzle-adapter@1.8.0-beta.5
+  - @better-auth/kysely-adapter@1.8.0-beta.5
+  - @better-auth/memory-adapter@1.8.0-beta.5
+  - @better-auth/mongo-adapter@1.8.0-beta.5
+  - @better-auth/prisma-adapter@1.8.0-beta.5
+  - @better-auth/telemetry@1.8.0-beta.5
+
 ## 1.8.0-beta.4
 
 ### Patch Changes

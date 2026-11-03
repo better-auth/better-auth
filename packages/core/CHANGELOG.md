@@ -1,5 +1,11 @@
 # @better-auth/core
 
+## 1.8.0-beta.5
+
+### Minor Changes
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - Electron desktop sign-in now completes only after required two-factor verification and the other sign-in after-hooks, regardless of plugin order, and authorization codes require the issuing browser session to remain valid until exchange. Plugin after-hooks on credential sign-in routes now run after the built-in two-factor challenge and must handle a null new session while verification is pending.
+
 ## 1.8.0-beta.4
 
 ### Minor Changes
