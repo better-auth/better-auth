@@ -2,6 +2,8 @@
 
 ## 1.8.0-beta.4
 
+## 1.7.16
+
 ### Patch Changes
 
 - Updated dependencies []:
@@ -36,6 +38,8 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/oauth-provider@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
+
+  - @better-auth/oauth-provider@1.7.16
 
 ## 1.7.15
 

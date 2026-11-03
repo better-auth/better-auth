@@ -10,6 +10,7 @@ import {
 	validateAuthorizationCode,
 } from "../oauth2";
 import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
+import { parseProviderEmailVerified } from "../oauth2/utils";
 
 /**
  * Profile data from a Cognito ID token or userinfo response.
@@ -243,9 +244,10 @@ export const cognito = (options: CognitoOptions) => {
 									"",
 								email: userInfo.email,
 								image: userInfo.picture,
-								emailVerified:
-									userInfo.email_verified === true ||
-									userInfo.email_verified === "true",
+								// The user info endpoint returns `email_verified` as a string.
+								emailVerified: parseProviderEmailVerified(
+									userInfo.email_verified,
+								),
 								...userMap,
 							},
 							data: userInfo,

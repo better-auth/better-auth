@@ -83,6 +83,14 @@ export function mergeScopes(
 }
 
 /**
+ * Reads a provider's email verification claim. Only boolean `true` or the
+ * exact string `"true"`, which some providers send, counts as verified.
+ */
+export function parseProviderEmailVerified(value: unknown): boolean {
+	return value === true || value === "true";
+}
+
+/**
  * Return the provider's primary Client ID: the single string, or the entry at
  * array index 0 for the cross-platform form used by ID token audience
  * verification. Index 0 is the designated primary and pairs with
