@@ -1,10 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import {
+	getCurrentAdapter,
+	runWithTransaction,
+} from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getAuthoritativeSessionFromCtx } from "../../api";
-import { isSessionOutsideStore } from "../../api/state/session-source";
-import { setSessionCookie } from "../../cookies";
+import { expireCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
@@ -26,6 +29,74 @@ export type RequiredPhoneNumberOptions = PhoneNumberOptions & {
 	code: string;
 	createdAt: string;
 };
+
+const PHONE_CREDENTIAL_PROOF_COOKIE = "phone_credential_proof";
+const PHONE_CREDENTIAL_PROOF_PREFIX = "phone-credential-proof:";
+const PHONE_CREDENTIAL_PROOF_MAX_AGE = 300;
+
+function phoneCredentialProofCookie(
+	ctx: GenericEndpointContext,
+	maxAge = PHONE_CREDENTIAL_PROOF_MAX_AGE,
+) {
+	return ctx.context.createAuthCookie(PHONE_CREDENTIAL_PROOF_COOKIE, {
+		maxAge,
+	});
+}
+
+function phoneCredentialProofValue(userId: string, phoneNumber: string) {
+	return JSON.stringify({
+		userId,
+		phoneNumber,
+	});
+}
+
+async function issuePhoneCredentialProof(
+	ctx: GenericEndpointContext,
+	opts: RequiredPhoneNumberOptions,
+	userId: string,
+	phoneNumber: string,
+) {
+	const identifier = `${PHONE_CREDENTIAL_PROOF_PREFIX}${generateRandomString(32)}`;
+	const maxAge = Math.min(opts.expiresIn, PHONE_CREDENTIAL_PROOF_MAX_AGE);
+	await ctx.context.internalAdapter.createVerificationValue({
+		identifier,
+		value: phoneCredentialProofValue(userId, phoneNumber),
+		expiresAt: getDate(maxAge, "sec"),
+	});
+	const cookie = phoneCredentialProofCookie(ctx, maxAge);
+	await ctx.setSignedCookie(
+		cookie.name,
+		identifier,
+		ctx.context.secret,
+		cookie.attributes,
+	);
+}
+
+/**
+ * A phone OTP proves control of the number, not ownership of an account that
+ * stores it unverified. The caller must hold that account's session or a
+ * credential proof issued for it by phone sign-in.
+ */
+async function hasPendingPhoneOwnership(
+	ctx: GenericEndpointContext,
+	userId: string,
+	phoneNumber: string,
+) {
+	const session = await getAuthoritativeSessionFromCtx(ctx);
+	if (session) return session.user.id === userId;
+	const cookie = phoneCredentialProofCookie(ctx);
+	const identifier = await ctx.getSignedCookie(cookie.name, ctx.context.secret);
+	if (
+		typeof identifier !== "string" ||
+		!identifier.startsWith(PHONE_CREDENTIAL_PROOF_PREFIX)
+	) {
+		return false;
+	}
+	const proof =
+		await ctx.context.internalAdapter.consumeVerificationValue(identifier);
+	expireCookie(ctx, cookie);
+	return proof?.value === phoneCredentialProofValue(userId, phoneNumber);
+}
 
 const signInPhoneNumberBodySchema = z.object({
 	phoneNumber: z.string().meta({
@@ -125,31 +196,6 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
-			if (opts.requireVerification) {
-				if (!user.phoneNumberVerified) {
-					const otp = generateOTP(opts.otpLength);
-					await ctx.context.internalAdapter.createVerificationValue({
-						value: otp,
-						identifier: phoneNumberOTPIdentifier(phoneNumber),
-						expiresAt: getDate(opts.expiresIn, "sec"),
-					});
-					if (opts.sendOTP) {
-						await ctx.context.runInBackgroundOrAwait(
-							opts.sendOTP(
-								{
-									phoneNumber,
-									code: otp,
-								},
-								ctx,
-							),
-						);
-					}
-					throw APIError.from(
-						"UNAUTHORIZED",
-						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
-					);
-				}
-			}
 			const credentialAccount =
 				await ctx.context.internalAdapter.findCredentialAccount(user.id);
 			if (!credentialAccount) {
@@ -176,6 +222,35 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				throw APIError.from(
 					"UNAUTHORIZED",
 					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
+				);
+			}
+			if (opts.requireVerification && !user.phoneNumberVerified) {
+				if (!opts.sendOTP) {
+					ctx.context.logger.warn("sendOTP not implemented");
+					throw APIError.from(
+						"NOT_IMPLEMENTED",
+						PHONE_NUMBER_ERROR_CODES.SEND_OTP_NOT_IMPLEMENTED,
+					);
+				}
+				await issuePhoneCredentialProof(ctx, opts, user.id, phoneNumber);
+				const otp = generateOTP(opts.otpLength);
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: otp,
+					identifier: phoneNumberOTPIdentifier(phoneNumber),
+					expiresAt: getDate(opts.expiresIn, "sec"),
+				});
+				await ctx.context.runInBackgroundOrAwait(
+					opts.sendOTP(
+						{
+							phoneNumber,
+							code: otp,
+						},
+						ctx,
+					),
+				);
+				throw APIError.from(
+					"UNAUTHORIZED",
+					PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
 				);
 			}
 			const session = await ctx.context.internalAdapter.createSession(
@@ -541,20 +616,14 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 
 			if (ctx.body.updatePhoneNumber) {
 				// Replacing the number changes a sign-in method, so a session revoked
-				// in the store must not pass on its cookie cache alone. A session
-				// built from an API key has no store row; the key is verified on
-				// every request instead.
-				const requestSession = ctx.context.session;
-				const session =
-					requestSession &&
-					(await isSessionOutsideStore(requestSession.session.token))
-						? requestSession
-						: await getAuthoritativeSessionFromCtx(ctx);
+				// in the store must not pass on its cookie cache alone.
+				const session = await getAuthoritativeSessionFromCtx(ctx);
 				if (!session) {
 					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.USER_NOT_FOUND);
 				}
-				const existingUser =
-					await ctx.context.adapter.findMany<UserWithPhoneNumber>({
+				const user = await runWithTransaction(ctx.context.adapter, async () => {
+					const adapter = await getCurrentAdapter(ctx.context.adapter);
+					const existingUser = await adapter.findMany<UserWithPhoneNumber>({
 						model: "user",
 						where: [
 							{
@@ -563,26 +632,53 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 							},
 						],
 					});
-				if (existingUser.length) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
-					);
-				}
-				const user =
-					await ctx.context.internalAdapter.updateUser<UserWithPhoneNumber>(
-						session.user.id,
-						{
-							[opts.phoneNumber]: ctx.body.phoneNumber,
-							[opts.phoneNumberVerified]: true,
-						},
-					);
-				if (!user) {
-					throw APIError.from(
-						"INTERNAL_SERVER_ERROR",
-						BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
-					);
-				}
+					if (existingUser.some((existing) => existing.phoneNumberVerified)) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
+						);
+					}
+					// An unverified number is only a claim, so it yields to the caller who
+					// proved the number with an OTP. The guard on the number keeps a
+					// claimant that has since moved to another number untouched.
+					for (const claimant of existingUser) {
+						if (claimant.id === session.user.id) continue;
+						await adapter.updateMany({
+							model: "user",
+							where: [
+								{
+									field: "id",
+									value: claimant.id,
+								},
+								{
+									field: opts.phoneNumber,
+									value: ctx.body.phoneNumber,
+								},
+							],
+							update: {
+								[opts.phoneNumber]: null,
+								[opts.phoneNumberVerified]: false,
+							},
+						});
+					}
+					const updated =
+						await ctx.context.internalAdapter.updateUser<UserWithPhoneNumber>(
+							session.user.id,
+							{
+								[opts.phoneNumber]: ctx.body.phoneNumber,
+								[opts.phoneNumberVerified]: true,
+							},
+						);
+					// A vetoing update hook returns null; throw inside the transaction so
+					// the claimant keeps the number.
+					if (!updated) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+						);
+					}
+					return updated;
+				});
 				await opts?.callbackOnVerification?.(
 					{
 						phoneNumber: ctx.body.phoneNumber,
@@ -643,6 +739,19 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					}
 				}
 			} else {
+				if (!user.phoneNumberVerified) {
+					const ownsPendingPhone = await hasPendingPhoneOwnership(
+						ctx,
+						user.id,
+						ctx.body.phoneNumber,
+					);
+					if (!ownsPendingPhone) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_PENDING_VERIFICATION,
+						);
+					}
+				}
 				user =
 					await ctx.context.internalAdapter.updateUser<UserWithPhoneNumber>(
 						user.id,
@@ -750,9 +859,9 @@ export const requestPasswordResetPhoneNumber = (
 				identifier: phoneNumberResetIdentifier(ctx.body.phoneNumber),
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
-			// Answer the same for a missing number and, with requireVerification, an
-			// unverified one, so the response does not reveal either.
-			if (!user || (opts.requireVerification && !user.phoneNumberVerified)) {
+			// Answer the same for a missing or unverified number, so the response
+			// does not reveal either.
+			if (!user?.phoneNumberVerified) {
 				return ctx.json({
 					status: true,
 				});
@@ -862,7 +971,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 			}
 			// An unverified number does not prove the account is the caller's.
-			if (opts.requireVerification && !user.phoneNumberVerified) {
+			if (!user.phoneNumberVerified) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_PENDING_VERIFICATION,

@@ -729,3 +729,43 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		expect(successCount).toBeLessThanOrEqual(1);
 	});
 });
+
+describe("two-factor security: challenge precedes other plugin after hooks", () => {
+	for (const order of ["probe-first", "two-factor-first"] as const) {
+		it(`hides the challenged session from plugin after hooks (${order})`, async () => {
+			const observed: Array<string | null> = [];
+			const probe = {
+				id: "new-session-probe",
+				hooks: {
+					after: [
+						{
+							matcher: (ctx) => ctx.path === "/sign-in/email",
+							handler: createAuthMiddleware(async (ctx) => {
+								observed.push(ctx.context.newSession?.session.token ?? null);
+							}),
+						},
+					],
+				},
+			} satisfies BetterAuthPlugin;
+			const { auth, signInWithTestUser, testUser } = await getTestInstance({
+				plugins:
+					order === "probe-first"
+						? [probe, twoFactor({ skipVerificationOnEnable: true })]
+						: [twoFactor({ skipVerificationOnEnable: true }), probe],
+			});
+			const { headers } = await signInWithTestUser();
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+			});
+			observed.length = 0;
+
+			const response = await auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+			});
+
+			expect(response).toMatchObject({ twoFactorRedirect: true });
+			expect(observed).toEqual([null]);
+		});
+	}
+});

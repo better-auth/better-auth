@@ -24,9 +24,7 @@ export function generateIdTokenNonce(provider: {
  * by name instead of by position.
  */
 export interface GenerateStateOptions {
-	/**
-	 * Link target when this flow links a provider identity to an existing user.
-	 */
+	/** Link target when this flow links a provider identity to an existing user. */
 	link?: StateData["link"];
 	/** Extra data to round-trip through state; `false` writes none. */
 	additionalData?: Record<string, any> | false | undefined;

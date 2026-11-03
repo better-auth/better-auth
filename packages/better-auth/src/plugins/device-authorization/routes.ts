@@ -2,10 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import {
-	getAuthoritativeSessionFromCtx,
-	getSessionFromCtx,
-} from "../../api/routes/session";
+import { getAuthoritativeSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import type { User } from "../../types";
 import type { Where } from "../../types/adapter";
@@ -207,7 +204,7 @@ async function recordDeviceCodeDecision(
 	userCode: string,
 	decision: "approved" | "denied",
 ) {
-	const session = await getSessionFromCtx(ctx);
+	const session = await getAuthoritativeSessionFromCtx(ctx);
 	if (!session) {
 		throw new APIError("UNAUTHORIZED", {
 			error: "unauthorized",

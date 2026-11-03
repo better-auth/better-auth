@@ -1,6 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { Suspense } from "react";
+import {
+	ElectronTwoFactorResult,
+	useTwoFactorCompletion,
+} from "@/components/electron-two-factor-result";
 import { TwoFactorEmailOtpForm } from "@/components/forms/two-factor-email-otp-form";
 import {
 	Card,
@@ -10,8 +14,18 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 
+// The completion hook reads search params, which needs a Suspense boundary
+// for static prerendering.
 export default function Page() {
-	const router = useRouter();
+	return (
+		<Suspense>
+			<TwoFactorOtp />
+		</Suspense>
+	);
+}
+
+function TwoFactorOtp() {
+	const { result, onSuccess, request } = useTwoFactorCompletion();
 
 	return (
 		<main className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
@@ -23,7 +37,11 @@ export default function Page() {
 					</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<TwoFactorEmailOtpForm onSuccess={() => router.push("/dashboard")} />
+					{result ? (
+						<ElectronTwoFactorResult code={result.code} />
+					) : (
+						<TwoFactorEmailOtpForm key={request} onSuccess={onSuccess} />
+					)}
 				</CardContent>
 			</Card>
 		</main>

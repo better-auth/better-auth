@@ -87,6 +87,8 @@ To send an OTP to a user's phone number for verification, you can use the `sendV
 
 After the OTP is sent, users can verify their phone number by providing the code.
 
+If the number is already stored unverified on an account, the request must also carry that account's session or the challenge cookie set by [`requireVerification`](#requireverification) sign-in. Otherwise it returns `PHONE_NUMBER_PENDING_VERIFICATION`.
+
 <APIMethod path="/phone-number/verify" method="POST">
   ```ts
   type verifyPhoneNumber = {
@@ -231,6 +233,8 @@ const isVerified = await authClient.phoneNumber.verify({
 })
 ```
 
+A number verified on another account returns `PHONE_NUMBER_EXIST`. A number stored unverified on another account is moved to the signed-in user.
+
 ### Remove Phone Number
 
 Logged-in users can release their phone number by passing `null` to `updateUser`. The plugin atomically clears the phone number and resets the verified flag, freeing the number so another account can claim it through the standard verification flow.
@@ -276,6 +280,8 @@ To initiate a request password reset flow using `phoneNumber`, you can start by 
 
 Then, you can reset the password by calling `resetPassword` on the client with the OTP code and the new password.
 
+Reset works only for a verified phone number. For an unverified number, `requestPasswordReset` still returns `{ status: true }` but sends no code, and `resetPassword` returns `PHONE_NUMBER_PENDING_VERIFICATION`.
+
 <APIMethod path="/phone-number/reset-password" method="POST">
   ```ts
   type resetPasswordPhoneNumber = {
@@ -307,7 +313,7 @@ The length of the OTP code to be generated. Default is `6`.
 
 ### `sendOTP`
 
-A function that sends the OTP code to the user's phone number. It takes the phone number and the OTP code as arguments.
+A required callback that sends the OTP code to the user's phone number. It takes the phone number and the OTP code as arguments. If the callback is missing when `requireVerification` is enabled, phone sign-in returns `SEND_OTP_NOT_IMPLEMENTED`.
 
 ### `expiresIn`
 
@@ -337,7 +343,7 @@ export const auth = betterAuth({
 
 ### `sendPasswordResetOTP`
 
-A function that sends the OTP code to the user's phone number for password reset. It takes the phone number and the OTP code as arguments.
+A function that sends the OTP code to the user's phone number for password reset. It takes the phone number and the OTP code as arguments. It is called only for verified phone numbers.
 
 ### `phoneNumberValidator`
 
@@ -386,7 +392,7 @@ An object with the following properties:
 
 ### `requireVerification`
 
-When enabled, users cannot sign in with their phone number until it has been verified. If an unverified user attempts to sign in, the server will respond with a 401 error (PHONE\_NUMBER\_NOT\_VERIFIED) and automatically trigger an OTP send to start the verification process.
+When enabled, users cannot sign in with their phone number until it has been verified. If the password is correct but the number is unverified, the server responds with a 401 error (PHONE\_NUMBER\_NOT\_VERIFIED), sends an OTP, and sets a cookie that lets `verify` complete for that account within `Math.min(expiresIn, 300)` seconds. Call `verify` from the same browser. Server code calling `auth.api` must forward the request headers and the response cookies.
 
 Password reset also needs a verified number. No reset code is sent to an unverified number, and `resetPassword` returns a 400 error (PHONE\_NUMBER\_PENDING\_VERIFICATION) without adding or changing a password.
 

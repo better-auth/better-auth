@@ -72,15 +72,15 @@ async function registrationSourceMatches(
 }
 
 /**
- * How a registration that does not require a session started: from a
- * session, bound by its digest, or through `resolveUser`. Nothing is recorded
- * when a session is required or sessions are not stored.
+ * The source a registration challenge is bound to, or `undefined` when the
+ * registration needs no binding (a required session, or stateless mode).
  */
-async function registrationSourceFor(
-	recordSource: boolean,
-	sessionToken: string | undefined,
+async function getRegistrationSource(
+	ctx: GenericEndpointContext,
+	requireSession: boolean,
 ): Promise<StoredChallengeValue["registrationSource"]> {
-	if (!recordSource) return undefined;
+	if (requireSession || !isStateful(ctx)) return undefined;
+	const sessionToken = ctx.context.session?.session?.token;
 	if (!sessionToken) return { type: "resolver" };
 	return {
 		type: "session",
@@ -335,7 +335,10 @@ export const generatePasskeyRegistrationOptions = (
 		},
 		async (ctx) => {
 			const user = await resolveRegistrationUser(opts, ctx);
-			const sessionToken = ctx.context.session?.session?.token;
+			const registrationSource = await getRegistrationSource(
+				ctx,
+				requireSession,
+			);
 			const userPasskeys = await ctx.context.adapter.findMany<Passkey>({
 				model: "passkey",
 				where: [
@@ -399,10 +402,7 @@ export const generatePasskeyRegistrationOptions = (
 				identifier: verificationToken,
 				value: JSON.stringify({
 					type: "registration",
-					registrationSource: await registrationSourceFor(
-						!requireSession && isStateful(ctx),
-						sessionToken,
-					),
+					registrationSource,
 					expectedChallenge: options.challenge,
 					userData: {
 						id: user.id,

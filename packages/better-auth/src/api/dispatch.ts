@@ -10,6 +10,7 @@ import {
 	ATTR_OPERATION_ID,
 	createWithSpan,
 } from "@better-auth/core/instrumentation";
+import { getInternalAuthCompletion } from "@better-auth/core/utils/auth-completion";
 import type { Endpoint, EndpointContext, InputContext } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
@@ -57,6 +58,20 @@ const hooksSourceWeakMap = new WeakMap<
 	AuthMiddleware,
 	`user` | `plugin:${string}`
 >();
+
+const signInGates = new WeakSet<AuthMiddleware>();
+
+/**
+ * Runs a plugin after hook ahead of every other plugin after hook, so a sign-in
+ * it withholds (such as a pending two-factor challenge) is never observed as
+ * complete, regardless of plugin registration order.
+ *
+ * @internal
+ */
+export function asSignInGate<H extends Hook>(hook: H): H {
+	signInGates.add(hook.handler);
+	return hook;
+}
 
 /**
  * Resolves the operation id used for spans, preferring an explicit
@@ -292,18 +307,30 @@ function getHooks(authContext: AuthContext) {
 			return h;
 		}),
 	);
-	const pluginAfterHooks = plugins.flatMap((plugin) =>
-		(plugin.hooks?.after ?? []).map((h) => {
-			hooksSourceWeakMap.set(h.handler, `plugin:${plugin.id}`);
-			return h;
-		}),
-	);
+	const pluginAfterHooks = plugins
+		.flatMap((plugin) =>
+			(plugin.hooks?.after ?? []).map((h) => {
+				hooksSourceWeakMap.set(h.handler, `plugin:${plugin.id}`);
+				return h;
+			}),
+		)
+		.sort(
+			(a, b) =>
+				Number(signInGates.has(b.handler)) - Number(signInGates.has(a.handler)),
+		);
+
+	const completionHooks = plugins.flatMap((plugin) => {
+		const completion = getInternalAuthCompletion(plugin);
+		if (!completion) return [];
+		hooksSourceWeakMap.set(completion.handler, `plugin:${plugin.id}`);
+		return [completion];
+	});
 
 	// Plugin hooks run after the user-configured hooks.
 	if (pluginBeforeHooks.length) beforeHooks.push(...pluginBeforeHooks);
 	if (pluginAfterHooks.length) afterHooks.push(...pluginAfterHooks);
 
-	return { beforeHooks, afterHooks };
+	return { beforeHooks, afterHooks, completionHooks };
 }
 
 /**
@@ -357,7 +384,9 @@ export async function dispatchAuthEndpoint(
 		},
 		async () =>
 			runWithEndpointContext(internalContext, async () => {
-				const { beforeHooks, afterHooks } = getHooks(internalContext.context);
+				const { beforeHooks, afterHooks, completionHooks } = getHooks(
+					internalContext.context,
+				);
 				const before = await runBeforeHooks(
 					internalContext,
 					beforeHooks,
@@ -427,16 +456,25 @@ export async function dispatchAuthEndpoint(
 				// Merge onto what the before hooks set, so the handler wins on overlap.
 				mergeResponseHeaders(internalContext.context, result.headers);
 
-				const after = await runAfterHooks(
+				await runAfterHooks(internalContext, afterHooks, endpoint, operationId);
+				const matchingCompletions = completionHooks.filter((hook) =>
+					hook.matcher(internalContext as HookEndpointContext),
+				);
+				if (matchingCompletions.length > 1) {
+					throw new APIError("INTERNAL_SERVER_ERROR", {
+						message: "Multiple authentication completion handlers matched.",
+					});
+				}
+				const completed = await runAfterHooks(
 					internalContext,
-					afterHooks,
+					matchingCompletions,
 					endpoint,
 					operationId,
 				);
-				if (after.response !== undefined) {
-					result.response = after.response;
+				if (completed.response !== undefined) {
+					result.response = completed.response;
 				}
-				result.headers = after.headers ?? result.headers;
+				result.headers = completed.headers ?? result.headers;
 
 				if (
 					isAPIError(result.response) &&
