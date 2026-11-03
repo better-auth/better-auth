@@ -217,14 +217,14 @@ function getTrustedClientCache(
 }
 
 /**
- * Verify the signature and expiration of an OAuth query issued by this provider.
- * Use the provider's current auth secret on the server before displaying a
- * consent page. A valid signature does not replace client or session checks.
+ * Check the signature and expiration of an OAuth query issued by this provider.
+ * The signature is verified first, so `"expired"` is only returned for queries
+ * that were genuinely signed by this provider.
  */
-export async function verifyOAuthQueryParams(
+export async function checkOAuthQueryParams(
 	oauth_query: string,
 	secret: string,
-) {
+): Promise<"valid" | "invalid_signature" | "expired"> {
 	const queryParams = new URLSearchParams(oauth_query);
 	const sig = queryParams.get("sig");
 	const sigs = queryParams.getAll("sig");
@@ -234,12 +234,22 @@ export async function verifyOAuthQueryParams(
 		canonicalizeOAuthQueryParams(queryParams).toString(),
 		secret,
 	);
-	return (
-		sigs.length === 1 &&
-		!!sig &&
-		constantTimeEqual(sig, verifySig) &&
-		new Date(exp * 1000) >= new Date()
-	);
+	if (sigs.length !== 1 || !sig || !constantTimeEqual(sig, verifySig)) {
+		return "invalid_signature";
+	}
+	return new Date(exp * 1000) >= new Date() ? "valid" : "expired";
+}
+
+/**
+ * Verify the signature and expiration of an OAuth query issued by this provider.
+ * Use the provider's current auth secret on the server before displaying a
+ * consent page. A valid signature does not replace client or session checks.
+ */
+export async function verifyOAuthQueryParams(
+	oauth_query: string,
+	secret: string,
+) {
+	return (await checkOAuthQueryParams(oauth_query, secret)) === "valid";
 }
 
 /**

@@ -1,6 +1,6 @@
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import type { OAuthOptions, Scope } from "../types";
-import { verifyOAuthQueryParams } from "../utils";
+import { checkOAuthQueryParams } from "../utils";
 
 export const publicSessionMiddleware = (opts: OAuthOptions<Scope[]>) =>
 	createAuthMiddleware(async (ctx) => {
@@ -8,10 +8,10 @@ export const publicSessionMiddleware = (opts: OAuthOptions<Scope[]>) =>
 			throw new APIError("BAD_REQUEST");
 		}
 		const query = ctx.body.oauth_query;
-		const isValid = await verifyOAuthQueryParams(query, ctx.context.secret);
-		if (!isValid) {
+		const status = await checkOAuthQueryParams(query, ctx.context.secret);
+		if (status !== "valid") {
 			throw new APIError("UNAUTHORIZED", {
-				error: "invalid_signature",
+				error: status === "expired" ? "expired_request" : "invalid_signature",
 			});
 		}
 	});
