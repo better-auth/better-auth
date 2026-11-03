@@ -2797,3 +2797,65 @@ describe("email-otp send origin/CSRF protection", async () => {
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("sign-in when the user is created concurrently", async () => {
+	const email = "concurrent-signup@domain.com";
+	let otp = "";
+	let createRacingUser = false;
+	const { client, auth } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						// Stands in for a concurrent request that creates the same user
+						// between the lookup and the insert.
+						before: async (user) => {
+							if (!createRacingUser || user.email !== email) {
+								return;
+							}
+							createRacingUser = false;
+							const ctx = await auth.$context;
+							await ctx.adapter.create({
+								model: "user",
+								data: {
+									email,
+									name: "Created concurrently",
+									emailVerified: false,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+								},
+							});
+						},
+					},
+				},
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12094
+	 */
+	it("should sign in the existing user instead of failing on a unique violation", async () => {
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		createRacingUser = true;
+
+		const res = await client.signIn.emailOtp({ email, otp });
+
+		expect(res.error).toBeNull();
+		expect(res.data?.token).toBeDefined();
+		expect(res.data?.user.email).toBe(email);
+		expect(res.data?.user.name).toBe("Created concurrently");
+	});
+});

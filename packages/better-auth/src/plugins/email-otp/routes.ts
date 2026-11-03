@@ -657,7 +657,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(ctx, opts, toOTPIdentifier("sign-in", email), otp);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			let user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				if (opts.disableSignUp) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
@@ -667,30 +667,45 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					rest,
 					"create",
 				);
-				const newUser = await ctx.context.internalAdapter.createUser(
-					{
-						...additionalFields,
-						email,
-						emailVerified: true,
-						name: name || "",
-						image,
-					},
-					{ method: "email-otp" },
-				);
-				const session = await ctx.context.internalAdapter.createSession(
-					newUser.id,
-				);
-				await setSessionCookie(ctx, {
-					session,
-					user: newUser,
-				});
-				return ctx.json({
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, newUser),
-				});
+				let newUser: Awaited<
+					ReturnType<typeof ctx.context.internalAdapter.createUser>
+				> | null = null;
+				try {
+					newUser = await ctx.context.internalAdapter.createUser(
+						{
+							...additionalFields,
+							email,
+							emailVerified: true,
+							name: name || "",
+							image,
+						},
+						{ method: "email-otp" },
+					);
+				} catch (error) {
+					// The OTP is already consumed. If a concurrent request created the
+					// user between the lookup and the insert, continue as an existing
+					// user instead of failing with a unique constraint error.
+					user = await ctx.context.internalAdapter.findUserByEmail(email);
+					if (!user) {
+						throw error;
+					}
+				}
+				if (newUser) {
+					const session = await ctx.context.internalAdapter.createSession(
+						newUser.id,
+					);
+					await setSessionCookie(ctx, {
+						session,
+						user: newUser,
+					});
+					return ctx.json({
+						token: session.token,
+						user: parseUserOutput(ctx.context.options, newUser),
+					});
+				}
 			}
 
-			let verifiedUser = user.user;
+			let verifiedUser = user!.user;
 			if (!verifiedUser.emailVerified) {
 				const promotedUser = await revokeUnprovenAccountAccess(
 					ctx,

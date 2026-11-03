@@ -435,17 +435,30 @@ export const magicLink = (options: MagicLinkOptions) => {
 									{ method: "magic-link" },
 								);
 							} catch (e) {
-								// Browser flow: forward a gate rejection's code to the error
-								// URL instead of surfacing a raw API error.
-								if (isAPIError(e) && e.body?.code) {
-									redirectWithError(e.body.code, e.body.message);
+								// The token is already consumed. If a concurrent request created
+								// the user between the lookup and the insert, continue as an
+								// existing user instead of failing.
+								const existingUser = await ctx.context.internalAdapter
+									.findUserByEmail(email)
+									.then((res) => res?.user);
+								if (existingUser) {
+									newUser = null;
+									user = existingUser;
+								} else {
+									// Browser flow: forward a gate rejection's code to the error
+									// URL instead of surfacing a raw API error.
+									if (isAPIError(e) && e.body?.code) {
+										redirectWithError(e.body.code, e.body.message);
+									}
+									throw e;
 								}
-								throw e;
 							}
-							isNewUser = true;
-							user = newUser;
 							if (!user) {
-								redirectWithError("failed_to_create_user");
+								isNewUser = true;
+								user = newUser ?? undefined;
+								if (!user) {
+									redirectWithError("failed_to_create_user");
+								}
 							}
 						} else {
 							redirectWithError("new_user_signup_disabled");
