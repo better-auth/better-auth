@@ -1,0 +1,104 @@
+---
+icon: pluginsOAuthProviderResourceServer
+sidebarTitle: "Protect Your API"
+title: Protect your API
+description: Verify provider-issued access tokens in your API or another service.
+---
+
+A resource server is the API that receives access tokens from your OAuth clients. This page shows how it verifies those tokens and checks their scopes.
+
+## Verify access tokens
+
+Call `verifyAccessTokenRequest` from `better-auth/oauth2` on each request. It verifies the token and, when the token is DPoP-bound, also checks the proof against the request method and URL ([RFC 9449 §7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
+
+```ts title="api/posts.ts"
+import {
+  requestToResourceInput,
+  verifyAccessTokenRequest,
+} from "better-auth/oauth2";
+
+export const GET = async (req: Request) => {
+  const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
+    jwksUrl: "https://auth.example.com/api/auth/jwks",
+    verifyOptions: {
+      issuer: "https://auth.example.com",
+      audience: "https://api.example.com",
+    },
+    requiredScopes: ["read:post"],
+  });
+};
+```
+
+`requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a `403` `insufficient_scope` error that lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
+
+If the API runs next to your auth server, use the [resource client](/docs/plugins/oauth-provider#add-the-client-plugins) instead. When you pass `auth` to `oauthProviderResourceClient`, it fills in `issuer`, `jwksUrl`, and the introspection URL from your config, and failures come back with a `WWW-Authenticate` challenge. Set `audience` to your API's identifier; it otherwise defaults to the auth server's `baseURL`.
+
+```ts title="api/posts.ts"
+import { serverClient } from "@/lib/server-client";
+
+export const POST = async (req: Request) => {
+  const payload = await serverClient.verifyAccessTokenRequest(req, {
+    verifyOptions: { audience: "https://api.example.com" },
+    requiredScopes: ["write:post"],
+  });
+};
+```
+
+`verifyBearerToken` takes a raw token string and rejects DPoP-bound tokens. Use it only on routes that should accept bearer tokens alone.
+
+<Callout type="warn">
+  The DPoP proof is checked against `request.url`, so a proxy in front of the API must forward the external scheme, host, and path. The default replay store is in memory and safe only for a single instance; for multi-instance or serverless APIs, pass `dpop: { replayStore: createDpopReplayStore((await auth.$context).internalAdapter) }` from `better-auth/oauth2`. That store needs database-backed verification storage, and rejects DPoP requests when only secondary storage is configured.
+</Callout>
+
+## JWT or opaque tokens
+
+The provider issues a JWT access token when the client sends a `resource` and the JWT plugin is enabled. Otherwise, it issues an opaque token.
+
+|                         | JWT access token                               | Opaque access token                                     |
+| ----------------------- | ---------------------------------------------- | ------------------------------------------------------- |
+| How the API verifies it | Locally, with the JWKS (`jwksUrl`)             | Remotely, through `/oauth2/introspect` (`remoteVerify`) |
+| Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                             |
+| Claims                  | Frozen when the token is issued                | Recomputed on every introspection                       |
+
+Accepting only JWT access tokens is the simplest setup: it is fast and the API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, `exp`, and `scope` ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)).
+
+To accept opaque tokens as well, register the API as a confidential client, [link it to the resource](#introspection), and pass its credentials. With `remoteVerify` set, every token is introspected, JWTs included, which also confirms that the session behind it is still active. Set `force: true` to skip the local JWT check.
+
+```ts title="api/posts.ts"
+const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
+  verifyOptions: { issuer: "https://auth.example.com", audience: "https://api.example.com" },
+  jwksUrl: "https://auth.example.com/api/auth/jwks",
+  remoteVerify: {
+    introspectUrl: "https://auth.example.com/api/auth/oauth2/introspect",
+    clientId: process.env.API_CLIENT_ID!,
+    clientSecret: process.env.API_CLIENT_SECRET!,
+  },
+});
+```
+
+<Callout>
+  If the introspection response has no `aud` claim and you set an `audience`, the token is rejected. Set `remoteVerify.allowMissingAudience: true` only if you trust the issuer to bind the token to your API some other way.
+</Callout>
+
+## Introspection
+
+`/oauth2/introspect` implements [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662). The caller must authenticate as a registered client ([§2.1](https://datatracker.ietf.org/doc/html/rfc7662#section-2.1)), using any method that client is registered for, including `private_key_jwt`.
+
+An authenticated client can introspect an access token only when:
+
+* it is the client the token was issued to, or
+* it is a resource server linked to one of the token's resources.
+
+To set up the second case, [register the API as a resource](/docs/plugins/oauth-provider/tokens#resources) and link the client to it. Any other caller gets `{ active: false }`, the same response as for an unknown or expired token. Only the client that requested a refresh token can introspect it.
+
+If a token is tied to a session, introspection also checks that the session is still active. JWT and opaque tokens return the same claims for the same grant in the [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2): extension access token claims, `customAccessTokenClaims`, per-resource `customClaims`, and the reserved claims the server owns (`iss`, `sub`, `aud`, `scope`, and similar). A callback that returns a reserved claim name has that claim dropped. See [Custom claims](/docs/plugins/oauth-provider/tokens#custom-claims).
+
+## Scopes and permissions
+
+Scopes describe what a client may request on a user's behalf. Permissions describe what a user is allowed to do, and your API enforces them.
+
+The simplest setup maps each scope to exactly one permission, such as `read:post`. If you need finer control, map each scope to several permissions in your API, and pass `isScopeSatisfied` to change how `requiredScopes` are matched.
+
+## Protected resource metadata
+
+To advertise which authorization server protects your API, serve an [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728#section-3) document at `/.well-known/oauth-protected-resource`. `serverClient.getProtectedResourceMetadata()` builds it for you. The [MCP plugin](/docs/plugins/mcp) serves this document automatically.

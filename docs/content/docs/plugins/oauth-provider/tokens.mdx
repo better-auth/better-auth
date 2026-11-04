@@ -1,0 +1,290 @@
+---
+icon: pluginsOAuthProviderTokens
+sidebarTitle: "Tokens & Scopes"
+title: Tokens, scopes, and resources
+description: Control which tokens the provider issues, for which APIs, and for how long.
+---
+
+## Token endpoint
+
+`POST /oauth2/token` supports the `authorization_code`, `client_credentials`, and `refresh_token` grants. A confidential client must authenticate with the `token_endpoint_auth_method` it registered, using one of the methods from [RFC 6749 §2.3.1](https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1) and [OIDC Core §9](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication):
+
+| Method                | How the client authenticates                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `client_secret_basic` | `client_id` and `client_secret` in an HTTP Basic `Authorization` header (default)                    |
+| `client_secret_post`  | `client_id` and `client_secret` in the request body                                                  |
+| `private_key_jwt`     | A signed JWT assertion. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt). |
+| `none`                | Public client. PKCE is required.                                                                     |
+
+When the request includes a `resource` and the JWT plugin is enabled, the access token is a JWT whose `aud` is that resource. Otherwise the access token is opaque. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
+
+## Scopes
+
+`scopes` lists every scope clients may request. It defaults to `["openid", "profile", "email", "offline_access"]`, and the provider acts as an OpenID provider only when it includes `openid`.
+
+| Scope            | Grants                                                         |
+| ---------------- | -------------------------------------------------------------- |
+| `openid`         | An ID token and the `sub` claim                                |
+| `profile`        | `name`, `picture`, `given_name`, and `family_name` at UserInfo |
+| `email`          | `email` and `email_verified` at UserInfo                       |
+| `offline_access` | A refresh token                                                |
+
+Standard claims are returned at UserInfo, not in the ID token, as [OIDC Core §5.4](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims) describes for flows that issue an access token.
+
+```ts title="auth.ts"
+oauthProvider({
+  scopes: ["openid", "profile", "offline_access", "read:post", "write:post"],
+})
+```
+
+## Resources
+
+A resource is a protected API that the provider issues access tokens for. Its `identifier` is the `resource` parameter value from [RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2) and becomes the `aud` of a JWT access token.
+
+<Callout type="warn">
+  `enforcePerClientResources` defaults to `true`, so `/oauth2/authorize` and `/oauth2/token` reject a `resource` the client is not linked to. Link clients with `resources` on `adminCreateOAuthClient` or with `adminLinkClientResource`, or set the option to `false` to let any client request any enabled resource.
+</Callout>
+
+```ts title="auth.ts"
+oauthProvider({
+  resources: [
+    "https://api.example.com",
+    {
+      identifier: "https://api.example.com/mcp",
+      allowedScopes: ["mcp:read", "mcp:write"],
+      accessTokenTtl: 300,
+    },
+  ],
+})
+```
+
+A string uses the plugin defaults. An object sets per-resource policy:
+
+| Field                           | Effect                                                                                                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                          | Label for admin screens.                                                                                                                       |
+| `allowedScopes`                 | Requested scopes are narrowed to this list. If none remain, the request fails with `invalid_scope`.                                            |
+| `accessTokenTtl`                | Access token lifetime in seconds. Defaults to `accessTokenExpiresIn`.                                                                          |
+| `refreshTokenTtl`               | Refresh token lifetime in seconds. Defaults to `refreshTokenExpiresIn`.                                                                        |
+| `signingAlgorithm`              | JWS algorithm for this resource's access tokens. Defaults to the JWT plugin's latest key. Applies only when a request names a single resource. |
+| `signingKeyId`                  | Key ID to sign this resource's access tokens with. Applies only when a request names a single resource.                                        |
+| `customClaims`                  | Claims added to every access token for this resource. Reserved JWT claims are stripped.                                                        |
+| `dpopBoundAccessTokensRequired` | Issue only [DPoP](#dpop)-bound tokens for this resource.                                                                                       |
+| `disabled`                      | Stop issuing tokens for this resource. Tokens already issued still verify until they expire.                                                   |
+
+Configured resources are written to the `oauthResource` table at startup. `resourceSeedMode` decides what happens to a row that already exists:
+
+* `insertOnly` (default): only adds missing rows, so edits made through the admin endpoints survive restarts.
+* `merge`: adds missing rows and updates the fields present in the config.
+* `overwrite`: replaces existing rows with the config values.
+
+### Manage resources at runtime
+
+These server-only endpoints change resources without a restart. Each one needs a session, and `resourcePrivileges` decides which users may call it. Without `resourcePrivileges`, any signed-in user may.
+
+| Server method               | Method   | Path                                                     |
+| --------------------------- | -------- | -------------------------------------------------------- |
+| `adminCreateOAuthResource`  | `POST`   | `/admin/oauth2/resources`                                |
+| `adminListOAuthResources`   | `GET`    | `/admin/oauth2/resources`                                |
+| `adminGetOAuthResource`     | `GET`    | `/admin/oauth2/resources/:identifier`                    |
+| `adminUpdateOAuthResource`  | `PATCH`  | `/admin/oauth2/resources/:identifier`                    |
+| `adminDeleteOAuthResource`  | `DELETE` | `/admin/oauth2/resources/:identifier`                    |
+| `adminLinkClientResource`   | `POST`   | `/admin/oauth2/resources/:identifier/clients/:client_id` |
+| `adminUnlinkClientResource` | `DELETE` | `/admin/oauth2/resources/:identifier/clients/:client_id` |
+
+```ts title="link-resource.ts"
+await auth.api.adminLinkClientResource({
+  params: { identifier: "https://api.example.com", client_id: clientId },
+  headers,
+});
+```
+
+Deleting a resource rejects tokens already issued for it, while `disabled: true` only stops new issuance. To attach resources during dynamic registration, see [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
+
+<Callout type="warn">
+  With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. Requests that use any configured resource fail until every resource declares `allowedScopes`. For the resource the [MCP plugin](/docs/plugins/mcp) adds, declare it in `resources` with the same identifier.
+</Callout>
+
+## Lifetimes
+
+All values are in seconds.
+
+| Option                    | Default             | Applies to                              |
+| ------------------------- | ------------------- | --------------------------------------- |
+| `accessTokenExpiresIn`    | `3600` (1 hour)     | Access tokens issued for a user         |
+| `m2mAccessTokenExpiresIn` | `3600` (1 hour)     | Access tokens from `client_credentials` |
+| `idTokenExpiresIn`        | `36000` (10 hours)  | ID tokens                               |
+| `refreshTokenExpiresIn`   | `2592000` (30 days) | Refresh tokens                          |
+| `codeExpiresIn`           | `600` (10 minutes)  | Authorization codes                     |
+| `assertionMaxLifetime`    | `300` (5 minutes)   | `private_key_jwt` client assertions     |
+
+A resource's `accessTokenTtl` and `refreshTokenTtl` override these. `scopeExpirations` shortens access tokens that carry high-privilege scopes; when several apply, the earliest expiry wins.
+
+```ts title="auth.ts"
+oauthProvider({
+  scopeExpirations: {
+    "write:payments": "5m",
+    "read:payments": "30m",
+  },
+})
+```
+
+## Refresh tokens
+
+Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay and revokes the whole token family.
+
+`refreshTokenReuseInterval` (default `0`) lets a client retry a refresh for a few seconds and get the same response back, for example after a lost response. The retry must come from the same client with the same scopes, resources, and DPoP key; a mismatch returns `invalid_grant` without revoking the family.
+
+```ts title="auth.ts"
+oauthProvider({
+  refreshTokenReuseInterval: 30,
+})
+```
+
+`formatRefreshToken` changes the string sent to the client. `decrypt` must return the `token` that `encrypt` received.
+
+```ts title="auth.ts"
+oauthProvider({
+  formatRefreshToken: {
+    encrypt: (token, sessionId) => (sessionId ? `1.${token}.${sessionId}` : token),
+    decrypt: (value) => {
+      const [version, token, sessionId] = value.split(".");
+      return version === "1" && token && sessionId ? { token, sessionId } : { token: value };
+    },
+  },
+})
+```
+
+## PKCE
+
+PKCE ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636#section-1)) is required for every authorization code flow, and only the `S256` method is accepted. An admin-created confidential client can opt out with `require_pkce: false`; public clients cannot. For dynamically registered confidential clients, set the default with `clientRegistrationRequirePKCE`.
+
+```ts title="admin-create-client.ts"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    token_endpoint_auth_method: "client_secret_post",
+    require_pkce: false, // [!code highlight]
+  },
+})
+```
+
+A client without PKCE that requests `offline_access` must send both `openid` and `nonce`. Keep PKCE on unless a legacy client cannot send it, as [OAuth 2.1 §7.5.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-7.5.1) recommends.
+
+## DPoP
+
+A client gets DPoP-bound tokens ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449#section-4)) when it registers with `dpop_bound_access_tokens: true` ([§5.2](https://datatracker.ietf.org/doc/html/rfc9449#section-5.2)), sends `dpop_jkt` on the authorization request, or requests a resource with `dpopBoundAccessTokensRequired: true`. The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)), returns `token_type: "DPoP"`, and requires a proof from the same key on refresh.
+
+```ts title="auth.ts"
+oauthProvider({
+  dpop: {
+    proofMaxAgeSeconds: 300,
+    signingAlgorithms: ["ES256", "EdDSA"],
+  },
+})
+```
+
+<Callout type="warn">
+  The expected `htu` is built from `baseURL`, not from the request host. Set `baseURL` to the public URL clients call, or proofs fail behind a proxy that rewrites the host.
+</Callout>
+
+To verify DPoP-bound tokens in your API, see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
+
+## Custom claims
+
+`customAccessTokenClaims` adds claims to access tokens. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. The callback may throw, for example when the user has left the organization, to stop the token from being issued.
+
+```ts title="auth.ts"
+oauthProvider({
+  customAccessTokenClaims: ({ user, scopes, referenceId, resources }) => ({
+    "https://example.com/org": referenceId,
+    "https://example.com/roles": ["editor"],
+  }),
+})
+```
+
+For ID token and UserInfo claims, see [OpenID Connect](/docs/plugins/oauth-provider/openid-connect#id-token-claims).
+
+### Client-Specific Access Token Claims
+
+`customAccessTokenClaims` receives only the client's `metadata`. To base a claim on the full client record, add an `extensions[].claims.accessToken` contributor:
+
+```ts title="auth.ts"
+oauthProvider({
+  extensions: [{
+    claims: {
+      accessToken: ({ client }) =>
+        client.referenceId ? { "https://example.com/org": client.referenceId } : {},
+    },
+  }],
+})
+```
+
+`client.referenceId` is the client's owner, set by [`clientReference`](/docs/plugins/oauth-provider/clients#organizations). It differs from the top-level `referenceId`, which is the consent reference from `postLogin.consentReferenceId`. Opaque-token introspection re-runs contributors without `grantType` or `sessionId`, so base the claim on the client, scopes, and resources. When names collide, see [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
+
+A JWT keeps its claims until it expires, so an organization claim does not prove the client is still enabled. A resource server that must react to a disabled client right away should introspect the token, which reports tokens of disabled clients as inactive.
+
+### Custom Token Response Fields
+
+`customTokenResponseFields` adds fields to the token endpoint's JSON response, not to the token itself. It cannot override standard fields such as `access_token` or `scope`, and it runs before any token is created.
+
+```ts title="auth.ts"
+oauthProvider({
+  customTokenResponseFields: ({ grantType, verificationValue }) =>
+    grantType === "authorization_code" && verificationValue?.referenceId
+      ? { tenant_id: verificationValue.referenceId }
+      : {},
+})
+```
+
+## Revocation
+
+`POST /oauth2/revoke` implements [RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1). What it does depends on the token:
+
+* **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
+* **Refresh token**: revoked, and every access token it issued is deleted.
+* **JWT access token**: cannot be revoked, because it is never stored. A valid one returns `400 unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)).
+
+To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session, so its lifetime is the only limit.
+
+## Without the JWT plugin
+
+`disableJwtPlugin: true` removes the dependency on the [JWT plugin](/docs/plugins/jwt):
+
+* Access tokens are always opaque, even when a `resource` is requested. The requested resources are still bound to the token and returned by introspection.
+* ID tokens are signed with HS256 using the client secret, so public clients get no ID token. They can still call UserInfo with the access token.
+* `storeClientSecret` defaults to `"encrypted"`, since the secret must be readable to sign ID tokens.
+
+```ts title="auth.ts"
+oauthProvider({
+  disableJwtPlugin: true, // [!code highlight]
+})
+```
+
+## Storage
+
+Client secrets, opaque access tokens, and refresh tokens are hashed in the database by default.
+
+* `storeClientSecret`: `"hashed"` or `{ hash, verify? }` with the JWT plugin; `"encrypted"` or `{ encrypt, decrypt }` without it. The provider fails to start on any other combination.
+* `storeTokens`: `"hashed"` or `{ hash: (token, type) => string }`.
+
+`prefix` adds a recognizable prefix to issued values, which helps secret scanners identify them:
+
+```ts title="auth.ts"
+oauthProvider({
+  prefix: {
+    opaqueAccessToken: "myapp_at_",
+    refreshToken: "myapp_rt_",
+    clientSecret: "myapp_cs_",
+  },
+})
+```
+
+<Callout type="warn">
+  Set prefixes before your first production deployment and keep them fixed afterwards. To add a prefix to a provider that has already issued values, use `generateOpaqueAccessToken`, `generateRefreshToken`, or `generateClientSecret` instead.
+</Callout>
+
+## Device code grant
+
+Add `oauthDeviceAuthorization()` next to `oauthProvider()` to enable the device code grant ([RFC 8628 §3.4](https://datatracker.ietf.org/doc/html/rfc8628#section-3.4)) at `/oauth2/token`. See [Device Authorization](/docs/plugins/device-authorization) for setup.

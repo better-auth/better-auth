@@ -221,7 +221,7 @@ const payload = await validateToken(token)
 
 ### OAuth Provider Mode
 
-If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint (oAuth equivalent `/oauth2/token`) and disable setting the jwt header (oAuth equivalent `/oauth2/userinfo`).
+When you use the [OAuth Provider](/docs/plugins/oauth-provider) or [MCP](/docs/plugins/mcp) plugin, disable the JWT plugin's `/token` endpoint, because OAuth clients get tokens from `/oauth2/token`. Also disable the JWT header on `/get-session`, because OAuth clients read user claims from `/oauth2/userinfo`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";

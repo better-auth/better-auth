@@ -79,7 +79,7 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
       </Tab>
     </Tabs>
 
-    The MCP plugin uses the same schema as the OAuth Provider plugin (`oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`, `oauthClientAssertion`). See the [OAuth Provider Schema](/docs/plugins/oauth-provider#schema) section for details.
+    The MCP plugin uses the same schema as the OAuth Provider plugin (`oauthClient`, `oauthAccessToken`, `oauthRefreshToken`, `oauthConsent`, `oauthClientAssertion`, `oauthResource`, `oauthClientResource`). See the [OAuth Provider schema](/docs/plugins/oauth-provider/reference#schema) for details.
   </Step>
 </Steps>
 
@@ -148,7 +148,7 @@ mcp({
 
 `resource` must be an HTTPS URL with no query, fragment, or credentials; HTTP is accepted only on loopback hosts for local development. A resource whose URL requires a query component cannot use `mcp()`, `requireMcpAuth`, or `createMcpProtectedRequestHandler`. Verify its tokens with `verifyAccessTokenRequest` from `better-auth/oauth2`, and build challenges with `createResourceServerChallenge` from `@better-auth/oauth-provider`.
 
-With Prisma on PostgreSQL, CockroachDB, or MongoDB, also declare this resource in `resources` with explicit `allowedScopes`; see [Resources](/docs/plugins/oauth-provider#resources).
+With Prisma on PostgreSQL, CockroachDB, or MongoDB, also declare this resource in `resources` with explicit `allowedScopes`; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
 
 `mcp()` also registers this identifier as a default client-registration resource. A dynamically registered client is linked to the MCP resource even when its registration request omits the non-standard `resources` field. Any `clientRegistrationDefaultResources` you provide are preserved, and the MCP resource is appended once.
 
@@ -167,7 +167,7 @@ mcp({
 })
 ```
 
-Some MCP clients, such as Cursor and older Claude Code releases, omit `application_type` and register custom-scheme callbacks or `http` callbacks on `localhost`, `127.0.0.1`, or `[::1]`, which the `web` default rejects. `clientRegistrationDefaultApplicationType: "infer"` registers those clients as `native`; see [application type](/docs/plugins/oauth-provider#dynamic-registration-endpoint).
+Some MCP clients omit `application_type` and register custom-scheme callbacks or `http` callbacks on `localhost`, `127.0.0.1`, or `[::1]`, which the `web` default rejects. `clientRegistrationDefaultApplicationType: "infer"` registers those clients as `native`; see [dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
 
 The registration endpoint is absent from discovery unless DCR is enabled. A DCR request does not need Better Auth's `resources` extension: `mcp()` adds its canonical resource as a server-owned default.
 
@@ -268,7 +268,7 @@ requireMcpAuth(auth, async (request, accessTokenClaims) => {
 
 ## Configuration
 
-`mcp()` extends the [OAuth Provider](/docs/plugins/oauth-provider#configuration) options. All OAuth provider options are passed flat (there is no nested `oidcConfig`). The required MCP-specific option is `resource`.
+`mcp()` extends the [OAuth Provider](/docs/plugins/oauth-provider/reference#plugin-options) options. All OAuth provider options are passed flat (there is no nested `oidcConfig`). The required MCP-specific option is `resource`.
 
 For every client configured through `mcp()`, the plugin defaults `refreshTokenReuseInterval` to 30 seconds. This lets a client retry a refresh with the old token and receive the same rotated token response when another request already consumed that refresh token. OAuth Provider itself remains strict by default; set `refreshTokenReuseInterval: 0` on `mcp()` to disable the overlap window.
 
@@ -292,7 +292,7 @@ export const mcpPluginOptionsType = {
 
 <TypeTable type={mcpPluginOptionsType} />
 
-The most commonly tuned OAuth provider options are below. See the [OAuth Provider Configuration](/docs/plugins/oauth-provider#configuration) for the full list.
+The most commonly tuned OAuth provider options are below. See the [OAuth Provider Configuration](/docs/plugins/oauth-provider/reference#plugin-options) for the full list.
 
 export const mcpOauthOptionsType = {
   scopes: {

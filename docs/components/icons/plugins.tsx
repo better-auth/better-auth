@@ -1,14 +1,22 @@
 import {
+	AppWindow,
 	Book,
 	BotIcon,
 	FileBoxIcon,
+	FileCode2,
 	FlaskConical,
+	Globe,
+	IdCard,
 	Key,
 	KeyRound,
+	LogIn,
 	Mail,
 	Mailbox,
 	Phone,
 	ScanFace,
+	ShieldAlert,
+	ShieldCheck,
+	Ticket,
 	UserCircle,
 	UserSquare2,
 	Users2,
@@ -183,6 +191,12 @@ export const pluginIcons = {
 			/>
 		</svg>
 	),
+	pluginsOAuthProviderSignInFlow: () => <LogIn className="size-4" />,
+	pluginsOAuthProviderClients: () => <AppWindow className="size-4" />,
+	pluginsOAuthProviderTokens: () => <Ticket className="size-4" />,
+	pluginsOAuthProviderResourceServer: () => <ShieldCheck className="size-4" />,
+	pluginsOAuthProviderOpenIDConnect: () => <IdCard className="size-4" />,
+	pluginsOAuthProviderReference: () => <Book className="size-4" />,
 	pluginsSSO: () => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
@@ -200,6 +214,12 @@ export const pluginIcons = {
 			></path>
 		</svg>
 	),
+	pluginsSSOOIDC: () => <KeyRound className="size-4" />,
+	pluginsSSOSAML: () => <FileCode2 className="size-4" />,
+	pluginsSSOSAMLSecurity: () => <ShieldAlert className="size-4" />,
+	pluginsSSOProvisioning: () => <Users2 className="size-4" />,
+	pluginsSSODomainVerification: () => <Globe className="size-4" />,
+	pluginsSSOReference: () => <Book className="size-4" />,
 	pluginsSCIM: () => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
