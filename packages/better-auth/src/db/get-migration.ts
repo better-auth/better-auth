@@ -4,7 +4,10 @@ import {
 	initGetFieldName,
 	initGetModelName,
 } from "@better-auth/core/db/adapter";
-import type { ResolvedDBTableIndex } from "@better-auth/core/db/internal";
+import type {
+	DatabaseIdStrategy,
+	ResolvedDBTableIndex,
+} from "@better-auth/core/db/internal";
 import {
 	diffSchema,
 	formatSchemaFinding,
@@ -12,6 +15,7 @@ import {
 	getDatabaseIndexStringLength,
 	getPortableDatabaseIdentifierKey,
 	invalidateSchemaChecks,
+	withImplicitIdField,
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -445,6 +449,7 @@ function assertExistingTableIndexFits({
 	dbType,
 	existingColumns,
 	fields,
+	generateId,
 	indexes,
 	index,
 	table,
@@ -453,14 +458,16 @@ function assertExistingTableIndexFits({
 	dbType: "mssql" | "mysql";
 	existingColumns: ReadonlySet<string>;
 	fields: Readonly<Record<string, DBFieldAttribute>>;
+	generateId: DatabaseIdStrategy;
 	indexes: readonly ResolvedDBTableIndex[];
 	index: ResolvedDBTableIndex;
 	table: string;
 }) {
 	const byteBudget = dbType === "mysql" ? 3072 : 1700;
+	const indexFields = withImplicitIdField(fields, generateId);
 	let requiredBytes = 0;
 	for (const column of index.columns) {
-		const field = fields[column];
+		const field = indexFields[column];
 		if (!field) continue;
 		if (field.type === "string" || Array.isArray(field.type)) {
 			if (!existingColumns.has(column)) {
@@ -468,6 +475,7 @@ function assertExistingTableIndexFits({
 					columnName: column,
 					dialect: dbType,
 					fields,
+					generateId,
 					indexes,
 				});
 				requiredBytes += (generatedLength ?? 0) * (dbType === "mysql" ? 4 : 1);
@@ -759,6 +767,7 @@ export async function getMigrations(
 					dbType,
 					existingColumns: new Set(table.columns.map((column) => column.name)),
 					fields: value.fields,
+					generateId: config.advanced?.database?.generateId,
 					index,
 					indexes: value.indexes ?? [],
 					table: key,
@@ -1006,6 +1015,7 @@ export async function getMigrations(
 			columnName: fieldName,
 			dialect: dbType,
 			fields: table.fields,
+			generateId: config.advanced?.database?.generateId,
 			indexes: table.indexes ?? [],
 		});
 	};

@@ -49,6 +49,43 @@ const compoundIndexPlugin = (): BetterAuthPlugin => ({
 	},
 });
 
+const memberOrganizationKeyPlugin = (): BetterAuthPlugin => ({
+	id: "member-organization-candidate-key",
+	schema: {
+		member: {
+			fields: {},
+			indexes: [
+				{
+					name: "member_organization_id_id_unique",
+					fields: ["organizationId", "id"],
+					unique: true,
+				},
+			],
+		},
+	},
+});
+
+const wideLookupPlugin = (): BetterAuthPlugin => ({
+	id: "wide-lookup",
+	schema: {
+		wideLookup: {
+			fields: Object.fromEntries(
+				["a", "b", "c", "d"].map((field) => [
+					field,
+					{ type: "string" as const },
+				]),
+			),
+			indexes: [{ fields: ["a", "b", "c", "d", "id"] }],
+		},
+	},
+});
+
+function getDrizzleTableBlock(code: string, tableName: string) {
+	const start = code.indexOf(`export const ${tableName} = `);
+	const end = code.indexOf("export const ", start + 1);
+	return code.slice(start, end === -1 ? undefined : end);
+}
+
 describe("generate", async () => {
 	describe("command output paths", () => {
 		it("should use adapter-specific filenames when output points to an existing directory", async () => {
@@ -828,6 +865,205 @@ model Directory_user {
 		expect(schema.code).toMatch(
 			/provisioning_status:\s*mysqlEnum\("provisioning_status", \[\s*"active",\s*"suspended",?\s*\]\)/,
 		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it.each([
+		"pg",
+		"mysql",
+		"sqlite",
+	] as const)("should generate %s Drizzle indexes on the implicit primary key", async (provider) => {
+		const database = drizzleAdapter({}, { provider, schema: {} });
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				plugins: [organization(), memberOrganizationKeyPlugin()],
+			},
+		});
+		const member = getDrizzleTableBlock(schema.code ?? "", "member");
+
+		expect(member.match(/^\s*id:/gm)).toHaveLength(1);
+		expect(member.match(/\.primaryKey\(/g)).toHaveLength(1);
+		expect(member).toMatch(
+			/uniqueIndex\("member_organization_id_id_unique"\)\.on\(\s*table\.organizationId,\s*table\.id,?\s*\)/,
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it("should generate Prisma indexes on the implicit primary key", async () => {
+		const database = prismaAdapter({}, { provider: "postgresql" });
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				plugins: [organization(), memberOrganizationKeyPlugin()],
+			},
+		});
+		const code = schema.code ?? "";
+		const memberStart = code.indexOf("model Member {");
+		const member = code.slice(memberStart, code.indexOf("}", memberStart));
+
+		expect(member.match(/^\s*id\s/gm)).toHaveLength(1);
+		expect(member).toContain(
+			'@@unique([organizationId, id], map: "member_organization_id_id_unique")',
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it("should keep full MySQL string lengths beside a serial Drizzle id", async () => {
+		const database = drizzleAdapter({}, { provider: "mysql", schema: {} });
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: database({} as BetterAuthOptions),
+			options: {
+				database,
+				advanced: { database: { generateId: "serial" } },
+				plugins: [wideLookupPlugin()],
+			},
+		});
+
+		expect(schema.code).toMatch(/a:\s*varchar\(["']a["'], \{ length: 191 \}\)/);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it("should count Prisma's VARCHAR(191) id in MySQL index lengths", async () => {
+		const database = prismaAdapter({}, { provider: "mysql" });
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: database({} as BetterAuthOptions),
+			options: { database, plugins: [wideLookupPlugin()] },
+		});
+
+		expect(schema.code).toMatch(/\ba\s+String\s+@db\.VarChar\(144\)/);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it.each([
+		{ id: "String @id @db.VarChar(36)", expected: 183 },
+		{ id: "String @id", expected: 144 },
+	])("should size MySQL index lengths from an existing Prisma id ($id)", async ({
+		id,
+		expected,
+	}) => {
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-existing-id-"),
+		);
+		const filePath = path.join(tmpDir, "schema.prisma");
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model WideLookup {
+  id ${id}
+  a  String @db.VarChar(153)
+  b  String @db.VarChar(153)
+
+  @@map("wideLookup")
+}
+`,
+		);
+
+		try {
+			const database = prismaAdapter({}, { provider: "mysql" });
+			const schema = await generatePrismaSchema({
+				file: path.relative(process.cwd(), filePath),
+				adapter: database({} as BetterAuthOptions),
+				options: { database, plugins: [wideLookupPlugin()] },
+			});
+
+			for (const field of ["a", "b", "c", "d"]) {
+				expect(schema.code).toMatch(
+					new RegExp(`\\b${field}\\s+String\\s+@db\\.VarChar\\(${expected}\\)`),
+				);
+			}
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11520
+	 */
+	it.each([
+		{ model: "Member", map: "member", length: 60 },
+		{ model: "WideLookup", map: "wideLookup", length: 60 },
+		{ model: "Member", map: "member", length: 255 },
+		{ model: "WideLookup", map: "wideLookup", length: 255 },
+	])("should keep an existing Prisma $model id at VarChar($length)", async ({
+		model,
+		map,
+		length,
+	}) => {
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "prisma-keep-id-"));
+		const filePath = path.join(tmpDir, "schema.prisma");
+		fs.writeFileSync(
+			filePath,
+			`
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url = env("DATABASE_URL")
+}
+
+model ${model} {
+  id String @id @db.VarChar(${length})
+
+  @@map("${map}")
+}
+`,
+		);
+
+		try {
+			const database = prismaAdapter({}, { provider: "mysql" });
+			const schema = await generatePrismaSchema({
+				file: path.relative(process.cwd(), filePath),
+				adapter: database({} as BetterAuthOptions),
+				options: {
+					database,
+					plugins: [
+						organization(),
+						memberOrganizationKeyPlugin(),
+						wideLookupPlugin(),
+					],
+				},
+			});
+			const code = schema.code ?? "";
+			const modelStart = code.indexOf(`model ${model} {`);
+			const modelBlock = code.slice(modelStart, code.indexOf("}", modelStart));
+
+			expect(modelBlock).toMatch(
+				new RegExp(
+					`^\\s*id\\s+String\\s+@id\\s+@db\\.VarChar\\(${length}\\)\\s*$`,
+					"m",
+				),
+			);
+		} finally {
+			fs.rmSync(tmpDir, { force: true, recursive: true });
+		}
 	});
 
 	it("should reject duplicate Drizzle field-level and table-level indexes", async () => {
