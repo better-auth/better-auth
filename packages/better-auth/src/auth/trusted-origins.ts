@@ -1,3 +1,4 @@
+import * as z from "zod";
 import { getHost, getOrigin, getProtocol } from "../utils/url";
 import { wildcardMatch } from "../utils/wildcard";
 
@@ -5,7 +6,7 @@ const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
 const RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
 const ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
 const IP_WILDCARD_HOST_PATTERN = /^(?=.*\d)[\d*?.]+$/;
-const IPV4_HOST_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$/;
+const ipv4Schema = z.ipv4();
 
 /**
  * A wildcard host made only of digits, dots and wildcards (`192.168.*.*`,
@@ -14,11 +15,12 @@ const IPV4_HOST_PATTERN = /^\d{1,3}(?:\.\d{1,3}){3}$/;
  * hosts keep the documented subdomain matching.
  */
 const isAllowedIPv4Host = (patternAuthority: string, authority: string) => {
-	const patternHost = patternAuthority.split(":")[0]!;
+	const [patternHost = ""] = patternAuthority.split(":");
 	if (!IP_WILDCARD_HOST_PATTERN.test(patternHost)) {
 		return true;
 	}
-	return IPV4_HOST_PATTERN.test(authority.split(":")[0]!);
+	const [host = ""] = authority.split(":");
+	return z.validate(ipv4Schema, host);
 };
 
 /**
