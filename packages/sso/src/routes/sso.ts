@@ -311,7 +311,12 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 													},
 													tokenEndpointAuthentication: {
 														type: "string",
-														enum: ["client_secret_post", "client_secret_basic"],
+														enum: [
+															"client_secret_post",
+															"client_secret_basic",
+															"private_key_jwt",
+															"none",
+														],
 														nullable: true,
 														description:
 															"Authentication method for the token endpoint",
@@ -361,7 +366,6 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 													"issuer",
 													"pkce",
 													"clientId",
-													"clientSecret",
 													"discoveryEndpoint",
 												],
 												description: "OIDC configuration for the provider",
@@ -669,9 +673,28 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 							const parsed = JSON.parse(config) as {
 								tokenEndpointAuthentication?: string;
 								clientSecret?: string;
+								pkce?: boolean;
 							};
 							if (
+								parsed.tokenEndpointAuthentication === "none" &&
+								parsed.clientSecret
+							) {
+								throw new APIError("BAD_REQUEST", {
+									message:
+										"clientSecret must be empty when using none authentication",
+								});
+							}
+							if (
+								parsed.tokenEndpointAuthentication === "none" &&
+								!parsed.pkce
+							) {
+								throw new APIError("BAD_REQUEST", {
+									message: "PKCE is required when using none authentication",
+								});
+							}
+							if (
 								parsed.tokenEndpointAuthentication !== "private_key_jwt" &&
+								parsed.tokenEndpointAuthentication !== "none" &&
 								!parsed.clientSecret
 							) {
 								throw new APIError("BAD_REQUEST", {
@@ -1393,11 +1416,21 @@ async function handleOIDCCallback(
 		return redirectOIDCError("invalid_provider", "token_endpoint_not_found");
 	}
 
+	// A public client has no secret, so PKCE is its only proof of possession.
+	if (config.tokenEndpointAuthentication === "none" && !config.pkce) {
+		return redirectOIDCError(
+			"invalid_provider",
+			"pkce_required_for_public_client",
+		);
+	}
+
 	const tokenEndpoint = config.tokenEndpoint;
 	let tokenEndpointAuth: TokenEndpointAuth =
 		config.tokenEndpointAuthentication === "client_secret_post"
 			? { method: "client_secret_post" }
-			: { method: "client_secret_basic" };
+			: config.tokenEndpointAuthentication === "none"
+				? { method: "none" }
+				: { method: "client_secret_basic" };
 
 	if (config.tokenEndpointAuthentication === "private_key_jwt") {
 		type PrivateKeyResult = {
@@ -1454,7 +1487,10 @@ async function handleOIDCCallback(
 	} = {
 		clientId: config.clientId,
 	};
-	if (tokenEndpointAuth.method !== "private_key_jwt") {
+	if (
+		tokenEndpointAuth.method === "client_secret_basic" ||
+		tokenEndpointAuth.method === "client_secret_post"
+	) {
 		tokenRequestOptions.clientSecret = config.clientSecret;
 	}
 

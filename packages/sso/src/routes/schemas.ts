@@ -137,7 +137,7 @@ const oidcConfigSchema = z.object({
 		.string()
 		.meta({
 			description:
-				"The client secret. Required for client_secret_basic/client_secret_post. Optional for private_key_jwt.",
+				"The client secret. Required for client_secret_basic/client_secret_post. Optional for private_key_jwt. Must be empty for none.",
 		})
 		.optional(),
 	authorizationEndpoint: z
@@ -156,7 +156,12 @@ const oidcConfigSchema = z.object({
 		.meta({ description: "The user info endpoint" })
 		.optional(),
 	tokenEndpointAuthentication: z
-		.enum(["client_secret_post", "client_secret_basic", "private_key_jwt"])
+		.enum([
+			"client_secret_post",
+			"client_secret_basic",
+			"private_key_jwt",
+			"none",
+		])
 		.optional(),
 	privateKeyId: z.string().optional(),
 	privateKeyAlgorithm: z.string().optional(),

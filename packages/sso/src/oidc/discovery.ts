@@ -767,8 +767,12 @@ function parseURL(name: string, endpoint: string, base?: string) {
  */
 export function selectTokenEndpointAuthMethod(
 	doc: OIDCDiscoveryDocument,
-	existing?: "client_secret_basic" | "client_secret_post" | "private_key_jwt",
-): "client_secret_basic" | "client_secret_post" | "private_key_jwt" {
+	existing?:
+		| "client_secret_basic"
+		| "client_secret_post"
+		| "private_key_jwt"
+		| "none",
+): "client_secret_basic" | "client_secret_post" | "private_key_jwt" | "none" {
 	if (existing === "private_key_jwt") {
 		return existing;
 	}
@@ -797,6 +801,8 @@ export function selectTokenEndpointAuthMethod(
 		return "private_key_jwt";
 	}
 
+	// `none` is never inferred: many IdPs and mock servers advertise it next to
+	// or instead of the secret methods a confidential client is registered for.
 	return "client_secret_basic";
 }
 

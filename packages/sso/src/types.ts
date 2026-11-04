@@ -33,7 +33,10 @@ export interface OIDCConfig {
 	issuer: string;
 	pkce: boolean;
 	clientId: string;
-	/** Required for client_secret_basic/client_secret_post. Optional for private_key_jwt. */
+	/**
+	 * Required for client_secret_basic/client_secret_post. Optional for
+	 * private_key_jwt. Must be empty for none (public clients).
+	 */
 	clientSecret?: string;
 	authorizationEndpoint?: string | undefined;
 	discoveryEndpoint: string;
@@ -42,7 +45,12 @@ export interface OIDCConfig {
 	overrideUserInfo?: boolean | undefined;
 	tokenEndpoint?: string | undefined;
 	tokenEndpointAuthentication?:
-		| ("client_secret_post" | "client_secret_basic" | "private_key_jwt")
+		| (
+				| "client_secret_post"
+				| "client_secret_basic"
+				| "private_key_jwt"
+				| "none"
+		  )
 		| undefined;
 	/** Key ID for private_key_jwt key resolution */
 	privateKeyId?: string | undefined;
