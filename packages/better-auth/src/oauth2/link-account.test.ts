@@ -2710,3 +2710,113 @@ describe("oauth2 - account-linking logs use the configured logger", async () => 
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11880
+ */
+describe("oauth2 - user.create.before returning false aborts sign-up", async () => {
+	const log = vi.fn();
+	const { auth, client, cookieSetter } = await getTestInstance(
+		{
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					verifyIdToken: async () => true,
+				},
+			},
+			databaseHooks: {
+				user: { create: { before: async () => false } },
+			},
+			logger: { log },
+		},
+		// The hook rejects every user, the default test user included.
+		{ disableTestUser: true },
+	);
+
+	const ctx = await auth.$context;
+
+	function googleProfile(email: string, sub: string): GoogleProfile {
+		return {
+			email,
+			email_verified: true,
+			name: "Rejected User",
+			picture: "https://example.com/photo.jpg",
+			exp: 1234567890,
+			sub,
+			iat: 1234567890,
+			aud: "test",
+			azp: "test",
+			nbf: 1234567890,
+			iss: "test",
+			locale: "en",
+			jti: "test",
+			given_name: "Rejected",
+			family_name: "User",
+		};
+	}
+
+	it("redirects with FAILED_TO_CREATE_USER from the OAuth callback", async () => {
+		const email = "hook-rejected-callback@example.com";
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: await signJWT(
+						googleProfile(email, "google_hook_rejected_callback"),
+						DEFAULT_SECRET,
+					),
+				});
+			}),
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=FAILED_TO_CREATE_USER");
+		expect(redirectLocation).not.toContain("unable_to_create_user");
+		const user = await ctx.adapter.findOne({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user).toBeNull();
+		expect(log.mock.calls.flat()).not.toContain("Unable to create OAuth user");
+	});
+
+	it("returns FAILED_TO_CREATE_USER from id token sign-in", async () => {
+		const email = "hook-rejected-id-token@example.com";
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: await signJWT(
+					googleProfile(email, "google_hook_rejected_id_token"),
+					DEFAULT_SECRET,
+				),
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("FAILED_TO_CREATE_USER");
+		const user = await ctx.adapter.findOne({
+			model: "user",
+			where: [{ field: "email", value: email }],
+		});
+		expect(user).toBeNull();
+	});
+});
