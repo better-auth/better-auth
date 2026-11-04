@@ -1429,6 +1429,8 @@ The early `defaultResult` return preserves registered URI and native loopback be
 
 Internally supported claims include \["sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp"].
 
+JWT access tokens issued for a user carry `auth_time` ([RFC 9068 §2.2.1](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2.1)), the time in seconds of the user's original authentication. It has the same value as the ID token's `auth_time`, and refreshed tokens keep it, so it never moves to the time of the refresh. Resource servers can use it for step-up checks, such as refusing a sensitive operation unless the user authenticated within the last few minutes. Tokens from `client_credentials` have no user authentication and omit it. The server owns this claim: `customAccessTokenClaims` and claim contributors cannot set it.
+
 ID token and UserInfo claims should be namespaced when possible to avoid potential future conflicts. In the authorization code flow, `profile`, `email`, and `claims.userinfo` request UserInfo claims; they are not added to the ID token unless you add them with `customIdTokenClaims`.
 
 `customIdTokenClaims` is additive for protocol-owned ID token claims. Reserved names such as `iss`, `sub`, `aud`, token lifetime claims, `nonce`, `sid`, hash claims, `auth_time`, `acr`, `amr`, and `azp` are stripped at issuance with a warning log. Use namespaced claim names such as `https://example.com/org` for application-specific data.
