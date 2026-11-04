@@ -58,8 +58,8 @@ Better Auth limits requests per client IP address, which it reads from
 only hold when a proxy or server code you control writes the address and clients
 cannot bypass it.
 
-If your proxy or platform sets the client address in a header, replacing any value
-the client sent, list that header:
+If your proxy sets the client address in a header, replacing any value the client
+sent, list that header:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -67,7 +67,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
     advanced: {
         ipAddress: {
-            ipAddressHeaders: ["cf-connecting-ip"], // a header your proxy writes
+            ipAddressHeaders: ["cf-connecting-ip"],
         },
     },
 })
@@ -96,8 +96,8 @@ export const auth = betterAuth({
 
 If clients connect to your server directly, set `ipAddressHeaders: []` to share one
 counter per path across all clients. To keep per-client limits, write the connection
-address into a header before the request reaches Better Auth, and list that header
-(`ipAddressHeaders: ["x-client-ip"]` in this Express example):
+address into a header before the request reaches Better Auth, and list that header in
+`ipAddressHeaders`:
 
 ```ts title="server.ts"
 import express from "express";
@@ -109,14 +109,14 @@ const authHandler = toNodeHandler(auth);
 
 // Express v4 route. For Express v5, use "/api/auth/*splat" instead.
 app.all("/api/auth/*", (req, res) => {
-    // Replace any value the client sent with the address of the connection.
+    // Overwrite any client value, and list "x-client-ip" in ipAddressHeaders.
     req.headers["x-client-ip"] = req.socket.remoteAddress ?? "";
     return authHandler(req, res);
 });
 ```
 
-When no address is found, Better Auth counts those requests in one shared counter
-per path and logs a warning once. In development and test, it uses `127.0.0.1`
+When no address is found, Better Auth uses one shared counter per path and logs a
+warning once. In development and test, it uses `127.0.0.1`
 instead. Setting `disableIpTracking: true` turns off this rate limiter for HTTP
 requests.
 
