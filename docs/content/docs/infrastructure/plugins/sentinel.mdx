@@ -536,23 +536,14 @@ export const authClient = createAuthClient({
 
 ## Security Events
 
-Sentinel tracks the following security event types:
+Sentinel records security activity as audit events:
 
-| Event Type                      | Description                         |
-| ------------------------------- | ----------------------------------- |
-| `security_blocked`              | Request was blocked                 |
-| `security_allowed`              | Request was allowed after challenge |
-| `security_credential_stuffing`  | Credential stuffing detected        |
-| `security_impossible_travel`    | Impossible travel detected          |
-| `security_geo_blocked`          | Geo-blocking triggered              |
-| `security_bot_blocked`          | Bot detected and blocked            |
-| `security_suspicious_ip`        | Suspicious IP detected              |
-| `security_velocity_exceeded`    | Rate limit exceeded                 |
-| `security_free_trial_abuse`     | Free trial abuse detected           |
-| `security_compromised_password` | Compromised password detected       |
-| `security_stale_account`        | Stale account reactivation          |
+| Event Type        | Description                                                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `security_check`  | One event per protected user action. `eventData.outcome` is `passed`, `challenged`, or `blocked`. Includes `evaluatedChecks`, `triggeredBy`, and `reason`. |
+| `security_signal` | Informational detection detail for the Security dashboard. Does not count toward security usage.                                                           |
 
-These events are visible in the Security dashboard and included in audit logs.
+These events are visible in the Security dashboard and included in [audit logs](/docs/infrastructure/plugins/audit-logs).
 
 ## Complete Example
 
