@@ -19,7 +19,9 @@ const verifyOptions = { audience: env.resource };
 
 async function route(request: Request): Promise<Response> {
 	const { pathname } = new URL(request.url);
-	const bearer = request.headers.get("authorization")?.replace(/^Bearer /, "");
+	const bearer = request.headers
+		.get("authorization")
+		?.replace(/^Bearer\s+/i, "");
 	if (pathname === "/.well-known/oauth-protected-resource") {
 		return Response.json(
 			await serverClient.getProtectedResourceMetadata({
