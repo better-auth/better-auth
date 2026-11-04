@@ -149,8 +149,12 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	options,
 	file,
 }) => {
-	const provider: "sqlite" | "postgresql" | "mysql" | "mongodb" =
-		adapter.options?.provider || "postgresql";
+	const provider:
+		| "sqlite"
+		| "postgresql"
+		| "mysql"
+		| "mongodb"
+		| "cockroachdb" = adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	// `generate` may pass an absolute path resolved against `--cwd`. Do not
@@ -388,7 +392,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							.field("id", "Int")
 							.attribute("id")
 							.attribute("default(autoincrement())");
-					} else if (useUUIDs && provider === "postgresql") {
+					} else if (
+						useUUIDs &&
+						(provider === "postgresql" || provider === "cockroachdb")
+					) {
 						builder
 							.model(modelName)
 							.field("id", "String")
@@ -590,17 +597,52 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					) {
 						continue;
 					}
+					const referencedCustomModelName =
+						tables[referencedOriginalModelName]?.modelName ||
+						referencedOriginalModelName;
+					const referencedModelName = capitalizeFirstLetter(
+						getModelName(referencedCustomModelName),
+					);
+
+					const referencedModel =
+						builder.findByType("model", { name: referencedModelName }) ||
+						builder.findByType("model", { name: referencedCustomModelName }) ||
+						builder.findByType("model", { name: referencedOriginalModelName });
+
+					let shouldAddUuid = useUUIDs;
+					if (referencedModel) {
+						const targetFieldName = getFieldName({
+							model: attr.references.model,
+							field: attr.references.field,
+						});
+						const referencedField =
+							builder.findByType("field", {
+								name: targetFieldName,
+								within: referencedModel.properties,
+							}) ||
+							builder.findByType("field", {
+								name: attr.references.field,
+								within: referencedModel.properties,
+							});
+						if (referencedField) {
+							const hasUuid = Boolean(
+								referencedField.attributes?.some(
+									(a) =>
+										(a.name === "Uuid" && a.group === "db") ||
+										a.name === "db.Uuid",
+								),
+							);
+							shouldAddUuid = hasUuid;
+						}
+					}
+
 					if (
-						useUUIDs &&
-						provider === "postgresql" &&
+						shouldAddUuid &&
+						(provider === "postgresql" || provider === "cockroachdb") &&
 						attr.references?.field === "id"
 					) {
 						builder.model(modelName).field(fieldName).attribute(`db.Uuid`);
 					}
-
-					const referencedCustomModelName =
-						tables[referencedOriginalModelName]?.modelName ||
-						referencedOriginalModelName;
 					let action = "Cascade";
 					if (attr.references.onDelete === "no action") action = "NoAction";
 					else if (attr.references.onDelete === "set null") action = "SetNull";
