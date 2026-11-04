@@ -303,9 +303,9 @@ export type BetterAuthAdvancedOptions = {
 				 * header that gives a valid address is used. Without
 				 * `trustedProxies`, a header with more than one address is skipped.
 				 *
-				 * Any client can send these headers. List only headers your proxy
-				 * or platform writes, and make sure clients cannot reach your server
-				 * without going through it.
+				 * Any client can send these headers. List only headers that your
+				 * proxy, platform, or own server code writes, replacing any value
+				 * the client sent.
 				 *
 				 * Ip address is used for rate limiting and session tracking
 				 *

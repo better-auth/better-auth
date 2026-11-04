@@ -134,7 +134,7 @@ import { auth } from "./auth";
 const app = express();
 const authHandler = toNodeHandler(auth);
 
-// For Express v5, use "/api/auth/*splat"
+// Express v4 route. For Express v5, use "/api/auth/*splat" instead.
 app.all("/api/auth/*", (req, res) => {
     // Replace any value the client sent with the address of the connection.
     req.headers["x-client-ip"] = req.socket.remoteAddress ?? "";
