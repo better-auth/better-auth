@@ -68,7 +68,7 @@ async function readSignInTwoFactorState(
 	trustDeviceMaxAge: number,
 ) {
 	const data = ctx.context.newSession;
-	if (!signInPaths.has(ctx.path) || !data?.user.twoFactorEnabled) {
+	if (!data?.user.twoFactorEnabled) {
 		return {
 			requiresTwoFactor: false,
 			trustDeviceCookie: null,
@@ -182,6 +182,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	}
 
 	async function shouldRequireTwoFactor(ctx: GenericEndpointContext) {
+		// Only the built-in sign-in paths are gated by the after hook
+		if (!signInPaths.has(ctx.path)) {
+			return false;
+		}
 		return (await getSignInTwoFactorState(ctx)).requiresTwoFactor;
 	}
 

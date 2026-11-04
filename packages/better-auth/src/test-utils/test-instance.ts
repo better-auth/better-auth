@@ -70,6 +70,12 @@ export async function getTestInstance<
 			? `ba_test_${randomUUID().replaceAll("-", "_")}`
 			: undefined;
 
+	const mysqlServerURL = "mysql://root:root_password@127.0.0.1:3306";
+	const mysqlDatabase =
+		testWith === "mysql"
+			? `ba_test_${randomUUID().replaceAll("-", "_")}`
+			: undefined;
+
 	const quotePostgresIdentifier = (identifier: string) =>
 		`"${identifier.replaceAll('"', '""')}"`;
 
@@ -103,10 +109,18 @@ export async function getTestInstance<
 
 	async function getMysql() {
 		const { Kysely, MysqlDialect } = await import("kysely");
-		const { createPool } = await import("mysql2/promise");
+		// Kysely's MysqlDialect drives mysql2's callback API; a mysql2/promise
+		// pool never invokes those callbacks, so every query hangs.
+		const { createConnection, createPool } = await import("mysql2");
+		const admin = createConnection(mysqlServerURL).promise();
+		try {
+			await admin.query(`CREATE DATABASE \`${mysqlDatabase}\``);
+		} finally {
+			await admin.end();
+		}
 		return new Kysely({
 			dialect: new MysqlDialect({
-				pool: createPool("mysql://user:password@localhost:3306/better_auth"),
+				pool: createPool(`${mysqlServerURL}/${mysqlDatabase}`),
 			}),
 		});
 	}
@@ -128,6 +142,10 @@ export async function getTestInstance<
 		return db;
 	}
 
+	const postgres = testWith === "postgres" ? await getPostgres() : undefined;
+	const mysql = testWith === "mysql" ? await getMysql() : undefined;
+	const sqlite = testWith === "sqlite" ? await getSqlite() : undefined;
+
 	const opts = {
 		socialProviders: {
 			github: {
@@ -140,25 +158,24 @@ export async function getTestInstance<
 			},
 		},
 		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
-		database:
-			testWith === "postgres"
-				? {
-						db: await getPostgres(),
-						type: "postgres",
-						transaction: config?.transaction,
-					}
-				: testWith === "mongodb"
-					? await Promise.all([
-							mongodbClient(),
-							await import("../adapters/mongodb-adapter"),
-						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
-					: testWith === "mysql"
-						? {
-								db: await getMysql(),
-								type: "mysql",
-								transaction: config?.transaction,
-							}
-						: await getSqlite(),
+		database: postgres
+			? {
+					db: postgres,
+					type: "postgres",
+					transaction: config?.transaction,
+				}
+			: testWith === "mongodb"
+				? await Promise.all([
+						mongodbClient(),
+						await import("../adapters/mongodb-adapter"),
+					]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
+				: mysql
+					? {
+							db: mysql,
+							type: "mysql",
+							transaction: config?.transaction,
+						}
+					: sqlite,
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -172,6 +189,51 @@ export async function getTestInstance<
 			level: "debug",
 		},
 	} satisfies BetterAuthOptions;
+
+	// Register before migrations and test-user setup so a failed setup still
+	// drops the database it created.
+	const cleanup = async () => {
+		if (testWith === "mongodb") {
+			const db = await mongodbClient();
+			await db.dropDatabase();
+			return;
+		}
+		if (postgres) {
+			try {
+				if (postgresSchema) {
+					await sql
+						.raw(
+							`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
+								postgresSchema,
+							)} CASCADE`,
+						)
+						.execute(postgres);
+				} else {
+					await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+						postgres,
+					);
+				}
+			} finally {
+				await postgres.destroy();
+			}
+			return;
+		}
+
+		if (mysql) {
+			try {
+				await sql
+					.raw(`DROP DATABASE IF EXISTS \`${mysqlDatabase}\``)
+					.execute(mysql);
+			} finally {
+				await mysql.destroy();
+			}
+			return;
+		}
+		if (sqlite) {
+			sqlite.close();
+		}
+	};
+	cleanupSet.add(cleanup);
 
 	const authOptions = {
 		baseURL: "http://localhost:" + (config?.port || 3000),
@@ -229,50 +291,6 @@ export async function getTestInstance<
 	}
 
 	await createTestUser();
-
-	const cleanup = async () => {
-		if (testWith === "mongodb") {
-			const db = await mongodbClient();
-			await db.dropDatabase();
-			return;
-		}
-		if (testWith === "postgres") {
-			const postgres = await getPostgres();
-			if (postgresSchema) {
-				await sql
-					.raw(
-						`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
-							postgresSchema,
-						)} CASCADE`,
-					)
-					.execute(postgres);
-			} else {
-				await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
-					postgres,
-				);
-			}
-			await postgres.destroy();
-			return;
-		}
-
-		if (testWith === "mysql") {
-			const mysql = await getMysql();
-			await sql`SET FOREIGN_KEY_CHECKS = 0;`.execute(mysql);
-			const tables = await mysql.introspection.getTables();
-			for (const table of tables) {
-				// @ts-expect-error
-				await mysql.deleteFrom(table.name).execute();
-			}
-			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
-			return;
-		}
-		if (testWith === "sqlite") {
-			const sqlite = await getSqlite();
-			sqlite.close();
-			return;
-		}
-	};
-	cleanupSet.add(cleanup);
 
 	const customFetchImpl = async (
 		url: string | URL | Request,

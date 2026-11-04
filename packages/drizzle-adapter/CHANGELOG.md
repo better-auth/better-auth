@@ -1,5 +1,7 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.17
+
 ## 1.7.16
 
 ### Patch Changes
