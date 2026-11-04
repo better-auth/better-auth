@@ -538,8 +538,10 @@ describe("database rate-limit pruning with active long windows", async () => {
 			{ disableTestUser: true },
 		);
 		const raceCtx = await raceAuth.$context;
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(40_000_000);
 
-		// A row whose own window is open with budget left: both rules below
+		// A row whose own window is open with budget left: both requests below
 		// decide against this same snapshot.
 		const rowKey = createRateLimitKey("127.0.0.5", "/get-session");
 		const windowStart = Date.now() - 2_000;
@@ -553,13 +555,23 @@ describe("database rate-limit pruning with active long windows", async () => {
 			},
 		});
 
-		// Hold each request's increment until both have read the row, then let
-		// the long window's write land before the short window's so the race
-		// runs the way it would under load.
+		// Hold each request's increment until both have decided against the
+		// same row, then let the long window's write land before the short
+		// window's so the race runs the way it would under load. The entry
+		// promises are resolved inside the mock, so the handler promises can be
+		// awaited directly instead of polling the row's state.
 		const originalIncrementOne = raceCtx.adapter.incrementOne.bind(
 			raceCtx.adapter,
 		);
 		let incrementCalls = 0;
+		let longEntered!: () => void;
+		const longEnteredPromise = new Promise<void>((resolve) => {
+			longEntered = resolve;
+		});
+		let shortEntered!: () => void;
+		const shortEnteredPromise = new Promise<void>((resolve) => {
+			shortEntered = resolve;
+		});
 		let releaseLongIncrement!: () => void;
 		const longIncrementGate = new Promise<void>((resolve) => {
 			releaseLongIncrement = resolve;
@@ -573,8 +585,10 @@ describe("database rate-limit pruning with active long windows", async () => {
 			.mockImplementation(async (args) => {
 				incrementCalls += 1;
 				if (incrementCalls === 1) {
+					longEntered();
 					await longIncrementGate;
 				} else if (incrementCalls === 2) {
+					shortEntered();
 					await shortIncrementGate;
 				}
 				return originalIncrementOne(args);
@@ -593,28 +607,29 @@ describe("database rate-limit pruning with active long windows", async () => {
 		try {
 			// The long-window request reads the row, then pends on its increment.
 			const longRequest = getSession(true);
-			await vi.waitFor(() => expect(incrementCalls).toBe(1));
+			await longEnteredPromise;
 			// The short request reads the same row while the long one is held,
 			// so both decide against the same stored deadline.
 			const shortRequest = getSession();
-			await vi.waitFor(() => expect(incrementCalls).toBe(2));
+			await shortEnteredPromise;
 
 			releaseLongIncrement();
-			await vi.waitFor(() =>
-				expect(
-					raceDb
-						.findMany<RateLimit>({
-							model: "rateLimit",
-							where: [{ field: "key", value: rowKey }],
-						})
-						.then(([found]) => Number(found?.count))
-						.catch(() => 0),
-				).resolves.toBe(2),
+			const long = await longRequest;
+			expect(long.status).toBe(200);
+			// The extension landed: two counted, 120s deadline from the start.
+			const extendedRow = await raceDb.findMany<RateLimit>({
+				model: "rateLimit",
+				where: [{ field: "key", value: rowKey }],
+			});
+			expect(Number(extendedRow[0]?.count)).toBe(2);
+			expect(Number(extendedRow[0]?.windowExpiresAt)).toBe(
+				windowStart + 120_000,
 			);
 
+			// The short request's decision saw the stored 10s deadline, so its
+			// write misses the compare-and-swap and it re-decides on fresh state.
 			releaseShortIncrement();
-			const [long, short] = await Promise.all([longRequest, shortRequest]);
-			expect(long.status).toBe(200);
+			const short = await shortRequest;
 			expect(short.status).toBe(200);
 
 			// Both requests counted, and the deadline held at 120s from the same
@@ -628,6 +643,131 @@ describe("database rate-limit pruning with active long windows", async () => {
 		} finally {
 			incrementOne.mockRestore();
 		}
+	});
+});
+
+describe("database rate-limit rows without a stored deadline", async () => {
+	const { auth, db } = await getTestInstance(
+		{
+			rateLimit: {
+				enabled: true,
+				storage: "database",
+				window: 10,
+				max: 10,
+			},
+		},
+		{ disableTestUser: true },
+	);
+	const ctx = await auth.$context;
+
+	// Restore the clock even when an assertion fails, so a failure here cannot
+	// leak fake timers into the suites that follow.
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	// With Prisma, a null comparison is sent as `equals: null`, which matches
+	// explicit nulls only: documents written before the `windowExpiresAt`
+	// column was added do not carry the field at all, so on MongoDB every
+	// guarded write that compares the deadline against null misses and
+	// `consume` retries forever. The spy below rejects writes carrying that
+	// comparison instead of letting them silently miss nothing, so a
+	// regression fails fast here rather than hanging the request.
+	const failWritesMatchingNullDeadline = () => {
+		const original = ctx.adapter.incrementOne.bind(ctx.adapter);
+		return vi
+			.spyOn(ctx.adapter, "incrementOne")
+			.mockImplementation(async (args) => {
+				if (
+					args.where.some(
+						(clause) =>
+							clause.field === "windowExpiresAt" && clause.value === null,
+					)
+				) {
+					throw new Error(
+						"guarded write compared windowExpiresAt against null",
+					);
+				}
+				return original(args);
+			});
+	};
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11660
+	 */
+	it("normalizes a deadline-less row on its first increment", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(40_000_000);
+		const rowKey = createRateLimitKey("127.0.0.6", "/get-session");
+		const windowStart = Date.now() - 2_000;
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: rowKey,
+				count: 1,
+				lastRequest: windowStart,
+			},
+		});
+
+		const incrementOne = failWritesMatchingNullDeadline();
+		try {
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "127.0.0.6" },
+				}),
+			);
+			expect(res.status).toBe(200);
+		} finally {
+			incrementOne.mockRestore();
+		}
+
+		const row = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: rowKey }],
+		});
+		expect(Number(row?.count)).toBe(2);
+		expect(Number(row?.windowExpiresAt)).toBe(windowStart + 10_000);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11660
+	 */
+	it("normalizes a deadline-less row while resetting its elapsed window", async () => {
+		vi.useFakeTimers();
+		vi.advanceTimersByTime(40_000_000);
+		// A stale row: its own 10s window elapsed 20s ago and the count was full
+		// anyway, so the request below takes the window-elapsed reset path.
+		const rowKey = createRateLimitKey("127.0.0.7", "/get-session");
+		const windowStart = Date.now() - 30_000;
+		await db.create({
+			model: "rateLimit",
+			data: {
+				key: rowKey,
+				count: 10,
+				lastRequest: windowStart,
+			},
+		});
+
+		const incrementOne = failWritesMatchingNullDeadline();
+		try {
+			const res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/get-session", {
+					headers: { "x-forwarded-for": "127.0.0.7" },
+				}),
+			);
+			expect(res.status).toBe(200);
+		} finally {
+			incrementOne.mockRestore();
+		}
+
+		const row = await db.findOne<RateLimit>({
+			model: "rateLimit",
+			where: [{ field: "key", value: rowKey }],
+		});
+		const now = Date.now();
+		expect(Number(row?.count)).toBe(1);
+		expect(Number(row?.lastRequest)).toBe(now);
+		expect(Number(row?.windowExpiresAt)).toBe(now + 10_000);
 	});
 });
 

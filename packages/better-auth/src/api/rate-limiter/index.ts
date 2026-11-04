@@ -213,6 +213,16 @@ function createDatabaseStorageWrapper(
 		// concurrent increment or extension between the read and the write
 		// cannot be clobbered; the miss re-reads and re-decides on the row as
 		// it now stands.
+		//
+		// The deadline comparison only guards rows that actually carry one.
+		// On Prisma a null comparison is sent as `equals: null`, which matches
+		// explicit nulls but never documents where the field does not exist,
+		// so on MongoDB documents written before the column was added the
+		// guard would miss on every attempt and `consume` would never return.
+		// Rows without a stored deadline are therefore guarded on the start
+		// only and normalized in the same set; the first write that lands
+		// gives the row a deadline, which bounds the unprotected transition to
+		// a single request.
 		if (now >= windowExpiresAt) {
 			const reset = await db.incrementOne<RateLimit>({
 				model,
@@ -223,11 +233,15 @@ function createDatabaseStorageWrapper(
 						operator: "lte",
 						value: data.lastRequest,
 					},
-					{
-						field: "windowExpiresAt",
-						operator: "eq",
-						value: data.windowExpiresAt ?? null,
-					},
+					...(typeof data.windowExpiresAt === "number"
+						? [
+								{
+									field: "windowExpiresAt",
+									operator: "eq" as const,
+									value: data.windowExpiresAt,
+								},
+							]
+						: []),
 				],
 				increment: {},
 				set: {
@@ -252,20 +266,32 @@ function createDatabaseStorageWrapper(
 		// decision: with concurrent requests deciding on different windows, a
 		// write may only land on the row its decision saw, so a fresher
 		// extension or reset is never overwritten and the loser re-reads and
-		// re-decides below. Rows written before the column existed (null
-		// deadline) match the null in the compare-and-swap value and are
-		// normalized here on their first increment.
+		// re-decides below.
+		//
+		// The deadline comparison only guards rows that actually carry one.
+		// On Prisma a null comparison is sent as `equals: null`, which matches
+		// explicit nulls but never documents where the field does not exist,
+		// so on MongoDB documents written before the column was added the
+		// guard would miss on every attempt and `consume` would never return.
+		// Rows without a stored deadline are therefore guarded on the start
+		// only and normalized in the same set; the first write that lands
+		// gives the row a deadline, which bounds the unprotected transition to
+		// a single request.
 		const incremented = await db.incrementOne<RateLimit>({
 			model,
 			where: [
 				{ field: "key", value: key },
 				{ field: "lastRequest", operator: "eq", value: data.lastRequest },
-				{
-					field: "windowExpiresAt",
-					operator: "eq",
-					value: data.windowExpiresAt ?? null,
-				},
-				{ field: "count", operator: "lt", value: rule.max },
+				...(typeof data.windowExpiresAt === "number"
+					? [
+							{
+								field: "windowExpiresAt",
+								operator: "eq" as const,
+								value: data.windowExpiresAt,
+							},
+						]
+					: []),
+				{ field: "count", operator: "lt" as const, value: rule.max },
 			],
 			increment: { count: 1 },
 			set: {
