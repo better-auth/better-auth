@@ -16,7 +16,7 @@ description: Control which tokens the provider issues, for which APIs, and for h
 | `private_key_jwt`     | A signed JWT assertion. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt). |
 | `none`                | Public client. PKCE is required.                                                                     |
 
-When the request includes a `resource` and the JWT plugin is enabled, the access token is a JWT whose `aud` is that resource. Otherwise the access token is opaque. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
+When the request includes a `resource` and the JWT plugin is enabled, the access token is a JWT whose `aud` is that resource. When the scopes also include `openid`, `aud` is an array that also holds the UserInfo endpoint URL. Otherwise the access token is opaque. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
 
 ## Scopes
 
@@ -42,7 +42,7 @@ oauthProvider({
 A resource is a protected API that the provider issues access tokens for. Its `identifier` is the `resource` parameter value from [RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2) and becomes the `aud` of a JWT access token.
 
 <Callout type="warn">
-  `enforcePerClientResources` defaults to `true`, so `/oauth2/authorize` and `/oauth2/token` reject a `resource` the client is not linked to. Link clients with `resources` on `adminCreateOAuthClient` or with `adminLinkClientResource`, or set the option to `false` to let any client request any enabled resource.
+  A client can request only the resources it is linked to. `/oauth2/authorize` and `/oauth2/token` reject any other `resource`. Link clients with `resources` on `adminCreateOAuthClient` or with `adminLinkClientResource`. Setting `enforcePerClientResources: false` lets any client request any enabled resource.
 </Callout>
 
 ```ts title="auth.ts"
@@ -101,7 +101,7 @@ await auth.api.adminLinkClientResource({
 });
 ```
 
-Deleting a resource makes introspection report its tokens as inactive, while `disabled: true` only stops new issuance. An API that verifies JWTs locally with the JWKS keeps accepting them until they expire; use [introspection](/docs/plugins/oauth-provider/resource-server#introspection) when deletion must cut off access immediately. To attach resources during dynamic registration, see [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
+Deleting a resource makes introspection report its tokens as inactive, while `disabled: true` only stops new issuance. An API that verifies JWTs locally with the JWKS keeps accepting them until they expire; use [introspection](/docs/plugins/oauth-provider/resource-server#introspection) when deletion must cut off access immediately. To attach resources during dynamic registration, see [Resources for registered clients](/docs/plugins/oauth-provider/clients#resources-for-registered-clients).
 
 <Callout type="warn">
   With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. Requests that use any configured resource fail until every resource declares `allowedScopes`. For the resource the [MCP plugin](/docs/plugins/mcp) adds, declare it in `resources` with the same identifier.
@@ -178,7 +178,13 @@ A client without PKCE that requests `offline_access` must send both `openid` and
 
 A DPoP-bound access token only works alongside a proof signed by the client's private key, so a leaked token cannot be replayed without that key, as long as your API verifies the proof.
 
-A client gets DPoP-bound tokens ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449#section-4)) when it registers with `dpop_bound_access_tokens: true` ([§5.2](https://datatracker.ietf.org/doc/html/rfc9449#section-5.2)), sends `dpop_jkt` on the authorization request, or requests a resource with `dpopBoundAccessTokensRequired: true`. The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)), returns `token_type: "DPoP"`, and requires a proof from the same key on refresh.
+A client gets DPoP-bound tokens ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449#section-4)) in any of these cases:
+
+* It registered with `dpop_bound_access_tokens: true` ([§5.2](https://datatracker.ietf.org/doc/html/rfc9449#section-5.2)).
+* It sends `dpop_jkt` on the authorization request.
+* It requests a resource with `dpopBoundAccessTokensRequired: true`.
+
+The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)) and returns `token_type: "DPoP"`. A refresh needs a proof from the same key. A JWT access token carries the key's thumbprint in `cnf.jkt`. The client calls your API with `Authorization: DPoP <access_token>` and a `DPoP` proof that includes the access token hash, `ath` ([§7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
 
 ```ts title="auth.ts"
 oauthProvider({

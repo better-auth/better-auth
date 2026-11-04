@@ -9,7 +9,12 @@ In SAML, your app is the service provider (SP). It sends the user to the identit
 
 ## Configure the IdP application
 
-At your IdP, create a SAML application with the ACS URL `{baseURL}/sso/saml2/sp/acs/{providerId}` (with the default base path, `https://app.example.com/api/auth/sso/saml2/sp/acs/acme-saml`) and the SP entity ID (audience) set to the `issuer` you will register. Then copy the IdP's metadata XML, or its entity ID, SSO URL, and signing certificate. After registration you can give the IdP the [SP metadata](#service-provider-metadata) URL instead.
+At your IdP, create a SAML application with these values:
+
+* **ACS URL**: `{baseURL}/sso/saml2/sp/acs/{providerId}`. With the default base path, that is `https://app.example.com/api/auth/sso/saml2/sp/acs/acme-saml`.
+* **SP entity ID** (audience): the `issuer` you will register.
+
+Then copy the IdP's metadata XML, or its entity ID, SSO URL, and signing certificate. After registration, you can give the IdP the [SP metadata](#service-provider-metadata) URL instead.
 
 ## Register a SAML provider
 
@@ -168,7 +173,9 @@ After sign-in, Better Auth redirects to the first of these that is set:
 
 Better Auth skips any entry that is not a relative path or a URL matching `trustedOrigins`.
 
-Errors in SP-initiated sign-ins redirect to the `errorCallbackURL` from `signIn.sso()`, else `onAPIError.errorURL`, else `{baseURL}/error`. Errors in IdP-initiated sign-ins use the list above. Errors from matching or creating the user, such as `account_not_linked`, `signup_disabled`, and `unable_to_create_user`, always redirect to the sign-in destination above, even when `errorCallbackURL` is set, so check for `error` there too.
+Errors in SP-initiated sign-ins redirect to the `errorCallbackURL` from `signIn.sso()`, else `onAPIError.errorURL`, else `{baseURL}/error`. Errors in IdP-initiated sign-ins use the list above.
+
+Errors from matching or creating the user always redirect to the sign-in destination above, even when `errorCallbackURL` is set. They include `account_not_linked`, `signup_disabled`, and `unable_to_create_user`. Check for `error` on that page too.
 
 `samlConfig.callbackUrl` sets where users land, not the ACS URL. Before 1.7 it set the ACS URL; see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#saml-configuration-is-simplified).
 
@@ -208,9 +215,12 @@ Set `saml.enableSingleLogout: true` to add SAML Single Logout ([Profiles §4.4](
 * `{baseURL}/sso/saml2/sp/slo/{providerId}` accepts GET and POST for IdP-initiated logout. SP metadata advertises it when Better Auth generates the metadata.
 * `POST /sso/saml2/logout/{providerId}` starts SP-initiated logout for the current session. It ends the Better Auth session and redirects to the IdP, with the optional `callbackURL` as RelayState.
 
-The IdP must publish a `SingleLogoutService`, in its metadata XML or in `idpMetadata.singleLogoutService`. The plugin options `saml.wantLogoutRequestSigned` and `saml.wantLogoutResponseSigned` require signed logout messages, and `saml.logoutRequestTTL` (default 5 minutes) limits how long a logout request stays valid. Signing out through `/sign-out` also removes the stored SAML session.
+The IdP must publish a `SingleLogoutService`, in its metadata XML or in `idpMetadata.singleLogoutService`. Signing out through `/sign-out` also removes the stored SAML session. These plugin options tune logout:
 
-The endpoint accepts only JSON and answers with a redirect to the IdP, and the client plugin does not expose it. Add a server route that the browser reaches with a form POST, and forward the request to `auth.handler` as JSON. Better Auth then runs its [origin and CSRF checks](/docs/reference/security#csrf-protection) on it, and the browser follows the redirect. Calling `auth.api.initiateSLO` directly would skip those checks. The example assumes the default `/api/auth` base path; use your `basePath` if you changed it:
+* `saml.wantLogoutRequestSigned` and `saml.wantLogoutResponseSigned` require signed logout messages from the IdP.
+* `saml.logoutRequestTTL` (default 5 minutes) limits how long a logout request stays valid.
+
+The client plugin does not expose SP-initiated logout, and the endpoint accepts only JSON. To start it from the browser, add a server route that a form POSTs to, and forward the request to `auth.handler` as JSON. Better Auth then runs its [origin and CSRF checks](/docs/reference/security#csrf-protection), and the browser follows the redirect to the IdP. Do not call `auth.api.initiateSLO` from that route, because a direct call skips those checks. The example uses the default `/api/auth` base path. Change it if you set `basePath`.
 
 ```ts title="app/sign-out/saml/route.ts"
 import { auth } from "@/lib/auth";

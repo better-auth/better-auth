@@ -64,7 +64,7 @@ Pass these options to `sso()`. All of them are optional.
 
     `oidcConfig` <span className="opacity-70">`OIDCConfig`</span>
 
-    The stored OIDC shape. `issuer`, `discoveryEndpoint`, and `pkce` are required here. This is the only place `allowIdpInitiated` takes effect.
+    The stored OIDC shape. `issuer`, `discoveryEndpoint`, and `pkce` are required here. Set `allowIdpInitiated` here, because the API silently drops it.
 
     `samlConfig` <span className="opacity-70">`SAMLConfig`</span>
 
@@ -168,7 +168,7 @@ See [Register an OIDC provider](/docs/plugins/sso/oidc#register-an-oidc-provider
 | `pkce`                        | `boolean`                                                            | `true`                                             | Sends a PKCE challenge ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636)).                                                                                                          |
 | `overrideUserInfo`            | `boolean`                                                            | —                                                  | Where the top-level `overrideUserInfo` is stored. Ignored at registration, where you set the top-level field. Set it here on update.                                                         |
 | `mapping`                     | `object`                                                             | —                                                  | Claim names to read. See [Mapping](/docs/plugins/sso/oidc#mapping).                                                                                                                          |
-| `allowIdpInitiated`           | `boolean`                                                            | `false`                                            | Accepts callbacks without `state`. Honored only on `defaultSSO` entries, because registration and update drop it. See [IdP-initiated sign-in](/docs/plugins/sso/oidc#idp-initiated-sign-in). |
+| `allowIdpInitiated`           | `boolean`                                                            | `false`                                            | Accepts callbacks without `state`. Set it only on `defaultSSO` entries; registration and update silently drop it. See [IdP-initiated sign-in](/docs/plugins/sso/oidc#idp-initiated-sign-in). |
 
 <Accordions>
   <Accordion title="oidcConfig.mapping">
@@ -364,7 +364,7 @@ export const ssoProviderTableFields = [
 
 ### Verification records
 
-The plugin also writes short-lived records to the verification table, or to secondary storage when one is configured.
+The plugin also writes short-lived records to the verification table, or to secondary storage when one is configured. `saml-used-assertion:` records always need the database; see [Assertion replay protection](/docs/plugins/sso/saml-security#assertion-replay-protection).
 
 | Identifier prefix             | Stores                                                |
 | ----------------------------- | ----------------------------------------------------- |

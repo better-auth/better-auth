@@ -126,7 +126,7 @@ await auth.api.adminCreateOAuthClient({
 * A valid `id_token_hint` for the current browser session ends it immediately. Without one, or with a hint for a different session, the user must confirm first.
 * Better Auth [redirects after logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout) only when `post_logout_redirect_uri` exactly matches a registered URI, and adds `state` only to that redirect.
 
-Enable this only for clients you trust. Ending the session also triggers back-channel logout.
+Enable this only for clients you trust. With a valid `id_token_hint`, the request does not need the user's browser, and an expired ID token is still accepted as a hint. So the client, or anyone holding an ID token it received, can end that session without confirmation. Ending the session also triggers back-channel logout for every client that holds tokens for it.
 
 ## Back-channel logout
 
@@ -144,7 +144,7 @@ await auth.api.adminCreateOAuthClient({
 ```
 
 * Recipients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token for it, such as after a `resource` request without `offline_access`, is not notified.
-* Logout Tokens always include `sid` and live for 120 seconds. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
+* Logout Tokens carry `typ: logout+jwt`, always include `sid`, and live for 120 seconds. The JWT plugin signs them, so a client verifies them with your JWKS. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
 * Better Auth also revokes the session's access tokens and its refresh tokens without `offline_access`. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows.
 * `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS, so a public name that resolves to a private address passes. If untrusted parties can register clients, block outbound requests from the auth server to private networks.
 * Clients registered through [CIMD](/docs/plugins/cimd) cannot use back-channel logout.

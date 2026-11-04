@@ -102,7 +102,7 @@ See the [Schema](/docs/plugins/sso/reference#schema) section to add the fields m
   ```
 </APIMethod>
 
-The call returns `204`, and it marks the provider verified only if every listed domain answers with the record. If the provider's domains change while the check runs, it returns `409` with `SSO_PROVIDER_CHANGED`. Reload the provider and retry.
+The call returns `204`, and it marks the provider verified only if every listed domain answers with the record. If the provider's domains change, or the provider is deleted, while the check runs, it returns `409` with `SSO_PROVIDER_CHANGED`. Reload the provider and retry.
 
 ## Request a verification token
 
@@ -132,4 +132,4 @@ Both endpoints require access to the provider: the caller owns it, or is an owne
 | `IDENTIFIER_TOO_LONG`        | 400    | `_{tokenPrefix}-{providerId}` is longer than 63 characters.                        |
 | `INVALID_DOMAIN`             | 400    | An entry in the provider's `domain` value is not a valid domain.                   |
 | `DOMAIN_VERIFICATION_FAILED` | 502    | A domain has no matching TXT record. Returns `500` when `node:dns` is unavailable. |
-| `SSO_PROVIDER_CHANGED`       | 409    | The provider's domains changed during verification. Reload the provider and retry. |
+| `SSO_PROVIDER_CHANGED`       | 409    | The domains changed, or the provider was deleted, during verification. Retry.      |

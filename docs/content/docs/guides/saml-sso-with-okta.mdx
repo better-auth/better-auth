@@ -34,7 +34,7 @@ In this setup:
 6. Download the IdP metadata XML file and certificate
 
 <Callout type="warn">
-  **IdP-initiated SSO**: To let users start from the IdP dashboard, point the **Single Sign-on URL** at `/api/auth/sso/saml2/sp/acs/{providerId}` and set `saml: { allowIdpInitiated: true }` in the `sso()` options. It is off by default because it lets anyone with an account at the IdP sign a victim into the attacker's account, and it applies to every SAML provider. Enable it only when the IdP requires it; see [IdP-initiated SSO](/docs/plugins/sso/saml#idp-initiated-sso).
+  **IdP-initiated SSO**: To let users start from the IdP dashboard, point the **Single Sign-on URL** at `/api/auth/sso/saml2/sp/acs/{providerId}` and set `saml: { allowIdpInitiated: true }` in the `sso()` options. It is off by default, because anyone with an account at the IdP could then sign a victim into the attacker's account. The setting applies to every SAML provider. Enable it only when the IdP requires it; see [IdP-initiated SSO](/docs/plugins/sso/saml#idp-initiated-sso).
 </Callout>
 
 ### Step 2: Configure Better Auth

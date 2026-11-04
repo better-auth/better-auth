@@ -22,7 +22,13 @@ A failed check redirects to the [error URL](/docs/plugins/sso/saml#acs-and-callb
 
 InResponseTo validation is on by default. Each AuthnRequest ID is stored as a verification value for `requestTTL` (5 minutes by default), and the matching response consumes it once ([SAML Core §3.2.2](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)). Verification values use secondary storage when it is configured and the database otherwise, so validation works across multiple instances. Replay protection always needs the database; see [Assertion replay protection](#assertion-replay-protection).
 
-A response without `InResponseTo` is IdP-initiated, and it is rejected unless you enable [IdP-initiated SSO](/docs/plugins/sso/saml#idp-initiated-sso). Setting `enableInResponseToValidation: false` turns correlation off for every SAML provider: unsolicited responses are then accepted even when `allowIdpInitiated` is `false`, and the provider-mismatch check is skipped. To accept IdP-initiated sign-in, keep validation on and set `allowIdpInitiated: true` instead.
+A response without `InResponseTo` is IdP-initiated, and it is rejected unless you enable [IdP-initiated SSO](/docs/plugins/sso/saml#idp-initiated-sso). To accept IdP-initiated sign-in, keep validation on and set `allowIdpInitiated: true`.
+
+Do not set `enableInResponseToValidation: false` to get there. It turns correlation off for every SAML provider:
+
+* Unsolicited responses are accepted even when `allowIdpInitiated` is `false`.
+* Responses that cite an unknown, expired, or already used request ID are accepted.
+* The check that a response belongs to the provider that started sign-in is skipped.
 
 To give users more time at the IdP login page, raise `requestTTL`:
 
@@ -43,7 +49,9 @@ sso({
 
 ## Assertion replay protection
 
-Replay protection is always on for assertions that carry an ID. Each assertion ID is reserved atomically in the verification store until `NotOnOrAfter` plus `clockSkew`, or for 15 minutes when the assertion has no `NotOnOrAfter`, and a reused ID redirects with `error=replay_detected` ([Profiles §4.1.4.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)). An assertion whose ID cannot be read skips this check, and a warning is logged.
+Replay protection is always on for assertions that carry an ID ([Profiles §4.1.4.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)). Each assertion ID is reserved until `NotOnOrAfter` plus `clockSkew`. An assertion without `NotOnOrAfter` is reserved for 15 minutes.
+
+A reused ID redirects with `error=replay_detected` and `error_description=SAML assertion has already been used`. An assertion whose ID cannot be read skips this check, and a warning is logged.
 
 <Callout type="warn">
   The reservation needs database-backed verification storage. With `secondaryStorage` configured, set [`verification.storeInDatabase: true`](/docs/reference/options#verification), or every SAML sign-in fails at this step.
@@ -53,7 +61,9 @@ Replay protection is always on for assertions that carry an ID. Each assertion I
 
 A response is rejected when the current time is before `NotBefore` minus `clockSkew`, or after `NotOnOrAfter` plus `clockSkew`. `clockSkew` defaults to 5 minutes.
 
-[SAML Core §2.5.1](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf) makes these conditions optional, while [SAML2Int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html) requires them. By default an assertion without timestamps is accepted and a warning is logged. An assertion without `NotOnOrAfter` never expires, and its replay reservation lasts only 15 minutes, so when unsolicited responses are accepted it can be replayed after that. Set `requireTimestamps: true` unless an IdP you rely on omits these conditions. It rejects only assertions with neither condition, not one that carries `NotBefore` alone.
+Set `requireTimestamps: true` unless an IdP you rely on omits these conditions. [SAML2Int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html) requires them, although [SAML Core §2.5.1](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf) makes them optional.
+
+By default, an assertion without timestamps is accepted and a warning is logged. An assertion without `NotOnOrAfter`, including one with only `NotBefore`, never expires, and its replay reservation lasts only 15 minutes. When unsolicited responses are accepted, it can be replayed after that. `requireTimestamps` rejects only assertions with neither condition, not one that carries `NotBefore` alone.
 
 ```ts title="auth.ts"
 sso({

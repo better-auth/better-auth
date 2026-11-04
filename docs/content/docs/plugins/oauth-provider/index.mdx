@@ -7,7 +7,12 @@ description: Make your app an OAuth 2.1 and OpenID Connect provider that other a
 
 The OAuth Provider plugin turns your Better Auth server into an authorization server that implements [OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1), [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html), and [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) metadata. Other applications send users to your app to sign in and receive access tokens for your APIs.
 
-By default, the provider requires S256 PKCE, matches redirect URIs exactly, adds `iss` to every authorization response so clients can tell which server answered, and issues tokens only for the APIs each client is linked to.
+By default, the provider:
+
+* requires S256 PKCE
+* matches redirect URIs exactly
+* adds `iss` to every authorization response, so clients can tell which server answered
+* issues tokens only for the APIs each client is linked to
 
 <Callout type="info">
   To sign users in to your app with another provider, use [social providers](/docs/concepts/oauth), [Generic OAuth](/docs/plugins/generic-oauth), or [SSO](/docs/plugins/sso) instead.
@@ -87,7 +92,7 @@ By default, the provider requires S256 PKCE, matches redirect URIs exactly, adds
   <Step>
     ### Expose the well-known metadata
 
-    The auth handler serves these routes. If your framework forwards only a catch-all auth route to `auth.handler`, add routes for the ones it misses.
+    Clients fetch the provider's metadata from these paths, and the auth handler serves them when requests reach it. Most frameworks forward only your auth base path, such as `/api/auth/*`, to `auth.handler`. Add a route for each path outside it, such as the RFC 8414 path at the root of your domain.
 
     | Metadata                                                                                              | Path                                                                                                          | Helper                              |
     | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
@@ -111,7 +116,7 @@ By default, the provider requires S256 PKCE, matches redirect URIs exactly, adds
   <Step>
     ### Add the client plugins
 
-    Add `oauthProviderClient` to the app that renders your login and consent pages. It sends the signed authorization request from the page URL back with each POST the page makes, such as sign-in and consent, so the flow can resume.
+    Add `oauthProviderClient` to the app that renders your login and consent pages. It carries the authorization request through sign-in and consent, so the flow resumes after each step.
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
@@ -140,7 +145,13 @@ This flow issues an access token for one API, `https://api.example.com`. Build t
   <Step>
     ### Register the API and a client
 
-    Add the API to `resources`, then create a client linked to it. `adminCreateOAuthClient` runs only on the server and needs a signed-in user's session, so call it from a route only admins can reach, [check its `Origin`](/docs/reference/security#csrf-protection), and pass that request's headers. [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) can also limit who creates clients. The authorize and token endpoints reject a `resource` the client is not linked to; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
+    Add the API to `resources`, then create a client linked to it. The authorize and token endpoints reject a `resource` the client is not linked to; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
+
+    `adminCreateOAuthClient` runs only on the server and needs a signed-in user's session. Call it from a route that:
+
+    * only administrators can reach
+    * [checks the request's `Origin`](/docs/reference/security#csrf-protection)
+    * passes the request's headers
 
     ```ts title="auth.ts"
     oauthProvider({

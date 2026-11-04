@@ -92,11 +92,26 @@ For a fixed set of providers configured in code, use [Generic OAuth](/docs/plugi
 
 ## Register a provider
 
-`authClient.sso.register` (or `auth.api.registerSSOProvider` on the server) calls `POST /sso/register` and creates a provider owned by the signed-in user. It requires `providerId`, `issuer` (a URL), `domain` (a bare email domain, comma-separated for several), and an `oidcConfig`, a `samlConfig`, or both.
+By default, any signed-in user can register up to 10 providers for any domain. Two providers can claim the same domain, and a provider's domain also matches its subdomains. Sign-in by email prefers a provider whose domain matches exactly, then takes the first match the database returns. Decide who registers providers before you deploy:
 
-`providerId` must be unique. Registration returns 422 when it matches a built-in provider id, a configured social provider, an `account.accountLinking.trustedProviders` entry, or a `defaultSSO` id.
+| Who registers providers                   | Configure                                                                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Only your administrators                  | Set `providersLimit` to a function that returns `0` for everyone else.                                                                                              |
+| Your customers, each for their own domain | Enable [domain verification](/docs/plugins/sso/domain-verification). A provider then cannot sign anyone in until its domain is proven over DNS.                     |
+| Nobody at runtime                         | Set `providersLimit: 0` and define the providers in [`defaultSSO`](#configure-providers-in-code). To link existing users by email, also enable domain verification. |
 
-Each user can register up to `providersLimit` providers (default `10`). Set it to `0` to disable registration. By default any signed-in user can register a provider for any domain, and two providers can claim the same domain. Unless customers register their own connections, set `providersLimit` to a function that returns `0` for everyone except your administrators. When users register their own providers, enable [domain verification](/docs/plugins/sso/domain-verification) so a provider cannot sign anyone in until its domain is proven over DNS.
+```ts title="auth.ts"
+sso({
+  providersLimit: async (user) => ((await isAdmin(user.id)) ? 10 : 0), // your check
+})
+```
+
+`authClient.sso.register` calls `POST /sso/register` and creates a provider owned by the signed-in user. On the server, call `auth.api.registerSSOProvider` with the request's headers. A registration needs:
+
+* `providerId`: unique. The IDs of built-in providers, your configured social providers, `account.accountLinking.trustedProviders` entries, and `defaultSSO` entries are rejected with 422.
+* `issuer`: the IdP issuer URL for OIDC, or your SP entity ID for SAML.
+* `domain`: a bare email domain such as `example.com`. Separate several domains with commas.
+* `oidcConfig`, `samlConfig`, or both.
 
 The response includes `redirectURI`, and `domainVerificationToken` when domain verification is enabled.
 
@@ -123,7 +138,12 @@ For every field, see [Register an OIDC provider](/docs/plugins/sso/oidc#register
 
 ### Configure providers in code
 
-`defaultSSO` is an array of `{ providerId, domain, oidcConfig?, samlConfig?, privateKey? }` entries that live in your config instead of the database. They are checked before database providers. With `domainVerification.enabled: true`, they count as verified without a DNS check, so a sign-in can link to an existing user at a listed domain when the other [linking conditions](/docs/plugins/sso/provisioning#how-sso-users-are-matched) hold. Without it, Better Auth does not link them by email, so an existing user's first SSO sign-in fails unless [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) links it. List only domains the IdP is authoritative for.
+`defaultSSO` is an array of `{ providerId, domain, oidcConfig?, samlConfig?, privateKey? }` entries that live in your config instead of the database. They are checked before database providers. List only domains the IdP is authoritative for.
+
+Whether these providers link to existing users depends on domain verification:
+
+* With `domainVerification.enabled: true`, they count as verified without a DNS check. A sign-in can link to an existing user at a listed domain when the other [linking conditions](/docs/plugins/sso/provisioning#how-sso-users-are-matched) hold.
+* Without it, Better Auth does not link them by email. An existing user's first SSO sign-in fails unless [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) links it.
 
 ```ts title="auth.ts"
 sso({
@@ -157,19 +177,23 @@ await authClient.signIn.sso({
 });
 ```
 
-| Identify the provider by | Match                                                                                                  |
-| ------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `email`                  | The domain part of the address is matched against provider domains.                                    |
-| `domain`                 | Matched against provider domains.                                                                      |
-| `organizationSlug`       | The provider linked to that organization. Needs the [organization plugin](/docs/plugins/organization). |
-| `providerId`             | The provider with that id.                                                                             |
+On the server, `auth.api.signInSSO` returns the IdP's `url`. Send the browser there.
 
-* When `providerId` is given, the provider is looked up by it alone. Otherwise the domain from `domain` or `email` is matched against each provider's comma-separated domains, checking `defaultSSO` entries before the database. `organizationSlug` selects the organization's provider, but a `defaultSSO` entry matching the domain still wins, and an unknown slug falls back to domain matching.
+Better Auth picks the provider in this order:
+
+1. With `providerId`, the provider with that ID. No other field is used.
+2. A `defaultSSO` entry whose domains include `domain`, or the domain part of `email`.
+3. With `organizationSlug`, the provider linked to that organization. This needs the [organization plugin](/docs/plugins/organization). An unknown slug continues to the next step.
+4. A registered provider whose domain matches exactly, then the first registered provider whose domains include the domain or a parent of it.
+
+With domain verification enabled, a provider whose domain is not verified returns 401.
+
+Other sign-in fields:
+
 * `loginHint` is sent to OIDC providers as [`login_hint`](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest), and falls back to `email`. SAML ignores it.
 * `providerType` picks the protocol when a provider has both configurations; without it, OIDC is used. Requesting a protocol the provider does not have returns 400.
 * `additionalParams` adds parameters to the OIDC authorization request. Reserved parameters such as `state`, `client_id`, and `redirect_uri` are rejected, and SAML providers reject it with 400.
 * `requestSignUp: true` creates a new user even when `disableImplicitSignUp` is on, and any caller can set it. It applies to OIDC only; SAML ignores it. To refuse users you have not provisioned, see [Block new users](/docs/plugins/sso/provisioning#block-new-users).
-* With domain verification enabled, a provider whose domain is not verified returns 401.
 
 <APIMethod path="/sign-in/sso" method="POST">
   ```ts
@@ -279,9 +303,14 @@ await authClient.signIn.sso({
   Deleting a provider also deletes every `account` row linked to it.
 </Callout>
 
-Use [`guardProviderMutation`](/docs/plugins/sso/reference#plugin-options) to reject provider changes, for example boundary changes while a directory sync is paired. Throw from it to fail the request with 409 `SSO_PROVIDER_MUTATION_REJECTED`. It needs a database adapter with native transactions.
+[`guardProviderMutation`](/docs/plugins/sso/reference#plugin-options) runs before a stored provider is updated or deleted. Throw from it to reject the change with 409 `SSO_PROVIDER_MUTATION_REJECTED`. It needs a database adapter with native transactions and async-context support. It runs after the provider row is locked, and receives:
 
-It runs inside the update or delete transaction after the provider row is locked, and receives `action`, the provider, and, on update, `isAuthenticationBoundaryChange`. That flag is `true` for the identity fields above and for SAML signing certificate changes. It is `false` for OIDC client secret and SAML SP private key rotation.
+* `action`: `"update"` or `"delete"`.
+* `provider`: the `id`, `providerId`, and `organizationId` of the stored row.
+* `providerReference`: an opaque reference to that row's configuration. Never persist it.
+* `isAuthenticationBoundaryChange`, on update only. It is `true` for the identity fields above and for SAML signing certificate changes. It is `false` for OIDC client secret and SAML SP private key rotation.
+
+Its second argument's `database` runs in the same transaction, so read related state through it. For example, reject boundary changes while a directory sync is paired. To change the IdP trust configuration, unpair the directory, update the provider, and then pair it again.
 
 ## Next steps
 

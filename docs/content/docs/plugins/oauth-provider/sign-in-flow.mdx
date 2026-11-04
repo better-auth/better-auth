@@ -51,10 +51,7 @@ oauthProvider({
 })
 ```
 
-The page's query holds `client_id`, `scope`, and, when requested, `claims`. Before rendering, verify the query on the server with the helper below. It:
-
-1. Keeps only the signed parameters: those listed in `ba_param`, plus `ba_param` and `sig`. Your page's own parameters would otherwise break the signature.
-2. Reads the provider's secret from `auth.$context`, including versioned `secrets`. Never send it to the browser.
+The page's query holds `client_id`, `scope`, and, when requested, `claims`. Before rendering, verify the query on the server with the helper below. It keeps only the signed parameters, so your page's own parameters do not break the signature. It reads the provider's secret from `auth.$context`, so run it only on the server.
 
 ```ts title="consent-query.ts"
 import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
@@ -72,9 +69,18 @@ export async function getVerifiedConsentQuery(request: Request) {
 }
 ```
 
-Return an error response when the helper returns `null`. The check rejects modified or expired queries only. It does not check that the client exists, that the user is signed in, or that the scopes are valid. Show the requested `scope` and `claims.userinfo` names on the screen, then call `oauth2.consent`.
+Return an error response when the helper returns `null`. The check rejects only queries that were changed or have expired. It does not prove that the client exists, that the user is signed in, or that the scopes are valid.
 
-To show which client is asking, load it with `auth.api.getOAuthClientPublic({ query: { client_id }, headers: request.headers })`, using the signed `client_id`. It throws a 404 error for unknown or disabled clients. For dynamically registered and CIMD clients, whoever registered the client chose its name and logo, so also show the host of the signed `redirect_uri`.
+To show which client is asking, load it with the signed `client_id`. The call throws a 401 error without a session, and a 404 error for unknown or disabled clients.
+
+```ts title="consent-page.ts"
+const client = await auth.api.getOAuthClientPublic({
+  query: { client_id: query.get("client_id")! },
+  headers: request.headers,
+});
+```
+
+For dynamically registered and CIMD clients, whoever registered the client chose its name and logo. Also show the host of the signed `redirect_uri`. Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
 
 <APIMethod path="/oauth2/consent" method="POST" requireSession>
   ```ts
@@ -153,7 +159,7 @@ await authClient.oauth2.continue({ selected: true });
 
 ## Post-login screen
 
-`postLogin` adds a step after sign-in and before consent, for example to pick an organization. `consentReferenceId` ties the consent to that choice: consent is stored per reference, and `undefined` uses consent given without one.
+`postLogin` adds a step after sign-in and before consent, for example to pick an organization. `consentReferenceId` returns the choice, such as the organization ID. Better Auth stores consent separately for each reference. When it returns `undefined`, the consent given without a reference applies.
 
 ```ts title="auth.ts"
 oauthProvider({

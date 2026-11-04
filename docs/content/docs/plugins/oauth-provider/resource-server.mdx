@@ -12,25 +12,31 @@ A resource server is the API that receives access tokens from your OAuth clients
 Call `verifyAccessTokenRequest` from `better-auth/oauth2` on each request. It verifies the token and, when the token is DPoP-bound, also checks the proof against the request method and URL ([RFC 9449 §7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
 
 ```ts title="api/posts.ts"
+import { isAPIError } from "better-auth/api";
 import {
   requestToResourceInput,
   verifyAccessTokenRequest,
 } from "better-auth/oauth2";
 
 export const GET = async (req: Request) => {
-  const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
-    jwksUrl: "https://auth.example.com/api/auth/jwks",
-    verifyOptions: {
-      issuer: "https://auth.example.com/api/auth",
-      audience: "https://api.example.com",
-    },
-    requiredScopes: ["read:post"],
-  });
-  return Response.json({ sub: payload.sub });
+  try {
+    const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
+      jwksUrl: "https://auth.example.com/api/auth/jwks",
+      verifyOptions: {
+        issuer: "https://auth.example.com/api/auth",
+        audience: "https://api.example.com",
+      },
+      requiredScopes: ["read:post"],
+    });
+    return Response.json({ sub: payload.sub });
+  } catch (error) {
+    if (!isAPIError(error)) throw error;
+    return Response.json(error.body, { status: error.statusCode });
+  }
 };
 ```
 
-`requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a `403` `insufficient_scope` error that lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)). Catch the thrown `APIError` and return its `statusCode`; most frameworks turn an uncaught error into a `500`.
+`requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a `403` `insufficient_scope` error that lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)). Catch the thrown `APIError` and return its `statusCode`, as above; most frameworks turn an uncaught error into a `500`.
 
 If the API runs in the same process as your auth server, use the resource client instead. Its `401` and `insufficient_scope` errors carry a `WWW-Authenticate` challenge in `headers`.
 
@@ -44,7 +50,7 @@ export const serverClient = createAuthClient({
 });
 ```
 
-The resource client's defaults come from the `baseURL` and `basePath` you pass to `betterAuth()`, not the resolved URL. With an origin-only `baseURL`, the default issuer misses the `/api/auth` path unless you set `jwt.issuer`, and the default JWKS URL misses it unless you set `basePath` explicitly. Pass `issuer` and `jwksUrl` to be safe, and set `audience` to your API's identifier.
+Pass `issuer`, `jwksUrl`, and `audience` explicitly. The defaults come from the `baseURL` you pass to `betterAuth()`, so they can miss your base path, such as `/api/auth`. The default audience is the auth server's URL, not your API's identifier.
 
 ```ts title="api/posts.ts"
 import { isAPIError } from "better-auth/api";
@@ -74,8 +80,21 @@ export const POST = async (req: Request) => {
 `verifyBearerToken` takes a raw token string and rejects DPoP-bound tokens. Use it only on routes that should accept bearer tokens alone.
 
 <Callout type="warn">
-  The DPoP proof is checked against `request.url`, so a proxy in front of the API must forward the external scheme, host, and path. The default replay store is in memory and safe only for a single instance; for multi-instance or serverless APIs, pass `dpop: { replayStore: createDpopReplayStore((await auth.$context).internalAdapter) }` from `better-auth/oauth2`. That store needs database-backed verification storage, and rejects DPoP requests when only secondary storage is configured.
+  For DPoP-bound tokens:
+
+  * The proof is checked against `request.url`. A proxy in front of the API must forward the external scheme, host, and path.
+  * The default replay store is in memory, so it is safe only for a single instance. For multi-instance or serverless APIs, pass a shared store, as below. It needs database-backed verification storage, and rejects DPoP requests when only secondary storage is configured.
 </Callout>
+
+```ts title="api/posts.ts"
+import { createDpopReplayStore } from "better-auth/oauth2";
+import { auth } from "@/lib/auth";
+
+const replayStore = createDpopReplayStore((await auth.$context).internalAdapter);
+
+// Pass it with the other options, as in the example above:
+// verifyAccessTokenRequest(input, { jwksUrl, verifyOptions, dpop: { replayStore } })
+```
 
 ## JWT or opaque tokens
 

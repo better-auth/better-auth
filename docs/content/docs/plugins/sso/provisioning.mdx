@@ -13,10 +13,15 @@ Better Auth stores each SSO identity as an `account` keyed by the provider ID an
 
 * **Returning account.** The user who owns the account signs in.
 * **New account, no user with that email.** A new user is created with `emailVerified: false`.
-* **New account, a user with that email exists.** Better Auth links the account in either case:
+* **New account, a user with that email exists.** Better Auth links the account in these cases:
 
-  * [`resolveUser`](#resolve-sso-users) returns `link`, which links to the `userId` it names.
-  * All of these hold, which links it to the user with that email: the provider's [domain is verified](/docs/plugins/sso/domain-verification#enable-domain-verification), the email's domain is one of the provider's domains, the existing user's email is verified (unless `account.accountLinking.requireLocalEmailVerified: false` is set), and neither `account.accountLinking.enabled: false` nor `account.accountLinking.disableImplicitLinking: true` is set.
+  * [`resolveUser`](#resolve-sso-users) returns `link`. The account is linked to the `userId` it names.
+  * All of these hold. The account is linked to the user with that email.
+    * The provider's [domain is verified](/docs/plugins/sso/domain-verification#enable-domain-verification). A [`defaultSSO`](/docs/plugins/sso#configure-providers-in-code) provider counts as verified only when `domainVerification.enabled` is `true`.
+    * The email's domain is one of the provider's domains.
+    * The existing user's email is verified. `account.accountLinking.requireLocalEmailVerified: false` skips this check.
+    * Account linking is on: `account.accountLinking.enabled` is not `false`, and `account.accountLinking.disableImplicitLinking` is not `true`.
+  * The deprecated `trustEmailVerified` option is on, and the IdP reports the email verified. The account is linked to the user with that email without domain verification. The existing user's email must still be verified, and account linking must be on.
 
   Otherwise the sign-in fails. OIDC redirects with `error=account not linked`, and SAML with `error=account_not_linked`.
 
@@ -38,7 +43,11 @@ sso({
 
 ### Update profiles on sign-in
 
-By default the user's profile is set only when the user is created. With `overrideUserInfo: true` on an OIDC provider, each sign-in overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values. A changed email is stored unverified, unless the deprecated `trustEmailVerified` option is on and the IdP reports it verified. Enable it only for IdPs that control their users' email addresses. Pass it in the registration body, or set `defaultOverrideUserInfo: true` on the plugin to apply it to providers registered afterwards. SAML sign-ins update the profile only when `resolveUser` returns `profile: "update"`.
+By default the user's profile is set only when the user is created. With `overrideUserInfo: true` on an OIDC provider, each sign-in overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values. Enable it only for IdPs that control their users' email addresses.
+
+* A changed email is stored unverified, unless the deprecated `trustEmailVerified` option is on and the IdP reports it verified.
+* Set it per provider in the registration body. To apply it to every provider registered afterwards, set `defaultOverrideUserInfo: true` on the plugin.
+* SAML sign-ins update the profile only when `resolveUser` returns `profile: "update"`.
 
 ## Resolve SSO users
 
@@ -102,7 +111,7 @@ The resolver receives:
 | `verifiedIdTokenClaims` | The full verified ID token payload                                             | Not present                                                             |
 | `providerClaims`        | The UserInfo claims, or the ID token claims when there is no UserInfo endpoint | Not present                                                             |
 | `providerAttributes`    | Not present                                                                    | The verified assertion attributes. Multi-valued attributes stay arrays. |
-| `providerReference`     | Opaque. Never persist it.                                                      | Opaque. Never persist it.                                               |
+| `providerReference`     | Opaque and transient. Never persist it as a tenant or user binding.            | Opaque and transient. Never persist it as a tenant or user binding.     |
 
 Profile fields, claims, and attributes may still need validation before you use them for authorization. `findProvisionedUserByAccountKey` is application-owned in this example. It should resolve the exact provider, issuer, and subject tuple through the transaction-scoped `context.database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
 
@@ -113,10 +122,14 @@ The resolver returns one of three decisions:
 * `{ action: "reject", code, message? }` rejects the sign-in with an application-defined error.
 
 <Callout type="warn">
-  `resolveUser` requires native database transactions and async-context support, and OIDC sign-ins must return an ID token. With secondary storage, set `session.storeSessionInDatabase: true` and leave `session.preserveSessionInDatabase` off. A fresh sign-in attempt may call the resolver again, so keep it idempotent.
+  `resolveUser` requires:
+
+  * a database adapter with native transactions and async-context support
+  * an ID token in every OIDC sign-in
+  * with secondary storage, `session.storeSessionInDatabase: true`, and `session.preserveSessionInDatabase` left off
 </Callout>
 
-Writes made through `context.database` during resolution, linking, and session creation commit or roll back together. Network calls, other external side effects, and after-commit hooks are not rolled back.
+A fresh sign-in attempt may call the resolver again, so keep it idempotent. Writes made through `context.database` during resolution, linking, and session creation commit or roll back together, and session cookies are set only after the commit. Network calls, other external side effects, and after-commit hooks are not rolled back.
 
 ## User provisioning
 
@@ -160,7 +173,10 @@ The caller must be a member of the organization, or the call returns `400`. With
 Organization provisioning needs the [organization plugin](/docs/plugins/organization). It adds SSO users to organizations as members.
 
 * **Sign-in through a provider with an `organizationId`.** The user joins that organization with `defaultRole` (`"member"` by default), or with the role `getRole({ user, userInfo, token, provider })` returns.
-* **Sign-in through a social provider.** The user joins an organization only when domain verification is on, the stored user's email is verified, and the email's domain matches the verified providers of exactly one organization.
+* **Sign-in through a social provider.** The user joins an organization only when all of these hold:
+  * Domain verification is on.
+  * The stored user's email is verified.
+  * The email's domain matches the verified providers of exactly one organization.
 
 Nothing happens when the user is already a member or has a pending, unexpired invitation to that organization. Automatic provisioning neither accepts nor cancels the invitation. Set `organizationProvisioning.disabled: true` to turn provisioning off.
 

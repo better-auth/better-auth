@@ -144,7 +144,7 @@ A per-provider callback also checks that the code arrived at the callback of the
 
 Set `oidcConfig.allowIdpInitiated: true` to accept callbacks that arrive at `/sso/callback/{providerId}` without `state`. Better Auth discards the IdP's code and starts a new authorization request with a fresh `state` and PKCE verifier.
 
-The option is read only from providers configured in [`defaultSSO`](/docs/plugins/sso#configure-providers-in-code). Providers created with `/sso/register` or updated through the API cannot set it.
+Set it on a provider in [`defaultSSO`](/docs/plugins/sso#configure-providers-in-code). `/sso/register` and `/sso/update-provider` silently drop it.
 
 <Callout type="warn">
   Set the `baseURL` option when you enable `allowIdpInitiated`. The restarted flow uses `baseURL` as the post-sign-in destination and fails with `CALLBACK_URL_REQUIRED` without it.
