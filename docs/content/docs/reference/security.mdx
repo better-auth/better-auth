@@ -151,43 +151,7 @@ Better Auth includes built-in rate limiting to safeguard against brute-force att
 
 ## IP Address Headers
 
-Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the IP address from the standard `X-Forwarded-For` header. However, you can configure a specific trusted header to ensure accurate IP address detection and prevent IP spoofing attacks.
-
-You can configure the IP address header in your Better Auth configuration:
-
-```typescript
-{
-  advanced: {
-    ipAddress: {
-      ipAddressHeaders: ['cf-connecting-ip'] // or any other custom header
-    }
-  }
-}
-```
-
-This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
-
-Behind a proxy chain, list your proxies in `trustedProxies` so Better Auth
-resolves the real client instead of the spoofable leftmost `X-Forwarded-For`
-token:
-
-```typescript
-{
-  advanced: {
-    ipAddress: {
-      // your proxies' addresses, not a broad private range that also covers clients
-      trustedProxies: ['192.0.2.10', '10.0.0.0/24']
-    }
-  }
-}
-```
-
-<Callout type="info">
-  **Important**
-
-  * When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
-  * In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
-</Callout>
+Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the address from `X-Forwarded-For`, which clients can set themselves, so per-client limits only hold when a proxy or server code you control writes the address. [Connecting IP Address](/docs/concepts/rate-limit#connecting-ip-address) explains how to set `ipAddressHeaders` or `trustedProxies` for your deployment.
 
 ## Trusted Proxy Headers
 
