@@ -230,7 +230,10 @@ describe("oauth introspect", async () => {
 		});
 	});
 
-	it("should fail with token_type_hint access_token and sent refresh_token", async () => {
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
+	 */
+	it("should find a refresh_token sent with token_type_hint access_token", async () => {
 		const tokens = await getTokens();
 		const introspection = await client.oauth2.introspect(
 			{
@@ -246,7 +249,11 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data).toEqual({ active: false });
+		expect(introspection.data).toMatchObject({
+			active: true,
+			client_id: oauthClient?.client_id,
+			scope: "openid profile email offline_access",
+		});
 	});
 
 	/**
@@ -299,7 +306,10 @@ describe("oauth introspect", async () => {
 		});
 	});
 
-	it("should fail with token_type_hint refresh_token and sent access_token", async () => {
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7662#section-2.1
+	 */
+	it("should find an access_token sent with token_type_hint refresh_token", async () => {
 		const tokens = await getTokens();
 		const introspection = await client.oauth2.introspect(
 			{
@@ -315,7 +325,10 @@ describe("oauth introspect", async () => {
 				},
 			},
 		);
-		expect(introspection.data?.active).toBeFalsy();
+		expect(introspection.data).toMatchObject({
+			active: true,
+			client_id: oauthClient?.client_id,
+		});
 	});
 
 	it("should pass without token_type_hint and sent jwt access_token", async () => {
@@ -1030,6 +1043,98 @@ describe("oauth introspect - config", async () => {
 			active: true,
 			resource_count: 1,
 			first_resource: validResource,
+		});
+	});
+
+	describe("formatRefreshToken decrypt throws on foreign input", async () => {
+		const encryptedPrefix = "enc.";
+		const testScopes = ["openid", "offline_access"];
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				scopes: testScopes,
+				formatRefreshToken: {
+					encrypt: (token) => `${encryptedPrefix}${token}`,
+					decrypt: (token) => {
+						if (!token.startsWith(encryptedPrefix)) {
+							throw new Error("cannot decrypt refresh token");
+						}
+						return { token: token.slice(encryptedPrefix.length) };
+					},
+				},
+			},
+		});
+		if (!oauthClient) expect.unreachable();
+
+		const formHeaders = {
+			accept: "application/json",
+			"content-type": "application/x-www-form-urlencoded",
+		};
+
+		async function getTokens() {
+			const { url: authUrl, codeVerifier } = await createAuthUrl(oauthClient!, {
+				scopes: testScopes,
+			});
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const url = new URL(callbackRedirectUrl);
+			const tokens = await client.oauth2.token(
+				{
+					grant_type: "authorization_code",
+					code: url.searchParams.get("code") ?? undefined,
+					code_verifier: codeVerifier,
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					scope: testScopes.join(" "),
+					redirect_uri: redirectUri,
+				},
+				{ headers: formHeaders },
+			);
+			return tokens.data as { access_token?: string; refresh_token?: string };
+		}
+
+		function introspect(
+			token: string,
+			token_type_hint?: "access_token" | "refresh_token",
+		) {
+			return client.oauth2.introspect(
+				{
+					client_id: oauthClient?.client_id,
+					client_secret: oauthClient?.client_secret,
+					token,
+					token_type_hint,
+				},
+				{ headers: formHeaders },
+			);
+		}
+
+		it.each([undefined, "access_token", "refresh_token"] as const)(
+			"should report an unknown token with token_type_hint %s as inactive",
+			async (token_type_hint) => {
+				const introspection = await introspect("bogus", token_type_hint);
+				expect(introspection.error).toBe(null);
+				expect(introspection.data).toEqual({ active: false });
+			},
+		);
+
+		it("should find an access_token sent with token_type_hint refresh_token", async () => {
+			const tokens = await getTokens();
+			const introspection = await introspect(
+				tokens.access_token!,
+				"refresh_token",
+			);
+			expect(introspection.error).toBe(null);
+			expect(introspection.data).toMatchObject({ active: true });
+		});
+
+		it("should still find a valid refresh_token", async () => {
+			const tokens = await getTokens();
+			expect(tokens.refresh_token?.startsWith(encryptedPrefix)).toBeTruthy();
+			const introspection = await introspect(tokens.refresh_token!);
+			expect(introspection.data).toMatchObject({ active: true });
 		});
 	});
 });

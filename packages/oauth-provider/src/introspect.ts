@@ -723,32 +723,33 @@ export async function introspectEndpoint(
 		authMethod,
 	);
 
-	try {
-		if (token_type_hint === undefined || token_type_hint === "access_token") {
-			try {
-				const payload = await validateAccessToken(
-					ctx,
-					opts,
-					token,
-					client.clientId,
-				);
-				return resolveIntrospectionSub(ctx, opts, payload, client);
-			} catch (error) {
-				if (error instanceof APIError) {
-					if (token_type_hint === "access_token") {
-						throw error;
-					} // else continue
-				} else if (error instanceof Error) {
-					throw error;
-				} else {
-					throw new Error(error as unknown as string);
-				}
-			}
-		}
+	// RFC 7662 §2.1: the hint only orders the lookup. A token not found under
+	// the hinted type is still searched for across the other supported types.
+	const tokenTypes =
+		token_type_hint === "refresh_token"
+			? (["refresh_token", "access_token"] as const)
+			: (["access_token", "refresh_token"] as const);
 
-		if (token_type_hint === undefined || token_type_hint === "refresh_token") {
+	try {
+		for (const tokenType of tokenTypes) {
 			try {
-				const refreshToken = await decodeRefreshToken(opts, token);
+				if (tokenType === "access_token") {
+					const payload = await validateAccessToken(
+						ctx,
+						opts,
+						token,
+						client.clientId,
+					);
+					return resolveIntrospectionSub(ctx, opts, payload, client);
+				}
+				let refreshToken: Awaited<ReturnType<typeof decodeRefreshToken>>;
+				try {
+					refreshToken = await decodeRefreshToken(opts, token);
+				} catch {
+					// A custom `formatRefreshToken.decrypt` may throw a plain Error on
+					// input it cannot decode: not a refresh token of this server.
+					continue;
+				}
 				const payload = await validateRefreshToken(
 					ctx,
 					opts,
@@ -758,9 +759,7 @@ export async function introspectEndpoint(
 				return resolveIntrospectionSub(ctx, opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
-					if (token_type_hint === "refresh_token") {
-						throw error;
-					} // else continue
+					// continue
 				} else if (error instanceof Error) {
 					throw error;
 				} else {
