@@ -41,6 +41,7 @@ class WindowOnlineManager implements OnlineManager {
 		window.addEventListener("offline", onOffline, false);
 
 		return () => {
+			if (typeof window === "undefined") return;
 			window.removeEventListener("online", onOnline, false);
 			window.removeEventListener("offline", onOffline, false);
 		};
