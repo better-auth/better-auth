@@ -98,7 +98,7 @@ const replayStore = createDpopReplayStore((await auth.$context).internalAdapter)
 
 ## JWT or opaque tokens
 
-Your provider issues a JWT access token when the client sends a `resource` and the JWT plugin is enabled. If either is missing, it issues an opaque token.
+Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, it issues an opaque token.
 
 |                         | JWT access token                               | Opaque access token                                     |
 | ----------------------- | ---------------------------------------------- | ------------------------------------------------------- |

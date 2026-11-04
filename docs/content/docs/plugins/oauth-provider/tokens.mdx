@@ -274,7 +274,7 @@ oauthProvider({
 
 ## Storage
 
-Your database stores client secrets, opaque access tokens, and refresh tokens as hashes by default.
+By default, your database stores opaque access tokens and refresh tokens as hashes. Client secrets are hashed with the JWT plugin and encrypted without it.
 
 * `storeClientSecret`: `"hashed"` or `{ hash, verify? }` with the JWT plugin; `"encrypted"` or `{ encrypt, decrypt }` without it. The provider fails to start on any other combination.
 * `storeTokens`: `"hashed"` or `{ hash: (token, type) => string }`.

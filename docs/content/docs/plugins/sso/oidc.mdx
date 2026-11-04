@@ -59,10 +59,10 @@ To store your own endpoints without fetching the document, set `skipDiscovery: t
 
 ### Trusted origins
 
-Registration fails unless [`trustedOrigins`](/docs/reference/security#trusted-origins) covers both of these:
+Registration checks these URLs against [`trustedOrigins`](/docs/reference/security#trusted-origins):
 
-* The discovery URL and every URL discovered from it. A missing origin fails registration with `discovery_untrusted_origin`.
-* Any endpoint on a private or non-routable host, or on a host that resolves to one. A missing entry fails registration with `discovery_private_host`.
+* When registration runs discovery, the discovery URL and every URL discovered from it. A missing origin fails registration with `discovery_untrusted_origin`.
+* Any endpoint on a private or non-routable host, or on a host that resolves to one, even with `skipDiscovery: true`. A missing entry fails registration with `discovery_private_host`.
 
 `trustedOrigins` is global. An IdP origin listed there is also accepted as a request `Origin` and a redirect target, and a private host listed there can be reached for any provider. List only IdP origins you have vetted, never values a registrant supplies.
 

@@ -199,7 +199,7 @@ IdP-initiated sign-ins have no `callbackURL`. When your frontend is on another o
 
 ## Service provider metadata
 
-To give the IdP your SP metadata, send it the URL `GET /sso/saml2/sp/metadata?providerId=…` or the downloaded file. The endpoint is public and returns the provider's SP metadata as XML.
+To give the IdP your SP metadata, send it the URL `{baseURL}/sso/saml2/sp/metadata?providerId=…`, or the downloaded file. The URL is a public `GET` endpoint that returns the provider's SP metadata as XML.
 
 ```ts
 const response = await auth.api.spMetadata({
