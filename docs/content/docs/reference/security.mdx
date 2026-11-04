@@ -82,6 +82,8 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
    }
    ```
 
+   `isTrustedOrigin` checks the origins resolved at startup. If your `trustedOrigins` function adds origins based on the request, include those in the check, or forward the request to `auth.handler` when the endpoint has an HTTP route.
+
 ### Disabling Security Checks
 
 Better Auth provides two separate options to disable security checks. These options control different aspects of security:

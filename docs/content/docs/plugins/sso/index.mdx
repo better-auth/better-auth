@@ -168,7 +168,7 @@ await authClient.signIn.sso({
 * `loginHint` is sent to OIDC providers as [`login_hint`](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest), and falls back to `email`. SAML ignores it.
 * `providerType` picks the protocol when a provider has both configurations; without it, OIDC is used. Requesting a protocol the provider does not have returns 400.
 * `additionalParams` adds parameters to the OIDC authorization request. Reserved parameters such as `state`, `client_id`, and `redirect_uri` are rejected, and SAML providers reject it with 400.
-* `requestSignUp: true` creates a new user even when `disableImplicitSignUp` is on, and any caller can set it. It applies to OIDC only; SAML ignores it. To refuse unprovisioned users, see [Block new users](/docs/plugins/sso/provisioning#block-new-users).
+* `requestSignUp: true` creates a new user even when `disableImplicitSignUp` is on, and any caller can set it. It applies to OIDC only; SAML ignores it. To refuse users you have not provisioned, see [Block new users](/docs/plugins/sso/provisioning#block-new-users).
 * With domain verification enabled, a provider whose domain is not verified returns 401.
 
 <APIMethod path="/sign-in/sso" method="POST">
