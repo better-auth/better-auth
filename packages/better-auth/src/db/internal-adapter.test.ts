@@ -2156,6 +2156,48 @@ describe("internal adapter test", async () => {
 			);
 		});
 
+		it("does not fail a committed transaction when a hook on a swept row throws", async () => {
+			const opts = {
+				database: new DatabaseSync(":memory:"),
+				databaseHooks: {
+					verification: {
+						delete: {
+							after: async (row) => {
+								if (row.identifier === "consume:swept") {
+									throw new Error("delete hook failed");
+								}
+							},
+						},
+					},
+				},
+			} satisfies BetterAuthOptions;
+			await (await getMigrations(opts)).runMigrations();
+			const ctx = await init(opts);
+			const loggerError = vi
+				.spyOn(ctx.logger, "error")
+				.mockImplementation(() => undefined);
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "consume:swept",
+				value: "expired",
+				expiresAt: new Date(Date.now() - 1_000),
+			});
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "consume:in-transaction",
+				value: "fresh",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			const consumed = await runWithTransaction(ctx.adapter, () =>
+				ctx.internalAdapter.consumeVerificationValue("consume:in-transaction"),
+			);
+
+			expect(consumed?.value).toBe("fresh");
+			expect(loggerError).toHaveBeenCalledWith(
+				"Failed to delete expired verification values",
+				expect.any(Error),
+			);
+		});
+
 		it("returns null for an unknown identifier", async () => {
 			const adapter = await makeAdapter();
 			const result = await adapter.consumeVerificationValue("consume:missing");
