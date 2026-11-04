@@ -375,7 +375,7 @@ export const oauthResourceTableFields = [
 
 Table Name: `oauthClientResource`
 
-Links a client to a resource. The pair `(clientId, resourceId)` is unique. Rows are checked only when `enforcePerClientResources` is `true`.
+Links a client to a resource. The pair `(clientId, resourceId)` is unique. `enforcePerClientResources` controls whether authorization and token requests check these rows. [Introspection](/docs/plugins/oauth-provider/resource-server#introspection) always uses them to decide whether a resource server can introspect another client's token.
 
 export const oauthClientResourceTableFields = [
   { name: "id", type: "string", description: "Database ID of the link", isPrimaryKey: true },

@@ -123,7 +123,7 @@ For every field, see [Register an OIDC provider](/docs/plugins/sso/oidc#register
 
 ### Configure providers in code
 
-`defaultSSO` is an array of `{ providerId, domain, oidcConfig?, samlConfig?, privateKey? }` entries that live in your config instead of the database. They are checked before database providers. Domain verification treats them as verified without a DNS check, so they can link to existing users at their listed domains. List only domains the IdP is authoritative for.
+`defaultSSO` is an array of `{ providerId, domain, oidcConfig?, samlConfig?, privateKey? }` entries that live in your config instead of the database. They are checked before database providers. With `domainVerification.enabled: true`, they count as verified without a DNS check, so a sign-in can link to an existing user at a listed domain when the other [linking conditions](/docs/plugins/sso/provisioning#how-sso-users-are-matched) hold. Without it, an existing user's first SSO sign-in fails instead of linking. List only domains the IdP is authoritative for.
 
 ```ts title="auth.ts"
 sso({

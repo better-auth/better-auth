@@ -168,7 +168,7 @@ After sign-in, Better Auth redirects to the first of these that is set:
 
 Better Auth skips any entry that is not a relative path or a URL matching `trustedOrigins`.
 
-Errors in SP-initiated sign-ins redirect to the `errorCallbackURL` from `signIn.sso()`, else `onAPIError.errorURL`, else `{baseURL}/error`. Errors in IdP-initiated sign-ins use the list above.
+Errors in SP-initiated sign-ins redirect to the `errorCallbackURL` from `signIn.sso()`, else `onAPIError.errorURL`, else `{baseURL}/error`. Errors in IdP-initiated sign-ins use the list above. Errors from matching or creating the user, such as `account_not_linked`, `signup_disabled`, and `unable_to_create_user`, always redirect to the sign-in destination above, even when `errorCallbackURL` is set, so check for `error` there too.
 
 `samlConfig.callbackUrl` sets where users land, not the ACS URL. Before 1.7 it set the ACS URL; see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#saml-configuration-is-simplified).
 
