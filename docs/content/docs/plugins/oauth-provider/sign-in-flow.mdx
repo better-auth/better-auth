@@ -43,7 +43,7 @@ oauthProvider({
 
 ## Consent page
 
-Set `consentPage` to the page that asks the user to approve the client. Clients with `skip_consent: true` never reach it.
+Set `consentPage` to the page that asks the user to approve the client. Clients with `skip_consent: true` skip it unless the authorize request includes `prompt=consent`.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -51,14 +51,18 @@ oauthProvider({
 })
 ```
 
-The page receives `client_id`, `scope` and, when requested, `claims` in its query. Verify the signed query on the server before rendering. `auth.$context` resolves the provider's secret, including versioned `secrets`; keep it on the server. If the page adds its own query parameters, remove them before verifying.
+The page receives `client_id`, `scope` and, when requested, `claims` in its query. Verify the signed query on the server before rendering. `auth.$context` resolves the provider's secret, including versioned `secrets`; keep it on the server. The signed query lists its own parameter names in `ba_param`; keep only those, `ba_param`, and `sig` so the page's own parameters do not break verification.
 
 ```ts title="consent-query.ts"
 import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
 import { auth } from "@/lib/auth";
 
 export async function getVerifiedConsentQuery(request: Request) {
-  const query = new URL(request.url).search.slice(1);
+  const params = new URL(request.url).searchParams;
+  const signed = new Set(["sig", "ba_param", ...params.getAll("ba_param")]);
+  const query = new URLSearchParams(
+    [...params].filter(([key]) => signed.has(key)),
+  ).toString();
   const { secret } = await auth.$context;
   if (!(await verifyOAuthQueryParams(query, secret))) return null;
   return new URLSearchParams(query);
@@ -77,7 +81,7 @@ Return an error response when the helper returns `null`. The check rejects modif
       /**
        * Space-separated accepted scopes, a subset of the requested ones. Defaults to all requested scopes.
        */
-      scope?: string = "openid profile email"
+      scope?: string
       /**
        * Accepted OIDC claims request object. Defaults to all requested claims.
        */

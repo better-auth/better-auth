@@ -215,9 +215,9 @@ await authClient.signIn.sso({
        */
       requestSignUp?: boolean = true
       /**
-       * Protocol to use when the provider has both configurations.
+       * Protocol to use when the provider has both configurations. Defaults to `oidc`.
        */
-      providerType?: "oidc" | "saml" = "saml"
+      providerType?: "oidc" | "saml" = "oidc"
   }
   ```
 </APIMethod>

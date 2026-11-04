@@ -150,7 +150,7 @@ This flow issues an access token for one API, `https://api.example.com`.
   <Step>
     ### Register the API and a client
 
-    Add the API to `resources`, then create a client linked to it. `adminCreateOAuthClient` runs only on the server.
+    Add the API to `resources`, then create a client linked to it. `adminCreateOAuthClient` runs only on the server and needs a signed-in user's session, so pass the headers of that user's request.
 
     ```ts title="auth.ts"
     oauthProvider({
@@ -162,6 +162,7 @@ This flow issues an access token for one API, `https://api.example.com`.
 
     ```ts title="create-client.ts"
     const client = await auth.api.adminCreateOAuthClient({
+      headers: request.headers,
       body: {
         client_name: "Example App",
         redirect_uris: ["https://app.example.com/callback"],

@@ -60,17 +60,19 @@ oauthProvider({
 
 A string uses the plugin defaults. An object sets per-resource policy:
 
-| Field                           | Effect                                                                                                                                         |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `name`                          | Label for admin screens.                                                                                                                       |
-| `allowedScopes`                 | Requested scopes are narrowed to this list. If none remain, the request fails with `invalid_scope`.                                            |
-| `accessTokenTtl`                | Access token lifetime in seconds. Defaults to `accessTokenExpiresIn`.                                                                          |
-| `refreshTokenTtl`               | Refresh token lifetime in seconds. Defaults to `refreshTokenExpiresIn`.                                                                        |
-| `signingAlgorithm`              | JWS algorithm for this resource's access tokens. Defaults to the JWT plugin's latest key. Applies only when a request names a single resource. |
-| `signingKeyId`                  | Key ID to sign this resource's access tokens with. Applies only when a request names a single resource.                                        |
-| `customClaims`                  | Claims added to every access token for this resource. Reserved JWT claims are stripped.                                                        |
-| `dpopBoundAccessTokensRequired` | Issue only [DPoP](#dpop)-bound tokens for this resource.                                                                                       |
-| `disabled`                      | Stop issuing tokens for this resource. Tokens already issued still verify until they expire.                                                   |
+| Field                           | Effect                                                                                              |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `name`                          | Label for admin screens.                                                                            |
+| `allowedScopes`                 | Requested scopes are narrowed to this list. If none remain, the request fails with `invalid_scope`. |
+| `accessTokenTtl`                | Access token lifetime in seconds. Defaults to `accessTokenExpiresIn`.                               |
+| `refreshTokenTtl`               | Refresh token lifetime in seconds. Defaults to `refreshTokenExpiresIn`.                             |
+| `signingAlgorithm`              | JWS algorithm for this resource's access tokens. Defaults to the JWT plugin's latest key.           |
+| `signingKeyId`                  | Key ID to sign this resource's access tokens with.                                                  |
+| `customClaims`                  | Claims added to every access token for this resource. Reserved JWT claims are stripped.             |
+| `dpopBoundAccessTokensRequired` | Issue only [DPoP](#dpop)-bound tokens for this resource.                                            |
+| `disabled`                      | Stop issuing tokens for this resource. Tokens already issued still verify until they expire.        |
+
+A request for several resources fails with `invalid_request` when their `signingAlgorithm` or `signingKeyId` values differ, because one token carries one signature.
 
 Configured resources are written to the `oauthResource` table at startup. `resourceSeedMode` decides what happens to a row that already exists:
 
@@ -99,7 +101,7 @@ await auth.api.adminLinkClientResource({
 });
 ```
 
-Deleting a resource rejects tokens already issued for it, while `disabled: true` only stops new issuance. To attach resources during dynamic registration, see [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
+Deleting a resource makes introspection report its tokens as inactive, while `disabled: true` only stops new issuance. An API that verifies JWTs locally with the JWKS keeps accepting them until they expire. To attach resources during dynamic registration, see [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
 
 <Callout type="warn">
   With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. Requests that use any configured resource fail until every resource declares `allowedScopes`. For the resource the [MCP plugin](/docs/plugins/mcp) adds, declare it in `resources` with the same identifier.
@@ -118,7 +120,7 @@ All values are in seconds.
 | `codeExpiresIn`           | `600` (10 minutes)  | Authorization codes                     |
 | `assertionMaxLifetime`    | `300` (5 minutes)   | `private_key_jwt` client assertions     |
 
-A resource's `accessTokenTtl` and `refreshTokenTtl` override these. `scopeExpirations` shortens access tokens that carry high-privilege scopes; when several apply, the earliest expiry wins.
+A resource's `accessTokenTtl` and `refreshTokenTtl` can shorten these lifetimes but not extend them. `scopeExpirations` also shortens access tokens that carry high-privilege scopes. When several limits apply, the earliest expiry wins.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -131,7 +133,7 @@ oauthProvider({
 
 ## Refresh tokens
 
-Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay and revokes the whole token family.
+Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire.
 
 `refreshTokenReuseInterval` (default `0`) lets a client retry a refresh for a few seconds and get the same response back, for example after a lost response. The retry must come from the same client with the same scopes, resources, and DPoP key; a mismatch returns `invalid_grant` without revoking the family.
 
@@ -243,7 +245,7 @@ oauthProvider({
 `POST /oauth2/revoke` implements [RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1). What it does depends on the token:
 
 * **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
-* **Refresh token**: revoked, and every access token it issued is deleted.
+* **Refresh token**: revoked, and the opaque access tokens it issued are deleted. JWT access tokens it issued stay valid until they expire.
 * **JWT access token**: cannot be revoked, because it is never stored. A valid one returns `400 unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)).
 
 To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session, so its lifetime is the only limit.

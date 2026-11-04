@@ -62,7 +62,7 @@ The provider issues a JWT access token when the client sends a `resource` and th
 
 Accepting only JWT access tokens is the simplest setup: it is fast and the API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, `exp`, and `scope` ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)).
 
-To accept opaque tokens as well, register the API as a confidential client, [link it to the resource](#introspection), and pass its credentials. With `remoteVerify` set, every token is introspected, JWTs included, which also confirms that the session behind it is still active. Set `force: true` to skip the local JWT check.
+To accept opaque tokens as well, register the API as a confidential client, [link it to the resource](#introspection), and pass its credentials. `remoteVerify` sends them in the request body, so register that client with `token_endpoint_auth_method: "client_secret_post"`; with the default `client_secret_basic`, every introspection call fails with `invalid_client`. With `remoteVerify` set, every token is introspected, JWTs included, which also confirms that the session behind it is still active. Set `force: true` to skip the local JWT check.
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {

@@ -76,10 +76,13 @@ Only the server-only `adminCreateOAuthClient` and `adminUpdateOAuthClient` metho
 * `disabled`: update only. Pauses the client.
 * `metadata`: private data attached to the client.
 
+Both methods still need a signed-in user's session, so pass the headers of that user's request.
+
 The admin update takes the changes under `update`:
 
 ```ts title="admin-update-oauth.ts"
 await auth.api.adminUpdateOAuthClient({
+  headers: request.headers,
   body: {
     client_id: "client-id",
     update: {
@@ -183,6 +186,7 @@ A `private_key_jwt` client authenticates with a JWT signed by its own key instea
 
 ```ts title="admin-create-oauth.ts"
 await auth.api.adminCreateOAuthClient({
+  headers: request.headers,
   body: {
     redirect_uris: ["https://app.example.com/callback"],
     token_endpoint_auth_method: "private_key_jwt",
