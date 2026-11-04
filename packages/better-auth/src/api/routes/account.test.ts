@@ -3366,6 +3366,38 @@ describe.each([{ encryptOAuthTokens: false }, { encryptOAuthTokens: true }])(
 			});
 		});
 
+		it("returns the scope and ID token of a grant stored while the refresh was in flight", async () => {
+			const account = await createExpiredAccount();
+			await ctx.internalAdapter.updateAccount(account.id, {
+				scope: "openid",
+				idToken: "old-id-token",
+			});
+			refreshAccessToken.mockImplementationOnce(async () => {
+				// The user re-linked with more scopes during the refresh.
+				await ctx.internalAdapter.updateAccount(account.id, {
+					accessToken: await setTokenUtil("relinked-access", tokenContext),
+					refreshToken: await setTokenUtil("relinked-refresh", tokenContext),
+					accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+					scope: "openid,email",
+					idToken: "relinked-id-token",
+				});
+				return {
+					accessToken: "stale-access",
+					refreshToken: "stale-refresh",
+					accessTokenExpiresAt: new Date(Date.now() + 3600_000),
+				};
+			});
+
+			const result = await auth.api.getAccessToken({
+				headers,
+				body: { accountId: account.id },
+			});
+
+			expect(result.accessToken).toBe("relinked-access");
+			expect(result.scopes).toEqual(["openid", "email"]);
+			expect(result.idToken).toBe("relinked-id-token");
+		});
+
 		it("waits for another worker's write that lands after the provider rejects the refresh", async () => {
 			const account = await createExpiredAccount();
 			let otherWorkerWrite: Promise<unknown> = Promise.resolve();

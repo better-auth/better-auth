@@ -912,6 +912,9 @@ async function getValidAccessToken(
 
 	try {
 		let newTokens: OAuth2Tokens | null = null;
+		// The account as stored after any refresh. A refresh can return another
+		// worker's or a re-link's grant, whose scope and ID token replace these.
+		let currentAccount: Account = account;
 		const accessTokenExpired =
 			account.accessTokenExpiresAt &&
 			new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000;
@@ -926,11 +929,9 @@ async function getValidAccessToken(
 				provider.refreshAccessToken,
 			);
 			newTokens = refreshed.tokens;
+			currentAccount = { ...account, ...refreshed.stored };
 			if (ctx.context.options.account?.storeAccountCookie) {
-				await setAccountCookie(ctx, {
-					...account,
-					...refreshed.stored,
-				});
+				await setAccountCookie(ctx, currentAccount);
 			}
 		}
 
@@ -941,11 +942,11 @@ async function getValidAccessToken(
 				}
 				return newTokens.accessTokenExpiresAt;
 			}
-			if (account.accessTokenExpiresAt) {
-				if (typeof account.accessTokenExpiresAt === "string") {
-					return new Date(account.accessTokenExpiresAt);
+			if (currentAccount.accessTokenExpiresAt) {
+				if (typeof currentAccount.accessTokenExpiresAt === "string") {
+					return new Date(currentAccount.accessTokenExpiresAt);
 				}
-				return account.accessTokenExpiresAt;
+				return currentAccount.accessTokenExpiresAt;
 			}
 			return undefined;
 		})();
@@ -955,8 +956,8 @@ async function getValidAccessToken(
 				newTokens?.accessToken ??
 				(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
 			accessTokenExpiresAt,
-			scopes: parseStoredScopes(account.scope),
-			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
+			scopes: parseStoredScopes(currentAccount.scope),
+			idToken: newTokens?.idToken ?? currentAccount.idToken ?? undefined,
 		};
 	} catch (_error) {
 		throw APIError.from("BAD_REQUEST", {
