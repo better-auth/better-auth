@@ -75,7 +75,7 @@ Not built in:
     ```
 
     <Callout type="warn">
-      If you use [secondary storage](/docs/concepts/database#secondary-storage), also set `session.storeSessionInDatabase: true`. The provider looks sessions up in the database, so without it the server fails at startup.
+      If you use [secondary storage](/docs/concepts/database#secondary-storage), also set `session.storeSessionInDatabase: true`. The provider looks sessions up in the database. Without `storeSessionInDatabase`, the server fails at startup.
     </Callout>
   </Step>
 
@@ -147,7 +147,7 @@ Not built in:
 
 The authorize endpoint redirects to `loginPage` when the user has no session, and to `consentPage` when the client needs the user's approval. Both receive a signed copy of the authorization request.
 
-On your login page, sign the user in as usual. The plugin continues the flow when the session is created. On your consent page, call `authClient.oauth2.consent`. To build both, see [Sign-in and consent screens](/docs/plugins/oauth-provider/sign-in-flow).
+On your login page, sign the user in as usual. When the session is created, the plugin continues the authorization request. On your consent page, call `authClient.oauth2.consent`. On both pages, the auth client sends the browser to the next step, so your pages need no redirect code. To build both, see [Sign-in and consent screens](/docs/plugins/oauth-provider/sign-in-flow).
 
 ## Run your first flow
 

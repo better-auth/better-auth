@@ -64,7 +64,7 @@ Most of the other client endpoints take a `client_id`. Each requires a session, 
 
 You cannot change `token_endpoint_auth_method` after creation, and an update cannot set the secret. Client secrets do not expire, so to retire one, rotate it with `rotateClientSecret`.
 
-To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, but that query is not bound to the client whose fields it reads. Anyone can get one by starting an authorization request, so enabling it makes the public fields of every enabled client, including `contacts`, readable without an account.
+To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, but that query is not bound to the client whose fields it reads. Anyone can get one by starting an authorization request. Enabling the option therefore makes the public fields of every enabled client, including `contacts`, readable without an account.
 
 ### Restricted fields
 
@@ -122,7 +122,7 @@ oauthProvider({
 })
 ```
 
-To let clients register without signing in, set `allowUnauthenticatedClientRegistration: true`. Anyone on the internet can then register a client:
+To also let clients register without signing in, set `allowUnauthenticatedClientRegistration: true` next to `allowDynamicClientRegistration`. Anyone on the internet can then register a client:
 
 * The registrant chooses the client's name, logo, and redirect URIs.
 * The client has [no owner](#an-organization-owns-the-client), so nobody can manage it through the client endpoints.
@@ -130,13 +130,13 @@ To let clients register without signing in, set `allowUnauthenticatedClientRegis
 
 Prefer CIMD or initial access tokens. If you enable open registration, keep [rate limiting](/docs/concepts/rate-limit) on.
 
-To register from the client app, call `authClient.oauth2.register({ client_name, redirect_uris })`.
+To register from the client app, call `authClient.oauth2.register({ client_name, redirect_uris })`. The response holds the new `client_id`. A client that uses `client_secret_basic` or `client_secret_post` also gets its `client_secret`. Only this response carries it, so store it now.
 
 <Callout type="info">
   For public clients that are not registered in advance, such as MCP clients, prefer [Client ID Metadata Documents](/docs/plugins/cimd). The client hosts its metadata at an HTTPS URL, and that URL is its `client_id`.
 </Callout>
 
-To let software register without a user session, define `validateInitialAccessToken`. It receives the token from `Authorization: Bearer <token>`. Return `false` to reject the request, or an object to accept it. The object's optional `referenceId` sets the owner. Without it, the client is [unowned](#an-organization-owns-the-client). While the callback is undefined, a Bearer token sent to `/oauth2/register` is rejected.
+To let software register without a user session, define `validateInitialAccessToken`. It receives `initialAccessToken` (the token from `Authorization: Bearer <token>`), the request `headers`, and the requested `clientMetadata`. Return `false` to reject the request with 401 `invalid_token`, or an object to accept it. The object's optional `referenceId` sets the owner. Without it, the client is [unowned](#an-organization-owns-the-client). While the callback is undefined, a Bearer token sent to `/oauth2/register` is rejected.
 
 Keep in mind:
 
@@ -152,10 +152,10 @@ The registration options:
 | `clientRegistrationDefaultScopes`          | `scopes` | Scopes every registered client may request.                                                                                                                  |
 | `clientRegistrationAllowedScopes`          | none     | Extra scopes added to the defaults. A request may ask for a subset of the union.                                                                             |
 | `clientRegistrationClientSecretExpiration` | never    | The `client_secret_expires_at` value returned at registration, such as `"30d"`. Better Auth does not reject the secret after that time.                      |
-| `clientRegistrationRequirePKCE`            | `true`   | Set `false` to let registered confidential clients skip PKCE. Public clients always need PKCE.                                                               |
+| `clientRegistrationRequirePKCE`            | `true`   | Set `false` to let registered confidential clients skip PKCE. Public clients **always** need PKCE.                                                           |
 | `clientRegistrationDefaultApplicationType` | `"web"`  | `application_type` for a registration that omits it: `"web"`, `"native"`, or `"infer"` (native when any redirect URI is a custom scheme or `http` loopback). |
 
-Registration keeps only the requested `grant_types` the server supports and returns what it registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). A registration with no supported grant fails with `invalid_client_metadata`. `createOAuthClient` and `adminCreateOAuthClient` reject an unsupported grant instead. `sector_identifier_uri` is not supported.
+Registration keeps only the requested `grant_types` the server supports and returns what it registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). `createOAuthClient` and `adminCreateOAuthClient` reject an unsupported grant instead. A registration with no supported grant fails with `invalid_client_metadata`. To fix it, the registrant requests a grant listed in the provider's `grant_types_supported` metadata, or you add the grant to `grantTypes`. `sector_identifier_uri` is not supported.
 
 ### Resources for registered clients
 
@@ -164,7 +164,7 @@ By default, a registration cannot request [resources](/docs/plugins/oauth-provid
 * `clientRegistrationDefaultResources` links every new client to these resources, including CIMD and admin-created clients, without a `resourcePrivileges` check.
 * `clientRegistrationAllowedResources` lists extra resources a registration may request.
 
-Every value must also be in `resources`. A requested resource outside both lists, or one that is missing or disabled, fails with `invalid_target`. The response lists the linked `resources`.
+Every value must also be in `resources`. A requested resource outside both lists, or one that is missing or disabled, fails with `invalid_target`. Its `error_description` names the resource and says which of these applies. The response lists the linked `resources`.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -193,7 +193,9 @@ An HTTP loopback URI must use exactly `localhost`, `127.0.0.1`, or `[::1]`, so s
 
 ## Custom redirect URI validation
 
-A requested redirect URI must match a registered one exactly. Exact matching keeps an attacker from redirecting the authorization code to a URI the client did not register. A native client's loopback port may vary. To change which URIs are accepted, set `validateRedirectUri`. It receives the requested URI, the client's registered URIs, and `defaultResult` from the built-in match. Its result replaces the built-in match, so return `defaultResult` for URIs you do not handle:
+A requested redirect URI must match a registered one exactly. Exact matching keeps an attacker from redirecting the authorization code to a URI the client did not register. The only exception is the port of a native client's loopback URI. For example, a registered `http://127.0.0.1:8787/callback` also matches `http://127.0.0.1:51234/callback`, but `http://localhost:51234/callback` does not.
+
+To change which URIs are accepted, set `validateRedirectUri`. It receives the requested URI, the client's registered URIs, and `defaultResult` from the built-in match. It returns `true` to accept the URI. Its result replaces the built-in match, so return `defaultResult` for URIs you do not handle:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -238,18 +240,18 @@ await auth.api.adminCreateOAuthClient({
 Prefer inline `jwks` for clients whose host you do not control.
 
 * `jwks` must be a JWK Set object with a non-empty `keys` array of public signing keys. EC keys use P-256, P-384, or P-521, and OKP keys use Ed25519.
-* `jwks_uri` must be an HTTPS URL on a public host. Its origin must be in [`trustedOrigins`](/docs/reference/options#trustedorigins), unless it matches the origin of a CIMD `client_id`. `trustedOrigins` applies to the whole app, so that origin is also trusted for redirects and requests.
+* `jwks_uri` must be an HTTPS URL on a public host. Its origin must be in [`trustedOrigins`](/docs/reference/options#trustedorigins), unless it matches the origin of a CIMD `client_id`. `trustedOrigins` applies to the whole app. That origin is then also trusted for redirects and requests.
 
 The client sends `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer` and the signed `client_assertion` instead of a secret. The assertion is signed with `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, or `EdDSA`, and must contain:
 
-| Claim | Requirement                                                                   |
-| ----- | ----------------------------------------------------------------------------- |
-| `iss` | The `client_id`                                                               |
-| `sub` | The `client_id`                                                               |
-| `aud` | The URL of the endpoint that receives the assertion, or the provider's issuer |
-| `exp` | Required. At most `assertionMaxLifetime` (default 300 seconds) from now       |
-| `jti` | Required. Better Auth accepts each value once                                 |
-| `iat` | Optional. When present, not older than `assertionMaxLifetime`                 |
+| Claim | Requirement                                                                               |
+| ----- | ----------------------------------------------------------------------------------------- |
+| `iss` | The `client_id`                                                                           |
+| `sub` | The `client_id`                                                                           |
+| `aud` | The URL of the endpoint that receives the assertion, or the provider's issuer             |
+| `exp` | Required. At most `assertionMaxLifetime` (default 300 seconds) from now                   |
+| `jti` | Required. Better Auth accepts each value once, so a captured assertion cannot be replayed |
+| `iat` | Optional. When present, not older than `assertionMaxLifetime`                             |
 
 ### Rotating client keys
 
@@ -277,9 +279,9 @@ oauthProvider({
 
 ## Client CRUD privileges
 
-To limit which client actions a signed-in user may take, define `clientPrivileges`. Without it, every signed-in user may take every action except `configure-client-credentials-scopes`. When it is set, return `true` to allow an action and `false` or `undefined` to deny it.
+To limit which client actions a signed-in user may take, define `clientPrivileges`. Without it, every signed-in user may take every action except `configure-client-credentials-scopes`. When it is set, return `true` to allow an action and `false` or `undefined` to deny it. A denied action fails with 401.
 
-It receives `action` (`create`, `read`, `update`, `delete`, `list`, `rotate`, or `configure-client-credentials-scopes`), `user`, `session`, `headers`, and, for an existing client, `clientId`. `clientId` comes from the request, so it does not prove the client exists or who owns it.
+It receives `action` (`create`, `read`, `update`, `delete`, `list`, `rotate`, or `configure-client-credentials-scopes`), `user`, `session`, `headers`, and, for an existing client, `clientId`. `clientId` comes from the request. It does not prove that the client exists or who owns it.
 
 Ownership is checked after this callback, so returning `true` does not grant access to another owner's client. There is one exception. An `adminUpdateOAuthClient` call that changes only `client_credentials_scopes` can change another owner's client when the callback approves both `update` and `configure-client-credentials-scopes`.
 
@@ -295,7 +297,7 @@ oauthProvider({
 
 ## Organizations
 
-To make an organization own new clients instead of the user, set `clientReference`. A client's owner is set at creation and never changes. This example returns the active [organization](/docs/plugins/organization):
+To make an organization own new clients instead of the user, set `clientReference`. It receives the signed-in `user` and `session`. It returns the owner's ID, or `undefined` to make the user the owner. A client's owner is set at creation and never changes. This example returns the active [organization](/docs/plugins/organization):
 
 ```ts title="auth.ts"
 oauthProvider({

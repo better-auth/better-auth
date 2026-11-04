@@ -36,7 +36,7 @@ export const GET = async (req: Request) => {
 };
 ```
 
-`requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a 403 `insufficient_scope` error that lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)). Catch the thrown `APIError` and return its `statusCode`, as above. Most frameworks turn an uncaught error into a `500`.
+`requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a 403 `insufficient_scope` error. Its `body.scope` lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)), so the client knows which scopes to request when it authorizes again. Catch the thrown `APIError` and return its `statusCode`, as above. Most frameworks turn an uncaught error into a `500`.
 
 If the API runs in the same process as your auth server, use the resource client instead. Its 401 and `insufficient_scope` errors carry a `WWW-Authenticate` challenge in `headers`.
 
@@ -50,7 +50,7 @@ export const serverClient = createAuthClient({
 });
 ```
 
-Pass `issuer`, `jwksUrl`, and `audience` explicitly. The defaults come from the `baseURL` you pass to `betterAuth()`, so they can miss your base path, such as `/api/auth`. The default audience is the auth server's URL, not your API's identifier.
+Pass `issuer`, `jwksUrl`, and `audience` explicitly. The defaults come from the `baseURL` you pass to `betterAuth()`. They can miss your base path, such as `/api/auth`. The default audience is the auth server's URL, not your API's identifier.
 
 ```ts title="api/posts.ts"
 import { isAPIError } from "better-auth/api";
@@ -77,13 +77,15 @@ export const POST = async (req: Request) => {
 };
 ```
 
+If every JWT access token fails with a 401 `invalid access token` error, check that `issuer` matches the token's `iss` claim and `audience` matches its `aud` claim. The provider puts the `resource` the client requested in `aud`, such as `https://api.example.com`.
+
 To accept bearer tokens alone on a route, use `verifyBearerToken`. It takes a raw token string and rejects DPoP-bound tokens.
 
 <Callout type="warn">
   For DPoP-bound tokens:
 
   * The proof is checked against `request.url`. A proxy in front of the API must forward the external scheme, host, and path.
-  * The default replay store is in memory, so it is safe only for a single instance. If your API runs on several instances or on serverless, pass a shared store, as below. It needs database-backed verification storage, and rejects DPoP requests when only secondary storage is configured.
+  * The replay store rejects a proof that was already used. The default store is in memory. It is safe only for a single instance. If your API runs on several instances or on serverless, pass a shared store, as below. The shared store needs database-backed verification storage, and rejects DPoP requests when only secondary storage is configured.
 </Callout>
 
 ```ts title="api/posts.ts"
@@ -106,15 +108,15 @@ Your provider issues a JWT access token when the request names a `resource` and 
 | Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                             |
 | Claims                  | Frozen when the token is issued                | Recomputed on every introspection                       |
 
-The simplest setup is to accept only JWT access tokens. It is fast, and your API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, `exp`, and `scope` ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)).
+The simplest setup is to accept only JWT access tokens. It is fast, and your API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, `exp`, and `scope` ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)). The cost is that the local check does not see an ended session. A JWT keeps passing the local check until it expires.
 
-To accept opaque tokens too, have your API introspect them:
+If your API also receives opaque tokens, have it introspect them:
 
-1. Register your API as a confidential client with `token_endpoint_auth_method: "client_secret_post"`. `remoteVerify` sends credentials in the request body, so the default `client_secret_basic` fails with `invalid_client`.
+1. Register your API as a confidential client with `token_endpoint_auth_method: "client_secret_post"`. `remoteVerify` sends credentials in the request body. If the client keeps the default method, `client_secret_basic`, introspection fails with `invalid_client`. Verification then throws a 500 `introspection failed` error.
 2. [Link it to the resource](#introspection).
 3. Pass its credentials as `remoteVerify`.
 
-With `remoteVerify` set, every token is introspected after the local JWT check, which also confirms the session is still active. Set `force: true` to skip the local check.
+With `remoteVerify` set, every token is introspected after the local JWT check. Introspection also confirms the session is still active. Set `force: true` to skip the local check.
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
@@ -129,7 +131,7 @@ const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
 ```
 
 <Callout>
-  If the introspection response has no `aud` claim and you set an `audience`, the token is rejected. Set `remoteVerify.allowMissingAudience: true` only if you trust the issuer to bind the token to your API some other way.
+  When you set `audience`, the audience check stops a token issued for another API on the same issuer from passing at yours. If the introspection response has no `aud` claim and you set an `audience`, the token is rejected. Set `remoteVerify.allowMissingAudience: true` only if you trust the issuer to bind the token to your API some other way.
 </Callout>
 
 ## Introspection

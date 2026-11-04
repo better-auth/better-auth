@@ -92,13 +92,15 @@ For a fixed set of providers configured in code, use [Generic OAuth](/docs/plugi
 
 ## Register a provider
 
-By default, any signed-in user can register up to 10 providers for any domain. Two providers can claim the same domain, and a provider's domain also matches its subdomains, so email sign-in can reach another registrant's provider. Before you deploy, decide who should register providers:
+By default, any signed-in user can register up to 10 providers for any domain. Two providers can claim the same domain. A provider's domain also matches its subdomains: a provider for `example.com` matches `user@eng.example.com`. Either way, email sign-in can reach another registrant's provider. Before you deploy, decide who should register providers:
 
 | Who registers providers                   | Configure                                                                                                                                                           |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Only your administrators                  | Set `providersLimit` to a function that returns `0` for everyone else.                                                                                              |
 | Your customers, each for their own domain | Enable [domain verification](/docs/plugins/sso/domain-verification). A provider then cannot sign anyone in until its domain is proven over DNS.                     |
 | Nobody at runtime                         | Set `providersLimit: 0` and define the providers in [`defaultSSO`](#configure-providers-in-code). To link existing users by email, also enable domain verification. |
+
+As a function, `providersLimit` receives the signed-in user and returns the number of providers that user can register. A limit of `0` rejects that user's registrations with 403.
 
 ```ts title="auth.ts"
 sso({
@@ -120,7 +122,7 @@ The response includes `redirectURI`, and `domainVerificationToken` when domain v
 ```ts title="register-provider.ts"
 import { authClient } from "@/lib/auth-client";
 
-const { data } = await authClient.sso.register({
+const { data, error } = await authClient.sso.register({
   providerId: "acme",
   issuer: "https://idp.example.com",
   domain: "example.com",
@@ -129,7 +131,12 @@ const { data } = await authClient.sso.register({
     clientSecret: "CLIENT_SECRET",
   },
 });
-// Configure data.redirectURI as the redirect URI at the identity provider.
+
+if (error) {
+  // Show error.message. Discovery failures set error.code, such as discovery_untrusted_origin.
+} else {
+  // Register data.redirectURI as the redirect URI at the IdP.
+}
 ```
 
 For every field, see [Register an OIDC provider](/docs/plugins/sso/oidc#register-an-oidc-provider) and [Register a SAML provider](/docs/plugins/sso/saml#register-a-saml-provider).
@@ -145,7 +152,7 @@ To keep providers in your config instead of the database, pass `defaultSSO`, an 
 Whether a sign-in through these providers links to an existing user depends on domain verification:
 
 * With `domainVerification.enabled: true`, they count as verified without a DNS check. A sign-in can link to an existing user at a listed domain when the other [linking conditions](/docs/plugins/sso/provisioning#how-sso-users-are-matched) hold.
-* Without it, Better Auth does not link them by email, so an existing user's first SSO sign-in fails unless [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) links it.
+* Without it, Better Auth does not link them by email. An existing user's first SSO sign-in then fails unless [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) links it.
 
 ```ts title="auth.ts"
 sso({
@@ -181,14 +188,20 @@ await authClient.signIn.sso({
 });
 ```
 
-On the server, call `auth.api.signInSSO`. It returns the IdP's `url`, so send the browser there.
+In the browser, the auth client sends the user to the IdP by itself. On the server, call `auth.api.signInSSO`. It returns the IdP's `url`, and your code must send the browser there.
+
+Pass the identifier you have:
+
+* The user's email, as `email`, or their email domain, as `domain`.
+* The organization's slug, as `organizationSlug`.
+* The provider's ID, as `providerId`.
 
 To choose the provider, Better Auth tries these in order:
 
-1. With `providerId`, the provider with that ID. No other field is used.
-2. A `defaultSSO` entry whose domains include `domain`, or the domain part of `email`.
-3. With `organizationSlug`, the provider linked to that organization. This needs the [organization plugin](/docs/plugins/organization). An unknown slug continues to the next step. A known organization without a linked provider returns 404.
-4. A registered provider whose domain matches exactly, then the first match the database returns among providers whose domains include the domain or a parent of it.
+1. If you pass `providerId`, it uses the provider with that ID. No other field is used.
+2. If a `defaultSSO` entry's domains include `domain`, or the domain part of `email`, it uses that entry.
+3. If you pass `organizationSlug`, it uses the provider linked to that organization. This needs the [organization plugin](/docs/plugins/organization). An unknown slug continues to the next step. A known organization without a linked provider returns 404.
+4. Otherwise, it uses a registered provider whose domain matches exactly, then the first match the database returns among providers whose domains include the domain or a parent of it.
 
 With domain verification enabled, a provider whose domain is not verified returns 401.
 

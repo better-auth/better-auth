@@ -9,7 +9,7 @@ Every SSO sign-in ends with a Better Auth user.
 
 ## How SSO users are matched
 
-Better Auth stores each SSO identity as an `account` keyed by the provider ID and the OIDC `sub` claim or the SAML `NameID`. Only that pair identifies the person, not the email ([OIDC Core §5.7](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability), [SAML Core §2.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)).
+Better Auth stores each SSO identity as an `account` keyed by the provider ID and the OIDC `sub` claim or the SAML `NameID`. Only that pair identifies the person, not the email ([OIDC Core §5.7](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability), [SAML Core §2.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)). A provider can assert any email address. Better Auth links by email only when the checks below pass.
 
 * **Returning account.** The user who owns the account signs in.
 * **New account, no user with that email.** A new user is created with `emailVerified: false`.
@@ -18,14 +18,14 @@ Better Auth stores each SSO identity as an `account` keyed by the provider ID an
   * [`resolveUser`](#resolve-sso-users) returns `link`. The account is linked to the `userId` it names.
   * All of these hold. The account is linked to the user with that email.
     * The provider's [domain is verified](/docs/plugins/sso/domain-verification#enable-domain-verification). A [`defaultSSO`](/docs/plugins/sso#configure-providers-in-code) provider counts as verified only when `domainVerification.enabled` is `true`.
-    * The email's domain is one of the provider's domains.
+    * The email's domain is one of the provider's domains or a subdomain of one. For example, `user@eng.acme.com` matches a provider for `acme.com`.
     * The existing user's email is verified. `account.accountLinking.requireLocalEmailVerified: false` skips this check.
     * Account linking is on: `account.accountLinking.enabled` is not `false`, and `account.accountLinking.disableImplicitLinking` is not `true`.
   * The deprecated `trustEmailVerified` option is on, and the IdP reports the email verified. The account is linked to the user with that email without domain verification. The existing user's email must still be verified, and account linking must be on.
 
-  Otherwise the sign-in fails. OIDC redirects with `error=account not linked`, and SAML with `error=account_not_linked`.
+  Otherwise the sign-in fails. OIDC redirects with `error=account not linked`, and SAML with `error=account_not_linked`. To let the sign-in through, meet one of the cases above. For example, verify the provider's domain when the other conditions in that case already hold, or return `link` from `resolveUser`.
 
-`account.accountLinking.trustedProviders` does not apply to SSO providers, and registration rejects a `providerId` listed there. SSO provider IDs are chosen by whoever registers them, so trust comes only from a verified domain.
+`account.accountLinking.trustedProviders` does not apply to SSO providers, and registration rejects a `providerId` listed there. Whoever registers an SSO provider chooses its ID. For this reason, trust comes only from a verified domain.
 
 <Callout type="warn">
   The deprecated `trustEmailVerified` option trusts the IdP's `email_verified` claim or mapped attribute. Anyone who can register a provider can then claim any email address and take over its account. Use domain verification or `resolveUser` instead.
@@ -33,7 +33,9 @@ Better Auth stores each SSO identity as an `account` keyed by the provider ID an
 
 ### Block new users
 
-To turn off implicit sign-up for SSO, set `disableImplicitSignUp: true`. A sign-in that would create a user then fails with `error=signup disabled` (SAML: `error=signup_disabled`). SAML ignores `requestSignUp`, but an OIDC sign-in still creates the user when `signIn.sso` is called with `requestSignUp: true`. Any client can send that flag, so for OIDC this option only changes the default. To refuse users you have not provisioned, return `{ action: "reject" }` from [`resolveUser`](#resolve-sso-users).
+To turn off implicit sign-up for SSO, set `disableImplicitSignUp: true`. A sign-in that would create a user then fails with `error=signup disabled` (SAML: `error=signup_disabled`). To let such a user in, create the user yourself and return `link` from [`resolveUser`](#resolve-sso-users).
+
+SAML ignores `requestSignUp`, but an OIDC sign-in still creates the user when `signIn.sso` is called with `requestSignUp: true`. Any client can send that flag. For OIDC, `disableImplicitSignUp` only changes the default. To refuse users you have not provisioned, return `{ action: "reject" }` from `resolveUser`.
 
 ```ts title="auth.ts"
 sso({
@@ -101,17 +103,15 @@ const auth = betterAuth({
 });
 ```
 
-Your resolver receives:
+Your resolver receives `input` and `context`. `input.protocol` is `"oidc"` or `"saml"`, and `input.providerId` is the provider's ID. `input` also holds:
 
-| Input                   | OIDC                                                                           | SAML                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `accountKey.issuer`     | The ID token's `iss`                                                           | The IdP entity ID                                                       |
-| `accountKey.accountId`  | The ID token's `sub`                                                           | The signed `NameID`. Matching is case-sensitive.                        |
-| `providerUser`          | The normalized profile                                                         | The normalized profile                                                  |
-| `verifiedIdTokenClaims` | The full verified ID token payload                                             | Not present                                                             |
-| `providerClaims`        | The UserInfo claims, or the ID token claims when there is no UserInfo endpoint | Not present                                                             |
-| `providerAttributes`    | Not present                                                                    | The verified assertion attributes. Multi-valued attributes stay arrays. |
-| `providerReference`     | Opaque and transient. Never persist it as a tenant or user binding.            | Opaque and transient. Never persist it as a tenant or user binding.     |
+* `accountKey.issuer`: the ID token's `iss` for OIDC, or the IdP entity ID for SAML.
+* `accountKey.accountId`: the ID token's `sub` for OIDC, or the signed `NameID` for SAML. `NameID` matching is case-sensitive.
+* `providerUser`: the normalized profile.
+* `verifiedIdTokenClaims` (OIDC only): the full verified ID token payload.
+* `providerClaims` (OIDC only): the UserInfo claims, or the ID token claims when there is no UserInfo endpoint.
+* `providerAttributes` (SAML only): the verified assertion attributes. Multi-valued attributes stay arrays.
+* `providerReference`: opaque and transient. Never persist it as a tenant or user binding.
 
 Profile fields, claims, and attributes may still need validation before you use them for authorization. `findProvisionedUserByAccountKey` is your own function in this example. It should resolve the exact provider, issuer, and subject tuple through the transaction-scoped `context.database` adapter. Do not fall back to matching an email address when the exact provisioned subject is absent.
 
@@ -119,7 +119,17 @@ Your resolver returns one of three decisions:
 
 * `{ action: "continue" }` continues the normal SSO sign-in behavior.
 * `{ action: "link", userId, profile }` links the exact SSO account to that user. Use `profile: "preserve"` to keep the local profile or `profile: "update"` to update it from the provider profile.
-* `{ action: "reject", code, message? }` rejects the sign-in with an application-defined error.
+* `{ action: "reject", code, message? }` rejects the sign-in with an application-defined error. No account or session is created.
+
+After a rejection, the browser goes to the first of these that is set:
+
+1. The `errorCallbackURL` passed to `signIn.sso()`.
+2. `onAPIError.errorURL`.
+3. `{baseURL}/error`.
+
+IdP-initiated SAML sign-ins go to the [sign-in destination](/docs/plugins/sso/saml#acs-and-callback-urls) instead. The redirect carries `error` set to `code`, and `error_description` set to `message` when you give one. Read them on the target page to show the user why the sign-in failed.
+
+If the resolver throws or returns an invalid decision, the sign-in fails with `error=SSO_USER_RESOLUTION_FAILED`. The server log says which of the two happened.
 
 <Callout type="warn">
   `resolveUser` requires:
@@ -133,7 +143,7 @@ A fresh sign-in attempt may call the resolver again, so keep it idempotent. Writ
 
 ## User provisioning
 
-To run your own code when an SSO sign-in creates a user, set `provisionUser`. It receives `{ user, userInfo, token, provider }`. To run it on every SSO sign-in, set `provisionUserOnEveryLogin: true`. It runs before [organization provisioning](#organization-provisioning).
+To run your own code when an SSO sign-in creates a user, set `provisionUser`. It receives `{ user, userInfo, token, provider }` and returns nothing. To also run it on every later SSO sign-in, set `provisionUserOnEveryLogin: true` next to `provisionUser`. It runs before [organization provisioning](#organization-provisioning).
 
 `userInfo` holds the mapped profile, including any `mapping.extraFields`. `token` holds the OIDC tokens and is `undefined` for SAML.
 
@@ -147,7 +157,7 @@ sso({
 });
 ```
 
-If `provisionUser` throws, the sign-in response fails but the user stays created. Without `provisionUserOnEveryLogin`, the callback does not run again for that user, so catch errors from calls the sign-in does not depend on. With `provisionUserOnEveryLogin`, make the callback idempotent.
+If `provisionUser` throws, the sign-in response fails but the user stays created. Without `provisionUserOnEveryLogin`, the callback does not run again for that user. For this reason, catch errors from calls the sign-in does not depend on. With `provisionUserOnEveryLogin`, make the callback idempotent.
 
 ## Link a provider to an organization
 
@@ -172,7 +182,7 @@ The caller must be a member of the organization, or the call returns `400`. With
 
 Organization provisioning adds SSO users to organizations as members. You need the [organization plugin](/docs/plugins/organization) for it.
 
-* **Sign-in through a provider with an `organizationId`.** The user joins that organization with `defaultRole` (`"member"` by default), or with the role `getRole({ user, userInfo, token, provider })` returns.
+* **Sign-in through a provider with an `organizationId`.** The user joins that organization with `defaultRole` (`"member"` by default). When you set `getRole({ user, userInfo, token, provider })`, the user gets the role it returns instead: `"member"` or `"admin"`.
 * **Sign-in through a social provider.** The user joins an organization only when all of these hold:
   * Domain verification is on.
   * The stored user's email is verified.

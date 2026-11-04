@@ -11,7 +11,7 @@ Your OAuth provider is also an [OpenID Connect](https://openid.net/specs/openid-
 
 Better Auth serves [OpenID Provider metadata](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig) at `{issuer}/.well-known/openid-configuration` and [authorization server metadata](https://datatracker.ietf.org/doc/html/rfc8414#section-3) at `{issuer}/.well-known/oauth-authorization-server`. If your framework does not forward these routes to `auth.handler`, see [Expose the well-known metadata](/docs/plugins/oauth-provider#expose-the-well-known-metadata).
 
-The OpenID configuration returns 404 when you set `scopes` without `openid`.
+The OpenID configuration returns 404 when you set `scopes` without `openid`. To serve it, add `openid` to `scopes`.
 
 To publish fewer scopes, or more claims, than the server supports, set `advertisedMetadata`:
 
@@ -33,7 +33,7 @@ Every value in `scopes_supported` must also be in `scopes`, or the plugin fails 
 
 ## ID token claims
 
-To add claims to the [ID token](https://openid.net/specs/openid-connect-core-1_0.html#IDToken), set `customIdTokenClaims`:
+To add claims to the [ID token](https://openid.net/specs/openid-connect-core-1_0.html#IDToken), set `customIdTokenClaims`. It receives the `user`, the granted `scopes`, and the client's `metadata`. It returns an object of claims to add:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -50,7 +50,7 @@ oauthProvider({
 
 When an extension also contributes claims, see [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
 
-Better Auth advertises `acr_values_supported: ["0"]` and always issues `acr: "0"`, meaning the authentication did not meet ISO/IEC 29115 level 1 ([OIDC Core §2](https://openid.net/specs/openid-connect-core-1_0.html#IDToken)). Custom ACR policies are not supported. A request for other `acr_values` still succeeds, but an essential `claims.id_token.acr` request that does not allow `"0"` fails.
+Better Auth advertises `acr_values_supported: ["0"]` and **always** issues `acr: "0"`, meaning the authentication did not meet ISO/IEC 29115 level 1 ([OIDC Core §2](https://openid.net/specs/openid-connect-core-1_0.html#IDToken)). Custom ACR policies are not supported. A request for other `acr_values` still succeeds, but an essential `claims.id_token.acr` request that does not allow `"0"` fails.
 
 With `disableJwtPlugin: true`, ID tokens are signed with `HS256` using the client secret, so public clients get no ID token. See [Without the JWT plugin](/docs/plugins/oauth-provider/tokens#without-the-jwt-plugin).
 
@@ -74,7 +74,7 @@ Claims follow the granted [scopes](https://openid.net/specs/openid-connect-core-
 
 Claims requested through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests) are added when they appear in `claims_supported` and a value exists. Missing values are omitted, not returned as `null`. This per-claim selection works only with opaque access tokens. With a JWT access token, UserInfo returns only the claims its scopes cover.
 
-To add claims to the [UserInfo response](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse), set `customUserInfoClaims`:
+To add claims to the [UserInfo response](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse), set `customUserInfoClaims`. It receives the `user`, the access token's `scopes`, the access token payload as `jwt`, and `requestedClaims`. `requestedClaims` lists the claim names requested through `claims.userinfo`. It returns an object of claims to add:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -85,13 +85,15 @@ oauthProvider({
 })
 ```
 
+A returned claim replaces the standard claim of the same name, except `sub`.
+
 ## Pairwise subject identifiers
 
-By default, `sub` is the user ID, which is the same for every client (the `public` [subject type](https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes)). To let clients receive a `sub` that other clients cannot correlate, set `pairwiseSecret`:
+Clients that receive the same `sub` for a user can link that user's activity across those clients. By default, `sub` is the user ID, which is the same for every client (the `public` [subject type](https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes)). To let clients receive a `sub` that other clients cannot correlate, set `pairwiseSecret`:
 
 ```ts title="auth.ts"
 oauthProvider({
-  pairwiseSecret: process.env.PAIRWISE_SECRET, // [!code highlight]
+  pairwiseSecret: process.env.PAIRWISE_SECRET, // at least 32 characters // [!code highlight]
 })
 ```
 
@@ -103,10 +105,10 @@ Better Auth computes the value with HMAC-SHA256 over the host of the client's fi
 * JWT access tokens keep the real user ID as `sub`, so resource servers can look users up.
 
 <Callout type="warn">
-  `pairwiseSecret` must be at least 32 characters. Changing it changes every pairwise `sub` and breaks existing client accounts, so treat it as permanent.
+  `pairwiseSecret` must be at least 32 characters. Changing it changes every pairwise `sub` and breaks existing client accounts. Treat it as permanent.
 </Callout>
 
-`sector_identifier_uri` is not supported, so all `redirect_uris` of a pairwise client must share one host. Pairwise clients cannot use custom-scheme redirect URIs with a host, such as `app://rp.example.com/callback`, because any app can claim a custom scheme.
+`sector_identifier_uri` is not supported. All `redirect_uris` of a pairwise client must therefore share one host. Pairwise clients also cannot use custom-scheme redirect URIs with a host, such as `app://rp.example.com/callback`. Any app can claim a custom scheme, and that app would receive the same `sub` as a pairwise web client that redirects to `rp.example.com`. Registration fails with `invalid_client_metadata` in either case.
 
 ## RP-initiated logout
 
@@ -123,10 +125,15 @@ await auth.api.adminCreateOAuthClient({
 ```
 
 * It accepts GET query parameters or a form-encoded POST body.
-* A valid `id_token_hint` for the current browser session ends it immediately. Without one, or with a hint for a different session, the user must confirm first.
-* Better Auth [redirects after logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout) only when `post_logout_redirect_uri` exactly matches a registered URI, and adds `state` only to that redirect.
+* A valid `id_token_hint` for the current browser session ends it immediately. Without one, or with a hint for a different session, the user must confirm first. In a browser, Better Auth serves the confirmation page.
+* Better Auth [redirects after logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout) only when `post_logout_redirect_uri` exactly matches a registered URI, and adds `state` only to that redirect. For example, `https://app.example.com/logout/` does not match a registered `https://app.example.com/logout`. Without a matching URI, a browser shows a logged-out page from Better Auth.
 
-Enable this only for clients you trust. With a valid `id_token_hint`, the request does not need the user's browser, and an expired ID token is still accepted as a hint. So the client, or anyone holding an ID token it received, can end that session without confirmation. Ending the session also triggers back-channel logout for every client that holds tokens for it.
+Enable this only for clients you trust. The client, or anyone holding an ID token it received, can end that token's session without confirmation, for these reasons:
+
+* With a valid `id_token_hint`, the request does not need the user's browser.
+* An expired ID token is still accepted as a hint.
+
+Ending the session also triggers back-channel logout for every client that holds tokens for it.
 
 ## Back-channel logout
 

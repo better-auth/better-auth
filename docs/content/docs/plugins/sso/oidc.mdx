@@ -14,7 +14,7 @@ To register an OIDC provider, pass an `oidcConfig` to `sso.register`. [Discovery
 ```ts title="register-oidc-provider.ts"
 import { authClient } from "@/lib/auth-client";
 
-const { data } = await authClient.sso.register({
+const { data, error } = await authClient.sso.register({
 	providerId: "acme",
 	issuer: "https://idp.example.com",
 	domain: "example.com",
@@ -29,6 +29,12 @@ const { data } = await authClient.sso.register({
 		},
 	},
 });
+
+if (error) {
+	// Discovery failures set error.code, such as discovery_untrusted_origin.
+} else {
+	// Register data.redirectURI as the redirect URI at the IdP.
+}
 ```
 
 The same body works on the server with `auth.api.registerSSOProvider({ body, headers })`, passing the headers of a signed-in request.
@@ -51,7 +57,7 @@ When the email claim is a list, Better Auth uses the first address. If your IdP 
 
 At registration, Better Auth fetches `{issuer}/.well-known/openid-configuration`, or `oidcConfig.discoveryEndpoint` when set ([OIDC Discovery §4](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig)). The document's `issuer` must match the provider's `issuer` ([§4.3](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation)). When discovery runs at registration, a missing or malformed document fails registration instead of the first sign-in.
 
-Discovery fills `authorizationEndpoint`, `tokenEndpoint`, `jwksEndpoint`, `userInfoEndpoint`, and `tokenEndpointAuthentication`. If you set one of these yourself, your value wins. Relative endpoint URLs are resolved against the issuer and keep its path.
+Discovery fills `authorizationEndpoint`, `tokenEndpoint`, `jwksEndpoint`, `userInfoEndpoint`, and `tokenEndpointAuthentication`. If you set one of these yourself, your value wins. Relative endpoint URLs are resolved against the issuer and keep its path. For example, with the issuer `https://idp.example.com/tenant`, the endpoint `/token` resolves to `https://idp.example.com/tenant/token`.
 
 The document must include `issuer`, `authorization_endpoint`, `token_endpoint`, and `jwks_uri`. Providers that support only the implicit flow, which may omit `token_endpoint`, are not supported.
 
@@ -59,7 +65,7 @@ To store your own endpoints without fetching the document, set `skipDiscovery: t
 
 ### Trusted origins
 
-Registration checks these URLs against [`trustedOrigins`](/docs/reference/security#trusted-origins):
+To stop a registrant from making your server call internal services or a cloud metadata address, registration checks these URLs against [`trustedOrigins`](/docs/reference/security#trusted-origins):
 
 * When registration runs discovery, the discovery URL and every URL discovered from it. A missing origin fails registration with `discovery_untrusted_origin`.
 * Any endpoint on a private or non-routable host, or on a host that resolves to one, even with `skipDiscovery: true`. A missing entry fails registration with `discovery_private_host`.
@@ -73,7 +79,7 @@ export const auth = betterAuth({
 });
 ```
 
-To support customers who bring their own IdPs, pass a function that adds the allowed IdP origins on SSO routes. These include registration, sign-in, and the callback:
+To support customers who bring their own IdPs, pass a function that adds the allowed IdP origins on SSO routes. These include registration, sign-in, and the callback. The function receives the request and returns the origins to trust:
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -90,24 +96,24 @@ export const auth = betterAuth({
 });
 ```
 
-If you call `auth.api.registerSSOProvider` directly, this function never sees the endpoint's URL, so the path check never matches. Register those providers over HTTP, or add their IdP origins to the list returned for every request.
+If you call `auth.api.registerSSOProvider` directly, this function never sees the endpoint's URL. The path check then never matches. Register those providers over HTTP, or add their IdP origins to the list returned for every request.
 
 ### Discovery errors
 
-Server-side OIDC requests (discovery, token, UserInfo, and JWKS) never follow redirects, so configure each endpoint's final URL. Registration and `signIn.sso` return these error codes:
+Server-side OIDC requests (discovery, token, UserInfo, and JWKS) never follow redirects, because a redirect could lead to a private host. Configure each endpoint's final URL. Registration and `signIn.sso` return these error codes:
 
-| Code                         | Status | Cause                                                                                 |
-| ---------------------------- | ------ | ------------------------------------------------------------------------------------- |
-| `issuer_mismatch`            | 400    | The document's `issuer` differs from the provider's `issuer`.                         |
-| `discovery_incomplete`       | 400    | The document lacks a required field, such as `token_endpoint` or `jwks_uri`.          |
-| `discovery_not_found`        | 400    | The discovery URL returned 404.                                                       |
-| `discovery_timeout`          | 502    | The IdP did not respond within 10 seconds, or returned 408.                           |
-| `discovery_invalid_url`      | 400    | An issuer, discovery, or endpoint URL is malformed or does not use `http` or `https`. |
-| `discovery_untrusted_origin` | 400    | A discovery or discovered URL does not match `trustedOrigins`.                        |
-| `discovery_private_host`     | 400    | An endpoint host is private or non-routable and not in `trustedOrigins`.              |
-| `discovery_invalid_json`     | 400    | The response is empty or not valid JSON.                                              |
-| `oidc_endpoint_redirect`     | 400    | An endpoint returned a `3xx` response.                                                |
-| `discovery_unexpected_error` | 502    | Any other HTTP error or failure while fetching the document.                          |
+| Code                         | Status | Cause                                                                                 | Fix                                                                                                                                                                                       |
+| ---------------------------- | ------ | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `issuer_mismatch`            | 400    | The document's `issuer` differs from the provider's `issuer`.                         | Set the provider's `issuer` to the document's `issuer` exactly, including any trailing slash.                                                                                             |
+| `discovery_incomplete`       | 400    | The document lacks a required field, such as `token_endpoint` or `jwks_uri`.          | Set `skipDiscovery: true` and provide `authorizationEndpoint`, `tokenEndpoint`, and `jwksEndpoint`. Also set `userInfoEndpoint` and `tokenEndpointAuthentication` if your IdP needs them. |
+| `discovery_not_found`        | 400    | The discovery URL returned 404.                                                       | Check `issuer`, or set `oidcConfig.discoveryEndpoint` to the document's URL.                                                                                                              |
+| `discovery_timeout`          | 502    | The IdP did not respond within 10 seconds, or returned 408.                           | Check that your server can reach the IdP, then retry.                                                                                                                                     |
+| `discovery_invalid_url`      | 400    | An issuer, discovery, or endpoint URL is malformed or does not use `http` or `https`. | Correct the URL so it is valid and uses `http` or `https`.                                                                                                                                |
+| `discovery_untrusted_origin` | 400    | A discovery or discovered URL does not match `trustedOrigins`.                        | After you vet the IdP, add the origin of the URL in the error message to `trustedOrigins`.                                                                                                |
+| `discovery_private_host`     | 400    | An endpoint host is private or non-routable and not in `trustedOrigins`.              | If the IdP is internal and vetted, add its origin to `trustedOrigins`.                                                                                                                    |
+| `discovery_invalid_json`     | 400    | The response is empty or not valid JSON.                                              | Point the discovery URL at the JSON document.                                                                                                                                             |
+| `oidc_endpoint_redirect`     | 400    | An endpoint returned a `3xx` response.                                                | Configure the URL that the redirect points to.                                                                                                                                            |
+| `discovery_unexpected_error` | 502    | Any other HTTP error or failure while fetching the document.                          | Read the error message for the HTTP status or cause.                                                                                                                                      |
 
 ## Token endpoint authentication
 
@@ -141,7 +147,7 @@ sso({
 
 The provider ID travels in the OAuth state. Sign-ins then send the shared URI as `redirect_uri`, so add it to each IdP's allowed redirect URIs. Both `/sso/callback` and `/sso/callback/{providerId}` stay registered. SAML providers are unaffected.
 
-If users register their own providers, keep per-provider callbacks. A per-provider callback also checks that the code arrived at the callback of the provider that started sign-in, while a shared callback relies on the state alone ([RFC 9700 §4.4](https://datatracker.ietf.org/doc/html/rfc9700#section-4.4)).
+If users register their own providers, keep per-provider callbacks. They limit mix-up attacks, where one provider's authorization response is processed as another provider's ([RFC 9700 §4.4](https://datatracker.ietf.org/doc/html/rfc9700#section-4.4)). A per-provider callback checks that the code arrived at the callback of the provider that started sign-in. A shared callback relies on the state alone.
 
 ## IdP-initiated sign-in
 
