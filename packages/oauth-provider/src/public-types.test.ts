@@ -82,4 +82,13 @@ describe("public oauth-provider types", () => {
 			string | undefined
 		>();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11204
+	 */
+	it("exports signedQueryExpiresIn as an optional seconds option", () => {
+		expectTypeOf<OAuthOptions["signedQueryExpiresIn"]>().toEqualTypeOf<
+			number | undefined
+		>();
+	});
 });
