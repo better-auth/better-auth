@@ -151,7 +151,12 @@ Better Auth includes built-in rate limiting to safeguard against brute-force att
 
 ## IP Address Headers
 
-Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the address from the `X-Forwarded-For` header. Clients can set this header themselves. Per-client limits only work when your own proxy or server code sets the address on every request. It must replace any value the client sent. [Connecting IP Address](/docs/concepts/rate-limit#connecting-ip-address) explains how to set `ipAddressHeaders` or `trustedProxies` for your deployment.
+Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the address from the `X-Forwarded-For` header. Clients can set this header themselves. Per-client limits only work in one of these setups:
+
+* Your proxy or server code sets the address in a header on every request and replaces any value the client sent.
+* Your proxies append to `X-Forwarded-For`, and you list them in `trustedProxies`.
+
+[Connecting IP Address](/docs/concepts/rate-limit#connecting-ip-address) explains how to configure each setup.
 
 ## Trusted Proxy Headers
 
