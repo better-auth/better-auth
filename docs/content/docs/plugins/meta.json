@@ -7,6 +7,7 @@
     "username",
     "anonymous",
     "phone-number",
+    "pin",
     "magic-link",
     "email-otp",
     "passkey",

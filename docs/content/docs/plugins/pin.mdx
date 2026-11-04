@@ -1,0 +1,271 @@
+---
+icon: pluginsPin
+title: PIN
+description: Step-up authentication with a hashed PIN for sensitive actions
+---
+
+`PIN` `Step-up`
+
+The PIN plugin adds a hashed PIN that users can verify to **step up** the current session before sensitive actions, such as money transfers, profile changes, or re-authentication prompts. A successful verification upgrades the existing session for a short, configurable window instead of creating a new session.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { pin } from "better-auth/plugins" // [!code highlight]
+
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            pin() // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Add the client plugin to your auth client
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { pinClient } from "better-auth/client/plugins" // [!code highlight]
+
+    export const authClient = createAuthClient({
+        plugins: [
+            pinClient() // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
+
+  <Step>
+    ### Run the database migration
+
+    The plugin adds a `pin` table and a `stepUpExpiresAt` field to the `session` table. Run the migration to apply the changes:
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth@latest migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```package-install
+        npx auth@latest generate
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Usage
+
+### Set a PIN
+
+Setting a PIN requires the account password. OAuth-only users can enable `allowPasswordless` if they have no credential account.
+
+```ts title="app.tsx"
+import { authClient } from "@/lib/auth-client"
+
+const { error } = await authClient.pin.set({
+    pin: "1234",
+    password: "user-password",
+})
+```
+
+### Verify a PIN for step-up
+
+`pin.verify` verifies the PIN and upgrades the current session for `stepUpTTL` seconds (2 minutes by default). It does not create a new session or change the user's sign-in state.
+
+```ts title="app.tsx"
+import { authClient } from "@/lib/auth-client"
+
+const { data, error } = await authClient.pin.verify({
+    pin: "1234",
+})
+
+if (data?.verified) {
+    // Allow the sensitive action
+}
+```
+
+### Check the step-up state
+
+The step-up window is stored on the session as `stepUpExpiresAt`, so it is available from `getSession` and from the client session atom.
+
+```ts title="app.tsx"
+import { authClient } from "@/lib/auth-client"
+
+const { data: session } = authClient.useSession()
+
+const isSteppedUp =
+    !!session?.session.stepUpExpiresAt &&
+    new Date(session.session.stepUpExpiresAt) > new Date()
+```
+
+You can also query the plugin directly:
+
+```ts title="app.tsx"
+const { data } = await authClient.pin.status()
+
+console.log(data?.hasPin) // true
+console.log(data?.stepUpValid) // true while the step-up window is open
+```
+
+### Change a PIN
+
+```ts title="app.tsx"
+const { error } = await authClient.pin.change({
+    currentPin: "1234",
+    newPin: "5678",
+})
+```
+
+### Disable a PIN
+
+Disabling a PIN requires the account password and immediately clears the session's step-up state.
+
+```ts title="app.tsx"
+const { error } = await authClient.pin.disable({
+    password: "user-password",
+})
+```
+
+## Enforcing step-up on the server
+
+Check the session before performing a sensitive operation. Reading the session from the database (rather than a cookie cache) prevents a stale cache from authorizing the action.
+
+```ts title="transfer.ts"
+import { auth } from "@/lib/auth"
+
+export async function transfer(request: Request) {
+    const session = await auth.api.getSession({
+        headers: request.headers,
+        query: { disableCookieCache: true },
+    })
+
+    if (
+        !session?.session.stepUpExpiresAt ||
+        new Date(session.session.stepUpExpiresAt) <= new Date()
+    ) {
+        throw new Error("STEP_UP_REQUIRED")
+    }
+
+    // Perform the sensitive action
+}
+```
+
+## Configuration
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { pin } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        pin({
+            minLength: 4, // Default: 4
+            maxLength: 12, // Default: 12
+            stepUpTTL: 120, // Default: 120 seconds
+            maxAttempts: 5, // Default: 5
+            lockoutDuration: 300, // Default: 300 seconds
+            requirePassword: true, // Default: true
+            allowPasswordless: false, // Default: false
+        })
+    ]
+})
+```
+
+**minLength**: `number`
+
+* Minimum PIN length. Default: `4`.
+
+**maxLength**: `number`
+
+* Maximum PIN length. Default: `12`.
+
+**stepUpTTL**: `number`
+
+* How long a successful verification keeps the session stepped up, in seconds. Default: `120`.
+
+**maxAttempts**: `number`
+
+* Number of consecutive failed attempts before the PIN is locked. Default: `5`.
+
+**lockoutDuration**: `number`
+
+* How long the PIN stays locked, in seconds. Default: `300`.
+
+**requirePassword**: `boolean`
+
+* Require the account password to set or disable a PIN. Default: `true`.
+
+**allowPasswordless**: `boolean`
+
+* Allow users without a credential account to set or disable a PIN without a password. Default: `false`.
+
+**pinValidator**: `(pin: string) => boolean | Promise<boolean>`
+
+* Custom format validation. When provided, it replaces the default digits-only check. Length limits still apply.
+
+**schema**: `object`
+
+* Customize the table and field names used by the plugin.
+
+## Database schema
+
+Table: `pin`
+
+export const pinTableFields = [
+	{
+		name: "userId",
+		type: "string",
+		description: "The user the PIN belongs to",
+		isOptional: false,
+	},
+	{
+		name: "hash",
+		type: "string",
+		description: "The hashed PIN",
+		isOptional: false,
+	},
+	{
+		name: "failedAttempts",
+		type: "number",
+		description: "Consecutive failed verification attempts",
+		isOptional: true,
+	},
+	{
+		name: "lockedUntil",
+		type: "date",
+		description: "When the PIN lockout expires",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="pin" fields={pinTableFields} />
+
+Table: `session`
+
+export const pinSessionTableFields = [
+	{
+		name: "stepUpExpiresAt",
+		type: "date",
+		description: "When the session's step-up window expires",
+		isOptional: true,
+	},
+];
+
+<DatabaseTable name="session" fields={pinSessionTableFields} />
+
+## Security notes
+
+* PINs are hashed with the same password hasher as account passwords and are never returned by any endpoint.
+* Failed verifications are counted per user. After `maxAttempts` consecutive failures, verification is rejected until `lockoutDuration` elapses.
+* All `/pin/*` endpoints are rate limited to 10 requests per 60 seconds per client.
+* A successful verification only upgrades the current session. Revoking the session or disabling the PIN clears the step-up state.
