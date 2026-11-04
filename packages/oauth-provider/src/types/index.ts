@@ -1261,6 +1261,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
 		}) => Awaitable<boolean | string>;
 	};
 	/**
@@ -1290,6 +1292,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
 		}) => Awaitable<boolean>;
 	};
 	/**
@@ -1311,6 +1315,13 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
+			/**
+			 * Set only when the user accepts. `referenceId` is the `reference_id`
+			 * they chose: check they may consent for it before returning it.
+			 */
+			consent?: { referenceId?: string };
 		}) => Awaitable<string | undefined>;
 		/**
 		 * After login and before consent, request the user to
@@ -1330,6 +1341,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
 			/**
 			 * `true` when the user returns from `page` through `/oauth2/continue`.
 			 * The client chooses to send that request, so it does not prove a

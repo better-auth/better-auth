@@ -138,7 +138,7 @@ By default, 2FA sign-in enforcement applies to the credential-based sign-in endp
 If your app needs to require 2FA for those sign-in methods, add custom hook handling for those endpoints and redirect users into your 2FA verification flow before treating the sign-in as complete.
 
 <Callout type="warn">
-  When a 2FA-enabled user signs in via a credential endpoint, the plugin issues a 2FA challenge instead of completing the sign-in. As part of this, the pending session is discarded and `ctx.context.newSession` is reset to `null` — there is no authenticated session until the user verifies the second factor. Server-side hooks (e.g. `after` hooks on the sign-in endpoints) that read `ctx.context.newSession` must null-check it before accessing `newSession.user`, otherwise they will throw while a 2FA challenge is in flight.
+  When a 2FA-enabled user signs in via a credential endpoint, the plugin issues a 2FA challenge instead of completing the sign-in. As part of this, the pending session is discarded and `ctx.context.newSession` is reset to `null` — there is no authenticated session until the user verifies the second factor. Server-side hooks (e.g. `after` hooks on the sign-in endpoints) that read `ctx.context.newSession` must null-check it before accessing `newSession.user`, otherwise they will throw while a 2FA challenge is in flight. Plugin `after` hooks on these endpoints run after the 2FA check regardless of plugin order.
 </Callout>
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
@@ -309,6 +309,22 @@ After the user has entered their 2FA code, you can verify it using `twoFactor.ve
   ```
 </APIMethod>
 
+#### Importing Existing TOTP Secrets
+
+To import TOTP secrets from another provider, prefix each Base32 secret with `base32:`, encrypt it with your auth secret, and store it in the `twoFactor` table. Then set `twoFactorEnabled: true` on the user.
+
+```ts
+import { symmetricEncrypt } from "better-auth/crypto";
+
+const ctx = await auth.$context;
+const secret = await symmetricEncrypt({
+    key: ctx.secretConfig,
+    data: `base32:${importedSecret}`,
+});
+```
+
+Remove any spaces from the secret before storing it. Imported secrets must use SHA-1 and the same `digits` and `period` as your TOTP options.
+
 ### OTP
 
 OTP (One-Time Password) is similar to TOTP but a random code is generated and sent to the user's email or phone.
@@ -432,9 +448,9 @@ To display the backup codes to the user, you can call `viewBackupCodes` on the s
   ```ts
   type viewBackupCodes = {
       /**
-       * The user ID to view all backup codes. 
+       * The ID of the user whose backup codes to return.
        */
-      userId?: string | null = "user-id"
+      userId: string = "user-id"
   }
   ```
 </APIMethod>

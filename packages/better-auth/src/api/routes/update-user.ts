@@ -773,6 +773,7 @@ export const changeEmail = createAuthEndpoint(
 				ctx.context.session.user.email,
 				newEmail,
 				ctx.context.options.emailVerification?.expiresIn,
+				{ userId: ctx.context.session.user.id },
 			);
 
 			ctx.context.logger.info("Change email attempt for existing email");
@@ -801,6 +802,7 @@ export const changeEmail = createAuthEndpoint(
 					newEmail,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
+					{ userId: ctx.context.session.user.id },
 				);
 				const url = `${
 					ctx.context.baseURL
@@ -838,6 +840,7 @@ export const changeEmail = createAuthEndpoint(
 				ctx.context.options.emailVerification?.expiresIn,
 				{
 					requestType: "change-email-confirmation",
+					userId: ctx.context.session.user.id,
 				},
 			);
 			const url = `${
@@ -875,6 +878,7 @@ export const changeEmail = createAuthEndpoint(
 			ctx.context.options.emailVerification?.expiresIn,
 			{
 				requestType: "change-email-verification",
+				userId: ctx.context.session.user.id,
 			},
 		);
 		const url = `${

@@ -13,6 +13,6 @@
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
     "better-auth": "workspace:*",
-    "stripe": "^22.0.1"
+    "stripe": "^23.0.0"
   }
 }

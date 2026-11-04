@@ -6,6 +6,11 @@ import type {
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import {
+	getPendingSecondFactorUser,
+	registerInternalAuthCompletion,
+} from "@better-auth/core/utils/auth-completion";
+import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthPlugin } from "better-auth";
 import { safeJSONParse } from "better-auth";
@@ -16,6 +21,7 @@ import {
 	electronInitOAuthProxy,
 	electronToken,
 	electronTransferUser,
+	hashSessionToken,
 } from "./routes";
 import type { ElectronOptions } from "./types";
 import { PACKAGE_VERSION } from "./version";
@@ -50,6 +56,20 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			ctx.path?.startsWith("/phone-number/verify")
 		);
 	};
+	const isTwoFactorCompletion = (path: string | undefined) =>
+		path === "/two-factor/verify-totp" ||
+		path === "/two-factor/verify-otp" ||
+		path === "/two-factor/verify-backup-code";
+
+	const querySchema = z.object({
+		client_id: z.string(),
+		code_challenge: z.string().nonempty(),
+		state: z.string().nonempty(),
+	});
+	const transferSchema = querySchema.extend({
+		userId: z.string().optional(),
+		expiresAt: z.number(),
+	});
 
 	const handleTransfer = async (
 		ctx: GenericEndpointContext,
@@ -58,11 +78,10 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			state: string;
 			code_challenge: string;
 		},
+		sourceSession: NonNullable<GenericEndpointContext["context"]["session"]>,
 	) => {
 		const { client_id, state, code_challenge } = payload;
-		const userId =
-			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
-		if (!userId || client_id !== opts.clientID) {
+		if (client_id !== opts.clientID) {
 			return null;
 		}
 		if (!state) {
@@ -70,6 +89,16 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		}
 		if (!code_challenge) {
 			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_PKCE);
+		}
+		const source = await ctx.context.internalAdapter.findSession(
+			sourceSession.session.token,
+		);
+		if (
+			!source ||
+			source.user.id !== sourceSession.user.id ||
+			source.session.expiresAt <= new Date()
+		) {
+			return null;
 		}
 
 		const redirectCookieName = `${opts.cookiePrefix}.${opts.clientID}`;
@@ -80,7 +109,8 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		await ctx.context.internalAdapter.createVerificationValue({
 			identifier: `electron:${identifier}`,
 			value: JSON.stringify({
-				userId,
+				userId: source.user.id,
+				sourceSessionTokenHash: await hashSessionToken(source.session.token),
 				codeChallenge: code_challenge,
 				state,
 			}),
@@ -100,13 +130,125 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		return identifier;
 	};
 
-	return {
+	const completionHook = {
+		matcher: (ctx: HookEndpointContext) =>
+			hookMatcher(ctx) || isTwoFactorCompletion(ctx.path),
+		handler: createAuthMiddleware(async (ctx) => {
+			const clearRedirect = () =>
+				ctx.setCookie(`${opts.cookiePrefix}.${opts.clientID}`, "", {
+					...ctx.context.authCookies.sessionToken.attributes,
+					httpOnly: false,
+					maxAge: 0,
+				});
+			// Verification must never reuse a handoff from an earlier request.
+			if (isTwoFactorCompletion(ctx.path)) clearRedirect();
+			const returned = ctx.context.returned;
+			if (returned instanceof Response) return;
+			// Better Call represents endpoint redirects as APIError. Only
+			// a 302 with a completed session can continue the transfer.
+			if (
+				isAPIError(returned) &&
+				(returned.statusCode !== 302 || !ctx.context.newSession?.session)
+			) {
+				return;
+			}
+			const cookie = ctx.context.createAuthCookie("transfer_token", {
+				maxAge: opts.codeExpiresIn,
+			});
+			const query = querySchema.safeParse(ctx.query);
+			const directQuery =
+				query.success && query.data.client_id === opts.clientID
+					? query.data
+					: null;
+
+			// A credential challenge has no final session. Keep only signed,
+			// user-bound transfer intent for the later verification request.
+			const pendingTwoFactorUserId = getPendingSecondFactorUser(ctx.context);
+			if (pendingTwoFactorUserId) {
+				clearRedirect();
+				if (directQuery) {
+					await ctx.setSignedCookie(
+						cookie.name,
+						JSON.stringify({
+							...directQuery,
+							userId: pendingTwoFactorUserId,
+							expiresAt: Date.now() + opts.codeExpiresIn * 1000,
+						}),
+						ctx.context.secret,
+						cookie.attributes,
+					);
+				}
+				return;
+			}
+
+			const sourceSession = ctx.context.newSession;
+			if (!sourceSession?.session) {
+				if (
+					directQuery &&
+					(ctx.path.startsWith("/sign-in") || ctx.path.startsWith("/sign-up"))
+				) {
+					clearRedirect();
+					await ctx.setSignedCookie(
+						cookie.name,
+						JSON.stringify({
+							...directQuery,
+							expiresAt: Date.now() + opts.codeExpiresIn * 1000,
+						}),
+						ctx.context.secret,
+						cookie.attributes,
+					);
+				}
+				return;
+			}
+			const transferCookie =
+				directQuery &&
+				(ctx.path.startsWith("/sign-in") || ctx.path.startsWith("/sign-up"))
+					? null
+					: await ctx.getSignedCookie(cookie.name, ctx.context.secret);
+			const parsedCookie = transferSchema.safeParse(
+				transferCookie ? safeJSONParse(transferCookie) : null,
+			);
+			const transferPayload =
+				parsedCookie.success && parsedCookie.data.expiresAt > Date.now()
+					? parsedCookie.data
+					: directQuery;
+			if (!transferPayload || transferPayload.client_id !== opts.clientID) {
+				return;
+			}
+			if (
+				(isTwoFactorCompletion(ctx.path) && !("userId" in transferPayload)) ||
+				("userId" in transferPayload &&
+					transferPayload.userId !== sourceSession.user.id)
+			) {
+				ctx.setCookie(cookie.name, "", { ...cookie.attributes, maxAge: 0 });
+				return;
+			}
+			const identifier = await handleTransfer(
+				ctx,
+				transferPayload,
+				sourceSession,
+			);
+			if (identifier === null) return;
+			ctx.setCookie(cookie.name, "", {
+				...cookie.attributes,
+				maxAge: 0,
+			});
+			if (isAPIError(returned)) return;
+			return ctx.json({
+				...(ctx.context.returned ?? {}),
+				electron_authorization_code: identifier,
+			});
+		}),
+	};
+
+	const plugin = {
 		id: "electron",
 		version: PACKAGE_VERSION,
 		hooks: {
 			after: [
 				{
-					matcher: (ctx) => !hookMatcher(ctx),
+					matcher: (ctx) =>
+						!hookMatcher(ctx) && !isTwoFactorCompletion(ctx.path),
 					handler: createAuthMiddleware(async (ctx) => {
 						const transferCookie = await ctx.getSignedCookie(
 							`${opts.cookiePrefix}.transfer_token`,
@@ -116,81 +258,20 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							return;
 						}
 
+						const parsed = transferSchema.safeParse(
+							safeJSONParse(transferCookie),
+						);
+						if (!parsed.success || parsed.data.expiresAt <= Date.now()) return;
 						const cookie = ctx.context.createAuthCookie("transfer_token", {
-							maxAge: opts.codeExpiresIn,
+							maxAge: Math.ceil((parsed.data.expiresAt - Date.now()) / 1000),
 						});
-						// Refresh the transfer cookie to extend its validity
-						// Avoids expiration during multi-step auth flows on active usage
-						// Can still expire when no endpoint is hit within the valid period
+						// Preserve the signed deadline across intermediate session responses.
 						await ctx.setSignedCookie(
 							cookie.name,
 							transferCookie,
 							ctx.context.secret,
 							cookie.attributes,
 						);
-					}),
-				},
-				{
-					matcher: hookMatcher,
-					handler: createAuthMiddleware(async (ctx) => {
-						const querySchema = z.object({
-							client_id: z.string(),
-							code_challenge: z.string().nonempty(),
-							state: z.string().nonempty(),
-						});
-						const cookie = ctx.context.createAuthCookie("transfer_token", {
-							maxAge: opts.codeExpiresIn,
-						});
-						if (
-							ctx.query?.client_id === opts.clientID &&
-							(ctx.path.startsWith("/sign-in") ||
-								ctx.path.startsWith("/sign-up"))
-						) {
-							const query = querySchema.safeParse(ctx.query);
-							if (query.success) {
-								await ctx.setSignedCookie(
-									cookie.name,
-									JSON.stringify(query.data),
-									ctx.context.secret,
-									cookie.attributes,
-								);
-							}
-						}
-
-						if (!ctx.context.newSession?.session) {
-							return;
-						}
-
-						const transferCookie = await ctx.getSignedCookie(
-							cookie.name,
-							ctx.context.secret,
-						);
-						ctx.setCookie(cookie.name, "", {
-							...cookie.attributes,
-							maxAge: 0,
-						});
-						let transferPayload: z.infer<typeof querySchema> | null = null;
-						if (!!transferCookie) {
-							transferPayload = safeJSONParse(transferCookie);
-						} else {
-							const query = querySchema.safeParse(ctx.query);
-							if (query.success && query.data.client_id === opts.clientID) {
-								transferPayload = query.data;
-							}
-						}
-						if (!transferPayload) {
-							return;
-						}
-
-						const identifier = await handleTransfer(ctx, transferPayload);
-						if (identifier === null) {
-							return ctx;
-						}
-
-						return ctx.json({
-							...(ctx.context.returned ?? {}),
-							electron_authorization_code: identifier,
-						});
 					}),
 				},
 			],
@@ -205,6 +286,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		options: opts,
 		$ERROR_CODES: ELECTRON_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
+	return registerInternalAuthCompletion(plugin, completionHook);
 };
 
 export type * from "./types";

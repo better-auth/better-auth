@@ -1,8 +1,110 @@
 # @better-auth/core
 
+## 1.8.0-beta.5
+
+### Minor Changes
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - Electron desktop sign-in now completes only after required two-factor verification and the other sign-in after-hooks, regardless of plugin order, and authorization codes require the issuing browser session to remain valid until exchange. Plugin after-hooks on credential sign-in routes now run after the built-in two-factor challenge and must handle a null new session while verification is pending.
+
+## 1.8.0-beta.4
+
+### Minor Changes
+
+- [#11865](https://github.com/better-auth/better-auth/pull/11865) [`9854901`](https://github.com/better-auth/better-auth/commit/985490110576062305b4ee2d66b3e8595c87380c) Thanks [@bytaesu](https://github.com/bytaesu)! - Spotify profile mappings must handle nullable display names, omitted email, and nullable image dimensions. A missing display name leaves the local name unset while raw profile fields remain available.
+
+- [#11860](https://github.com/better-auth/better-auth/pull/11860) [`8b2944c`](https://github.com/better-auth/better-auth/commit/8b2944c7d75146ed2cd1c2214a6ac64e7c25de4c) Thanks [@bytaesu](https://github.com/bytaesu)! - Paybin now uses its published `/oauth/*` endpoints and returns UserInfo data instead of stored ID-token claims. Profile mappings must handle omitted email, and custom ID-token sign-ins using the default profile reader must also supply `accessToken`.
+
+- [#11848](https://github.com/better-auth/better-auth/pull/11848) [`93dd5d1`](https://github.com/better-auth/better-auth/commit/93dd5d102eb16a2c96ab808389af953ec8c7d24d) Thanks [@bytaesu](https://github.com/bytaesu)! - Twitch now returns current profile data instead of stored ID-token claims. Profile mappings must handle optional fields, and custom ID-token sign-ins using the default profile reader must also supply `accessToken`.
+
+## 1.8.0-beta.3
+
+### Minor Changes
+
+- [#11842](https://github.com/better-auth/better-auth/pull/11842) [`26a2c44`](https://github.com/better-auth/better-auth/commit/26a2c4417413541e2f7418e1ffd6e9e895858828) Thanks [@bytaesu](https://github.com/bytaesu)! - Apple profile mappings must handle optional private-email status, user status, and pictures, and boolean or string email-verification claims.
+
+- [#11843](https://github.com/better-auth/better-auth/pull/11843) [`fb7ab26`](https://github.com/better-auth/better-auth/commit/fb7ab26338442f5af2466294b24d75c1e6657233) Thanks [@bytaesu](https://github.com/bytaesu)! - `CognitoProfile` now has optional profile and token claims, accepts boolean or `"true"`/`"false"` verification values, and exposes custom claims as `unknown`; update profile mappings to handle missing values and narrow custom claims. Verification values are normalized to booleans, ID-token names also fall back to `cognito:username`, and token verification supports both documented issuer formats.
+
+- [#11867](https://github.com/better-auth/better-auth/pull/11867) [`7e635bc`](https://github.com/better-auth/better-auth/commit/7e635bce38e0ef7a7ece88ea9984487596f5d79d) Thanks [@bytaesu](https://github.com/bytaesu)! - Discord profile mappings now handle optional metadata and expose avatar decoration, collectible, and primary guild details. Missing email verification defaults to false.
+
+- [#11846](https://github.com/better-auth/better-auth/pull/11846) [`5b5093e`](https://github.com/better-auth/better-auth/commit/5b5093e0123e424328b89f022b2c8fbaf4e6a737) Thanks [@bytaesu](https://github.com/bytaesu)! - Dropbox profile types now include account status, locale, referral links, pairing status, account type, team policies, and root information. Update custom profiles to supply the required fields, including `home_path` for team roots, and handle omitted profile photos and missing or `null` team information.
+
+- [#11856](https://github.com/better-auth/better-auth/pull/11856) [`50dfb4a`](https://github.com/better-auth/better-auth/commit/50dfb4af2e1a2a8fd4ebf874a705a840544e714e) Thanks [@bytaesu](https://github.com/bytaesu)! - Facebook Limited Login profile callbacks now accept tokens without name, email, or picture claims. Profile mappings must handle these omitted values.
+
+- [#11855](https://github.com/better-auth/better-auth/pull/11855) [`41ebe9a`](https://github.com/better-auth/better-auth/commit/41ebe9ab6787cd96f56338bfa18e62faba0e354f) Thanks [@bytaesu](https://github.com/bytaesu)! - `LinearUser.avatarUrl` is now required and typed as `string | null`; custom profiles must include it, and mappings must handle `null`. Null avatars preserve stored images during enabled profile updates, and authorization scopes are comma-separated.
+
+- [#11839](https://github.com/better-auth/better-auth/pull/11839) [`7a3a84f`](https://github.com/better-auth/better-auth/commit/7a3a84f3c7418292eabbf8134b20093a1e8bf281) Thanks [@bytaesu](https://github.com/bytaesu)! - `GithubProfile.id` and account counters are now numbers. Profile mappings must handle nullable details and omitted scope-dependent fields, including `twitter_username`. Private-account and enterprise fields are available when returned by GitHub.
+
+- [#11853](https://github.com/better-auth/better-auth/pull/11853) [`3e80e84`](https://github.com/better-auth/better-auth/commit/3e80e84edba5acd7a26df8f6dd64c2575870a028) Thanks [@bytaesu](https://github.com/bytaesu)! - GitLab profile mappings must handle nullable details and omitted conditional fields. `locked` is now a required boolean; null avatars leave stored images unchanged when profile updates are enabled.
+
+- [#11851](https://github.com/better-auth/better-auth/pull/11851) [`4e13e16`](https://github.com/better-auth/better-auth/commit/4e13e16c6d67e33baea7f769c88eed494b44be01) Thanks [@bytaesu](https://github.com/bytaesu)! - `SlackProfile` email and profile claims are now optional, and custom claims are `unknown`; update profile mappings accordingly. The built-in provider and Generic OAuth helper use POST for userinfo and reject Slack errors returned with HTTP 200.
+
+- [#11859](https://github.com/better-auth/better-auth/pull/11859) [`a9aa12e`](https://github.com/better-auth/better-auth/commit/a9aa12ee639cef37bfdfbe817b58c5f0d57dddf2) Thanks [@bytaesu](https://github.com/bytaesu)! - Notion users without an avatar now keep their existing profile image when profile updates are enabled. Update custom mappings to handle optional `type`, nullable `name` and `avatar_url`, and missing `image` values as `undefined` instead of `null`. Custom mappings can now access optional `person.email_verified` metadata.
+
+- [#11854](https://github.com/better-auth/better-auth/pull/11854) [`a7d4b48`](https://github.com/better-auth/better-auth/commit/a7d4b4841fe1e2159ddfbc36fd6eb82663b7a980) Thanks [@bytaesu](https://github.com/bytaesu)! - `MicrosoftEntraIDProfile` timestamps are numbers, `groups`, `acrs`, and `xms_cc` are string arrays, `in_corp` is boolean, and conditional claims and profile photos can be omitted. Update profile mappings to handle these types and missing values.
+
+- [#11862](https://github.com/better-auth/better-auth/pull/11862) [`cbf3a97`](https://github.com/better-auth/better-auth/commit/cbf3a97902f8d0a2965aac284eaba3d631b88211) Thanks [@bytaesu](https://github.com/bytaesu)! - PayPal profile types now reflect omitted names, email, and verification claims when personal permissions are not granted. Missing email verification defaults to false; profile mappings must supply an email when the provider omits it.
+
+- [#11861](https://github.com/better-auth/better-auth/pull/11861) [`efabf96`](https://github.com/better-auth/better-auth/commit/efabf960a8dcc3fdac58492187ebbfd0f4e578f1) Thanks [@bytaesu](https://github.com/bytaesu)! - `RailwayProfile.email`, `name`, and `picture` are now optional to reflect granted scopes. Profile mappings must supply an email when the provider omits it.
+
+- [#11852](https://github.com/better-auth/better-auth/pull/11852) [`959a9c6`](https://github.com/better-auth/better-auth/commit/959a9c697ac89d4d727981272de260850c02c12d) Thanks [@bytaesu](https://github.com/bytaesu)! - Nested `TwitterProfile` entity objects, arrays, and URL details can now be omitted or `null`; update typed reads to handle both. The types also include description cashtags, mentions, and URL preview metadata; request extra `user.fields` on `/2/users/me` in custom profile lookups.
+
+## 1.8.0-beta.2
+
+### Minor Changes
+
+- [#11866](https://github.com/better-auth/better-auth/pull/11866) [`19850f2`](https://github.com/better-auth/better-auth/commit/19850f27fdbc2356ca9d4f658b184d79dc84899c) Thanks [@bytaesu](https://github.com/bytaesu)! - `RobloxProfile` scoped fields are now optional, `picture` also permits `null`, and custom claims are `unknown`; update profile mappings accordingly. Missing avatars preserve stored images when profile updates are enabled.
+
+- [#11840](https://github.com/better-auth/better-auth/pull/11840) [`73f87f6`](https://github.com/better-auth/better-auth/commit/73f87f6f19173b1a9bc3946aa0591b6ca6392fd5) Thanks [@bytaesu](https://github.com/bytaesu)! - Identify Polar accounts by their userinfo subject and expose the scoped, nullable userinfo claims in `mapProfileToUser` instead of unrelated user profile fields.
+
+- [#11845](https://github.com/better-auth/better-auth/pull/11845) [`9acad1f`](https://github.com/better-auth/better-auth/commit/9acad1fb6a5a4eee85663a5adbe5f1452367532c) Thanks [@bytaesu](https://github.com/bytaesu)! - Hugging Face profile mappings must iterate over organization arrays and can read optional plan and security restrictions. Organization roles are strings; use `securityRestrictions` instead of the deprecated SSO and MFA flags.
+
+- [#11857](https://github.com/better-auth/better-auth/pull/11857) [`d46e6ca`](https://github.com/better-auth/better-auth/commit/d46e6cad47e957d4807d54003270400c6c16ba0b) Thanks [@bytaesu](https://github.com/bytaesu)! - `KakaoProfile.kakao_account` is now optional, so profile mappings must handle its absence. Authorization requests separate consent scopes with commas as documented by Kakao.
+
+- [#11841](https://github.com/better-auth/better-auth/pull/11841) [`1f46266`](https://github.com/better-auth/better-auth/commit/1f462662b99e0d74b3501301c0a2fe685be3ac6f) Thanks [@bytaesu](https://github.com/bytaesu)! - `KickProfile.user_id` is now a number. Update custom profile mappings and `getUserInfo` callbacks that previously treated it as a string.
+
+- [#11844](https://github.com/better-auth/better-auth/pull/11844) [`3ddca15`](https://github.com/better-auth/better-auth/commit/3ddca15ecc7fd8affed72d07f64e560499298a83) Thanks [@bytaesu](https://github.com/bytaesu)! - LinkedIn profile callbacks now accept locale language tags such as `en-US`. Profile mappings must read `locale` as a string instead of a country/language object.
+
+- [#11858](https://github.com/better-auth/better-auth/pull/11858) [`badd3a0`](https://github.com/better-auth/better-auth/commit/badd3a01ff7313dcf147cf79f3df38f2633591e9) Thanks [@bytaesu](https://github.com/bytaesu)! - `NaverProfile.response` personal fields are now optional. Profile mappings must handle omitted details and supply an email when Naver does not share one.
+
+- [#11847](https://github.com/better-auth/better-auth/pull/11847) [`1904e6f`](https://github.com/better-auth/better-auth/commit/1904e6f9bbd80a483ef8bbca4da7052b6ce4d75a) Thanks [@bytaesu](https://github.com/bytaesu)! - Reflect Google's optional ID token claims in `GoogleProfile` and treat an absent email verification claim as unverified.
+
+- [#11849](https://github.com/better-auth/better-auth/pull/11849) [`be4ca72`](https://github.com/better-auth/better-auth/commit/be4ca72155f4c57ca6fa81e7d0dfb42869e279bb) Thanks [@bytaesu](https://github.com/bytaesu)! - VK profile callbacks now accept phone numbers as strings. Profile mappings must treat `user.phone` as a string instead of a number.
+
+- [#11850](https://github.com/better-auth/better-auth/pull/11850) [`98fed80`](https://github.com/better-auth/better-auth/commit/98fed8094453b2004271a81f0df770e694279d8c) Thanks [@bytaesu](https://github.com/bytaesu)! - Zoom profiles now support phone number, WeChat, and Alipay login types (`11`, `21`, and `23`). Profile mappings with exhaustive login-type checks must handle these values.
+
 ## 1.8.0-beta.1
 
 ## 1.8.0-beta.0
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Generic OAuth providers whose discovery document has a `jwks_uri` now reject a user profile whose `sub` differs from the ID token's `sub`. Direct ID-token sign-in and linking with a generic OAuth provider now resolve the profile from the verified ID token only and ignore a submitted access or refresh token.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Account linking and new OAuth users now count an email as verified only when the provider claim is `true` or the string `"true"`, which covers generic OAuth, Cognito, and Microsoft Entra ID claims sent as strings. Any other `emailVerified` value, including a non-boolean value returned from `mapProfileToUser` such as `1`, now reads as unverified.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Zoom social provider now applies its configured provider options, so `disableSignUp`, `requireEmailVerification`, and `overrideUserInfoOnSignIn` take effect for Zoom sign-ins.
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12106](https://github.com/better-auth/better-auth/pull/12106) [`9ef0c5b`](https://github.com/better-auth/better-auth/commit/9ef0c5bda9c5ebc46d2c5d93fc0874893d1c6256) Thanks [@bytaesu](https://github.com/bytaesu)! - Built-in social providers no longer follow HTTP redirects on token exchange, refresh, verification, and signing key (JWKS) requests, matching the other server-side OAuth requests.
+
+## 1.7.14
+
+### Patch Changes
+
+- [#12045](https://github.com/better-auth/better-auth/pull/12045) [`2947ab7`](https://github.com/better-auth/better-auth/commit/2947ab76c3a141f205813de9201661ee21e327c2) Thanks [@honuuk](https://github.com/honuuk)! - Kakao sign-in now passes `loginHint` to Kakao, so the Kakao Account login page opens with the ID field prefilled.
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11997](https://github.com/better-auth/better-auth/pull/11997) [`2712441`](https://github.com/better-auth/better-auth/commit/2712441e355204389c88a7eb546974cce1936b5f) Thanks [@bytaesu](https://github.com/bytaesu)! - The Cloudflare provider now accepts `tokenEndpointAuth: { method }`. The existing `tokenEndpointAuthMethod` option is marked as deprecated and remains supported for backward compatibility.
+
+- [#11948](https://github.com/better-auth/better-auth/pull/11948) [`1cf4b2c`](https://github.com/better-auth/better-auth/commit/1cf4b2c8f5bffdbdb101f11a6fefedbab6cf2994) Thanks [@allenzhou101](https://github.com/allenzhou101)! - Allow the Vercel social provider to configure token endpoint authentication, including dynamic OIDC tokens and private key JWT client assertions, without replacing the built-in sign-in flow.
 
 ## 1.7.12
 

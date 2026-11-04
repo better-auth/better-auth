@@ -12,9 +12,9 @@ interface PatreonProfile {
 	data: {
 		id: string;
 		attributes: {
-			full_name: string;
-			email: string;
-			image_url: string;
+			full_name: string | null;
+			email?: string | null;
+			image_url: string | null;
 			is_email_verified: boolean;
 		};
 	};
@@ -65,9 +65,9 @@ export function patreon(
 
 		return {
 			id: profile.data.id,
-			name: profile.data.attributes.full_name,
+			name: profile.data.attributes.full_name ?? undefined,
 			email: profile.data.attributes.email,
-			image: profile.data.attributes.image_url,
+			image: profile.data.attributes.image_url ?? undefined,
 			emailVerified: profile.data.attributes.is_email_verified,
 		};
 	};

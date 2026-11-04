@@ -4,10 +4,12 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { setPendingSecondFactorUser } from "@better-auth/core/utils/auth-completion";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
-import { sensitiveSessionMiddleware, sessionMiddleware } from "../../api";
+import { sensitiveSessionMiddleware } from "../../api";
+import { asSignInGate } from "../../api/dispatch";
 import {
 	deleteSessionCookie,
 	expireCookie,
@@ -125,7 +127,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				{
 					method: "POST",
 					body: enableTwoFactorBodySchema,
-					use: [sessionMiddleware],
+					use: [sensitiveSessionMiddleware],
 					metadata: {
 						openapi: {
 							summary: "Enable two factor authentication",
@@ -430,7 +432,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 		options: options as NoInfer<O>,
 		hooks: {
 			after: [
-				{
+				asSignInGate({
 					matcher(context) {
 						return (
 							context.path === "/sign-in/email" ||
@@ -533,6 +535,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
 						ctx.context.setNewSession(null);
+						setPendingSecondFactorUser(ctx.context, data.user.id);
 						const maxAge = options?.twoFactorCookieMaxAge ?? 10 * 60; // 10 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
@@ -596,7 +599,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							twoFactorMethods,
 						});
 					}),
-				},
+				}),
 			],
 		},
 		schema: mergeSchema(schema, {

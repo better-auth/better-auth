@@ -14,6 +14,7 @@ import {
 	uuidTestSuite,
 } from "../adapter-factory";
 import { compoundIndexTestSuite } from "../adapter-factory/compound-index-test-suite";
+import { emailLookupTestSuite } from "../adapter-factory/email-lookup-test-suite";
 
 // We are not allowed to handle the mssql connection
 // we must let kysely handle it. This is because if kysely is already
@@ -343,6 +344,7 @@ const { execute } = await testAdapter({
 		}),
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite({ showDB }),
+		emailLookupTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),

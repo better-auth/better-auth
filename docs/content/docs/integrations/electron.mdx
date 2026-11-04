@@ -322,6 +322,19 @@ function SignIn({
 
 To handle already signed-in users, you can use the `electron.transferUser` method on the client and `electronTransferUser` on the server to transfer the user to the Electron app. [See Example](https://github.com/better-auth/better-auth/blob/main/demo/nextjs/app/\(auth\)/sign-in/_components/electron.tsx)
 
+The authorization code is tied to the browser session that issued it and is rejected if that session ends before the exchange.
+
+#### Two-factor authentication
+
+When sign-in requires [two-factor authentication](/docs/plugins/2fa), the authorization code is issued after the second factor is verified. Keep the Electron query parameters in the verification page URL and start the redirect again once verification succeeds:
+
+```ts title="web/pages/two-factor.tsx"
+const { data } = await authClient.twoFactor.verifyTotp({ code });
+if (data && authClient.electron.getAuthorizationCode()) {
+  authClient.ensureElectronRedirect();
+}
+```
+
 ### Handling Authentication in Electron
 
 In your Electron renderer process, you can use the IPC bridges exposed by the preload script.

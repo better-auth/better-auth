@@ -1,5 +1,35 @@
 # @better-auth/mcp
 
+## 1.8.0-beta.5
+
+### Patch Changes
+
+- Updated dependencies [[`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda)]:
+  - @better-auth/oauth-provider@1.8.0-beta.5
+
+## 1.8.0-beta.4
+
+## 1.7.16
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.8.0-beta.4
+
+## 1.8.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.8.0-beta.3
+
+## 1.8.0-beta.2
+
+### Patch Changes
+
+- Updated dependencies [[`39235e1`](https://github.com/better-auth/better-auth/commit/39235e1433118ca3359bc7b7cc22979f47f05b12)]:
+  - @better-auth/oauth-provider@1.8.0-beta.2
+
 ## 1.8.0-beta.1
 
 ### Patch Changes
@@ -15,6 +45,29 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/oauth-provider@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
+
+  - @better-auth/oauth-provider@1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.15
+
+## 1.7.14
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.13
 
 ## 1.7.12
 

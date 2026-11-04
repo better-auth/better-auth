@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, Loader2, Mail } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Controller, useForm } from "react-hook-form";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,14 @@ export function TwoFactorEmailOtpForm({
 	const [isOtpSent, setIsOtpSent] = useState(false);
 	const [isVerified, setIsVerified] = useState(false);
 	const [message, setMessage] = useState("");
+	const [sendError, setSendError] = useState<string | null>(null);
+	const active = useRef(true);
+	useEffect(() => {
+		active.current = true;
+		return () => {
+			active.current = false;
+		};
+	}, []);
 
 	const form = useForm<OtpFormValues>({
 		resolver: zodResolver(otpSchema),
@@ -49,24 +57,46 @@ export function TwoFactorEmailOtpForm({
 
 	const handleSendOtp = () => {
 		startTransition(async () => {
-			await authClient.twoFactor.sendOtp();
-			setIsOtpSent(true);
-			setMessage(`OTP sent to ${userEmail}`);
+			setSendError(null);
+			setMessage("");
+			try {
+				const { data, error } = await authClient.twoFactor.sendOtp();
+				if (!active.current) return;
+				if (error || !data?.status) {
+					setSendError(error?.message ?? "Could not send the code. Try again.");
+					return;
+				}
+				setIsOtpSent(true);
+				setMessage(`OTP sent to ${userEmail}`);
+			} catch {
+				if (active.current) setSendError("Could not send the code. Try again.");
+			}
 		});
 	};
 
 	const onSubmit = (data: OtpFormValues) => {
 		startTransition(async () => {
-			const res = await authClient.twoFactor.verifyOtp({
-				code: data.code,
-			});
-			if (res.data) {
+			setIsVerified(false);
+			form.clearErrors("code");
+			try {
+				const { data: verified, error } = await authClient.twoFactor.verifyOtp({
+					code: data.code,
+				});
+				if (!active.current) return;
+				if (error || !verified?.token) {
+					const message =
+						error?.message ?? "Verification did not complete sign-in.";
+					onError?.(message);
+					form.setError("code", { message });
+					return;
+				}
 				setIsVerified(true);
-				setMessage("OTP validated successfully");
 				onSuccess?.();
-			} else {
-				onError?.("Invalid OTP");
-				form.setError("code", { message: "Invalid OTP" });
+			} catch {
+				if (!active.current) return;
+				form.setError("code", {
+					message: "Could not verify the code. Try again.",
+				});
 			}
 		});
 	};
@@ -83,6 +113,7 @@ export function TwoFactorEmailOtpForm({
 	if (!isOtpSent) {
 		return (
 			<div className="grid gap-4">
+				{sendError && <p role="alert">{sendError}</p>}
 				<Button onClick={handleSendOtp} className="w-full" disabled={loading}>
 					{loading ? (
 						<Loader2 size={16} className="animate-spin" />
@@ -116,6 +147,7 @@ export function TwoFactorEmailOtpForm({
 							<Input
 								{...field}
 								id="email-otp-code"
+								disabled={loading}
 								type="text"
 								inputMode="numeric"
 								maxLength={6}

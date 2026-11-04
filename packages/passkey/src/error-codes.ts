@@ -1,6 +1,8 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const PASSKEY_ERROR_CODES = defineErrorCodes({
+	ORIGIN_NOT_CONFIGURED:
+		"Passkey origin is not configured. Set the `origin` option of the passkey plugin or configure `baseURL`.",
 	CHALLENGE_NOT_FOUND: "Challenge not found",
 	YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY:
 		"You are not allowed to register this passkey",

@@ -1,6 +1,6 @@
 import type { ElectronRequestAuthOptions } from "@better-auth/electron/client";
 import { cn } from "@renderer/lib/utils";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
@@ -8,17 +8,39 @@ export function RequestAuth() {
 	const [loading, startTransition] = useTransition();
 	const [openedBrowser, setOpenedBrowser] = useState(false);
 	const [manualMode, setManualMode] = useState(false);
+	const [code, setCode] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	useEffect(
+		() =>
+			window.onAuthError((context) => {
+				setError(
+					context.message ?? "Could not sign in. Start a new browser sign-in.",
+				);
+			}),
+		[],
+	);
 
 	const handleRequestAuth =
 		(opts?: ElectronRequestAuthOptions | undefined) => () => {
-			void window.requestAuth(opts);
-			setTimeout(() => {
-				setOpenedBrowser(true);
-			}, 500);
+			setCode("");
+			setError(null);
+			startTransition(async () => {
+				try {
+					await window.requestAuth(opts);
+					setOpenedBrowser(true);
+				} catch {
+					setError("Could not start browser sign-in. Try again.");
+				}
+			});
 		};
 
 	return (
 		<>
+			{error && (
+				<p role="alert" className="max-w-sm px-8">
+					{error}
+				</p>
+			)}
 			{!manualMode ? (
 				<>
 					<div className="grid grid-cols-2 gap-2 w-full max-w-sm px-8">
@@ -182,13 +204,10 @@ export function RequestAuth() {
 							type="text"
 							placeholder="Paste code here"
 							className="h-10 ps-9 peer"
-							maxLength={32}
+							value={code}
 							onChange={(e) => {
-								if (e.target.value.length === 32) {
-									startTransition(async () => {
-										await window.authenticate({ token: e.target.value });
-									});
-								}
+								setCode(e.target.value);
+								setError(null);
 							}}
 							disabled={loading}
 						/>
@@ -223,6 +242,27 @@ export function RequestAuth() {
 							)}
 						</div>
 					</div>
+					<Button
+						disabled={loading || !code.trim() || !openedBrowser}
+						onClick={() => {
+							setError(null);
+							startTransition(async () => {
+								try {
+									await window.authenticate({ token: code.trim() });
+								} catch {
+									setError(
+										"Could not exchange the code. Start a new browser sign-in.",
+									);
+								}
+							});
+						}}
+					>
+						Continue with code
+					</Button>
+					<p className="text-xs">
+						Paste the complete browser code. If it expires, start a new browser
+						sign-in.
+					</p>
 					<button
 						onClick={() => setManualMode(false)}
 						className="text-xs mx-auto flex items-center gap-2 underline underline-offset-2 text-muted-foreground hover:text-foreground focus-visible:text-foreground transition-colors"

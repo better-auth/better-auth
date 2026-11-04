@@ -47,6 +47,7 @@ import {
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
+import { readSignedOAuthQuery } from "./signed-query";
 import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
@@ -58,13 +59,10 @@ import {
 import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
-	getSignedQueryIssuedAt,
 	isSessionFreshForSignedQuery,
-	postLoginClearedParam,
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
-	signedQueryIssuedAtParam,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -667,19 +665,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								error: "invalid_signature",
 							});
 						}
-						const signedQueryIssuedAt = getSignedQueryIssuedAt(query);
-						const queryParams = new URLSearchParams(query);
-						const postLoginClearedForSession =
-							queryParams.get(postLoginClearedParam) ?? undefined;
-						queryParams.delete("sig");
-						queryParams.delete("exp");
-						queryParams.delete(signedQueryIssuedAtParam);
-						queryParams.delete(postLoginClearedParam);
-						await oAuthState.set({
-							query: queryParams.toString(),
-							signedQueryIssuedAt: signedQueryIssuedAt ?? undefined,
-							postLoginClearedForSession,
-						});
+						const signed = readSignedOAuthQuery(query);
+						await oAuthState.set(signed);
 
 						// On the social sign-in path the authorize query has to survive the
 						// provider redirect to be resumed after login. Carry it in the
@@ -687,10 +674,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						// through the request body.
 						if (ctx.path === "/sign-in/social") {
 							await addOAuthServerContext({
-								query: queryParams.toString(),
-								...(signedQueryIssuedAt
+								query: signed.query,
+								...(signed.signedQueryIssuedAt
 									? {
-											[signedQueryIssuedAtMsKey]: signedQueryIssuedAt.getTime(),
+											[signedQueryIssuedAtMsKey]:
+												signed.signedQueryIssuedAt.getTime(),
 										}
 									: {}),
 							});
@@ -827,6 +815,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						claims: claimsRequestParameterSchema.optional().meta({
 							description:
 								"Accepted OIDC claims request object. If none is provided, then all originally requested claims are accepted.",
+						}),
+						reference_id: z.string().min(1).optional().meta({
+							description:
+								"The reference the user chose for this consent, such as an organization ID. postLogin.consentReferenceId receives it and decides whether to accept it.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",

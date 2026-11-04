@@ -1,5 +1,13 @@
 # @better-auth/ciba
 
+## 1.8.0-beta.5
+
+## 1.8.0-beta.4
+
+## 1.8.0-beta.3
+
+## 1.8.0-beta.2
+
 ## 1.8.0-beta.1
 
 ## 1.8.0-beta.0

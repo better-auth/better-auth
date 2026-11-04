@@ -16,13 +16,13 @@ import {
 export interface PayPalProfile {
 	sub?: string | undefined;
 	user_id: string;
-	name: string;
-	given_name: string;
-	family_name: string;
+	name?: string;
+	given_name?: string;
+	family_name?: string;
 	middle_name?: string | undefined;
 	picture?: string | undefined;
-	email: string;
-	email_verified: boolean;
+	email?: string;
+	email_verified?: boolean;
 	gender?: string | undefined;
 	birthdate?: string | undefined;
 	zoneinfo?: string | undefined;
@@ -215,7 +215,7 @@ export const paypal = (options: PayPalOptions) => {
 						name: userInfo.name,
 						email: userInfo.email,
 						image: userInfo.picture,
-						emailVerified: userInfo.email_verified,
+						emailVerified: userInfo.email_verified ?? false,
 						...userMap,
 					},
 					data: userInfo,

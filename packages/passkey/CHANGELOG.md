@@ -1,5 +1,19 @@
 # @better-auth/passkey
 
+## 1.8.0-beta.5
+
+### Minor Changes
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - The passkey plugin now applies `authenticatorSelection.userVerification` to both ceremonies. The configured policy is requested during authentication as well as registration, and when it is `required`, responses without the user verification flag are rejected.
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - With a server-side session store, passkey registration, device-code approval, two-factor enrollment, phone number changes, social account linking, and organization invitations now require a session that is still active in the store, even with cookie caching, so sessions created from API keys with `enableSessionForAPIKeys` are refused there. Social link callbacks also require the session that started the link, so direct `linkOAuthAccount` callers must pass it in OAuth state.
+
+## 1.8.0-beta.4
+
+## 1.8.0-beta.3
+
+## 1.8.0-beta.2
+
 ## 1.8.0-beta.1
 
 ## 1.8.0-beta.0
@@ -9,6 +23,22 @@
 - Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1)]:
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Passkey registration, device authorization, two-factor enrollment and verification, social account linking, and phone number changes now reject a session revoked in the database or secondary storage, even when cookie caching is enabled. Sessions created from API keys are refused on these routes, except two-factor enrollment and phone number changes.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The expected WebAuthn origin now comes from server configuration instead of the request: the `origin` option, or the `baseURL` origin plus a frontend origin listed exactly in `trustedOrigins`. Set `origin` when `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - `authenticatorSelection.userVerification` now applies to authentication as well as registration: it is requested in authentication options, and with `required` passkey registration and sign-in reject responses without user verification.
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
 
 ## 1.7.12
 

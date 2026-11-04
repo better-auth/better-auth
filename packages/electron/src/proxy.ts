@@ -1,9 +1,13 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import { base64Url } from "@better-auth/utils/base64";
 import { parseCookies } from "better-auth/cookies";
 import type { electron } from "./index";
 import type { ElectronProxyClientOptions } from "./types/client";
 import { parseProtocolScheme } from "./utils";
 import { PACKAGE_VERSION } from "./version";
+
+const BASE64URL = /^[A-Za-z0-9_-]+={0,2}$/;
 
 export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 	const opts = {
@@ -25,13 +29,39 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 				const authorizationCode = parseCookies(document.cookie).get(
 					redirectCookieName,
 				);
-				return authorizationCode ?? null;
+				// The decoder throws outside the base64url alphabet.
+				if (!authorizationCode || !BASE64URL.test(authorizationCode)) {
+					return null;
+				}
+				const payload = safeJSONParse<{
+					identifier?: unknown;
+					state?: unknown;
+				}>(new TextDecoder().decode(base64Url.decode(authorizationCode)));
+				if (typeof payload?.identifier !== "string" || !payload.identifier) {
+					return null;
+				}
+				if (typeof payload.state !== "string" || !payload.state) {
+					return null;
+				}
+				if (typeof window === "undefined") return authorizationCode;
+
+				const query = new URLSearchParams(window.location.search);
+				const state = query.get("state");
+				if (
+					query.get("client_id") === opts.clientID &&
+					state &&
+					payload.state !== state
+				) {
+					return null;
+				}
+				return authorizationCode;
 			};
 
 			return {
 				electron: {
 					/**
 					 * Gets the current authorization code from the cookie.
+					 * When the page has Electron request parameters, ignores codes for another state.
 					 */
 					getAuthorizationCode,
 				},

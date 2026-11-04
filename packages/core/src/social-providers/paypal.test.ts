@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { SignJWT } from "jose";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PayPalProfile } from "./paypal";
 import { paypal } from "./paypal";
 
@@ -208,5 +208,26 @@ describe("paypal.getUserInfo", () => {
 		});
 
 		expect(result).toBeNull();
+	});
+
+	/**
+	 * @see https://www.postman.com/paypal/paypal-public-api-workspace/request/p607bjm/user-info
+	 */
+	it("accepts PayPal user info without personal profile permissions", async () => {
+		const data = { user_id: "paypal-user", sub: "paypal-subject" };
+		assertType<PayPalProfile>(data);
+		mockedBetterFetch.mockResolvedValueOnce(userInfoResponse(data));
+
+		const result = await paypal(options).getUserInfo({
+			accessToken: "paypal-access-token",
+		});
+
+		expect(result?.data).toEqual(data);
+		expect(result?.user).toEqual({
+			name: undefined,
+			email: undefined,
+			image: undefined,
+			emailVerified: false,
+		});
 	});
 });

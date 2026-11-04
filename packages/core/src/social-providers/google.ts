@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
@@ -10,32 +9,36 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 import { getIdTokenVerifyOptions } from "../oauth2/verify-id-token";
 
+/**
+ * Claims from a Google ID token.
+ */
 export interface GoogleProfile {
 	aud: string;
-	azp: string;
-	email: string;
-	email_verified: boolean;
+	azp?: string | undefined;
+	email?: string | undefined;
+	email_verified?: boolean | undefined;
 	exp: number;
 	/**
 	 * The family name of the user, or last name in most
 	 * Western languages.
 	 */
-	family_name: string;
+	family_name?: string | undefined;
 	/**
 	 * The given name of the user, or first name in most
 	 * Western languages.
 	 */
-	given_name: string;
+	given_name?: string | undefined;
 	hd?: string | undefined;
 	iat: number;
 	iss: string;
 	jti?: string | undefined;
 	locale?: string | undefined;
-	name: string;
+	name?: string | undefined;
 	nbf?: number | undefined;
-	picture: string;
+	picture?: string | undefined;
 	sub: string;
 }
 
@@ -264,7 +267,7 @@ export const google = (options: GoogleOptions) => {
 					name: user.name,
 					email: user.email,
 					image: user.picture,
-					emailVerified: user.email_verified,
+					emailVerified: user.email_verified ?? false,
 					...userMap,
 				},
 				data: user,
@@ -283,7 +286,7 @@ export const getGooglePublicKey = async (kid: string) => {
 };
 
 const getGooglePublicKeys = async (kid?: string) => {
-	const { data } = await betterFetch<{
+	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
 			kid: string;
 			alg?: string;

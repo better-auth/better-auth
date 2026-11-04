@@ -1,5 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
-
 import { decodeJwt, importJWK } from "jose";
 import { logger } from "../env";
 import { APIError, BetterAuthError } from "../error";
@@ -10,6 +8,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 export interface AppleProfile {
 	/**
 	 * The subject registered claim identifies the principal that’s the subject
@@ -30,13 +29,13 @@ export interface AppleProfile {
 	 * Sign in with Apple at Work & School users, and this claim is "false" or
 	 * false for those users.
 	 */
-	email_verified: true | "true";
+	email_verified: boolean | "true" | "false";
 	/**
 	 * A string or Boolean value that indicates whether the email that the user
 	 * shares is the proxy address. The value can either be a string ("true" or
 	 * "false") or a Boolean (true or false).
 	 */
-	is_private_email: boolean;
+	is_private_email?: boolean | "true" | "false";
 	/**
 	 * An Integer value that indicates whether the user appears to be a real
 	 * person. Use the value of this claim to mitigate fraud. The possible
@@ -45,16 +44,16 @@ export interface AppleProfile {
 	 * in iOS 14 and later, macOS 11 and later, watchOS 7 and later, tvOS 14
 	 * and later. The claim isn’t present or supported for web-based apps.
 	 */
-	real_user_status: number;
+	real_user_status?: number;
 	/**
 	 * The user’s full name in the format provided during the authorization
 	 * process.
 	 */
 	name: string;
 	/**
-	 * The URL to the user's profile picture.
+	 * An optional profile extension; Apple does not document a picture claim.
 	 */
-	picture: string;
+	picture?: string;
 	user?: AppleNonConformUser | undefined;
 }
 
@@ -193,7 +192,7 @@ export const apple = (options: AppleOptions) => {
 export const getApplePublicKey = async (kid: string) => {
 	const APPLE_BASE_URL = "https://appleid.apple.com";
 	const JWKS_APPLE_URI = "/auth/keys";
-	const { data } = await betterFetch<{
+	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
 			kid: string;
 			alg: string;

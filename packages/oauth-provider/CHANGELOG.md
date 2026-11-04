@@ -1,5 +1,23 @@
 # @better-auth/oauth-provider
 
+## 1.8.0-beta.5
+
+### Minor Changes
+
+- [#12202](https://github.com/better-auth/better-auth/pull/12202) [`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda) Thanks [@bytaesu](https://github.com/bytaesu)! - With a server-side session store, passkey registration, device-code approval, two-factor enrollment, phone number changes, social account linking, and organization invitations now require a session that is still active in the store, even with cookie caching, so sessions created from API keys with `enableSessionForAPIKeys` are refused there. Social link callbacks also require the session that started the link, so direct `linkOAuthAccount` callers must pass it in OAuth state.
+
+## 1.8.0-beta.4
+
+## 1.8.0-beta.3
+
+## 1.8.0-beta.2
+
+### Minor Changes
+
+- [#11967](https://github.com/better-auth/better-auth/pull/11967) [`39235e1`](https://github.com/better-auth/better-auth/commit/39235e1433118ca3359bc7b7cc22979f47f05b12) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `postLogin.consentReferenceId` and the `shouldRedirect` hooks of `signup`, `selectAccount`, and `postLogin` now receive `query`, the validated authorization request. Hooks can read parameters the client adds, such as the `organization` a consent is for, and every requested `resource`.
+
+  Your consent page can send the organization the user picked as `reference_id` to `/oauth2/consent`, and `consentReferenceId` receives it as `consent.referenceId` to verify. Accepting with `reference_id` fails with `invalid_request` when `postLogin.consentReferenceId` is not configured; a denial ignores it. `consentReferenceId` now runs once per acceptance instead of twice.
+
 ## 1.8.0-beta.1
 
 ### Minor Changes
@@ -82,6 +100,14 @@
 - Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1)]:
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
+
+## 1.7.16
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
 
 ## 1.7.12
 

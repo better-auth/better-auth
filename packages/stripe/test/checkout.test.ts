@@ -1072,6 +1072,119 @@ describe("stripe checkout", () => {
 			expect(location).not.toContain("%7BCHECKOUT_SESSION_ID%7D");
 		});
 
+		describe("callbackURL origin after {CHECKOUT_SESSION_ID} replacement", () => {
+			const originCheckTest = test.extend<{
+				requestSuccess: (
+					callbackURL: string,
+					checkoutSessionId: string,
+				) => Promise<Response>;
+			}>({
+				requestSuccess: async ({ memory, stripeOptions }, use) => {
+					const { client, auth, sessionSetter } = await getTestInstance(
+						{
+							database: memory,
+							plugins: [stripe(stripeOptions)],
+							advanced: {
+								disableOriginCheck: false,
+							},
+						},
+						{
+							disableTestUser: true,
+							clientOptions: {
+								plugins: [stripeClient({ subscription: true })],
+							},
+						},
+					);
+					const headers = new Headers();
+					await client.signUp.email(testUser, { throw: true });
+					await client.signIn.email(testUser, {
+						throw: true,
+						onSuccess: sessionSetter(headers),
+					});
+					await use((callbackURL, checkoutSessionId) =>
+						auth.handler(
+							new Request(
+								`http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}&checkoutSessionId=${encodeURIComponent(checkoutSessionId)}`,
+								{
+									method: "GET",
+									headers,
+									redirect: "manual",
+								},
+							),
+						),
+					);
+				},
+			});
+
+			originCheckTest(
+				"should reject a checkoutSessionId that moves callbackURL to an untrusted origin",
+				async ({ stripeMock, requestSuccess }) => {
+					stripeMock.checkout.sessions.retrieve.mockRejectedValue(
+						new Error("No such checkout session"),
+					);
+
+					const response = await requestSuccess(
+						"http://{CHECKOUT_SESSION_ID}@localhost:3000/",
+						"evil.example/",
+					);
+
+					expect(response.status).toBe(403);
+					expect(response.headers.get("location")).toBeNull();
+				},
+			);
+
+			originCheckTest(
+				"should redirect to the replaced callbackURL on a trusted origin",
+				async ({ stripeMock, requestSuccess }) => {
+					stripeMock.checkout.sessions.retrieve.mockRejectedValue(
+						new Error("No such checkout session"),
+					);
+
+					const response = await requestSuccess(
+						"http://localhost:3000/billing?session_id={CHECKOUT_SESSION_ID}",
+						"cs_test_a1B2c3",
+					);
+
+					expect(response.status).toBe(302);
+					expect(response.headers.get("location")).toBe(
+						"http://localhost:3000/billing?session_id=cs_test_a1B2c3",
+					);
+				},
+			);
+		});
+
+		test.for(["callbackURL", "checkoutSessionId"] as const)(
+			"should reject a duplicated %s query parameter",
+			async (key, { memory, stripeOptions }) => {
+				const { auth: testAuth } = await getTestInstance(
+					{
+						database: memory,
+						plugins: [stripe(stripeOptions)],
+					},
+					{
+						disableTestUser: true,
+					},
+				);
+				const query = new URLSearchParams({
+					callbackURL: "/dashboard",
+					checkoutSessionId: "cs_test_123",
+				});
+				query.append(key, "duplicate");
+
+				const response = await testAuth.handler(
+					new Request(
+						`http://localhost:3000/api/auth/subscription/success?${query}`,
+						{
+							method: "GET",
+							redirect: "manual",
+						},
+					),
+				);
+
+				expect(response.status).toBe(400);
+			},
+		);
+
 		test("should redirect when checkout session retrieval fails", async ({
 			memory,
 			stripeOptions,
@@ -1206,15 +1319,12 @@ describe("stripe checkout", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(meteredMockStripe.checkout.sessions.create).toHaveBeenCalled();
-			const createCall =
-				meteredMockStripe.checkout.sessions.create.mock.calls[0][0];
-			const baseLineItem = createCall.line_items.find(
-				(item: { price: string }) => item.price === meteredPriceId,
+			expect(meteredMockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					line_items: expect.arrayContaining([{ price: meteredPriceId }]),
+				}),
+				undefined,
 			);
-
-			expect(baseLineItem).toBeDefined();
-			expect(baseLineItem).not.toHaveProperty("quantity");
 		});
 
 		test("should still include quantity for licensed base price in checkout session", async ({
@@ -1286,15 +1396,14 @@ describe("stripe checkout", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(licensedMockStripe.checkout.sessions.create).toHaveBeenCalled();
-			const createCall =
-				licensedMockStripe.checkout.sessions.create.mock.calls[0][0];
-			const baseLineItem = createCall.line_items.find(
-				(item: { price: string }) => item.price === licensedPriceId,
+			expect(licensedMockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+				expect.objectContaining({
+					line_items: expect.arrayContaining([
+						{ price: licensedPriceId, quantity: 1 },
+					]),
+				}),
+				undefined,
 			);
-
-			expect(baseLineItem).toBeDefined();
-			expect(baseLineItem).toHaveProperty("quantity", 1);
 		});
 
 		test("should not include quantity for metered price during billing portal upgrade", async ({
@@ -1421,14 +1530,15 @@ describe("stripe checkout", () => {
 
 			expect(
 				upgradeMockStripe.billingPortal.sessions.create,
-			).toHaveBeenCalled();
-			const portalCall =
-				upgradeMockStripe.billingPortal.sessions.create.mock.calls[0][0];
-			const portalItem =
-				portalCall.flow_data.subscription_update_confirm.items[0];
-
-			expect(portalItem.price).toBe(meteredPriceId);
-			expect(portalItem).not.toHaveProperty("quantity");
+			).toHaveBeenCalledWith(
+				expect.objectContaining({
+					flow_data: expect.objectContaining({
+						subscription_update_confirm: expect.objectContaining({
+							items: [{ id: expect.any(String), price: meteredPriceId }],
+						}),
+					}),
+				}),
+			);
 		});
 
 		test("should not include quantity for metered price during direct subscription upgrade", async ({
@@ -1554,15 +1664,14 @@ describe("stripe checkout", () => {
 				fetchOptions: { headers },
 			});
 
-			expect(upgradeMockStripe.subscriptions.update).toHaveBeenCalled();
-			const updateCall =
-				upgradeMockStripe.subscriptions.update.mock.calls[0][1];
-			const meteredItem = updateCall.items.find(
-				(item: { price?: string }) => item.price === meteredPriceId,
+			expect(upgradeMockStripe.subscriptions.update).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					items: expect.arrayContaining([
+						{ id: expect.any(String), price: meteredPriceId },
+					]),
+				}),
 			);
-
-			expect(meteredItem).toBeDefined();
-			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 
 		test("should not include quantity for metered price during scheduled upgrade", async ({
@@ -1708,16 +1817,17 @@ describe("stripe checkout", () => {
 
 			expect(
 				scheduleMockStripe.subscriptionSchedules.update,
-			).toHaveBeenCalled();
-			const scheduleUpdate =
-				scheduleMockStripe.subscriptionSchedules.update.mock.calls[0][1];
-			const newPhase = scheduleUpdate.phases[1];
-			const meteredItem = newPhase.items.find(
-				(item: { price: string }) => item.price === meteredPriceId,
+			).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					phases: [
+						expect.anything(),
+						expect.objectContaining({
+							items: expect.arrayContaining([{ price: meteredPriceId }]),
+						}),
+					],
+				}),
 			);
-
-			expect(meteredItem).toBeDefined();
-			expect(meteredItem).not.toHaveProperty("quantity");
 		});
 	});
 	/**

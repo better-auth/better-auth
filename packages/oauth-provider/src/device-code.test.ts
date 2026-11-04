@@ -1094,6 +1094,73 @@ describe("oauth-provider device-code grant", async () => {
 		expect(idToken.aud).toBe(clientId);
 	});
 
+	it("does not redeem a device grant after approval from a revoked cached session", async () => {
+		const {
+			auth: guardedAuth,
+			client: guardedClient,
+			signInWithTestUser: signIn,
+			cookieSetter,
+		} = await getTestInstance(
+			{
+				baseURL,
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						scopes: ["openid", "profile", "email"],
+					}),
+					oauthDeviceAuthorization(),
+				],
+			},
+			{ clientOptions: { plugins: [oauthProviderClient()] } },
+		);
+		const { headers } = await signIn();
+		const registered = await guardedAuth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid profile email",
+				application_type: "native",
+			},
+		});
+		const current = await guardedClient.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { device_code, user_code } = await guardedAuth.api.deviceCode({
+			body: { client_id: registered!.client_id },
+		});
+		const consent = await openDeviceConsent(guardedClient, user_code, headers);
+		const ctx = await guardedAuth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		const answered = await fetchRedirect(guardedClient, "/oauth2/consent", {
+			method: "POST",
+			headers,
+			body: { accept: true, oauth_query: consent.toString() },
+		});
+		expect(new URL(answered, baseURL).searchParams.get("status")).not.toBe(
+			"approved",
+		);
+		const polled = await guardedClient.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code,
+					client_id: registered!.client_id,
+				}),
+				headers: FORM_HEADERS,
+			},
+		);
+		expect(polled.data?.access_token).toBeUndefined();
+		expect(polled.error).not.toBeNull();
+	});
+
 	it("returns invalid_request when device-code polling omits client_id", async () => {
 		const clientId = await createDeviceClient();
 		const deviceCode = await approvedDeviceCode(clientId);
@@ -2301,14 +2368,13 @@ describe("oauth-provider device approval through the consent flow", async () => 
 	});
 
 	it("rejects an approval when the code expires before the final step", async () => {
-		let calls = 0;
-		resolveReference = () => {
-			// The consent endpoint resolves the reference first; expire the code
-			// before the second resolution, which precedes the approval.
-			calls += 1;
-			if (calls === 2) vi.setSystemTime(Date.now() + 31 * 60 * 1000);
-			return "org_1";
-		};
+		resolveReference = () => "org_1";
+		// The authentication context resolves just before the approval; expire
+		// the code then.
+		resolveAuthenticationContext.mockImplementationOnce(() => {
+			vi.setSystemTime(Date.now() + 31 * 60 * 1000);
+			return undefined;
+		});
 		const { user_code, headers } = await startDevice();
 		vi.useFakeTimers({ toFake: ["Date"] });
 		try {

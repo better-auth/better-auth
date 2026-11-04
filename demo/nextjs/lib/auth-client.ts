@@ -25,7 +25,13 @@ export const authClient = createAuthClient({
 		organizationClient(),
 		twoFactorClient({
 			onTwoFactorRedirect() {
-				window.location.href = "/two-factor";
+				const target = new URL("/two-factor", window.location.origin);
+				const current = new URL(window.location.href);
+				for (const name of ["client_id", "state", "code_challenge"]) {
+					const value = current.searchParams.get(name);
+					if (value) target.searchParams.set(name, value);
+				}
+				window.location.href = target.toString();
 			},
 		}),
 		passkeyClient(),
