@@ -778,11 +778,11 @@ electronClient({
 
 #### `sanitizeUser?`
 
-A function to sanitize the user object before it is sent to the renderer process. Use this to strip sensitive fields.
+A function to sanitize the user object before it is sent to the renderer process. Use this to strip sensitive fields or add additional data from the session.
 
 ```ts title="electron/auth-client.ts"
 electronClient({
-  sanitizeUser: (user) => {
+  sanitizeUser: (user, session) => {
     const { sensitiveField, ...rest } = user;
     return rest;
   },
