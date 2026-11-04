@@ -55,9 +55,11 @@ These custom rules ensure that sensitive operations are protected with stricter 
 
 Better Auth limits requests per client IP address, which it reads from
 `X-Forwarded-For` by default. Any client can set that header, so per-client limits
-only hold when a proxy you control writes the address and clients cannot bypass it.
+only hold when a proxy or server code you control writes the address and clients
+cannot bypass it.
 
-If your proxy or platform sets the client address in a header, list that header:
+If your proxy or platform sets the client address in a header, replacing any value
+the client sent, list that header:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -98,6 +100,11 @@ address into a header before the request reaches Better Auth, and list that head
 (`ipAddressHeaders: ["x-client-ip"]` in this Express example):
 
 ```ts title="server.ts"
+import express from "express";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./auth";
+
+const app = express();
 const authHandler = toNodeHandler(auth);
 
 // Express v4 route. For Express v5, use "/api/auth/*splat" instead.
@@ -109,7 +116,9 @@ app.all("/api/auth/*", (req, res) => {
 ```
 
 When no address is found, Better Auth counts those requests in one shared counter
-per path and logs a warning. In development and test, it uses `127.0.0.1` instead.
+per path and logs a warning once. In development and test, it uses `127.0.0.1`
+instead. Setting `disableIpTracking: true` turns off this rate limiter for HTTP
+requests.
 
 #### IPv6 Address Support
 
