@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
-import { Kysely, sql } from "kysely";
+import type { Kysely } from "kysely";
+import { sql } from "kysely";
 import { afterAll, expect, it } from "vitest";
 
 let sqlite: DatabaseSync | undefined;
@@ -7,13 +8,17 @@ let postgres: Kysely<unknown> | undefined;
 
 // Vitest runs afterAll hooks in reverse registration order, and test-instance
 // registers its cleanup hook when it is imported. Registering this hook before
-// that import makes it run after the cleanup.
+// that import makes it run after the cleanup. Each check needs the handle its
+// test captured, so a run filtered with `-t` skips the other backend's check.
 afterAll(async () => {
-	expect(sqlite?.isOpen).toBe(false);
-	expect.assert.instanceOf(postgres, Kysely);
-	await expect(sql`select 1`.execute(postgres)).rejects.toThrow(
-		"driver has already been destroyed",
-	);
+	if (sqlite) {
+		expect(sqlite.isOpen).toBe(false);
+	}
+	if (postgres) {
+		await expect(sql`select 1`.execute(postgres)).rejects.toThrow(
+			"driver has already been destroyed",
+		);
+	}
 });
 
 const { getTestInstance } = await import("./test-instance");
@@ -25,7 +30,9 @@ let fileHookAuth:
 // Registered after the import, so it runs before the cleanup closes the
 // database, like an afterAll hook in any test file that uses getTestInstance.
 afterAll(async () => {
-	expect.assert.isDefined(fileHookAuth);
+	if (!fileHookAuth) {
+		return;
+	}
 	const session = await fileHookAuth.api.signInEmail({
 		body: { email: "test@test.com", password: "test123456" },
 	});
