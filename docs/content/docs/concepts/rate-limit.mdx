@@ -53,13 +53,18 @@ These custom rules ensure that sensitive operations are protected with stricter 
 
 ### Connecting IP Address
 
-Better Auth limits requests per client IP address, which it reads from
-`X-Forwarded-For` by default. Any client can set that header, so per-client limits
-only hold when a proxy or server code you control writes the address and clients
-cannot bypass it.
+Better Auth limits requests per client IP address. It cannot see the network
+connection, so it reads the address from request headers, `X-Forwarded-For` by
+default. A header's name doesn't tell Better Auth who set it, and clients can send
+any header. List a header only when your proxy or server code sets it on every
+request, replacing any client value, and every request passes through that proxy or
+code.
 
-If your proxy sets the client address in a header, replacing any value the client
-sent, list that header:
+Better Auth tries the headers in `ipAddressHeaders` in order and uses the first
+valid address. A header that nothing overwrites lets a client choose its address,
+even if a later header in the list is trustworthy.
+
+If your proxy sets the client address in its own header, list only that header:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -67,6 +72,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
     advanced: {
         ipAddress: {
+            // the header your proxy sets
             ipAddressHeaders: ["cf-connecting-ip"],
         },
     },
@@ -94,10 +100,12 @@ export const auth = betterAuth({
   your server only through these proxies.
 </Callout>
 
-If clients connect to your server directly, set `ipAddressHeaders: []` to share one
-counter per path across all clients. To keep per-client limits, write the connection
-address into a header before the request reaches Better Auth, and list that header in
-`ipAddressHeaders`:
+If clients connect to your server directly, nothing replaces the headers they send.
+Set `ipAddressHeaders: []` to share one counter per path across all clients. To keep
+per-client limits, write the connection address into a header in your server code.
+This Express example overwrites `x-client-ip` on every request, which makes
+`ipAddressHeaders: ["x-client-ip"]` safe. Without this code, clients could set
+`x-client-ip` themselves:
 
 ```ts title="server.ts"
 import express from "express";
@@ -109,7 +117,7 @@ const authHandler = toNodeHandler(auth);
 
 // Express v4 route. For Express v5, use "/api/auth/*splat" instead.
 app.all("/api/auth/*", (req, res) => {
-    // Overwrite any client value, and list "x-client-ip" in ipAddressHeaders.
+    // Replaces any client value. Pair with ipAddressHeaders: ["x-client-ip"].
     req.headers["x-client-ip"] = req.socket.remoteAddress ?? "";
     return authHandler(req, res);
 });
