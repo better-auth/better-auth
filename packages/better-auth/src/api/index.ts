@@ -64,9 +64,23 @@ export function checkEndpointConflicts(
 		{ pluginId: string; endpointKey: string; methods: string[] }[]
 	>();
 
-	options.plugins?.forEach((plugin) => {
+	// `getEndpoints` merges plugin endpoints by key, so a later plugin that
+	// defines the same key replaces the earlier endpoint and only that one is
+	// routed. Registering the replaced endpoint would report a conflict the
+	// router never has.
+	const lastPluginIndexByKey = new Map<string, number>();
+	options.plugins?.forEach((plugin, index) => {
+		for (const key of Object.keys(plugin.endpoints ?? {})) {
+			lastPluginIndexByKey.set(key, index);
+		}
+	});
+
+	options.plugins?.forEach((plugin, index) => {
 		if (plugin.endpoints) {
 			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
+				if (lastPluginIndexByKey.get(key) !== index) {
+					continue;
+				}
 				if (
 					endpoint &&
 					"path" in endpoint &&
