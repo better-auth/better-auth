@@ -25,7 +25,7 @@ export function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
  * @see https://www.w3.org/TR/webauthn-3/#sctn-validating-origin
  */
 export function getExpectedOrigins(
-	options: PasskeyOptions & { baseURLFromRequest: boolean },
+	options: PasskeyOptions,
 	ctx: GenericEndpointContext,
 	clientDataJSON: unknown,
 ) {
@@ -35,7 +35,7 @@ export function getExpectedOrigins(
 			: [options.origin];
 		return configured.filter((origin) => origin.length > 0);
 	}
-	const baseOrigins = getServerOrigins(options, ctx);
+	const baseOrigins = getServerOrigins(ctx);
 	const reported = getReportedOrigin(clientDataJSON);
 	if (
 		!reported ||
@@ -47,11 +47,12 @@ export function getExpectedOrigins(
 	return [...baseOrigins, reported];
 }
 
-function getServerOrigins(
-	options: { baseURLFromRequest: boolean },
-	ctx: GenericEndpointContext,
-) {
-	if (options.baseURLFromRequest) {
+function getServerOrigins(ctx: GenericEndpointContext) {
+	// Core rewrites `options.baseURL` per request, so read the flag set at init.
+	if (
+		"passkeyBaseURLFromRequest" in ctx.context &&
+		ctx.context.passkeyBaseURLFromRequest
+	) {
 		return ctx.request ? [new URL(ctx.request.url).origin] : [];
 	}
 	return ctx.context.baseURL ? [new URL(ctx.context.baseURL).origin] : [];

@@ -92,10 +92,6 @@ type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 
 type RequiredPassKeyOptions = WithRequired<PasskeyOptions, "advanced"> & {
 	advanced: Required<PasskeyOptions["advanced"]>;
-	/**
-	 * Set at init when no `baseURL` is configured, so the core derives it per request.
-	 */
-	baseURLFromRequest: boolean;
 };
 
 const expectedOriginUnavailable = (ctx: GenericEndpointContext) => {
