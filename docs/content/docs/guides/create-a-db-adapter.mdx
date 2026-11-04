@@ -225,7 +225,9 @@ updateMany: async ({ model, where, update }) => {
 
 ### `delete` method
 
-The `delete` method is used to delete a record from the database.
+The `delete` method is used to delete a single record from the database.
+
+If the `where` clause is empty after transformation, the call is a no-op and no rows are deleted. Use `deleteMany` when you intend to delete multiple rows or every row in the model.
 
 parameters:
 
@@ -244,6 +246,8 @@ delete: async ({ model, where }) => {
 ### `deleteMany` method
 
 The `deleteMany` method is used to delete multiple records from the database.
+
+An empty `where` clause matches every row in the model. Use this method (not `delete`) when you need to delete all rows.
 
 parameters:
 
