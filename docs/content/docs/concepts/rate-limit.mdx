@@ -77,17 +77,16 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
     advanced: {
         ipAddress: {
-            ipAddressHeaders: ["cf-connecting-ip"], // written by Cloudflare
+            ipAddressHeaders: ["cf-connecting-ip"], // a header your proxy writes
         },
     },
 })
 ```
 
-Your platform's documentation names the header and says whether it replaces client
-values, for example [Vercel](https://vercel.com/docs/headers/request-headers) or
-[Cloudflare](https://developers.cloudflare.com/fundamentals/reference/http-headers/).
-Better Auth reads the listed headers in order and uses the first one that contains a
-single valid address, so every header you list must be one your proxy writes.
+Your platform's or proxy's documentation names the header and says whether it
+replaces client values. Better Auth reads the listed headers in order and uses the
+first one that contains a single valid address, so every header you list must be one
+your proxy writes.
 
 #### Proxies append to `X-Forwarded-For`
 
