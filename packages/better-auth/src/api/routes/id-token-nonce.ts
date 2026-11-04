@@ -7,25 +7,78 @@ import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { generateRandomString } from "../../crypto";
 
-const ID_TOKEN_NONCE_EXPIRES_IN_MS = 5 * 60 * 1000;
+const ISSUED_NONCE_EXPIRES_IN_MS = 5 * 60 * 1000;
 const ISSUED_NONCE_LENGTH = 32;
 const ISSUED_NONCE_PATTERN = new RegExp(
 	`^[a-zA-Z0-9]{${ISSUED_NONCE_LENGTH}}$`,
 );
 
+/**
+ * Store a new single-use nonce under `scope` and return it. It expires after
+ * five minutes.
+ */
+export async function issueNonce(ctx: GenericEndpointContext, scope: string) {
+	const nonce = generateRandomString(ISSUED_NONCE_LENGTH, "a-z", "A-Z", "0-9");
+	await ctx.context.internalAdapter.createVerificationValue({
+		identifier: `${scope}:${nonce}`,
+		value: scope,
+		expiresAt: new Date(Date.now() + ISSUED_NONCE_EXPIRES_IN_MS),
+	});
+	return nonce;
+}
+
+/**
+ * Consume a nonce that {@link issueNonce} stored under `scope`. Throws
+ * `INVALID_ID_TOKEN_NONCE` when it is missing, malformed, unknown, expired, or
+ * already used. Call it before verifying the token, so a failed attempt burns
+ * the nonce too.
+ */
+export async function consumeNonce(
+	ctx: GenericEndpointContext,
+	scope: string,
+	nonce: string | undefined,
+) {
+	const issued =
+		nonce && ISSUED_NONCE_PATTERN.test(nonce)
+			? await ctx.context.internalAdapter.consumeVerificationValue(
+					`${scope}:${nonce}`,
+				)
+			: null;
+	if (!issued) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_ID_TOKEN_NONCE);
+	}
+}
+
+/** OpenAPI responses for an endpoint that returns `{ nonce }` from {@link issueNonce}. */
+export const issuedNonceResponses = {
+	200: {
+		description: "Success",
+		content: {
+			"application/json": {
+				schema: {
+					type: "object" as const,
+					properties: {
+						nonce: { type: "string" as const },
+					},
+					required: ["nonce"],
+				},
+			},
+		},
+	},
+};
+
 type ProviderWithOptions = Pick<OAuthProvider, "id" | "options">;
 
-const nonceIdentifier = (providerId: string, nonce: string) =>
-	`id-token-nonce:${providerId}:${nonce}`;
+const idTokenNonceScope = (providerId: string) =>
+	`id-token-nonce:${providerId}`;
 
 const requiresIssuedNonce = (provider: ProviderWithOptions) =>
 	provider.options?.requireIssuedIdTokenNonce === true;
 
 /**
  * Consume the issued nonce presented with a client-submitted ID token, from
- * `/sign-in/social`, `/link-social`, or Google One Tap. A no-op
- * for providers without `requireIssuedIdTokenNonce`. The nonce is burned before
- * the token is verified, so a failed attempt cannot be retried with it.
+ * `/sign-in/social` or `/link-social`. A no-op for providers without
+ * `requireIssuedIdTokenNonce`.
  */
 export async function consumeIssuedIdTokenNonce(
 	ctx: GenericEndpointContext,
@@ -33,15 +86,7 @@ export async function consumeIssuedIdTokenNonce(
 	nonce: string | undefined,
 ) {
 	if (!requiresIssuedNonce(provider)) return;
-	const issued =
-		nonce && ISSUED_NONCE_PATTERN.test(nonce)
-			? await ctx.context.internalAdapter.consumeVerificationValue(
-					nonceIdentifier(provider.id, nonce),
-				)
-			: null;
-	if (!issued) {
-		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_ID_TOKEN_NONCE);
-	}
+	await consumeNonce(ctx, idTokenNonceScope(provider.id), nonce);
 }
 
 /**
@@ -50,8 +95,7 @@ export async function consumeIssuedIdTokenNonce(
  * POST `/id-token/nonce`
  *
  * Issues a single-use nonce for a client to pass to the provider's SDK before
- * submitting the resulting ID token to `/sign-in/social`, `/link-social`, or
- * `/one-tap/callback`.
+ * submitting the resulting ID token to `/sign-in/social` or `/link-social`.
  * Only available for providers that set `requireIssuedIdTokenNonce`.
  */
 export const issueIdTokenNonce = createAuthEndpoint(
@@ -66,22 +110,7 @@ export const issueIdTokenNonce = createAuthEndpoint(
 			openapi: {
 				description:
 					"Issue a single-use nonce to bind a provider ID token to one sign-in or account-linking request",
-				responses: {
-					200: {
-						description: "Success",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										nonce: { type: "string" },
-									},
-									required: ["nonce"],
-								},
-							},
-						},
-					},
-				},
+				responses: issuedNonceResponses,
 			},
 		},
 	},
@@ -98,17 +127,7 @@ export const issueIdTokenNonce = createAuthEndpoint(
 				BASE_ERROR_CODES.ID_TOKEN_NONCE_NOT_ENABLED,
 			);
 		}
-		const nonce = generateRandomString(
-			ISSUED_NONCE_LENGTH,
-			"a-z",
-			"A-Z",
-			"0-9",
-		);
-		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: nonceIdentifier(provider.id, nonce),
-			value: provider.id,
-			expiresAt: new Date(Date.now() + ID_TOKEN_NONCE_EXPIRES_IN_MS),
-		});
+		const nonce = await issueNonce(ctx, idTokenNonceScope(provider.id));
 		return ctx.json({ nonce });
 	},
 );

@@ -62,6 +62,24 @@ vi.mock("jose", async (importOriginal) => {
 
 afterEach(() => {
 	vi.mocked(jwtVerify).mockClear();
+	Reflect.deleteProperty(verifiedPayload, "nonce");
+});
+
+/**
+ * Issues a One Tap nonce and makes the mocked Google ID token carry it, the
+ * way Google echoes the nonce the client passed to `initialize()`.
+ */
+async function issueNonce(auth: {
+	api: { oneTapNonce: () => Promise<{ nonce: string }> };
+}) {
+	const { nonce } = await auth.api.oneTapNonce();
+	Object.assign(verifiedPayload, { nonce });
+	return nonce;
+}
+
+const callbackBody = async (auth: Parameters<typeof issueNonce>[0]) => ({
+	idToken: "stub-id-token",
+	nonce: await issueNonce(auth),
 });
 
 /**
@@ -76,7 +94,7 @@ describe("one-tap last login method", () => {
 			new Request("http://localhost:3000/api/auth/one-tap/callback", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ idToken: "stub-id-token" }),
+				body: JSON.stringify(await callbackBody(auth)),
 			}),
 		);
 
@@ -97,7 +115,7 @@ describe("one-tap last login method", () => {
 			new Request("http://localhost:3000/api/auth/one-tap/callback", {
 				method: "POST",
 				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ idToken: "stub-id-token" }),
+				body: JSON.stringify(await callbackBody(auth)),
 			}),
 		);
 
@@ -120,7 +138,7 @@ describe("one-tap implicit linking gate", async () => {
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-g38m-r43w-p2q7
 	 */
 	it("rejects implicit linking when the local user is unverified", async () => {
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: {
 				google: {
 					clientId: "test-client",
@@ -142,7 +160,7 @@ describe("one-tap implicit linking gate", async () => {
 			error: { status: number; code?: string } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error?.status).toBe(401);
@@ -183,7 +201,7 @@ describe("one-tap implicit linking gate", async () => {
 			error: unknown;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error).toBeFalsy();
@@ -231,7 +249,7 @@ describe("one-tap implicit linking gate", async () => {
 			error: { status: number } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error).toBeFalsy();
@@ -256,7 +274,7 @@ describe("one-tap implicit linking gate", async () => {
 		verifiedPayload.email_verified = false;
 		verifiedPayload.sub = "one_tap_unverified_sub";
 
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: {
 				google: {
 					clientId: "test-client",
@@ -273,7 +291,7 @@ describe("one-tap implicit linking gate", async () => {
 			error: { status: number } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		// 403 distinguishes the mapped EMAIL_NOT_VERIFIED gate from the generic
@@ -329,7 +347,7 @@ describe("one-tap implicit linking gate", async () => {
 			error: { status: number } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error).toBeFalsy();
@@ -362,10 +380,10 @@ describe("one-tap implicit linking gate", async () => {
 		});
 		const ctx = await auth.$context;
 
-		const callOneTap = () =>
+		const callOneTap = async () =>
 			client.$fetch<{ token?: string }>("/one-tap/callback", {
 				method: "POST",
-				body: { idToken: "stub-id-token" },
+				body: await callbackBody(auth),
 			});
 
 		const first = await callOneTap();
@@ -434,7 +452,7 @@ describe("one-tap implicit linking gate", async () => {
 
 		const res = await client.$fetch<{ user?: { id: string } }>(
 			"/one-tap/callback",
-			{ method: "POST", body: { idToken: "stub-id-token" } },
+			{ method: "POST", body: await callbackBody(auth) },
 		);
 
 		expect(res.error).toBeFalsy();
@@ -479,7 +497,7 @@ describe("one-tap implicit linking gate", async () => {
 			error: { status: number } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error?.status).toBe(401);
@@ -506,7 +524,7 @@ describe("one-tap callbackURL origin validation", async () => {
 	};
 
 	it("rejects an untrusted callbackURL via the global origin check", async () => {
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: { google: googleProvider },
 			plugins: [oneTap()],
 			advanced: { disableOriginCheck: false },
@@ -518,7 +536,7 @@ describe("one-tap callbackURL origin validation", async () => {
 		}>("/one-tap/callback", {
 			method: "POST",
 			body: {
-				idToken: "stub-id-token",
+				...(await callbackBody(auth)),
 				callbackURL: "https://untrusted.example/callback",
 			},
 		});
@@ -527,7 +545,7 @@ describe("one-tap callbackURL origin validation", async () => {
 	});
 
 	it("accepts a relative callbackURL (origin check passes)", async () => {
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: { google: googleProvider },
 			plugins: [oneTap()],
 			advanced: { disableOriginCheck: false },
@@ -538,7 +556,7 @@ describe("one-tap callbackURL origin validation", async () => {
 			error: { status: number } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token", callbackURL: "/dashboard" },
+			body: { ...(await callbackBody(auth)), callbackURL: "/dashboard" },
 		});
 
 		// The origin check must not block a same-app relative redirect target.
@@ -558,7 +576,7 @@ describe("one-tap audience enforcement", async () => {
 		// closed before verification rather than accept a cross-client token.
 		// (`socialProviders: {}` overrides the test default, which configures
 		// google with a client id.)
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: {},
 			plugins: [oneTap()],
 		});
@@ -568,7 +586,7 @@ describe("one-tap audience enforcement", async () => {
 			error: { status: number; message?: string } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error?.status).toBe(400);
@@ -577,7 +595,7 @@ describe("one-tap audience enforcement", async () => {
 	});
 
 	it("accepts the oneTap-level clientId as the audience without a Google provider", async () => {
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: {},
 			plugins: [oneTap({ clientId: "explicit-one-tap-client" })],
 		});
@@ -587,7 +605,7 @@ describe("one-tap audience enforcement", async () => {
 			error: { status: number; message?: string } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		// The audience guard is satisfied, so the request is not rejected for a
@@ -605,7 +623,7 @@ describe("one-tap audience enforcement", async () => {
 	});
 
 	it("rejects the callback when the verified token has no email", async () => {
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: {},
 			plugins: [oneTap({ clientId: "explicit-one-tap-client" })],
 		});
@@ -617,7 +635,7 @@ describe("one-tap audience enforcement", async () => {
 			error: { status: number; message?: string } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error?.status).toBe(400);
@@ -643,7 +661,7 @@ describe("one-tap hosted domain (hd)", async () => {
 		verifiedPayload.sub = "one-tap-hd-mismatch-sub";
 		(verifiedPayload as Record<string, unknown>).hd = "other.com";
 
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: { google: withHd },
 			plugins: [oneTap()],
 		});
@@ -653,7 +671,7 @@ describe("one-tap hosted domain (hd)", async () => {
 			error: { status: number } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error?.status).toBe(400);
@@ -663,7 +681,7 @@ describe("one-tap hosted domain (hd)", async () => {
 		verifiedPayload.email = "one-tap-hd-missing@company.com";
 		verifiedPayload.sub = "one-tap-hd-missing-sub";
 
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: { google: withHd },
 			plugins: [oneTap()],
 		});
@@ -673,7 +691,7 @@ describe("one-tap hosted domain (hd)", async () => {
 			error: { status: number } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error?.status).toBe(400);
@@ -684,14 +702,14 @@ describe("one-tap hosted domain (hd)", async () => {
 		verifiedPayload.sub = "one-tap-hd-match-sub";
 		(verifiedPayload as Record<string, unknown>).hd = "company.com";
 
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: { google: withHd },
 			plugins: [oneTap()],
 		});
 
 		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error).toBeFalsy();
@@ -703,7 +721,7 @@ describe("one-tap hosted domain (hd)", async () => {
 		verifiedPayload.sub = "one-tap-hd-wildcard-sub";
 		(verifiedPayload as Record<string, unknown>).hd = "company.com";
 
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: {
 				google: {
 					...withHd,
@@ -715,7 +733,7 @@ describe("one-tap hosted domain (hd)", async () => {
 
 		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error).toBeFalsy();
@@ -726,7 +744,7 @@ describe("one-tap hosted domain (hd)", async () => {
 		verifiedPayload.email = "one-tap-hd-wildcard-missing@example.com";
 		verifiedPayload.sub = "one-tap-hd-wildcard-missing-sub";
 
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: {
 				google: {
 					...withHd,
@@ -741,7 +759,7 @@ describe("one-tap hosted domain (hd)", async () => {
 			error: { status: number } | null;
 		}>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error?.status).toBe(400);
@@ -752,7 +770,7 @@ describe("one-tap hosted domain (hd)", async () => {
 		verifiedPayload.sub = "one-tap-no-hd-config-sub";
 		(verifiedPayload as Record<string, unknown>).hd = "anywhere.com";
 
-		const { client } = await getTestInstance({
+		const { auth, client } = await getTestInstance({
 			socialProviders: {
 				google: {
 					clientId: "test-client",
@@ -765,7 +783,7 @@ describe("one-tap hosted domain (hd)", async () => {
 
 		const res = await client.$fetch<{ token?: string }>("/one-tap/callback", {
 			method: "POST",
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.error).toBeFalsy();
@@ -799,7 +817,7 @@ describe("one-tap disableSignUp", () => {
 
 		await expect(
 			auth.api.oneTapCallback({
-				body: { idToken: "stub-id-token" },
+				body: await callbackBody(auth),
 			}),
 		).rejects.toMatchObject({
 			statusCode: 401,
@@ -838,7 +856,7 @@ describe("one-tap disableSignUp", () => {
 
 		await expect(
 			auth.api.oneTapCallback({
-				body: { idToken: "stub-id-token" },
+				body: await callbackBody(auth),
 			}),
 		).rejects.toMatchObject({
 			statusCode: 401,
@@ -883,7 +901,7 @@ describe("one-tap Google profile mapping", () => {
 		});
 
 		const res = await auth.api.oneTapCallback({
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.user).toMatchObject({
@@ -916,7 +934,7 @@ describe("one-tap Google profile mapping", () => {
 		});
 
 		const res = await auth.api.oneTapCallback({
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.user.name).toBe("From Override");
@@ -946,10 +964,10 @@ describe("one-tap Google profile mapping", () => {
 			plugins: [oneTap()],
 		});
 
-		await auth.api.oneTapCallback({ body: { idToken: "stub-id-token" } });
+		await auth.api.oneTapCallback({ body: await callbackBody(auth) });
 		verifiedPayload.name = "Renamed";
 		const res = await auth.api.oneTapCallback({
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.user.name).toBe("Mapped Renamed");
@@ -965,7 +983,7 @@ describe("one-tap Google profile mapping", () => {
 		});
 
 		const res = await auth.api.oneTapCallback({
-			body: { idToken: "stub-id-token" },
+			body: await callbackBody(auth),
 		});
 
 		expect(res.user).toMatchObject({
@@ -1044,7 +1062,14 @@ describe("oneTapClient initialize config", async () => {
 
 	const flows = [
 		["prompt", {}],
-		["button", { button: { container: {} as HTMLElement } }],
+		[
+			"button",
+			{
+				button: {
+					container: { replaceChildren: vi.fn() } as unknown as HTMLElement,
+				},
+			},
+		],
 	] as const;
 
 	it.each(flows)(
@@ -1082,7 +1107,7 @@ describe("oneTapClient initialize config", async () => {
 		},
 	);
 
-	const container = {} as HTMLElement;
+	const container = { replaceChildren: vi.fn() } as unknown as HTMLElement;
 
 	it("opts the button into the FedCM button flow, with autoSelect as its auto select", async () => {
 		stubBrowser();
@@ -1113,8 +1138,10 @@ describe("oneTapClient initialize config", async () => {
 		await client.oneTap({ button: { container }, fetchOptions: {} });
 
 		const config = initialize.mock.calls[0]![0] as {
+			nonce: string;
 			callback: (response: { credential: string }) => Promise<void>;
 		};
+		Object.assign(verifiedPayload, { nonce: config.nonce });
 		await config.callback({ credential: "stub-id-token" });
 
 		expect(jwtVerify).toHaveBeenCalledWith(
@@ -1213,28 +1240,19 @@ describe("one-tap prompt notifications", () => {
 	});
 });
 
-describe("one-tap issued nonce", async () => {
-	afterEach(() => {
-		Reflect.deleteProperty(verifiedPayload, "nonce");
-	});
-
-	const { client } = await getTestInstance({
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10926
+ */
+describe("one-tap nonce", async () => {
+	const { auth, client } = await getTestInstance({
 		socialProviders: {
-			google: {
-				clientId: "test-client",
-				clientSecret: "test-secret",
-				requireIssuedIdTokenNonce: true,
-			},
+			google: { clientId: "test-client", clientSecret: "test-secret" },
 		},
 		plugins: [oneTap()],
 	});
 
-	const issueNonce = async () => {
-		const { data } = await client.idToken.nonce({ provider: "google" });
-		return data!.nonce;
-	};
-	const postCallback = async (body: Record<string, unknown>) => {
-		const res = await client.$fetch<{ token: string }>("/one-tap/callback", {
+	const postCallback = async (body: Record<string, unknown>, via = client) => {
+		const res = await via.$fetch<{ token: string }>("/one-tap/callback", {
 			method: "POST",
 			body: { idToken: "stub-id-token", ...body },
 		});
@@ -1245,31 +1263,33 @@ describe("one-tap issued nonce", async () => {
 	};
 
 	it("signs in with an issued nonce that matches the token's nonce claim", async () => {
-		const nonce = await issueNonce();
-		Object.assign(verifiedPayload, { nonce });
-
-		const res = await postCallback({ nonce });
+		const res = await postCallback({ nonce: await issueNonce(auth) });
 
 		expect(res.error).toBeNull();
 		expect(res.data?.token).toBeDefined();
+	});
+
+	it("marks the nonce response as not cacheable", async () => {
+		const res = await auth.api.oneTapNonce({ asResponse: true });
+
+		expect(res.headers.get("cache-control")).toBe("no-store");
 	});
 
 	it("rejects a callback without a nonce", async () => {
 		const res = await postCallback({});
 
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe("INVALID_ID_TOKEN_NONCE");
 		expect(jwtVerify).not.toHaveBeenCalled();
 	});
 
 	it("rejects a nonce that was already used", async () => {
-		const nonce = await issueNonce();
-		Object.assign(verifiedPayload, { nonce });
+		const nonce = await issueNonce(auth);
 		expect((await postCallback({ nonce })).error).toBeNull();
 
 		const replay = await postCallback({ nonce });
 
 		expect(replay.error?.code).toBe("INVALID_ID_TOKEN_NONCE");
+		expect(jwtVerify).toHaveBeenCalledOnce();
 	});
 
 	it("rejects a nonce in a format the server never issues", async () => {
@@ -1278,40 +1298,39 @@ describe("one-tap issued nonce", async () => {
 		expect(res.error?.code).toBe("INVALID_ID_TOKEN_NONCE");
 	});
 
-	it("rejects an issued nonce that differs from the token's nonce claim", async () => {
-		Object.assign(verifiedPayload, { nonce: "a".repeat(32) });
-
-		const res = await postCallback({ nonce: await issueNonce() });
-
-		expect(res.error?.status).toBe(400);
-		expect(res.error?.message).toBe("invalid id token");
-	});
-});
-
-describe("one-tap without an issued nonce", async () => {
-	afterEach(() => {
-		Reflect.deleteProperty(verifiedPayload, "nonce");
-	});
-
-	const { client } = await getTestInstance({
-		socialProviders: {},
-		plugins: [oneTap({ clientId: "test-client" })],
-	});
-
-	it("rejects a token with a nonce claim posted without a nonce", async () => {
-		Object.assign(verifiedPayload, { nonce: "a".repeat(32) });
-
-		const res = await client.$fetch("/one-tap/callback", {
-			method: "POST",
-			body: { idToken: "stub-id-token" },
+	it("rejects a nonce issued for /sign-in/social", async () => {
+		const { auth, client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test-client",
+					clientSecret: "test-secret",
+					requireIssuedIdTokenNonce: true,
+				},
+			},
+			plugins: [oneTap()],
 		});
+		const { nonce } = await auth.api.issueIdTokenNonce({
+			body: { provider: "google" },
+		});
+		Object.assign(verifiedPayload, { nonce });
+
+		const res = await postCallback({ nonce }, client);
+
+		expect(res.error?.code).toBe("INVALID_ID_TOKEN_NONCE");
+	});
+
+	it("rejects an issued nonce that differs from the token's nonce claim", async () => {
+		const nonce = await issueNonce(auth);
+		Object.assign(verifiedPayload, { nonce: "a".repeat(32) });
+
+		const res = await postCallback({ nonce });
 
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.message).toBe("invalid id token");
 	});
 });
 
-describe("oneTapClient with useIssuedNonce", async () => {
+describe("oneTapClient nonce", async () => {
 	const initialize = vi.fn();
 	const renderButton = vi.fn();
 	const prompt = vi.fn((listener: (notification: unknown) => void) =>
@@ -1329,19 +1348,13 @@ describe("oneTapClient with useIssuedNonce", async () => {
 	const { client, auth } = await getTestInstance(
 		{
 			socialProviders: {
-				google: {
-					clientId: "test-client",
-					clientSecret: "test-secret",
-					requireIssuedIdTokenNonce: true,
-				},
+				google: { clientId: "test-client", clientSecret: "test-secret" },
 			},
 			plugins: [oneTap()],
 		},
 		{
 			clientOptions: {
-				plugins: [
-					oneTapClient({ clientId: "test-client", useIssuedNonce: true }),
-				],
+				plugins: [oneTapClient({ clientId: "test-client" })],
 			},
 		},
 	);
@@ -1355,7 +1368,7 @@ describe("oneTapClient with useIssuedNonce", async () => {
 	const container = () =>
 		({ isConnected: true, replaceChildren: vi.fn() }) as unknown as HTMLElement;
 	type InitializeConfig = {
-		nonce?: string;
+		nonce: string;
 		callback: (response: { credential: string }) => Promise<void>;
 	};
 	const initConfig = (call: number) =>
@@ -1429,10 +1442,14 @@ describe("oneTapClient with useIssuedNonce", async () => {
 
 	// Simulates the nonce endpoint failing, then recovering.
 	const setNonceEndpointUp = async (up: boolean) => {
-		const google = (await auth.$context).socialProviders.find(
-			(provider) => provider.id === "google",
-		)!;
-		google.options = { ...google.options, requireIssuedIdTokenNonce: up };
+		const { internalAdapter } = await auth.$context;
+		if (up) {
+			vi.mocked(internalAdapter.createVerificationValue).mockRestore();
+		} else {
+			vi.spyOn(internalAdapter, "createVerificationValue").mockRejectedValue(
+				new Error("storage unavailable"),
+			);
+		}
 	};
 
 	it("does not open the prompt when no nonce can be fetched", async () => {
@@ -1476,7 +1493,6 @@ describe("oneTapClient with useIssuedNonce", async () => {
 		);
 		const { oneTap: run } = oneTapClient({
 			clientId: "test-client",
-			useIssuedNonce: true,
 		}).getActions(
 			$fetch as unknown as BetterFetch,
 			{} as ClientStore,

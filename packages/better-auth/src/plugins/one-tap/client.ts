@@ -122,15 +122,6 @@ export interface GoogleOneTapOptions {
 	 */
 	additionalOptions?: Record<string, any> | undefined;
 	/**
-	 * Fetch a single-use nonce from `/id-token/nonce` before each prompt and
-	 * button render, pass it to Google, and send it with the ID token. Enable it
-	 * together with `requireIssuedIdTokenNonce` on the server's
-	 * `socialProviders.google`.
-	 *
-	 * @default false
-	 */
-	useIssuedNonce?: boolean | undefined;
-	/**
 	 * Configuration options for the prompt and exponential backoff behavior.
 	 */
 	promptOptions?:
@@ -159,10 +150,7 @@ export interface GoogleOneTapOptions {
 }
 
 export interface GoogleOneTapActionOptions
-	extends Omit<
-		GoogleOneTapOptions,
-		"clientId" | "promptOptions" | "useIssuedNonce"
-	> {
+	extends Omit<GoogleOneTapOptions, "clientId" | "promptOptions"> {
 	fetchOptions?: ClientFetchOption | undefined;
 	/**
 	 * Callback URL.
@@ -174,8 +162,8 @@ export interface GoogleOneTapActionOptions
 	 */
 	onPromptNotification?: ((notification?: any | undefined) => void) | undefined;
 	/**
-	 * @deprecated Ignored. A nonce the app chooses gives the server nothing to
-	 * check. Set `useIssuedNonce` on `oneTapClient` instead.
+	 * @deprecated Ignored. The client fetches a single-use nonce from
+	 * `/one-tap/nonce` for every prompt and button render.
 	 */
 	nonce?: string | undefined;
 	/**
@@ -279,12 +267,12 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 					if (opts?.nonce !== undefined) {
 						console.warn(
-							"Google One Tap: the `nonce` option is ignored. Set `useIssuedNonce` to bind sign-ins to a server-issued nonce.",
+							"Google One Tap: the `nonce` option is ignored; the nonce is issued by the server.",
 						);
 					}
 
 					/** Returns whether it navigated away. */
-					async function callback(idToken: string, nonce: string | undefined) {
+					async function callback(idToken: string, nonce: string) {
 						const res = await $fetch("/one-tap/callback", {
 							method: "POST",
 							body: { idToken, nonce, callbackURL: opts?.callbackURL },
@@ -311,11 +299,10 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					// The app's fetchOptions belong to the callback (e.g. a redirect in
 					// onSuccess), so the nonce request does not use them.
 					const fetchNonce = async () => {
-						if (!options.useIssuedNonce) return undefined;
 						const { data, error } = await $fetch<{ nonce: string }>(
-							"/id-token/nonce",
+							"/one-tap/nonce",
 							// `throw: false` keeps the `{ data, error }` shape when the app sets `throw: true`.
-							{ method: "POST", body: { provider: "google" }, throw: false },
+							{ method: "POST", throw: false },
 						);
 						// Without a nonce the server rejects the sign-in, so do not show Google.
 						if (!data?.nonce) {
@@ -328,7 +315,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 					const autoSelect = opts?.autoSelect ?? options.autoSelect;
 					const initialize = (
-						nonce: string | undefined,
+						nonce: string,
 						onCredential: (response: { credential: string }) => Promise<void>,
 					) =>
 						window.google?.accounts.id.initialize({
@@ -381,18 +368,16 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								} catch (error) {
 									console.error("Error during button callback:", error);
 								}
-								if (nonce && !navigated) await refreshButton();
+								if (!navigated) await refreshButton();
 							});
 							// A rendered button signs in with the nonce it was initialized
 							// with, and each nonce is single-use and expires. Re-render with
 							// a fresh nonce after every attempt and before expiry.
-							if (nonce) {
-								container.replaceChildren();
-								buttonRefreshTimers.set(
-									container,
-									setTimeout(refreshButton, BUTTON_NONCE_REFRESH_MS),
-								);
-							}
+							container.replaceChildren();
+							buttonRefreshTimers.set(
+								container,
+								setTimeout(refreshButton, BUTTON_NONCE_REFRESH_MS),
+							);
 							window.google?.accounts.id.renderButton(container, buttonConfig);
 						};
 						const refreshButton = async () => {

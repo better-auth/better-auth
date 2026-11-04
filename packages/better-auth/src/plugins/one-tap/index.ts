@@ -8,7 +8,11 @@ import {
 } from "@better-auth/core/social-providers";
 import * as z from "zod";
 import { APIError } from "../../api";
-import { consumeIssuedIdTokenNonce } from "../../api/routes/id-token-nonce";
+import {
+	consumeNonce,
+	issuedNonceResponses,
+	issueNonce,
+} from "../../api/routes/id-token-nonce";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
@@ -47,13 +51,10 @@ const oneTapCallbackBodySchema = z.object({
 		description:
 			"Google ID token, which the client obtains from the One Tap API",
 	}),
-	nonce: z
-		.string()
-		.meta({
-			description:
-				"Nonce issued by /id-token/nonce and passed to Google when the ID token was requested",
-		})
-		.optional(),
+	nonce: z.string().meta({
+		description:
+			"Nonce issued by /one-tap/nonce and passed to Google when the ID token was requested",
+	}),
 	/**
 	 * Sent so the global origin-check middleware validates the post-login
 	 * redirect target against `trustedOrigins`. Without it the client performs
@@ -67,11 +68,39 @@ const oneTapCallbackBodySchema = z.object({
 		.optional(),
 });
 
+const ONE_TAP_NONCE_SCOPE = "one-tap-nonce";
+
 export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
 		version: PACKAGE_VERSION,
 		endpoints: {
+			/**
+			 * ### Endpoint
+			 *
+			 * POST `/one-tap/nonce`
+			 *
+			 * Issues a single-use nonce to pass to Google before requesting the
+			 * One Tap ID token. `/one-tap/callback` consumes it and requires the
+			 * token's `nonce` claim to match.
+			 */
+			oneTapNonce: createAuthEndpoint(
+				"/one-tap/nonce",
+				{
+					method: "POST",
+					metadata: {
+						noStore: true,
+						openapi: {
+							summary: "Issue a One Tap nonce",
+							description:
+								"Issue a single-use nonce to bind a Google One Tap ID token to one sign-in",
+							responses: issuedNonceResponses,
+						},
+					},
+				},
+				async (ctx) =>
+					ctx.json({ nonce: await issueNonce(ctx, ONE_TAP_NONCE_SCOPE) }),
+			),
 			oneTapCallback: createAuthEndpoint(
 				"/one-tap/callback",
 				{
@@ -110,13 +139,11 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 				async (ctx) => {
 					const { idToken, nonce } = ctx.body;
+					await consumeNonce(ctx, ONE_TAP_NONCE_SCOPE, nonce);
 					const googleOAuthProvider = await getAwaitableValue(
 						ctx.context.socialProviders,
 						{ value: "google" },
 					);
-					if (googleOAuthProvider) {
-						await consumeIssuedIdTokenNonce(ctx, googleOAuthProvider, nonce);
-					}
 					const googleProvider =
 						typeof ctx.context.options.socialProviders?.google === "function"
 							? await ctx.context.options.socialProviders?.google()
@@ -137,9 +164,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						token: idToken,
 						audience,
 						nonce,
-					})) as (Partial<GoogleProfile> & { nonce?: unknown }) | null;
-					// A token minted with a nonce must be presented with that nonce.
-					if (!payload || (payload.nonce !== undefined && !nonce)) {
+					})) as Partial<GoogleProfile> | null;
+					if (!payload) {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
