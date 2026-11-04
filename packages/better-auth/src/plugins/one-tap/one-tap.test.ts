@@ -5,6 +5,7 @@ import type { BetterFetch } from "@better-fetch/fetch";
 import type { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import * as z from "zod";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { lastLoginMethod } from "../last-login-method";
@@ -1505,7 +1506,7 @@ describe("oneTapClient nonce", async () => {
 		expect(initConfig(0).nonce).toBe("n".repeat(32));
 	});
 
-	it("requests the nonce from the server the callback uses, without the callback's hooks", async () => {
+	it("requests the nonce from the server the callback uses, without the callback's hooks or schema", async () => {
 		const $fetch = vi.fn(async () => ({
 			data: { nonce: "n".repeat(32) },
 			error: null,
@@ -1525,6 +1526,7 @@ describe("oneTapClient nonce", async () => {
 				baseURL: "https://auth.example.com/api/auth",
 				headers: { "x-tenant": "acme" },
 				onSuccess,
+				output: z.object({ token: z.string() }),
 			},
 		});
 
@@ -1534,9 +1536,19 @@ describe("oneTapClient nonce", async () => {
 				baseURL: "https://auth.example.com/api/auth",
 				headers: { "x-tenant": "acme" },
 				onSuccess: undefined,
+				output: undefined,
 				throw: false,
 			}),
 		);
+	});
+
+	it("opens the prompt when the callback's fetchOptions validate its output", async () => {
+		stubBrowser();
+		await client.oneTap({
+			fetchOptions: { output: z.object({ token: z.string() }) },
+		});
+
+		expect(initConfig(0).nonce).toMatch(/^[a-zA-Z0-9]{32}$/);
 	});
 
 	it("ignores the deprecated nonce option and warns", async () => {

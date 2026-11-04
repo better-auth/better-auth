@@ -297,8 +297,8 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					}
 
 					// The nonce must come from the server the callback reaches, so it
-					// shares the app's request settings (baseURL, headers). The
-					// `onSuccess`/`onError` hooks belong to the sign-in, not to this request.
+					// shares the app's server and transport settings (baseURL, headers).
+					// The request shape, response schemas and hooks belong to the sign-in.
 					const fetchNonce = async () => {
 						const { data, error } = await $fetch<{ nonce: string }>(
 							"/one-tap/nonce",
@@ -306,6 +306,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 								...opts?.fetchOptions,
 								...fetchOptions,
 								method: "POST",
+								body: undefined,
+								query: undefined,
+								params: undefined,
+								output: undefined,
+								errorSchema: undefined,
 								onSuccess: undefined,
 								onError: undefined,
 								// Keeps the `{ data, error }` shape when the app sets `throw: true`.
