@@ -14,6 +14,8 @@ import * as z from "zod";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import {
 	DiscoveryError,
+	decryptOIDCConfig,
+	encryptOIDCConfig,
 	mapDiscoveryErrorToAPIError,
 	validateOIDCEndpointUrls,
 } from "../oidc";
@@ -26,6 +28,7 @@ import {
 } from "../saml";
 import { parseSAMLServiceProviderMetadata } from "../saml/response-binding";
 import type {
+	EncryptedOIDCConfig,
 	Member,
 	OIDCConfig,
 	SAMLConfig,
@@ -973,9 +976,15 @@ export const updateSSOProvider = (options: SSOOptions) => {
 							throw error;
 						}
 
-						const currentOidcConfig = parseAndValidateConfig<OIDCConfig>(
-							existingProvider.oidcConfig,
-							"OIDC",
+						const currentOidcConfig = await decryptOIDCConfig(
+							parseAndValidateConfig<OIDCConfig | EncryptedOIDCConfig>(
+								existingProvider.oidcConfig,
+								"OIDC",
+							),
+							{
+								authSecret: ctx.context.secret,
+								ssoOptions: options ?? {},
+							},
 						);
 
 						const updatedOidcConfig = mergeOIDCConfig(
@@ -1021,7 +1030,12 @@ export const updateSSOProvider = (options: SSOOptions) => {
 							providerIdentityBoundaryChanged = true;
 						}
 
-						updateData.oidcConfig = JSON.stringify(updatedOidcConfig);
+						updateData.oidcConfig = JSON.stringify(
+							await encryptOIDCConfig(updatedOidcConfig, {
+								authSecret: ctx.context.secret,
+								ssoOptions: options ?? {},
+							}),
+						);
 					}
 
 					await guardSSOProviderMutation(
