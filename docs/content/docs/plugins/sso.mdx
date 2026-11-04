@@ -678,9 +678,9 @@ const res = await auth.api.signInSSO({
        */
       callbackURL: string = "https://example.com/callback"
       /**
-       * The URL to redirect to after login. 
+       * The URL to redirect to if sign-in fails, including account linking or signup errors.
        */
-      errorCallbackURL?: string = "https://example.com/callback"
+      errorCallbackURL?: string = "https://example.com/error"
       /**
        * The URL to redirect to after login if the user is new. 
        */
