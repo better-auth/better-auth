@@ -72,7 +72,7 @@ A string uses the plugin defaults. An object sets per-resource policy:
 | `dpopBoundAccessTokensRequired` | Issue only [DPoP](#dpop)-bound tokens for this resource.                                            |
 | `disabled`                      | Stop issuing tokens for this resource. Tokens already issued still verify until they expire.        |
 
-A request for several resources fails with `invalid_request` when their `signingAlgorithm` or `signingKeyId` values differ, because one token carries one signature.
+In a request for several resources, a `signingAlgorithm` or `signingKeyId` set on one of them applies to the whole token, and resources without one do not conflict with it. The request fails with `invalid_request` only when two resources set different values, because one token carries one signature.
 
 Configured resources are written to the `oauthResource` table at startup. `resourceSeedMode` decides what happens to a row that already exists:
 
