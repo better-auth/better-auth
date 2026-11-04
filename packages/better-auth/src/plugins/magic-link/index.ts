@@ -14,6 +14,10 @@ import {
 	revokeUnprovenAccountAccess,
 } from "../../db";
 import { isAPIError } from "../../utils/is-api-error";
+import {
+	findConcurrentlyCreatedUser,
+	reserveUserId,
+} from "../../utils/recover-concurrent-user-create";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
@@ -425,9 +429,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 							let newUser: Awaited<
 								ReturnType<typeof ctx.context.internalAdapter.createUser>
 							> | null;
+							const reservedId = reserveUserId(ctx);
 							try {
 								newUser = await ctx.context.internalAdapter.createUser(
 									{
+										...(reservedId !== undefined && { id: reservedId }),
 										email: email,
 										emailVerified: true,
 										name: name || "",
@@ -437,10 +443,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 							} catch (e) {
 								// The token is already consumed. If a concurrent request created
 								// the user between the lookup and the insert, continue as an
-								// existing user instead of failing.
-								const existingUser = await ctx.context.internalAdapter
-									.findUserByEmail(email)
-									.then((res) => res?.user);
+								// existing user instead of failing. Failures that happen after
+								// our own insert (e.g. an `after` hook) are rethrown.
+								const existingUser = (
+									await findConcurrentlyCreatedUser(ctx, email, reservedId, e)
+								)?.user;
 								if (existingUser) {
 									newUser = null;
 									user = existingUser;

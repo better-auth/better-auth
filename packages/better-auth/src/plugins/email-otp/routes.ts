@@ -19,6 +19,10 @@ import {
 	assertPasswordNotTooShort,
 	resetCredentialPassword,
 } from "../../utils/password";
+import {
+	findConcurrentlyCreatedUser,
+	reserveUserId,
+} from "../../utils/recover-concurrent-user-create";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
@@ -670,10 +674,12 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				let newUser: Awaited<
 					ReturnType<typeof ctx.context.internalAdapter.createUser>
 				> | null = null;
+				const reservedId = reserveUserId(ctx);
 				try {
 					newUser = await ctx.context.internalAdapter.createUser(
 						{
 							...additionalFields,
+							...(reservedId !== undefined && { id: reservedId }),
 							email,
 							emailVerified: true,
 							name: name || "",
@@ -684,8 +690,15 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				} catch (error) {
 					// The OTP is already consumed. If a concurrent request created the
 					// user between the lookup and the insert, continue as an existing
-					// user instead of failing with a unique constraint error.
-					user = await ctx.context.internalAdapter.findUserByEmail(email);
+					// user instead of failing with a unique constraint error. Failures
+					// that happen after our own insert (e.g. an `after` hook) are
+					// rethrown.
+					user = await findConcurrentlyCreatedUser(
+						ctx,
+						email,
+						reservedId,
+						error,
+					);
 					if (!user) {
 						throw error;
 					}
