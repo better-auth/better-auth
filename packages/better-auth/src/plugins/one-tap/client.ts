@@ -297,17 +297,17 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					}
 
 					// The nonce must come from the server the callback reaches, so it
-					// shares the call's server and transport settings (baseURL, headers).
-					// The request shape, response schemas and hooks belong to the sign-in.
-					// Omitted rather than set to undefined, which would also override
-					// the auth client's own hooks.
+					// shares the call's server and transport settings, including
+					// `onRequest`, which may set headers or the URL. The request body,
+					// response schemas and response hooks belong to the sign-in. They are
+					// omitted rather than set to undefined, which would also override the
+					// auth client's own hooks.
 					const {
 						body: _body,
 						query: _query,
 						params: _params,
 						output: _output,
 						errorSchema: _errorSchema,
-						onRequest: _onRequest,
 						onResponse: _onResponse,
 						onSuccess: _onSuccess,
 						onError: _onError,

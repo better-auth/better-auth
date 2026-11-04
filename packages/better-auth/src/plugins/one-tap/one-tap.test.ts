@@ -1507,7 +1507,7 @@ describe("oneTapClient nonce", async () => {
 		expect(initConfig(0).nonce).toBe("n".repeat(32));
 	});
 
-	it("requests the nonce from the server the callback uses, without the callback's hooks or schema", async () => {
+	it("requests the nonce from the server the callback uses, without the callback's response hooks or schema", async () => {
 		const $fetch = vi.fn(async () => ({
 			data: { nonce: "n".repeat(32) },
 			error: null,
@@ -1520,12 +1520,14 @@ describe("oneTapClient nonce", async () => {
 			undefined,
 		);
 		stubBrowser();
+		const onRequest = vi.fn();
 
 		await run({
 			fetchOptions: {
 				baseURL: "https://auth.example.com/api/auth",
 				headers: { "x-tenant": "acme" },
-				onRequest: vi.fn(),
+				onRequest,
+				onResponse: vi.fn(),
 				onSuccess: vi.fn(),
 				output: z.object({ token: z.string() }),
 			},
@@ -1539,18 +1541,19 @@ describe("oneTapClient nonce", async () => {
 		expect(init).toMatchObject({
 			baseURL: "https://auth.example.com/api/auth",
 			headers: { "x-tenant": "acme" },
+			onRequest,
 			throw: false,
 		});
-		for (const key of ["onRequest", "onSuccess", "output"]) {
+		for (const key of ["onResponse", "onSuccess", "output"]) {
 			expect(init).not.toHaveProperty(key);
 		}
 	});
 
 	it("keeps the auth client's own hooks on the nonce request", async () => {
-		const onRequest = vi.fn();
+		const onResponse = vi.fn();
 		const $fetch = createFetch({
 			baseURL: "http://localhost:3000/api/auth",
-			onRequest,
+			onResponse,
 			customFetchImpl: async () => Response.json({ nonce: "n".repeat(32) }),
 		});
 		const { oneTap: run } = oneTapClient({
@@ -1558,9 +1561,9 @@ describe("oneTapClient nonce", async () => {
 		}).getActions($fetch, {} as ClientStore, undefined);
 		stubBrowser();
 
-		await run({ fetchOptions: { onRequest: vi.fn() } });
+		await run({ fetchOptions: { onResponse: vi.fn() } });
 
-		expect(onRequest).toHaveBeenCalledOnce();
+		expect(onResponse).toHaveBeenCalledOnce();
 		expect(initConfig(0).nonce).toBe("n".repeat(32));
 	});
 
