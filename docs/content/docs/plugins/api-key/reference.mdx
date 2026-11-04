@@ -227,7 +227,7 @@ Defer non-critical updates (rate limiting counters, timestamps, remaining count)
 Requires `backgroundTasks.handler` to be configured in the main auth options.
 
 <Callout type="warn">
-  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
+  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Concurrent verifications can be accepted from the same persisted counter snapshot. Policy changes that race an optimistic verification, such as disabling a key or changing its permissions, may take effect on the next verification. Synchronous guarded enforcement is available only for database storage and secondary storage with database fallback. Secondary-storage-only enforcement currently uses a best-effort read-modify-write flow until atomic consumption is implemented. Only enable deferred updates if your application can tolerate this trade-off for improved latency.
 </Callout>
 
 <Tabs items={["Vercel", "Cloudflare Workers"]}>
