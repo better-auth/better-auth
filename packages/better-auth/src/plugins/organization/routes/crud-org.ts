@@ -5,6 +5,7 @@ import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
+import type { Prettify } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -830,7 +831,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				? {
 						members: InferMember<O>[];
 						invitations: InferInvitation<O>[];
-						teams: InferTeam<O>[];
+						teams: Prettify<InferTeam<O> & { members: TeamMember[] }>[];
 					} & InferOrganization<O>
 				: {
 						members: InferMember<O>[];
@@ -971,7 +972,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				? {
 						members: InferMember<O>[];
 						invitations: InferInvitation<O>[];
-						teams: InferTeam<O>[];
+						teams: Prettify<InferTeam<O> & { members: TeamMember[] }>[];
 					} & InferOrganization<O>
 				: {
 						members: InferMember<O>[];
