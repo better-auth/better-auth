@@ -216,11 +216,17 @@ export function assertSAMLIdentityProviderAuthority<
 	});
 }
 
-export function createIdP(config: SAMLConfig) {
+export function createIdP(
+	config: SAMLConfig,
+	opts?: { signLogoutRequests?: boolean; signLogoutResponses?: boolean },
+) {
 	assertSAMLIdentityProviderAuthority(config);
 	const idpData = config.idpMetadata;
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
+			// samlify uses the target entity's requirements to sign outgoing messages.
+			wantLogoutRequestSigned: opts?.signLogoutRequests ?? false,
+			wantLogoutResponseSigned: opts?.signLogoutResponses ?? false,
 			metadata: idpData.metadata,
 			privateKey: normalizePem(idpData.privateKey),
 			privateKeyPass: idpData.privateKeyPass,
@@ -230,6 +236,9 @@ export function createIdP(config: SAMLConfig) {
 		});
 	}
 	return saml.IdentityProvider({
+		// samlify uses the target entity's requirements to sign outgoing messages.
+		wantLogoutRequestSigned: opts?.signLogoutRequests ?? false,
+		wantLogoutResponseSigned: opts?.signLogoutResponses ?? false,
 		entityID: idpData.entityID,
 		singleSignOnService: idpData.singleSignOnService || [
 			{
