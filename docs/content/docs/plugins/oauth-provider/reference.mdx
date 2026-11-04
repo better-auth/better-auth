@@ -11,14 +11,29 @@ Pass these options to `oauthProvider()`. Only `loginPage` and `consentPage` are 
 
 ### Sign-in flow
 
-| Option                      | Type      | Default | Description                                                                                                                                                                                                                                                                      |
-| --------------------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loginPage`                 | `string`  | —       | Required. Page the authorize endpoint redirects to when the user must sign in. See [Login page](/docs/plugins/oauth-provider/sign-in-flow#login-page).                                                                                                                           |
-| `consentPage`               | `string`  | —       | Required. Page the authorize endpoint redirects to when the user must consent. See [Consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page).                                                                                                                       |
-| `signup`                    | `object`  | —       | Settings for `prompt=create`. See [Sign-up account screen](/docs/plugins/oauth-provider/sign-in-flow#sign-up-account-screen).                                                                                                                                                    |
-| `selectAccount`             | `object`  | —       | Settings for `prompt=select_account`. See [Select account screen](/docs/plugins/oauth-provider/sign-in-flow#select-account-screen).                                                                                                                                              |
-| `postLogin`                 | `object`  | —       | A step between login and consent, such as choosing an organization. See [Post-login screen](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen).                                                                                                                        |
-| `allowPublicClientPrelogin` | `boolean` | `false` | Lets `/oauth2/public-client-prelogin` answer before sign-in when the request carries a valid signed `oauth_query`. The signed query does not limit which `client_id` is read, so every enabled client's public fields, including `contacts`, become readable without an account. |
+`loginPage` <span className="opacity-70">`string`</span>
+
+Required. Page the authorize endpoint redirects to when the user must sign in. See [Login page](/docs/plugins/oauth-provider/sign-in-flow#login-page).
+
+`consentPage` <span className="opacity-70">`string`</span>
+
+Required. Page the authorize endpoint redirects to when the user must consent. See [Consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page).
+
+`signup` <span className="opacity-70">`object`</span>
+
+Settings for `prompt=create`. See [Sign-up account screen](/docs/plugins/oauth-provider/sign-in-flow#sign-up-account-screen).
+
+`selectAccount` <span className="opacity-70">`object`</span>
+
+Settings for `prompt=select_account`. See [Select account screen](/docs/plugins/oauth-provider/sign-in-flow#select-account-screen).
+
+`postLogin` <span className="opacity-70">`object`</span>
+
+A step between login and consent, such as choosing an organization. See [Post-login screen](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen).
+
+`allowPublicClientPrelogin` <span className="opacity-70">`boolean`</span>
+
+Lets `/oauth2/public-client-prelogin` answer before sign-in when the request carries a valid signed `oauth_query`. The signed query does not limit which `client_id` is read, so every enabled client's public fields, including `contacts`, become readable without an account. Defaults to `false`.
 
 <Accordions>
   <Accordion title="signup options">
@@ -58,48 +73,129 @@ Pass these options to `oauthProvider()`. Only `loginPage` and `consentPage` are 
 
 ### Scopes and claims
 
-| Option                      | Type                                           | Default                                            | Description                                                                                                                                                                                                              |
-| --------------------------- | ---------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scopes`                    | `string[]`                                     | `["openid", "profile", "email", "offline_access"]` | Scopes clients may request. Without `openid`, the provider is OAuth only. See [Scopes](/docs/plugins/oauth-provider/tokens#scopes).                                                                                      |
-| `advertisedMetadata`        | `{ scopes_supported?, claims_supported? }`     | —                                                  | Overrides what discovery advertises. Every `scopes_supported` value must be in `scopes`. See [Discovery metadata](/docs/plugins/oauth-provider/openid-connect#discovery-metadata).                                       |
-| `customAccessTokenClaims`   | `(info) => Awaitable<Record<string, any>>`     | —                                                  | Adds access token claims, also returned by introspection. See [Custom claims](/docs/plugins/oauth-provider/tokens#custom-claims).                                                                                        |
-| `customIdTokenClaims`       | `(info) => Awaitable<Record<string, any>>`     | —                                                  | Adds ID token claims. Reserved names are stripped. See [ID token claims](/docs/plugins/oauth-provider/openid-connect#id-token-claims).                                                                                   |
-| `customUserInfoClaims`      | `(info) => Awaitable<Record<string, any>>`     | —                                                  | Adds UserInfo claims. See [UserInfo](/docs/plugins/oauth-provider/openid-connect#userinfo).                                                                                                                              |
-| `customTokenResponseFields` | `(info) => Awaitable<Record<string, unknown>>` | —                                                  | Adds fields to the token response body. Standard fields cannot be overridden. See [Custom token response fields](/docs/plugins/oauth-provider/tokens#custom-token-response-fields).                                      |
-| `pairwiseSecret`            | `string`                                       | —                                                  | Enables pairwise `sub` values for clients with `subject_type: "pairwise"`. Must be at least 32 characters. See [Pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers). |
+`scopes` <span className="opacity-70">`string[]`</span>
+
+Scopes clients may request. Without `openid`, the provider is OAuth only. Defaults to `["openid", "profile", "email", "offline_access"]`. See [Scopes](/docs/plugins/oauth-provider/tokens#scopes).
+
+`advertisedMetadata` <span className="opacity-70">`{ scopes_supported?, claims_supported? }`</span>
+
+Overrides what discovery advertises. Every `scopes_supported` value must be in `scopes`. See [Discovery metadata](/docs/plugins/oauth-provider/openid-connect#discovery-metadata).
+
+`customAccessTokenClaims` <span className="opacity-70">`(info) => Awaitable<Record<string, any>>`</span>
+
+Adds access token claims, also returned by introspection. See [Custom claims](/docs/plugins/oauth-provider/tokens#custom-claims).
+
+`customIdTokenClaims` <span className="opacity-70">`(info) => Awaitable<Record<string, any>>`</span>
+
+Adds ID token claims. Reserved names are stripped. See [ID token claims](/docs/plugins/oauth-provider/openid-connect#id-token-claims).
+
+`customUserInfoClaims` <span className="opacity-70">`(info) => Awaitable<Record<string, any>>`</span>
+
+Adds UserInfo claims. See [UserInfo](/docs/plugins/oauth-provider/openid-connect#userinfo).
+
+`customTokenResponseFields` <span className="opacity-70">`(info) => Awaitable<Record<string, unknown>>`</span>
+
+Adds fields to the token response body. Standard fields cannot be overridden. See [Custom token response fields](/docs/plugins/oauth-provider/tokens#custom-token-response-fields).
+
+`pairwiseSecret` <span className="opacity-70">`string`</span>
+
+Enables pairwise `sub` values for clients with `subject_type: "pairwise"`. Must be at least 32 characters. See [Pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers).
 
 ### Clients and registration
 
-| Option                                     | Type                                                         | Default                                                         | Description                                                                                                                                                                                                                                                      |
-| ------------------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `grantTypes`                               | `GrantType[]`                                                | `["authorization_code", "client_credentials", "refresh_token"]` | Grants the token endpoint accepts. `refresh_token` requires `authorization_code`. Extension grants are added on top.                                                                                                                                             |
-| `validateRedirectUri`                      | `(uri, registeredUris, defaultResult) => Awaitable<boolean>` | —                                                               | Replaces exact redirect URI matching. See [Custom redirect URI validation](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).                                                                                                                 |
-| `cachedTrustedClients`                     | `Set<string>`                                                | —                                                               | Client IDs to cache. Cached clients cannot be changed through the CRUD endpoints. See [Trusted clients](/docs/plugins/oauth-provider/clients#trusted-clients).                                                                                                   |
-| `clientPrivileges`                         | `(context) => Awaitable<boolean \| undefined>`               | —                                                               | Authorizes client actions: `create`, `read`, `update`, `delete`, `list`, `rotate`, and `configure-client-credentials-scopes`. See [Client CRUD privileges](/docs/plugins/oauth-provider/clients#client-crud-privileges).                                         |
-| `clientReference`                          | `(context) => Awaitable<string \| undefined>`                | —                                                               | Returns the owner reference, such as an organization ID, for new clients. See [Organizations](/docs/plugins/oauth-provider/clients#organizations).                                                                                                               |
-| `allowDynamicClientRegistration`           | `boolean`                                                    | `false`                                                         | Enables `POST /oauth2/register`. See [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).                                                                                                                            |
-| `allowUnauthenticatedClientRegistration`   | `boolean`                                                    | `false`                                                         | Accepts registration requests without a session.                                                                                                                                                                                                                 |
-| `validateInitialAccessToken`               | `(context) => Awaitable<{ referenceId? } \| false>`          | —                                                               | Enables registration with an initial access token ([RFC 7591 §3](https://datatracker.ietf.org/doc/html/rfc7591#section-3)).                                                                                                                                      |
-| `clientRegistrationDefaultScopes`          | `string[]`                                                   | `scopes`                                                        | Scopes stored on every dynamically registered client.                                                                                                                                                                                                            |
-| `clientRegistrationAllowedScopes`          | `string[]`                                                   | `[]`                                                            | Extra scopes a registration may ask for. Every value must be in `scopes`.                                                                                                                                                                                        |
-| `clientRegistrationRequirePKCE`            | `boolean`                                                    | `true`                                                          | Whether dynamically registered confidential clients require PKCE. See [PKCE](/docs/plugins/oauth-provider/tokens#pkce).                                                                                                                                          |
-| `clientRegistrationDefaultApplicationType` | `"web" \| "native" \| "infer"`                               | `"web"`                                                         | `application_type` used when a registration omits it.                                                                                                                                                                                                            |
-| `clientRegistrationClientSecretExpiration` | `number \| string \| Date`                                   | No expiry                                                       | Lifetime of secrets issued to dynamically registered confidential clients.                                                                                                                                                                                       |
-| `clientRegistrationDefaultResources`       | `string[]`                                                   | —                                                               | Resources linked to every newly registered client. Each must be in `resources`.                                                                                                                                                                                  |
-| `clientRegistrationAllowedResources`       | `string[]`                                                   | —                                                               | Resources a registration may request. Each must be in `resources`. When both resource options are omitted, requested resources are rejected.                                                                                                                     |
-| `assertionMaxLifetime`                     | `number`                                                     | `300`                                                           | Maximum lifetime in seconds of a `private_key_jwt` assertion. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).                                                                                                                       |
-| `allowClientKeyRotation`                   | `boolean`                                                    | `false`                                                         | Enables `POST /oauth2/client/rotate-keys`. Startup fails on the memory adapter or with `advanced.database.generateId: "serial"`, which cannot keep assertions single-use. See [Rotating client keys](/docs/plugins/oauth-provider/clients#rotating-client-keys). |
+`grantTypes` <span className="opacity-70">`GrantType[]`</span>
+
+Grants the token endpoint accepts. `refresh_token` requires `authorization_code`. Extension grants are added on top. Defaults to `["authorization_code", "client_credentials", "refresh_token"]`.
+
+`validateRedirectUri` <span className="opacity-70">`(uri, registeredUris, defaultResult) => Awaitable<boolean>`</span>
+
+Replaces exact redirect URI matching. See [Custom redirect URI validation](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).
+
+`cachedTrustedClients` <span className="opacity-70">`Set<string>`</span>
+
+Client IDs to cache. Cached clients cannot be changed through the CRUD endpoints. See [Trusted clients](/docs/plugins/oauth-provider/clients#trusted-clients).
+
+`clientPrivileges` <span className="opacity-70">`(context) => Awaitable<boolean | undefined>`</span>
+
+Authorizes client actions: `create`, `read`, `update`, `delete`, `list`, `rotate`, and `configure-client-credentials-scopes`. See [Client CRUD privileges](/docs/plugins/oauth-provider/clients#client-crud-privileges).
+
+`clientReference` <span className="opacity-70">`(context) => Awaitable<string | undefined>`</span>
+
+Returns the owner reference, such as an organization ID, for new clients. See [Organizations](/docs/plugins/oauth-provider/clients#organizations).
+
+`allowDynamicClientRegistration` <span className="opacity-70">`boolean`</span>
+
+Enables `POST /oauth2/register`. Defaults to `false`. See [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
+
+`allowUnauthenticatedClientRegistration` <span className="opacity-70">`boolean`</span>
+
+Accepts registration requests without a session. Defaults to `false`.
+
+`validateInitialAccessToken` <span className="opacity-70">`(context) => Awaitable<{ referenceId? } | false>`</span>
+
+Enables registration with an initial access token ([RFC 7591 §3](https://datatracker.ietf.org/doc/html/rfc7591#section-3)).
+
+`clientRegistrationDefaultScopes` <span className="opacity-70">`string[]`</span>
+
+Scopes stored on every dynamically registered client. Defaults to `scopes`.
+
+`clientRegistrationAllowedScopes` <span className="opacity-70">`string[]`</span>
+
+Extra scopes a registration may ask for. Every value must be in `scopes`. Defaults to `[]`.
+
+`clientRegistrationRequirePKCE` <span className="opacity-70">`boolean`</span>
+
+Whether dynamically registered confidential clients require PKCE. Defaults to `true`. See [PKCE](/docs/plugins/oauth-provider/tokens#pkce).
+
+`clientRegistrationDefaultApplicationType` <span className="opacity-70">`"web" | "native" | "infer"`</span>
+
+`application_type` used when a registration omits it. Defaults to `"web"`.
+
+`clientRegistrationClientSecretExpiration` <span className="opacity-70">`number | string | Date`</span>
+
+Lifetime of secrets issued to dynamically registered confidential clients. Defaults to no expiry.
+
+`clientRegistrationDefaultResources` <span className="opacity-70">`string[]`</span>
+
+Resources linked to every new client, including CIMD and admin-created clients. Each must be in `resources`.
+
+`clientRegistrationAllowedResources` <span className="opacity-70">`string[]`</span>
+
+Resources a registration may request. Each must be in `resources`. When both resource options are omitted, requested resources are rejected.
+
+`assertionMaxLifetime` <span className="opacity-70">`number`</span>
+
+Maximum lifetime in seconds of a `private_key_jwt` assertion. Defaults to `300`. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
+
+`allowClientKeyRotation` <span className="opacity-70">`boolean`</span>
+
+Enables `POST /oauth2/client/rotate-keys`. Startup fails on the memory adapter or with `advanced.database.generateId: "serial"`, which cannot keep assertions single-use. Defaults to `false`. See [Rotating client keys](/docs/plugins/oauth-provider/clients#rotating-client-keys).
 
 ### Resources
 
-| Option                      | Type                                           | Default        | Description                                                                                                                                                                                                  |
-| --------------------------- | ---------------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `resources`                 | `Array<string \| OAuthResourceInput>`          | —              | Protected resources seeded into `oauthResource` at startup. See [Resources](/docs/plugins/oauth-provider/tokens#resources).                                                                                  |
-| `resourceSeedMode`          | `"insertOnly" \| "merge" \| "overwrite"`       | `"insertOnly"` | How seeding treats existing rows: skip them, update only the configured fields, or replace them.                                                                                                             |
-| `enforcePerClientResources` | `boolean`                                      | `true`         | Requires a client to be linked to every `resource` it requests ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)).                                                                     |
-| `cachedResources`           | `Set<string>`                                  | —              | Resource identifiers to cache. Writes through the admin endpoints invalidate the cache.                                                                                                                      |
-| `identifierValidator`       | `(identifier) => Awaitable<boolean>`           | RFC 8707 check | Validates identifiers created through the admin endpoints or registration. The default requires an absolute URI without a fragment ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). |
-| `resourcePrivileges`        | `(context) => Awaitable<boolean \| undefined>` | —              | Authorizes resource actions: `create`, `read`, `update`, `delete`, `list`, `link`, and `unlink`.                                                                                                             |
+`resources` <span className="opacity-70">`Array<string | OAuthResourceInput>`</span>
+
+Protected resources seeded into `oauthResource` at startup. See [Resources](/docs/plugins/oauth-provider/tokens#resources).
+
+`resourceSeedMode` <span className="opacity-70">`"insertOnly" | "merge" | "overwrite"`</span>
+
+How seeding treats existing rows: skip them, update only the configured fields, or replace them. Defaults to `"insertOnly"`.
+
+`enforcePerClientResources` <span className="opacity-70">`boolean`</span>
+
+Requires a client to be linked to every `resource` it requests ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). Defaults to `true`.
+
+`cachedResources` <span className="opacity-70">`Set<string>`</span>
+
+Resource identifiers to cache. Writes through the admin endpoints invalidate the cache.
+
+`identifierValidator` <span className="opacity-70">`(identifier) => Awaitable<boolean>`</span>
+
+Validates identifiers created through the admin endpoints or registration. The default requires an absolute URI without a fragment ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)).
+
+`resourcePrivileges` <span className="opacity-70">`(context) => Awaitable<boolean | undefined>`</span>
+
+Authorizes resource actions: `create`, `read`, `update`, `delete`, `list`, `link`, and `unlink`.
 
 <Callout type="warn">
   Without `resourcePrivileges`, any signed-in user whose headers reach the admin resource endpoints can manage resources. Define it before calling those endpoints from a route.
@@ -107,39 +203,93 @@ Pass these options to `oauthProvider()`. Only `loginPage` and `consentPage` are 
 
 ### Tokens
 
-| Option                      | Type                                                 | Default                                                | Description                                                                                                                                                                                                 |
-| --------------------------- | ---------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `accessTokenExpiresIn`      | `number`                                             | `3600`                                                 | Access token lifetime in seconds. See [Lifetimes](/docs/plugins/oauth-provider/tokens#lifetimes).                                                                                                           |
-| `m2mAccessTokenExpiresIn`   | `number`                                             | `3600`                                                 | Lifetime in seconds of `client_credentials` access tokens.                                                                                                                                                  |
-| `idTokenExpiresIn`          | `number`                                             | `36000`                                                | ID token lifetime in seconds.                                                                                                                                                                               |
-| `refreshTokenExpiresIn`     | `number`                                             | `2592000`                                              | Refresh token lifetime in seconds.                                                                                                                                                                          |
-| `codeExpiresIn`             | `number`                                             | `600`                                                  | Authorization code lifetime in seconds.                                                                                                                                                                     |
-| `scopeExpirations`          | `Record<scope, number \| string \| Date>`            | —                                                      | Shorter access token lifetimes per scope. The earliest expiry wins.                                                                                                                                         |
-| `refreshTokenReuseInterval` | `number`                                             | `0`                                                    | Seconds a rotated refresh token can replay the same response. See [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).                                                                     |
-| `formatRefreshToken`        | `{ encrypt, decrypt }`                               | —                                                      | Custom refresh token encoding sent to clients.                                                                                                                                                              |
-| `disableJwtPlugin`          | `boolean`                                            | `false`                                                | Issues opaque access tokens and HS256 ID tokens. See [Without the JWT plugin](/docs/plugins/oauth-provider/tokens#without-the-jwt-plugin).                                                                  |
-| `dpop`                      | `{ proofMaxAgeSeconds?, signingAlgorithms? }`        | `300`, `["EdDSA", "ES256", "ES512", "PS256", "RS256"]` | DPoP proof validation. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).                                                                                                                                |
-| `requestUriResolver`        | `(input) => Promise<Record<string, string> \| null>` | —                                                      | Resolves a `request_uri` at the authorize endpoint for pushed authorization requests ([RFC 9126 §4](https://datatracker.ietf.org/doc/html/rfc9126#section-4)). Return `null` for an unknown or expired URI. |
+`accessTokenExpiresIn` <span className="opacity-70">`number`</span>
+
+Access token lifetime in seconds. Defaults to `3600`. See [Lifetimes](/docs/plugins/oauth-provider/tokens#lifetimes).
+
+`m2mAccessTokenExpiresIn` <span className="opacity-70">`number`</span>
+
+Lifetime in seconds of `client_credentials` access tokens. Defaults to `3600`.
+
+`idTokenExpiresIn` <span className="opacity-70">`number`</span>
+
+ID token lifetime in seconds. Defaults to `36000`.
+
+`refreshTokenExpiresIn` <span className="opacity-70">`number`</span>
+
+Refresh token lifetime in seconds. Defaults to `2592000`.
+
+`codeExpiresIn` <span className="opacity-70">`number`</span>
+
+Authorization code lifetime in seconds. Defaults to `600`.
+
+`scopeExpirations` <span className="opacity-70">`Record<scope, number | string | Date>`</span>
+
+Shorter access token lifetimes per scope. The earliest expiry wins.
+
+`refreshTokenReuseInterval` <span className="opacity-70">`number`</span>
+
+Seconds a rotated refresh token can replay the same response. Defaults to `0`. See [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
+
+`formatRefreshToken` <span className="opacity-70">`{ encrypt, decrypt }`</span>
+
+Custom refresh token encoding sent to clients.
+
+`disableJwtPlugin` <span className="opacity-70">`boolean`</span>
+
+Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Without the JWT plugin](/docs/plugins/oauth-provider/tokens#without-the-jwt-plugin).
+
+`dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms? }`</span>
+
+DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
+
+`requestUriResolver` <span className="opacity-70">`(input) => Promise<Record<string, string> | null>`</span>
+
+Resolves a `request_uri` at the authorize endpoint for pushed authorization requests ([RFC 9126 §4](https://datatracker.ietf.org/doc/html/rfc9126#section-4)). Return `null` for an unknown or expired URI.
 
 ### Storage and generation
 
-| Option                      | Type                                                                   | Default                                              | Description                                                                                                                                                         |
-| --------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storeClientSecret`         | `"hashed" \| "encrypted" \| { hash, verify? } \| { encrypt, decrypt }` | `"hashed"`, or `"encrypted"` with `disableJwtPlugin` | How client secrets are stored. Hashing requires the JWT plugin; encryption requires `disableJwtPlugin`. See [Storage](/docs/plugins/oauth-provider/tokens#storage). |
-| `storeTokens`               | `"hashed" \| { hash }`                                                 | `"hashed"`                                           | How opaque access tokens and refresh tokens are stored.                                                                                                             |
-| `prefix`                    | `{ opaqueAccessToken?, refreshToken?, clientSecret? }`                 | —                                                    | Prefixes added to returned values and not stored. Set them before your first deployment; after that, add the prefix in the matching `generate*` function instead.   |
-| `generateClientId`          | `() => string`                                                         | 32 random letters                                    | Generates client IDs.                                                                                                                                               |
-| `generateClientSecret`      | `() => string`                                                         | 32 random letters                                    | Generates client secrets.                                                                                                                                           |
-| `generateOpaqueAccessToken` | `() => Awaitable<string>`                                              | 32 random letters                                    | Generates opaque access tokens.                                                                                                                                     |
-| `generateRefreshToken`      | `() => Awaitable<string>`                                              | 32 random letters                                    | Generates refresh tokens.                                                                                                                                           |
+`storeClientSecret` <span className="opacity-70">`"hashed" | "encrypted" | { hash, verify? } | { encrypt, decrypt }`</span>
+
+How client secrets are stored. Hashing requires the JWT plugin; encryption requires `disableJwtPlugin`. Defaults to `"hashed"`, or `"encrypted"` with `disableJwtPlugin`. See [Storage](/docs/plugins/oauth-provider/tokens#storage).
+
+`storeTokens` <span className="opacity-70">`"hashed" | { hash }`</span>
+
+How opaque access tokens and refresh tokens are stored. Defaults to `"hashed"`.
+
+`prefix` <span className="opacity-70">`{ opaqueAccessToken?, refreshToken?, clientSecret? }`</span>
+
+Prefixes added to returned values and not stored. Set them before your first deployment; after that, add the prefix in the matching `generate*` function instead.
+
+`generateClientId` <span className="opacity-70">`() => string`</span>
+
+Generates client IDs. Defaults to 32 random letters.
+
+`generateClientSecret` <span className="opacity-70">`() => string`</span>
+
+Generates client secrets. Defaults to 32 random letters.
+
+`generateOpaqueAccessToken` <span className="opacity-70">`() => Awaitable<string>`</span>
+
+Generates opaque access tokens. Defaults to 32 random letters.
+
+`generateRefreshToken` <span className="opacity-70">`() => Awaitable<string>`</span>
+
+Generates refresh tokens. Defaults to 32 random letters.
 
 ### Other
 
-| Option       | Type                       | Default                         | Description                                                                                                                  |
-| ------------ | -------------------------- | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `rateLimit`  | `object`                   | See [Rate limits](#rate-limits) | Per-endpoint rate limits.                                                                                                    |
-| `extensions` | `OAuthProviderExtension[]` | —                               | Companion extensions. Plugins usually call `extendOAuthProvider()` instead. See [Provider extensions](#provider-extensions). |
-| `schema`     | `object`                   | —                               | Custom model and field names for the plugin tables.                                                                          |
+`rateLimit` <span className="opacity-70">`object`</span>
+
+Per-endpoint rate limits. For the defaults, see [Rate limits](#rate-limits).
+
+`extensions` <span className="opacity-70">`OAuthProviderExtension[]`</span>
+
+Companion extensions. Plugins usually call `extendOAuthProvider()` instead. See [Provider extensions](#provider-extensions).
+
+`schema` <span className="opacity-70">`object`</span>
+
+Custom model and field names for the plugin tables.
 
 ## Endpoints
 
