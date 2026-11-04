@@ -101,7 +101,7 @@ await auth.api.adminLinkClientResource({
 });
 ```
 
-Deleting a resource makes introspection report its tokens as inactive, while `disabled: true` only stops new issuance. An API that verifies JWTs locally with the JWKS keeps accepting them until they expire. To attach resources during dynamic registration, see [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
+Deleting a resource makes introspection report its tokens as inactive, while `disabled: true` only stops new issuance. An API that verifies JWTs locally with the JWKS keeps accepting them until they expire; use [introspection](/docs/plugins/oauth-provider/resource-server#introspection) when deletion must cut off access immediately. To attach resources during dynamic registration, see [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
 
 <Callout type="warn">
   With Prisma on PostgreSQL, CockroachDB, or MongoDB, a resource without `allowedScopes` cannot be stored, because Prisma cannot write `null` to a list column. Requests that use any configured resource fail until every resource declares `allowedScopes`. For the resource the [MCP plugin](/docs/plugins/mcp) adds, declare it in `resources` with the same identifier.

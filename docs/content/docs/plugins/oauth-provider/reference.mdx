@@ -161,8 +161,8 @@ Paths are relative to your auth base path. "Server-only" endpoints are callable 
 | `GET` `POST` | `/oauth2/end-session`                                    | `oauth2EndSession`             | `id_token_hint`, or user confirmation                  | No          |
 | `POST`       | `/oauth2/end-session/confirm`                            | —                              | Signed confirmation cookie                             | HTTP only   |
 | `POST`       | `/oauth2/register`                                       | `registerOAuthClient`          | Session, initial access token, or none                 | No          |
-| `POST`       | `/admin/oauth2/create-client`                            | `adminCreateOAuthClient`       | Server                                                 | Yes         |
-| `PATCH`      | `/admin/oauth2/update-client`                            | `adminUpdateOAuthClient`       | Server                                                 | Yes         |
+| `POST`       | `/admin/oauth2/create-client`                            | `adminCreateOAuthClient`       | Server, with a session                                 | Yes         |
+| `PATCH`      | `/admin/oauth2/update-client`                            | `adminUpdateOAuthClient`       | Server, with a session                                 | Yes         |
 | `POST`       | `/oauth2/create-client`                                  | `createOAuthClient`            | Session                                                | No          |
 | `GET`        | `/oauth2/get-client`                                     | `getOAuthClient`               | Session                                                | No          |
 | `GET`        | `/oauth2/public-client`                                  | `getOAuthClientPublic`         | Session                                                | No          |

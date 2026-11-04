@@ -342,7 +342,7 @@ import { createMcpProtectedRequestHandler } from "@better-auth/mcp"; // [!code h
 
 const handler = createMcpProtectedRequestHandler( // [!code highlight]
     {
-        issuer: "https://auth.example.com",
+        issuer: "https://auth.example.com/api/auth",
         audience: "https://api.example.com/mcp",
         jwksUrl: "https://auth.example.com/api/auth/jwks",
     },

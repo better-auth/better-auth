@@ -21,7 +21,7 @@ export const GET = async (req: Request) => {
   const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
     jwksUrl: "https://auth.example.com/api/auth/jwks",
     verifyOptions: {
-      issuer: "https://auth.example.com",
+      issuer: "https://auth.example.com/api/auth",
       audience: "https://api.example.com",
     },
     requiredScopes: ["read:post"],
@@ -66,7 +66,7 @@ To accept opaque tokens as well, register the API as a confidential client, [lin
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
-  verifyOptions: { issuer: "https://auth.example.com", audience: "https://api.example.com" },
+  verifyOptions: { issuer: "https://auth.example.com/api/auth", audience: "https://api.example.com" },
   jwksUrl: "https://auth.example.com/api/auth/jwks",
   remoteVerify: {
     introspectUrl: "https://auth.example.com/api/auth/oauth2/introspect",
