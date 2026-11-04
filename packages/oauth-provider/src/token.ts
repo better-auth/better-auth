@@ -13,7 +13,7 @@ import {
 	verifyDpopProof,
 } from "better-auth/oauth2";
 import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
-import type { Session, User } from "better-auth/types";
+import type { User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
 import {
@@ -55,6 +55,7 @@ import {
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
+	findLiveSession,
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
@@ -708,6 +709,7 @@ async function createRefreshToken(
 type CreateUserTokensParams = OAuthTokenIssueParams & {
 	grantType: GrantType;
 	authorizationCodeId?: string;
+	sessionEnded?: boolean;
 };
 
 interface ResourceGrantIssuance {
@@ -1140,6 +1142,16 @@ async function createUserTokens(
 	});
 	const audienceClaim = grantIssuance.audienceClaim;
 	const effectiveScopes = grantIssuance.effectiveScopes;
+	// A session-bound refresh token without `offline_access`, or one that drops
+	// it (by scope request or by a resource allowlist), ends with the session,
+	// as it does on sign-out. Refuse before any write so the parent row stays
+	// valid.
+	if (params.sessionEnded && !effectiveScopes.includes("offline_access")) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 	const exp = grantIssuance.accessTokenExpiresAtSeconds;
 	const refreshTokenExp = grantIssuance.refreshTokenExpiresAtSeconds;
 	// Only mint a refresh token when the client may use refresh tokens.
@@ -1651,16 +1663,8 @@ async function handleAuthorizationCodeGrant(
 	}
 
 	// Check if session used is still active
-	const session = await ctx.context.adapter.findOne<Session>({
-		model: "session",
-		where: [
-			{
-				field: "id",
-				value: verificationValue.sessionId,
-			},
-		],
-	});
-	if (!session || session.expiresAt < new Date()) {
+	const session = await findLiveSession(ctx, verificationValue.sessionId);
+	if (!session) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session no longer exists",
 			error: "invalid_request",
@@ -1954,6 +1958,14 @@ async function handleRefreshTokenGrant(
 			? normalizeTimestampValue(refreshToken.authTime)
 			: undefined;
 
+	// OIDC Back-Channel Logout §2.7: only an `offline_access` grant outlives its
+	// session. Detach it from an ended session instead of stamping a dead `sid`;
+	// createUserTokens refuses the detachment when the effective scopes lack
+	// `offline_access`.
+	const session = refreshToken.sessionId
+		? await findLiveSession(ctx, refreshToken.sessionId)
+		: null;
+
 	// Generate new tokens
 	return createUserTokens(ctx, opts, {
 		client,
@@ -1962,7 +1974,8 @@ async function handleRefreshTokenGrant(
 		grantType: "refresh_token",
 		referenceId: refreshToken.referenceId,
 		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: refreshToken.sessionId,
+		sessionId: session?.id,
+		sessionEnded: Boolean(refreshToken.sessionId) && !session,
 		refreshToken,
 		resources: resources ?? refreshToken.resources,
 		authTime,

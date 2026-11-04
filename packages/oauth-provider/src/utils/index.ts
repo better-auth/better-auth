@@ -10,6 +10,7 @@ import {
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
+import type { Session } from "better-auth/types";
 import { APIError } from "better-call";
 import { errors as joseErrors } from "jose";
 import {
@@ -204,6 +205,26 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
 		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
 	);
+}
+
+/**
+ * Finds the session row when it exists and has not expired. An expired row
+ * that is still in the table counts as ended.
+ *
+ * @internal
+ */
+export async function findLiveSession(
+	ctx: GenericEndpointContext,
+	sessionId: string,
+) {
+	const session = await ctx.context.adapter.findOne<Session>({
+		model: "session",
+		where: [{ field: "id", value: sessionId }],
+	});
+	if (!session || session.expiresAt < new Date()) {
+		return null;
+	}
+	return session;
 }
 
 /**
