@@ -75,6 +75,39 @@ describe("device approval session authority", () => {
 		});
 		expect(stored?.status).toBe("pending");
 	});
+
+	it("does not deny a claimed code after the session is revoked", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			auth.api.deviceDeny({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
 });
 
 describe("device authorization plugin input validation", () => {
