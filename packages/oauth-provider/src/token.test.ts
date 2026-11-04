@@ -2153,6 +2153,335 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	});
 });
 
+/**
+ * Reuse detection (RFC 9700 §4.14) tears the refresh-token family down in
+ * several statements. One failed statement must not leave the rotated
+ * successor redeemable or its access token active.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11629
+ */
+describe("oauth token - refresh_token family invalidation", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				refreshTokenReuseInterval: 0,
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/test`;
+	async function createOAuthClient() {
+		const response = await authorizationServer.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		if (!response?.client_id || !response.client_secret) {
+			throw new Error("client registration failed");
+		}
+		return {
+			clientId: response.client_id,
+			clientSecret: response.client_secret,
+		};
+	}
+
+	type TestClient = Awaited<ReturnType<typeof createOAuthClient>>;
+
+	async function refresh(oauthClient: TestClient, refreshToken: string) {
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: {
+				clientId: oauthClient.clientId,
+				clientSecret: oauthClient.clientSecret,
+				redirectURI: redirectUri,
+			},
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+	async function rotateOnce(oauthClient: TestClient) {
+		const codeVerifier = generateRandomString(32);
+		const authUrl = await createAuthorizationURL({
+			id: "test",
+			options: {
+				clientId: oauthClient.clientId,
+				clientSecret: oauthClient.clientSecret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const { body, headers } = await authorizationCodeRequest({
+			code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.clientId,
+				clientSecret: oauthClient.clientSecret,
+				redirectURI: redirectUri,
+			},
+		});
+		const initial = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+		expect(initial.data?.refresh_token).toBeDefined();
+
+		const rotated = await refresh(oauthClient, initial.data!.refresh_token!);
+		expect(rotated.error).toBeNull();
+		expect(rotated.data?.refresh_token).toBeDefined();
+		expect(rotated.data?.access_token).toBeDefined();
+		return {
+			r0: initial.data!.refresh_token!,
+			a0: initial.data!.access_token!,
+			r1: rotated.data!.refresh_token!,
+			a1: rotated.data!.access_token!,
+		};
+	}
+
+	function introspect(oauthClient: TestClient, accessToken: string) {
+		return client.oauth2.introspect(
+			{
+				client_id: oauthClient.clientId,
+				client_secret: oauthClient.clientSecret,
+				token: accessToken,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+	}
+
+	/**
+	 * Runs `request` while the first adapter `deleteMany` against `model` throws,
+	 * as one failed statement partway through family invalidation would. Every
+	 * other adapter call goes through unchanged.
+	 */
+	async function withFailingDeleteMany<T>(
+		model: "oauthAccessToken" | "oauthRefreshToken",
+		request: () => Promise<T>,
+	) {
+		const context = await authorizationServer.$context;
+		const deleteMany = context.adapter.deleteMany.bind(context.adapter);
+		let failed = false;
+		const spy = vi
+			.spyOn(context.adapter, "deleteMany")
+			.mockImplementation(async (data) => {
+				if (!failed && data.model === model) {
+					failed = true;
+					throw new Error(`${model} delete failed`);
+				}
+				return deleteMany(data);
+			});
+		try {
+			const result = await request();
+			expect(failed).toBe(true);
+			return result;
+		} finally {
+			spy.mockRestore();
+		}
+	}
+
+	/**
+	 * Like `withFailingDeleteMany`, but fails the first `updateMany` against
+	 * `model`.
+	 */
+	async function withFailingUpdateMany<T>(
+		model: "oauthAccessToken" | "oauthRefreshToken",
+		request: () => Promise<T>,
+	) {
+		const context = await authorizationServer.$context;
+		const updateMany = context.adapter.updateMany.bind(context.adapter);
+		let failed = false;
+		const spy = vi
+			.spyOn(context.adapter, "updateMany")
+			.mockImplementation(async (data) => {
+				if (!failed && data.model === model) {
+					failed = true;
+					throw new Error(`${model} update failed`);
+				}
+				return updateMany(data);
+			});
+		try {
+			const result = await request();
+			expect(failed).toBe(true);
+			return result;
+		} finally {
+			spy.mockRestore();
+		}
+	}
+
+	it.each([
+		"oauthRefreshToken",
+		"oauthAccessToken",
+	] as const)("rejects the rotated successor when the %s delete fails during reuse detection", async (model) => {
+		const oauthClient = await createOAuthClient();
+		const { r0, r1 } = await rotateOnce(oauthClient);
+
+		const replay = await withFailingDeleteMany(model, () =>
+			refresh(oauthClient, r0),
+		);
+		expect(replay.error?.status).toBe(500);
+
+		expect(await refresh(oauthClient, r1)).toMatchObject({
+			data: null,
+			error: { status: 400, error: "invalid_grant" },
+		});
+	});
+
+	it("rejects the rotated successor when the oauthAccessToken update fails during reuse detection", async () => {
+		const oauthClient = await createOAuthClient();
+		const { r0, r1 } = await rotateOnce(oauthClient);
+
+		const replay = await withFailingUpdateMany("oauthAccessToken", () =>
+			refresh(oauthClient, r0),
+		);
+		expect(replay.error?.status).toBe(500);
+
+		expect(await refresh(oauthClient, r1)).toMatchObject({
+			data: null,
+			error: { status: 400, error: "invalid_grant" },
+		});
+	});
+
+	it("reports the successor's access token inactive when the oauthAccessToken delete fails", async () => {
+		const oauthClient = await createOAuthClient();
+		const { r0, a1 } = await rotateOnce(oauthClient);
+		expect((await introspect(oauthClient, a1)).data?.active).toBe(true);
+
+		const replay = await withFailingDeleteMany("oauthAccessToken", () =>
+			refresh(oauthClient, r0),
+		);
+		expect(replay.error?.status).toBe(500);
+
+		expect((await introspect(oauthClient, a1)).data?.active).toBe(false);
+	});
+
+	it("keeps the access token issued with a rotated refresh token active", async () => {
+		const oauthClient = await createOAuthClient();
+		const { a0 } = await rotateOnce(oauthClient);
+
+		// Rotation sets `revoked` on R0, but A0 stays valid until it expires.
+		expect((await introspect(oauthClient, a0)).data?.active).toBe(true);
+	});
+
+	it("reports the access token issued with a rotated refresh token inactive when the oauthAccessToken delete fails", async () => {
+		const oauthClient = await createOAuthClient();
+		const { r0, a0 } = await rotateOnce(oauthClient);
+		expect((await introspect(oauthClient, a0)).data?.active).toBe(true);
+
+		const replay = await withFailingDeleteMany("oauthAccessToken", () =>
+			refresh(oauthClient, r0),
+		);
+		expect(replay.error?.status).toBe(500);
+
+		expect((await introspect(oauthClient, a0)).data?.active).toBe(false);
+	});
+
+	it.each([
+		"oauthRefreshToken",
+		"oauthAccessToken",
+	] as const)("rejects the rotated successor when the %s delete fails during /oauth2/revoke", async (model) => {
+		const oauthClient = await createOAuthClient();
+		const { r0, r1 } = await rotateOnce(oauthClient);
+
+		// Revoking the already-rotated R0 invalidates the family.
+		const revocation = await withFailingDeleteMany(model, () =>
+			client.$fetch("/oauth2/revoke", {
+				method: "POST",
+				body: new URLSearchParams({
+					token: r0,
+					token_type_hint: "refresh_token",
+					client_id: oauthClient.clientId,
+					client_secret: oauthClient.clientSecret,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			}),
+		);
+		expect(revocation.error?.status).toBe(500);
+
+		expect(await refresh(oauthClient, r1)).toMatchObject({
+			data: null,
+			error: { status: 400, error: "invalid_grant" },
+		});
+	});
+
+	it("rejects the newest refresh token of a family past the findMany limit when the oauthAccessToken delete fails", async () => {
+		const oauthClient = await createOAuthClient();
+		const { r0, r1, a1 } = await rotateOnce(oauthClient);
+		let refreshToken = r1;
+		let accessToken = a1;
+		// 102 refresh rows, past the adapter's default findMany limit of 100.
+		for (let i = 0; i < 100; i++) {
+			const rotated = await refresh(oauthClient, refreshToken);
+			expect(rotated.error).toBeNull();
+			refreshToken = rotated.data!.refresh_token!;
+			accessToken = rotated.data!.access_token!;
+		}
+
+		const replay = await withFailingDeleteMany("oauthAccessToken", () =>
+			refresh(oauthClient, r0),
+		);
+		expect(replay.error?.status).toBe(500);
+
+		expect((await introspect(oauthClient, accessToken)).data?.active).toBe(
+			false,
+		);
+		expect(await refresh(oauthClient, refreshToken)).toMatchObject({
+			data: null,
+			error: { status: 400, error: "invalid_grant" },
+		});
+	});
+});
+
 describe("oauth token - client_credentials", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
