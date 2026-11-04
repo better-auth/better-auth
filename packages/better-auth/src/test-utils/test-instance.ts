@@ -70,6 +70,12 @@ export async function getTestInstance<
 			? `ba_test_${randomUUID().replaceAll("-", "_")}`
 			: undefined;
 
+	const mysqlServerURL = "mysql://root:root_password@127.0.0.1:3306";
+	const mysqlDatabase =
+		testWith === "mysql"
+			? `ba_test_${randomUUID().replaceAll("-", "_")}`
+			: undefined;
+
 	const quotePostgresIdentifier = (identifier: string) =>
 		`"${identifier.replaceAll('"', '""')}"`;
 
@@ -103,10 +109,15 @@ export async function getTestInstance<
 
 	async function getMysql() {
 		const { Kysely, MysqlDialect } = await import("kysely");
-		const { createPool } = await import("mysql2/promise");
+		// Kysely's MysqlDialect drives mysql2's callback API; a mysql2/promise
+		// pool never invokes those callbacks, so every query hangs.
+		const { createConnection, createPool } = await import("mysql2");
+		const admin = createConnection(mysqlServerURL).promise();
+		await admin.query(`CREATE DATABASE IF NOT EXISTS \`${mysqlDatabase}\``);
+		await admin.end();
 		return new Kysely({
 			dialect: new MysqlDialect({
-				pool: createPool("mysql://user:password@localhost:3306/better_auth"),
+				pool: createPool(`${mysqlServerURL}/${mysqlDatabase}`),
 			}),
 		});
 	}
@@ -257,13 +268,10 @@ export async function getTestInstance<
 
 		if (testWith === "mysql") {
 			const mysql = await getMysql();
-			await sql`SET FOREIGN_KEY_CHECKS = 0;`.execute(mysql);
-			const tables = await mysql.introspection.getTables();
-			for (const table of tables) {
-				// @ts-expect-error
-				await mysql.deleteFrom(table.name).execute();
-			}
-			await sql`SET FOREIGN_KEY_CHECKS = 1;`.execute(mysql);
+			await sql
+				.raw(`DROP DATABASE IF EXISTS \`${mysqlDatabase}\``)
+				.execute(mysql);
+			await mysql.destroy();
 			return;
 		}
 		if (testWith === "sqlite") {
