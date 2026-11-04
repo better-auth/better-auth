@@ -4,7 +4,13 @@ import { CLIENT_ASSERTION_TYPE } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin, User } from "better-auth/types";
-import { decodeJwt } from "jose";
+import {
+	calculateJwkThumbprint,
+	decodeJwt,
+	exportJWK,
+	generateKeyPair,
+	SignJWT,
+} from "jose";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { extendOAuthProvider } from "./extensions";
@@ -15,6 +21,7 @@ import type {
 	OAuthProviderExtension,
 	SchemaClient,
 	Scope,
+	VerificationValue,
 } from "./types";
 import { consumeClientAssertion } from "./utils/client-assertion";
 
@@ -26,6 +33,7 @@ describe("oauth-provider extensions", async () => {
 	const extensionOpaqueGrant = "urn:better-auth:test:opaque-grant";
 	const extensionOpaqueBoundGrant = "urn:better-auth:test:opaque-bound-grant";
 	const extensionDriftGrant = "urn:better-auth:test:drift-grant";
+	const extensionDpopJktGrant = "urn:better-auth:test:dpop-jkt-grant";
 	const extensionAuthMethod = "test_attestation_jwt";
 	const extensionAssertionType =
 		"urn:better-auth:test:client-assertion-type:test-attestation";
@@ -150,6 +158,33 @@ describe("oauth-provider extensions", async () => {
 							client,
 							scopes: ["openid", "email", "vc"],
 							user: grantUser,
+						});
+					},
+					// Resolves the DPoP binding before issuance against a stored request
+					// that bound a key, like an authorization code issued for `dpop_jkt`.
+					[extensionDpopJktGrant]: async ({ ctx, provider }) => {
+						if (!grantUser) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description: "test user is not ready",
+							});
+						}
+						const scopes = ["openid", "email", "vc"];
+						const { client } = await provider.authenticateClient({ scopes });
+						const verificationValue = {
+							type: "authorization_code",
+							query: { dpop_jkt: (ctx.body as { dpop_jkt?: string }).dpop_jkt },
+						} as VerificationValue;
+						const confirmation = await provider.resolveConfirmation({
+							client,
+							scopes,
+							verificationValue,
+						});
+						return provider.issueTokens({
+							client,
+							scopes,
+							user: grantUser,
+							confirmation,
 						});
 					},
 				},
@@ -1277,6 +1312,59 @@ describe("oauth-provider extensions", async () => {
 		// The audience is the endpoint serving the request, not a hardcoded token
 		// endpoint, so the same assertion cannot be replayed at another endpoint.
 		expect(observedAudience).toBe(`${authServerBaseUrl}/oauth2/bc-authorize`);
+	});
+
+	it("resolveConfirmation enforces the DPoP key a stored request bound", async () => {
+		const boundKey = await generateKeyPair("ES256", { extractable: true });
+		const otherKey = await generateKeyPair("ES256", { extractable: true });
+		const dpopJkt = await calculateJwkThumbprint(
+			await exportJWK(boundKey.publicKey),
+			"sha256",
+		);
+		const proofWith = async (keys: typeof boundKey) =>
+			new SignJWT({
+				jti: crypto.randomUUID(),
+				htm: "POST",
+				htu: `${authServerBaseUrl}/api/auth/oauth2/token`,
+				iat: Math.floor(Date.now() / 1000),
+			})
+				.setProtectedHeader({
+					typ: "dpop+jwt",
+					alg: "ES256",
+					jwk: await exportJWK(keys.publicKey),
+				})
+				.sign(keys.privateKey);
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: extensionAuthMethod,
+				grant_types: [extensionDpopJktGrant],
+				scope: "openid email vc",
+				application_type: "web",
+			},
+		});
+		const exchange = async (keys: typeof boundKey) =>
+			client.$fetch<{ token_type: string }>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: extensionDpopJktGrant,
+					dpop_jkt: dpopJkt,
+					client_id: oauthClient!.client_id,
+					client_assertion_type: extensionAssertionType,
+					client_assertion: `assertion:${oauthClient!.client_id}`,
+				}),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					dpop: await proofWith(keys),
+				},
+			});
+
+		const rejected = await exchange(otherKey);
+		expect(rejected.error).toMatchObject({ error: "invalid_dpop_proof" });
+
+		const issued = await exchange(boundKey);
+		expect(issued.error).toBeNull();
+		expect(issued.data?.token_type).toBe("DPoP");
 	});
 
 	it("getOAuthProviderApi.issueTokens requires a bound grant type", () => {
