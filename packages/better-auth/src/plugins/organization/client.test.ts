@@ -137,3 +137,27 @@ it("refreshes the active organization after sign-in sets it in a session hook", 
 		});
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11529
+ */
+describe("organization client transfer-ownership signals", () => {
+	const { atomListeners } = organizationClient();
+	const matchersFor = (signal: string) =>
+		(atomListeners ?? [])
+			.filter((listener) => listener.signal === signal)
+			.map((listener) => listener.matcher);
+
+	it.each([
+		"$activeMemberSignal",
+		"$activeMemberRoleSignal",
+	])("refreshes %s after a transfer is applied, but not after a preview", (signal) => {
+		const matchers = matchersFor(signal);
+		expect(matchers.length).toBeGreaterThan(0);
+		const matches = (path: string) => matchers.some((matcher) => matcher(path));
+		expect(matches("/organization/transfer-ownership")).toBe(true);
+		expect(matches("/organization/transfer-ownership/callback")).toBe(true);
+		expect(matches("/organization/transfer-ownership/confirm")).toBe(true);
+		expect(matches("/organization/transfer-ownership/preview")).toBe(false);
+	});
+});
