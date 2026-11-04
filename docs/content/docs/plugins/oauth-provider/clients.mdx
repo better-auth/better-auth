@@ -76,7 +76,7 @@ Only the server-only `adminCreateOAuthClient` and `adminUpdateOAuthClient` metho
 * `disabled`: update only. Pauses the client.
 * `metadata`: private data attached to the client.
 
-Both methods need a signed-in user's session and run `clientPrivileges`, and the update needs that user to own the client. Neither checks that the user is an administrator, so call them only from server code you already restrict to administrators.
+Both methods need a signed-in user's session and run `clientPrivileges`, and the update needs that user to own the client, unless it changes only `client_credentials_scopes` and `clientPrivileges` approves `configure-client-credentials-scopes`. Neither checks that the user is an administrator, so call them only from server code you already restrict to administrators.
 
 The admin update takes the changes under `update`:
 
@@ -225,7 +225,7 @@ oauthProvider({
 
 ## Client CRUD privileges
 
-`clientPrivileges` can deny client actions to a signed-in user. It receives `action` (`create`, `read`, `update`, `delete`, `list`, `rotate`, or `configure-client-credentials-scopes`), `user`, `session`, `headers`, and, for an existing client, `clientId`. Ownership is still checked afterwards, so returning `true` never grants access to another owner's client.
+`clientPrivileges` can deny client actions to a signed-in user. It receives `action` (`create`, `read`, `update`, `delete`, `list`, `rotate`, or `configure-client-credentials-scopes`), `user`, `session`, `headers`, and, for an existing client, `clientId`. Ownership is still checked afterwards, so returning `true` does not grant access to another owner's client. The one exception is an `adminUpdateOAuthClient` call that changes only `client_credentials_scopes`, which `configure-client-credentials-scopes` alone authorizes.
 
 ```ts title="auth.ts"
 oauthProvider({

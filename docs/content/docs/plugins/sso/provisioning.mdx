@@ -16,7 +16,7 @@ Better Auth stores each SSO identity as an `account` keyed by the provider ID an
 * **New account, a user with that email exists.** Better Auth links the account in either case:
 
   * [`resolveUser`](#resolve-sso-users) returns `link`, which links to the `userId` it names.
-  * All of these hold, which links it to the user with that email: the provider's [domain is verified](/docs/plugins/sso/domain-verification#enable-domain-verification), the email's domain is one of the provider's domains, the existing user's email is verified, and neither `account.accountLinking.enabled: false` nor `account.accountLinking.disableImplicitLinking: true` is set.
+  * All of these hold, which links it to the user with that email: the provider's [domain is verified](/docs/plugins/sso/domain-verification#enable-domain-verification), the email's domain is one of the provider's domains, the existing user's email is verified (unless `account.accountLinking.requireLocalEmailVerified: false` is set), and neither `account.accountLinking.enabled: false` nor `account.accountLinking.disableImplicitLinking: true` is set.
 
   Otherwise the sign-in fails. OIDC redirects with `error=account not linked`, and SAML with `error=account_not_linked`.
 
@@ -38,7 +38,7 @@ sso({
 
 ### Update profiles on sign-in
 
-By default the user's profile is set only when the user is created. With `overrideUserInfo: true` on an OIDC provider, each sign-in overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values. A changed email is stored unverified. Enable it only for IdPs that control their users' email addresses. Pass it in the registration body, or set `defaultOverrideUserInfo: true` on the plugin to apply it to providers registered afterwards. SAML sign-ins update the profile only when `resolveUser` returns `profile: "update"`.
+By default the user's profile is set only when the user is created. With `overrideUserInfo: true` on an OIDC provider, each sign-in overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values. A changed email is stored unverified, unless the deprecated `trustEmailVerified` option is on and the IdP reports it verified. Enable it only for IdPs that control their users' email addresses. Pass it in the registration body, or set `defaultOverrideUserInfo: true` on the plugin to apply it to providers registered afterwards. SAML sign-ins update the profile only when `resolveUser` returns `profile: "update"`.
 
 ## Resolve SSO users
 
