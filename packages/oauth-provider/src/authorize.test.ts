@@ -6,7 +6,15 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import * as z from "zod";
 import { formatErrorURL, validateIssuerUrl } from "./authorize";
 import { oauthProviderClient } from "./client";
@@ -82,6 +90,189 @@ describe("validateIssuerUrl (RFC 9207)", () => {
 		expect(
 			validateIssuerUrl("http://auth.example.com:8080/path?query=1#hash"),
 		).toBe("https://auth.example.com:8080/path");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11740
+ */
+describe("validateIssuerUrl insecure http issuer", () => {
+	let freshValidateIssuerUrl: typeof validateIssuerUrl;
+	let loggerModule: typeof import("@better-auth/core/env");
+
+	beforeEach(async () => {
+		// Reset the module registry so each test gets a fresh
+		// warn-once flag inside validateIssuerUrl.
+		vi.resetModules();
+		const authorize = await import("./authorize");
+		freshValidateIssuerUrl = authorize.validateIssuerUrl;
+		loggerModule = await import("@better-auth/core/env");
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("keeps a non-loopback http issuer when allowInsecureHttpIssuer is set", () => {
+		expect(
+			freshValidateIssuerUrl("http://10.0.0.5:3000/api/auth", {
+				allowInsecureHttpIssuer: true,
+			}),
+		).toBe("http://10.0.0.5:3000/api/auth");
+	});
+
+	it("still rewrites a non-loopback http issuer to https by default", () => {
+		expect(freshValidateIssuerUrl("http://10.0.0.5:3000/api/auth")).toBe(
+			"https://10.0.0.5:3000/api/auth",
+		);
+	});
+
+	it("still rewrites non-http schemes to https even when allowInsecureHttpIssuer is set", () => {
+		expect(
+			freshValidateIssuerUrl("ftp://example.com/x", {
+				allowInsecureHttpIssuer: true,
+			}),
+		).toBe("https://example.com/x");
+	});
+
+	it("redacts userinfo, query, and fragment from the rewrite warning", () => {
+		const warn = vi
+			.spyOn(loggerModule.logger, "warn")
+			.mockImplementation(() => {});
+		freshValidateIssuerUrl(
+			"http://user:s3cret@10.0.0.5:3000/api/auth?token=abc#frag",
+		);
+		expect(warn).toHaveBeenCalledTimes(1);
+		const message = warn.mock.calls[0]?.[0] as string;
+		expect(message).not.toContain("s3cret");
+		expect(message).not.toContain("user@");
+		expect(message).not.toContain("token=abc");
+		expect(message).not.toContain("#frag");
+		expect(message).toContain("http://10.0.0.5:3000/api/auth");
+		expect(message).toContain("https://10.0.0.5:3000/api/auth");
+	});
+
+	it("warns exactly once when the rewrite fires", () => {
+		const warn = vi
+			.spyOn(loggerModule.logger, "warn")
+			.mockImplementation(() => {});
+		freshValidateIssuerUrl("http://10.0.0.5:3000/api/auth");
+		freshValidateIssuerUrl("http://10.0.0.6:3000/api/auth");
+		expect(warn).toHaveBeenCalledTimes(1);
+		expect(warn.mock.calls[0]?.[0]).toContain("http://10.0.0.5:3000/api/auth");
+		expect(warn.mock.calls[0]?.[0]).toContain("https://10.0.0.5:3000/api/auth");
+	});
+
+	it("does not warn when the opt-out flag is set", () => {
+		const warn = vi
+			.spyOn(loggerModule.logger, "warn")
+			.mockImplementation(() => {});
+		freshValidateIssuerUrl("http://10.0.0.5:3000/api/auth", {
+			allowInsecureHttpIssuer: true,
+		});
+		expect(warn).not.toHaveBeenCalled();
+	});
+
+	it("does not warn for loopback http issuers", () => {
+		const warn = vi
+			.spyOn(loggerModule.logger, "warn")
+			.mockImplementation(() => {});
+		freshValidateIssuerUrl("http://localhost:3000");
+		expect(warn).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11740
+ */
+describe("oauthProvider allowInsecureHttpIssuer (option wiring)", async () => {
+	const authServerBaseUrl = "http://10.0.0.5:3000";
+	const baseURL = `${authServerBaseUrl}/api/auth`;
+	const rpBaseUrl = "http://localhost:5000";
+
+	async function createWiredInstance(oauthProviderConfig?: {
+		allowInsecureHttpIssuer?: boolean;
+	}) {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						...oauthProviderConfig,
+					}),
+					jwt(),
+				],
+			},
+		);
+		const { headers } = await signInWithTestUser();
+		const unauthenticatedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+		const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+		if (!client?.client_id) {
+			throw new Error("failed to register test OAuth client");
+		}
+		return { auth, unauthenticatedClient, client, redirectUri };
+	}
+
+	it("serves both discovery documents with the insecure http issuer", async () => {
+		const { auth } = await createWiredInstance({
+			allowInsecureHttpIssuer: true,
+		});
+		const openIdConfig = await auth.api.getOpenIdConfig();
+		expect(openIdConfig?.issuer).toBe(baseURL);
+		const oauthMetadata = await auth.api.getOAuthServerConfig();
+		expect(oauthMetadata?.issuer).toBe(baseURL);
+	});
+
+	it("rewrites the discovery issuer to https without the option", async () => {
+		const { auth } = await createWiredInstance();
+		const openIdConfig = await auth.api.getOpenIdConfig();
+		expect(openIdConfig?.issuer).toBe(`https://10.0.0.5:3000/api/auth`);
+	});
+
+	it("advertises the insecure http issuer in the authorization response iss", async () => {
+		const { unauthenticatedClient, client, redirectUri } =
+			await createWiredInstance({
+				allowInsecureHttpIssuer: true,
+			});
+		// prompt=none without a session yields a login_required error redirect
+		// that carries the authorization response iss parameter.
+		const authUrl = new URL(`${baseURL}/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", client.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "insecure-issuer-iss");
+		authUrl.searchParams.set("prompt", "none");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let callbackRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("error=login_required");
+		const iss = new URL(callbackRedirectUrl).searchParams.get("iss");
+		expect(iss).toBe(baseURL);
 	});
 });
 

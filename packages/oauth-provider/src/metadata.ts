@@ -34,6 +34,7 @@ export function authServerMetadata(
 		endpoint_auth_methods_supported?: TokenEndpointAuthMethod[];
 		jwt_disabled?: boolean;
 		dpop_signing_alg_values_supported?: JWSAlgorithms[];
+		allowInsecureHttpIssuer?: boolean;
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
@@ -42,7 +43,9 @@ export function authServerMetadata(
 	const backchannelSupported = !overrides?.jwt_disabled;
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
-		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
+		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL, {
+			allowInsecureHttpIssuer: overrides?.allowInsecureHttpIssuer,
+		}),
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
 		token_endpoint: `${baseURL}/oauth2/token`,
 		jwks_uri: overrides?.jwt_disabled
@@ -135,6 +138,7 @@ function buildAuthServerMetadata(
 		endpoint_auth_methods_supported: getSupportedAuthMethods(opts),
 		jwt_disabled: opts.disableJwtPlugin,
 		dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,
+		allowInsecureHttpIssuer: opts.allowInsecureHttpIssuer,
 	});
 	return { jwtPluginOptions, clientDiscoveries, authMetadata };
 }
