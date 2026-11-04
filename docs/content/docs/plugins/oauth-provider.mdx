@@ -197,7 +197,7 @@ oauthProvider({
 })
 ```
 
-Then, the following endpoint will obtain public client information.
+Then, the following endpoint will obtain public client information. The `client_id` must match the one in the signed `oauth_query`; a request for any other client is rejected with `401`.
 
 <APIMethod path="/oauth2/public-client-prelogin" method="POST">
   ```ts

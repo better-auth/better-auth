@@ -270,9 +270,10 @@ describe("oauthClient", async () => {
 		});
 	});
 
-	it("should get public-only information about a client prelogin", async () => {
+	async function signedOAuthQuery(clientId: string) {
 		// Creates mock valid search params
 		const signedParams = new URLSearchParams({
+			client_id: clientId,
 			exp: `${Math.floor(Date.now() / 1000) + 60}`,
 		});
 		const sig = await makeSignature(
@@ -280,15 +281,27 @@ describe("oauthClient", async () => {
 			(auth.options as unknown as { secret: string }).secret,
 		);
 		signedParams.set("sig", sig);
+		return signedParams.toString();
+	}
 
+	it("should get public-only information about a client prelogin", async () => {
 		const client = await authClient.oauth2.publicClientPrelogin({
 			client_id: oauthUiClient.client_id,
-			oauth_query: signedParams.toString(),
+			oauth_query: await signedOAuthQuery(oauthUiClient.client_id),
 		});
 		expect(client.data).toMatchObject({
 			client_id: oauthUiClient.client_id,
 			...testUiClientInput,
 		});
+	});
+
+	it("should reject a prelogin lookup for a client other than the signed query's", async () => {
+		const client = await authClient.oauth2.publicClientPrelogin({
+			client_id: oauthClient.client_id,
+			oauth_query: await signedOAuthQuery(oauthUiClient.client_id),
+		});
+		expect(client.data).toBeNull();
+		expect(client.error?.status).toBe(401);
 	});
 
 	it("should get user's clients", async () => {
