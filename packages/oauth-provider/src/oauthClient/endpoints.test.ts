@@ -295,6 +295,9 @@ describe("oauthClient", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/8214
+	 */
 	it("should reject a prelogin lookup for a client other than the signed query's", async () => {
 		const client = await authClient.oauth2.publicClientPrelogin({
 			client_id: oauthClient.client_id,
