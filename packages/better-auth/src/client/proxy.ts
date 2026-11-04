@@ -76,11 +76,15 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					...fetchOptions,
 					...argFetchOptions,
 				} as ClientFetchOption;
-				const method = getMethod(routePath, knownPathMethods, arg);
+				const method = getMethod(routePath, knownPathMethods, {
+					...arg,
+					fetchOptions: options,
+				});
+				const normalizedMethod = method.toUpperCase();
 				return await client(routePath, {
 					...options,
 					body:
-						method === "GET"
+						normalizedMethod === "GET" || normalizedMethod === "HEAD"
 							? undefined
 							: {
 									...body,
