@@ -214,12 +214,13 @@ export const kyselyAdapter = (
 							.executeTakeFirst();
 					}
 
-					// LAST_INSERT_ID() cannot identify this insert on another connection.
-					const insertResult = await builder.executeTakeFirst();
-					const insertId = insertResult?.insertId;
-
 					// Inserts: cascading strategy inside a transaction
 					const fetchInserted = async (trx: any) => {
+						// Insert on the same transaction so a failed read-back rolls it back.
+						// LAST_INSERT_ID() cannot identify this insert on another connection.
+						const insertResult = await trx.executeQuery(builder);
+						const insertId: bigint | undefined = insertResult.insertId;
+
 						// 1. Known id from the data
 						if (values.id) {
 							return await trx
