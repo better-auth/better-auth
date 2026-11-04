@@ -608,6 +608,19 @@ const response = await auth.api.adminCreateOAuthClient({
   `jwks` and `jwks_uri` are general OIDC client key metadata and are mutually exclusive. Inline `jwks` must be an RFC 7517 JWK Set object with a non-empty `keys` array containing only public asymmetric signing keys; a bare key array is rejected. EC keys must use P-256, P-384, or P-521; OKP keys must use Ed25519. A key may omit `alg`. When present, `alg` must be a supported `private_key_jwt` algorithm that matches the key type and curve. When using `jwks_uri`, it must be an HTTPS URL pointing to a public (non-private) host and must return the same JWK Set object shape.
 </Callout>
 
+#### Rotating `jwks_uri` keys
+
+Better Auth caches a client's `jwks_uri` key set for 5 minutes. When an assertion names a key the cached set lacks, such as a new `kid`, Better Auth refetches the `jwks_uri` and verifies against the fresh set. Better Auth refetches a `jwks_uri` at most once every 60 seconds, whether or not the refetch succeeds, and concurrent assertions share one refetch. This keeps assertions naming unknown keys from making the provider call the client's endpoint repeatedly. The limit is held in memory, so it applies separately to each server process and each `oauthProvider()` call, and separately to clients from different client discovery sources that share a `jwks_uri`. The cache holds up to 500 key sets; when it is full, the oldest is evicted along with its limit.
+
+To rotate without failed authentications, give every key a unique `kid` and follow this order:
+
+1. Publish the new key at the `jwks_uri` next to the old key.
+2. Wait 5 minutes, so every cached copy includes the new key, then start signing with it. Signing right away also works through the refetch, unless another refetch of the same `jwks_uri` happened in the last 60 seconds. In that case the assertion fails and the client can retry after the cooldown.
+3. Keep the old key published until assertions signed with it have expired, which takes `assertionMaxLifetime` (5 minutes by default).
+4. Remove the old key. Processes that cached it keep accepting it until their cache expires: at most 5 minutes after removal, or 10 minutes if the `jwks_uri` is unreachable.
+
+Clients that register inline `jwks` have no refetch; update the registration to rotate.
+
 When exchanging tokens, the client sends a `client_assertion` JWT instead of a `client_secret`:
 
 ```
