@@ -76,7 +76,29 @@ export const requestDomainVerification = (options: SSOOptions) => {
 							description: "Domain has already been verified",
 						},
 						"201": {
-							description: "Domain submitted for verification",
+							description: "DNS record details for domain verification",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											domainVerificationIdentifier: {
+												type: "string",
+												description:
+													"The DNS TXT record host, relative to each provider domain",
+											},
+											domainVerificationToken: {
+												type: "string",
+												description: "The DNS TXT record value",
+											},
+										},
+										required: [
+											"domainVerificationIdentifier",
+											"domainVerificationToken",
+										],
+									},
+								},
+							},
 						},
 					},
 				},
@@ -107,7 +129,10 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				new Date(activeVerification.expiresAt) > new Date()
 			) {
 				ctx.setStatus(201);
-				return ctx.json({ domainVerificationToken: activeVerification.value });
+				return ctx.json({
+					domainVerificationIdentifier: identifier,
+					domainVerificationToken: activeVerification.value,
+				});
 			}
 
 			const domainVerificationToken = generateRandomString(24);
@@ -119,6 +144,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 
 			ctx.setStatus(201);
 			return ctx.json({
+				domainVerificationIdentifier: identifier,
 				domainVerificationToken,
 			});
 		},
