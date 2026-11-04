@@ -1806,6 +1806,25 @@ describe("expo authorization proxy", async () => {
 		expect(res.headers.get("location")).toBe(target);
 	});
 
+	it.for([
+		"https://accounts.google.com/o/oauth2/v2/auth?client_id=x",
+		"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=",
+	])(
+		"rejects a provider authorizationURL without state before setting the oauth_state cookie: %s",
+		async (authorizationURL) => {
+			const res = await auth.handler(
+				new Request(
+					`https://app.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+						authorizationURL,
+					)}&oauthState=planted`,
+				),
+			);
+			expect(res.status).toBe(400);
+			expect(res.headers.get("location")).toBeNull();
+			expect(res.headers.get("set-cookie")).toBeNull();
+		},
+	);
+
 	it("rejects an unconfigured authorization origin without setting cookies", async () => {
 		const res = await proxy("https://unconfigured.example/authorize?state=abc");
 		expect(res.status).toBe(400);
