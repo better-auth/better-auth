@@ -228,6 +228,7 @@ export const createInternalAdapter = (
 	async function queueCachedUserSessionDeletion(
 		userId: string,
 		sessionReferences?: readonly ActiveSessionReference[],
+		revokedAt = Date.now(),
 	) {
 		if (!secondaryStorage) return;
 
@@ -235,7 +236,6 @@ export const createInternalAdapter = (
 		// replacement session created by a later hook must remain active.
 		const references =
 			sessionReferences ?? (await getActiveSessionReferences(userId));
-		const revokedAt = Date.now();
 		await queueAfterTransactionHook(
 			() => deleteCachedUserSessions(userId, references, revokedAt),
 			{
@@ -1033,10 +1033,17 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
+			// Take the cutoff before delete hooks run so a replacement session they
+			// create is not treated as revoked.
+			const revokedAt = Date.now();
 			const sessionReferences = await getActiveSessionReferences(userId);
 			if (secondaryStorage) {
 				if (!options.session?.storeSessionInDatabase) {
-					await queueCachedUserSessionDeletion(userId, sessionReferences);
+					await queueCachedUserSessionDeletion(
+						userId,
+						sessionReferences,
+						revokedAt,
+					);
 					return;
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
@@ -1044,7 +1051,11 @@ export const createInternalAdapter = (
 						{ field: "userId", value: userId },
 					]);
 					if (endedSessions !== null) {
-						await queueCachedUserSessionDeletion(userId, sessionReferences);
+						await queueCachedUserSessionDeletion(
+							userId,
+							sessionReferences,
+							revokedAt,
+						);
 					}
 					return;
 				}
@@ -1060,7 +1071,11 @@ export const createInternalAdapter = (
 				undefined,
 			);
 			if (deletedSessions !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
+				await queueCachedUserSessionDeletion(
+					userId,
+					sessionReferences,
+					revokedAt,
+				);
 			}
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
