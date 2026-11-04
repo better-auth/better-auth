@@ -351,6 +351,110 @@ describe("session", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11466
+	 */
+	describe("don't remember me marker on a later session cookie", () => {
+		const startedAt = new Date("2026-01-01T00:00:00Z").getTime();
+
+		beforeEach(() => {
+			vi.setSystemTime(startedAt);
+		});
+
+		async function signInWithoutRememberMe() {
+			const instance = await getTestInstance({
+				session: {
+					updateAge: 60,
+					expiresIn: 120,
+				},
+			});
+			const headers = new Headers();
+			await instance.client.signIn.email(
+				{
+					email: instance.testUser.email,
+					password: instance.testUser.password,
+					rememberMe: false,
+				},
+				{
+					onSuccess: instance.cookieSetter(headers),
+				},
+			);
+			expect(
+				parseCookies(headers.get("cookie") || "").get(
+					"better-auth.dont_remember",
+				),
+			).toBeTruthy();
+			return { ...instance, headers };
+		}
+
+		it("clears the marker when a later sign-in is remembered", async () => {
+			const { client, testUser, cookieSetter, headers } =
+				await signInWithoutRememberMe();
+
+			let signInCookies: ReturnType<typeof parseSetCookieHeader> = new Map();
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						signInCookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						cookieSetter(headers)(context);
+					},
+				},
+			});
+
+			vi.setSystemTime(startedAt + 61_000);
+			const response = await client.getSession({ fetchOptions: { headers } });
+
+			expect(response.error).toBeNull();
+			expect(new Date(response.data!.session.expiresAt).getTime()).toBe(
+				startedAt + 181_000,
+			);
+			expect(signInCookies.get("better-auth.session_token")?.["max-age"]).toBe(
+				120,
+			);
+			expect(signInCookies.get("better-auth.dont_remember")?.["max-age"]).toBe(
+				0,
+			);
+		});
+
+		it("keeps the marker when the session cookie is reissued without a new choice", async () => {
+			const { client, headers } = await signInWithoutRememberMe();
+			const initial = await client.getSession({ fetchOptions: { headers } });
+
+			await client.updateUser({
+				name: "Updated Name",
+				fetchOptions: {
+					headers,
+					onSuccess(context) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						expect(
+							cookies.get("better-auth.session_token")?.["max-age"],
+						).toBeUndefined();
+						expect(cookies.get("better-auth.dont_remember")?.value).toBe(
+							parseCookies(headers.get("cookie") || "").get(
+								"better-auth.dont_remember",
+							),
+						);
+					},
+				},
+			});
+
+			vi.setSystemTime(startedAt + 61_000);
+			const response = await client.getSession({ fetchOptions: { headers } });
+
+			expect(response.error).toBeNull();
+			expect(response.data!.session.expiresAt).toEqual(
+				initial.data!.session.expiresAt,
+			);
+		});
+	});
+
 	it("should update the session every time when set to 0", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
 			session: {
