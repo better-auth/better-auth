@@ -2,6 +2,7 @@
 import type { BetterAuthClientPlugin, ClientStore } from "@better-auth/core";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import type { BetterFetch } from "@better-fetch/fetch";
+import { createFetch } from "@better-fetch/fetch";
 import type { oneTap as oneTapFromSubpath } from "better-auth/plugins/one-tap";
 import { jwtVerify } from "jose";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
@@ -1519,27 +1520,48 @@ describe("oneTapClient nonce", async () => {
 			undefined,
 		);
 		stubBrowser();
-		const onSuccess = vi.fn();
 
 		await run({
 			fetchOptions: {
 				baseURL: "https://auth.example.com/api/auth",
 				headers: { "x-tenant": "acme" },
-				onSuccess,
+				onRequest: vi.fn(),
+				onSuccess: vi.fn(),
 				output: z.object({ token: z.string() }),
 			},
 		});
 
-		expect($fetch).toHaveBeenCalledWith(
-			"/one-tap/nonce",
-			expect.objectContaining({
-				baseURL: "https://auth.example.com/api/auth",
-				headers: { "x-tenant": "acme" },
-				onSuccess: undefined,
-				output: undefined,
-				throw: false,
-			}),
-		);
+		const [path, init] = $fetch.mock.calls[0] as unknown as [
+			string,
+			Record<string, unknown>,
+		];
+		expect(path).toBe("/one-tap/nonce");
+		expect(init).toMatchObject({
+			baseURL: "https://auth.example.com/api/auth",
+			headers: { "x-tenant": "acme" },
+			throw: false,
+		});
+		for (const key of ["onRequest", "onSuccess", "output"]) {
+			expect(init).not.toHaveProperty(key);
+		}
+	});
+
+	it("keeps the auth client's own hooks on the nonce request", async () => {
+		const onRequest = vi.fn();
+		const $fetch = createFetch({
+			baseURL: "http://localhost:3000/api/auth",
+			onRequest,
+			customFetchImpl: async () => Response.json({ nonce: "n".repeat(32) }),
+		});
+		const { oneTap: run } = oneTapClient({
+			clientId: "test-client",
+		}).getActions($fetch, {} as ClientStore, undefined);
+		stubBrowser();
+
+		await run({ fetchOptions: { onRequest: vi.fn() } });
+
+		expect(onRequest).toHaveBeenCalledOnce();
+		expect(initConfig(0).nonce).toBe("n".repeat(32));
 	});
 
 	it("opens the prompt when the callback's fetchOptions validate its output", async () => {
