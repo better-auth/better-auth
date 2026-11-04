@@ -1,5 +1,11 @@
 # @better-auth/expo
 
+## 1.7.17
+
+### Patch Changes
+
+- [#12218](https://github.com/better-auth/better-auth/pull/12218) [`b00bff0`](https://github.com/better-auth/better-auth/commit/b00bff02882839df3df94ce1c103b50b26fb8843) Thanks [@bytaesu](https://github.com/bytaesu)! - When OAuth state is stored in a cookie, Expo social sign-in now rejects authorization URLs without a `state` parameter, the same as with the default database storage.
+
 ## 1.7.16
 
 ### Patch Changes
