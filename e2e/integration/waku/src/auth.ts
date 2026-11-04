@@ -3,7 +3,6 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthMiddleware } from "better-auth/api";
 import { getContext } from "hono/context-storage";
-import { COOKIE_CACHE_MAX_AGE } from "./constants";
 
 const database = {
 	user: [],
@@ -63,7 +62,6 @@ export const auth = betterAuth({
 	session: {
 		cookieCache: {
 			enabled: true,
-			maxAge: COOKIE_CACHE_MAX_AGE,
 		},
 	},
 	plugins: [wakuCookies()],

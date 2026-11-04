@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { terminate } from "@better-auth-test/test-utils/playwright";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { COOKIE_CACHE_MAX_AGE } from "../src/constants";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
@@ -45,10 +44,15 @@ async function signUp(
 	await page.getByLabel("Name").fill(name);
 	await page.getByLabel("Email").fill(email);
 	await page.getByLabel("Password").fill("password123");
-	await Promise.all([
-		page.waitForResponse((response) => response.request().method() === "POST"),
+	const [response] = await Promise.all([
+		page.waitForResponse(
+			(response) =>
+				new URL(response.url()).origin === new URL(baseURL).origin &&
+				response.request().method() === "POST",
+		),
 		page.getByRole("button", { name: "Sign up" }).click(),
 	]);
+	expect(response.ok()).toBe(true);
 }
 
 async function getCookie(page: Page, name: string) {
@@ -57,9 +61,12 @@ async function getCookie(page: Page, name: string) {
 }
 
 for (const [mode, server] of Object.entries(servers)) {
+	/**
+	 * @see https://waku.gg/guides/request-context
+	 */
 	test.describe(`waku ${mode}`, () => {
-		// Share one server instead of starting one per worker.
-		test.describe.configure({ mode: "serial" });
+		// Share a server while keeping failures and retries independent.
+		test.describe.configure({ mode: "default" });
 
 		let child: ChildProcessWithoutNullStreams;
 		let baseURL: string;
@@ -85,7 +92,7 @@ for (const [mode, server] of Object.entries(servers)) {
 			if (child) await terminate(child);
 		});
 
-		test("forwards every cookie set inside a server action", async ({
+		test("forwards session cookies set inside a server action", async ({
 			page,
 		}) => {
 			await signUp(page, baseURL, "Action User", "action@example.com");
@@ -94,8 +101,7 @@ for (const [mode, server] of Object.entries(servers)) {
 			const sessionData = await getCookie(page, "better-auth.session_data");
 			expect(sessionToken).toBeDefined();
 			expect(sessionData).toBeDefined();
-			// Joined into one `Set-Cookie` header, `session_data`'s Max-Age would win
-			// (it's set to a short value for the test, see COOKIE_CACHE_MAX_AGE)
+			// A merged Set-Cookie header can overwrite the session token's Max-Age.
 			expect((sessionToken?.expires ?? 0) * 1000).toBeGreaterThan(
 				Date.now() + 24 * 60 * 60 * 1000,
 			);
@@ -104,34 +110,45 @@ for (const [mode, server] of Object.entries(servers)) {
 			await expect(page.getByText("Signed in as Action User")).toBeVisible();
 		});
 
-		test("refreshes the cookie cache during an RSC navigation", async ({
+		test("reissues a missing cookie cache during client-side navigation", async ({
 			page,
 		}) => {
 			await signUp(page, baseURL, "RSC User", "rsc@example.com");
 			await page.goto(baseURL);
 			await expect(page.getByText("Signed in as RSC User")).toBeVisible();
 
-			await expect
-				.poll(() => getCookie(page, "better-auth.session_data"), {
-					timeout: (COOKIE_CACHE_MAX_AGE + 5) * 1000,
-				})
-				.toBeUndefined();
+			await page.context().clearCookies({ name: "better-auth.session_data" });
+			expect(await getCookie(page, "better-auth.session_data")).toBeUndefined();
+			const documentTimeOrigin = await page.evaluate(
+				() => performance.timeOrigin,
+			);
 
-			// The layout's `getSession()` re-issues `session_data` while rendering the
-			// RSC payload for a client-side navigation.
 			const [response] = await Promise.all([
-				page.waitForResponse((response) =>
-					new URL(response.url()).pathname.startsWith("/RSC/"),
+				page.waitForResponse(
+					(response) =>
+						new URL(response.url()).pathname === "/RSC/R/dashboard.txt" &&
+						response.request().method() === "GET",
 				),
 				page.getByRole("link", { name: "Dashboard" }).click(),
 			]);
 			expect(response.ok()).toBe(true);
+			expect(await response.headerValues("set-cookie")).toEqual(
+				expect.arrayContaining([
+					expect.stringMatching(/^better-auth\.session_data=/),
+				]),
+			);
+			await expect
+				.poll(() => getCookie(page, "better-auth.session_data"))
+				.toBeDefined();
+			await expect(page).toHaveURL(new URL("/dashboard", baseURL).href);
 			await expect(
 				page.getByRole("heading", { name: "Dashboard" }),
 			).toBeVisible();
 			await expect(page.getByText("Signed in as RSC User")).toBeVisible();
 
-			expect(await getCookie(page, "better-auth.session_data")).toBeDefined();
+			expect(await page.evaluate(() => performance.timeOrigin)).toBe(
+				documentTimeOrigin,
+			);
 		});
 	});
 }
