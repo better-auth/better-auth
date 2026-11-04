@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
-import { createAuthEndpoint } from "better-auth/api";
+import { APIError, createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import type { ProviderOptions } from "better-auth/oauth2";
@@ -1814,6 +1814,8 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	const validAudience = "https://reuse-api.example.com";
 	const otherAudience = "https://other-reuse-api.example.com";
 	let refreshTokenResponseCalls = 0;
+	let refreshTokenResponseFieldsHook: (() => Promise<void> | void) | null =
+		null;
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -1832,11 +1834,12 @@ describe("oauth token - refresh_token reuse interval", async () => {
 				resources: [validAudience, otherAudience],
 				enforcePerClientResources: false,
 				refreshTokenReuseInterval: 30,
-				customTokenResponseFields({ grantType }) {
+				async customTokenResponseFields({ grantType }) {
 					if (grantType !== "refresh_token") {
 						return {};
 					}
 					refreshTokenResponseCalls += 1;
+					await refreshTokenResponseFieldsHook?.();
 					return {
 						refresh_call: `${refreshTokenResponseCalls}`,
 					};
@@ -1993,6 +1996,273 @@ describe("oauth token - refresh_token reuse interval", async () => {
 	});
 
 	/**
+	 * Two overlapping `refresh_token` grants with the same parent must both
+	 * receive the rotated response inside the reuse interval. The CAS loser
+	 * used to return `invalid_grant` before the winner stored the replay.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("replays the same response for concurrent refresh_token grants inside the reuse interval", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+
+		const [first, second] = await Promise.all([
+			refresh(tokens.refresh_token!),
+			refresh(tokens.refresh_token!),
+		]);
+
+		expect(first.error).toBeNull();
+		expect(second.error).toBeNull();
+		expect(second.data).toMatchObject({
+			access_token: first.data?.access_token,
+			expires_at: first.data?.expires_at,
+			token_type: first.data?.token_type,
+			refresh_token: first.data?.refresh_token,
+			scope: first.data?.scope,
+			id_token: first.data?.id_token,
+			refresh_call: first.data?.refresh_call,
+		});
+		// Both requests can enter `createUserTokens` and run
+		// `customTokenResponseFields` before the CAS; only one rotation
+		// is stored, and the loser replays that response.
+		expect(refreshTokenResponseCalls).toBeGreaterThanOrEqual(1);
+		expect(refreshTokenResponseCalls).toBeLessThanOrEqual(2);
+
+		const next = await refresh(first.data!.refresh_token!);
+		expect(next.error).toBeNull();
+		expect(next.data?.refresh_token).toBeDefined();
+		expect(next.data?.refresh_token).not.toEqual(first.data?.refresh_token);
+	});
+
+	/**
+	 * The second request can also arrive after the parent is already revoked
+	 * but before `storeRefreshTokenRotationReplay` writes. That used to miss
+	 * the replay cache and return `invalid_grant` inside the reuse interval.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("waits for the stored replay when a concurrent refresh arrives mid-rotation", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				holdReplayStore = true;
+				reached.resolve();
+				await released.promise;
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			released.resolve();
+			const [first, second] = await Promise.all([rotating, overlapping]);
+
+			expect(first.error).toBeNull();
+			expect(second.error).toBeNull();
+			expect(second.data).toMatchObject({
+				access_token: first.data?.access_token,
+				expires_at: first.data?.expires_at,
+				token_type: first.data?.token_type,
+				refresh_token: first.data?.refresh_token,
+				scope: first.data?.scope,
+				id_token: first.data?.id_token,
+				refresh_call: "1",
+			});
+			expect(refreshTokenResponseCalls).toBe(1);
+		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			released.resolve();
+		}
+	});
+
+	/**
+	 * The reuse window, not a fixed 2s cap, is the wait deadline. A slow
+	 * winner still storing its replay must not be rejected while the interval
+	 * is active.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("waits for the stored replay past two seconds while the reuse interval is active", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				holdReplayStore = true;
+				reached.resolve();
+				await released.promise;
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			await new Promise<void>((resolve) => {
+				setTimeout(resolve, 2_100);
+			});
+			released.resolve();
+			const [first, second] = await Promise.all([rotating, overlapping]);
+
+			expect(first.error).toBeNull();
+			expect(second.error).toBeNull();
+			expect(second.data).toMatchObject({
+				access_token: first.data?.access_token,
+				refresh_token: first.data?.refresh_token,
+				refresh_call: "1",
+			});
+		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			released.resolve();
+		}
+	});
+
+	/**
+	 * Recovering every `invalid_grant` from token issuance would replay the
+	 * winner's tokens over a callback/extension failure.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("does not recover a non-CAS invalid_grant as a rotation replay", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const casWon = Promise.withResolvers<void>();
+		const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+		const spy = vi.spyOn(context.adapter, "incrementOne");
+		spy.mockImplementation(async (...args) => {
+			const result = await incrementOne(...args);
+			if (args[0].model === "oauthRefreshToken" && result) {
+				casWon.resolve();
+			}
+			return result;
+		});
+
+		let fieldCalls = 0;
+		refreshTokenResponseFieldsHook = async () => {
+			fieldCalls += 1;
+			if (fieldCalls > 1) {
+				await casWon.promise;
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_grant",
+					error_description: "callback failed",
+				});
+			}
+		};
+
+		try {
+			const [first, second] = await Promise.all([
+				refresh(tokens.refresh_token!),
+				refresh(tokens.refresh_token!),
+			]);
+			const failed = [first, second].find((result) => result.error !== null);
+			const succeeded = [first, second].find((result) => result.error === null);
+
+			expect(succeeded?.data?.refresh_token).toBeDefined();
+			expect((failed?.error as { error?: string } | undefined)?.error).toBe(
+				"invalid_grant",
+			);
+			expect(
+				(failed?.error as { error_description?: string } | undefined)
+					?.error_description,
+			).toBe("callback failed");
+			expect(failed?.data).toBeNull();
+		} finally {
+			refreshTokenResponseFieldsHook = null;
+			spy.mockRestore();
+		}
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8512
 	 */
 	it("replays equivalent requests when scope and resource order differ", async () => {
@@ -2077,6 +2347,105 @@ describe("oauth token - refresh_token reuse interval", async () => {
 		} finally {
 			update.mockRestore();
 			loggerError.mockRestore();
+		}
+	});
+
+	/**
+	 * A failed replay store must not look like an in-flight write. Concurrent
+	 * retries would otherwise poll until the reuse window expires.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("does not wait out the reuse interval when storing the replay cache fails", async () => {
+		oauthClient = await createOAuthClient();
+		refreshTokenResponseCalls = 0;
+		const tokens = await authorizeForRefreshToken([
+			"openid",
+			"profile",
+			"offline_access",
+		]);
+		const context = await authorizationServer.$context;
+		const originalUpdate = context.adapter.update.bind(context.adapter);
+		const originalFindOne = context.adapter.findOne.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const overlappingRead = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		let holdReplayStore = false;
+		let replayStoreWrites = 0;
+		let pendingParentReads = 0;
+		const update = vi.spyOn(context.adapter, "update");
+		const findOne = vi.spyOn(context.adapter, "findOne");
+		const loggerError = vi
+			.spyOn(context.logger, "error")
+			.mockImplementation(() => undefined);
+		update.mockImplementation(async (...args) => {
+			const [params] = args;
+			if (
+				params.model === "oauthRefreshToken" &&
+				Object.prototype.hasOwnProperty.call(
+					params.update,
+					"rotationReplayResponse",
+				)
+			) {
+				replayStoreWrites += 1;
+				if (replayStoreWrites === 1) {
+					holdReplayStore = true;
+					reached.resolve();
+					await released.promise;
+					throw new Error("replay cache unavailable");
+				}
+			}
+			return originalUpdate(...args);
+		});
+		findOne.mockImplementation(async (...args) => {
+			const result = await originalFindOne(...args);
+			if (
+				holdReplayStore &&
+				args[0].model === "oauthRefreshToken" &&
+				result &&
+				typeof result === "object" &&
+				"revoked" in result &&
+				result.revoked &&
+				!("rotationReplayResponse" in result && result.rotationReplayResponse)
+			) {
+				pendingParentReads += 1;
+				overlappingRead.resolve();
+			}
+			return result;
+		});
+
+		try {
+			const rotating = refresh(tokens.refresh_token!);
+			await reached.promise;
+			const overlapping = refresh(tokens.refresh_token!);
+			await overlappingRead.promise;
+			released.resolve();
+			const settled = await Promise.race([
+				Promise.all([rotating, overlapping]),
+				new Promise<"timeout">((resolve) => {
+					setTimeout(() => resolve("timeout"), 1_000);
+				}),
+			]);
+			expect(settled).not.toBe("timeout");
+			if (settled === "timeout") {
+				return;
+			}
+			const [first, second] = settled;
+			expect(first.error).toBeNull();
+			expect(first.data?.refresh_token).toBeDefined();
+			expect((second.error as { error?: string } | null)?.error).toBe(
+				"invalid_grant",
+			);
+			expect(pendingParentReads).toBeLessThan(20);
+			expect(loggerError).toHaveBeenCalledWith(
+				"failed to store refresh token rotation replay",
+				expect.any(Error),
+			);
+		} finally {
+			update.mockRestore();
+			findOne.mockRestore();
+			loggerError.mockRestore();
+			released.resolve();
 		}
 	});
 
@@ -5320,6 +5689,274 @@ describe("oauth token - DPoP", async () => {
 		expect(replay.data?.expires_in).toBeLessThanOrEqual(
 			firstRefresh.data!.expires_in!,
 		);
+	});
+
+	/**
+	 * Concurrent DPoP refresh grants present distinct proofs (different `jti`).
+	 * The CAS loser already consumed its proof during issuance; recovery must
+	 * not verify that consumed proof a second time.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	it("replays concurrent DPoP-bound refresh grants with distinct proofs", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const issueProof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "concurrent-dpop-issue-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			issueProof,
+		);
+		expect(tokens.data?.refresh_token).toBeDefined();
+
+		async function refresh(dpopProof: string) {
+			const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+				refreshToken: tokens.data!.refresh_token!,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+			});
+			const refreshHeaders = new Headers(reqHeaders);
+			refreshHeaders.set("DPoP", dpopProof);
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: refreshHeaders,
+			});
+		}
+
+		const [firstProof, secondProof] = await Promise.all([
+			createDpopProof({
+				privateKey: dpopKey.privateKey,
+				publicJwk: dpopKey.publicJwk,
+				method: "POST",
+				url: tokenEndpoint,
+				jti: "concurrent-dpop-refresh-proof-1",
+			}),
+			createDpopProof({
+				privateKey: dpopKey.privateKey,
+				publicJwk: dpopKey.publicJwk,
+				method: "POST",
+				url: tokenEndpoint,
+				jti: "concurrent-dpop-refresh-proof-2",
+			}),
+		]);
+		const [first, second] = await Promise.all([
+			refresh(firstProof),
+			refresh(secondProof),
+		]);
+
+		expect(first.error).toBeNull();
+		expect(second.error).toBeNull();
+		expect(first.data?.token_type).toBe("DPoP");
+		expect(second.data).toMatchObject({
+			access_token: first.data?.access_token,
+			expires_at: first.data?.expires_at,
+			token_type: "DPoP",
+			refresh_token: first.data?.refresh_token,
+			scope: first.data?.scope,
+			id_token: first.data?.id_token,
+		});
+	});
+
+	/**
+	 * The CAS loser already verified its DPoP proof during issuance. Recovery
+	 * must reuse that binding; re-checking iat can exceed proofMaxAgeSeconds
+	 * while the winner is still storing the replay.
+	 *
+	 * Isolated from the suite default so other DPoP tests keep the 300s
+	 * proof window. A 1s limit on the shared instance would expire proofs
+	 * minted before slower authorization flows.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/12087
+	 */
+	describe("concurrent DPoP refresh after proof max age", async () => {
+		const {
+			auth: agedAuth,
+			signInWithTestUser: agedSignIn,
+			customFetchImpl: agedFetch,
+		} = await getTestInstance({
+			baseURL: `${authServerBaseUrl}/api/auth/`,
+			advanced: { skipTrailingSlashes: true },
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					refreshTokenReuseInterval: 30,
+					dpop: {
+						proofMaxAgeSeconds: 1,
+					},
+					resources: [
+						jwtResource,
+						{
+							identifier: dpopRequiredResource,
+							dpopBoundAccessTokensRequired: true,
+						},
+					],
+					enforcePerClientResources: false,
+				}),
+			],
+		});
+		const { headers: agedHeaders } = await agedSignIn();
+		const agedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl: agedFetch, headers: agedHeaders },
+		});
+		const agedOauthClient = await agedAuth.api.adminCreateOAuthClient({
+			headers: agedHeaders,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["authorization_code", "refresh_token"],
+				redirect_uris: [redirectUri],
+				application_type: "native",
+				skip_consent: true,
+			},
+		});
+
+		it("recovers a concurrent DPoP refresh after the proof max age elapses", async () => {
+			const dpopKey = await createDpopKey();
+			const codeVerifier = generateRandomString(32);
+			const authUrl = await createAuthorizationURL({
+				id: providerId,
+				options: {
+					clientId: agedOauthClient!.client_id,
+					clientSecret: agedOauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+				redirectURI: "",
+				authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+				state: "123",
+				scopes: ["openid", "offline_access"],
+				codeVerifier,
+				additionalParams: { dpop_jkt: dpopKey.jkt },
+			});
+			authUrl.searchParams.set("resource", jwtResource);
+			let callbackRedirectUrl = "";
+			await agedClient.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+			const issueProof = await createDpopProof({
+				privateKey: dpopKey.privateKey,
+				publicJwk: dpopKey.publicJwk,
+				method: "POST",
+				url: tokenEndpoint,
+				jti: "stale-dpop-issue-proof",
+			});
+			const { body: issueBody, headers: issueHeaders } =
+				await authorizationCodeRequest({
+					code,
+					codeVerifier,
+					redirectURI: redirectUri,
+					resource: jwtResource,
+					options: {
+						clientId: agedOauthClient!.client_id,
+						clientSecret: agedOauthClient!.client_secret!,
+						redirectURI: redirectUri,
+					},
+				});
+			const issueTokenHeaders = new Headers(issueHeaders);
+			issueTokenHeaders.set("DPoP", issueProof);
+			const tokens = await agedClient.$fetch<OAuthTokenResponse>(
+				"/oauth2/token",
+				{
+					method: "POST",
+					body: issueBody,
+					headers: issueTokenHeaders,
+				},
+			);
+			expect(tokens.data?.refresh_token).toBeDefined();
+
+			async function refresh(dpopProof: string) {
+				const { body, headers: reqHeaders } = await refreshAccessTokenRequest({
+					refreshToken: tokens.data!.refresh_token!,
+					options: {
+						clientId: agedOauthClient!.client_id,
+						clientSecret: agedOauthClient!.client_secret!,
+						redirectURI: redirectUri,
+					},
+				});
+				const refreshHeaders = new Headers(reqHeaders);
+				refreshHeaders.set("DPoP", dpopProof);
+				return agedClient.$fetch<OAuthTokenResponse>("/oauth2/token", {
+					method: "POST",
+					body,
+					headers: refreshHeaders,
+				});
+			}
+
+			const context = await agedAuth.$context;
+			const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+			const bothCas = Promise.withResolvers<void>();
+			const releaseCas = Promise.withResolvers<void>();
+			let casCalls = 0;
+			const spy = vi.spyOn(context.adapter, "incrementOne");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthRefreshToken") {
+					casCalls += 1;
+					if (casCalls === 2) {
+						bothCas.resolve();
+					}
+					await releaseCas.promise;
+				}
+				return incrementOne(...args);
+			});
+
+			try {
+				const [firstProof, secondProof] = await Promise.all([
+					createDpopProof({
+						privateKey: dpopKey.privateKey,
+						publicJwk: dpopKey.publicJwk,
+						method: "POST",
+						url: tokenEndpoint,
+						jti: "stale-dpop-refresh-proof-1",
+					}),
+					createDpopProof({
+						privateKey: dpopKey.privateKey,
+						publicJwk: dpopKey.publicJwk,
+						method: "POST",
+						url: tokenEndpoint,
+						jti: "stale-dpop-refresh-proof-2",
+					}),
+				]);
+				const rotating = refresh(firstProof);
+				const overlapping = refresh(secondProof);
+				await bothCas.promise;
+				await new Promise<void>((resolve) => {
+					setTimeout(resolve, 2_100);
+				});
+				releaseCas.resolve();
+				const [first, second] = await Promise.all([rotating, overlapping]);
+
+				expect(first.error).toBeNull();
+				expect(second.error).toBeNull();
+				expect(second.data).toMatchObject({
+					access_token: first.data?.access_token,
+					token_type: "DPoP",
+					refresh_token: first.data?.refresh_token,
+				});
+			} finally {
+				spy.mockRestore();
+				releaseCas.resolve();
+			}
+		});
 	});
 
 	it("rejects a replayed DPoP proof at the token endpoint", async () => {

@@ -687,7 +687,7 @@ The refresh token grant enables clients to update their access token without nee
 
 This implementation currently issues a new refresh token for every refresh request.
 
-Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This lets clients recover from duplicate refresh requests, lost responses, or retries without minting another token pair.
+Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This lets clients recover from duplicate refresh requests — including overlapping in-flight refreshes — lost responses, or retries without minting another token pair.
 
 ```ts title="auth.ts"
 oauthProvider({

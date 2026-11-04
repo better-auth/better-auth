@@ -652,9 +652,10 @@ async function createRefreshToken(
 	// Rotation: atomic compare-and-swap on the parent row. Concurrent
 	// rotations against the same parent both observe `revoked === null` on
 	// the read in `handleRefreshTokenGrant`, but only one wins this update.
-	// The loser fails closed with `invalid_grant`; the parent row is now
-	// revoked, so any subsequent reuse of the original refresh token is handled
-	// by the replay/invalid-grant path in `handleRefreshTokenGrant`.
+	// Without a reuse interval the loser fails closed with `invalid_grant`.
+	// When `refreshTokenReuseInterval` is set, the loser is recovered by the
+	// replay wait in `handleRefreshTokenGrant` once the winner stores the
+	// rotated response.
 	//
 	// FIXME(strict-family-invalidation): RFC 9700 §4.14 prescribes
 	// immediate family invalidation on detected concurrent redemption.
@@ -686,23 +687,33 @@ async function createRefreshToken(
 	});
 
 	if (!won) {
+		if (reuseInterval > 0) {
+			throwRefreshTokenRotationInFlight(confirmation);
+		}
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",
 		});
 	}
 
-	const refreshToken = await ctx.context.adapter.create<
-		OAuthRefreshToken<Scope[]> & { id: string }
-	>({
-		model: "oauthRefreshToken",
-		data: newRow,
-	});
+	try {
+		const refreshToken = await ctx.context.adapter.create<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
+			model: "oauthRefreshToken",
+			data: newRow,
+		});
 
-	return {
-		id: refreshToken.id,
-		token: await encodeRefreshToken(opts, token, sessionId),
-	};
+		return {
+			id: refreshToken.id,
+			token: await encodeRefreshToken(opts, token, sessionId),
+		};
+	} catch (error) {
+		if (reuseInterval > 0) {
+			await markRefreshTokenRotationReplayUnavailable(ctx, originalRefresh);
+		}
+		throw error;
+	}
 }
 
 type CreateUserTokensParams = OAuthTokenIssueParams & {
@@ -1000,6 +1011,8 @@ function isWithinRefreshTokenReuseInterval(
 	);
 }
 
+const REFRESH_TOKEN_ROTATION_REPLAY_UNAVAILABLE = "unavailable";
+
 async function storeRefreshTokenRotationReplay(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -1022,16 +1035,56 @@ async function storeRefreshTokenRotationReplay(
 	});
 }
 
-async function getRefreshTokenRotationReplay(
+async function markRefreshTokenRotationReplayUnavailable(
+	ctx: GenericEndpointContext,
+	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
+) {
+	try {
+		const latest = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+		});
+		if (!latest?.rotatedAt || latest.rotationReplayResponse) {
+			return;
+		}
+		await ctx.context.adapter.update({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+			update: {
+				rotationReplayResponse: REFRESH_TOKEN_ROTATION_REPLAY_UNAVAILABLE,
+			},
+		});
+	} catch (error) {
+		ctx.context.logger.error(
+			"failed to mark refresh token rotation replay unavailable",
+			error,
+		);
+	}
+}
+
+type RefreshTokenRotationReplayLookup =
+	| { status: "hit"; response: OAuthTokenResponse }
+	| { status: "pending" }
+	| { status: "unavailable" };
+
+async function lookupRefreshTokenRotationReplay(
 	ctx: GenericEndpointContext,
 	refreshToken: OAuthRefreshToken<Scope[]>,
 	request: RefreshTokenRotationReplayRequest,
-) {
+): Promise<RefreshTokenRotationReplayLookup> {
 	if (!isWithinRefreshTokenReuseInterval(refreshToken)) {
-		return undefined;
+		return { status: "unavailable" };
 	}
 	if (!refreshToken.rotationReplayResponse) {
-		return undefined;
+		return { status: "pending" };
+	}
+	if (
+		refreshToken.rotationReplayResponse ===
+		REFRESH_TOKEN_ROTATION_REPLAY_UNAVAILABLE
+	) {
+		return { status: "unavailable" };
 	}
 
 	try {
@@ -1043,13 +1096,136 @@ async function getRefreshTokenRotationReplay(
 			!replay ||
 			!sameRefreshTokenRotationReplayRequest(replay.request, request)
 		) {
-			return undefined;
+			return { status: "unavailable" };
 		}
-		return replay.response;
+		return { status: "hit", response: replay.response };
 	} catch (error) {
 		ctx.context.logger.error("refresh token rotation replay failed", error);
+		return { status: "unavailable" };
+	}
+}
+
+const REFRESH_TOKEN_REPLAY_POLL_INTERVAL_MS = 25;
+
+const wait = (ms: number) =>
+	new Promise<void>((resolve) => {
+		setTimeout(resolve, ms);
+	});
+
+const refreshTokenRotationInFlightErrors = new WeakSet<object>();
+const refreshTokenRotationInFlightBindings = new WeakMap<
+	object,
+	Confirmation | undefined
+>();
+
+function throwRefreshTokenRotationInFlight(confirmation?: Confirmation): never {
+	const error = new APIError("BAD_REQUEST", {
+		error_description: "invalid refresh token",
+		error: "invalid_grant",
+	});
+	refreshTokenRotationInFlightErrors.add(error);
+	refreshTokenRotationInFlightBindings.set(error, confirmation);
+	throw error;
+}
+
+function isRefreshTokenRotationInFlightError(error: unknown) {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		refreshTokenRotationInFlightErrors.has(error)
+	);
+}
+
+function getRefreshTokenRotationInFlightBinding(error: unknown) {
+	if (typeof error !== "object" || error === null) {
 		return undefined;
 	}
+	return refreshTokenRotationInFlightBindings.get(error);
+}
+
+function refreshTokenReplayWaitDeadline(
+	refreshToken: OAuthRefreshToken<Scope[]>,
+) {
+	return refreshToken.rotationReplayExpiresAt?.getTime() ?? Date.now();
+}
+
+/**
+ * Wait for a concurrent rotation to store its replay. The winner's CAS revokes
+ * the parent before `storeRefreshTokenRotationReplay` runs, so a same-interval
+ * loser must poll the parent row instead of returning `invalid_grant`.
+ *
+ * The wait ends when the replay appears, the request is not pending
+ * (including a rotation marked unavailable after issuance or replay storage
+ * failed), or `rotationReplayExpiresAt` elapses — the reuse window, not a
+ * shorter cap. Slow successful writes still occupy the full window.
+ *
+ * Mismatched replay requests fail immediately. Coordination is through the
+ * adapter so overlapping grants on different instances can still recover.
+ */
+async function waitForRefreshTokenRotationReplay(
+	ctx: GenericEndpointContext,
+	refreshToken: OAuthRefreshToken<Scope[]> & { id: string },
+	request: RefreshTokenRotationReplayRequest,
+) {
+	let latest = refreshToken;
+	let polled = false;
+	while (true) {
+		const lookup = await lookupRefreshTokenRotationReplay(ctx, latest, request);
+		if (lookup.status === "hit") {
+			return lookup.response;
+		}
+		if (
+			lookup.status !== "pending" ||
+			Date.now() >= refreshTokenReplayWaitDeadline(latest)
+		) {
+			return undefined;
+		}
+		if (polled) {
+			await wait(REFRESH_TOKEN_REPLAY_POLL_INTERVAL_MS);
+		}
+		polled = true;
+		const next = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+		});
+		if (!next) {
+			return undefined;
+		}
+		latest = next;
+	}
+}
+
+async function replayRefreshTokenRotationOrThrow(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
+		scopes: string[];
+		resources?: string[];
+		verifiedConfirmation?: Confirmation;
+		skipDpopVerification?: boolean;
+	},
+) {
+	const replayRequest = await resolveRefreshTokenRotationReplayRequest(
+		ctx,
+		opts,
+		params,
+	);
+	const replay = await waitForRefreshTokenRotationReplay(
+		ctx,
+		params.refreshToken,
+		replayRequest,
+	);
+	if (replay) {
+		return replayRefreshTokenRotationResponse(ctx, replay);
+	}
+	throw new APIError("BAD_REQUEST", {
+		error_description: "invalid refresh token",
+		error: "invalid_grant",
+	});
 }
 
 async function resolveRefreshTokenRotationReplayRequest(
@@ -1060,6 +1236,8 @@ async function resolveRefreshTokenRotationReplayRequest(
 		refreshToken: OAuthRefreshToken<Scope[]> & { id: string };
 		scopes: string[];
 		resources?: string[];
+		verifiedConfirmation?: Confirmation;
+		skipDpopVerification?: boolean;
 	},
 ) {
 	const iat = Math.floor(Date.now() / 1000);
@@ -1071,11 +1249,13 @@ async function resolveRefreshTokenRotationReplayRequest(
 		iat,
 		scopeExpiresAtSeconds: iat + (opts.accessTokenExpiresIn ?? 3600),
 	});
-	const confirmation = await resolveDpopTokenBinding(ctx, opts, {
-		client: params.client,
-		grantIssuance,
-		refreshToken: params.refreshToken,
-	});
+	const confirmation = params.skipDpopVerification
+		? params.verifiedConfirmation
+		: await resolveDpopTokenBinding(ctx, opts, {
+				client: params.client,
+				grantIssuance,
+				refreshToken: params.refreshToken,
+			});
 	return buildRefreshTokenRotationReplayRequest({
 		effectiveScopes: grantIssuance.effectiveScopes,
 		requestedResources: params.resources,
@@ -1247,117 +1427,142 @@ async function createUserTokens(
 			})
 		: undefined;
 
-	// Create access token and refresh token in parallel
-	const [accessToken, refreshToken] = await Promise.all([
-		isJwtAccessToken
-			? createJwtAccessToken(
+	const refreshTokenPromise = earlyRefreshToken
+		? Promise.resolve(earlyRefreshToken)
+		: isRefreshToken && user
+			? createRefreshToken(
 					ctx,
 					opts,
 					user,
-					client,
-					audienceClaim,
-					effectiveScopes,
-					{
-						iat,
-						exp,
-						sid: sessionId,
-						signingAlgorithm: grantIssuance.signingAlgorithm,
-						signingKeyId: grantIssuance.signingKeyId,
-						accessTokenClaims,
-						confirmation,
-					},
-				)
-			: createOpaqueAccessToken(
-					ctx,
-					opts,
-					user,
-					client,
-					effectiveScopes,
-					{
-						iat,
-						exp,
-						sid: sessionId,
-					},
-					params?.resources,
 					referenceId,
 					params.authorizationCodeId,
-					earlyRefreshToken?.id,
+					client,
+					effectiveScopes,
+					{
+						iat,
+						exp: refreshTokenExp,
+						sid: sessionId,
+					},
+					existingRefreshToken,
+					authTime,
+					refreshResources,
 					confirmation,
 					requestedUserInfoClaims,
-				),
-		earlyRefreshToken
-			? earlyRefreshToken
-			: isRefreshToken && user
-				? createRefreshToken(
+				)
+			: Promise.resolve(undefined);
+
+	try {
+		// Create access token and refresh token in parallel
+		const [accessToken, refreshToken] = await Promise.all([
+			isJwtAccessToken
+				? createJwtAccessToken(
 						ctx,
 						opts,
 						user,
-						referenceId,
-						params.authorizationCodeId,
+						client,
+						audienceClaim,
+						effectiveScopes,
+						{
+							iat,
+							exp,
+							sid: sessionId,
+							signingAlgorithm: grantIssuance.signingAlgorithm,
+							signingKeyId: grantIssuance.signingKeyId,
+							accessTokenClaims,
+							confirmation,
+						},
+					)
+				: createOpaqueAccessToken(
+						ctx,
+						opts,
+						user,
 						client,
 						effectiveScopes,
 						{
 							iat,
-							exp: refreshTokenExp,
+							exp,
 							sid: sessionId,
 						},
-						existingRefreshToken,
-						authTime,
-						refreshResources,
+						params?.resources,
+						referenceId,
+						params.authorizationCodeId,
+						earlyRefreshToken?.id,
 						confirmation,
 						requestedUserInfoClaims,
-					)
-				: undefined,
-	]);
+					),
+			refreshTokenPromise,
+		]);
 
-	// ID token created after access token so at_hash can be computed
-	const idToken = isIdToken
-		? await createIdToken(
-				ctx,
-				opts,
-				user,
-				client,
-				effectiveScopes,
-				nonce,
-				sessionId,
-				authTime,
-				accessToken,
-				additionalIdTokenClaims,
-			)
-		: undefined;
-
-	const responseBody: OAuthTokenResponse = {
-		...customFields,
-		...(params.tokenResponse ?? {}),
-		access_token: accessToken,
-		expires_in: exp - iat,
-		expires_at: exp,
-		token_type: confirmationTokenType(confirmation),
-		refresh_token: refreshToken?.token,
-		scope: effectiveScopes.join(" "),
-		id_token: idToken,
-	};
-	if (existingRefreshToken?.id && refreshToken?.id) {
-		try {
-			await storeRefreshTokenRotationReplay(
-				ctx,
-				opts,
-				existingRefreshToken,
-				buildRefreshTokenRotationReplayRequest({
+		// ID token created after access token so at_hash can be computed
+		const idToken = isIdToken
+			? await createIdToken(
+					ctx,
+					opts,
+					user,
+					client,
 					effectiveScopes,
-					requestedResources: params.resources,
-					confirmation,
-				}),
-				responseBody,
-			);
-		} catch (error) {
-			ctx.context.logger.error(
-				"failed to store refresh token rotation replay",
-				error,
-			);
+					nonce,
+					sessionId,
+					authTime,
+					accessToken,
+					additionalIdTokenClaims,
+				)
+			: undefined;
+
+		const responseBody: OAuthTokenResponse = {
+			...customFields,
+			...(params.tokenResponse ?? {}),
+			access_token: accessToken,
+			expires_in: exp - iat,
+			expires_at: exp,
+			token_type: confirmationTokenType(confirmation),
+			refresh_token: refreshToken?.token,
+			scope: effectiveScopes.join(" "),
+			id_token: idToken,
+		};
+		if (existingRefreshToken?.id && refreshToken?.id) {
+			try {
+				await storeRefreshTokenRotationReplay(
+					ctx,
+					opts,
+					existingRefreshToken,
+					buildRefreshTokenRotationReplayRequest({
+						effectiveScopes,
+						requestedResources: params.resources,
+						confirmation,
+					}),
+					responseBody,
+				);
+			} catch (error) {
+				ctx.context.logger.error(
+					"failed to store refresh token rotation replay",
+					error,
+				);
+				await markRefreshTokenRotationReplayUnavailable(
+					ctx,
+					existingRefreshToken,
+				);
+			}
 		}
+		return ctx.json(responseBody);
+	} catch (error) {
+		if (
+			existingRefreshToken?.id &&
+			!isRefreshTokenRotationInFlightError(error)
+		) {
+			const created = await refreshTokenPromise.then(
+				(token) => token,
+				() => undefined,
+			);
+			if (created?.id) {
+				await markRefreshTokenRotationReplayUnavailable(
+					ctx,
+					existingRefreshToken,
+				);
+			}
+		}
+		throw error;
 	}
-	return ctx.json(responseBody);
 }
 
 /** Checks verification value */
@@ -1909,27 +2114,11 @@ async function handleRefreshTokenGrant(
 
 	if (refreshToken.revoked) {
 		if (isWithinRefreshTokenReuseInterval(refreshToken)) {
-			const replayRequest = await resolveRefreshTokenRotationReplayRequest(
-				ctx,
-				opts,
-				{
-					client,
-					refreshToken,
-					scopes: requestedScopes ?? scopes,
-					resources: resources ?? refreshToken.resources,
-				},
-			);
-			const replay = await getRefreshTokenRotationReplay(
-				ctx,
+			return replayRefreshTokenRotationOrThrow(ctx, opts, {
+				client,
 				refreshToken,
-				replayRequest,
-			);
-			if (replay) {
-				return replayRefreshTokenRotationResponse(ctx, replay);
-			}
-			throw new APIError("BAD_REQUEST", {
-				error_description: "invalid refresh token",
-				error: "invalid_grant",
+				scopes: requestedScopes ?? scopes,
+				resources: resources ?? refreshToken.resources,
 			});
 		}
 		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
@@ -1955,17 +2144,43 @@ async function handleRefreshTokenGrant(
 			: undefined;
 
 	// Generate new tokens
-	return createUserTokens(ctx, opts, {
-		client,
-		scopes: requestedScopes ?? scopes,
-		user,
-		grantType: "refresh_token",
-		referenceId: refreshToken.referenceId,
-		authorizationCodeId: refreshToken.authorizationCodeId,
-		sessionId: refreshToken.sessionId,
-		refreshToken,
-		resources: resources ?? refreshToken.resources,
-		authTime,
-		requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
-	});
+	try {
+		return await createUserTokens(ctx, opts, {
+			client,
+			scopes: requestedScopes ?? scopes,
+			user,
+			grantType: "refresh_token",
+			referenceId: refreshToken.referenceId,
+			authorizationCodeId: refreshToken.authorizationCodeId,
+			sessionId: refreshToken.sessionId,
+			refreshToken,
+			resources: resources ?? refreshToken.resources,
+			authTime,
+			requestedUserInfoClaims: refreshToken.requestedUserInfoClaims,
+		});
+	} catch (error) {
+		if (
+			(opts.refreshTokenReuseInterval ?? 0) <= 0 ||
+			!isRefreshTokenRotationInFlightError(error)
+		) {
+			throw error;
+		}
+		const latest = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]> & { id: string }
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+		});
+		if (!latest || !isWithinRefreshTokenReuseInterval(latest)) {
+			throw error;
+		}
+		return replayRefreshTokenRotationOrThrow(ctx, opts, {
+			client,
+			refreshToken: latest,
+			scopes: requestedScopes ?? scopes,
+			resources: resources ?? latest.resources,
+			verifiedConfirmation: getRefreshTokenRotationInFlightBinding(error),
+			skipDpopVerification: true,
+		});
+	}
 }
