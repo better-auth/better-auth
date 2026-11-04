@@ -687,6 +687,8 @@ The refresh token grant enables clients to update their access token without nee
 
 This implementation currently issues a new refresh token for every refresh request.
 
+A refresh token with `offline_access` outlives the browser session that authorized it. Once that session has ended, a refresh issues tokens without a `sid`, so the ended session does not cut them off. A refresh token without `offline_access` (for example after scope narrowing) is bound to that session: once the session has ended, a refresh returns `invalid_grant` and `/oauth2/introspect` reports the refresh token inactive ([Back-Channel Logout §2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions)). A refresh that drops `offline_access` after the session has ended, by its scope request or by a resource whose `allowedScopes` omit it, is refused the same way.
+
 Set `refreshTokenReuseInterval` to allow a rotated refresh token to be reused for a short interval and receive the same token response. This lets clients recover from duplicate refresh requests, lost responses, or retries without minting another token pair.
 
 ```ts title="auth.ts"

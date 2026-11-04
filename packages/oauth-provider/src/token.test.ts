@@ -756,6 +756,7 @@ describe("oauth token - refresh_token", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
 	const validResource = "https://myapi.example.com";
+	const narrowResource = "https://narrow.example.com";
 	const {
 		auth: authorizationServer,
 		signInWithTestUser,
@@ -771,7 +772,13 @@ describe("oauth token - refresh_token", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
-				resources: [validResource],
+				resources: [
+					validResource,
+					{
+						identifier: narrowResource,
+						allowedScopes: ["openid", "profile"],
+					},
+				],
 				enforcePerClientResources: false,
 			}),
 		],
@@ -892,13 +899,17 @@ describe("oauth token - refresh_token", async () => {
 	}
 
 	/** Initial authorization */
-	async function authorizeForRefreshToken(scopes: string[]) {
+	async function authorizeForRefreshToken(
+		scopes: string[],
+		authorizeHeaders?: Headers,
+	) {
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
 			scopes,
 		});
 
 		let callbackRedirectUrl = "";
 		await client.$fetch(authUrl.toString(), {
+			headers: authorizeHeaders ?? headers,
 			onError(context) {
 				callbackRedirectUrl = context.response.headers.get("Location") || "";
 			},
@@ -1804,6 +1815,219 @@ describe("oauth token - refresh_token", async () => {
 			} finally {
 				cas.restore();
 			}
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11132
+	 * @see https://github.com/better-auth/better-auth/issues/12222
+	 * @see https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions
+	 */
+	describe("refresh after the grant session ended", () => {
+		const scopes = ["openid", "profile", "offline_access"];
+
+		async function refresh(
+			refreshToken: string,
+			params?: { scope?: string; opaque?: boolean; resource?: string },
+		) {
+			const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+				refreshToken,
+				options: {
+					clientId: oauthClient!.client_id,
+					clientSecret: oauthClient!.client_secret!,
+					redirectURI: redirectUri,
+				},
+				extraParams: params?.scope ? { scope: params.scope } : undefined,
+				resource: params?.opaque
+					? undefined
+					: (params?.resource ?? validResource),
+			});
+			return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+				method: "POST",
+				body,
+				headers: tokenHeaders,
+			});
+		}
+
+		async function introspectAccessToken(token: string) {
+			return client.oauth2.introspect(
+				{
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+					token,
+					token_type_hint: "access_token",
+				},
+				{ headers: { "content-type": "application/x-www-form-urlencoded" } },
+			);
+		}
+
+		async function introspectRefreshToken(token: string) {
+			return client.oauth2.introspect(
+				{
+					client_id: oauthClient!.client_id,
+					client_secret: oauthClient!.client_secret,
+					token,
+					token_type_hint: "refresh_token",
+				},
+				{ headers: { "content-type": "application/x-www-form-urlencoded" } },
+			);
+		}
+
+		async function fetchUserinfo(accessToken: string) {
+			return client.$fetch<Record<string, unknown>>("/oauth2/userinfo", {
+				headers: { Authorization: `Bearer ${accessToken}` },
+			});
+		}
+
+		async function signInAndAuthorize() {
+			const { headers: sessionHeaders } = await signInWithTestUser();
+			const session = await authorizationServer.api.getSession({
+				headers: sessionHeaders,
+			});
+			const tokens = await authorizeForRefreshToken(scopes, sessionHeaders);
+			return { sessionId: session!.session.id, tokens: tokens! };
+		}
+
+		async function expireSession(sessionId: string) {
+			const ctx = await authorizationServer.$context;
+			await ctx.adapter.update({
+				model: "session",
+				where: [{ field: "id", value: sessionId }],
+				update: { expiresAt: new Date(Date.now() - 60_000) },
+			});
+			const expiredSession = await ctx.adapter.findOne<{ id: string }>({
+				model: "session",
+				where: [{ field: "id", value: sessionId }],
+			});
+			expect(expiredSession?.id).toBe(sessionId);
+		}
+
+		it("issues tokens without sid when the session expired but still exists", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			await expireSession(sessionId);
+
+			const refreshed = await refresh(tokens.refresh_token!);
+			expect(refreshed.error).toBeNull();
+			const accessToken = refreshed.data!.access_token!;
+			expect(decodeJwt(accessToken).sid).toBeUndefined();
+			expect(decodeJwt(refreshed.data!.id_token!).sid).toBeUndefined();
+
+			const introspection = await introspectAccessToken(accessToken);
+			expect(introspection.data).toMatchObject({ active: true });
+			expect(introspection.data?.sid).toBeUndefined();
+
+			const userinfo = await fetchUserinfo(accessToken);
+			expect(userinfo.error).toBeNull();
+			expect(userinfo.data?.sub).toBeDefined();
+		});
+
+		it("issues an opaque access token without a session when the session expired but still exists", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			await expireSession(sessionId);
+
+			const refreshed = await refresh(tokens.refresh_token!, { opaque: true });
+			expect(refreshed.error).toBeNull();
+			const accessToken = refreshed.data!.access_token!;
+
+			const introspection = await introspectAccessToken(accessToken);
+			expect(introspection.data).toMatchObject({ active: true });
+			expect(introspection.data?.sid).toBeUndefined();
+
+			const userinfo = await fetchUserinfo(accessToken);
+			expect(userinfo.error).toBeNull();
+			expect(userinfo.data?.sub).toBeDefined();
+		});
+
+		it("keeps the sid while the session is live", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+
+			const refreshed = await refresh(tokens.refresh_token!);
+			expect(refreshed.error).toBeNull();
+			const accessToken = refreshed.data!.access_token!;
+			expect(decodeJwt(accessToken).sid).toBe(sessionId);
+
+			const introspection = await introspectAccessToken(accessToken);
+			expect(introspection.data).toMatchObject({
+				active: true,
+				sid: sessionId,
+			});
+		});
+
+		it("rejects a refresh token without offline_access once the session ended", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			const narrowed = await refresh(tokens.refresh_token!, {
+				scope: "openid profile",
+			});
+			expect(narrowed.error).toBeNull();
+			expect(narrowed.data?.scope).toBe("openid profile");
+			const narrowedRefreshToken = narrowed.data!.refresh_token!;
+
+			const live = await refresh(narrowedRefreshToken);
+			expect(live.error).toBeNull();
+			expect(live.data?.refresh_token).toBeUndefined();
+
+			await expireSession(sessionId);
+
+			const ended = await refresh(narrowedRefreshToken);
+			expect(ended.data).toBeNull();
+			expect(
+				(ended.error as { error?: string } | null | undefined)?.error,
+			).toBe("invalid_grant");
+		});
+
+		it("rejects a refresh that drops offline_access once the session ended", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			await expireSession(sessionId);
+
+			const narrowed = await refresh(tokens.refresh_token!, {
+				scope: "openid profile",
+			});
+			expect(narrowed.data).toBeNull();
+			expect(
+				(narrowed.error as { error?: string } | null | undefined)?.error,
+			).toBe("invalid_grant");
+
+			const kept = await refresh(tokens.refresh_token!);
+			expect(kept.error).toBeNull();
+			expect(decodeJwt(kept.data!.access_token!).sid).toBeUndefined();
+			const rotated = await introspectRefreshToken(kept.data!.refresh_token!);
+			expect(rotated.data).toMatchObject({ active: true });
+			expect(rotated.data?.sid).toBeUndefined();
+		});
+
+		it("rejects a refresh whose resource allowlist drops offline_access once the session ended", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			await expireSession(sessionId);
+
+			const narrowed = await refresh(tokens.refresh_token!, {
+				resource: narrowResource,
+			});
+			expect(narrowed.data).toBeNull();
+			expect(
+				(narrowed.error as { error?: string } | null | undefined)?.error,
+			).toBe("invalid_grant");
+
+			const kept = await refresh(tokens.refresh_token!);
+			expect(kept.error).toBeNull();
+			expect(kept.data?.scope).toBe(scopes.join(" "));
+			expect(decodeJwt(kept.data!.access_token!).sid).toBeUndefined();
+		});
+
+		it("reports a refresh token without offline_access inactive once the session ended", async () => {
+			const { sessionId, tokens } = await signInAndAuthorize();
+			const narrowed = await refresh(tokens.refresh_token!, {
+				scope: "openid profile",
+			});
+			expect(narrowed.error).toBeNull();
+			const narrowedRefreshToken = narrowed.data!.refresh_token!;
+
+			const live = await introspectRefreshToken(narrowedRefreshToken);
+			expect(live.data).toMatchObject({ active: true, sid: sessionId });
+
+			await expireSession(sessionId);
+
+			const ended = await introspectRefreshToken(narrowedRefreshToken);
+			expect(ended.data).toMatchObject({ active: false });
 		});
 	});
 });
