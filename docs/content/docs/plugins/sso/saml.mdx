@@ -234,7 +234,7 @@ To log users out of the IdP and your app together, set `saml.enableSingleLogout:
 
 Your IdP must publish a `SingleLogoutService`, in its metadata XML or in `idpMetadata.singleLogoutService`. When you sign users out through `/sign-out`, Better Auth also removes the stored SAML session. These plugin options tune logout:
 
-* `saml.wantLogoutRequestSigned` and `saml.wantLogoutResponseSigned` require signed logout messages from the IdP. Both default to `false`. Enable them when your IdP signs logout messages.
+* `saml.wantLogoutRequestSigned` requires signed LogoutRequests from the IdP, and `saml.wantLogoutResponseSigned` requires signed LogoutResponses. Both default to `false`. Enable each one when your IdP signs that message type.
 * `saml.logoutRequestTTL` (default 5 minutes) limits how long a logout request stays valid.
 
 The client plugin does not expose SP-initiated logout, and the endpoint accepts only JSON. To start it from the browser, add a server route that a form POSTs to, and forward the request to `auth.handler` as JSON. Better Auth then runs its [origin and CSRF checks](/docs/reference/security#csrf-protection), and the browser follows the redirect to the IdP. Do not call `auth.api.initiateSLO` from that route, because a direct call skips those checks. The example uses the default `/api/auth` base path, so change it if you set `basePath`.
