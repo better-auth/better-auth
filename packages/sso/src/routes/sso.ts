@@ -2255,7 +2255,14 @@ export const sloEndpoint = (options?: SSOOptions) => {
 				return handleLogoutResponse(ctx, sp, idp, relayState, providerId);
 			}
 
-			return handleLogoutRequest(ctx, sp, idp, relayState, providerId);
+			return handleLogoutRequest(
+				ctx,
+				sp,
+				idp,
+				relayState,
+				providerId,
+				createIdP(config, { logoutResponse: true }),
+			);
 		},
 	);
 };
@@ -2340,6 +2347,7 @@ async function handleLogoutRequest(
 	idp: ReturnType<typeof createIdP>,
 	relayState: string | undefined,
 	providerId: string,
+	responseIdp: ReturnType<typeof createIdP>,
 ) {
 	const binding =
 		ctx.method === "POST" && ctx.body?.SAMLRequest ? "post" : "redirect";
@@ -2424,7 +2432,7 @@ async function handleLogoutRequest(
 	// Pass the parsed request so samlify links `InResponseTo` and fills the
 	// response template (ID, Issuer, IssueInstant, Destination, StatusCode).
 	const res = sp.createLogoutResponse(
-		idp,
+		responseIdp,
 		parsed as unknown as RequestInfo,
 		binding,
 		relayState || "",
