@@ -7,11 +7,11 @@ description: Prove ownership of a provider's email domains with a DNS TXT record
 
 ## Enable domain verification
 
-With `domainVerification.enabled`, every new provider starts unverified, and sign-in through it returns `401` with "Provider domain has not been verified" until its domains are verified. A verified domain also lets SSO link existing users whose email matches it, and enables domain-based [organization assignment](/docs/plugins/sso/provisioning#organization-provisioning). Providers configured in `defaultSSO` count as verified.
+To require proof of domain ownership, set `domainVerification.enabled`. Every new provider then starts unverified, and sign-in through it returns `401` with "Provider domain has not been verified" until its domains are verified. A verified domain also lets SSO link existing users whose email matches it, and enables domain-based [organization assignment](/docs/plugins/sso/provisioning#organization-provisioning). Providers configured in `defaultSSO` count as verified.
 
 With domain verification disabled, Better Auth never creates organization memberships from email-domain matches. Providers linked to an organization still provision members, and `signIn.sso` still finds providers by email or domain.
 
-Enable the option on the server and on the client. The client option exposes the verification endpoints in its types.
+Enable the option on the server and on the client. On the client, it adds the verification endpoints to the types.
 
 <Tabs items={["server", "client"]}>
   <Tab value="server">
@@ -79,9 +79,9 @@ See the [Schema](/docs/plugins/sso/reference#schema) section to add the fields m
   <Step>
     ### Publish a TXT record
 
-    Add a `TXT` record at `_{tokenPrefix}-{providerId}.{domain}`. The default `tokenPrefix` is `better-auth-token`, and the leading underscore marks the name as an attribute leaf, as described in [RFC 8552](https://datatracker.ietf.org/doc/html/rfc8552). The record's value is the token, or `{label}={token}` where `{label}` is `_{tokenPrefix}-{providerId}`.
+    Add a `TXT` record at `_{tokenPrefix}-{providerId}.{domain}`. The leading underscore marks the name as an attribute leaf, as described in [RFC 8552](https://datatracker.ietf.org/doc/html/rfc8552). The default `tokenPrefix` is `better-auth-token`. Set the record's value to the token, or to `{label}={token}` where `{label}` is `_{tokenPrefix}-{providerId}`.
 
-    A provider with `domain: "example.com,example.org"` needs the record on both domains. The label must be at most 63 characters, so keep `tokenPrefix` and `providerId` short.
+    If a provider has `domain: "example.com,example.org"`, add the record on both domains. The label must be at most 63 characters, so keep `tokenPrefix` and the provider ID short.
   </Step>
 
   <Step>
@@ -102,7 +102,7 @@ See the [Schema](/docs/plugins/sso/reference#schema) section to add the fields m
   ```
 </APIMethod>
 
-The call returns `204`, and it marks the provider verified only if every listed domain answers with the record. If the provider changes while the check runs, it returns `409` with `SSO_PROVIDER_CHANGED`:
+The call returns `204` and marks the provider verified only if every listed domain answers with the record. If the provider changes while the check runs, it returns `409` with `SSO_PROVIDER_CHANGED`:
 
 * If its domains changed, reload the provider and retry.
 * If it was deleted, there is nothing left to verify.
@@ -120,13 +120,13 @@ The call returns `204`, and it marks the provider verified only if every listed 
   ```
 </APIMethod>
 
-It returns the current `domainVerificationToken` while that token is valid, and otherwise issues a new one. Tokens last one week.
+It returns the current `domainVerificationToken` while that token is valid. When no valid token exists, it issues a new one. Tokens last one week.
 
 Changing `domain` through [`update-provider`](/docs/plugins/sso#manage-providers) resets `domainVerified`, so verify the provider again afterwards.
 
 ## Errors
 
-Both endpoints require access to the provider: the caller owns it, or is an owner or admin of its organization. Otherwise they return `403`, and `404` when the provider does not exist.
+Both endpoints require access to the provider: the signed-in user must own it, or be an owner or admin of its organization. Without that access they return `403`, and `404` when the provider does not exist.
 
 | Code                         | Status | Meaning                                                                                                                   |
 | ---------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |

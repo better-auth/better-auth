@@ -55,7 +55,7 @@ Not built in:
   <Step>
     ### Add the plugin to the server
 
-    The provider signs tokens with the [JWT plugin](/docs/plugins/jwt). Disable the JWT plugin's `/token` route, because `/oauth2/token` is the token endpoint clients call.
+    Your provider signs tokens with the [JWT plugin](/docs/plugins/jwt). Disable the JWT plugin's `/token` route, because clients call `/oauth2/token` instead.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -75,14 +75,14 @@ Not built in:
     ```
 
     <Callout type="warn">
-      With [secondary storage](/docs/concepts/database#secondary-storage), also set `session.storeSessionInDatabase: true`. The provider looks sessions up in the database and fails at startup without it.
+      If you use [secondary storage](/docs/concepts/database#secondary-storage), also set `session.storeSessionInDatabase: true`. The provider looks sessions up in the database, so without it the server fails at startup.
     </Callout>
   </Step>
 
   <Step>
     ### Migrate the database
 
-    Run the migration or generate the schema to add the necessary fields and tables to the database.
+    To add the plugin's fields and tables to your database, run the migration or generate the schema.
 
     <Tabs items={["migrate", "generate"]}>
       <Tab value="migrate">
@@ -104,7 +104,7 @@ Not built in:
   <Step>
     ### Expose the well-known metadata
 
-    Clients fetch the provider's metadata from these paths, and the auth handler serves them when requests reach it. Most frameworks forward only your auth base path, such as `/api/auth/*`, to `auth.handler`. Add a route for each path outside it, such as the RFC 8414 path at the root of your domain.
+    Clients fetch your provider's metadata from the paths below, and the auth handler serves them when requests reach it. Most frameworks forward only your auth base path, such as `/api/auth/*`, to `auth.handler`. For each path outside it, such as the RFC 8414 path at the root of your domain, add a route.
 
     | Metadata                                                                                              | Path                                                                                                          | Helper                              |
     | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
@@ -121,14 +121,14 @@ Not built in:
     ```
 
     <Callout type="info">
-      A browser-based client that fetches metadata from another origin needs CORS on these routes. The metadata is public, so `oauthProviderAuthServerMetadata(auth, { headers: { "Access-Control-Allow-Origin": "*" } })` is fine. Do not allow credentials.
+      If a browser-based client fetches your metadata from another origin, enable CORS on these routes. The metadata is public, so `oauthProviderAuthServerMetadata(auth, { headers: { "Access-Control-Allow-Origin": "*" } })` is fine. Do not allow credentials.
     </Callout>
   </Step>
 
   <Step>
     ### Add the client plugins
 
-    Add `oauthProviderClient` to the app that renders your login and consent pages. It carries the authorization request through sign-in and consent, so the flow resumes after each step.
+    To resume the flow after each step, add `oauthProviderClient` to the app that renders your login and consent pages. It carries the authorization request through sign-in and consent.
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
@@ -139,7 +139,7 @@ Not built in:
     });
     ```
 
-    An API that verifies access tokens uses `oauthProviderResourceClient`; see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
+    To verify access tokens in your API, use `oauthProviderResourceClient`; see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
   </Step>
 </Steps>
 
@@ -147,11 +147,11 @@ Not built in:
 
 The authorize endpoint redirects to `loginPage` when the user has no session, and to `consentPage` when the client needs the user's approval. Both receive a signed copy of the authorization request.
 
-Your login page signs the user in as usual, and the plugin continues the flow when the session is created. Your consent page calls `authClient.oauth2.consent`. See [Sign-in and consent screens](/docs/plugins/oauth-provider/sign-in-flow) to build both.
+On your login page, sign the user in as usual. The plugin continues the flow when the session is created. On your consent page, call `authClient.oauth2.consent`. To build both, see [Sign-in and consent screens](/docs/plugins/oauth-provider/sign-in-flow).
 
 ## Run your first flow
 
-This flow issues an access token for one API, `https://api.example.com`. Build the login and consent pages first; step 3 redirects to them.
+To try the provider end to end, follow this flow. It issues an access token for one API, `https://api.example.com`. Build your login and consent pages first, because step 3 redirects to them.
 
 <Steps>
   <Step>
@@ -159,7 +159,7 @@ This flow issues an access token for one API, `https://api.example.com`. Build t
 
     Add the API to `resources`, then create a client linked to it. The authorize and token endpoints reject a `resource` the client is not linked to; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
 
-    `adminCreateOAuthClient` runs only on the server and needs a signed-in user's session. Call it from a route that:
+    To create the client, call `adminCreateOAuthClient`. It runs only on the server and needs a signed-in user's session, so call it from a route that:
 
     * only administrators can reach
     * [checks the request's `Origin`](/docs/reference/security#csrf-protection)
@@ -186,7 +186,7 @@ This flow issues an access token for one API, `https://api.example.com`. Build t
     // Store client.client_id and client.client_secret in the client app.
     ```
 
-    For a public client, such as a single-page or native app, add `token_endpoint_auth_method: "none"`. It gets no secret and authenticates with PKCE alone.
+    To register a public client, such as a single-page or native app, add `token_endpoint_auth_method: "none"`. The client gets no secret and authenticates with PKCE alone.
   </Step>
 
   <Step>
@@ -234,7 +234,7 @@ This flow issues an access token for one API, `https://api.example.com`. Build t
   <Step>
     ### Check the token
 
-    Call UserInfo with the access token. A `200` response with the user's `sub` and `name` means the flow worked.
+    Call UserInfo with the access token. A 200 response with the user's `sub` and `name` means the flow worked.
 
     ```bash
     curl https://auth.example.com/api/auth/oauth2/userinfo \

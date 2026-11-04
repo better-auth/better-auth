@@ -9,7 +9,7 @@ An OIDC provider signs users in with the authorization code flow, using PKCE ([R
 
 ## Register an OIDC provider
 
-Pass an `oidcConfig` to `sso.register`. Endpoints you leave out are filled in by [discovery](#oidc-discovery).
+To register an OIDC provider, pass an `oidcConfig` to `sso.register`. [Discovery](#oidc-discovery) fills in any endpoints you leave out.
 
 ```ts title="register-oidc-provider.ts"
 import { authClient } from "@/lib/auth-client";
@@ -33,13 +33,13 @@ const { data } = await authClient.sso.register({
 
 The same body works on the server with `auth.api.registerSSOProvider({ body, headers })`, passing the headers of a signed-in request.
 
-Register `{baseURL}/sso/callback/{providerId}` as the redirect URI at the IdP. With the default base path, that is `/api/auth/sso/callback/acme`, unless you set a [shared redirect URI](#shared-redirect-uri). The response returns it as `redirectURI`.
+At the IdP, register `{baseURL}/sso/callback/{providerId}` as the redirect URI. With the default base path, that is `/api/auth/sso/callback/acme`. If you set a [shared redirect URI](#shared-redirect-uri), register that instead. The response returns the URI to register as `redirectURI`.
 
 `pkce` defaults to `true`, and `scopes` defaults to `["openid", "email", "profile", "offline_access"]`. See [`oidcConfig`](/docs/plugins/sso/reference#oidcconfig) for every field.
 
 ### Mapping
 
-`mapping` selects the claims that fill the user. Claims come from the UserInfo response when the provider has a UserInfo endpoint, and from the ID token otherwise. By default `email` reads `email`, `name` reads `name`, and `image` reads `picture`. Each `extraFields` entry maps a user field to a claim. Entries that name a [user additional field](/docs/concepts/database#extending-core-schema) are saved on the user, and every entry is passed to `provisionUser` in `userInfo`. Mapping cannot replace the account subject, which is always `sub`.
+To choose which claims fill the user, set `mapping`. Claims come from the UserInfo response when the provider has a UserInfo endpoint, and from the ID token otherwise. By default, `email` reads `email`, `name` reads `name`, and `image` reads `picture`. Each `extraFields` entry maps a user field to a claim. Better Auth saves entries that name a [user additional field](/docs/concepts/database#extending-core-schema) on the user, and passes every entry to `provisionUser` in `userInfo`. Mapping cannot replace the account subject, which is always `sub`.
 
 When the email claim is a list, Better Auth uses the first address. If your IdP sends addresses only in a list claim such as `emails`, set `mapping: { email: "emails" }`.
 
@@ -49,19 +49,22 @@ When the email claim is a list, Better Auth uses the first address. If your IdP 
 
 ## OIDC discovery
 
-At registration, Better Auth fetches `{issuer}/.well-known/openid-configuration`, or `oidcConfig.discoveryEndpoint` when set ([OIDC Discovery §4](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig)). The document's `issuer` must match the provider's `issuer` ([§4.3](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation)).
+At registration, Better Auth fetches `{issuer}/.well-known/openid-configuration`, or `oidcConfig.discoveryEndpoint` when set ([OIDC Discovery §4](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig)). The document's `issuer` must match the provider's `issuer` ([§4.3](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfigurationValidation)). When discovery runs at registration, a missing or malformed document fails registration instead of the first sign-in.
 
-Discovery fills `authorizationEndpoint`, `tokenEndpoint`, `jwksEndpoint`, `userInfoEndpoint`, and `tokenEndpointAuthentication`. Values you set explicitly win. Relative endpoint URLs are resolved against the issuer and keep its path.
+Discovery fills `authorizationEndpoint`, `tokenEndpoint`, `jwksEndpoint`, `userInfoEndpoint`, and `tokenEndpointAuthentication`. If you set one of these yourself, your value wins. Relative endpoint URLs are resolved against the issuer and keep its path.
 
 The document must include `issuer`, `authorization_endpoint`, `token_endpoint`, and `jwks_uri`. Providers that support only the implicit flow, which may omit `token_endpoint`, are not supported.
 
-Set `skipDiscovery: true` to store your endpoints without fetching the document, and provide `authorizationEndpoint`, `tokenEndpoint`, and `jwksEndpoint`. If a stored provider lacks any of the three, Better Auth runs discovery at sign-in.
+To store your own endpoints without fetching the document, set `skipDiscovery: true` and provide `authorizationEndpoint`, `tokenEndpoint`, and `jwksEndpoint`. If you omit any of the three, Better Auth runs discovery at sign-in.
 
 ### Trusted origins
 
-The discovery URL and every URL discovered from it must match [`trustedOrigins`](/docs/reference/security#trusted-origins), or registration fails with `discovery_untrusted_origin`. An endpoint on a private or non-routable host, or on a host that resolves to one, also needs a `trustedOrigins` entry, or registration fails with `discovery_private_host`.
+Registration fails unless [`trustedOrigins`](/docs/reference/security#trusted-origins) covers both of these:
 
-`trustedOrigins` is global: an IdP origin listed there is also accepted as a request `Origin` and a redirect target, and a private host listed there can be reached for any provider. List only IdP origins you have vetted, never values a registrant supplies.
+* The discovery URL and every URL discovered from it. A missing origin fails registration with `discovery_untrusted_origin`.
+* Any endpoint on a private or non-routable host, or on a host that resolves to one. A missing entry fails registration with `discovery_private_host`.
+
+`trustedOrigins` is global. An IdP origin listed there is also accepted as a request `Origin` and a redirect target, and a private host listed there can be reached for any provider. List only IdP origins you have vetted, never values a registrant supplies.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -70,7 +73,7 @@ export const auth = betterAuth({
 });
 ```
 
-When customers bring their own IdPs, pass a function that adds the allowed IdP origins on SSO routes, which include registration, sign-in, and the callback:
+To support customers who bring their own IdPs, pass a function that adds the allowed IdP origins on SSO routes. These include registration, sign-in, and the callback:
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -87,7 +90,7 @@ export const auth = betterAuth({
 });
 ```
 
-Direct `auth.api.registerSSOProvider` calls do not give this function the endpoint's URL, so the path check never matches them. Register those providers over HTTP, or add their IdP origins to the list returned for every request.
+If you call `auth.api.registerSSOProvider` directly, this function never sees the endpoint's URL, so the path check never matches. Register those providers over HTTP, or add their IdP origins to the list returned for every request.
 
 ### Discovery errors
 
@@ -108,9 +111,9 @@ Server-side OIDC requests (discovery, token, UserInfo, and JWKS) never follow re
 
 ## Token endpoint authentication
 
-`tokenEndpointAuthentication` is `client_secret_basic` (the default), `client_secret_post`, or `private_key_jwt` ([OIDC Core §9](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication), [RFC 7523 §2.2](https://datatracker.ietf.org/doc/html/rfc7523#section-2.2)). When you leave it unset, discovery picks the first one the IdP advertises in that order, and falls back to `client_secret_basic`. `clientSecret` is required for the two secret methods.
+To choose how Better Auth authenticates at the token endpoint, set `tokenEndpointAuthentication` to `client_secret_basic`, `client_secret_post`, or `private_key_jwt` ([OIDC Core §9](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication), [RFC 7523 §2.2](https://datatracker.ietf.org/doc/html/rfc7523#section-2.2)). If you leave it unset, discovery picks the first one the IdP advertises in that order and falls back to `client_secret_basic`, the default. Both secret methods require `clientSecret`.
 
-For `private_key_jwt`, `oidcConfig` takes an optional `privateKeyId` (passed to `resolvePrivateKey` as `keyId` and sent as the assertion's `kid`) and `privateKeyAlgorithm` (default `RS256`). Supply the key with the `resolvePrivateKey` plugin option, which keeps keys out of the database, or with `defaultSSO[].privateKey`, which wins when both exist. Without either, registration returns 400.
+For `private_key_jwt`, supply the key with the `resolvePrivateKey` plugin option, which keeps keys out of the database, or with `defaultSSO[].privateKey`, which wins when both exist. Registration returns 400 without either. In `oidcConfig`, you can also set `privateKeyId` (passed to `resolvePrivateKey` as `keyId` and sent as the assertion's `kid`) and `privateKeyAlgorithm` (default `RS256`).
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -128,7 +131,7 @@ export const auth = betterAuth({
 
 ## Shared redirect URI
 
-By default each OIDC provider has its own callback at `/sso/callback/{providerId}`. Set `redirectURI` to make every OIDC provider share one callback, either as a path appended to `baseURL` or as a full URL that routes to this server.
+To make every OIDC provider share one callback, set `redirectURI` to a path appended to `baseURL` or to a full URL that routes to this server. Without it, each provider has its own callback at `/sso/callback/{providerId}`.
 
 ```ts title="auth.ts"
 sso({
@@ -138,13 +141,13 @@ sso({
 
 The provider ID travels in the OAuth state. Sign-ins then send the shared URI as `redirect_uri`, so add it to each IdP's allowed redirect URIs. Both `/sso/callback` and `/sso/callback/{providerId}` stay registered. SAML providers are unaffected.
 
-A per-provider callback also checks that the code arrived at the callback of the provider that started sign-in, while a shared callback relies on the state alone. Keep per-provider callbacks when users register their own providers ([RFC 9700 §4.4](https://datatracker.ietf.org/doc/html/rfc9700#section-4.4)).
+If users register their own providers, keep per-provider callbacks. A per-provider callback also checks that the code arrived at the callback of the provider that started sign-in, while a shared callback relies on the state alone ([RFC 9700 §4.4](https://datatracker.ietf.org/doc/html/rfc9700#section-4.4)).
 
 ## IdP-initiated sign-in
 
-Set `oidcConfig.allowIdpInitiated: true` to accept callbacks that arrive at `/sso/callback/{providerId}` without `state`. Better Auth discards the IdP's code and starts a new authorization request with a fresh `state` and PKCE verifier.
+To accept callbacks that arrive at `/sso/callback/{providerId}` without `state`, set `oidcConfig.allowIdpInitiated: true`. Better Auth discards the IdP's code and starts a new authorization request with a fresh `state` and PKCE verifier.
 
-Set it on a provider in [`defaultSSO`](/docs/plugins/sso#configure-providers-in-code). `/sso/register` and `/sso/update-provider` silently drop it.
+Set it on a provider in [`defaultSSO`](/docs/plugins/sso#configure-providers-in-code), because `/sso/register` and `/sso/update-provider` silently drop it.
 
 <Callout type="warn">
   Set the `baseURL` option when you enable `allowIdpInitiated`. The restarted flow uses `baseURL` as the post-sign-in destination and fails with `CALLBACK_URL_REQUIRED` without it.

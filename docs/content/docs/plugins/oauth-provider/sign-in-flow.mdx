@@ -11,7 +11,7 @@ When a client sends a user to `/oauth2/authorize`, Better Auth redirects the use
 
 Each redirect carries the original authorize parameters as a signed query. Your pages pass it back as `oauth_query`, and Better Auth verifies it before resuming. The signature covers every authorize parameter, including custom ones, and expires after `codeExpiresIn` (10 minutes by default).
 
-The `oauthProviderClient` plugin sends `oauth_query` from the current page URL on every `POST` request. If you call the endpoints another way, send the signed query yourself. Your own page parameters can sit in the same URL, but keep them out of `oauth_query`.
+The `oauthProviderClient` plugin sends `oauth_query` from the current page URL on every POST request. If you call the endpoints another way, send the signed query yourself. Your own page parameters can sit in the same URL, but keep them out of `oauth_query`.
 
 The authorize endpoint runs these steps in order and stops at the first one that needs the user:
 
@@ -33,7 +33,7 @@ Better Auth also applies these rules to the authorize request ([OAuth 2.1 §4.1.
 
 ## Login page
 
-Set `loginPage` to the page where users sign in. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. With `oauthProviderClient`, the page needs no OAuth code.
+To send users to your sign-in page, set `loginPage`. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. With `oauthProviderClient`, your page needs no OAuth code.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -43,7 +43,7 @@ oauthProvider({
 
 ## Consent page
 
-Set `consentPage` to the page that asks the user to approve the client. Clients with `skip_consent: true` skip it unless the authorize request includes `prompt=consent`.
+To ask users to approve a client, set `consentPage`. A client with `skip_consent: true` skips this page. A request with `prompt=consent` shows it anyway.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -51,7 +51,7 @@ oauthProvider({
 })
 ```
 
-The page's query holds `client_id`, `scope`, and, when requested, `claims`. Before rendering, verify the query on the server with the helper below. It keeps only the signed parameters, so your page's own parameters do not break the signature. It reads the provider's secret from `auth.$context`, so run it only on the server.
+To trust the consent query, verify it on the server before you render the page. The query holds `client_id`, `scope`, and, when requested, `claims`. The helper below keeps only the signed parameters, so your page's own parameters do not break the signature. It reads the provider's secret from `auth.$context`, so run it only on the server.
 
 ```ts title="consent-query.ts"
 import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
@@ -69,7 +69,7 @@ export async function getVerifiedConsentQuery(request: Request) {
 }
 ```
 
-Return an error response when the helper returns `null`. The check rejects only queries that were changed or have expired. It does not prove that the client exists, that the user is signed in, or that the scopes are valid.
+If the helper returns `null`, return an error response. The check rejects only queries that were changed or have expired. It does not prove that the client exists, that the user is signed in, or that the scopes are valid.
 
 To show which client is asking, load it with the signed `client_id`. The call throws a 401 error without a session, and a 404 error for unknown or disabled clients.
 
@@ -80,7 +80,7 @@ const client = await auth.api.getOAuthClientPublic({
 });
 ```
 
-For dynamically registered and CIMD clients, whoever registered the client chose its name and logo. Also show the host of the signed `redirect_uri`. Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
+For dynamically registered and CIMD clients, whoever registered the client chose its name and logo, so also show the host of the signed `redirect_uri`. Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
 
 <APIMethod path="/oauth2/consent" method="POST" requireSession>
   ```ts
@@ -109,7 +109,7 @@ The response is `{ redirect: true, url }`. With `accept: false`, the user return
 
 ## Sign-up account screen
 
-When a client sends `prompt=create` ([OpenID Connect Prompt Create](https://openid.net/specs/openid-connect-prompt-create-1_0.html)), Better Auth redirects to `signup.page`, which defaults to `loginPage`.
+To send `prompt=create` requests ([OpenID Connect Prompt Create](https://openid.net/specs/openid-connect-prompt-create-1_0.html)) to a separate sign-up page, set `signup.page`. Without it, Better Auth redirects to `loginPage`.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -136,7 +136,7 @@ When registration is done, call `authClient.oauth2.continue({ created: true })`.
 
 ## Select account screen
 
-Set `selectAccount` to support `prompt=select_account` ([OIDC Core §3.1.2.1](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)). Without `selectAccount.page`, that prompt returns an error. This example uses the [multi-session plugin](/docs/plugins/multi-session) and asks whenever more than one session is signed in:
+To support `prompt=select_account` ([OIDC Core §3.1.2.1](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)), set `selectAccount`. Without `selectAccount.page`, that prompt returns an error. This example uses the [multi-session plugin](/docs/plugins/multi-session) and asks whenever more than one session is signed in:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -159,7 +159,7 @@ await authClient.oauth2.continue({ selected: true });
 
 ## Post-login screen
 
-`postLogin` adds a step after sign-in and before consent, for example to pick an organization. `consentReferenceId` returns the choice, such as the organization ID. Better Auth stores consent separately for each reference. When it returns `undefined`, the consent given without a reference applies.
+To add a step after sign-in and before consent, such as picking an organization, set `postLogin`. `consentReferenceId` returns the choice, such as an organization ID. Better Auth stores consent separately for each reference. When it returns `undefined`, the consent given without a reference applies.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -178,18 +178,18 @@ oauthProvider({
 })
 ```
 
-`shouldRedirect` runs again with `isContinuation: true` when the user returns from your page. Ask users with several organizations on a new authorization, and return `false` on continuation once the active organization is one the user belongs to. `isContinuation` does not prove a selection was made, so always check the session.
+When the user returns from your page, `shouldRedirect` runs again with `isContinuation: true`. Ask users with several organizations on a new authorization. On continuation, return `false` once the active organization is one the user belongs to. `isContinuation` does not prove a selection was made, so always check the session.
 
 ```ts title="select-organization.ts"
 await authClient.organization.setActive({ organizationId });
 await authClient.oauth2.continue({ postLogin: true });
 ```
 
-If some scopes need a reference, throw an `APIError` from `consentReferenceId` when it is missing; Better Auth does not check this for you. For how references reach token claims, see [Organizations](/docs/plugins/oauth-provider/clients#organizations).
+If some scopes need a reference, throw an `APIError` from `consentReferenceId` when none is set. Better Auth does not check this for you. For how references reach token claims, see [Organizations](/docs/plugins/oauth-provider/clients#organizations).
 
 ## Continue endpoint
 
-Account pages call this endpoint to resume authorization. Send the flag that matches the page.
+To resume authorization from an account page, call this endpoint with the flag that matches the page.
 
 <APIMethod path="/oauth2/continue" method="POST" requireSession>
   ```ts
@@ -216,7 +216,7 @@ Account pages call this endpoint to resume authorization. Send the flag that mat
 
 ## Manage consents
 
-Users can list and change the consents they have given. Each endpoint requires a session and only returns or changes the signed-in user's consents.
+To let users list and change their consents, use these endpoints. Each requires a session and only returns or changes the signed-in user's consents.
 
 | Server method        | Path                     | Method | Input                             |
 | -------------------- | ------------------------ | ------ | --------------------------------- |
