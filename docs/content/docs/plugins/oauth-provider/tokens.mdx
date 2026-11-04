@@ -120,7 +120,7 @@ All values are in seconds.
 | `codeExpiresIn`           | `600` (10 minutes)  | Authorization codes                     |
 | `assertionMaxLifetime`    | `300` (5 minutes)   | `private_key_jwt` client assertions     |
 
-A refresh token's lifetime restarts at each refresh: the replacement token gets a new `refreshTokenExpiresIn` window. A client that refreshes regularly therefore keeps its grant indefinitely. To end a grant, revoke the refresh token or delete the user's [consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents).
+A refresh token's lifetime restarts at each refresh: the replacement token gets a new `refreshTokenExpiresIn` window. A client that refreshes regularly therefore keeps its grant indefinitely. To end a grant, [revoke](#revocation) the refresh token. Deleting the user's [consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents) does not revoke tokens already issued.
 
 To shorten access tokens that carry high-privilege scopes, set `scopeExpirations`. A resource's `accessTokenTtl` and `refreshTokenTtl` can also shorten these lifetimes, but not extend them. When several limits apply, the earliest expiry wins. For example, with the config below, a token with both `read:payments` and `write:payments` expires after 5 minutes.
 
