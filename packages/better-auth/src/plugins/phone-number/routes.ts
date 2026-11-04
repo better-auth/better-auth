@@ -539,6 +539,46 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		async (ctx) => {
 			await verifyAndConsumePhoneNumberOTP(ctx, opts, ctx.body);
 
+			// Single completion path. Each branch above computes `user` and decides
+			// the session strategy; finalize() is the only place that fires the
+			// `callbackOnVerification` hook and shapes the response, so a future
+			// branch can't accidentally skip either.
+			const finalize = async (
+				user: UserWithPhoneNumber,
+				sessionStrategy:
+					| { type: "reuse"; token: string }
+					| { type: "create" }
+					| { type: "none" },
+			) => {
+				await opts?.callbackOnVerification?.(
+					{ phoneNumber: ctx.body.phoneNumber, user },
+					ctx,
+				);
+
+				let token: string | null = null;
+				if (sessionStrategy.type === "reuse") {
+					token = sessionStrategy.token;
+				} else if (sessionStrategy.type === "create") {
+					const session = await ctx.context.internalAdapter.createSession(
+						user.id,
+					);
+					if (!session) {
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						);
+					}
+					await setSessionCookie(ctx, { session, user });
+					token = session.token;
+				}
+
+				return ctx.json({
+					status: true,
+					token,
+					user: parseUserOutput(ctx.context.options, user),
+				});
+			};
+
 			if (ctx.body.updatePhoneNumber) {
 				// Replacing the number changes a sign-in method, so a session revoked
 				// in the store must not pass on its cookie cache alone. A session
@@ -583,17 +623,9 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
 					);
 				}
-				await opts?.callbackOnVerification?.(
-					{
-						phoneNumber: ctx.body.phoneNumber,
-						user,
-					},
-					ctx,
-				);
-				return ctx.json({
-					status: true,
+				return finalize(user, {
+					type: "reuse",
 					token: session.session.token,
-					user: parseUserOutput(ctx.context.options, user),
 				});
 			}
 
@@ -658,40 +690,10 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 			}
 
-			await opts?.callbackOnVerification?.(
-				{
-					phoneNumber: ctx.body.phoneNumber,
-					user,
-				},
-				ctx,
+			return finalize(
+				user,
+				ctx.body.disableSession ? { type: "none" } : { type: "create" },
 			);
-
-			if (!ctx.body.disableSession) {
-				const session = await ctx.context.internalAdapter.createSession(
-					user.id,
-				);
-				if (!session) {
-					throw APIError.from(
-						"INTERNAL_SERVER_ERROR",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-					);
-				}
-				await setSessionCookie(ctx, {
-					session,
-					user,
-				});
-				return ctx.json({
-					status: true,
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, user),
-				});
-			}
-
-			return ctx.json({
-				status: true,
-				token: null,
-				user: parseUserOutput(ctx.context.options, user),
-			});
 		},
 	);
 
