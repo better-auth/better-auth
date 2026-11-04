@@ -153,7 +153,7 @@ Whether dynamically registered confidential clients require PKCE. Defaults to `t
 
 `clientRegistrationClientSecretExpiration` <span className="opacity-70">`number | string | Date`</span>
 
-Lifetime of secrets issued to dynamically registered confidential clients. Defaults to no expiry.
+The `client_secret_expires_at` value returned to dynamically registered confidential clients. Better Auth does not reject the secret after that time. Defaults to no expiry.
 
 `clientRegistrationDefaultResources` <span className="opacity-70">`string[]`</span>
 

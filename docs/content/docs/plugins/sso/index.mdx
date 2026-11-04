@@ -113,6 +113,8 @@ sso({
 * `domain`: a bare email domain such as `example.com`. Separate several domains with commas.
 * `oidcConfig`, `samlConfig`, or both.
 
+OIDC registration fetches the IdP's discovery document, so add the IdP's origin to `trustedOrigins` first. Otherwise registration fails with `discovery_untrusted_origin`. `trustedOrigins` applies to the whole app, so list only IdP origins you have vetted. See [Trusted origins](/docs/plugins/sso/oidc#trusted-origins).
+
 The response includes `redirectURI`, and `domainVerificationToken` when domain verification is enabled.
 
 ```ts title="register-provider.ts"

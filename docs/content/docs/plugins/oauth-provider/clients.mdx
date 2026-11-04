@@ -47,7 +47,7 @@ Create a client owned by the signed-in user, or by the organization that [`clien
   ```
 </APIMethod>
 
-A confidential client receives its `client_secret` once, in this response. Public clients receive only a `client_id`.
+A client that authenticates with `client_secret_basic` or `client_secret_post` receives its `client_secret` once, in this response. Public and `private_key_jwt` clients receive only a `client_id`.
 
 The other client endpoints take a `client_id` and require a session, except where noted:
 
@@ -62,7 +62,7 @@ The other client endpoints take a `client_id` and require a session, except wher
 | `rotateClientSecret`           | `/oauth2/client/rotate-secret`   | `POST`  | Issue a new secret. The old one stops working at once.     |
 | `deleteOAuthClient`            | `/oauth2/delete-client`          | `POST`  | Delete the client.                                         |
 
-`token_endpoint_auth_method` cannot change after creation, and an update cannot set the secret.
+`token_endpoint_auth_method` cannot change after creation, and an update cannot set the secret. Client secrets do not expire. To retire one, rotate it with `rotateClientSecret`.
 
 `getOAuthClientPublicPrelogin` is off until you set `allowPublicClientPrelogin: true`. It needs a valid signed `oauth_query`, but that query is not bound to the `client_id` it reads. Anyone can get one by starting an authorization request, so enabling it makes the public fields of every enabled client, including `contacts`, readable without an account.
 
@@ -70,7 +70,6 @@ The other client endpoints take a `client_id` and require a session, except wher
 
 Only the server-only `adminCreateOAuthClient` and `adminUpdateOAuthClient` methods can set these fields:
 
-* `client_secret_expires_at`: when a confidential client's secret expires. `0` means never.
 * `skip_consent`: skip the consent screen. Use it for [trusted clients](#trusted-clients).
 * `enable_end_session`: allow the client to [end the user's session](/docs/plugins/oauth-provider/openid-connect#rp-initiated-logout).
 * `require_pkce`: create only. Set `false` to let a confidential client skip [PKCE](/docs/plugins/oauth-provider/tokens#pkce).
@@ -150,7 +149,7 @@ The registration options:
 | ------------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `clientRegistrationDefaultScopes`          | `scopes` | Scopes every registered client may request.                                                                                                                  |
 | `clientRegistrationAllowedScopes`          | none     | Extra scopes added to the defaults. A request may ask for a subset of the union.                                                                             |
-| `clientRegistrationClientSecretExpiration` | never    | Lifetime of a confidential client's secret, such as `"30d"`.                                                                                                 |
+| `clientRegistrationClientSecretExpiration` | never    | The `client_secret_expires_at` value returned at registration, such as `"30d"`. Better Auth does not reject the secret after that time.                      |
 | `clientRegistrationRequirePKCE`            | `true`   | Set `false` to let registered confidential clients skip PKCE. Public clients always need PKCE.                                                               |
 | `clientRegistrationDefaultApplicationType` | `"web"`  | `application_type` for a registration that omits it: `"web"`, `"native"`, or `"infer"` (native when any redirect URI is a custom scheme or `http` loopback). |
 
