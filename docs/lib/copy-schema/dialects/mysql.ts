@@ -82,7 +82,7 @@ export const mysqlResolver = {
 			date: "timestamp(3)",
 			json: "json",
 			id: ctx.useNumberId ? "integer" : "varchar(36)",
-			foreignKeyId: ctx.useNumberId ? "integer" : "text",
+			foreignKeyId: ctx.useNumberId ? "integer" : "varchar(36)",
 		}));
 
 		const lines = [
@@ -115,6 +115,7 @@ export const mysqlResolver = {
 			lines.push(`);`);
 		}
 		for (const field of filterNonUniqueIndexes(ctx.schema)) {
+			if (field.references) continue;
 			lines.push(formatIndex(field, ctx.schema.modelName));
 		}
 		return lines.join("\n");
