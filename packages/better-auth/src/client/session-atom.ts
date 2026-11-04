@@ -268,13 +268,17 @@ export function getSessionAtom(
 	) => void = () => {};
 
 	onMount(session, () => {
-		let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-		if (!isServer()) {
-			timeoutId = setTimeout(() => {
-				void fetchSessionOnMount();
-			}, 0);
+		// Focus / online / broadcast refresh is browser-only. Subscribing the
+		// global managers during SSR retains listeners across requests because
+		// Vue's store unsubscribe may never run onMount cleanup on the server.
+		if (isServer()) {
+			return;
 		}
+
+		let timeoutId: ReturnType<typeof setTimeout> | undefined;
+		timeoutId = setTimeout(() => {
+			void fetchSessionOnMount();
+		}, 0);
 
 		const refreshManager = createSessionRefreshManager({
 			fetchSession,
