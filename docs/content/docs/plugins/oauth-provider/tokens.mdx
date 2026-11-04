@@ -135,7 +135,7 @@ oauthProvider({
 
 Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
 
-Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. The retry must use the same client, scopes, resources, and DPoP key, or it gets `invalid_grant`.
+Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. The retry gets that response only when it uses the same client, scopes, resources, and DPoP key as the first refresh. A retry that differs but is otherwise valid gets `invalid_grant`.
 
 Inside the window, reuse is not treated as replay, and the token family is never revoked. A stolen rotated token that passes these checks therefore gets the replacement refresh token. Keep the interval short.
 
