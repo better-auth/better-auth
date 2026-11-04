@@ -142,7 +142,9 @@ export async function getTestInstance<
 		return db;
 	}
 
+	const postgres = testWith === "postgres" ? await getPostgres() : undefined;
 	const mysql = testWith === "mysql" ? await getMysql() : undefined;
+	const sqlite = testWith === "sqlite" ? await getSqlite() : undefined;
 
 	const opts = {
 		socialProviders: {
@@ -156,25 +158,24 @@ export async function getTestInstance<
 			},
 		},
 		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
-		database:
-			testWith === "postgres"
-				? {
-						db: await getPostgres(),
-						type: "postgres",
-						transaction: config?.transaction,
-					}
-				: testWith === "mongodb"
-					? await Promise.all([
-							mongodbClient(),
-							await import("../adapters/mongodb-adapter"),
-						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
-					: mysql
-						? {
-								db: mysql,
-								type: "mysql",
-								transaction: config?.transaction,
-							}
-						: await getSqlite(),
+		database: postgres
+			? {
+					db: postgres,
+					type: "postgres",
+					transaction: config?.transaction,
+				}
+			: testWith === "mongodb"
+				? await Promise.all([
+						mongodbClient(),
+						await import("../adapters/mongodb-adapter"),
+					]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
+				: mysql
+					? {
+							db: mysql,
+							type: "mysql",
+							transaction: config?.transaction,
+						}
+					: sqlite,
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -197,22 +198,24 @@ export async function getTestInstance<
 			await db.dropDatabase();
 			return;
 		}
-		if (testWith === "postgres") {
-			const postgres = await getPostgres();
-			if (postgresSchema) {
-				await sql
-					.raw(
-						`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
-							postgresSchema,
-						)} CASCADE`,
-					)
-					.execute(postgres);
-			} else {
-				await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
-					postgres,
-				);
+		if (postgres) {
+			try {
+				if (postgresSchema) {
+					await sql
+						.raw(
+							`DROP SCHEMA IF EXISTS ${quotePostgresIdentifier(
+								postgresSchema,
+							)} CASCADE`,
+						)
+						.execute(postgres);
+				} else {
+					await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
+						postgres,
+					);
+				}
+			} finally {
+				await postgres.destroy();
 			}
-			await postgres.destroy();
 			return;
 		}
 
@@ -226,10 +229,8 @@ export async function getTestInstance<
 			}
 			return;
 		}
-		if (testWith === "sqlite") {
-			const sqlite = await getSqlite();
+		if (sqlite) {
 			sqlite.close();
-			return;
 		}
 	};
 	cleanupSet.add(cleanup);
