@@ -1,3 +1,4 @@
+import { APIError } from "@better-auth/core/error";
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organization } from ".";
@@ -306,5 +307,75 @@ describe("organization creation in database hooks", async () => {
 		});
 		expect(org).toBeDefined();
 		expect((org as any)?.name).toBe("Before-After Org");
+	});
+});
+
+describe("organization deletion hooks", async () => {
+	const getInstance = async (
+		beforeDeleteOrganization?: () => Promise<void>,
+	) => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: { beforeDeleteOrganization },
+				}),
+			],
+		});
+		const ctx = await auth.$context;
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "Delete Hook Org",
+				slug: "delete-hook-org",
+			},
+			headers,
+		});
+		const session = await auth.api.getSession({ headers });
+		expect(session?.session.activeOrganizationId).toBe(org?.id);
+		const findOrganization = () =>
+			ctx.adapter.findOne({
+				model: "organization",
+				where: [{ field: "id", value: org!.id }],
+			});
+		return { auth, findOrganization, headers, org };
+	};
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10590
+	 */
+	it("should keep the active organization when beforeDeleteOrganization rejects the delete", async () => {
+		const { auth, findOrganization, headers, org } = await getInstance(
+			async () => {
+				throw new APIError("BAD_REQUEST", {
+					message: "Organization still has other members",
+				});
+			},
+		);
+
+		await expect(
+			auth.api.deleteOrganization({
+				body: { organizationId: org!.id },
+				headers,
+			}),
+		).rejects.toThrow("Organization still has other members");
+
+		// The delete was refused, so the organization survives and the session
+		// must still point at it.
+		expect(await findOrganization()).not.toBeNull();
+		const session = await auth.api.getSession({ headers });
+		expect(session?.session.activeOrganizationId).toBe(org!.id);
+	});
+
+	it("should clear the active organization when the delete succeeds", async () => {
+		const { auth, findOrganization, headers, org } = await getInstance();
+
+		await auth.api.deleteOrganization({
+			body: { organizationId: org!.id },
+			headers,
+		});
+
+		expect(await findOrganization()).toBeNull();
+		const session = await auth.api.getSession({ headers });
+		expect(session?.session.activeOrganizationId).toBeNull();
 	});
 });
