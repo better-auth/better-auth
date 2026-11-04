@@ -103,7 +103,13 @@ export type DiscoveryErrorCode =
 	| "discovery_invalid_json"
 	/** OIDC endpoint URL (discovery or per-endpoint: authorization, token, userinfo, jwks) is invalid, malformed, or uses a non-`http(s)` scheme */
 	| "discovery_invalid_url"
-	/** OIDC endpoint URL is not trusted by the trusted origins configuration */
+	/**
+	 * OIDC endpoint URL is not trusted by the trusted origins configuration.
+	 *
+	 * @deprecated No longer emitted. Public hosts are allowed without a
+	 * `trustedOrigins` entry, and non-public hosts fail with
+	 * `discovery_private_host`. Kept so existing error handling keeps compiling.
+	 */
 	| "discovery_untrusted_origin"
 	/** OIDC endpoint URL (discovery or per-endpoint) points to a host that is not publicly routable (loopback, RFC 1918, link-local, cloud metadata FQDN, etc.) */
 	| "discovery_private_host"
