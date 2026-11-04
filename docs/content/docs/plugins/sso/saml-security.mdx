@@ -93,7 +93,7 @@ sso({
 
 Algorithm validation flags weak algorithms, such as RSA-SHA1, and can reject them. It also rejects unknown signature and digest algorithms. Registration and provider updates check the config's `signatureAlgorithm` and `digestAlgorithm`, and a rejected value fails the request with a 400 error.
 
-Also configure each IdP to sign with RSA-SHA256 or stronger and, when it encrypts assertions, to use RSA-OAEP and AES-GCM. Treat these options as a second check, not a replacement for the IdP's own settings.
+Also configure each IdP to sign with RSA-SHA256 or stronger and, when it encrypts assertions, to use RSA-OAEP and AES-GCM. Better Auth's `algorithms` options do not replace the IdP's own settings.
 
 | Kind            | Accepted                                     | Deprecated |
 | --------------- | -------------------------------------------- | ---------- |

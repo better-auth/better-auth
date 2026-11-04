@@ -68,7 +68,7 @@ To store your own endpoints without fetching the document, set `skipDiscovery: t
 To stop a registrant from making your server call internal services or a cloud metadata address, registration checks these URLs against [`trustedOrigins`](/docs/reference/security#trusted-origins):
 
 * When registration runs discovery, the discovery URL and every URL discovered from it. A missing origin fails registration with `discovery_untrusted_origin`.
-* Any endpoint on a private or non-routable host, or on a host that resolves to one, even with `skipDiscovery: true`. A missing entry fails registration with `discovery_private_host`. Hostnames are resolved only where `node:dns` is available. On runtimes without it, such as Cloudflare Workers, only literal private addresses are blocked. The resolved address is not pinned for the later request.
+* Any endpoint on a private or non-routable host, or on a host that resolves to one, even with `skipDiscovery: true`. A missing entry fails registration with `discovery_private_host`. Hostnames are resolved only where `node:dns` is available. On runtimes without it, the check still blocks private and reserved IP addresses written in the URL, `localhost` and `*.localhost` names, and known cloud metadata hostnames such as `metadata.google.internal`. Other hostnames are not resolved, so a hostname that points to a private address is not blocked. The resolved address is not pinned for the later request.
 
 `trustedOrigins` is global. An IdP origin listed there is also accepted as a request `Origin` and a redirect target, and a private host listed there can be reached for any provider. List only IdP origins you have vetted, never values a registrant supplies.
 
@@ -79,7 +79,7 @@ export const auth = betterAuth({
 });
 ```
 
-To support customers who bring their own IdPs, pass a function that adds IdP origins you have approved on the SSO registration, sign-in, and callback routes. The function receives the request and returns the origins to trust. On the routes where it returns an IdP origin, that origin is also accepted as a request `Origin` and as a `callbackURL`, `errorCallbackURL`, or `newUserCallbackURL`. Return only origins your team has vetted, such as from an allowlist you maintain. Never return values read from provider rows or registration requests, because a registrant could then add their own site as a redirect target or an internal host for the server to call.
+To support customers who bring their own IdPs, pass a function that adds IdP origins you have approved on the SSO registration, provider update, sign-in, and callback routes. The function receives the request and returns the origins to trust. On the routes where it returns an IdP origin, that origin is also accepted as a request `Origin` and as a `callbackURL`, `errorCallbackURL`, or `newUserCallbackURL`. Return only origins your team has vetted, such as from an allowlist you maintain. Never return values read from provider rows or registration requests, because a registrant could then add their own site as a redirect target or an internal host for the server to call.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -91,7 +91,9 @@ export const auth = betterAuth({
 		// Match exact routes, not any path that contains "/sso"
 		const isSSORoute =
 			pathname === "/api/auth/sso/register" ||
+			pathname === "/api/auth/sso/update-provider" ||
 			pathname === "/api/auth/sign-in/sso" ||
+			pathname === "/api/auth/sso/callback" ||
 			pathname.startsWith("/api/auth/sso/callback/");
 		return isSSORoute
 			? [...app, ...(await getApprovedIdpOrigins())]

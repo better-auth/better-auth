@@ -278,7 +278,7 @@ requireMcpAuth(auth, async (request, accessTokenClaims) => {
 For every client configured through `mcp()`, the plugin defaults `refreshTokenReuseInterval` to 30 seconds. This lets a client retry a refresh with the old token and receive the same rotated token response when another request already consumed that refresh token. OAuth Provider itself remains strict by default; set `refreshTokenReuseInterval: 0` on `mcp()` to disable the overlap window.
 
 <Callout type="warn">
-  Inside the window, reuse of a rotated refresh token is not treated as replay, so the token family is not revoked. An attacker who replays a stolen refresh token within 30 seconds of the legitimate refresh gets the replacement refresh token. Most MCP clients are public clients with no secret, so nothing else stops that retry. Set `refreshTokenReuseInterval: 0` unless your clients lose refresh responses; see [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
+  Inside the window, reuse of a rotated refresh token is not treated as replay, so the token family is not revoked. An attacker who replays a stolen bearer refresh token within 30 seconds of the legitimate refresh gets the replacement refresh token, as long as the retry asks for the same scopes and resources. A DPoP-bound refresh token also needs a valid DPoP proof from the key it is bound to. Most MCP clients are public clients with no secret, so nothing else stops a bearer token retry. Set `refreshTokenReuseInterval: 0` unless your clients lose refresh responses; see [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
 </Callout>
 
 export const mcpPluginOptionsType = {

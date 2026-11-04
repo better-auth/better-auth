@@ -65,7 +65,7 @@ MIIDqjCCApKgAwIBAgIGAZhVGMeUMA0GCSqGSIb3DQEBCwUAMIGVMQswCQYDVQQGEwJVUzETMBEG
 ...
 -----END CERTIFICATE-----`,
       // Better Auth generates the SP metadata from `issuer` and the ACS URL.
-      // If you supply your own `spMetadata.metadata`, its entityID must equal `issuer`.
+      // If you supply your own `spMetadata.metadata`, its entityID becomes the SP entity ID and the default audience.
     }
   }]
 }

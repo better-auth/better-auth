@@ -126,14 +126,13 @@ If your API also receives opaque tokens, have it introspect them:
 2. [Link it to the resource](#introspection).
 3. Pass its credentials as `remoteVerify`.
 
-With `remoteVerify` set, every token is introspected after the local JWT check. Introspection also confirms the session is still active. Set `force: true` to skip the local check.
+With `remoteVerify` set, every token is introspected after the local JWT check. Introspection also confirms the session is still active. Set `force: true` to skip the local check. Leave `typ` out of `verifyOptions` here. The introspection result has no JWT header, so a `typ` check rejects every token. Introspection reports a JWT as active only when it has `azp`, so session JWTs still fail.
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
   verifyOptions: {
     issuer: "https://auth.example.com/api/auth",
     audience: "https://api.example.com",
-    typ: "at+jwt",
     requiredClaims: ["azp"],
   },
   jwksUrl: "https://auth.example.com/api/auth/jwks",
