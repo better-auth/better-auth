@@ -81,31 +81,35 @@ describe("getTestInstance password hasher", () => {
 });
 
 /**
- * Kysely's `MysqlDialect` expects a callback-style mysql2 pool.
+ * Kysely's `MysqlDialect` expects a callback-style mysql2 pool. CI starts
+ * MySQL, so the suite runs there even when the probe fails.
  * @see https://kysely-org.github.io/kysely-apidoc/interfaces/MysqlDialectConfig.html
  */
-describe.runIf(isMysqlAvailable)("getTestInstance with MySQL", () => {
-	it("should migrate and sign in the test user", async () => {
-		const { client, signInWithTestUser, testUser } = await getTestInstance(
-			undefined,
-			{ testWith: "mysql" },
-		);
+describe.runIf(isMysqlAvailable || Boolean(process.env.CI))(
+	"getTestInstance with MySQL",
+	() => {
+		it("should migrate and sign in the test user", async () => {
+			const { client, signInWithTestUser, testUser } = await getTestInstance(
+				undefined,
+				{ testWith: "mysql" },
+			);
 
-		const { user, headers } = await signInWithTestUser();
-		expect(user.email).toBe(testUser.email);
+			const { user, headers } = await signInWithTestUser();
+			expect(user.email).toBe(testUser.email);
 
-		const session = await client.getSession({ fetchOptions: { headers } });
-		expect(session.data?.user.id).toBe(user.id);
-	});
+			const session = await client.getSession({ fetchOptions: { headers } });
+			expect(session.data?.user.id).toBe(user.id);
+		});
 
-	it("should give each instance its own database", async () => {
-		const first = await getTestInstance(undefined, { testWith: "mysql" });
-		const second = await getTestInstance(undefined, { testWith: "mysql" });
+		it("should give each instance its own database", async () => {
+			const first = await getTestInstance(undefined, { testWith: "mysql" });
+			const second = await getTestInstance(undefined, { testWith: "mysql" });
 
-		const { user: firstUser } = await first.signInWithTestUser();
-		const { user: secondUser } = await second.signInWithTestUser();
+			const { user: firstUser } = await first.signInWithTestUser();
+			const { user: secondUser } = await second.signInWithTestUser();
 
-		expect(secondUser.email).toBe(firstUser.email);
-		expect(secondUser.id).not.toBe(firstUser.id);
-	});
-});
+			expect(secondUser.email).toBe(firstUser.email);
+			expect(secondUser.id).not.toBe(firstUser.id);
+		});
+	},
+);
