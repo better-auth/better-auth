@@ -71,6 +71,17 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 5. **No Mutations on GET Requests (with additional safeguards)**
    `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
 
+6. **Your own routes that call `auth.api`**
+   These checks run only for requests that reach `auth.handler`. A direct `auth.api` call skips them, even when you pass the browser's headers. If your own route changes state for a cookie-authenticated browser request, reject it unless its `Origin` is trusted:
+
+   ```ts
+   const origin = request.headers.get("origin");
+   const context = await auth.$context;
+   if (!origin || !context.isTrustedOrigin(origin)) {
+     return new Response(null, { status: 403 });
+   }
+   ```
+
 ### Disabling Security Checks
 
 Better Auth provides two separate options to disable security checks. These options control different aspects of security:

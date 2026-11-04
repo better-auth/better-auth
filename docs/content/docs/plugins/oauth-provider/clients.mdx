@@ -76,7 +76,7 @@ Only the server-only `adminCreateOAuthClient` and `adminUpdateOAuthClient` metho
 * `disabled`: update only. Pauses the client.
 * `metadata`: private data attached to the client.
 
-Both methods need a signed-in user's session and run `clientPrivileges`, and the update needs that user to own the client, unless it changes only `client_credentials_scopes` and `clientPrivileges` approves both `update` and `configure-client-credentials-scopes`. Neither checks that the user is an administrator, so call them only from server code you already restrict to administrators.
+Both methods need a signed-in user's session and run `clientPrivileges`, and the update needs that user to own the client, unless it changes only `client_credentials_scopes` and `clientPrivileges` approves both `update` and `configure-client-credentials-scopes`. Neither checks that the user is an administrator, so call them only from server code you already restrict to administrators. When that code is a route a browser calls with its session cookie, [check its `Origin`](/docs/reference/security#csrf-protection) first.
 
 The admin update takes the changes under `update`:
 

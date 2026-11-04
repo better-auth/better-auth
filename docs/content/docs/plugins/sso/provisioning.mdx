@@ -138,7 +138,7 @@ An error thrown from `provisionUser` fails the sign-in response, but the user st
 
 ## Link a provider to an organization
 
-Pass `organizationId` when you register a provider. Users who sign in through it join that organization.
+Pass `organizationId` when you register a provider. Users who sign in through it join that organization. When you call this from a route a browser reaches with its session cookie, [check its `Origin`](/docs/reference/security#csrf-protection) first.
 
 ```ts title="register-provider.ts"
 await auth.api.registerSSOProvider({

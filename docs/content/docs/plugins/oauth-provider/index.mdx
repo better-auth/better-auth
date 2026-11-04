@@ -140,7 +140,7 @@ This flow issues an access token for one API, `https://api.example.com`. Build t
   <Step>
     ### Register the API and a client
 
-    Add the API to `resources`, then create a client linked to it. `adminCreateOAuthClient` runs only on the server and needs a signed-in user's session, so call it from a route only admins can reach and pass that request's headers. [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) can also limit who creates clients. The authorize and token endpoints reject a `resource` the client is not linked to; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
+    Add the API to `resources`, then create a client linked to it. `adminCreateOAuthClient` runs only on the server and needs a signed-in user's session, so call it from a route only admins can reach, [check its `Origin`](/docs/reference/security#csrf-protection), and pass that request's headers. [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) can also limit who creates clients. The authorize and token endpoints reject a `resource` the client is not linked to; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
 
     ```ts title="auth.ts"
     oauthProvider({
@@ -151,7 +151,7 @@ This flow issues an access token for one API, `https://api.example.com`. Build t
     ```
 
     ```ts title="admin-route.ts"
-    // Inside an admin-only server route that receives `request`
+    // Inside an admin-only server route that receives `request`; check its Origin first
     const client = await auth.api.adminCreateOAuthClient({
       headers: request.headers,
       body: {
