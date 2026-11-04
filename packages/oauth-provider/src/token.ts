@@ -520,17 +520,11 @@ async function createOpaqueAccessToken(
 /**
  * Tear down the entire refresh-token family for a (client, user) pair, plus
  * any access tokens that reference those refresh rows, per RFC 9700 §4.14.
- * Access tokens are deleted first so the parent rows' foreign-key children
- * do not block the refresh-row delete.
  *
- * TODO(invalidate-family-race): the two `deleteMany` calls are not atomic
- * with respect to each other. Between them, a concurrent rotation in a
- * different worker can `create` a fresh refresh row (and, immediately after,
- * an access-token row referencing it) for the same (client, user) pair,
- * leaving the family partially rebuilt and the new refresh row orphaned of
- * any deletion. Closing this window requires the same transactional adapter
- * contract tracked under FIXME(strict-family-invalidation) in
- * `createRefreshToken`.
+ * Revoke every refresh row in one update before deleting. A later delete can
+ * fail (or a successor can be inserted around the deletes) and the family is
+ * still unusable: rotation re-reads the parent and drops a successor whose
+ * parent was revoked again or removed.
  *
  * @internal
  */
@@ -539,6 +533,23 @@ export async function invalidateRefreshFamily(
 	clientId: string,
 	userId: string,
 ) {
+	// A concurrent rotation can stamp `rotatedAt` while this write is in flight.
+	// A clock a minute ahead still lands after that stamp, and clearing the
+	// replay cache stops the old token from returning the cached successor.
+	const revokedAt = new Date(Date.now() + 60_000);
+	await ctx.context.adapter.updateMany({
+		model: "oauthRefreshToken",
+		where: [
+			{ field: "clientId", value: clientId },
+			{ field: "userId", value: userId },
+		],
+		update: {
+			revoked: revokedAt,
+			rotationReplayExpiresAt: null,
+			rotationReplayResponse: null,
+		},
+	});
+
 	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
 		model: "oauthRefreshToken",
 		where: [
@@ -565,6 +576,23 @@ export async function invalidateRefreshFamily(
 			{ field: "userId", value: userId },
 		],
 	});
+}
+
+/**
+ * A rotation sets `revoked` and `rotatedAt` to the same instant. A later
+ * family invalidation moves `revoked` forward or deletes the parent. Either
+ * means a successor inserted after that must not be kept.
+ *
+ * @internal
+ */
+export function familyWasInvalidatedAfterRotation(
+	parent: { revoked?: Date | null; rotatedAt?: Date | null } | null,
+): boolean {
+	if (!parent?.rotatedAt) return true;
+	if (!parent.revoked) return false;
+	return (
+		new Date(parent.revoked).getTime() > new Date(parent.rotatedAt).getTime()
+	);
 }
 
 async function revokeTokensIssuedForAuthorizationCode(
@@ -698,6 +726,29 @@ async function createRefreshToken(
 		model: "oauthRefreshToken",
 		data: newRow,
 	});
+
+	const parent = await ctx.context.adapter.findOne<{
+		revoked?: Date | null;
+		rotatedAt?: Date | null;
+	}>({
+		model: "oauthRefreshToken",
+		where: [{ field: "id", value: originalRefresh.id }],
+	});
+	if (familyWasInvalidatedAfterRotation(parent)) {
+		await ctx.context.adapter.update({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+			update: { revoked: new Date() },
+		});
+		await ctx.context.adapter.delete({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: refreshToken.id }],
+		});
+		throw new APIError("BAD_REQUEST", {
+			error_description: "invalid refresh token",
+			error: "invalid_grant",
+		});
+	}
 
 	return {
 		id: refreshToken.id,
@@ -1309,6 +1360,28 @@ async function createUserTokens(
 					)
 				: undefined,
 	]);
+
+	// Family invalidation can remove the successor after it is inserted and
+	// before this access row is written. Drop that access row if the refresh
+	// row is already gone or revoked.
+	if (earlyRefreshToken?.id) {
+		const liveRefresh = await ctx.context.adapter.findOne<{
+			revoked?: Date | null;
+		}>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: earlyRefreshToken.id }],
+		});
+		if (!liveRefresh || liveRefresh.revoked) {
+			await ctx.context.adapter.deleteMany({
+				model: "oauthAccessToken",
+				where: [{ field: "refreshId", value: earlyRefreshToken.id }],
+			});
+			throw new APIError("BAD_REQUEST", {
+				error_description: "invalid refresh token",
+				error: "invalid_grant",
+			});
+		}
+	}
 
 	// ID token created after access token so at_hash can be computed
 	const idToken = isIdToken
