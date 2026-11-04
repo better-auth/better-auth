@@ -49,8 +49,9 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 								// An unproven number is still unique, so storing one could squat
 								// someone else's number. Only this plugin's verified path sets it.
 								async before(data, ctx) {
+									// An empty string is no number, so it is dropped like one.
 									if (
-										!data[opts.phoneNumber] ||
+										data[opts.phoneNumber] == null ||
 										data[opts.phoneNumberVerified] === true
 									) {
 										return;
@@ -89,7 +90,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 									// claim one. Dropping it keeps an existing verified number intact.
 									if (
 										!ctx ||
-										!data[opts.phoneNumber] ||
+										data[opts.phoneNumber] == null ||
 										data[opts.phoneNumberVerified] === true ||
 										ctx.path === "/admin/update-user"
 									) {
