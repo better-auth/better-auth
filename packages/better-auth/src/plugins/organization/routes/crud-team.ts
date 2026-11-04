@@ -3,7 +3,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
@@ -755,6 +755,12 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 					ctx,
 				);
 
+				if (!updatedSession) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+					);
+				}
 				await setSessionCookie(ctx, {
 					session: updatedSession,
 					user: session.user,
@@ -815,6 +821,12 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				ctx,
 			);
 
+			if (!updatedSession) {
+				throw APIError.from(
+					"UNAUTHORIZED",
+					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+				);
+			}
 			await setSessionCookie(ctx, {
 				session: updatedSession,
 				user: session.user,
