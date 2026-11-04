@@ -85,7 +85,7 @@ oauthProvider({
 })
 ```
 
-## Pairwise Subject Identifiers
+## Pairwise subject identifiers
 
 By default, `sub` is the user ID, which is the same for every client (the `public` [subject type](https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes)). Set `pairwiseSecret` to let clients receive a `sub` that other clients cannot correlate:
 
@@ -95,7 +95,7 @@ oauthProvider({
 })
 ```
 
-Discovery then lists `"public"` and `"pairwise"` in `subject_types_supported`. A client opts in by registering with `subject_type: "pairwise"`.
+Discovery then lists `"public"` and `"pairwise"` in `subject_types_supported`. A client opts in with `subject_type: "pairwise"` through dynamic registration or `adminCreateOAuthClient`. `createOAuthClient` ignores the field.
 
 Better Auth computes the value with HMAC-SHA256 over the host of the client's first redirect URI and the user ID ([OIDC Core §8.1](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg)). Clients that share a redirect host share the same `sub`.
 
@@ -146,7 +146,7 @@ await auth.api.adminCreateOAuthClient({
 * Recipients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token for it, such as after a `resource` request without `offline_access`, is not notified.
 * Logout Tokens always include `sid` and live for 120 seconds. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
 * Better Auth also revokes the session's access tokens and its refresh tokens without `offline_access`. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows.
-* `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS.
+* `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS, so a public name that resolves to a private address passes. If untrusted parties can register clients, block outbound requests from the auth server to private networks.
 * Clients registered through [CIMD](/docs/plugins/cimd) cannot use back-channel logout.
 
 <Callout type="warn">

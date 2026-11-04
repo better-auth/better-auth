@@ -5,7 +5,7 @@ title: SAML response validation
 description: How Better Auth validates SAML responses and which checks you can tune.
 ---
 
-The assertion consumer service (ACS) endpoint, `/sso/saml2/sp/acs/:providerId`, runs these checks on every SAML response before it signs anyone in:
+The ACS endpoint, `{baseURL}/sso/saml2/sp/acs/{providerId}`, runs these checks on every SAML response before it signs anyone in:
 
 1. **Size limit**: the encoded response must fit within `maxResponseSize`.
 2. **One assertion**: the response must contain exactly one assertion.
@@ -13,16 +13,16 @@ The assertion consumer service (ACS) endpoint, `/sso/saml2/sp/acs/:providerId`, 
 4. **Algorithms**: the signature and encryption algorithms must be allowed.
 5. **Timestamps**: the current time must fall between `NotBefore` and `NotOnOrAfter`.
 6. **Audience, recipient, and destination**: the response must be addressed to this service provider and its ACS URL ([Profiles §4.1.4.2](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)).
-7. **InResponseTo**: the response must answer an AuthnRequest this server sent, unless IdP-initiated SSO is allowed.
+7. **InResponseTo**: the response must answer an AuthnRequest this server sent, unless IdP-initiated SSO is allowed or `enableInResponseToValidation` is `false`.
 8. **Replay**: the assertion ID must not have been used before.
 
-A failed check redirects to the [error URL](/docs/plugins/sso/saml#acs-and-callback-urls) with `error` set to the lowercased error code (`saml_error` when the error has none) and `error_description` set to the message. The sections below cover the checks you can tune. Every option sits under `saml` in the plugin options and is listed in the [reference](/docs/plugins/sso/reference#saml).
+A failed check redirects to the [error URL](/docs/plugins/sso/saml#acs-and-callback-urls) with `error` set to the lowercased error code (`saml_error` when the error has none) and `error_description` set to the message. Every option sits under `saml` in the plugin options and is listed in the [reference](/docs/plugins/sso/reference#saml).
 
 ## InResponseTo validation
 
-InResponseTo validation is on by default. Each AuthnRequest ID is stored as a verification value for `requestTTL` (5 minutes by default), and the matching response consumes it once ([SAML Core §3.2.2](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)). Verification values use secondary storage when it is configured and the database otherwise, so validation works across multiple instances.
+InResponseTo validation is on by default. Each AuthnRequest ID is stored as a verification value for `requestTTL` (5 minutes by default), and the matching response consumes it once ([SAML Core §3.2.2](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)). Verification values use secondary storage when it is configured and the database otherwise, so validation works across multiple instances. Replay protection always needs the database; see [Assertion replay protection](#assertion-replay-protection).
 
-A response without `InResponseTo` is IdP-initiated, and it is rejected unless you enable [IdP-initiated SSO](/docs/plugins/sso/saml#idp-initiated-sso). Setting `enableInResponseToValidation: false` turns correlation off completely, and `allowIdpInitiated` then has no effect.
+A response without `InResponseTo` is IdP-initiated, and it is rejected unless you enable [IdP-initiated SSO](/docs/plugins/sso/saml#idp-initiated-sso). Setting `enableInResponseToValidation: false` turns correlation off for every SAML provider: unsolicited responses are then accepted even when `allowIdpInitiated` is `false`, and the provider-mismatch check is skipped. To accept IdP-initiated sign-in, keep validation on and set `allowIdpInitiated: true` instead.
 
 To give users more time at the IdP login page, raise `requestTTL`:
 
@@ -43,7 +43,7 @@ sso({
 
 ## Assertion replay protection
 
-Replay protection is always on. Each assertion ID is reserved atomically in the verification store until `NotOnOrAfter` plus `clockSkew`, or for 15 minutes when the assertion has no `NotOnOrAfter`, and a reused ID redirects with `error=replay_detected` ([Profiles §4.1.4.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)).
+Replay protection is always on for assertions that carry an ID. Each assertion ID is reserved atomically in the verification store until `NotOnOrAfter` plus `clockSkew`, or for 15 minutes when the assertion has no `NotOnOrAfter`, and a reused ID redirects with `error=replay_detected` ([Profiles §4.1.4.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)). An assertion whose ID cannot be read skips this check, and a warning is logged.
 
 <Callout type="warn">
   The reservation needs database-backed verification storage. With `secondaryStorage` configured, set [`verification.storeInDatabase: true`](/docs/reference/options#verification), or every SAML sign-in fails at this step.
@@ -53,7 +53,7 @@ Replay protection is always on. Each assertion ID is reserved atomically in the 
 
 A response is rejected when the current time is before `NotBefore` minus `clockSkew`, or after `NotOnOrAfter` plus `clockSkew`. `clockSkew` defaults to 5 minutes.
 
-[SAML Core §2.5.1](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf) makes these conditions optional, while [SAML2Int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html) requires them. By default an assertion without timestamps is accepted and a warning is logged. Set `requireTimestamps: true` to reject it.
+[SAML Core §2.5.1](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf) makes these conditions optional, while [SAML2Int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html) requires them. By default an assertion without timestamps is accepted and a warning is logged. An assertion without `NotOnOrAfter` never expires, and its replay reservation lasts only 15 minutes, so when unsolicited responses are accepted it can be replayed after that. Set `requireTimestamps: true` unless an IdP you rely on omits these conditions. It rejects only assertions with neither condition, not one that carries `NotBefore` alone.
 
 ```ts title="auth.ts"
 sso({
@@ -77,6 +77,8 @@ sso({
 * `"warn"` (default): log a warning and continue.
 * `"reject"`: fail the request.
 * `"allow"`: continue silently.
+
+In production, set `onDeprecated: "reject"` once your IdPs use only the accepted algorithms below.
 
 The ACS checks the response signature algorithm and, for encrypted assertions, the key and data encryption algorithms. Registration and provider updates check the config's `signatureAlgorithm` and `digestAlgorithm`, and a rejected value fails the request with a 400 error.
 
@@ -112,7 +114,7 @@ An algorithm outside the list fails with the error code `SAML_ALGORITHM_NOT_ALLO
 
 ## Size limits
 
-`maxResponseSize` caps the SAML response at 256 KB. `maxMetadataSize` caps IdP and SP metadata at 100 KB, and registration and provider updates enforce it.
+`maxResponseSize` caps the SAML response, 256 KB by default. `maxMetadataSize` caps IdP and SP metadata, 100 KB by default, and registration and provider updates enforce it.
 
 To accept IdPs that send large group claims, raise the response limit:
 

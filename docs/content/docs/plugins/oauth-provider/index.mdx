@@ -7,7 +7,7 @@ description: Make your app an OAuth 2.1 and OpenID Connect provider that other a
 
 The OAuth Provider plugin turns your Better Auth server into an authorization server that implements [OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1), [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html), and [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) metadata. Other applications send users to your app to sign in and receive access tokens for your APIs.
 
-The defaults follow the safer protocol choice: S256 PKCE, exact redirect URI matching, the `iss` authorization response parameter, and tokens bound to the resources each client is linked to.
+By default, the provider requires S256 PKCE, matches redirect URIs exactly, adds `iss` to every authorization response so clients can tell which server answered, and issues tokens only for the APIs each client is linked to.
 
 <Callout type="info">
   To sign users in to your app with another provider, use [social providers](/docs/concepts/oauth), [Generic OAuth](/docs/plugins/generic-oauth), or [SSO](/docs/plugins/sso) instead.
@@ -21,7 +21,7 @@ The defaults follow the safer protocol choice: S256 PKCE, exact redirect URI mat
 * [Device code grant](/docs/plugins/device-authorization) for CLIs and limited-input devices
 * [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) and [Client ID Metadata Documents](/docs/plugins/cimd)
 * [`private_key_jwt`](/docs/plugins/oauth-provider/clients#private-key-jwt) client authentication
-* [DPoP](/docs/plugins/oauth-provider/tokens#dpop) sender-constrained access tokens
+* [DPoP](/docs/plugins/oauth-provider/tokens#dpop) access tokens that only the client holding the key can use
 * [OpenID Connect](/docs/plugins/oauth-provider/openid-connect) ID tokens, UserInfo, and [logout](/docs/plugins/oauth-provider/openid-connect#rp-initiated-logout)
 
 ## Installation
@@ -104,14 +104,14 @@ The defaults follow the safer protocol choice: S256 PKCE, exact redirect URI mat
     ```
 
     <Callout type="info">
-      A browser-based client that fetches metadata from another origin needs CORS on these routes. For local testing, allow `GET` from any origin.
+      A browser-based client that fetches metadata from another origin needs CORS on these routes. The metadata is public, so `oauthProviderAuthServerMetadata(auth, { headers: { "Access-Control-Allow-Origin": "*" } })` is fine. Do not allow credentials.
     </Callout>
   </Step>
 
   <Step>
     ### Add the client plugins
 
-    Add `oauthProviderClient` to the app that renders your login and consent pages. It forwards the signed authorization request to the endpoints that need it.
+    Add `oauthProviderClient` to the app that renders your login and consent pages. It sends the signed authorization request from the page URL back with each POST the page makes, such as sign-in and consent, so the flow can resume.
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
@@ -122,17 +122,7 @@ The defaults follow the safer protocol choice: S256 PKCE, exact redirect URI mat
     });
     ```
 
-    Add `oauthProviderResourceClient` to an API that verifies access tokens. Pass `auth` when the API runs in the same process as the provider. See [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens) for the verification options to set.
-
-    ```ts title="server-client.ts"
-    import { createAuthClient } from "better-auth/client";
-    import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"; // [!code highlight]
-    import { auth } from "@/lib/auth";
-
-    export const serverClient = createAuthClient({
-      plugins: [oauthProviderResourceClient(auth)], // [!code highlight]
-    });
-    ```
+    An API that verifies access tokens uses `oauthProviderResourceClient`; see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
   </Step>
 </Steps>
 
@@ -144,13 +134,13 @@ Your login page signs the user in as usual, and the plugin continues the flow wh
 
 ## Run your first flow
 
-This flow issues an access token for one API, `https://api.example.com`.
+This flow issues an access token for one API, `https://api.example.com`. Build the login and consent pages first; step 3 redirects to them.
 
 <Steps>
   <Step>
     ### Register the API and a client
 
-    Add the API to `resources`, then create a client linked to it. `adminCreateOAuthClient` runs only on the server and needs a signed-in user's session, so pass the headers of that user's request.
+    Add the API to `resources`, then create a client linked to it. `adminCreateOAuthClient` runs only on the server and needs a signed-in user's session, so call it from a route only admins can reach and pass that request's headers. [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) can also limit who creates clients. The authorize and token endpoints reject a `resource` the client is not linked to; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
 
     ```ts title="auth.ts"
     oauthProvider({
@@ -160,7 +150,8 @@ This flow issues an access token for one API, `https://api.example.com`.
     })
     ```
 
-    ```ts title="create-client.ts"
+    ```ts title="admin-route.ts"
+    // Inside an admin-only server route that receives `request`
     const client = await auth.api.adminCreateOAuthClient({
       headers: request.headers,
       body: {
@@ -216,11 +207,18 @@ This flow issues an access token for one API, `https://api.example.com`.
 
     The response holds an access token for `https://api.example.com`, an ID token, and a refresh token.
   </Step>
-</Steps>
 
-<Callout type="warn">
-  `enforcePerClientResources` defaults to `true`, so the authorize and token endpoints reject a `resource` that is not linked to the client. Link resources when you create the client, or see [Resources](/docs/plugins/oauth-provider/tokens#resources).
-</Callout>
+  <Step>
+    ### Check the token
+
+    Call UserInfo with the access token. A `200` response with the user's `sub` and `name` means the flow worked.
+
+    ```bash
+    curl https://auth.example.com/api/auth/oauth2/userinfo \
+      -H "Authorization: Bearer ACCESS_TOKEN"
+    ```
+  </Step>
+</Steps>
 
 ## Next steps
 

@@ -28,7 +28,7 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
   <Step>
     ### Configure authorization
 
-    Add the MCP plugin to your auth configuration alongside the [JWT plugin](/docs/plugins/jwt). The JWT plugin is required: it provides the stable signing key used for ID tokens and access tokens, and exposes the `/jwks` endpoint that resource servers use to verify them.
+    Add the MCP plugin to your auth configuration alongside the [JWT plugin](/docs/plugins/jwt). The JWT plugin is required: it provides the stable signing key used for ID tokens and access tokens, and exposes the `/jwks` endpoint that resource servers use to verify them. Disable the JWT plugin's `/token` route, because `/oauth2/token` is the token endpoint clients call.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -38,6 +38,7 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
     import { fetchClientMetadataResource } from "@better-auth/cimd/node"; // [!code highlight]
 
     export const auth = betterAuth({
+        disabledPaths: ["/token"], // [!code highlight]
         plugins: [
             jwt(), // [!code highlight]
             mcp({ // [!code highlight]

@@ -5,7 +5,7 @@ title: SSO users and organizations
 description: Control how SSO identities map to users, run provisioning code, and add users to organizations.
 ---
 
-Every SSO sign-in ends with a Better Auth user. This page covers how that user is found or created, how to run your own code on sign-in, and how users join organizations.
+Every SSO sign-in ends with a Better Auth user.
 
 ## How SSO users are matched
 
@@ -13,7 +13,12 @@ Better Auth stores each SSO identity as an `account` keyed by the provider ID an
 
 * **Returning account.** The user who owns the account signs in.
 * **New account, no user with that email.** A new user is created with `emailVerified: false`.
-* **New account, a user with that email exists.** The account is linked to that user only when the provider's [domain is verified](/docs/plugins/sso/domain-verification#domain-verification) and the email's domain is one of the provider's domains, or when [`resolveUser`](#resolve-sso-users) returns `link`. Domain-based linking also needs the existing user's email to be verified and `account.accountLinking` not to be disabled. Otherwise the sign-in fails: OIDC redirects with `error=account not linked`, and SAML with `error=account_not_linked`.
+* **New account, a user with that email exists.** Better Auth links the account in either case:
+
+  * [`resolveUser`](#resolve-sso-users) returns `link`, which links to the `userId` it names.
+  * All of these hold, which links it to the user with that email: the provider's [domain is verified](/docs/plugins/sso/domain-verification#enable-domain-verification), the email's domain is one of the provider's domains, the existing user's email is verified, and neither `account.accountLinking.enabled: false` nor `account.accountLinking.disableImplicitLinking: true` is set.
+
+  Otherwise the sign-in fails. OIDC redirects with `error=account not linked`, and SAML with `error=account_not_linked`.
 
 `account.accountLinking.trustedProviders` does not apply to SSO providers, and registration rejects a `providerId` listed there. SSO provider IDs are chosen by whoever registers them, so trust comes only from a verified domain.
 
@@ -23,7 +28,7 @@ Better Auth stores each SSO identity as an `account` keyed by the provider ID an
 
 ### Block new users
 
-With `disableImplicitSignUp: true`, an SSO sign-in that would create a user fails with `error=signup disabled` (SAML: `error=signup_disabled`). An OIDC sign-in can still create one when `signIn.sso` is called with `requestSignUp: true`. SAML ignores `requestSignUp`.
+With `disableImplicitSignUp: true`, an SSO sign-in that would create a user fails with `error=signup disabled` (SAML: `error=signup_disabled`). SAML ignores `requestSignUp`, but an OIDC sign-in still creates the user when `signIn.sso` is called with `requestSignUp: true`. Any client can send that flag, so for OIDC this option only changes the default. To refuse users you have not provisioned, return `{ action: "reject" }` from [`resolveUser`](#resolve-sso-users).
 
 ```ts title="auth.ts"
 sso({
@@ -33,9 +38,9 @@ sso({
 
 ### Update profiles on sign-in
 
-By default the user's profile is set only when the user is created. With `overrideUserInfo: true` on an OIDC provider, each sign-in overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values. Pass it in the registration body, or set `defaultOverrideUserInfo: true` on the plugin to apply it to providers registered afterwards. SAML sign-ins update the profile only when `resolveUser` returns `profile: "update"`.
+By default the user's profile is set only when the user is created. With `overrideUserInfo: true` on an OIDC provider, each sign-in overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values. A changed email is stored unverified. Enable it only for IdPs that control their users' email addresses. Pass it in the registration body, or set `defaultOverrideUserInfo: true` on the plugin to apply it to providers registered afterwards. SAML sign-ins update the profile only when `resolveUser` returns `profile: "update"`.
 
-## Resolve SSO Users
+## Resolve SSO users
 
 Use `resolveUser` when an OIDC or SAML identity must be mapped to an existing Better Auth user instead of relying on email matching. The resolver runs on every SSO sign-in after the protocol identity has been verified.
 
@@ -115,7 +120,7 @@ Writes made through `context.database` during resolution, linking, and session c
 
 ## User provisioning
 
-`provisionUser({ user, userInfo, token, provider })` runs after a new user signs in through SSO. Set `provisionUserOnEveryLogin: true` to run it on every sign-in. It runs before [organization provisioning](#organization-provisioning).
+`provisionUser({ user, userInfo, token, provider })` runs when an SSO sign-in creates the user. Set `provisionUserOnEveryLogin: true` to run it on every SSO sign-in. It runs before [organization provisioning](#organization-provisioning).
 
 `userInfo` holds the mapped profile, including any `mapping.extraFields`. `token` holds the OIDC tokens and is `undefined` for SAML.
 
@@ -129,7 +134,26 @@ sso({
 });
 ```
 
-With `provisionUserOnEveryLogin`, make the callback idempotent. An error thrown from it fails the sign-in response, so catch errors from calls the sign-in does not depend on.
+An error thrown from `provisionUser` fails the sign-in response, but the user stays created, and the callback runs again only with `provisionUserOnEveryLogin`. Catch errors from calls the sign-in does not depend on. With `provisionUserOnEveryLogin`, make the callback idempotent.
+
+## Link a provider to an organization
+
+Pass `organizationId` when you register a provider. Users who sign in through it join that organization.
+
+```ts title="register-provider.ts"
+await auth.api.registerSSOProvider({
+  body: {
+    providerId: "acme",
+    issuer: "https://idp.acme.com",
+    domain: "acme.com",
+    organizationId: "org_acme", // [!code highlight]
+    samlConfig: { /* ... */ },
+  },
+  headers: request.headers,
+});
+```
+
+The caller must be a member of the organization, or the call returns `400`. With the organization plugin, the caller must also be an organization `owner` or `admin`, or it returns `403`. Owners and admins can then list, update, and delete the provider. Without the plugin, only membership is checked, and only the user who registered the provider can manage it.
 
 ## Organization provisioning
 
@@ -153,22 +177,3 @@ sso({
   },
 });
 ```
-
-## Link a provider to an organization
-
-Pass `organizationId` when you register a provider. Users who sign in through it join that organization.
-
-```ts title="register-provider.ts"
-await auth.api.registerSSOProvider({
-  body: {
-    providerId: "acme",
-    issuer: "https://idp.acme.com",
-    domain: "acme.com",
-    organizationId: "org_acme", // [!code highlight]
-    samlConfig: { /* ... */ },
-  },
-  headers: request.headers,
-});
-```
-
-The caller must be a member of the organization. With the organization plugin, the caller must also be an organization `owner` or `admin`, or the call returns `403`. Owners and admins can then list, update, and delete the provider. Without the plugin, only membership is checked, and only the user who registered the provider can manage it.

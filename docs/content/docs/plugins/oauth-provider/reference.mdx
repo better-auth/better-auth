@@ -5,22 +5,20 @@ title: OAuth Provider reference
 description: OAuth provider options, endpoints, errors, rate limits, extensions, and database schema.
 ---
 
-This reference describes the options, endpoints, and database schema of `@better-auth/oauth-provider`.
-
 ## Plugin options
 
 Pass these options to `oauthProvider()`. Only `loginPage` and `consentPage` are required.
 
 ### Sign-in flow
 
-| Option                      | Type      | Default | Description                                                                                                                                                |
-| --------------------------- | --------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `loginPage`                 | `string`  | —       | Required. Page the authorize endpoint redirects to when the user must sign in. See [Login page](/docs/plugins/oauth-provider/sign-in-flow#login-page).     |
-| `consentPage`               | `string`  | —       | Required. Page the authorize endpoint redirects to when the user must consent. See [Consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page). |
-| `signup`                    | `object`  | —       | Settings for `prompt=create`. See [Sign Up Account Screen](/docs/plugins/oauth-provider/sign-in-flow#sign-up-account-screen).                              |
-| `selectAccount`             | `object`  | —       | Settings for `prompt=select_account`. See [Select Account Screen](/docs/plugins/oauth-provider/sign-in-flow#select-account-screen).                        |
-| `postLogin`                 | `object`  | —       | A step between login and consent, such as choosing an organization. See [Post Login Screen](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen).  |
-| `allowPublicClientPrelogin` | `boolean` | `false` | Lets `/oauth2/public-client-prelogin` answer before sign-in when the request carries a valid signed `oauth_query`.                                         |
+| Option                      | Type      | Default | Description                                                                                                                                                                                                                                                                      |
+| --------------------------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loginPage`                 | `string`  | —       | Required. Page the authorize endpoint redirects to when the user must sign in. See [Login page](/docs/plugins/oauth-provider/sign-in-flow#login-page).                                                                                                                           |
+| `consentPage`               | `string`  | —       | Required. Page the authorize endpoint redirects to when the user must consent. See [Consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page).                                                                                                                       |
+| `signup`                    | `object`  | —       | Settings for `prompt=create`. See [Sign Up Account Screen](/docs/plugins/oauth-provider/sign-in-flow#sign-up-account-screen).                                                                                                                                                    |
+| `selectAccount`             | `object`  | —       | Settings for `prompt=select_account`. See [Select Account Screen](/docs/plugins/oauth-provider/sign-in-flow#select-account-screen).                                                                                                                                              |
+| `postLogin`                 | `object`  | —       | A step between login and consent, such as choosing an organization. See [Post Login Screen](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen).                                                                                                                        |
+| `allowPublicClientPrelogin` | `boolean` | `false` | Lets `/oauth2/public-client-prelogin` answer before sign-in when the request carries a valid signed `oauth_query`. The signed query does not limit which `client_id` is read, so every enabled client's public fields, including `contacts`, become readable without an account. |
 
 <Accordions>
   <Accordion title="signup options">
@@ -36,7 +34,7 @@ Pass these options to `oauthProvider()`. Only `loginPage` and `consentPage` are 
   <Accordion title="selectAccount options">
     `page` <span className="opacity-70">`string`</span>
 
-    Account selection page. Defaults to `loginPage`. After selection, call `/oauth2/continue` with `selected: true`.
+    Account selection page. Without it, `prompt=select_account` returns an error, and a `true` from `shouldRedirect` sends the user to `loginPage`. After selection, call `/oauth2/continue` with `selected: true`.
 
     `shouldRedirect` <span className="opacity-70">`(context) => Awaitable<boolean>`</span>
 
@@ -75,9 +73,9 @@ Pass these options to `oauthProvider()`. Only `loginPage` and `consentPage` are 
 | Option                                     | Type                                                         | Default                                                         | Description                                                                                                                                                                                                                                                      |
 | ------------------------------------------ | ------------------------------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `grantTypes`                               | `GrantType[]`                                                | `["authorization_code", "client_credentials", "refresh_token"]` | Grants the token endpoint accepts. `refresh_token` requires `authorization_code`. Extension grants are added on top.                                                                                                                                             |
-| `validateRedirectUri`                      | `(uri, registeredUris, defaultResult) => Awaitable<boolean>` | —                                                               | Replaces exact redirect URI matching. See [Custom Redirect URI Validation](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).                                                                                                                 |
+| `validateRedirectUri`                      | `(uri, registeredUris, defaultResult) => Awaitable<boolean>` | —                                                               | Replaces exact redirect URI matching. See [Custom redirect URI validation](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).                                                                                                                 |
 | `cachedTrustedClients`                     | `Set<string>`                                                | —                                                               | Client IDs to cache. Cached clients cannot be changed through the CRUD endpoints. See [Trusted clients](/docs/plugins/oauth-provider/clients#trusted-clients).                                                                                                   |
-| `clientPrivileges`                         | `(context) => Awaitable<boolean \| undefined>`               | —                                                               | Authorizes client actions: `create`, `read`, `update`, `delete`, `list`, `rotate`, and `configure-client-credentials-scopes`. See [Client CRUD Privileges](/docs/plugins/oauth-provider/clients#client-crud-privileges).                                         |
+| `clientPrivileges`                         | `(context) => Awaitable<boolean \| undefined>`               | —                                                               | Authorizes client actions: `create`, `read`, `update`, `delete`, `list`, `rotate`, and `configure-client-credentials-scopes`. See [Client CRUD privileges](/docs/plugins/oauth-provider/clients#client-crud-privileges).                                         |
 | `clientReference`                          | `(context) => Awaitable<string \| undefined>`                | —                                                               | Returns the owner reference, such as an organization ID, for new clients. See [Organizations](/docs/plugins/oauth-provider/clients#organizations).                                                                                                               |
 | `allowDynamicClientRegistration`           | `boolean`                                                    | `false`                                                         | Enables `POST /oauth2/register`. See [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).                                                                                                                            |
 | `allowUnauthenticatedClientRegistration`   | `boolean`                                                    | `false`                                                         | Accepts registration requests without a session.                                                                                                                                                                                                                 |
@@ -149,8 +147,8 @@ Paths are relative to your auth base path. "Server-only" endpoints are callable 
 
 | Method       | Path                                                     | Server method                  | Auth                                                   | Server-only |
 | ------------ | -------------------------------------------------------- | ------------------------------ | ------------------------------------------------------ | ----------- |
-| `GET`        | `/.well-known/oauth-authorization-server`                | `getOAuthServerConfig`         | None                                                   | Yes         |
-| `GET`        | `/.well-known/openid-configuration`                      | `getOpenIdConfig`              | None                                                   | Yes         |
+| `GET`        | `/.well-known/oauth-authorization-server`                | `getOAuthServerConfig`         | None                                                   | No          |
+| `GET`        | `/.well-known/openid-configuration`                      | `getOpenIdConfig`              | None                                                   | No          |
 | `GET` `POST` | `/oauth2/authorize`                                      | `oauth2Authorize`              | Session, or redirect to `loginPage`                    | No          |
 | `POST`       | `/oauth2/consent`                                        | `oauth2Consent`                | Session and signed `oauth_query`                       | No          |
 | `POST`       | `/oauth2/continue`                                       | `oauth2Continue`               | Session and signed `oauth_query`                       | No          |
@@ -184,7 +182,7 @@ Paths are relative to your auth base path. "Server-only" endpoints are callable 
 | `POST`       | `/admin/oauth2/resources/:identifier/clients/:client_id` | `adminLinkClientResource`      | Session and `resourcePrivileges`                       | Yes         |
 | `DELETE`     | `/admin/oauth2/resources/:identifier/clients/:client_id` | `adminUnlinkClientResource`    | Session and `resourcePrivileges`                       | Yes         |
 
-The provider also serves both well-known documents at their issuer-relative paths ([RFC 8414 §3](https://datatracker.ietf.org/doc/html/rfc8414#section-3)). In the browser, `oauthProviderClient()` adds the signed `oauth_query` from the page URL to POST requests. `/oauth2/register` rejects requests unless `allowDynamicClientRegistration` is on, and `/oauth2/client/rotate-keys` unless `allowClientKeyRotation` is on.
+The provider also serves both well-known documents at their issuer-relative paths ([RFC 8414 §3](https://datatracker.ietf.org/doc/html/rfc8414#section-3)). Their `auth.api` methods are server-only. In the browser, `oauthProviderClient()` adds the signed `oauth_query` from the page URL to POST requests. `/oauth2/register` rejects requests unless `allowDynamicClientRegistration` is on, and `/oauth2/client/rotate-keys` unless `allowClientKeyRotation` is on.
 
 ## Token errors
 
@@ -290,11 +288,11 @@ authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
 
 Extension claims only add claim names. Your own callbacks can override profile claims. The provider always owns identity, lifetime, binding, and authentication-context claims.
 
-| Token        | Order, lowest to highest authority                                                                                             | Owned by the provider                                                                                                                                               |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims` | `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`, stripped before signing                                                  |
-| ID token     | subject and authentication claims \< `customIdTokenClaims`. Extension and per-issuance `idTokenClaims` only add names.         | `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`, and scope-derived UserInfo claims |
-| UserInfo     | scope and `claims.userinfo` claims \< extension `claims.userInfo` (add only) \< `customUserInfoClaims`                         | `sub`, applied last                                                                                                                                                 |
+| Token        | Order, lowest to highest authority                                                                                                                            | Owned by the provider                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`                                | `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`, stripped before signing               |
+| ID token     | subject and authentication claims \< `customIdTokenClaims`. Extension and per-issuance `idTokenClaims` only add names and cannot set profile or email claims. | `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp` |
+| UserInfo     | scope and `claims.userinfo` claims \< extension `claims.userInfo` (add only) \< `customUserInfoClaims`                                                        | `sub`, applied last                                                                                                              |
 
 Per-issuance `accessTokenClaims` exist only in JWT access tokens. A claim that introspection of an opaque token must return belongs in a `claims.accessToken` contributor that does not depend on the grant type.
 

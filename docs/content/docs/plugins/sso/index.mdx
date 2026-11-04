@@ -5,7 +5,7 @@ title: Single Sign-On (SSO)
 description: Connect each organization to its own OIDC or SAML 2.0 identity provider.
 ---
 
-The SSO plugin lets users sign in through identity providers that you or your customers register at runtime, over [OpenID Connect](https://openid.net/specs/openid-connect-core-1_0.html) or [SAML 2.0](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf). Each connection is one row in the `ssoProvider` table.
+The SSO plugin lets users sign in through identity providers that you or your customers register at runtime, over [OpenID Connect](https://openid.net/specs/openid-connect-core-1_0.html) or [SAML 2.0](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf). Each registered connection is one row in the `ssoProvider` table. You can also [define connections in code](#configure-providers-in-code).
 
 For a fixed set of providers configured in code, use [Generic OAuth](/docs/plugins/generic-oauth) or [social providers](/docs/concepts/oauth). To let other apps sign in with yours, use [OAuth Provider](/docs/plugins/oauth-provider).
 
@@ -22,7 +22,7 @@ For a fixed set of providers configured in code, use [Generic OAuth](/docs/plugi
 * SAML [Single Logout](/docs/plugins/sso/saml#single-logout)
 * [User resolution](/docs/plugins/sso/provisioning#resolve-sso-users) and provisioning
 * [Organization provisioning](/docs/plugins/sso/provisioning#organization-provisioning)
-* DNS [domain verification](/docs/plugins/sso/domain-verification#domain-verification)
+* DNS [domain verification](/docs/plugins/sso/domain-verification#enable-domain-verification)
 
 ## Installation
 
@@ -94,7 +94,11 @@ For a fixed set of providers configured in code, use [Generic OAuth](/docs/plugi
 
 `authClient.sso.register` (or `auth.api.registerSSOProvider` on the server) calls `POST /sso/register` and creates a provider owned by the signed-in user. It requires `providerId`, `issuer` (a URL), `domain` (a bare email domain, comma-separated for several), and an `oidcConfig`, a `samlConfig`, or both.
 
-`providerId` must be unique, and it must not equal a built-in provider id, a configured social provider, an `account.accountLinking.trustedProviders` entry, or a `defaultSSO` id, or registration returns 422. Each user can register up to `providersLimit` providers (default `10`; `0` disables registration). The response includes `redirectURI`, plus `domainVerificationToken` when domain verification is enabled.
+`providerId` must be unique. Registration returns 422 when it matches a built-in provider id, a configured social provider, an `account.accountLinking.trustedProviders` entry, or a `defaultSSO` id.
+
+Each user can register up to `providersLimit` providers (default `10`). Set it to `0` to disable registration. By default any signed-in user can register a provider for any domain, and two providers can claim the same domain. Unless customers register their own connections, set `providersLimit` to a function that returns `0` for everyone except your administrators. When users register their own providers, enable [domain verification](/docs/plugins/sso/domain-verification) so a provider cannot sign anyone in until its domain is proven over DNS.
+
+The response includes `redirectURI`, and `domainVerificationToken` when domain verification is enabled.
 
 ```ts title="register-provider.ts"
 import { authClient } from "@/lib/auth-client";
@@ -111,15 +115,15 @@ const { data } = await authClient.sso.register({
 // Configure data.redirectURI as the redirect URI at the identity provider.
 ```
 
-For every field, see [Register an OIDC Provider](/docs/plugins/sso/oidc#register-an-oidc-provider) and [Register a SAML Provider](/docs/plugins/sso/saml#register-a-saml-provider).
+For every field, see [Register an OIDC provider](/docs/plugins/sso/oidc#register-an-oidc-provider) and [Register a SAML provider](/docs/plugins/sso/saml#register-a-saml-provider).
 
 <Callout type="warn">
-  When you pass `organizationId` and the organization plugin is enabled, the caller must be an `owner` or `admin` of that organization. See [Link a provider to an organization](/docs/plugins/sso/provisioning#link-a-provider-to-an-organization).
+  Passing `organizationId` requires organization membership. See [Link a provider to an organization](/docs/plugins/sso/provisioning#link-a-provider-to-an-organization).
 </Callout>
 
 ### Configure providers in code
 
-`defaultSSO` is an array of `{ providerId, domain, oidcConfig?, samlConfig?, privateKey? }` entries that live in your config instead of the database. They are checked before database providers, and domain verification treats them as verified. Use them in development or for connections you control.
+`defaultSSO` is an array of `{ providerId, domain, oidcConfig?, samlConfig?, privateKey? }` entries that live in your config instead of the database. They are checked before database providers. Domain verification treats them as verified without a DNS check, so they can link to existing users at their listed domains. List only domains the IdP is authoritative for.
 
 ```ts title="auth.ts"
 sso({
@@ -160,11 +164,11 @@ await authClient.signIn.sso({
 | `organizationSlug`       | The provider linked to that organization. Needs the [organization plugin](/docs/plugins/organization). |
 | `providerId`             | The provider with that id.                                                                             |
 
-* When `providerId` or `organizationSlug` is given, the provider is looked up by it alone. Otherwise the domain from `domain` or `email` is matched against each provider's comma-separated domains. `defaultSSO` entries are checked before the database.
+* When `providerId` is given, the provider is looked up by it alone. Otherwise the domain from `domain` or `email` is matched against each provider's comma-separated domains, checking `defaultSSO` entries before the database. `organizationSlug` selects the organization's provider, but a `defaultSSO` entry matching the domain still wins, and an unknown slug falls back to domain matching.
 * `loginHint` is sent to OIDC providers as [`login_hint`](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest), and falls back to `email`. SAML ignores it.
 * `providerType` picks the protocol when a provider has both configurations; without it, OIDC is used. Requesting a protocol the provider does not have returns 400.
 * `additionalParams` adds parameters to the OIDC authorization request. Reserved parameters such as `state`, `client_id`, and `redirect_uri` are rejected, and SAML providers reject it with 400.
-* `requestSignUp: true` creates a new user even when `disableImplicitSignUp` is on. It applies to OIDC only; SAML ignores it.
+* `requestSignUp: true` creates a new user even when `disableImplicitSignUp` is on, and any caller can set it. It applies to OIDC only; SAML ignores it. To refuse unprovisioned users, see [Block new users](/docs/plugins/sso/provisioning#block-new-users).
 * With domain verification enabled, a provider whose domain is not verified returns 401.
 
 <APIMethod path="/sign-in/sso" method="POST">
@@ -224,7 +228,7 @@ await authClient.signIn.sso({
 
 ## Manage providers
 
-`authClient.sso.providers()` (`GET /sso/providers`) lists the providers the caller owns, plus the providers of organizations where the caller is an `owner` or `admin`. `authClient.sso.getProvider({ query: { providerId } })` (`GET /sso/get-provider`) returns one provider. Both return a sanitized configuration: `clientIdLastFour` instead of the client ID, no secrets, and the parsed SAML signing certificates. Update and delete need the same access.
+`authClient.sso.providers()` (`GET /sso/providers`) lists the providers the caller registered without an organization, plus the providers of organizations where the caller is an `owner` or `admin`. `authClient.sso.getProvider({ query: { providerId } })` (`GET /sso/get-provider`) returns one provider. Both return a sanitized configuration: `clientIdLastFour` instead of the client ID, no secrets, and the parsed SAML signing certificates. Update and delete need the same access.
 
 <APIMethod path="/sso/update-provider" method="POST" requireSession>
   ```ts
@@ -255,7 +259,10 @@ await authClient.signIn.sso({
 
 * A supplied `mapping` replaces the whole previous mapping.
 * Changing `domain` resets `domainVerified` to `false`.
-* Changing an identity field returns 409 while accounts are linked to the provider. The identity fields are `issuer`; for OIDC, the authorization, token, userinfo, JWKS, and discovery endpoints and `clientId`; and for SAML, the IdP entity ID, IdP SSO URLs, SP entity ID, NameID format, POST ACS URLs, `wantAssertionsSigned`, and `audience`.
+* Changing an identity field returns 409 while accounts are linked to the provider. The identity fields are:
+  * Both: `issuer`
+  * OIDC: authorization, token, userinfo, JWKS, and discovery endpoints, and `clientId`
+  * SAML: IdP entity ID, IdP SSO URLs, SP entity ID, NameID format, POST ACS URLs, `wantAssertionsSigned`, and `audience`
 
 <APIMethod path="/sso/delete-provider" method="POST" requireSession>
   ```ts
@@ -272,7 +279,9 @@ await authClient.signIn.sso({
   Deleting a provider also deletes every `account` row linked to it.
 </Callout>
 
-The [`guardProviderMutation`](/docs/plugins/sso/reference#plugin-options) option runs inside the update or delete transaction after the provider row is locked, and receives `action`, the provider, and on update `isAuthenticationBoundaryChange`. That flag is true for the identity fields above and for SAML signing certificate changes, and false for OIDC client secret or SAML SP private key rotation. Throw from it to reject the change with 409 `SSO_PROVIDER_MUTATION_REJECTED`, for example to block boundary changes while a directory sync is paired. It needs a database adapter with native transactions.
+Use [`guardProviderMutation`](/docs/plugins/sso/reference#plugin-options) to reject provider changes, for example boundary changes while a directory sync is paired. Throw from it to fail the request with 409 `SSO_PROVIDER_MUTATION_REJECTED`. It needs a database adapter with native transactions.
+
+It runs inside the update or delete transaction after the provider row is locked, and receives `action`, the provider, and, on update, `isAuthenticationBoundaryChange`. That flag is `true` for the identity fields above and for SAML signing certificate changes. It is `false` for OIDC client secret and SAML SP private key rotation.
 
 ## Next steps
 

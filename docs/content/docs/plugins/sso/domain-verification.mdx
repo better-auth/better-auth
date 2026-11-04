@@ -5,9 +5,11 @@ title: Verify SSO domains
 description: Prove ownership of a provider's email domains with a DNS TXT record before users can sign in.
 ---
 
-## Domain verification
+## Enable domain verification
 
 With `domainVerification.enabled`, every new provider starts unverified, and sign-in through it returns `401` with "Provider domain has not been verified" until its domains are verified. A verified domain also lets SSO link existing users whose email matches it, and enables domain-based [organization assignment](/docs/plugins/sso/provisioning#organization-provisioning). Providers configured in `defaultSSO` count as verified.
+
+With domain verification disabled, Better Auth never creates organization memberships from email-domain matches. Providers linked to an organization still provision members, and `signIn.sso` still finds providers by email or domain.
 
 Enable the option on the server and on the client. The client option exposes the verification endpoints in its types.
 
@@ -60,10 +62,6 @@ The option adds the `domainVerified` field to the `ssoProvider` table, so migrat
 </Tabs>
 
 See the [Schema](/docs/plugins/sso/reference#schema) section to add the fields manually.
-
-<Callout type="info">
-  With domain verification disabled, Better Auth does not create organization memberships from email-domain matches. Providers explicitly linked to an organization still provision normally, and `signIn.sso` still resolves providers by email or domain.
-</Callout>
 
 <Callout type="warn">
   Verification resolves DNS through `node:dns/promises`. On runtimes without it, `verify-domain` fails with `DOMAIN_VERIFICATION_FAILED`.

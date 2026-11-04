@@ -1,6 +1,6 @@
 ---
 icon: pluginsOAuthProviderSignInFlow
-sidebarTitle: "Sign-in & Consent"
+sidebarTitle: "Sign-in and consent"
 title: Sign-in and consent screens
 description: Build the login, consent, and account screens that the authorize endpoint redirects to.
 ---
@@ -51,7 +51,10 @@ oauthProvider({
 })
 ```
 
-The page receives `client_id`, `scope` and, when requested, `claims` in its query. Verify the signed query on the server before rendering. `auth.$context` resolves the provider's secret, including versioned `secrets`; keep it on the server. The signed query lists its own parameter names in `ba_param`; keep only those, `ba_param`, and `sig` so the page's own parameters do not break verification.
+The page's query holds `client_id`, `scope`, and, when requested, `claims`. Before rendering, verify the query on the server with the helper below. It:
+
+1. Keeps only the signed parameters: those listed in `ba_param`, plus `ba_param` and `sig`. Your page's own parameters would otherwise break the signature.
+2. Reads the provider's secret from `auth.$context`, including versioned `secrets`. Never send it to the browser.
 
 ```ts title="consent-query.ts"
 import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
@@ -70,6 +73,8 @@ export async function getVerifiedConsentQuery(request: Request) {
 ```
 
 Return an error response when the helper returns `null`. The check rejects modified or expired queries only. It does not check that the client exists, that the user is signed in, or that the scopes are valid. Show the requested `scope` and `claims.userinfo` names on the screen, then call `oauth2.consent`.
+
+To show which client is asking, load it with `auth.api.getOAuthClientPublic({ query: { client_id }, headers: request.headers })`, using the signed `client_id`. It throws a 404 error for unknown or disabled clients. For dynamically registered and CIMD clients, whoever registered the client chose its name and logo, so also show the host of the signed `redirect_uri`.
 
 <APIMethod path="/oauth2/consent" method="POST" requireSession>
   ```ts
@@ -96,7 +101,7 @@ Return an error response when the helper returns `null`. The check rejects modif
 
 The response is `{ redirect: true, url }`. With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. To remove consent, see [Manage consents](#manage-consents).
 
-## Sign Up Account Screen
+## Sign-up account screen
 
 When a client sends `prompt=create` ([OpenID Connect Prompt Create](https://openid.net/specs/openid-connect-prompt-create-1_0.html)), Better Auth redirects to `signup.page`, which defaults to `loginPage`.
 
@@ -123,7 +128,7 @@ oauthProvider({
 
 When registration is done, call `authClient.oauth2.continue({ created: true })`.
 
-## Select Account Screen
+## Select account screen
 
 Set `selectAccount` to support `prompt=select_account` ([OIDC Core §3.1.2.1](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)). Without `selectAccount.page`, that prompt returns an error. This example uses the [multi-session plugin](/docs/plugins/multi-session) and asks whenever more than one session is signed in:
 
@@ -146,7 +151,7 @@ await authClient.multiSession.setActive({ sessionToken });
 await authClient.oauth2.continue({ selected: true });
 ```
 
-## Post Login Screen
+## Post-login screen
 
 `postLogin` adds a step after sign-in and before consent, for example to pick an organization. `consentReferenceId` ties the consent to that choice: consent is stored per reference, and `undefined` uses consent given without one.
 

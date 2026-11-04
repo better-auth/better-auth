@@ -1,6 +1,6 @@
 ---
 icon: pluginsOAuthProviderTokens
-sidebarTitle: "Tokens & Scopes"
+sidebarTitle: "Tokens and scopes"
 title: Tokens, scopes, and resources
 description: Control which tokens the provider issues, for which APIs, and for how long.
 ---
@@ -135,11 +135,11 @@ oauthProvider({
 
 Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire.
 
-`refreshTokenReuseInterval` (default `0`) lets a client retry a refresh for a few seconds and get the same response back, for example after a lost response. The retry must come from the same client with the same scopes, resources, and DPoP key; a mismatch returns `invalid_grant` without revoking the family.
+`refreshTokenReuseInterval` (default `0`) lets a client retry a refresh within that many seconds, for example after a lost response, and get the same response back, including the replacement refresh token. The retry must use the same client, scopes, resources, and DPoP key, or it gets `invalid_grant`. Inside the window no reuse is treated as replay: the family is never revoked, and a stolen rotated token that passes these checks gets the replacement refresh token. Keep the interval short.
 
 ```ts title="auth.ts"
 oauthProvider({
-  refreshTokenReuseInterval: 30,
+  refreshTokenReuseInterval: 5,
 })
 ```
 
@@ -176,6 +176,8 @@ A client without PKCE that requests `offline_access` must send both `openid` and
 
 ## DPoP
 
+A DPoP-bound access token only works alongside a proof signed by the client's private key, so a leaked token cannot be replayed without that key, as long as your API verifies the proof.
+
 A client gets DPoP-bound tokens ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449#section-4)) when it registers with `dpop_bound_access_tokens: true` ([§5.2](https://datatracker.ietf.org/doc/html/rfc9449#section-5.2)), sends `dpop_jkt` on the authorization request, or requests a resource with `dpopBoundAccessTokensRequired: true`. The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)), returns `token_type: "DPoP"`, and requires a proof from the same key on refresh.
 
 ```ts title="auth.ts"
@@ -208,7 +210,7 @@ oauthProvider({
 
 For ID token and UserInfo claims, see [OpenID Connect](/docs/plugins/oauth-provider/openid-connect#id-token-claims).
 
-### Client-Specific Access Token Claims
+### Client-specific access token claims
 
 `customAccessTokenClaims` receives only the client's `metadata`. To base a claim on the full client record, add an `extensions[].claims.accessToken` contributor:
 
@@ -227,7 +229,7 @@ oauthProvider({
 
 A JWT keeps its claims until it expires, so an organization claim does not prove the client is still enabled. A resource server that must react to a disabled client right away should introspect the token, which reports tokens of disabled clients as inactive.
 
-### Custom Token Response Fields
+### Custom token response fields
 
 `customTokenResponseFields` adds fields to the token endpoint's JSON response, not to the token itself. It cannot override standard fields such as `access_token` or `scope`, and it runs before any token is created.
 

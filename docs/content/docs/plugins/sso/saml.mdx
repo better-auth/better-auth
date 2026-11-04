@@ -5,11 +5,19 @@ title: SAML providers
 description: Register SAML 2.0 identity providers and configure signing, certificates, attributes, and callbacks.
 ---
 
-Better Auth acts as the service provider (SP) in the SAML [Web Browser SSO profile](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf) (§4.1). It sends AuthnRequests with the HTTP-Redirect binding and receives responses with the HTTP-POST binding at its Assertion Consumer Service (ACS) endpoint ([Bindings §3.4, §3.5](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf)). Every response goes through the checks described in [SAML security](/docs/plugins/sso/saml-security).
+In SAML, your app is the service provider (SP). It sends the user to the identity provider (IdP) with a sign-in request (an AuthnRequest), and the IdP posts a signed response back to an endpoint on your app, the Assertion Consumer Service (ACS). Better Auth implements the SP side of the [Web Browser SSO profile](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf) (§4.1): requests use the HTTP-Redirect binding and responses use HTTP-POST ([Bindings §3.4, §3.5](https://docs.oasis-open.org/security/saml/v2.0/saml-bindings-2.0-os.pdf)). Every response goes through the checks in [SAML security](/docs/plugins/sso/saml-security).
 
-## Register a SAML Provider
+## Configure the IdP application
 
-Better Auth identifies a SAML account by the provider ID and the signed `NameID` ([Core §2.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)). The top-level `issuer` is your SP entity ID. The IdP entity ID comes from `idpMetadata.metadata`, or from `idpMetadata.entityID` when you configure the IdP by hand.
+At your IdP, create a SAML application with the ACS URL `{baseURL}/sso/saml2/sp/acs/{providerId}` (with the default base path, `https://app.example.com/api/auth/sso/saml2/sp/acs/acme-saml`) and the SP entity ID (audience) set to the `issuer` you will register. Then copy the IdP's metadata XML, or its entity ID, SSO URL, and signing certificate. After registration you can give the IdP the [SP metadata](#service-provider-metadata) URL instead.
+
+## Register a SAML provider
+
+<Callout type="warn">
+  SAML sign-in reserves each assertion ID in the database to block replays. If you configure `secondaryStorage`, also set [`verification.storeInDatabase: true`](/docs/reference/options#verification), or every SAML sign-in fails.
+</Callout>
+
+Each side names itself with an entity ID, a URI that appears in its metadata and messages. The top-level `issuer` is your SP entity ID. The IdP entity ID comes from `idpMetadata.metadata`, or from `idpMetadata.entityID` when you configure the IdP by hand.
 
 A SAML registration needs:
 
@@ -90,6 +98,8 @@ samlConfig: {
 
 Set `idpMetadata.isAssertionEncrypted: true` so Better Auth decrypts assertions, and pass the decryption key in `spMetadata.encPrivateKey`, with `encPrivateKeyPass` when the key is encrypted. The generated SP metadata has no encryption certificate, so give the IdP the certificate that matches `encPrivateKey` directly, or supply your own `spMetadata.metadata` with an encryption `KeyDescriptor`.
 
+Signing and decryption keys in a registered `samlConfig` are stored unencrypted in the `ssoProvider.samlConfig` column, so anyone who can read that column can sign requests as your SP and decrypt its assertions. To keep a key out of the database, define the provider in [`defaultSSO`](/docs/plugins/sso#configure-providers-in-code).
+
 ## Signing certificates and rotation
 
 When your IdP rotates its signing certificate, list the old and the new PEM in `idpMetadata.cert`. Better Auth accepts responses signed by either, so users keep signing in during the rotation.
@@ -119,13 +129,13 @@ When `idpMetadata.metadata` is set, Better Auth reads the certificates from that
 
 `mapping` names the SAML attributes that fill the user's profile:
 
-| Field         | Default attribute                                                       |
-| ------------- | ----------------------------------------------------------------------- |
-| `email`       | `email`, then the `NameID`                                              |
-| `name`        | `givenName` and `surname` joined, else `displayName`, else the `NameID` |
-| `firstName`   | `givenName`, used to build `name`                                       |
-| `lastName`    | `surname`, used to build `name`                                         |
-| `extraFields` | The attribute named in each entry                                       |
+| Field         | Default attribute                                                                              |
+| ------------- | ---------------------------------------------------------------------------------------------- |
+| `email`       | `email`, then the `NameID`                                                                     |
+| `name`        | `displayName`, read only when neither `firstName` nor `lastName` is present; else the `NameID` |
+| `firstName`   | `givenName`, joined with `lastName` to build `name`                                            |
+| `lastName`    | `surname`, joined with `firstName` to build `name`                                             |
+| `extraFields` | The attribute named in each entry                                                              |
 
 ```ts
 samlConfig: {
@@ -138,7 +148,7 @@ samlConfig: {
 }
 ```
 
-Mapping fills the profile only; the account is always keyed by the signed `NameID`. `email` and `name` take the first value of a multi-valued attribute, while `extraFields` and [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) receive multi-valued attributes as arrays. `mapping.emailVerified` is read only with the deprecated `trustEmailVerified` option; see [provisioning](/docs/plugins/sso/provisioning).
+Mapping fills the profile only. The account is keyed by the provider ID and the signed `NameID`; see [How SSO users are matched](/docs/plugins/sso/provisioning#how-sso-users-are-matched). `email` and `name` take the first value of a multi-valued attribute, while `extraFields` and [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) receive multi-valued attributes as arrays. `mapping.emailVerified` is read only with the deprecated `trustEmailVerified` option; see [provisioning](/docs/plugins/sso/provisioning).
 
 ## ACS and callback URLs
 
@@ -150,21 +160,21 @@ The IdP must send an `AudienceRestriction` that contains the SP entity ID, or `s
 
 After sign-in, Better Auth redirects to the first of these that is set:
 
-1. The `callbackURL` from `signIn.sso()`, carried in RelayState.
+1. The `callbackURL` from `signIn.sso()`.
 2. `samlConfig.idpInitiatedCallbackUrl`.
 3. The plugin option `saml.idpInitiatedCallbackUrl`.
 4. `samlConfig.callbackUrl`.
 5. The origin of the base URL.
 
-For SP-initiated sign-ins, error redirects go to the `errorCallbackURL` from `signIn.sso()`, else `onAPIError.errorURL`, else `{baseURL}/error`. IdP-initiated errors use the chain above. Only relative paths and URLs that match `trustedOrigins` are used. `samlConfig.callbackUrl` is a post-login redirect, not an ACS URL; see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#saml-configuration-is-simplified).
+Better Auth skips any entry that is not a relative path or a URL matching `trustedOrigins`.
 
-<Callout>
-  When you upgrade to purpose-prefixed [verification identifiers](/docs/reference/options#verification) or purpose-specific [state-cookie keys](/docs/reference/options#storestatestrategy), restart pending SP-initiated SAML sign-ins and upgrade all servers together. IdP-initiated sign-ins do not use that state.
-</Callout>
+Errors in SP-initiated sign-ins redirect to the `errorCallbackURL` from `signIn.sso()`, else `onAPIError.errorURL`, else `{baseURL}/error`. Errors in IdP-initiated sign-ins use the list above.
+
+`samlConfig.callbackUrl` sets where users land, not the ACS URL. Before 1.7 it set the ACS URL; see the [1.7 upgrade guide](/docs/guides/1-7-upgrade-guide#saml-configuration-is-simplified).
 
 ## IdP-initiated SSO
 
-A response with no `InResponseTo` is unsolicited ([Profiles §4.1.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)). Better Auth rejects it by default and redirects with `error=unsolicited_response`. To accept these responses:
+When the user starts at your app, the IdP's response names your request in `InResponseTo`. When the user starts at the IdP, for example from its dashboard, the response has no `InResponseTo` and is unsolicited ([Profiles §4.1.5](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)). Better Auth rejects these by default and redirects with `error=unsolicited_response`. To accept them:
 
 ```ts title="auth.ts"
 sso({
@@ -175,8 +185,10 @@ sso({
 ```
 
 <Callout type="warn">
-  An unsolicited response cannot be tied to a request your app started, and [SAML2Int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html) advises against it. Enable this only when the IdP requires it. When your frontend is on another origin, set `idpInitiatedCallbackUrl`, or users land on the auth server's origin.
+  An unsolicited response cannot be tied to a request your app started, so anyone with an account at the IdP can post their own signed response from a victim's browser and sign the victim into the attacker's account. The option applies to every SAML provider, not only the one that needs it. [SAML2Int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html) advises against it; enable this only when the IdP requires it.
 </Callout>
+
+IdP-initiated sign-ins have no `callbackURL`. When your frontend is on another origin, set `idpInitiatedCallbackUrl`, or users land on the auth server's origin.
 
 ## Service provider metadata
 

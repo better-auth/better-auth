@@ -1,11 +1,11 @@
 ---
 icon: pluginsOAuthProviderResourceServer
-sidebarTitle: "Protect Your API"
+sidebarTitle: "Protect your API"
 title: Protect your API
 description: Verify provider-issued access tokens in your API or another service.
 ---
 
-A resource server is the API that receives access tokens from your OAuth clients. This page shows how it verifies those tokens and checks their scopes.
+A resource server is the API that receives access tokens from your OAuth clients.
 
 ## Verify access tokens
 
@@ -26,25 +26,48 @@ export const GET = async (req: Request) => {
     },
     requiredScopes: ["read:post"],
   });
+  return Response.json({ sub: payload.sub });
 };
 ```
 
-`requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a `403` `insufficient_scope` error that lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
+`requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a `403` `insufficient_scope` error that lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)). Catch the thrown `APIError` and return its `statusCode`; most frameworks turn an uncaught error into a `500`.
 
-If the API runs next to your auth server, use the [resource client](/docs/plugins/oauth-provider#add-the-client-plugins) instead; failures come back with a `WWW-Authenticate` challenge. Its defaults come from the `baseURL` and `basePath` you pass to `betterAuth()`, not the resolved URL. With an origin-only `baseURL`, the default issuer misses the `/api/auth` path unless you set `jwt.issuer`, and the default JWKS URL misses it unless you set `basePath` explicitly. Pass `issuer` and `jwksUrl` to be safe, and set `audience` to your API's identifier.
+If the API runs in the same process as your auth server, use the resource client instead. Its `401` and `insufficient_scope` errors carry a `WWW-Authenticate` challenge in `headers`.
+
+```ts title="lib/server-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client";
+import { auth } from "@/lib/auth";
+
+export const serverClient = createAuthClient({
+  plugins: [oauthProviderResourceClient(auth)],
+});
+```
+
+The resource client's defaults come from the `baseURL` and `basePath` you pass to `betterAuth()`, not the resolved URL. With an origin-only `baseURL`, the default issuer misses the `/api/auth` path unless you set `jwt.issuer`, and the default JWKS URL misses it unless you set `basePath` explicitly. Pass `issuer` and `jwksUrl` to be safe, and set `audience` to your API's identifier.
 
 ```ts title="api/posts.ts"
+import { isAPIError } from "better-auth/api";
 import { serverClient } from "@/lib/server-client";
 
 export const POST = async (req: Request) => {
-  const payload = await serverClient.verifyAccessTokenRequest(req, {
-    verifyOptions: {
-      issuer: "https://auth.example.com/api/auth",
-      audience: "https://api.example.com",
-    },
-    jwksUrl: "https://auth.example.com/api/auth/jwks",
-    requiredScopes: ["write:post"],
-  });
+  try {
+    const payload = await serverClient.verifyAccessTokenRequest(req, {
+      verifyOptions: {
+        issuer: "https://auth.example.com/api/auth",
+        audience: "https://api.example.com",
+      },
+      jwksUrl: "https://auth.example.com/api/auth/jwks",
+      requiredScopes: ["write:post"],
+    });
+    return Response.json({ sub: payload.sub });
+  } catch (error) {
+    if (!isAPIError(error)) throw error;
+    return Response.json(error.body, {
+      status: error.statusCode,
+      headers: error.headers,
+    });
+  }
 };
 ```
 
@@ -66,7 +89,13 @@ The provider issues a JWT access token when the client sends a `resource` and th
 
 Accepting only JWT access tokens is the simplest setup: it is fast and the API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, `exp`, and `scope` ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)).
 
-To accept opaque tokens as well, register the API as a confidential client, [link it to the resource](#introspection), and pass its credentials. `remoteVerify` sends them in the request body, so register that client with `token_endpoint_auth_method: "client_secret_post"`; with the default `client_secret_basic`, every introspection call fails with `invalid_client`. With `remoteVerify` set, every token is introspected, JWTs included, which also confirms that the session behind it is still active. Set `force: true` to skip the local JWT check.
+To accept opaque tokens too, introspect them:
+
+1. Register the API as a confidential client with `token_endpoint_auth_method: "client_secret_post"`. `remoteVerify` sends credentials in the request body, so the default `client_secret_basic` fails with `invalid_client`.
+2. [Link it to the resource](#introspection).
+3. Pass its credentials as `remoteVerify`.
+
+With `remoteVerify` set, every token is introspected after the local JWT check, which also confirms the session is still active. Set `force: true` to skip the local check.
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
@@ -105,4 +134,16 @@ The simplest setup maps each scope to exactly one permission, such as `read:post
 
 ## Protected resource metadata
 
-To advertise which authorization server protects your API, serve an [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728#section-3) document at `/.well-known/oauth-protected-resource`. `serverClient.getProtectedResourceMetadata()` builds it for you. The [MCP plugin](/docs/plugins/mcp) serves this document automatically.
+To advertise which authorization server protects your API, serve an [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728#section-3) document at `/.well-known/oauth-protected-resource`. `serverClient.getProtectedResourceMetadata()` builds it for you. Its default `authorization_servers` entry has the same origin-only `baseURL` problem as the default issuer, so pass your provider's issuer. The [MCP plugin](/docs/plugins/mcp) serves this document automatically.
+
+```ts title="app/.well-known/oauth-protected-resource/route.ts"
+import { serverClient } from "@/lib/server-client";
+
+export const GET = async () =>
+  Response.json(
+    await serverClient.getProtectedResourceMetadata({
+      resource: "https://api.example.com",
+      authorization_servers: ["https://auth.example.com/api/auth"],
+    }),
+  );
+```

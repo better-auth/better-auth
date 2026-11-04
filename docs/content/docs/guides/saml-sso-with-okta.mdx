@@ -4,7 +4,7 @@ title: SAML SSO with Okta
 description: A guide to integrating SAML Single Sign-On (SSO) with Better Auth, featuring Okta
 ---
 
-This guide walks you through setting up SAML Single Sign-On (SSO) with your Identity Provider (IdP), using Okta as an example. For advanced configuration details and the full API reference, check out the [SSO Plugin Documentation](/docs/plugins/sso).
+This guide walks you through setting up SAML Single Sign-On (SSO) with your Identity Provider (IdP), using Okta as an example. For every SAML option, see [SAML providers](/docs/plugins/sso/saml) and the [SSO reference](/docs/plugins/sso/reference).
 
 ## What is SAML?
 
@@ -33,8 +33,8 @@ In this setup:
 
 6. Download the IdP metadata XML file and certificate
 
-<Callout type="info">
-  **IdP-Initiated SSO**: If you want users to access your app from the Okta dashboard, make sure the **Single Sign-on URL** points to the callback endpoint (`/api/auth/sso/saml2/sp/acs/{providerId}`). Better Auth automatically handles both SP-initiated and IdP-initiated flows.
+<Callout type="warn">
+  **IdP-initiated SSO**: To let users start from the IdP dashboard, point the **Single Sign-on URL** at `/api/auth/sso/saml2/sp/acs/{providerId}` and set `saml: { allowIdpInitiated: true }` in the `sso()` options. It is off by default because it lets anyone with an account at the IdP sign a victim into the attacker's account, and it applies to every SAML provider. Enable it only when the IdP requires it; see [IdP-initiated SSO](/docs/plugins/sso/saml#idp-initiated-sso).
 </Callout>
 
 ### Step 2: Configure Better Auth
@@ -178,5 +178,7 @@ await authClient.sso.register({
 ## Additional Resources
 
 * [SSO Plugin Documentation](/docs/plugins/sso)
+* [SAML providers](/docs/plugins/sso/saml)
+* [SSO reference](/docs/plugins/sso/reference)
 * [Okta SAML Documentation](https://developer.okta.com/docs/concepts/saml/)
 * [SAML 2.0 Specification](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)
