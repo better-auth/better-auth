@@ -1,3 +1,12 @@
+import { TWO_FACTOR_VERIFICATION_PREFIX } from "../../db/verification-token-storage";
+
+export { TWO_FACTOR_VERIFICATION_PREFIX };
+/**
+ * Prefix for the per-challenge attempt counters consumed as the race gate by
+ * `verifyTwoFactor().beginAttempt`.
+ */
+export const TWO_FACTOR_ATTEMPT_COUNTER_PREFIX = `${TWO_FACTOR_VERIFICATION_PREFIX}attempts-`;
+
 export const TWO_FACTOR_COOKIE_NAME = "two_factor";
 export const TRUST_DEVICE_COOKIE_NAME = "trust_device";
 export const TRUST_DEVICE_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 days

@@ -1780,6 +1780,333 @@ describe("internal adapter test", async () => {
 			expect(found).toBeNull(); // Proves DB was NOT used
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("retries secondary-only 2fa-* reads across transient KV misses", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let misses = 2;
+			let reads = 0;
+			const flaky: SecondaryStorage = {
+				...base,
+				get(key: string) {
+					reads += 1;
+					if (key.startsWith("verification:2fa-") && misses > 0) {
+						misses -= 1;
+						return null;
+					}
+					return base.get(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: flaky,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-transient-miss",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("2fa-transient-miss");
+			expect(found).not.toBeNull();
+			expect(found?.value).toBe("user-id");
+			// 1 initial read + 2 retries, then the hit: the retry budget is pinned.
+			expect(reads).toBe(3);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("retries secondary-only 2fa-* consume across transient KV misses and stays single-use", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let misses = 2;
+			let deletes = 0;
+			// The consume path only calls getAndDelete, never get: there is
+			// no get override here, so every miss below exercises the real path.
+			const flaky: SecondaryStorage = {
+				...base,
+				getAndDelete(key: string) {
+					deletes += 1;
+					if (key.startsWith("verification:2fa-") && misses > 0) {
+						misses -= 1;
+						return null;
+					}
+					return base.getAndDelete(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: flaky,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-consume-miss",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const consumed =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-consume-miss");
+			expect(consumed).not.toBeNull();
+			expect(consumed?.value).toBe("user-id");
+			// 1 initial attempt + 2 retries, then the hit: the consume budget is pinned.
+			expect(deletes).toBe(3);
+			const replay =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-consume-miss");
+			expect(replay).toBeNull();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("falls back from hashed to plain key in round 1 without per-key retry sleep", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let deletes = 0;
+
+			const flaky: SecondaryStorage = {
+				...base,
+				getAndDelete(key: string) {
+					deletes += 1;
+					// Reject the hashed key on every call.
+					if (key !== "verification:2fa-hash-test") {
+						return null;
+					}
+					return base.getAndDelete(key);
+				},
+			};
+
+			const hashedOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: flaky,
+				verification: {
+					storeIdentifier: "hashed" as const,
+				},
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(hashedOpts)).runMigrations();
+			const ctx = await init(hashedOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-hash-test",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			await flaky.set(
+				"verification:2fa-hash-test",
+				JSON.stringify({
+					identifier: "2fa-hash-test",
+					value: "user-id",
+					expiresAt: new Date(Date.now() + 60000).toISOString(),
+				}),
+			);
+
+			const consumed =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-hash-test");
+			expect(consumed).not.toBeNull();
+			expect(consumed?.value).toBe("user-id");
+			expect(deletes).toBe(2);
+			expect(store.size).toBe(0);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("fails closed after bounded retries on a permanent secondary miss for 2fa-*", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let reads = 0;
+			const missing: SecondaryStorage = {
+				...base,
+				get(key: string) {
+					reads += 1;
+					if (key.startsWith("verification:2fa-")) {
+						return null;
+					}
+					return base.get(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: missing,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-permanent-miss",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			// Simulate a write that never propagates to this region.
+			store.clear();
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("2fa-permanent-miss");
+			expect(found).toBeNull();
+			// 1 initial read + 3 bounded retries, then fail closed — never more.
+			expect(reads).toBe(4);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("fails closed on corrupt secondary bytes for 2fa-* without throwing", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let reads = 0;
+			const counting: SecondaryStorage = {
+				...base,
+				get(key: string) {
+					reads += 1;
+					return base.get(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: counting,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			store.set("verification:2fa-corrupt", "not-json{{{");
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("2fa-corrupt");
+			expect(found).toBeNull();
+			// Unparseable bytes are a miss on every attempt: still bounded.
+			expect(reads).toBe(4);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("fails closed on a permanent secondary consume miss without breaking later consumes", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let deletes = 0;
+			let alwaysMiss = true;
+			const flaky: SecondaryStorage = {
+				...base,
+				getAndDelete(key: string) {
+					deletes += 1;
+					if (alwaysMiss && key.startsWith("verification:2fa-")) {
+						return null;
+					}
+					return base.getAndDelete(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: flaky,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-consume-tail",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const missed =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-consume-tail");
+			expect(missed).toBeNull();
+			// 1 initial attempt + 2 bounded consume retries, then fail closed.
+			expect(deletes).toBe(3);
+			// The miss deleted nothing: once the write propagates the value is
+			// still there and still single-use.
+			alwaysMiss = false;
+			const consumed =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-consume-tail");
+			expect(consumed?.value).toBe("user-id");
+			const replay =
+				await ctx.internalAdapter.consumeVerificationValue("2fa-consume-tail");
+			expect(replay).toBeNull();
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("grants a concurrent secondary-only 2fa-* consume to exactly one racer", async () => {
+			const store = new Map<string, string>();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: createStringSecondaryStorage(store),
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-concurrent",
+				value: "user-id",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const [first, second] = await Promise.all([
+				ctx.internalAdapter.consumeVerificationValue("2fa-concurrent"),
+				ctx.internalAdapter.consumeVerificationValue("2fa-concurrent"),
+			]);
+			// The loser's retries must not resurrect the value: exactly one winner.
+			expect([first, second].filter(Boolean)).toHaveLength(1);
+			expect([first, second].find(Boolean)?.value).toBe("user-id");
+		});
+
+		it("keeps single-read behavior for non-2fa identifiers in secondary-only mode", async () => {
+			const store = new Map<string, string>();
+			const base = createStringSecondaryStorage(store);
+			let reads = 0;
+			const counting: SecondaryStorage = {
+				...base,
+				get(key: string) {
+					reads += 1;
+					return base.get(key);
+				},
+			};
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: counting,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "password-reset-guard",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			store.clear();
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"password-reset-guard",
+			);
+			expect(found).toBeNull();
+			expect(reads).toBe(1);
+		});
+
 		it("should delete verification from secondary storage", async () => {
 			const { dataMap, storage } = createMockStorage();
 
@@ -1831,6 +2158,55 @@ describe("internal adapter test", async () => {
 				await ctx.internalAdapter.findVerificationValue("both-test");
 			expect(found).not.toBeNull();
 			expect(found?.value).toBe("both-value");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11344
+		 */
+		it("should dual-write, find, and delete 2fa-* values when storeInDatabase is true", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const dualStorageOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeInDatabase: true,
+				},
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			await (await getMigrations(dualStorageOpts)).runMigrations();
+			const ctx = await init(dualStorageOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "2fa-dual-write",
+				value: "2fa-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			// Dual-write: the challenge lands in the secondary store ...
+			expect(dataMap.has("verification:2fa-dual-write")).toBe(true);
+			const secondaryCopy = dataMap.get("verification:2fa-dual-write");
+
+			// ... and the database copy serves reads when secondary misses.
+			dataMap.clear();
+			const found =
+				await ctx.internalAdapter.findVerificationValue("2fa-dual-write");
+			expect(found).not.toBeNull();
+			expect(found?.value).toBe("2fa-value");
+
+			// Restore the secondary copy so the delete below proves secondary
+			// deletion instead of asserting against an already-cleared map.
+			dataMap.set("verification:2fa-dual-write", secondaryCopy!);
+			expect(dataMap.has("verification:2fa-dual-write")).toBe(true);
+
+			// Delete removes the database copy too: the value is gone everywhere.
+			await ctx.internalAdapter.deleteVerificationByIdentifier(
+				"2fa-dual-write",
+			);
+			const afterDelete =
+				await ctx.internalAdapter.findVerificationValue("2fa-dual-write");
+			expect(afterDelete).toBeNull();
+			expect(dataMap.has("verification:2fa-dual-write")).toBe(false);
 		});
 
 		it("should fallback to database when not in secondary storage", async () => {

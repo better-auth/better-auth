@@ -729,3 +729,107 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		expect(successCount).toBeLessThanOrEqual(1);
 	});
 });
+
+/**
+ * A backend storage miss and a tampered cookie must both fail closed with
+ * `INVALID_TWO_FACTOR_COOKIE`: the secondary-storage retry must never turn a
+ * permanent miss into a success, and a forged cookie must never read as valid.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/11344
+ */
+describe("two-factor security: secondary-storage miss vs tampered cookie", async () => {
+	const store = new Map<string, string>();
+	const secondaryStorage: SecondaryStorage = {
+		async get(key: string) {
+			return store.get(key) ?? null;
+		},
+		async getAndDelete(key: string) {
+			const value = store.get(key) ?? null;
+			store.delete(key);
+			return value;
+		},
+		async increment(key: string) {
+			const count = Number(store.get(key) ?? 0) + 1;
+			store.set(key, String(count));
+			return count;
+		},
+		async set(key: string, value: string) {
+			store.set(key, value);
+		},
+		async delete(key: string) {
+			store.delete(key);
+		},
+	};
+
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		secondaryStorage,
+		plugins: [twoFactor()],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const dbUser = await db.findOne<User>({
+		model: "user",
+		where: [{ field: "email", value: testUser.email }],
+	});
+	const userId = dbUser?.id as string;
+
+	const enrollment = await auth.api.enableTwoFactor({
+		body: { password: testUser.password },
+		headers,
+	});
+	if (enrollment.method !== "totp") {
+		throw new Error("expected totp enrollment");
+	}
+	const row = await db.findOne<TwoFactorTable>({
+		model: "twoFactor",
+		where: [{ field: "userId", value: userId }],
+	});
+	const secret = await symmetricDecrypt({
+		key: DEFAULT_SECRET,
+		data: row!.secret,
+	});
+	const enrollCode = await createOTP(secret).totp();
+	await auth.api.verifyTOTP({ body: { code: enrollCode }, headers });
+
+	async function startChallenge(): Promise<Headers> {
+		const signIn = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			asResponse: true,
+		});
+		expect(signIn.status).toBe(200);
+		return convertSetCookieToCookie(signIn.headers);
+	}
+
+	it("fails closed when the challenge never reaches secondary storage", async () => {
+		const challengeHeaders = await startChallenge();
+		// Simulate a cross-region write that never propagates to this reader.
+		store.clear();
+		const res = await auth.api.verifyTOTP({
+			body: { code: "123456" },
+			headers: challengeHeaders,
+			asResponse: true,
+		});
+		expect(res.status).toBe(401);
+		const json = (await res.json()) as { message: string };
+		expect(json.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
+		);
+	});
+
+	it("fails closed on a tampered two-factor cookie", async () => {
+		await startChallenge();
+		const tampered = new Headers();
+		tampered.set("cookie", "better-auth.two_factor=forged-value");
+		const res = await auth.api.verifyTOTP({
+			body: { code: "123456" },
+			headers: tampered,
+			asResponse: true,
+		});
+		expect(res.status).toBe(401);
+		const json = (await res.json()) as { message: string };
+		expect(json.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
+		);
+	});
+});
