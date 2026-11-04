@@ -2035,3 +2035,124 @@ describe("oauth authorize - custom redirect URI safety", async () => {
 		expect(location).toContain("error=invalid_redirect");
 	});
 });
+
+describe("oauth authorize - default scopes when scope is omitted", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["openid", "profile", "files:read", "members:write"],
+				clientRegistrationDefaultScopes: ["openid", "files:read"],
+				clientRegistrationAllowedScopes: [
+					"openid",
+					"files:read",
+					"members:write",
+				],
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const unauthenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	it("falls back to the operator default scopes, not the client's whole persisted set", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["http://localhost:5000/callback"],
+				application_type: "native",
+			},
+		});
+		expect(client?.client_id).toBeDefined();
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: client.client_id,
+			redirect_uri: "http://localhost:5000/callback",
+			code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+			code_challenge_method: "S256",
+		}).toString();
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(loginRedirectUrl).toContain("/login");
+		const redirectUrl = new URL(loginRedirectUrl, authServerBaseUrl);
+		const assignedScope = redirectUrl.searchParams.get("scope") ?? "";
+		expect(assignedScope.split(" ")).toEqual(["openid", "files:read"]);
+		expect(assignedScope).not.toContain("members:write");
+	});
+});
+
+describe("oauth authorize - empty registration default scopes", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["openid", "profile", "files:read", "members:write"],
+				clientRegistrationDefaultScopes: [],
+				clientRegistrationAllowedScopes: [
+					"openid",
+					"files:read",
+					"members:write",
+				],
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const unauthenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	it("assigns no scopes when the operator configured an empty default list", async () => {
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["http://localhost:5000/callback"],
+				application_type: "native",
+			},
+		});
+		expect(client?.client_id).toBeDefined();
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: client.client_id,
+			redirect_uri: "http://localhost:5000/callback",
+			code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+			code_challenge_method: "S256",
+		}).toString();
+
+		let loginRedirectUrl = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				loginRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(loginRedirectUrl).toContain("/login");
+		const redirectUrl = new URL(loginRedirectUrl, authServerBaseUrl);
+		const assignedScope = redirectUrl.searchParams.get("scope") ?? "";
+		expect(assignedScope).toBe("");
+	});
+});
