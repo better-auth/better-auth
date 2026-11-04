@@ -102,7 +102,7 @@ Discovery then lists `"public"` and `"pairwise"` in `subject_types_supported`. A
 Better Auth computes the value with HMAC-SHA256 over the host of the client's first redirect URI and the user ID ([OIDC Core §8.1](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg)). Clients that share a redirect host share the same `sub`.
 
 * Pairwise `sub` appears in the ID token, UserInfo, and introspection. Introspection returns the `sub` of the client the token was issued to.
-* JWT access tokens keep the real user ID as `sub`, so resource servers can look users up.
+* JWT access tokens keep the real user ID as `sub`, so resource servers can look users up. A client can decode its own JWT access tokens, so a pairwise client that requests a `resource` learns the real user ID. To keep the user ID from a pairwise client, have it request opaque tokens by omitting `resource`.
 
 <Callout type="warn">
   `pairwiseSecret` must be at least 32 characters. Changing it changes every pairwise `sub` and breaks existing client accounts. Treat it as permanent.

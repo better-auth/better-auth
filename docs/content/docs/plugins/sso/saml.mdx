@@ -97,13 +97,13 @@ Registration rejects SP metadata that weakens `wantAssertionsSigned: true`, has 
 
 ### Signed assertions
 
-To require that the IdP sign each assertion itself, not only the response that carries it, set `wantAssertionsSigned: true`. The default is `false`. The setting also advertises `WantAssertionsSigned="true"` in SP metadata ([Metadata §2.4.4](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf)).
+To require that the IdP sign each assertion itself, not only the response that carries it, set `wantAssertionsSigned: true`. The default is `false`. Set it to `true` whenever your IdP supports it, as [SAML2Int](https://kantarainitiative.github.io/SAMLprofiles/saml2int.html) expects. The setting also advertises `WantAssertionsSigned="true"` in SP metadata ([Metadata §2.4.4](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf)).
 
 With the setting on, an assertion without its own signature makes sign-in redirect with `error=invalid_saml_response` and `error_description=SAML assertion signature is required`. To fix it, configure the IdP to sign the assertion.
 
 ### Signed AuthnRequests
 
-Signing AuthnRequests lets the IdP reject a sign-in request that a third party sends in your SP's name. To sign AuthnRequests, set `authnRequestsSigned: true` and provide a signing key in `spMetadata.privateKey` or `samlConfig.privateKey`. The default is `false`. The setting also advertises `AuthnRequestsSigned="true"` in SP metadata. Without a key, sign-in returns 400.
+Signing AuthnRequests lets the IdP reject a sign-in request that a third party sends in your SP's name. To sign AuthnRequests, set `authnRequestsSigned: true` and provide a signing key in `spMetadata.privateKey` or `samlConfig.privateKey`. The default is `false`. The setting also advertises `AuthnRequestsSigned="true"` in SP metadata. Without a key, sign-in returns 400. Set the key only in server code, such as `defaultSSO` or `auth.api.registerSSOProvider`. Never pass it through `authClient.sso.register`, which would put it in your client bundle.
 
 ```ts
 samlConfig: {
@@ -124,7 +124,7 @@ Signing and decryption keys in a registered `samlConfig` are stored unencrypted 
 
 ## Signing certificates and rotation
 
-To keep users signing in while your IdP rotates its signing certificate, list the old and the new PEM in `idpMetadata.cert`. Better Auth accepts responses signed by either, so users keep signing in during the rotation.
+To keep users signing in while your IdP rotates its signing certificate, list the old and the new PEM in `idpMetadata.cert`. Better Auth accepts responses signed by either, so users keep signing in during the rotation. This works when the IdP embeds its signing certificate in the signature's `KeyInfo`, which most IdPs do. Without `KeyInfo`, only the first certificate in the list is tried.
 
 ```ts
 samlConfig: {
@@ -170,7 +170,7 @@ samlConfig: {
 }
 ```
 
-Mapping fills the profile only. The account is keyed by the provider ID and the signed `NameID`, as [How SSO users are matched](/docs/plugins/sso/provisioning#how-sso-users-are-matched) explains. `email` and `name` take the first value of a multi-valued attribute. `extraFields` and [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) receive multi-valued attributes as arrays. `mapping.emailVerified` is read only with the deprecated `trustEmailVerified` option ([provisioning](/docs/plugins/sso/provisioning)).
+Mapping fills the profile, with one exception: for a provider with a verified domain, `email` selects the existing user that a new account is linked to. Map `email` only to an attribute that the IdP administrator controls and users cannot edit. The account is keyed by the provider ID and the signed `NameID`, as [How SSO users are matched](/docs/plugins/sso/provisioning#how-sso-users-are-matched) explains. `email` and `name` take the first value of a multi-valued attribute. `extraFields` and [`resolveUser`](/docs/plugins/sso/provisioning#resolve-sso-users) receive multi-valued attributes as arrays. `mapping.emailVerified` is read only with the deprecated `trustEmailVerified` option ([provisioning](/docs/plugins/sso/provisioning)).
 
 ## ACS and callback URLs
 
@@ -234,7 +234,7 @@ To log users out of the IdP and your app together, set `saml.enableSingleLogout:
 
 Your IdP must publish a `SingleLogoutService`, in its metadata XML or in `idpMetadata.singleLogoutService`. When you sign users out through `/sign-out`, Better Auth also removes the stored SAML session. These plugin options tune logout:
 
-* `saml.wantLogoutRequestSigned` and `saml.wantLogoutResponseSigned` require signed logout messages from the IdP.
+* `saml.wantLogoutRequestSigned` and `saml.wantLogoutResponseSigned` require signed logout messages from the IdP. Both default to `false`. Set both to `true` whenever you enable Single Logout, so that only your IdP can end your users' sessions.
 * `saml.logoutRequestTTL` (default 5 minutes) limits how long a logout request stays valid.
 
 The client plugin does not expose SP-initiated logout, and the endpoint accepts only JSON. To start it from the browser, add a server route that a form POSTs to, and forward the request to `auth.handler` as JSON. Better Auth then runs its [origin and CSRF checks](/docs/reference/security#csrf-protection), and the browser follows the redirect to the IdP. Do not call `auth.api.initiateSLO` from that route, because a direct call skips those checks. The example uses the default `/api/auth` base path, so change it if you set `basePath`.

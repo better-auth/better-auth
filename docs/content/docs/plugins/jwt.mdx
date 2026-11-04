@@ -221,7 +221,9 @@ const payload = await validateToken(token)
 
 ### OAuth Provider Mode
 
-When you use the [OAuth Provider](/docs/plugins/oauth-provider) or [MCP](/docs/plugins/mcp) plugin, disable the JWT plugin's `/token` endpoint, because OAuth clients get tokens from `/oauth2/token`. OAuth clients read user claims from `/oauth2/userinfo` and ignore the `set-auth-jwt` header, so you can also set `disableSettingJwtHeader: true`.
+When you use the [OAuth Provider](/docs/plugins/oauth-provider) or [MCP](/docs/plugins/mcp) plugin, disable both ways the JWT plugin hands session JWTs to the browser: the `/token` endpoint and the `set-auth-jwt` header. OAuth clients get tokens from `/oauth2/token` and claims from `/oauth2/userinfo`, so they need neither.
+
+Session JWTs are signed with the same keys as OAuth access tokens, and by default they carry the auth server's URL as both `iss` and `aud`. A resource server that checks only signature, issuer, and audience can therefore accept a signed-in user's session JWT as an access token, without any client, consent, or scope. Disabling both paths removes that token from the browser. Resource servers should also reject tokens that are not OAuth access tokens; see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";

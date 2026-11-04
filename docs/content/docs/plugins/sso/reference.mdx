@@ -159,11 +159,11 @@ Lifetime of a LogoutRequest record, in milliseconds. Defaults to `300000`.
 
 `wantLogoutRequestSigned` <span className="opacity-70">`boolean`</span>
 
-Requires signed LogoutRequests from the IdP. Defaults to `false`.
+Requires signed LogoutRequests from the IdP. Defaults to `false`. Set `true` whenever `enableSingleLogout` is on.
 
 `wantLogoutResponseSigned` <span className="opacity-70">`boolean`</span>
 
-Requires signed LogoutResponses from the IdP. Defaults to `false`.
+Requires signed LogoutResponses from the IdP. Defaults to `false`. Set `true` whenever `enableSingleLogout` is on.
 
 <Accordions>
   <Accordion title="algorithms options">
@@ -173,7 +173,7 @@ Requires signed LogoutResponses from the IdP. Defaults to `false`.
 
     `allowedSignatureAlgorithms` <span className="opacity-70">`string[]`</span>
 
-    Accepts only these signature algorithm URIs in responses and in `samlConfig.signatureAlgorithm`. When set, it replaces the deprecated check for signatures.
+    Signature algorithm URIs to accept, including in `samlConfig.signatureAlgorithm`. When set, it replaces the deprecated check for signatures.
 
     `allowedDigestAlgorithms` <span className="opacity-70">`string[]`</span>
 

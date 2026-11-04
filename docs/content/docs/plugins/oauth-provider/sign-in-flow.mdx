@@ -80,7 +80,7 @@ const client = await auth.api.getOAuthClientPublic({
 });
 ```
 
-For dynamically registered and CIMD clients, whoever registered the client chose its name and logo, so also show the host of the signed `redirect_uri`. Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
+For any client an administrator did not create, whoever registered it chose its name, logo, and links. That includes dynamically registered and CIMD clients, and clients any signed-in user created with `createOAuthClient` while [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) is unset. So also show the host of the signed `redirect_uri`. Better Auth does not check the scheme of `logo_uri`, `client_uri`, `tos_uri`, or `policy_uri`, so render them only when they start with `https:`. Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
 
 <APIMethod path="/oauth2/consent" method="POST" requireSession>
   ```ts

@@ -64,16 +64,8 @@ MIIDqjCCApKgAwIBAgIGAZhVGMeUMA0GCSqGSIb3DQEBCwUAMIGVMQswCQYDVQQGEwJVUzETMBEG
 [Your Okta Certificate]
 ...
 -----END CERTIFICATE-----`,
-      
-      // SP Metadata
-      spMetadata: {
-        metadata: `<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" 
-          entityID="http://localhost:3000/api/sso/saml2/sp/metadata">
-          ...
-          [Your SP Metadata XML]
-          ...
-        </md:EntityDescriptor>`
-      }
+      // Better Auth generates the SP metadata from `issuer` and the ACS URL.
+      // If you supply your own `spMetadata.metadata`, its entityID must equal `issuer`.
     }
   }]
 }
@@ -152,8 +144,6 @@ await authClient.signIn.sso({
 
 **Important Notes**:
 
-* DummyIDP should ONLY be used for development and testing
-* Never use these certificates in production
 * The example uses `localhost:3000` - adjust URLs for your environment
 * For production, always use proper IdP providers like Okta, Azure AD, or OneLogin
 * The ACS URL is derived automatically from `{baseURL}/sso/saml2/sp/acs/{providerId}`. The post-login destination is controlled by `callbackURL` in `signIn.sso()`

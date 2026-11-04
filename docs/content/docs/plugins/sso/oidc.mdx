@@ -41,7 +41,7 @@ The same body works on the server with `auth.api.registerSSOProvider({ body, hea
 
 At the IdP, register `{baseURL}/sso/callback/{providerId}` as the redirect URI. With the default base path, that is `/api/auth/sso/callback/acme`. If you set a [shared redirect URI](#shared-redirect-uri), register that instead. The response returns the URI to register as `redirectURI`.
 
-`pkce` defaults to `true`, and `scopes` defaults to `["openid", "email", "profile", "offline_access"]`. See [`oidcConfig`](/docs/plugins/sso/reference#oidcconfig) for every field.
+`pkce` defaults to `true`. Keep it on: `pkce: false` leaves only `state` to protect the callback against injected authorization codes ([RFC 9700 §4.5](https://datatracker.ietf.org/doc/html/rfc9700#section-4.5)). The registrant sets this field, so a self-registered provider can turn it off. `scopes` defaults to `["openid", "email", "profile", "offline_access"]`. See [`oidcConfig`](/docs/plugins/sso/reference#oidcconfig) for every field.
 
 ### Mapping
 
@@ -68,7 +68,7 @@ To store your own endpoints without fetching the document, set `skipDiscovery: t
 To stop a registrant from making your server call internal services or a cloud metadata address, registration checks these URLs against [`trustedOrigins`](/docs/reference/security#trusted-origins):
 
 * When registration runs discovery, the discovery URL and every URL discovered from it. A missing origin fails registration with `discovery_untrusted_origin`.
-* Any endpoint on a private or non-routable host, or on a host that resolves to one, even with `skipDiscovery: true`. A missing entry fails registration with `discovery_private_host`.
+* Any endpoint on a private or non-routable host, or on a host that resolves to one, even with `skipDiscovery: true`. A missing entry fails registration with `discovery_private_host`. Hostnames are resolved only where `node:dns` is available. On runtimes without it, such as Cloudflare Workers, only literal private addresses are blocked. The resolved address is not pinned for the later request.
 
 `trustedOrigins` is global. An IdP origin listed there is also accepted as a request `Origin` and a redirect target, and a private host listed there can be reached for any provider. List only IdP origins you have vetted, never values a registrant supplies.
 
@@ -79,7 +79,7 @@ export const auth = betterAuth({
 });
 ```
 
-To support customers who bring their own IdPs, pass a function that adds the allowed IdP origins on SSO routes. These include registration, sign-in, and the callback. The function receives the request and returns the origins to trust:
+To support customers who bring their own IdPs, pass a function that adds IdP origins you have approved on the SSO registration, sign-in, and callback routes. The function receives the request and returns the origins to trust. On the routes where it returns an IdP origin, that origin is also accepted as a request `Origin` and as a `callbackURL`, `errorCallbackURL`, or `newUserCallbackURL`. Return only origins your team has vetted, such as from an allowlist you maintain. Never return values read from provider rows or registration requests, because a registrant could then add their own site as a redirect target or an internal host for the server to call.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -88,8 +88,13 @@ export const auth = betterAuth({
 		// request is undefined during initialization and auth.api calls
 		if (!request) return app;
 		const { pathname } = new URL(request.url);
-		return pathname.includes("/sso")
-			? [...app, ...(await getAllowedIdpOrigins())]
+		// Match exact routes, not any path that contains "/sso"
+		const isSSORoute =
+			pathname === "/api/auth/sso/register" ||
+			pathname === "/api/auth/sign-in/sso" ||
+			pathname.startsWith("/api/auth/sso/callback/");
+		return isSSORoute
+			? [...app, ...(await getApprovedIdpOrigins())]
 			: app;
 	},
 	plugins: [sso()],
@@ -133,7 +138,7 @@ export const auth = betterAuth({
 });
 ```
 
-`resolvePrivateKey` receives `{ providerId, keyId, issuer }` and returns `{ privateKeyJwk?, privateKeyPem?, kid?, algorithm? }`.
+`resolvePrivateKey` receives `{ providerId, keyId, issuer }` and returns `{ privateKeyJwk?, privateKeyPem?, kid?, algorithm? }`. `keyId` and `issuer` come from the stored provider config, which the registrant sets. Look the key up by `providerId`, and confirm that the provider belongs to the tenant the key was issued for. A lookup by `keyId` alone lets one registrant name another tenant's key.
 
 ## Shared redirect URI
 

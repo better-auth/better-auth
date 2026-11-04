@@ -94,11 +94,11 @@ For a fixed set of providers configured in code, use [Generic OAuth](/docs/plugi
 
 By default, any signed-in user can register up to 10 providers for any domain. Two providers can claim the same domain. A provider's domain also matches its subdomains: a provider for `example.com` matches `user@eng.example.com`. Either way, email sign-in can reach another registrant's provider. Before you deploy, decide who should register providers:
 
-| Who registers providers                   | Configure                                                                                                                                                           |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Only your administrators                  | Set `providersLimit` to a function that returns `0` for everyone else.                                                                                              |
-| Your customers, each for their own domain | Enable [domain verification](/docs/plugins/sso/domain-verification). A provider then cannot sign anyone in until its domain is proven over DNS.                     |
-| Nobody at runtime                         | Set `providersLimit: 0` and define the providers in [`defaultSSO`](#configure-providers-in-code). To link existing users by email, also enable domain verification. |
+| Who registers providers                   | Configure                                                                                                                                                                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Only your administrators                  | Set `providersLimit` to a function that returns `0` for everyone else. Owners and admins of an organization can still update its linked providers, including their `domain`; block that with [`guardProviderMutation`](/docs/plugins/sso/reference#plugin-options). |
+| Your customers, each for their own domain | Enable [domain verification](/docs/plugins/sso/domain-verification). A provider then cannot sign anyone in until its domain is proven over DNS.                                                                                                                     |
+| Nobody at runtime                         | Set `providersLimit: 0` and define the providers in [`defaultSSO`](#configure-providers-in-code). To link existing users by email, also enable domain verification.                                                                                                 |
 
 As a function, `providersLimit` receives the signed-in user and returns the number of providers that user can register. A limit of `0` rejects that user's registrations with 403.
 
@@ -189,6 +189,10 @@ await authClient.signIn.sso({
 ```
 
 In the browser, the auth client sends the user to the IdP by itself. On the server, call `auth.api.signInSSO`. It returns the IdP's `url`, and your code must send the browser there.
+
+<Callout type="warn">
+  `auth.api.signInSSO` does not check `callbackURL`, `errorCallbackURL`, or `newUserCallbackURL` against [`trustedOrigins`](/docs/reference/security#trusted-origins). Only requests through `auth.handler` get that check. If your server code passes a URL from the request, validate it first, or the sign-in becomes an open redirect.
+</Callout>
 
 Pass the identifier you have:
 
@@ -317,7 +321,7 @@ To list the providers you can manage, call `authClient.sso.providers()` (`GET /s
 </APIMethod>
 
 <Callout type="warn">
-  Deleting a provider also deletes every `account` row linked to it.
+  Deleting a provider also deletes every `account` row linked to it. It does not end sessions that users started through the provider, or remove organization memberships it provisioned. If you delete a provider because its IdP was compromised, also revoke those users' sessions.
 </Callout>
 
 To block an update or delete of a stored provider, throw from [`guardProviderMutation`](/docs/plugins/sso/reference#plugin-options). The change is rejected with 409 `SSO_PROVIDER_MUTATION_REJECTED`. The guard runs after the provider row is locked, and it needs a database adapter with native transactions and async-context support. It receives:

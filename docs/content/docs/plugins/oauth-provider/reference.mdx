@@ -129,7 +129,7 @@ Enables `POST /oauth2/register`. Defaults to `false`. See [Dynamic client regist
 
 `allowUnauthenticatedClientRegistration` <span className="opacity-70">`boolean`</span>
 
-Accepts registration requests without a session. Defaults to `false`.
+Accepts registration requests without a session. Defaults to `false`. Anyone on the internet can then register a client; read [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) before you enable it.
 
 `validateInitialAccessToken` <span className="opacity-70">`(context) => Awaitable<{ referenceId? } | false>`</span>
 
@@ -137,7 +137,7 @@ Enables registration with an initial access token ([RFC 7591 §3](https://datatr
 
 `clientRegistrationDefaultScopes` <span className="opacity-70">`string[]`</span>
 
-Scopes stored on every dynamically registered client. Defaults to `scopes`.
+Scopes stored on every dynamically registered client. Defaults to `scopes`, which includes `offline_access` and every custom scope. Narrow it when you enable open registration.
 
 `clientRegistrationAllowedScopes` <span className="opacity-70">`string[]`</span>
 
@@ -145,7 +145,7 @@ Extra scopes a registration may ask for. Every value must be in `scopes`. Defaul
 
 `clientRegistrationRequirePKCE` <span className="opacity-70">`boolean`</span>
 
-Whether dynamically registered confidential clients require PKCE. Defaults to `true`. See [PKCE](/docs/plugins/oauth-provider/tokens#pkce).
+Whether dynamically registered confidential clients require PKCE. Defaults to `true`. `false` removes the protection against intercepted and injected codes for every such client, including anonymous ones. See [PKCE](/docs/plugins/oauth-provider/tokens#pkce).
 
 `clientRegistrationDefaultApplicationType` <span className="opacity-70">`"web" | "native" | "infer"`</span>
 
@@ -157,7 +157,7 @@ The `client_secret_expires_at` value returned to dynamically registered clients 
 
 `clientRegistrationDefaultResources` <span className="opacity-70">`string[]`</span>
 
-Resources linked to every new client, including CIMD and admin-created clients. Each must be in `resources`.
+Resources linked to every new client, including CIMD, anonymously registered, and admin-created clients. Each must be in `resources`. Every client that can register can then get tokens for these APIs.
 
 `clientRegistrationAllowedResources` <span className="opacity-70">`string[]`</span>
 
@@ -183,7 +183,7 @@ How seeding treats existing rows: skip them, update only the configured fields, 
 
 `enforcePerClientResources` <span className="opacity-70">`boolean`</span>
 
-Requires a client to be linked to every `resource` it requests ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). Defaults to `true`.
+Requires a client to be linked to every `resource` it requests ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). Defaults to `true`. `false` lets any client, including self-registered ones, get tokens for every enabled resource.
 
 `cachedResources` <span className="opacity-70">`Set<string>`</span>
 
@@ -217,7 +217,7 @@ ID token lifetime in seconds. Defaults to `36000`.
 
 `refreshTokenExpiresIn` <span className="opacity-70">`number`</span>
 
-Refresh token lifetime in seconds. Defaults to `2592000`.
+Refresh token lifetime in seconds. Defaults to `2592000`. Each refresh starts a new window, so a regularly used grant does not expire.
 
 `codeExpiresIn` <span className="opacity-70">`number`</span>
 

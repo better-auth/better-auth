@@ -25,6 +25,8 @@ export const GET = async (req: Request) => {
       verifyOptions: {
         issuer: "https://auth.example.com/api/auth",
         audience: "https://api.example.com",
+        typ: "at+jwt",
+        requiredClaims: ["azp"],
       },
       requiredScopes: ["read:post"],
     });
@@ -35,6 +37,8 @@ export const GET = async (req: Request) => {
   }
 };
 ```
+
+`typ: "at+jwt"` and `requiredClaims: ["azp"]` reject any JWT that is not an OAuth access token. The provider sets both on every JWT access token ([RFC 9068 §2.1](https://datatracker.ietf.org/doc/html/rfc9068#section-2.1)). Without them, a [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWT signed with the same key passes whenever its `iss` and `aud` match. That token was issued to a signed-in user, not to an OAuth client, and carries no consent or scopes.
 
 `requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a 403 `insufficient_scope` error. Its `body.scope` lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)), so the client knows which scopes to request when it authorizes again. Catch the thrown `APIError` and return its `statusCode`, as above. Most frameworks turn an uncaught error into a `500`.
 
@@ -50,7 +54,11 @@ export const serverClient = createAuthClient({
 });
 ```
 
-Pass `issuer`, `jwksUrl`, and `audience` explicitly. The defaults come from the `baseURL` you pass to `betterAuth()`. They can miss your base path, such as `/api/auth`. The default audience is the auth server's URL, not your API's identifier.
+Pass `issuer`, `jwksUrl`, and `audience` explicitly. The defaults come from the `baseURL` you pass to `betterAuth()`. They can miss your base path, such as `/api/auth`.
+
+<Callout type="warn">
+  Do not rely on the default audience. It is the auth server's URL, not your API's identifier, and it is also the default `aud` of [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWTs. With the defaults, a signed-in user's session JWT can pass as an access token. Set `audience` to your API's resource identifier, and add `typ: "at+jwt"` and `requiredClaims: ["azp"]`.
+</Callout>
 
 ```ts title="api/posts.ts"
 import { isAPIError } from "better-auth/api";
@@ -62,6 +70,8 @@ export const POST = async (req: Request) => {
       verifyOptions: {
         issuer: "https://auth.example.com/api/auth",
         audience: "https://api.example.com",
+        typ: "at+jwt",
+        requiredClaims: ["azp"],
       },
       jwksUrl: "https://auth.example.com/api/auth/jwks",
       requiredScopes: ["write:post"],
@@ -108,7 +118,7 @@ Your provider issues a JWT access token when the request names a `resource` and 
 | Cost per request        | No network call (unless `remoteVerify` is set) | One call to the auth server                             |
 | Claims                  | Frozen when the token is issued                | Recomputed on every introspection                       |
 
-The simplest setup is to accept only JWT access tokens. It is fast, and your API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, `exp`, and `scope` ([RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4)). The cost is that the local check does not see an ended session. A JWT keeps passing the local check until it expires.
+The simplest setup is to accept only JWT access tokens. It is fast, and your API needs no client credentials. `verifyAccessTokenRequest` checks the JWT's signature, `iss`, `aud`, and `exp`. It checks `scope` only against the `requiredScopes` you pass, and checks the token type only when you pass `typ: "at+jwt"`. Pass both to get the validation [RFC 9068 §4](https://datatracker.ietf.org/doc/html/rfc9068#section-4) requires. The cost is that the local check does not see an ended session. A JWT keeps passing the local check until it expires.
 
 If your API also receives opaque tokens, have it introspect them:
 
@@ -120,7 +130,12 @@ With `remoteVerify` set, every token is introspected after the local JWT check. 
 
 ```ts title="api/posts.ts"
 const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
-  verifyOptions: { issuer: "https://auth.example.com/api/auth", audience: "https://api.example.com" },
+  verifyOptions: {
+    issuer: "https://auth.example.com/api/auth",
+    audience: "https://api.example.com",
+    typ: "at+jwt",
+    requiredClaims: ["azp"],
+  },
   jwksUrl: "https://auth.example.com/api/auth/jwks",
   remoteVerify: {
     introspectUrl: "https://auth.example.com/api/auth/oauth2/introspect",

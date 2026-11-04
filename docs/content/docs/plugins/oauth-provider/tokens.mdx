@@ -42,7 +42,7 @@ oauthProvider({
 A resource is a protected API that your provider issues access tokens for. Its `identifier` is the `resource` parameter value from [RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2) and becomes the `aud` of a JWT access token.
 
 <Callout type="warn">
-  A client can get access tokens only for resources it is linked to. The authorize and token endpoints reject any other `resource` with `invalid_target`. To link a client, pass `resources` to `adminCreateOAuthClient` or call `adminLinkClientResource`. Setting `enforcePerClientResources: false` lets any client request any enabled resource.
+  A client can get access tokens only for resources it is linked to. The authorize and token endpoints reject any other `resource` with `invalid_target`. To link a client, pass `resources` to `adminCreateOAuthClient` or call `adminLinkClientResource`. Setting `enforcePerClientResources: false` lets any client request any enabled resource, which removes the per-client audience restriction. With dynamic registration or CIMD, a client anyone registered could then get tokens for every enabled API. Keep the default, `true`, and link clients explicitly or through `clientRegistrationDefaultResources`.
 </Callout>
 
 ```ts title="auth.ts"
@@ -120,6 +120,8 @@ All values are in seconds.
 | `codeExpiresIn`           | `600` (10 minutes)  | Authorization codes                     |
 | `assertionMaxLifetime`    | `300` (5 minutes)   | `private_key_jwt` client assertions     |
 
+A refresh token's lifetime restarts at each refresh: the replacement token gets a new `refreshTokenExpiresIn` window. A client that refreshes regularly therefore keeps its grant indefinitely. To end a grant, revoke the refresh token or delete the user's [consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents).
+
 To shorten access tokens that carry high-privilege scopes, set `scopeExpirations`. A resource's `accessTokenTtl` and `refreshTokenTtl` can also shorten these lifetimes, but not extend them. When several limits apply, the earliest expiry wins. For example, with the config below, a token with both `read:payments` and `write:payments` expires after 5 minutes.
 
 ```ts title="auth.ts"
@@ -161,7 +163,7 @@ oauthProvider({
 
 ## PKCE
 
-PKCE ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636#section-1)) is **required** for every authorization code flow, and only the `S256` method is accepted. To let an admin-created confidential client skip PKCE, set `require_pkce: false` on it. Public clients cannot opt out. For dynamically registered confidential clients, set the default with `clientRegistrationRequirePKCE`.
+PKCE ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636#section-1)) is **required** for every authorization code flow, and only the `S256` method is accepted. To let an admin-created confidential client skip PKCE, set `require_pkce: false` on it. That client then has no protection against intercepted or injected authorization codes beyond its secret and `state` ([RFC 9700 §2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1)). Public clients cannot opt out. For dynamically registered confidential clients, set the default with `clientRegistrationRequirePKCE`.
 
 ```ts title="admin-create-client.ts"
 await auth.api.adminCreateOAuthClient({
