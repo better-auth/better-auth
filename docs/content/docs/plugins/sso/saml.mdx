@@ -88,7 +88,7 @@ samlConfig: {
 
 ### Encrypted assertions
 
-Set `idpMetadata.isAssertionEncrypted: true` so Better Auth decrypts assertions, and pass the decryption key in `spMetadata.encPrivateKey`, with `encPrivateKeyPass` when the key is encrypted. Set `spMetadata.isAssertionEncrypted: true` as well to advertise encryption in your SP metadata.
+Set `idpMetadata.isAssertionEncrypted: true` so Better Auth decrypts assertions, and pass the decryption key in `spMetadata.encPrivateKey`, with `encPrivateKeyPass` when the key is encrypted. The generated SP metadata has no encryption certificate, so give the IdP the certificate that matches `encPrivateKey` directly, or supply your own `spMetadata.metadata` with an encryption `KeyDescriptor`.
 
 ## Signing certificates and rotation
 

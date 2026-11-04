@@ -31,14 +31,18 @@ export const GET = async (req: Request) => {
 
 `requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a `403` `insufficient_scope` error that lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
 
-If the API runs next to your auth server, use the [resource client](/docs/plugins/oauth-provider#add-the-client-plugins) instead. When you pass `auth` to `oauthProviderResourceClient`, it fills in `issuer`, `jwksUrl`, and the introspection URL from your config, and failures come back with a `WWW-Authenticate` challenge. Set `audience` to your API's identifier; it otherwise defaults to the auth server's `baseURL`.
+If the API runs next to your auth server, use the [resource client](/docs/plugins/oauth-provider#add-the-client-plugins) instead; failures come back with a `WWW-Authenticate` challenge. Its defaults come from the `baseURL` and `basePath` you pass to `betterAuth()`, not the resolved URL, so with an origin-only `baseURL` the default issuer and JWKS URL miss the `/api/auth` path. Pass `issuer` and `jwksUrl` explicitly, and set `audience` to your API's identifier.
 
 ```ts title="api/posts.ts"
 import { serverClient } from "@/lib/server-client";
 
 export const POST = async (req: Request) => {
   const payload = await serverClient.verifyAccessTokenRequest(req, {
-    verifyOptions: { audience: "https://api.example.com" },
+    verifyOptions: {
+      issuer: "https://auth.example.com/api/auth",
+      audience: "https://api.example.com",
+    },
+    jwksUrl: "https://auth.example.com/api/auth/jwks",
     requiredScopes: ["write:post"],
   });
 };

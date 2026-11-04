@@ -122,7 +122,7 @@ The defaults follow the safer protocol choice: S256 PKCE, exact redirect URI mat
     });
     ```
 
-    Add `oauthProviderResourceClient` to an API that verifies access tokens. Pass `auth` when the API runs in the same process as the provider, so the issuer and JWKS URL are filled in for you. See [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
+    Add `oauthProviderResourceClient` to an API that verifies access tokens. Pass `auth` when the API runs in the same process as the provider. See [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens) for the verification options to set.
 
     ```ts title="server-client.ts"
     import { createAuthClient } from "better-auth/client";

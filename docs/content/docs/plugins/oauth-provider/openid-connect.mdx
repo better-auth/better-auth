@@ -143,6 +143,7 @@ await auth.api.adminCreateOAuthClient({
 });
 ```
 
+* Recipients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token for it, such as after a `resource` request without `offline_access`, is not notified.
 * Logout Tokens always include `sid` and live for 120 seconds. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
 * Better Auth also revokes the session's access tokens and its refresh tokens without `offline_access`. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows.
 * `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS.
