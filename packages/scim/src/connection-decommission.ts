@@ -17,6 +17,7 @@ import {
 	findSCIMProjectionDomainBatch,
 	reconcileSCIMProjectionDomainBatch,
 } from "./projection";
+import { assertNativeSCIMTransactions } from "./transaction";
 
 const SCIM_DECOMMISSION_LEASE_DURATION_MS = 5 * 60 * 1000;
 
@@ -417,6 +418,7 @@ export function createDecommissionSCIMConnectionEndpoint(
 			body: decommissionConnectionBodySchema,
 		},
 		async (ctx) => {
+			assertNativeSCIMTransactions(ctx.context.adapter);
 			return ctx.json(
 				await decommissionSCIMConnection({
 					database: ctx.context.adapter,

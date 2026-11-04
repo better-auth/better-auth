@@ -63,7 +63,7 @@ Each SCIM User links to a Better Auth User. Provisioning does not create a sign-
     </Tabs>
 
     <Callout type="warn">
-      Cloudflare D1 does not support the interactive transactions required by the SCIM plugin.
+      Cloudflare D1 does not support the interactive transactions SCIM writes need. Auth still starts. Every `/scim/v2` route returns 501, including reads, and SCIM management writes return 501. Management reads stay available. `supportsNativeSCIMTransactions` reports whether the adapter can run the routes that need a transaction.
     </Callout>
   </Step>
 
