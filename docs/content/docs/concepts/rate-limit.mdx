@@ -53,18 +53,23 @@ These custom rules ensure that sensitive operations are protected with stricter 
 
 ### Connecting IP Address
 
-Better Auth limits requests per client IP address. It cannot see the network
-connection, so it reads the address from request headers, `X-Forwarded-For` by
-default. A header's name doesn't tell Better Auth who set it, and clients can send
-any header. List a header only when your proxy or server code sets it on every
-request, replacing any client value, and every request passes through that proxy or
-code.
+Better Auth limits requests for each client IP address. It cannot see the network
+connection, so it reads the address from a request header. By default, it reads
+the `X-Forwarded-For` header.
 
-Better Auth tries the headers in `ipAddressHeaders` in order and uses the first
-valid address. A header that nothing overwrites lets a client choose its address,
-even if a later header in the list is trustworthy.
+Clients can send any header with any value. A header's name does not make it safe.
+What matters is who sets it. List a header in `ipAddressHeaders` only when all of
+these are true:
 
-If your proxy sets the client address in its own header, list only that header:
+* Your proxy or server code sets the header on every request.
+* It replaces any value that the client sent.
+* Clients cannot reach your server without going through that proxy or code.
+
+Better Auth checks the listed headers in order and uses the first valid address.
+Because of this, every header in the list must be safe. If a client can set a
+header that comes before a safe one, the client can choose its own address.
+
+If your proxy puts the client address in its own header, list only that header:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -72,23 +77,25 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
     advanced: {
         ipAddress: {
-            // the header your proxy sets
+            // Replace this with the header your proxy sets.
             ipAddressHeaders: ["cf-connecting-ip"],
         },
     },
 })
 ```
 
-If your proxies append to `X-Forwarded-For` instead, list them in `trustedProxies`.
-Better Auth reads the chain from right to left and uses the first address that is
-not one of your proxies. Without `trustedProxies`, a header with more than one
-address is ignored.
+Some proxies do not replace `X-Forwarded-For`. Instead, each proxy adds the
+address that connected to it to the end of the header. In this case, list your
+proxies in `trustedProxies`. Better Auth then reads the addresses from right to
+left. It skips your proxies and uses the first address that is not one of them.
+Without `trustedProxies`, Better Auth ignores a header that contains more than one
+address.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
     advanced: {
         ipAddress: {
-            // your proxies' addresses, not a broad private range that also covers clients
+            // Only your proxies' addresses. Avoid wide ranges that also include clients.
             trustedProxies: ["192.0.2.10", "10.0.0.0/24"],
         },
     },
@@ -96,16 +103,22 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warning">
-  `trustedProxies` cannot check who sent the request. Make sure clients can reach
-  your server only through these proxies.
+  `trustedProxies` cannot check who sent a request. Make sure that clients can
+  reach your server only through these proxies.
 </Callout>
 
-If clients connect to your server directly, nothing replaces the headers they send.
-Set `ipAddressHeaders: []` to share one counter per path across all clients. To keep
-per-client limits, write the connection address into a header in your server code.
-This Express example overwrites `x-client-ip` on every request, which makes
-`ipAddressHeaders: ["x-client-ip"]` safe. Without this code, clients could set
-`x-client-ip` themselves:
+If clients connect to your server directly, no proxy replaces the headers they
+send. You have two options:
+
+* Set `ipAddressHeaders: []`. All clients then share one counter for each path.
+* To keep a separate counter for each client, have your server code write the
+  connection address into a header before Better Auth handles the request. Then
+  list that header in `ipAddressHeaders`.
+
+The Express example below uses the second option. It sets `x-client-ip` on every
+request and replaces any value that the client sent. This is why
+`ipAddressHeaders: ["x-client-ip"]` is safe here. Without this code, a client
+could set `x-client-ip` itself.
 
 ```ts title="server.ts"
 import express from "express";
@@ -117,16 +130,17 @@ const authHandler = toNodeHandler(auth);
 
 // Express v4 route. For Express v5, use "/api/auth/*splat" instead.
 app.all("/api/auth/*", (req, res) => {
-    // Replaces any client value. Pair with ipAddressHeaders: ["x-client-ip"].
+    // Replace any value that the client sent.
+    // Also set ipAddressHeaders: ["x-client-ip"] in your auth config.
     req.headers["x-client-ip"] = req.socket.remoteAddress ?? "";
     return authHandler(req, res);
 });
 ```
 
-When no address is found, Better Auth uses one shared counter per path and logs a
-warning once. In development and test, it uses `127.0.0.1`
-instead. Setting `disableIpTracking: true` turns off this rate limiter for HTTP
-requests.
+Requests where Better Auth cannot find a valid address share one counter for each
+path. Better Auth logs a warning the first time this happens. In development and
+test, it uses `127.0.0.1` as the address instead. To turn off this rate limiter
+for HTTP requests, set `disableIpTracking: true`.
 
 #### IPv6 Address Support
 
