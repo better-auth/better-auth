@@ -299,14 +299,20 @@ export type BetterAuthAdvancedOptions = {
 	ipAddress?:
 		| {
 				/**
-				 * List of headers to use for ip address
+				 * Headers to read the client IP address from, in order. The first
+				 * header that gives a valid address is used. Without
+				 * `trustedProxies`, a header with more than one address is skipped.
+				 *
+				 * Any client can send these headers. List only headers your proxy
+				 * or platform writes, and make sure clients cannot reach your server
+				 * without going through it.
 				 *
 				 * Ip address is used for rate limiting and session tracking
 				 *
-				 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
+				 * @example ["cf-connecting-ip"]
 				 *
-				 * @default
-				 * @link https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/ip.ts
+				 * @default ["x-forwarded-for"]
+				 * @link https://www.better-auth.com/docs/concepts/rate-limit#connecting-ip-address
 				 */
 				ipAddressHeaders?: string[];
 				/**
