@@ -1505,6 +1505,40 @@ describe("oneTapClient nonce", async () => {
 		expect(initConfig(0).nonce).toBe("n".repeat(32));
 	});
 
+	it("requests the nonce from the server the callback uses, without the callback's hooks", async () => {
+		const $fetch = vi.fn(async () => ({
+			data: { nonce: "n".repeat(32) },
+			error: null,
+		}));
+		const { oneTap: run } = oneTapClient({
+			clientId: "test-client",
+		}).getActions(
+			$fetch as unknown as BetterFetch,
+			{} as ClientStore,
+			undefined,
+		);
+		stubBrowser();
+		const onSuccess = vi.fn();
+
+		await run({
+			fetchOptions: {
+				baseURL: "https://auth.example.com/api/auth",
+				headers: { "x-tenant": "acme" },
+				onSuccess,
+			},
+		});
+
+		expect($fetch).toHaveBeenCalledWith(
+			"/one-tap/nonce",
+			expect.objectContaining({
+				baseURL: "https://auth.example.com/api/auth",
+				headers: { "x-tenant": "acme" },
+				onSuccess: undefined,
+				throw: false,
+			}),
+		);
+	});
+
 	it("ignores the deprecated nonce option and warns", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		stubBrowser();

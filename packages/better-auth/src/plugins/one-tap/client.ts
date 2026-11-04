@@ -296,13 +296,21 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						return false;
 					}
 
-					// The app's fetchOptions belong to the callback (e.g. a redirect in
-					// onSuccess), so the nonce request does not use them.
+					// The nonce must come from the server the callback reaches, so it
+					// shares the app's request settings (baseURL, headers). The
+					// `onSuccess`/`onError` hooks belong to the sign-in, not to this request.
 					const fetchNonce = async () => {
 						const { data, error } = await $fetch<{ nonce: string }>(
 							"/one-tap/nonce",
-							// `throw: false` keeps the `{ data, error }` shape when the app sets `throw: true`.
-							{ method: "POST", throw: false },
+							{
+								...opts?.fetchOptions,
+								...fetchOptions,
+								method: "POST",
+								onSuccess: undefined,
+								onError: undefined,
+								// Keeps the `{ data, error }` shape when the app sets `throw: true`.
+								throw: false,
+							},
 						);
 						// Without a nonce the server rejects the sign-in, so do not show Google.
 						if (!data?.nonce) {
