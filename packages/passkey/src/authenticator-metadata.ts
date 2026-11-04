@@ -33,6 +33,9 @@ export const commonAuthenticatorNames: Record<string, string> = {
 	"50726f74-6f6e-5061-7373-50726f746f6e": "Proton Pass",
 	"0ea242b4-43c4-4a1b-8b17-dd6d0b6baec6": "Keeper",
 	"53414d53-554e-4700-0000-000000000000": "Samsung Pass",
+	"adce0002-35bc-c60a-648b-0b25f1f05503": "Chrome on Mac",
+	"fa2b99dc-9e39-4257-8f92-4a30d23c4118": "YubiKey 5 Series with NFC",
+	"d8522d9f-575b-4866-88a9-ba99fa02f35b": "YubiKey Bio Series - FIDO Edition",
 };
 
 /**
