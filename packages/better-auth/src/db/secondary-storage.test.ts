@@ -1,7 +1,7 @@
-import type { SecondaryStorage } from "@better-auth/core/db";
+import type { SecondaryStorage, Session } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { memoryAdapter } from "@better-auth/memory-adapter";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { admin } from "../plugins/admin/admin";
 import { adminClient } from "../plugins/admin/client";
 import { anonymous } from "../plugins/anonymous";
@@ -752,5 +752,201 @@ describe("secondary storage - /delete-anonymous-user cleans up sessions", async 
 
 		const after = await client.getSession({ fetchOptions: { headers } });
 		expect(after.data).toBeNull();
+	});
+});
+
+/**
+ * The active-sessions index is a read-modify-write list, so concurrent writes
+ * can drop a token from it. Revoking all sessions must still end such a session.
+ */
+describe("secondary storage - bulk revocation of unindexed sessions", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it.for([false, true])(
+		"revokes a session missing from the index (storeSessionInDatabase: %s)",
+		async (storeSessionInDatabase) => {
+			const store = new Map<string, string>();
+			const { client, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: createStringSecondaryStorage(store),
+				session: {
+					storeSessionInDatabase,
+				},
+			});
+			const first = await signInWithTestUser();
+			const unindexed = await signInWithTestUser();
+			const current = await client.getSession({
+				fetchOptions: {
+					headers: unindexed.headers,
+				},
+			});
+			const userId = current.data!.user.id;
+			const indexKey = `active-sessions-${userId}`;
+			const index = JSON.parse(store.get(indexKey)!) as Pick<
+				Session,
+				"token"
+			>[];
+			store.set(
+				indexKey,
+				JSON.stringify(
+					index.filter((s) => s.token !== current.data!.session.token),
+				),
+			);
+			vi.setSystemTime(Date.now() + 1000);
+
+			await client.revokeSessions({
+				fetchOptions: {
+					headers: first.headers,
+				},
+			});
+
+			const revoked = await client.getSession({
+				fetchOptions: {
+					headers: unindexed.headers,
+				},
+			});
+			expect(revoked.data).toBeNull();
+
+			vi.setSystemTime(Date.now() + 1000);
+			const replacement = await signInWithTestUser();
+			const active = await client.getSession({
+				fetchOptions: {
+					headers: replacement.headers,
+				},
+			});
+			expect(active.data?.user.id).toBe(userId);
+		},
+	);
+
+	it("ends an unindexed session when the user is deleted", async () => {
+		const store = new Map<string, string>();
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+		});
+		const unindexed = await signInWithTestUser();
+		const current = await client.getSession({
+			fetchOptions: {
+				headers: unindexed.headers,
+			},
+		});
+		const userId = current.data!.user.id;
+		store.set(`active-sessions-${userId}`, JSON.stringify([]));
+		vi.setSystemTime(Date.now() + 1000);
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteUser(userId);
+
+		expect(store.has(`revoked-sessions-before-${userId}`)).toBe(true);
+		const revoked = await client.getSession({
+			fetchOptions: {
+				headers: unindexed.headers,
+			},
+		});
+		expect(revoked.data).toBeNull();
+	});
+
+	it("keeps the cutoff for as long as any session created before it can live", async () => {
+		const ttls = new Map<string, number | undefined>();
+		const store = new Map<string, string>();
+		const storage = createStringSecondaryStorage(store);
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				...storage,
+				set(key, value, ttl) {
+					ttls.set(key, ttl);
+					return storage.set(key, value, ttl);
+				},
+			},
+			session: {
+				expiresIn: 60 * 60,
+			},
+			plugins: [
+				admin({
+					impersonationSessionDuration: 60 * 60 * 24 * 3,
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const current = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await client.revokeSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(ttls.get(`revoked-sessions-before-${current.data!.user.id}`)).toBe(
+			60 * 60 * 24 * 3,
+		);
+	});
+});
+
+describe("secondary storage - bulk revocation with a replacement session", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("keeps a session created by a session delete hook active", async () => {
+		const store = new Map<string, string>();
+		const replacementTokens: string[] = [];
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: {
+				storeSessionInDatabase: true,
+			},
+			databaseHooks: {
+				session: {
+					delete: {
+						async after(session, ctx) {
+							if (!ctx || replacementTokens.length) return;
+							const replacement =
+								await ctx.context.internalAdapter.createSession(session.userId);
+							replacementTokens.push(replacement.token);
+							// Later revocation work must not move the cutoff past this session.
+							vi.setSystemTime(Date.now() + 1000);
+						},
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const current = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.setSystemTime(Date.now() + 1000);
+
+		await client.revokeSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const { internalAdapter } = await auth.$context;
+		expect(replacementTokens).toHaveLength(1);
+		await expect(
+			internalAdapter.findSession(current.data!.session.token),
+		).resolves.toBeNull();
+		await expect(
+			internalAdapter.findSession(replacementTokens[0]!),
+		).resolves.toMatchObject({
+			session: {
+				userId: current.data!.user.id,
+			},
+		});
 	});
 });

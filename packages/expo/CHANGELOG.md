@@ -1,5 +1,17 @@
 # @better-auth/expo
 
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy now redirects only to the origin of a configured social or generic OAuth provider's authorization endpoint, or of an SSO provider on a trusted origin. If Expo sign-in through an SSO identity provider fails, add the identity provider's origin to `trustedOrigins`.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy now sets the signed state cookie only for an unexpired state issued by the server. `getAuthStateVerificationIdentifier` is now exported for plugins that look up OAuth state records.
+
+## 1.7.15
+
+## 1.7.14
+
 ## 1.7.13
 
 ## 1.7.12

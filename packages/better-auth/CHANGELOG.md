@@ -1,5 +1,102 @@
 # better-auth
 
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - `/admin/update-user` now requires the new `user:set-phone` permission to change `phoneNumber` or `phoneNumberVerified`. If you use a custom access control, add `set-phone` to your statements and grant it to roles that should change phone numbers.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Anonymous users are no longer linked or deleted on a sign-in that is still waiting for a second factor.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Email verification and change email links now only work for the account they were issued to. Opening a change email link no longer signs the user in, and it verifies the new email only if the current one was verified.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Wildcard trusted origins now match custom-scheme URLs by their parsed scheme, host, and path, and no longer match a URL with userinfo or one that cannot be parsed as an origin. A wildcard host made only of digits, dots, and wildcards, such as `192.168.*.*`, now matches only IPv4 addresses in that range.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Looking up a user by email now returns only an account whose stored address matches the requested one, ignoring case, even on databases with accent-insensitive collations. The email OTP password reset routes now validate the address and send the code to the address on the account.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Email change codes from the email OTP plugin are now bound to the requesting account and the new address. Codes sent before the upgrade must be requested again.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed the email OTP `checkVerificationOtp` and `resetPassword` endpoints and the phone number `resetPassword` endpoint allowing more OTP guesses than `allowedAttempts` when requests arrive concurrently. A correct check still leaves the OTP usable for the follow-up call.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy now sets the signed state cookie only for an unexpired state issued by the server. `getAuthStateVerificationIdentifier` is now exported for plugins that look up OAuth state records.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Passkey registration, device authorization, two-factor enrollment and verification, social account linking, and phone number changes now reject a session revoked in the database or secondary storage, even when cookie caching is enabled. Sessions created from API keys are refused on these routes, except two-factor enrollment and phone number changes.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Generic OAuth providers whose discovery document has a `jwks_uri` now reject a user profile whose `sub` differs from the ID token's `sub`. Direct ID-token sign-in and linking with a generic OAuth provider now resolve the profile from the verified ID token only and ignore a submitted access or refresh token.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Pending organization invitations are now only returned to members whose role can create invitations, and creator-role invitations only to members who hold that role.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Organization invitations use random IDs when `advanced.database.generateId` is not set, including on adapters with sequential default IDs such as MongoDB. On MongoDB, new invitation IDs are strings instead of ObjectIds.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Dynamic access control roles reused through `hasPermission`'s `useMemoryCache` option are now cached per request and per auth instance instead of in a process-global cache, so role changes apply on the next request.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Organization role lists are now trimmed and split on commas wherever they are stored or compared, and invitations with an empty role are rejected.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - With the phone number plugin, `updateUserInfoOnLink` no longer copies an unverified `phoneNumber` from the linked provider's profile. An existing verified number is kept.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - With `requireVerification`, phone number password reset now works only for a verified number. No reset code is sent to an unverified number, and `resetPassword` returns `PHONE_NUMBER_PENDING_VERIFICATION` without adding or changing a password.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - With the phone number plugin, a new user no longer stores a `phoneNumber` that was not verified. Sign-up and sign-in routes reject one sent in the request, and a number from a social profile or in `data` passed to `createUser` is dropped unless it is marked verified.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Phone number verification and password reset codes are now stored under their own namespaces, so a phone number request can no longer create, consume or delete verification codes that belong to other flows. Codes sent before the upgrade must be requested again.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Account linking and new OAuth users now count an email as verified only when the provider claim is `true` or the string `"true"`, which covers generic OAuth, Cognito, and Microsoft Entra ID claims sent as strings. Any other `emailVerified` value, including a non-boolean value returned from `mapProfileToUser` such as `1`, now reads as unverified.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - With secondary storage, revoking all of a user's sessions or deleting the user now also ends sessions missing from the cached session list.
+
+- Updated dependencies [[`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e), [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e), [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e), [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e), [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e)]:
+  - @better-auth/drizzle-adapter@1.7.16
+  - @better-auth/core@1.7.16
+  - @better-auth/kysely-adapter@1.7.16
+  - @better-auth/memory-adapter@1.7.16
+  - @better-auth/mongo-adapter@1.7.16
+  - @better-auth/prisma-adapter@1.7.16
+  - @better-auth/telemetry@1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12100](https://github.com/better-auth/better-auth/pull/12100) [`7769e91`](https://github.com/better-auth/better-auth/commit/7769e91a3e126335f0a67c08d40ec5a4723bfd36) Thanks [@bytaesu](https://github.com/bytaesu)! - The admin plugin now rejects banned users when a session is created outside an endpoint, such as through `internalAdapter.createSession`.
+
+- [#12099](https://github.com/better-auth/better-auth/pull/12099) [`3f17193`](https://github.com/better-auth/better-auth/commit/3f17193023ed76a174a1564352cf0cbb7cddb948) Thanks [@bytaesu](https://github.com/bytaesu)! - The admin `update-user` endpoint now rejects `data.id` with a 400 error instead of attempting to change the user's primary key.
+
+- [#12145](https://github.com/better-auth/better-auth/pull/12145) [`804ba8a`](https://github.com/better-auth/better-auth/commit/804ba8aa3a07b8840804960f24ec93c0ff61ce11) Thanks [@bytaesu](https://github.com/bytaesu)! - Headers and cookies set by a `hooks.before` hook that does not return early now reach the response instead of being dropped. When the endpoint sets the same header or cookie, the endpoint's value wins.
+
+- [#12108](https://github.com/better-auth/better-auth/pull/12108) [`1391673`](https://github.com/better-auth/better-auth/commit/1391673e2cdba75240dd6ff67f7de94b72076449) Thanks [@bytaesu](https://github.com/bytaesu)! - The HubSpot helper in `genericOAuth` now encodes the access token as a single path segment when fetching token info, so tokens containing reserved characters are no longer truncated, and it returns `null` instead of requesting `/access-tokens/undefined` when no access token is present.
+
+- [#12142](https://github.com/better-auth/better-auth/pull/12142) [`f63fb0e`](https://github.com/better-auth/better-auth/commit/f63fb0ec275d4ed810fbe2561af8d839c7b5f069) Thanks [@bytaesu](https://github.com/bytaesu)! - Organization and API key metadata, and OAuth proxy sign-ins whose `additionalData` contains a `constructor` field, no longer fail with "Potential prototype pollution attempt detected".
+
+- [#12098](https://github.com/better-auth/better-auth/pull/12098) [`4cdcb1c`](https://github.com/better-auth/better-auth/commit/4cdcb1c002c1e13ca3aeca1e1d88be46b17dcbb9) Thanks [@bytaesu](https://github.com/bytaesu)! - Error messages for a malformed `BETTER_AUTH_SECRETS` entry now report the entry position instead of including the entry value.
+
+- [#12097](https://github.com/better-auth/better-auth/pull/12097) [`6e7fa27`](https://github.com/better-auth/better-auth/commit/6e7fa279a52e5e31091e6bda78ab5d56a5c50d24) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed `/sign-in/username` and `/is-username-available` rejecting a username that sign-up accepts when `validationOrder.username` is `post-normalization`. Both endpoints now validate the same value as sign-up.
+
+- [#12109](https://github.com/better-auth/better-auth/pull/12109) [`264de2b`](https://github.com/better-auth/better-auth/commit/264de2b8974277e7a9eb8bef3a4e2ca1eef8e68a) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix the Vue client's `useSession(useFetch)` returning no session during Nuxt SSR when `baseURL` is inferred from the environment.
+
+- Updated dependencies [[`9ef0c5b`](https://github.com/better-auth/better-auth/commit/9ef0c5bda9c5ebc46d2c5d93fc0874893d1c6256)]:
+  - @better-auth/core@1.7.15
+  - @better-auth/drizzle-adapter@1.7.15
+  - @better-auth/kysely-adapter@1.7.15
+  - @better-auth/memory-adapter@1.7.15
+  - @better-auth/mongo-adapter@1.7.15
+  - @better-auth/prisma-adapter@1.7.15
+  - @better-auth/telemetry@1.7.15
+
+## 1.7.14
+
+### Patch Changes
+
+- [#12031](https://github.com/better-auth/better-auth/pull/12031) [`d2cb7f5`](https://github.com/better-auth/better-auth/commit/d2cb7f56ca2e9faa9b1522117570c438aa367484) Thanks [@bytaesu](https://github.com/bytaesu)! - Two-factor TOTP now accepts imported Base32 secrets stored as `base32:<secret>`.
+
+- Updated dependencies [[`2947ab7`](https://github.com/better-auth/better-auth/commit/2947ab76c3a141f205813de9201661ee21e327c2)]:
+  - @better-auth/core@1.7.14
+  - @better-auth/drizzle-adapter@1.7.14
+  - @better-auth/kysely-adapter@1.7.14
+  - @better-auth/memory-adapter@1.7.14
+  - @better-auth/mongo-adapter@1.7.14
+  - @better-auth/prisma-adapter@1.7.14
+  - @better-auth/telemetry@1.7.14
+
 ## 1.7.13
 
 ### Patch Changes

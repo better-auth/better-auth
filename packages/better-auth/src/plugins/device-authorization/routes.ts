@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api/routes/session";
+import { getAuthoritativeSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import type { User } from "../../types";
 import type { Where } from "../../types/adapter";
@@ -864,7 +864,7 @@ export const deviceVerify = <
 				});
 			}
 
-			const session = await getSessionFromCtx(ctx);
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 			if (
 				session?.user?.id &&
 				!deviceCodeRecord.userId &&
@@ -959,7 +959,7 @@ export const deviceApprove = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const session = await getSessionFromCtx(ctx);
+		const session = await getAuthoritativeSessionFromCtx(ctx);
 		if (!session) {
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",
@@ -1082,7 +1082,7 @@ export const deviceDeny = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const session = await getSessionFromCtx(ctx);
+		const session = await getAuthoritativeSessionFromCtx(ctx);
 		if (!session) {
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",

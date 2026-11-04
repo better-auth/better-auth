@@ -153,11 +153,50 @@ export const createInternalAdapter = (
 			: [];
 	}
 
+	// The session index is a read-modify-write list, so concurrent writers can
+	// drop a token from it. Bulk revocation also records a cutoff, and sessions
+	// created before it count as revoked even when the index missed them.
+	const revokedBeforeKey = (userId: string) =>
+		`revoked-sessions-before-${userId}`;
+	// The cutoff must outlive every session created before it, including the
+	// one-day sessions of `dontRememberMe` and admin impersonation sessions,
+	// which can be longer than `session.expiresIn`.
+	const revokedBeforeTTL = Math.max(
+		sessionExpiration,
+		60 * 60 * 24,
+		Number(
+			options.plugins?.find((plugin) => plugin.id === "admin")?.options
+				?.impersonationSessionDuration,
+		) || 0,
+	);
+
+	async function isRevokedSession(
+		session: Pick<Session, "userId" | "createdAt">,
+		revokedBeforeByUser?: Map<string, number>,
+	) {
+		if (!secondaryStorage) return false;
+		const revokedBefore =
+			revokedBeforeByUser?.get(session.userId) ??
+			Number(await secondaryStorage.get(revokedBeforeKey(session.userId)));
+		revokedBeforeByUser?.set(session.userId, revokedBefore);
+		return new Date(session.createdAt).getTime() < revokedBefore;
+	}
+
 	async function deleteCachedUserSessions(
 		userId: string,
 		sessionReferences: readonly ActiveSessionReference[],
+		revokedAt: number,
 	) {
 		if (!secondaryStorage) return;
+
+		const previousRevokedBefore = Number(
+			await secondaryStorage.get(revokedBeforeKey(userId)),
+		);
+		await secondaryStorage.set(
+			revokedBeforeKey(userId),
+			String(Math.max(revokedAt, previousRevokedBefore || 0)),
+			revokedBeforeTTL,
+		);
 
 		const deletedTokens = new Set(
 			sessionReferences.map((session) => session.token),
@@ -189,6 +228,7 @@ export const createInternalAdapter = (
 	async function queueCachedUserSessionDeletion(
 		userId: string,
 		sessionReferences?: readonly ActiveSessionReference[],
+		revokedAt = Date.now(),
 	) {
 		if (!secondaryStorage) return;
 
@@ -197,7 +237,7 @@ export const createInternalAdapter = (
 		const references =
 			sessionReferences ?? (await getActiveSessionReferences(userId));
 		await queueAfterTransactionHook(
-			() => deleteCachedUserSessions(userId, references),
+			() => deleteCachedUserSessions(userId, references, revokedAt),
 			{
 				onError(error) {
 					logger.error(
@@ -365,6 +405,7 @@ export const createInternalAdapter = (
 
 				const seenTokens = new Set<string>();
 				const sessions: Session[] = [];
+				const revokedBeforeByUser = new Map<string, number>();
 
 				for (const { token, expiresAt } of list) {
 					if (expiresAt <= now || seenTokens.has(token)) continue;
@@ -380,7 +421,11 @@ export const createInternalAdapter = (
 							session: Session;
 							user: User;
 						};
-						if (!parsed?.session) continue;
+						if (
+							!parsed?.session ||
+							(await isRevokedSession(parsed.session, revokedBeforeByUser))
+						)
+							continue;
 
 						sessions.push(
 							parseSessionOutput(ctx.options, {
@@ -582,7 +627,12 @@ export const createInternalAdapter = (
 				if (sessionTTL > 0) {
 					await secondaryStorage.set(
 						data.token,
-						JSON.stringify({ session: sessionData, user }),
+						// Keep the millisecond creation time: a database column without
+						// fractional seconds rounds it, and revocation cutoffs compare it.
+						JSON.stringify({
+							session: { ...sessionData, createdAt: data.createdAt },
+							user,
+						}),
 						sessionTTL,
 					);
 				}
@@ -648,7 +698,7 @@ export const createInternalAdapter = (
 						session: Session;
 						user: User;
 					}>(sessionStringified);
-					if (!s) return null;
+					if (!s || (await isRevokedSession(s.session))) return null;
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -685,6 +735,8 @@ export const createInternalAdapter = (
 			if (!result) return null;
 
 			const { user, ...session } = result;
+			// Bulk revocation deletes database rows, so a row read here outlived
+			// it. Its `createdAt` may be rounded, so the cutoff is not compared.
 			if (!user) return null;
 			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
@@ -707,6 +759,7 @@ export const createInternalAdapter = (
 				{ session: Session; user: User }
 			>();
 			const missingTokens: string[] = [];
+			const revokedBeforeByUser = new Map<string, number>();
 			if (secondaryStorage) {
 				for (const sessionToken of uniqueTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
@@ -720,7 +773,11 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							if (!s) continue;
+							if (
+								!s ||
+								(await isRevokedSession(s.session, revokedBeforeByUser))
+							)
+								continue;
 							const expiresAt = new Date(s.session.expiresAt);
 							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
 								continue;
@@ -976,10 +1033,17 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
+			// Take the cutoff before delete hooks run so a replacement session they
+			// create is not treated as revoked.
+			const revokedAt = Date.now();
 			const sessionReferences = await getActiveSessionReferences(userId);
 			if (secondaryStorage) {
 				if (!options.session?.storeSessionInDatabase) {
-					await queueCachedUserSessionDeletion(userId, sessionReferences);
+					await queueCachedUserSessionDeletion(
+						userId,
+						sessionReferences,
+						revokedAt,
+					);
 					return;
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
@@ -987,7 +1051,11 @@ export const createInternalAdapter = (
 						{ field: "userId", value: userId },
 					]);
 					if (endedSessions !== null) {
-						await queueCachedUserSessionDeletion(userId, sessionReferences);
+						await queueCachedUserSessionDeletion(
+							userId,
+							sessionReferences,
+							revokedAt,
+						);
 					}
 					return;
 				}
@@ -1003,7 +1071,11 @@ export const createInternalAdapter = (
 				undefined,
 			);
 			if (deletedSessions !== null) {
-				await queueCachedUserSessionDeletion(userId, sessionReferences);
+				await queueCachedUserSessionDeletion(
+					userId,
+					sessionReferences,
+					revokedAt,
+				);
 			}
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
@@ -1086,6 +1158,13 @@ export const createInternalAdapter = (
 				},
 			});
 			if (!result) return null;
+			// The database's equality may be looser than ours: accent-insensitive
+			// collations match look-alike addresses to this row. Only hand back a
+			// row whose stored address is the one that was asked for.
+			const normalize = (value: string) => value.normalize("NFC").toLowerCase();
+			if (normalize(result.email) !== normalize(email)) {
+				return null;
+			}
 			const { account: accounts, ...user } = result;
 			return {
 				user,

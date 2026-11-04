@@ -16,6 +16,7 @@ import {
 	electronInitOAuthProxy,
 	electronToken,
 	electronTransferUser,
+	hashSessionToken,
 } from "./routes";
 import type { ElectronOptions } from "./types";
 import { PACKAGE_VERSION } from "./version";
@@ -60,9 +61,8 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		},
 	) => {
 		const { client_id, state, code_challenge } = payload;
-		const userId =
-			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
-		if (!userId || client_id !== opts.clientID) {
+		const source = ctx.context.session || ctx.context.newSession;
+		if (!source || client_id !== opts.clientID) {
 			return null;
 		}
 		if (!state) {
@@ -80,7 +80,9 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		await ctx.context.internalAdapter.createVerificationValue({
 			identifier: `electron:${identifier}`,
 			value: JSON.stringify({
-				userId,
+				userId: source.user.id,
+				// A later hook can still revoke this session (e.g. a pending second factor).
+				sourceSessionTokenHash: await hashSessionToken(source.session.token),
 				codeChallenge: code_challenge,
 				state,
 			}),
@@ -171,7 +173,12 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						});
 						let transferPayload: z.infer<typeof querySchema> | null = null;
 						if (!!transferCookie) {
-							transferPayload = safeJSONParse(transferCookie);
+							const stored = querySchema.safeParse(
+								safeJSONParse(transferCookie),
+							);
+							if (stored.success) {
+								transferPayload = stored.data;
+							}
 						} else {
 							const query = querySchema.safeParse(ctx.query);
 							if (query.success && query.data.client_id === opts.clientID) {
@@ -184,7 +191,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 
 						const identifier = await handleTransfer(ctx, transferPayload);
 						if (identifier === null) {
-							return ctx;
+							return;
 						}
 
 						return ctx.json({
