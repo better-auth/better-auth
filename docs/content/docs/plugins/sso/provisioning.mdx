@@ -12,7 +12,7 @@ Every SSO sign-in ends with a Better Auth user.
 Better Auth stores each SSO identity as an `account` keyed by the provider ID and the OIDC `sub` claim or the SAML `NameID`. Only that pair identifies the person, not the email ([OIDC Core §5.7](https://openid.net/specs/openid-connect-core-1_0.html#ClaimStability), [SAML Core §2.2.3](https://docs.oasis-open.org/security/saml/v2.0/saml-core-2.0-os.pdf)). A provider can assert any email address. Better Auth links by email only when the checks below pass.
 
 * **Returning account.** The user who owns the account signs in.
-* **New account, no user with that email.** A new user is created with `emailVerified: false`. The email does not have to be in the provider's domain, so a provider can create users for any address. To refuse those users, use [`resolveUser`](#resolve-sso-users) with `{ action: "reject" }`.
+* **New account, no user with that email.** A new user is created with `emailVerified: false`. To refuse users you have not provisioned, use [`resolveUser`](#resolve-sso-users) with `{ action: "reject" }`.
 * **New account, a user with that email exists.** Better Auth links the account in these cases:
 
   * [`resolveUser`](#resolve-sso-users) returns `link`. The account is linked to the `userId` it names.

@@ -92,7 +92,7 @@ For a fixed set of providers configured in code, use [Generic OAuth](/docs/plugi
 
 ## Register a provider
 
-By default, any signed-in user can register up to 10 providers for any domain. Two providers can claim the same domain. A provider's domain also matches its subdomains: a provider for `example.com` matches `user@eng.example.com`. Either way, email sign-in can reach another registrant's provider. Before you deploy, decide who should register providers:
+By default, any signed-in user can register up to 10 providers. Before you deploy, decide who should register providers:
 
 | Who registers providers                   | Configure                                                                                                                                                                                                                                                           |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -205,7 +205,7 @@ To choose the provider, Better Auth tries these in order:
 1. If you pass `providerId`, it uses the provider with that ID. No other field is used.
 2. If a `defaultSSO` entry's domains include `domain`, or the domain part of `email`, it uses that entry.
 3. If you pass `organizationSlug`, it uses the provider linked to that organization. This needs the [organization plugin](/docs/plugins/organization). An unknown slug continues to the next step. A known organization without a linked provider returns 404.
-4. Otherwise, it uses a registered provider whose domain matches exactly, then the first match the database returns among providers whose domains include the domain or a parent of it.
+4. Otherwise, it uses a registered provider for that domain.
 
 With domain verification enabled, a provider whose domain is not verified returns 401.
 

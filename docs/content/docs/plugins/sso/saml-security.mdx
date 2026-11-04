@@ -10,7 +10,7 @@ The ACS endpoint, `{baseURL}/sso/saml2/sp/acs/{providerId}`, runs these checks o
 1. **Size limit**: the encoded response must fit within `maxResponseSize`.
 2. **One assertion**: the response must contain exactly one assertion.
 3. **Signature**: the response or assertion signature must verify against the IdP certificate. When the provider sets `wantAssertionsSigned`, the assertion must carry its own signature as well ([Metadata §2.4.4](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf)).
-4. **Algorithms**: the signature and encryption algorithms must be allowed.
+4. **Algorithms**: the response's algorithms must be allowed.
 5. **Timestamps**: the current time must fall between `NotBefore` and `NotOnOrAfter`.
 6. **Audience, recipient, and destination**: the response must be addressed to this service provider and its ACS URL ([Profiles §4.1.4.2](https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf)).
 7. **InResponseTo**: the response must answer an AuthnRequest this server sent, unless IdP-initiated SSO is allowed or `enableInResponseToValidation` is `false`.
@@ -86,7 +86,7 @@ sso({
 
 Algorithm validation flags weak algorithms, such as RSA-SHA1, and can reject them. It also rejects unknown signature and digest algorithms. Registration and provider updates check the config's `signatureAlgorithm` and `digestAlgorithm`, and a rejected value fails the request with a 400 error.
 
-Also configure each IdP to sign with RSA-SHA256 or stronger and, when it encrypts assertions, to use RSA-OAEP and AES-GCM. Better Auth's `algorithms` options do not replace the IdP's own settings.
+Configure each IdP to sign with RSA-SHA256 or stronger and, when it encrypts assertions, to use RSA-OAEP and AES-GCM.
 
 | Kind            | Accepted                                     | Deprecated |
 | --------------- | -------------------------------------------- | ---------- |
