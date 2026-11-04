@@ -31,6 +31,14 @@ const options: BetterAuthOptions = {
 						label: { type: "string" },
 					},
 				},
+				legacy: {
+					fields: {
+						label: {
+							type: "string",
+							unique: true,
+						},
+					},
+				},
 			},
 		},
 	],
@@ -54,6 +62,13 @@ beforeAll(async () => {
 		.promise()
 		.query(
 			"CREATE TABLE `ticket` (`id` INT AUTO_INCREMENT PRIMARY KEY, `label` VARCHAR(191) NOT NULL)",
+		);
+	// The id has a default but is not AUTO_INCREMENT, so the INSERT succeeds
+	// while `LAST_INSERT_ID()` stays 0.
+	await pool
+		.promise()
+		.query(
+			"CREATE TABLE `legacy` (`id` BIGINT UNSIGNED PRIMARY KEY DEFAULT (UUID_SHORT()), `label` VARCHAR(191) NOT NULL UNIQUE)",
 		);
 });
 
@@ -129,5 +144,27 @@ describe("kysely mysql serial ids on a connection pool", () => {
 		});
 
 		expect(created).toMatchObject({ label: "this request" });
+	});
+
+	it("does not keep the row when the INSERT reports no auto-increment id", async () => {
+		const db = new Kysely<unknown>({
+			dialect: new MysqlDialect({ pool: pool as unknown as MysqlPool }),
+		});
+		const adapter = kyselyAdapter(db, { type: "mysql" })(options);
+		const create = () =>
+			adapter.create({
+				model: "legacy",
+				data: { label: "no auto-increment" },
+			});
+
+		await expect(create()).rejects.toThrow(
+			/did not report an auto-increment id/,
+		);
+		// A retry must fail the same way instead of hitting the unique label.
+		await expect(create()).rejects.toThrow(
+			/did not report an auto-increment id/,
+		);
+		const [rows] = await pool.promise().query("SELECT * FROM `legacy`");
+		expect(rows).toEqual([]);
 	});
 });
