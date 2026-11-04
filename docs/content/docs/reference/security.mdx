@@ -151,42 +151,25 @@ Better Auth includes built-in rate limiting to safeguard against brute-force att
 
 ## IP Address Headers
 
-Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the IP address from the standard `X-Forwarded-For` header. However, you can configure a specific trusted header to ensure accurate IP address detection and prevent IP spoofing attacks.
+Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the address from the `X-Forwarded-For` header. Clients can set that header themselves, so the address is only reliable when a proxy you control writes it and clients cannot reach your server without going through that proxy. Otherwise, a client can change its address on every request and avoid per-client rate limits.
 
-You can configure the IP address header in your Better Auth configuration:
-
-```typescript
-{
-  advanced: {
-    ipAddress: {
-      ipAddressHeaders: ['cf-connecting-ip'] // or any other custom header
-    }
-  }
-}
-```
-
-This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
-
-Behind a proxy chain, list your proxies in `trustedProxies` so Better Auth
-resolves the real client instead of the spoofable leftmost `X-Forwarded-For`
-token:
+Configure the header your proxy writes, or list your proxies:
 
 ```typescript
 {
   advanced: {
     ipAddress: {
-      // your proxies' addresses, not a broad private range that also covers clients
-      trustedProxies: ['192.0.2.10', '10.0.0.0/24']
+      ipAddressHeaders: ['cf-connecting-ip'] // a header your proxy writes
+      // or: trustedProxies: ['192.0.2.10', '10.0.0.0/24']
     }
   }
 }
 ```
+
+[Connecting IP Address](/docs/concepts/rate-limit#connecting-ip-address) explains each option, including servers that clients connect to directly.
 
 <Callout type="info">
-  **Important**
-
-  * When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
-  * In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
+  In development and test, Better Auth uses `127.0.0.1` when it cannot find an address in the headers.
 </Callout>
 
 ## Trusted Proxy Headers
