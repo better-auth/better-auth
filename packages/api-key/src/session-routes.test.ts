@@ -1,8 +1,10 @@
+import { base32 } from "@better-auth/utils/base32";
+import { createOTP } from "@better-auth/utils/otp";
 import { organization } from "better-auth/plugins/organization";
 import { phoneNumber } from "better-auth/plugins/phone-number";
 import { twoFactor } from "better-auth/plugins/two-factor";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { apiKey } from ".";
 
 /**
@@ -79,6 +81,38 @@ describe("API-key sessions on session routes", () => {
 		});
 
 		expect(enrollment.method).toBe("totp");
+	});
+
+	it("finishes TOTP enrollment", async () => {
+		const { auth, testUser, user, apiKeyHeaders } = await setup();
+		const enrollment = await auth.api.enableTwoFactor({
+			body: {
+				password: testUser.password,
+			},
+			headers: apiKeyHeaders,
+		});
+		assert(enrollment.method === "totp");
+		const secret = new URL(enrollment.totpURI).searchParams.get("secret")!;
+		const code = await createOTP(base32.decode(secret)).totp();
+
+		await expect(
+			auth.api.verifyTOTP({
+				body: {
+					code,
+				},
+				headers: apiKeyHeaders,
+			}),
+		).resolves.toMatchObject({
+			user: {
+				id: user.id,
+			},
+		});
+
+		const context = await auth.$context;
+		const stored = await context.internalAdapter.findUserById(user.id);
+		expect(stored).toMatchObject({
+			twoFactorEnabled: true,
+		});
 	});
 
 	it("replaces the phone number", async () => {
