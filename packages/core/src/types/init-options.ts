@@ -300,12 +300,13 @@ export type BetterAuthAdvancedOptions = {
 		| {
 				/**
 				 * Headers to read the client IP address from, in order. The first
-				 * header that gives a valid address is used. Without
-				 * `trustedProxies`, a header with more than one address is skipped.
+				 * header that gives a valid address is used.
 				 *
 				 * Any client can send these headers. List only headers that your
-				 * proxy, platform, or own server code writes, replacing any value
-				 * the client sent.
+				 * proxy, platform, or server code sets, replacing any client value.
+				 * If your proxies append to `X-Forwarded-For` instead, set
+				 * `trustedProxies`; without it, a header with more than one address
+				 * is skipped.
 				 *
 				 * Ip address is used for rate limiting and session tracking
 				 *
