@@ -276,7 +276,7 @@ oauthProvider({
 
 ## Client CRUD privileges
 
-`clientPrivileges` decides which client actions a signed-in user may take. Without it, every signed-in user may take every action except `configure-client-credentials-scopes`. When it is set, return `true` to allow an action; any other value denies it.
+`clientPrivileges` decides which client actions a signed-in user may take. Without it, every signed-in user may take every action except `configure-client-credentials-scopes`. When it is set, return `true` to allow an action, and `false` or `undefined` to deny it.
 
 It receives `action` (`create`, `read`, `update`, `delete`, `list`, `rotate`, or `configure-client-credentials-scopes`), `user`, `session`, `headers`, and, for an existing client, `clientId`. `clientId` comes from the request, so it does not prove the client exists or who owns it.
 

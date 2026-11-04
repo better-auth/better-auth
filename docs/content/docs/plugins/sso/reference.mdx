@@ -63,7 +63,7 @@ Stops SSO sign-in from creating new users. For OIDC, any caller can pass `reques
 
 `defaultSSO` <span className="opacity-70">`array`</span>
 
-Providers defined in code. They are checked before the database, by `providerId` or by email domain at sign-in, and domain verification treats them as verified. See [Configure providers in code](/docs/plugins/sso#configure-providers-in-code).
+Providers defined in code. They are checked before the database, by `providerId` or by email domain at sign-in. With `domainVerification.enabled`, they count as verified without a DNS check. See [Configure providers in code](/docs/plugins/sso#configure-providers-in-code).
 
 `providersLimit` <span className="opacity-70">`number | (user) => Awaitable<number>`</span>
 

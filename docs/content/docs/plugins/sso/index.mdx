@@ -183,7 +183,7 @@ Better Auth picks the provider in this order:
 
 1. With `providerId`, the provider with that ID. No other field is used.
 2. A `defaultSSO` entry whose domains include `domain`, or the domain part of `email`.
-3. With `organizationSlug`, the provider linked to that organization. This needs the [organization plugin](/docs/plugins/organization). An unknown slug continues to the next step.
+3. With `organizationSlug`, the provider linked to that organization. This needs the [organization plugin](/docs/plugins/organization). An unknown slug continues to the next step. A known organization without a linked provider returns 404.
 4. A registered provider whose domain matches exactly, then the first registered provider whose domains include the domain or a parent of it.
 
 With domain verification enabled, a provider whose domain is not verified returns 401.
