@@ -1456,8 +1456,8 @@ export interface OAuthOptions<
 	 * request or interaction request, such as a device code or a CIBA
 	 * request, that the user approves on the provider's pages.
 	 *
-	 * Without this option, ID tokens carry `acr: "0"` (OIDC level 0) and no
-	 * `amr`.
+	 * Without this option, ID tokens issued after an approval on the
+	 * provider's pages carry `acr: "0"` (OIDC level 0) and no `amr`.
 	 */
 	authenticationContext?: OAuthAuthenticationContextOptions<Scopes>;
 	/**

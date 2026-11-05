@@ -93,9 +93,10 @@ export const auth = betterAuth({
       },
     },
   },
+  disabledPaths: ["/token"],
   plugins: [
     twoFactor(),
-    jwt(),
+    jwt({ disableSettingJwtHeader: true }),
     oauthProvider({
       loginPage: "/sign-in",
       consentPage: "/consent",
@@ -142,7 +143,15 @@ Claims follow the granted [scopes](https://openid.net/specs/openid-connect-core-
 | `profile` | `name`, `picture`, `given_name`, `family_name` |
 | `email`   | `email`, `email_verified`                      |
 
-When a claim from the table above is requested through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests) and appears in `claims_supported`, Better Auth returns it if a value exists, even when its scope was not granted. Better Auth does not fill in other requested names, such as `locale`. To return them, read `requestedClaims` in `customUserInfoClaims`, described below. Missing values are omitted, not returned as `null`. This per-claim selection works only with opaque access tokens. With a JWT access token, UserInfo returns only the claims its scopes cover.
+Better Auth returns a claim from the table above even when its scope was not granted, if all of these are true:
+
+* The client requests the claim through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests).
+* The claim appears in `claims_supported`.
+* Your [consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page) did not remove the claim. It removes one when it passes a `claims` object to `oauth2.consent` that leaves the claim out.
+* The user has a value for the claim. Better Auth omits missing values instead of returning `null`.
+* The access token is opaque. With a JWT access token, UserInfo returns only the claims its scopes cover.
+
+Better Auth does not fill in other requested names, such as `locale`. To return one on request, list it in `advertisedMetadata.claims_supported` together with the defaults you still want, as in [Discovery metadata](#discovery-metadata). Then read `requestedClaims` in `customUserInfoClaims`, described below.
 
 To add claims to the [UserInfo response](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse), set `customUserInfoClaims`. It receives the `user`, the access token's `scopes`, the access token payload as `jwt`, and `requestedClaims`. `requestedClaims` lists the claim names requested through `claims.userinfo`. It returns an object of claims to add:
 
@@ -229,7 +238,7 @@ await auth.api.adminCreateOAuthClient({
 
 * Recipients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token for it, such as after a `resource` request without `offline_access`, is not notified.
 * Logout Tokens carry `typ: logout+jwt`, always include `sid`, and live for 120 seconds. The JWT plugin signs them, so a client verifies them with your JWKS. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
-* Better Auth also revokes the session's access tokens and its refresh tokens without `offline_access`. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows.
+* When the session is deleted, Better Auth revokes the session's access tokens and its refresh tokens without `offline_access`. This happens whether or not any client registered a `backchannel_logout_uri`. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows.
 * `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS, so a public name that resolves to a private address passes. If untrusted parties can register clients on your server, block outbound requests from the auth server to private networks.
 * Clients registered through [CIMD](/docs/plugins/cimd) cannot use back-channel logout.
 
@@ -243,7 +252,7 @@ await auth.api.adminCreateOAuthClient({
 
 ## Front-channel logout
 
-[Front-Channel Logout](https://openid.net/specs/openid-connect-frontchannel-1_0.html) notifies clients through the user's browser. When a user logs out at `/oauth2/end-session`, Better Auth renders a page with one hidden iframe per client that holds tokens on the session. Each iframe loads that client's `frontchannel_logout_uri`, so the client can clear its own session cookies. As with back-channel logout, clients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token gets no iframe.
+[Front-Channel Logout](https://openid.net/specs/openid-connect-frontchannel-1_0.html) notifies clients through the user's browser. When a user logs out at `/oauth2/end-session`, Better Auth renders a page with one hidden iframe per client that holds tokens on the session. Each iframe loads that client's `frontchannel_logout_uri`, so the client can clear its own session cookies. As with back-channel logout, Better Auth finds these clients through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token gets no iframe.
 
 <Callout type="warn">
   The iframes are third-party content. Safari blocks third-party cookies, Firefox partitions them by default, and Chrome blocks them in Incognito and for users who turn them off. A client on a different site therefore often cannot see its session cookie inside the iframe. Front-channel logout is reliable only when your provider and its clients share a registrable domain, such as `auth.example.com` and `app.example.com`. Use [back-channel logout](#back-channel-logout) when clients run on other sites or when logout must not depend on the browser.

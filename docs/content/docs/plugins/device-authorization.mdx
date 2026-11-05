@@ -141,8 +141,9 @@ import {
 } from "@better-auth/oauth-provider"; // [!code highlight]
 
 export const auth = betterAuth({
+  disabledPaths: ["/token"],
   plugins: [
-    jwt(),
+    jwt({ disableSettingJwtHeader: true }),
     oauthProvider({
       loginPage: "/sign-in",
       consentPage: "/consent",
@@ -156,7 +157,9 @@ export const auth = betterAuth({
 });
 ```
 
-Then run `npx auth@latest migrate`, or `npx auth@latest generate` and apply the schema, to create the `deviceCode` table with the OAuth fields listed in [Schema](#schema).
+`disabledPaths` and `disableSettingJwtHeader` stop the JWT plugin from handing session JWTs to the browser. Session JWTs are signed with the same keys as OAuth access tokens. OAuth clients get their tokens from `/oauth2/token` instead. See [OAuth Provider Mode](/docs/plugins/jwt#oauth-provider-mode).
+
+To create the `deviceCode` table with the OAuth fields listed in [Schema](#schema), run `npx auth@latest migrate`. Alternatively, run `npx auth@latest generate` and apply the generated schema.
 
 Register the CLI as a public native client and link it to the API resource. Public clients use `token_endpoint_auth_method: "none"` because an installed CLI cannot keep a shared secret confidential:
 
@@ -533,6 +536,10 @@ With `oauthDeviceAuthorization()`, both endpoints refuse OAuth device codes. App
 
 #### Example Approval Page
 
+The server returns `client_id` and `scope` only to the signed-in user who owns the code. The page enables Approve and Deny only when the lookup returns `client_id` for a pending code.
+
+The page labels the client ID as the device sent it. Without `validateClient`, `deviceAuthorization()` alone accepts any client ID. With `oauthDeviceAuthorization()`, the standalone flow accepts only client IDs that `validateClient` accepts. See [Client Validation](#client-validation).
+
 ```tsx title="app/device/approve/page.tsx"
 export default function DeviceApprovalPage() {
   const { user } = useAuth(); // Must be authenticated
@@ -544,14 +551,36 @@ export default function DeviceApprovalPage() {
     scope?: string;
   } | null>(null);
 
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
   useEffect(() => {
+    setRequest(null);
+    setLookupError(null);
     if (!user || !userCode) return;
-    authClient.device({ query: { user_code: userCode } }).then(({ data }) => {
-      setRequest(data);
-    });
+    let active = true;
+    authClient
+      .device({ query: { user_code: userCode } })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (!data?.client_id || data.status !== "pending") {
+          setLookupError(
+            error?.error_description ??
+              "This code is invalid, expired, already used, or belongs to another account.",
+          );
+          return;
+        }
+        setRequest(data);
+      })
+      .catch(() => {
+        if (active) setLookupError("Could not reach the server. Try again.");
+      });
+    return () => {
+      active = false;
+    };
   }, [user, userCode]);
   
   const handleApprove = async () => {
+    if (!userCode) return;
     setIsProcessing(true);
     try {
       const { error } = await authClient.device.approve({ userCode });
@@ -569,6 +598,7 @@ export default function DeviceApprovalPage() {
   };
   
   const handleDeny = async () => {
+    if (!userCode) return;
     setIsProcessing(true);
     try {
       const { error } = await authClient.device.deny({ userCode });
@@ -595,14 +625,22 @@ export default function DeviceApprovalPage() {
   return (
     <div>
       <h2>Device Authorization Request</h2>
-      <p>Client: {request?.client_id}</p>
-      <p>Scopes: {request?.scope || "None"}</p>
+      {lookupError && <p role="alert">{lookupError}</p>}
+      {request && (
+        <>
+          <p>Client ID, as the device sent it: {request.client_id}</p>
+          <p>Scopes: {request.scope || "None"}</p>
+        </>
+      )}
       <p>Code: {userCode}</p>
       
-      <button onClick={handleApprove} disabled={isProcessing}>
+      <button
+        onClick={handleApprove}
+        disabled={isProcessing || !request?.client_id}
+      >
         Approve
       </button>
-      <button onClick={handleDeny} disabled={isProcessing}>
+      <button onClick={handleDeny} disabled={isProcessing || !request?.client_id}>
         Deny
       </button>
     </div>

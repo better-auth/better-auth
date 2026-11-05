@@ -84,10 +84,11 @@ const client = await auth.api.getOAuthClientPublic({
 
 For any client an administrator did not create, whoever registered it chose its name, logo, and links. That includes dynamically registered and CIMD clients, and clients any signed-in user created with `createOAuthClient` while [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) is unset. So also show the host of the signed `redirect_uri`. Render `logo_uri`, `client_uri`, `tos_uri`, and `policy_uri` only when they start with `https:`. Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
 
-Device approvals and CIBA requests carry no `redirect_uri`. Their queries carry other fields to show:
+Device approvals and CIBA requests carry no `redirect_uri`. For a client an administrator did not create, the page then has no host to show beside the name the client chose. Label that name and logo as supplied by the client, not as the client's identity. Device approval and CIBA queries carry other fields to show:
 
 * A device approval's query also carries `user_code`. Show it so the user can check that it matches the code on their device.
 * A CIBA request's query carries the client's `binding_message` when the client sent one.
+* Both queries carry each requested `resource`, the API the token is for. Show each one. See [Production security requirements](/docs/plugins/device-authorization#production-security-requirements).
 
 <APIMethod path="/oauth2/consent" method="POST" requireSession>
   ```ts
@@ -118,7 +119,7 @@ Device approvals and CIBA requests carry no `redirect_uri`. Their queries carry 
 
 The response is `{ redirect: true, url }`. By default, the auth client sends the browser to `url`. If you call the endpoint another way, send the browser to `url` yourself.
 
-With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. A denied device approval instead returns to the device verification page, and a denied CIBA request to `resultPage`, each with `status=denied`. To remove consent, see [Manage consents](#manage-consents).
+With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. When the user denies a device approval, the user returns to the device verification page instead. When the user denies a CIBA request, the user goes to `resultPage`. Both URLs carry `status=denied`. To remove consent, see [Manage consents](#manage-consents).
 
 ## Sign-up account screen
 
@@ -175,7 +176,7 @@ await authClient.oauth2.continue({ selected: true });
 To add a step after sign-in and before consent, such as picking an organization, set `postLogin` with a `page` and these callbacks:
 
 * `shouldRedirect` receives `headers`, `user`, `session`, `scopes`, `query`, and `isContinuation`. It returns `true` to redirect to `page`.
-* `consentReferenceId` receives `user`, `session`, `scopes`, `query`, and, once the user accepts, `consent`. Until then, `scopes` holds the requested scopes. Once the user accepts, it holds the scopes they accepted. `consentReferenceId` returns the user's choice, such as an organization ID. Better Auth stores consent separately for each reference. When `consentReferenceId` returns `undefined` or an empty string, the consent given without a reference applies.
+* `consentReferenceId` receives `user`, `session`, `scopes`, `query`, and, once the user accepts, `consent`. Until then, `scopes` holds the requested scopes. Once the user accepts, it holds the scopes they accepted. The callback returns the user's choice, such as an organization ID. Better Auth stores consent separately for each reference. When `consentReferenceId` returns `undefined` or an empty string, the consent given without a reference applies.
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -201,7 +202,7 @@ await authClient.organization.setActive({ organizationId });
 await authClient.oauth2.continue({ postLogin: true });
 ```
 
-Device approvals from `oauthDeviceAuthorization()` and CIBA requests approved on the provider's pages run this step too, and their tokens carry the `referenceId` it selects. [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app) skips this step, so its tokens carry no `referenceId`.
+Device approvals from `oauthDeviceAuthorization()` and CIBA requests approved on the provider's pages run this step too. Tokens for these requests carry the `referenceId` that this step selects. [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app) skips this step. Tokens for requests it approves carry no `referenceId`.
 
 If some scopes need a reference, throw an `APIError` from `consentReferenceId` when none is set. Better Auth does not check this for you. For how references reach token claims, see [Organizations](/docs/plugins/oauth-provider/clients#organizations) and [Consent reference claim](/docs/plugins/oauth-provider/tokens#consent-reference-claim).
 
@@ -209,7 +210,11 @@ If some scopes need a reference, throw an `APIError` from `consentReferenceId` w
 
 A client can name the organization it needs in its authorization request, such as `organization=org_123`, and `consentReferenceId` reads it from `query`. Your consent page can instead let the user pick one and send it as `reference_id` to `/oauth2/consent`. `consentReferenceId` receives that pick as `consent.referenceId`. Neither value comes from your server, so check that the user belongs to the organization before returning it.
 
-`consent` is set only when the user accepts. Until then, return `undefined` while no organization is known, so the consent page can ask. An authorization request from a client with `skip_consent` gets no consent page unless it sends `prompt=consent`, so refuse its request with `invalid_request` when it names no organization. The provider rejects a repeated standard parameter other than `resource`. It passes a repeated custom parameter such as `organization` through with every value, so refuse a request whose organizations disagree.
+`consent` is set only when the user accepts. Until then, return `undefined` while no organization is known. The consent page can then ask.
+
+An authorization request from a client with `skip_consent` gets no consent page unless it sends `prompt=consent`. When such a request names no organization, refuse it with `invalid_request`.
+
+A request can carry a custom parameter such as `organization` more than once. Refuse a request whose organizations disagree.
 
 ```ts title="auth.ts"
 // Clients created with `skip_consent` skip the consent page on authorization requests.
