@@ -3,10 +3,19 @@ import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import type { OAuthOptions, Scope } from "./types";
@@ -1168,5 +1177,72 @@ describe("oauth introspect - rejects non-OAuth same-issuer JWTs", async () => {
 		expect(sessionJwt.split(".")).toHaveLength(3);
 		const introspection = await introspect(sessionJwt);
 		expect(introspection.data?.active).toBe(false);
+	});
+
+	/**
+	 * Forced introspection skips the local JWT check, so the resource server's
+	 * `typ` check cannot apply. The `azp` gate in introspection is what keeps a
+	 * session JWT from passing as an access token.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9068#section-4
+	 */
+	describe("resource server verification with the RFC 9068 typ check", () => {
+		beforeEach(() => {
+			const networkFetch = globalThis.fetch.bind(globalThis);
+			vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+				const requestedUrl =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				return requestedUrl.startsWith(authServerBaseUrl)
+					? customFetchImpl(input, init)
+					: networkFetch(input, init);
+			});
+		});
+
+		afterEach(() => {
+			vi.unstubAllGlobals();
+		});
+
+		function verifyByIntrospection(token: string) {
+			return verifyAccessTokenRequest(
+				{
+					authorizationHeader: `Bearer ${token}`,
+					method: "GET",
+					url: authServerBaseUrl,
+				},
+				{
+					verifyOptions: {
+						issuer: authServerBaseUrl,
+						audience: authServerBaseUrl,
+						typ: "at+jwt",
+					},
+					remoteVerify: {
+						introspectUrl: `${authServerBaseUrl}/api/auth/oauth2/introspect`,
+						clientId: oauthClient!.client_id!,
+						clientSecret: oauthClient!.client_secret!,
+						force: true,
+					},
+				},
+			);
+		}
+
+		it("accepts a real OAuth JWT access token", async () => {
+			const accessToken = await getOAuthJwtAccessToken();
+			await expect(verifyByIntrospection(accessToken)).resolves.toMatchObject({
+				active: true,
+				client_id: oauthClient?.client_id,
+			});
+		});
+
+		it("rejects a JWT plugin session token", async () => {
+			const { token: sessionJwt } = await auth.api.getToken({ headers });
+			await expect(verifyByIntrospection(sessionJwt)).rejects.toMatchObject({
+				status: "UNAUTHORIZED",
+				message: "token inactive",
+			});
+		});
 	});
 });

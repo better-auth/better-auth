@@ -114,9 +114,7 @@ export interface OrganizationCreator {
 	): DefaultOrganizationPlugin<Options>;
 }
 
-export function parseRoles(roles: string | string[]): string {
-	return Array.isArray(roles) ? roles.join(",") : roles;
-}
+export { parseRoles } from "./roles";
 
 export type DynamicAccessControlEndpoints<O extends OrganizationOptions> = {
 	createOrgRole: ReturnType<typeof createOrgRole<O>>;

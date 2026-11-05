@@ -294,7 +294,8 @@ export interface VerifyAccessTokenRemote {
 	/**
 	 * Forces remote verification of a token.
 	 * This ensures attached session (if applicable)
-	 * is also still active.
+	 * is also still active. The local JWT check is skipped, so
+	 * `verifyOptions.typ` is not enforced.
 	 */
 	force?: boolean;
 	/**

@@ -1,5 +1,15 @@
 # @better-auth/stripe
 
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Stripe customer ids and the subscription fields the plugin manages can no longer be set from sign-up or update-user requests and are removed from their input types. This includes server calls such as `auth.api.updateUser`; write them through your database adapter instead.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - When several records share a Stripe customer id, subscriptions created outside checkout now go to the owner recorded on the Stripe customer, and are skipped with a warning when no recorded owner holds the id.
+
 ## 1.7.15
 
 ### Patch Changes

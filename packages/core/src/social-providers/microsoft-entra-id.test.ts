@@ -1,6 +1,6 @@
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, test, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -163,6 +163,32 @@ describe("microsoft id_token tenant enforcement", () => {
 			verifyProviderIdToken(provider, token, undefined),
 		).resolves.toBe(false);
 	});
+});
+
+describe("microsoft email_verified claim", () => {
+	test.for([
+		[true, true],
+		["true", true],
+		[false, false],
+		["TRUE", false],
+		[["true"], false],
+	] as const)(
+		"reads email_verified %j as verified=%s",
+		async ([claim, verified]) => {
+			const provider = microsoft({ clientId: CLIENT_ID, tenantId: "common" });
+			const idToken = await encodeMicrosoftProfile({
+				sub: "ms-pairwise-sub",
+				oid: "ms-stable-oid",
+				tid: WORK_TENANT_ID,
+				email: "user@example.com",
+				email_verified: claim,
+			});
+
+			const result = await provider.getUserInfo({ idToken });
+
+			expect(result?.user.emailVerified).toBe(verified);
+		},
+	);
 });
 
 describe("microsoft account subject", () => {
