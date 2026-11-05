@@ -205,7 +205,7 @@ export const createInternalAdapter = (
 		const deletedTokens = new Set(
 			sessionReferences.map((session) => session.token),
 		);
-		for (const { token } of sessionReferences) {
+		for (const token of deletedTokens) {
 			await secondaryStorage.delete(token);
 		}
 
@@ -1051,11 +1051,15 @@ export const createInternalAdapter = (
 				return;
 			}
 			// Revoke the cached copies as soon as the rows end, before delete.after
-			// hooks are queued: the cutoff then covers every row this call ended,
-			// including rows created while delete.before hooks ran, and stays below
-			// replacement sessions those after hooks create.
-			const revokeCachedSessions = () =>
-				queueCachedUserSessionDeletion(userId, sessionReferences);
+			// hooks are queued, so replacement sessions those hooks create stay
+			// active. The session index is read again at that point: a session
+			// created while delete.before hooks ran is missing from the first read,
+			// and its creation time can equal the cutoff.
+			const revokeCachedSessions = async () =>
+				queueCachedUserSessionDeletion(userId, [
+					...sessionReferences,
+					...(await getActiveSessionReferences(userId)),
+				]);
 			if (ctx.options.session?.preserveSessionInDatabase) {
 				await endPreservedSessions(
 					[{ field: "userId", value: userId }],

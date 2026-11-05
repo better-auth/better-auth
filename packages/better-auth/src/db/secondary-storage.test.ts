@@ -951,6 +951,9 @@ describe("secondary storage - bulk revocation with a replacement session", () =>
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/pull/12212
+ */
 describe("secondary storage - bulk revocation during a pending delete hook", () => {
 	beforeEach(() => {
 		vi.useFakeTimers({ toFake: ["Date"] });
@@ -961,11 +964,13 @@ describe("secondary storage - bulk revocation during a pending delete hook", () 
 	});
 
 	it.each([
-		{ preserveSessionInDatabase: false },
-		{ preserveSessionInDatabase: true },
+		{ preserveSessionInDatabase: false, sameMillisecond: false },
+		{ preserveSessionInDatabase: false, sameMillisecond: true },
+		{ preserveSessionInDatabase: true, sameMillisecond: false },
+		{ preserveSessionInDatabase: true, sameMillisecond: true },
 	])(
-		"revokes a session created while a delete.before hook runs (preserveSessionInDatabase: $preserveSessionInDatabase)",
-		async ({ preserveSessionInDatabase }) => {
+		"revokes a session created while a delete.before hook runs (preserveSessionInDatabase: $preserveSessionInDatabase, created in the cutoff's millisecond: $sameMillisecond)",
+		async ({ preserveSessionInDatabase, sameMillisecond }) => {
 			const store = new Map<string, string>();
 			let pauseNextDelete = false;
 			let hookStarted!: () => void;
@@ -1005,7 +1010,9 @@ describe("secondary storage - bulk revocation during a pending delete hook", () 
 			await started;
 			vi.setSystemTime(Date.now() + 1000);
 			const concurrent = await signInWithTestUser();
-			vi.setSystemTime(Date.now() + 1000);
+			if (!sameMillisecond) {
+				vi.setSystemTime(Date.now() + 1000);
+			}
 			resumeHook();
 			await revoking;
 
