@@ -9,6 +9,7 @@ export const hi: TranslationDictionary = {
 	FAILED_TO_CREATE_SESSION: "सत्र बनाने में विफल",
 	FAILED_TO_UPDATE_USER: "उपयोगकर्ता अपडेट करने में विफल",
 	FAILED_TO_GET_SESSION: "सत्र प्राप्त करने में विफल",
+	FAILED_TO_DELETE_SESSION: "सत्र हटाने में विफल",
 	INVALID_PASSWORD: "अमान्य पासवर्ड",
 	INVALID_EMAIL: "अमान्य ईमेल",
 	INVALID_EMAIL_OR_PASSWORD: "अमान्य ईमेल या पासवर्ड",
