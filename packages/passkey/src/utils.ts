@@ -24,15 +24,20 @@ export function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
  *
  * @see https://www.w3.org/TR/webauthn-3/#sctn-validating-origin
  */
-export function getExpectedOrigins(
+export async function getExpectedOrigins(
 	options: PasskeyOptions,
 	ctx: GenericEndpointContext,
 	clientDataJSON: unknown,
 ) {
 	if (options.origin) {
-		const configured = Array.isArray(options.origin)
-			? options.origin
-			: [options.origin];
+		const resolved =
+			typeof options.origin === "function"
+				? await options.origin(ctx.request ?? new Request("http://localhost"))
+				: options.origin;
+		if (!resolved) {
+			return [];
+		}
+		const configured = Array.isArray(resolved) ? resolved : [resolved];
 		return configured.filter((origin) => origin.length > 0);
 	}
 	const baseOrigins = getServerOrigins(ctx);

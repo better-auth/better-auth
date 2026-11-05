@@ -649,7 +649,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 		},
 		async (ctx) => {
 			const resp = ctx.body.response;
-			const expectedOrigin = getExpectedOrigins(
+			const expectedOrigin = await getExpectedOrigins(
 				options,
 				ctx,
 				resp?.response?.clientDataJSON,
@@ -913,7 +913,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 		},
 		async (ctx) => {
 			const resp = ctx.body.response;
-			const expectedOrigin = getExpectedOrigins(
+			const expectedOrigin = await getExpectedOrigins(
 				options,
 				ctx,
 				resp?.response?.clientDataJSON,

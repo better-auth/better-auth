@@ -393,6 +393,42 @@ describe("passkey expected origin", () => {
 		},
 	);
 
+	it("accepts origin as a request function when a wildcard allowed host covers rpID", async () => {
+		const { getExpectedOrigins } = await import("./utils");
+		const originFn = vi.fn(async (request: Request) => [
+			new URL(request.url).origin,
+		]);
+		await expect(
+			getTestInstance({
+				plugins: [
+					passkey({
+						rpID: "localhost",
+						origin: originFn,
+					}),
+				],
+				baseURL: {
+					allowedHosts: ["localhost:3000", "*.localhost:3000"],
+					protocol: "http",
+					fallback: RP_ORIGIN,
+				},
+			}),
+		).resolves.toBeDefined();
+
+		const origins = await getExpectedOrigins(
+			{ origin: originFn },
+			{
+				request: new Request(RP_ORIGIN),
+				context: {
+					baseURL: RP_ORIGIN,
+					trustedOrigins: [RP_ORIGIN],
+				},
+			} as never,
+			encodeClientData(RP_ORIGIN),
+		);
+		expect(originFn).toHaveBeenCalled();
+		expect(origins).toEqual([RP_ORIGIN]);
+	});
+
 	it("control: allows a wildcard allowed host with an explicit origin or a per-host rpID", async () => {
 		const baseURL = {
 			allowedHosts: ["*.localhost:3000", "*.vercel.app"],
