@@ -1,35 +1,23 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { terminate } from "@better-auth-test/test-utils/playwright";
+import { launch } from "@better-auth-test/test-utils/playwright";
 import { expect, test } from "@playwright/test";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
-let server: ChildProcessWithoutNullStreams;
+const app = launch(root);
 let baseURL: string;
 
 test.beforeAll(async () => {
-	server = spawn("pnpm", ["run", "dev"], {
-		detached: process.platform !== "win32",
-		cwd: root,
-		stdio: "pipe",
-		env: { ...process.env, NO_COLOR: "1" },
-	});
-	server.stderr.on("data", (data) => console.error(data.toString()));
-	baseURL = await new Promise<string>((resolve, reject) => {
-		server.stdout.on("data", (data) => {
-			const match = data.toString().match(/http:\/\/localhost:\d+/);
-			if (match) resolve(match[0]);
-		});
-		server.on("exit", (code) =>
-			reject(new Error(`vite dev exited with code ${code}`)),
-		);
-	});
+	baseURL = await app.start(["run", "dev"]);
 });
 
-test.afterAll(async () => {
-	if (server) await terminate(server);
+// Runs even when `beforeAll` times out, unlike `afterEach`.
+test.afterAll(async ({}, testInfo) => {
+	await app.stop();
+	await testInfo.attach("vite-dev.log", {
+		body: app.output(),
+		contentType: "text/plain",
+	});
 });
 
 /**
