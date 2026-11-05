@@ -808,7 +808,9 @@ export async function resolveIssuanceConfirmation(
 			params.expectedJkt !== undefined &&
 			getConfirmationJkt(params.confirmation) !== params.expectedJkt
 		) {
-			throwInvalidDpopProof("DPoP proof key does not match the bound token");
+			throwInvalidDpopProof(
+				"Client authentication confirmation does not match the bound token",
+			);
 		}
 		return params.confirmation;
 	}

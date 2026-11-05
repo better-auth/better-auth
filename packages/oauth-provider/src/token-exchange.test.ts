@@ -955,7 +955,8 @@ describe("oauthTokenExchange", () => {
 					await exchangeWithProvenConfirmation(proven);
 				expect(error).toMatchObject({
 					error: "invalid_dpop_proof",
-					error_description: "DPoP proof key does not match the bound token",
+					error_description:
+						"Client authentication confirmation does not match the bound token",
 				});
 				expect(allowExchange).not.toHaveBeenCalled();
 			},
