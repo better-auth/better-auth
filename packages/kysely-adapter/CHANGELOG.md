@@ -1,5 +1,7 @@
 # @better-auth/kysely-adapter
 
+## 1.7.18
+
 ## 1.7.17
 
 ### Patch Changes

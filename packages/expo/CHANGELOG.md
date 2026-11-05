@@ -1,5 +1,7 @@
 # @better-auth/expo
 
+## 1.7.18
+
 ## 1.7.17
 
 ### Patch Changes

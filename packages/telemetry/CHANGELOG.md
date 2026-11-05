@@ -1,5 +1,7 @@
 # @better-auth/telemetry
 
+## 1.7.18
+
 ## 1.7.17
 
 ## 1.7.16
