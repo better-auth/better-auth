@@ -118,6 +118,38 @@ for (const [mode, server] of Object.entries(servers)) {
 			await expect(page.getByText("Signed in as Action User")).toBeVisible();
 		});
 
+		test("clears session cookies on API sign-out when the cookie cache is missing", async ({
+			page,
+		}) => {
+			await signUp(page, baseURL, "Sign Out User", "signout@example.com");
+			await page.goto(baseURL);
+			await expect(page.getByText("Signed in as Sign Out User")).toBeVisible();
+			expect(await getCookie(page, "better-auth.session_token")).toBeDefined();
+			expect(await getCookie(page, "better-auth.session_data")).toBeDefined();
+
+			await page.context().clearCookies({ name: "better-auth.session_data" });
+			const response = await page.evaluate(async () => {
+				const response = await fetch("/api/auth/sign-out", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: "{}",
+				});
+				const body: unknown = await response.json();
+				return { status: response.status, body };
+			});
+			expect(response).toMatchObject({ status: 200, body: { success: true } });
+			expect(
+				await getCookie(page, "better-auth.session_token"),
+			).toBeUndefined();
+			expect(await getCookie(page, "better-auth.session_data")).toBeUndefined();
+
+			const session = await page.request.get(`${baseURL}/api/auth/get-session`);
+			expect(session.ok()).toBe(true);
+			expect(await session.json()).toBeNull();
+			await page.goto(baseURL);
+			await expect(page.getByText("Signed out", { exact: true })).toBeVisible();
+		});
+
 		test("reissues a missing cookie cache during client-side navigation", async ({
 			page,
 		}) => {
