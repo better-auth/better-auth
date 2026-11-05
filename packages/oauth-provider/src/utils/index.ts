@@ -579,20 +579,24 @@ export async function readFormParams(
  * key: a parameter sent without a value counts as omitted, and a parameter
  * sent more than once is rejected with `invalid_request`. A name in
  * `repeatable`, such as RFC 8707 `resource`, keeps every value as an array
- * when it repeats. A value a `before` hook replaced is left as the hook set it.
+ * when it repeats. With `repeatable: "all"`, every parameter keeps all its
+ * values, empty ones included, as the router does for a query string, and the
+ * endpoint's schema decides which may repeat. A value a `before` hook replaced
+ * is left as the hook set it.
  *
  * @internal
  */
 export function applyFormParams(
 	params: URLSearchParams,
 	body: Record<string, unknown>,
-	repeatable: readonly string[] = [],
+	repeatable: readonly string[] | "all" = [],
 ): Record<string, unknown> {
 	const merged = { ...body };
+	const keepAll = repeatable === "all";
 	for (const name of new Set(params.keys())) {
 		const raw = params.getAll(name);
-		const values = raw.filter(Boolean);
-		if (values.length > 1 && !repeatable.includes(name)) {
+		const values = keepAll ? raw : raw.filter(Boolean);
+		if (values.length > 1 && !keepAll && !repeatable.includes(name)) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description: `${name} must not be repeated`,
