@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	getSignedQueryIssuedAt,
+	postLoginClearedParam,
+	readSignedOAuthQuery,
+	signedQueryIssuedAtParam,
+} from "../signed-query";
+import {
 	isSessionFreshForSignedQuery,
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
-	signedQueryIssuedAtParam,
 } from "./index";
 
 describe("searchParamsToQuery", () => {
@@ -133,35 +136,45 @@ describe("removeMaxAgeFromQuery", () => {
 	});
 });
 
-describe("getSignedQueryIssuedAt", () => {
-	it("reads the signed query issue time when present", () => {
+describe("readSignedOAuthQuery", () => {
+	it("reads the issue time and flags and removes every signing parameter", () => {
 		const issuedAt = 1777026004123;
 		const params = new URLSearchParams({
 			client_id: "abc",
+			exp: "1777026604",
+			sig: "signature",
 			[signedQueryIssuedAtParam]: String(issuedAt),
+			[postLoginClearedParam]: "session-1",
+			ba_param: "client_id",
 		});
 
-		expect(getSignedQueryIssuedAt(params.toString())).toEqual(
-			new Date(issuedAt),
-		);
+		expect(readSignedOAuthQuery(params.toString())).toEqual({
+			query: "client_id=abc",
+			signedQueryIssuedAt: new Date(issuedAt),
+			postLoginClearedForSession: "session-1",
+		});
 	});
 
-	it("returns null when ba_iat is absent", () => {
+	it("has no issue time when ba_iat is absent", () => {
 		const params = new URLSearchParams({
 			client_id: "abc",
 			exp: "1777026604",
 		});
 
-		expect(getSignedQueryIssuedAt(params.toString())).toBeNull();
+		expect(
+			readSignedOAuthQuery(params.toString()).signedQueryIssuedAt,
+		).toBeUndefined();
 	});
 
-	it("returns null when ba_iat is not a positive finite number", () => {
+	it("has no issue time when ba_iat is not a positive finite number", () => {
 		const params = new URLSearchParams({
 			client_id: "abc",
 			[signedQueryIssuedAtParam]: "not-a-number",
 		});
 
-		expect(getSignedQueryIssuedAt(params.toString())).toBeNull();
+		expect(
+			readSignedOAuthQuery(params.toString()).signedQueryIssuedAt,
+		).toBeUndefined();
 	});
 });
 

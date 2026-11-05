@@ -13,7 +13,7 @@ The Device Authorization plugin implements the code issuance and approval flow f
 You can test the device authorization flow right now using the Better Auth CLI:
 
 ```package-install
-npx auth login
+npx auth@latest login
 ```
 
 This will demonstrate the complete device authorization flow by:
@@ -58,13 +58,13 @@ This will demonstrate the complete device authorization flow by:
     <Tabs items={["migrate", "generate"]}>
       <Tab value="migrate">
         ```package-install
-        npx auth migrate
+        npx auth@latest migrate
         ```
       </Tab>
 
       <Tab value="generate">
         ```package-install
-        npx auth generate
+        npx auth@latest generate
         ```
       </Tab>
     </Tabs>
@@ -123,7 +123,7 @@ Device authorization can finish with two different token types. Choose the token
 
 A command-line application commonly needs the second path: it cannot keep a client secret, but it needs a user-authorized token for your API. Choose the grant by where the CLI runs:
 
-* **The user has a browser on the same machine**, such as a developer laptop: use the authorization code grant with PKCE and a [loopback redirect](https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3). The CLI listens on `http://127.0.0.1` on any free port, opens the browser at `/oauth2/authorize`, and receives the code on that listener. The user signs in and consents with no code to type or compare. Register the CLI as a `native` client with a loopback redirect URI; [the port may vary](/docs/plugins/oauth-provider#custom-redirect-uri-validation).
+* **The user has a browser on the same machine**, such as a developer laptop: use the authorization code grant with PKCE and a [loopback redirect](https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3). The CLI listens on `http://127.0.0.1` on any free port, opens the browser at `/oauth2/authorize`, and receives the code on that listener. The user signs in and consents with no code to type or compare. Register the CLI as a `native` client with a loopback redirect URI; [the port may vary](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).
 * **The CLI cannot open a browser or listen locally**, such as over SSH, in a container, or on a TV: use the device grant below. The user approves in a browser on any device while the CLI polls for an audience-bound OAuth access token.
 
 A CLI can try the loopback flow first and fall back to the device grant when it cannot open a browser.
@@ -141,8 +141,9 @@ import {
 } from "@better-auth/oauth-provider"; // [!code highlight]
 
 export const auth = betterAuth({
+  disabledPaths: ["/token"],
   plugins: [
-    jwt(),
+    jwt({ disableSettingJwtHeader: true }),
     oauthProvider({
       loginPage: "/sign-in",
       consentPage: "/consent",
@@ -155,6 +156,10 @@ export const auth = betterAuth({
   ],
 });
 ```
+
+`disabledPaths` and `disableSettingJwtHeader` stop the JWT plugin from handing session JWTs to the browser. Session JWTs are signed with the same keys as OAuth access tokens. OAuth clients get their tokens from `/oauth2/token` instead. See [OAuth Provider Mode](/docs/plugins/jwt#oauth-provider-mode).
+
+To create the `deviceCode` table with the OAuth fields listed in [Schema](#schema), run `npx auth@latest migrate`. Alternatively, run `npx auth@latest generate` and apply the generated schema.
 
 Register the CLI as a public native client and link it to the API resource. Public clients use `token_endpoint_auth_method: "none"` because an installed CLI cannot keep a shared secret confidential:
 
@@ -232,7 +237,7 @@ const response = await fetch(`${authBaseURL}/oauth2/token`, {
 const tokens = await response.json();
 ```
 
-The access token is a signed JWT whose `aud` identifies `https://api.example.com`. Send it to that API as `Authorization: Bearer <access_token>`, then verify its signature, issuer, audience, expiry, and required scopes at the API. See [API Server verification](/docs/plugins/oauth-provider#api-server). If the CLI requests `offline_access`, store the returned refresh token in the operating system's secure credential store and use it to renew short-lived access tokens.
+The access token is a signed JWT whose `aud` identifies `https://api.example.com`. Send it to that API as `Authorization: Bearer <access_token>`, then verify its signature, issuer, audience, expiry, and required scopes at the API. See [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens). If the CLI requests `offline_access`, store the returned refresh token in the operating system's secure credential store and use it to renew short-lived access tokens.
 
 <Callout type="warn">
   Do not call `authClient.device.token` for this OAuth flow. That client method polls `/device/token` and returns a Better Auth session token. Registered OAuth clients must poll `/oauth2/token`.
@@ -275,7 +280,7 @@ When the code is unknown, expired, or already used, the user returns to your ver
 
 #### Grant device access for an organization
 
-Device approvals run `postLogin`, so [`postLogin.consentReferenceId`](/docs/plugins/oauth-provider#post-login-screen) selects the organization the same way it does for an authorization request. The device's access tokens and refresh tokens carry the returned `referenceId`, so `customAccessTokenClaims` receives it on every issuance, including refreshes:
+Device approvals run `postLogin`, so [`postLogin.consentReferenceId`](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen) selects the organization the same way it does for an authorization request. The device's access tokens and refresh tokens carry the returned `referenceId`, so `customAccessTokenClaims` receives it on every issuance, including refreshes:
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -531,6 +536,10 @@ With `oauthDeviceAuthorization()`, both endpoints refuse OAuth device codes. App
 
 #### Example Approval Page
 
+The server returns `client_id` and `scope` only to the signed-in user who owns the code. The page enables Approve and Deny only when the lookup returns `client_id` for a pending code.
+
+The page labels the client ID as the device sent it. Without `validateClient`, `deviceAuthorization()` alone accepts any client ID. With `oauthDeviceAuthorization()`, the standalone flow accepts only client IDs that `validateClient` accepts. See [Client Validation](#client-validation).
+
 ```tsx title="app/device/approve/page.tsx"
 export default function DeviceApprovalPage() {
   const { user } = useAuth(); // Must be authenticated
@@ -540,17 +549,38 @@ export default function DeviceApprovalPage() {
   const [request, setRequest] = useState<{
     client_id?: string;
     scope?: string;
-    resource?: string | string[];
   } | null>(null);
 
+  const [lookupError, setLookupError] = useState<string | null>(null);
+
   useEffect(() => {
+    setRequest(null);
+    setLookupError(null);
     if (!user || !userCode) return;
-    authClient.device({ query: { user_code: userCode } }).then(({ data }) => {
-      setRequest(data);
-    });
+    let active = true;
+    authClient
+      .device({ query: { user_code: userCode } })
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (!data?.client_id || data.status !== "pending") {
+          setLookupError(
+            error?.error_description ??
+              "This code is invalid, expired, already used, or belongs to another account.",
+          );
+          return;
+        }
+        setRequest(data);
+      })
+      .catch(() => {
+        if (active) setLookupError("Could not reach the server. Try again.");
+      });
+    return () => {
+      active = false;
+    };
   }, [user, userCode]);
   
   const handleApprove = async () => {
+    if (!userCode) return;
     setIsProcessing(true);
     try {
       const { error } = await authClient.device.approve({ userCode });
@@ -568,6 +598,7 @@ export default function DeviceApprovalPage() {
   };
   
   const handleDeny = async () => {
+    if (!userCode) return;
     setIsProcessing(true);
     try {
       const { error } = await authClient.device.deny({ userCode });
@@ -594,19 +625,22 @@ export default function DeviceApprovalPage() {
   return (
     <div>
       <h2>Device Authorization Request</h2>
-      <p>Client: {request?.client_id}</p>
-      <p>Scopes: {request?.scope || "None"}</p>
-      <p>
-        Resources: {Array.isArray(request?.resource)
-          ? request.resource.join(", ")
-          : request?.resource || "None"}
-      </p>
+      {lookupError && <p role="alert">{lookupError}</p>}
+      {request && (
+        <>
+          <p>Client ID, as the device sent it: {request.client_id}</p>
+          <p>Scopes: {request.scope || "None"}</p>
+        </>
+      )}
       <p>Code: {userCode}</p>
       
-      <button onClick={handleApprove} disabled={isProcessing}>
+      <button
+        onClick={handleApprove}
+        disabled={isProcessing || !request?.client_id}
+      >
         Approve
       </button>
-      <button onClick={handleDeny} disabled={isProcessing}>
+      <button onClick={handleDeny} disabled={isProcessing || !request?.client_id}>
         Deny
       </button>
     </div>

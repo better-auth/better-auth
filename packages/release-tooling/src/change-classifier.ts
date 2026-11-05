@@ -42,6 +42,7 @@ const SCOPE_TO_DOMAIN = new Map(
 		"oidc-provider": "identity",
 		mcp: "identity",
 		"device-authorization": "identity",
+		ciba: "identity",
 		cimd: "identity",
 
 		// organization
@@ -94,6 +95,7 @@ const PATH_TO_DOMAIN = [
 	["packages/better-auth/src/plugins/oidc-provider/", "identity"],
 	["packages/better-auth/src/plugins/mcp/", "identity"],
 	["packages/better-auth/src/plugins/device-authorization/", "identity"],
+	["packages/ciba/", "identity"],
 	["packages/cimd/", "identity"],
 	["packages/better-auth/src/plugins/magic-link/", "credentials"],
 	["packages/better-auth/src/plugins/email-otp/", "credentials"],
@@ -227,6 +229,7 @@ export function isMaintenanceBranch(branch: string): boolean {
 
 const SCOPE_TO_PACKAGE = new Map(
 	Object.entries({
+		ciba: "@better-auth/ciba",
 		cimd: "@better-auth/cimd",
 		sso: "@better-auth/sso",
 		scim: "@better-auth/scim",
@@ -253,6 +256,7 @@ const SCOPE_TO_PACKAGE = new Map(
  * Order matters: more specific paths must come before catch-alls.
  */
 const PATH_TO_PACKAGE = [
+	["packages/ciba/", "@better-auth/ciba"],
 	["packages/cimd/", "@better-auth/cimd"],
 	["packages/sso/", "@better-auth/sso"],
 	["packages/scim/", "@better-auth/scim"],

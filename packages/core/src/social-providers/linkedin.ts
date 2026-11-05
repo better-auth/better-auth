@@ -12,10 +12,7 @@ export interface LinkedInProfile {
 	given_name: string;
 	family_name: string;
 	picture: string;
-	locale: {
-		country: string;
-		language: string;
-	};
+	locale: string;
 	email?: string;
 	email_verified?: boolean;
 }

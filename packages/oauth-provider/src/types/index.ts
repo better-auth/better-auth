@@ -65,7 +65,8 @@ export interface OAuthAuthenticationContextOptions<
 	acrValuesSupported: string[];
 	/**
 	 * Returns the `acr` and `amr` the current session establishes. Called when
-	 * the user approves an authorization request or a device code. Return only
+	 * the user approves an authorization request or an interaction request, such
+	 * as a device code or a CIBA request, on the provider's pages. Return only
 	 * what the session actually proved; do not raise `acr` to match
 	 * `requestedAcrValues`.
 	 *
@@ -271,6 +272,14 @@ export interface OAuthTokenIssueParams {
 	 * is stamped after, and cannot be overridden by, contributed claims.
 	 */
 	confirmation?: Confirmation;
+	/**
+	 * Latest time the access token may expire. The authorization server issues
+	 * the earlier of this and its configured lifetime, so a grant derived from
+	 * another token (for example RFC 8693 token exchange) cannot outlive it.
+	 * If it is not in the future, issuance fails with `invalid_request`. Refresh
+	 * and ID tokens are not capped, so such a grant should not issue them.
+	 */
+	maxExpiresAt?: Date;
 }
 
 export interface OAuthTokenResponse {
@@ -326,6 +335,21 @@ export interface OAuthProviderApi {
 	 * calling it.
 	 */
 	issueTokens: (params: OAuthTokenIssueParams) => Awaitable<OAuthTokenResponse>;
+	/**
+	 * Resolves the sender-constraint the tokens for this request will carry: the
+	 * `confirmation` the client proved at authentication, or else the DPoP proof
+	 * on this request, verified and required by the same rules `issueTokens`
+	 * applies. A grant that consumes a one-time credential (a device code, a CIBA
+	 * request) calls this before the claim and passes the result to
+	 * `issueTokens` as `confirmation`, so a rejected proof leaves the credential
+	 * for a retry with a valid one.
+	 */
+	resolveConfirmation: (params: {
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		resources?: string[];
+		confirmation?: Confirmation;
+	}) => Promise<Confirmation | undefined>;
 	/**
 	 * Computes the stored lookup key for a token value (the same hash the
 	 * provider persists), so a caller can find or revoke a previously issued
@@ -672,6 +696,19 @@ export interface InitialAccessTokenAuthorization {
 	 * client is stored with neither a `user_id` nor a `reference_id`).
 	 */
 	referenceId?: string;
+	/**
+	 * Scope ceiling for the `client_credentials` grant, such as the machine
+	 * scopes an administrator approved when the token was issued. Return only
+	 * scopes that approval covered: the token is the only proof of it.
+	 *
+	 * The client must register the `client_credentials` grant with a
+	 * confidential authentication method, and every scope must be one the
+	 * provider offers and not a user-delegated scope such as `openid`.
+	 * Otherwise registration fails.
+	 *
+	 * @default []
+	 */
+	clientCredentialsScopes?: string[];
 }
 
 export interface OAuthOptions<
@@ -735,9 +772,10 @@ export interface OAuthOptions<
 	 *
 	 * Custom acceptance relaxes the exact matching required by RFC 9700 §2.1.
 	 * Accept only callback hosts you control. For pairwise subject identifiers,
-	 * custom-validated URIs use the sector of the client's first registered URI.
+	 * custom-validated URIs use the sector derived from the client's registered
+	 * redirect URIs, not their own host.
 	 *
-	 * @see https://www.better-auth.com/docs/plugins/oauth-provider#custom-redirect-uri-validation
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation
 	 *
 	 * @param redirectUri - The redirect_uri from the authorization request
 	 * @param registeredUris - Registered redirect URIs for the client
@@ -1225,6 +1263,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
 		}) => Awaitable<boolean | string>;
 	};
 	/**
@@ -1254,6 +1294,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
 		}) => Awaitable<boolean>;
 	};
 	/**
@@ -1275,6 +1317,13 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
+			/**
+			 * Set only when the user accepts. `referenceId` is the `reference_id`
+			 * they chose: check they may consent for it before returning it.
+			 */
+			consent?: { referenceId?: string };
 		}) => Awaitable<string | undefined>;
 		/**
 		 * After login and before consent, request the user to
@@ -1294,6 +1343,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
 			/**
 			 * `true` when the user returns from `page` through `/oauth2/continue`.
 			 * The client chooses to send that request, so it does not prove a
@@ -1401,11 +1452,12 @@ export interface OAuthOptions<
 		requestedClaims: string[];
 	}) => Awaitable<Record<string, any>>;
 	/**
-	 * Asserts the `acr` and `amr` ID token claims for each approved
-	 * authorization request.
+	 * Asserts the `acr` and `amr` ID token claims for each authorization
+	 * request or interaction request, such as a device code or a CIBA
+	 * request, that the user approves on the provider's pages.
 	 *
-	 * Without this option, ID tokens carry `acr: "0"` (OIDC level 0) and no
-	 * `amr`.
+	 * Without this option, ID tokens issued after an approval on the
+	 * provider's pages carry `acr: "0"` (OIDC level 0) and no `amr`.
 	 */
 	authenticationContext?: OAuthAuthenticationContextOptions<Scopes>;
 	/**

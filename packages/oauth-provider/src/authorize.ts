@@ -41,6 +41,7 @@ import { authorizationQuerySchema, SafeUrlSchema } from "./types/zod";
 
 import {
 	clientAllowsGrant,
+	consentCovers,
 	findConsent,
 	getClient,
 	getConsentReferenceId,
@@ -460,8 +461,11 @@ export type AuthorizeEndpointSettings = {
 	isAuthorize?: boolean;
 	postLogin?: boolean;
 	isPostLoginContinuation?: boolean;
-	/** Set only by the consent endpoint, in the request where the user accepts. */
-	consentAccepted?: boolean;
+	/**
+	 * Set only by the consent endpoint, in the request where the user accepts:
+	 * the reference the consent was stored under.
+	 */
+	acceptedConsent?: { referenceId?: string };
 };
 
 export async function authorizeEndpoint(
@@ -932,6 +936,13 @@ async function runAuthorizationInteraction(
 		query = removeMaxAgeFromAuthorizationQuery(query);
 		ctx.query = query;
 	}
+	// Each hook gets its own copy of the query.
+	const hookContext = () => ({
+		user: session.user,
+		session: session.session,
+		scopes,
+		query: serializeAuthorizationQuery(query),
+	});
 
 	// Force account selection (eg. multi-session)
 	if (settings?.isAuthorize && promptSet?.has("select_account")) {
@@ -945,9 +956,7 @@ async function runAuthorizationInteraction(
 	) {
 		const selectedAccountRedirect = await opts.selectAccount.shouldRedirect({
 			headers,
-			user: session.user,
-			session: session.session,
-			scopes,
+			...hookContext(),
 		});
 		if (selectedAccountRedirect) {
 			if (promptNone) {
@@ -967,9 +976,7 @@ async function runAuthorizationInteraction(
 	if (opts.signup?.shouldRedirect) {
 		const signupRedirect = await opts.signup.shouldRedirect({
 			headers,
-			user: session.user,
-			session: session.session,
-			scopes,
+			...hookContext(),
 		});
 		if (signupRedirect) {
 			if (promptNone) {
@@ -990,9 +997,7 @@ async function runAuthorizationInteraction(
 	if (!settings?.postLogin && opts.postLogin) {
 		const postLoginRedirect = await opts.postLogin.shouldRedirect({
 			headers,
-			user: session.user,
-			session: session.session,
-			scopes,
+			...hookContext(),
 			isContinuation: settings?.isPostLoginContinuation ?? false,
 		});
 		if (postLoginRedirect) {
@@ -1013,18 +1018,16 @@ async function runAuthorizationInteraction(
 	// the request where the user accepts it, never from a resumed signed query.
 	if (
 		promptSet?.has("consent") ||
-		(request.requireConsent && !settings?.consentAccepted)
+		(request.requireConsent && !settings?.acceptedConsent)
 	) {
 		return redirectWithPromptCode(ctx, opts, "consent", {
 			sessionId: session.session.id,
 		});
 	}
 
-	const referenceId = await getConsentReferenceId(opts, {
-		user: session.user,
-		session: session.session,
-		scopes,
-	});
+	const referenceId = settings?.acceptedConsent
+		? settings.acceptedConsent.referenceId
+		: await getConsentReferenceId(opts, hookContext());
 	const approve = async () => {
 		let authenticationContext: OAuthAuthenticationContext;
 		try {
@@ -1089,32 +1092,12 @@ async function runAuthorizationInteraction(
 		referenceId,
 	);
 
+	// Prompt again whenever a requested scope, claim, or resource is not covered.
 	if (
 		!consent ||
-		!scopes.every((val) => consent.scopes.includes(val)) ||
+		!consentCovers(consent, scopes, resources) ||
 		!userInfoClaims.every((claim) =>
 			(consent.requestedUserInfoClaims ?? []).includes(claim),
-		)
-	) {
-		if (promptNone) {
-			return redirectWithAuthorizationError(
-				ctx,
-				opts,
-				query,
-				"consent_required",
-				"End-User consent is required",
-			);
-		}
-		return redirectWithPromptCode(ctx, opts, "consent", {
-			sessionId: session.session.id,
-		});
-	}
-
-	// Prompt again whenever a requested resource is not covered by stored consent.
-	const consentedResources = consent?.resources ?? [];
-	if (
-		resources.some(
-			(requestedResource) => !consentedResources.includes(requestedResource),
 		)
 	) {
 		if (promptNone) {
@@ -1134,7 +1117,7 @@ async function runAuthorizationInteraction(
 	return approve();
 }
 
-function serializeAuthorizationQuery(query: OAuthAuthorizationQuery) {
+function serializeAuthorizationQuery(query: OAuthInteractionQuery) {
 	const params = new URLSearchParams();
 	for (const [key, value] of Object.entries(query)) {
 		if (value == null) continue;

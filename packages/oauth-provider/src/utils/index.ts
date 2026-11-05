@@ -31,12 +31,6 @@ import type {
 	TokenEndpointAuthMethod,
 } from "../types";
 
-export {
-	getSignedQueryIssuedAt,
-	postLoginClearedParam,
-	signedQueryIssuedAtParam,
-} from "../signed-query";
-
 /**
  * Extracts the credentials from an `Authorization: Bearer <token>` header.
  *
@@ -588,20 +582,24 @@ export async function readFormParams(
  * key: a parameter sent without a value counts as omitted, and a parameter
  * sent more than once is rejected with `invalid_request`. A name in
  * `repeatable`, such as RFC 8707 `resource`, keeps every value as an array
- * when it repeats. A value a `before` hook replaced is left as the hook set it.
+ * when it repeats. With `repeatable: "all"`, every parameter keeps all its
+ * values, empty ones included, as the router does for a query string, and the
+ * endpoint's schema decides which may repeat. A value a `before` hook replaced
+ * is left as the hook set it.
  *
  * @internal
  */
 export function applyFormParams(
 	params: URLSearchParams,
 	body: Record<string, unknown>,
-	repeatable: readonly string[] = [],
+	repeatable: readonly string[] | "all" = [],
 ): Record<string, unknown> {
 	const merged = { ...body };
+	const keepAll = repeatable === "all";
 	for (const name of new Set(params.keys())) {
 		const raw = params.getAll(name);
-		const values = raw.filter(Boolean);
-		if (values.length > 1 && !repeatable.includes(name)) {
+		const values = keepAll ? raw : raw.filter(Boolean);
+		if (values.length > 1 && !keepAll && !repeatable.includes(name)) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description: `${name} must not be repeated`,
@@ -748,6 +746,51 @@ export function clientAllowsGrant(
 		return true;
 	}
 	return allowedGrants.includes(grantType);
+}
+
+/**
+ * Throws an OAuth error response (RFC 6749 §5.2).
+ *
+ * @internal
+ */
+export function tokenError(
+	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
+	error: string,
+	errorDescription: string,
+): never {
+	throw new APIError(status, {
+		error,
+		error_description: errorDescription,
+	});
+}
+
+/**
+ * Splits a space-delimited OAuth `scope` value (RFC 6749 §3.3).
+ *
+ * @internal
+ */
+export function parseScopes(scope: string | null | undefined): string[] {
+	const normalized = scope?.trim();
+	return normalized ? normalized.split(/\s+/) : [];
+}
+
+/**
+ * Whether a stored consent covers every requested scope and resource. Shared by
+ * authorization and grants that need prior consent, so the coverage rule cannot
+ * drift between them. Each caller still chooses which consent rows to check.
+ *
+ * @internal
+ */
+export function consentCovers(
+	consent: Pick<OAuthConsent<Scope[]>, "scopes" | "resources">,
+	scopes: readonly string[],
+	resources: readonly string[],
+): boolean {
+	const consentedResources = consent.resources ?? [];
+	return (
+		scopes.every((scope) => consent.scopes.includes(scope)) &&
+		resources.every((resource) => consentedResources.includes(resource))
+	);
 }
 
 /**

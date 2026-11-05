@@ -1,5 +1,40 @@
 # @better-auth/redis-storage
 
+## 1.8.0-beta.6
+
+## 1.8.0-beta.5
+
+## 1.8.0-beta.4
+
+## 1.8.0-beta.3
+
+## 1.8.0-beta.2
+
+## 1.8.0-beta.1
+
+## 1.8.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.8.0-beta.0
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
 ## 1.7.10
 
 ## 1.7.9

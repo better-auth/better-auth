@@ -68,7 +68,8 @@ export function SignInForm({
 				},
 				{
 					query: params ? Object.fromEntries(params.entries()) : undefined,
-					onSuccess() {
+					onSuccess(context) {
+						if (!context.data?.token) return;
 						toast.success("Successfully signed in");
 						onSuccess?.();
 					},

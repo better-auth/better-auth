@@ -11,6 +11,7 @@ let baseURL: string;
 
 test.beforeAll(async () => {
 	server = spawn("pnpm", ["run", "dev"], {
+		detached: process.platform !== "win32",
 		cwd: root,
 		stdio: "pipe",
 		env: { ...process.env, NO_COLOR: "1" },
@@ -28,7 +29,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-	if (server?.pid) await terminate(server.pid);
+	if (server) await terminate(server);
 });
 
 /**

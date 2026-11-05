@@ -1,0 +1,584 @@
+---
+icon: pluginsSSOReference
+sidebarTitle: "Reference"
+title: SSO reference
+description: SSO plugin options, provider configuration, endpoints, and database schema.
+---
+
+## Plugin options
+
+Pass these options to `sso()`. All of them are optional.
+
+### Users and accounts
+
+`resolveUser` <span className="opacity-70">`(input, context) => Awaitable<SSOUserResolution>`</span>
+
+Maps a verified provider identity to a user on every SSO sign-in. Return `continue`, `link`, or `reject`. Runs in a database transaction, so the adapter needs native transaction support. See [Resolve SSO users](/docs/plugins/sso/provisioning#resolve-sso-users).
+
+`provisionUser` <span className="opacity-70">`({ user, userInfo, token, provider }) => Awaitable<void>`</span>
+
+Runs after a new user and account are saved, before organization assignment. A thrown error fails the response, but the user stays created and the callback is not retried unless `provisionUserOnEveryLogin` is on. See [User provisioning](/docs/plugins/sso/provisioning#user-provisioning).
+
+`provisionUserOnEveryLogin` <span className="opacity-70">`boolean`</span>
+
+Runs `provisionUser` on every SSO sign-in, not only when it creates the user. Keep the callback idempotent. Defaults to `false`.
+
+`organizationProvisioning` <span className="opacity-70">`object`</span>
+
+Adds SSO users to the organization the provider is linked to. See [Organization provisioning](/docs/plugins/sso/provisioning#organization-provisioning).
+
+`defaultOverrideUserInfo` <span className="opacity-70">`boolean`</span>
+
+Sets `overrideUserInfo` on OIDC providers registered while this is on, even when the body passes `false`. Existing providers keep their stored value. Defaults to `false`.
+
+`disableImplicitSignUp` <span className="opacity-70">`boolean`</span>
+
+Stops SSO sign-in from creating new users. For OIDC, any caller can pass `requestSignUp: true` at sign-in to allow it. SAML ignores `requestSignUp`. Defaults to `false`. See [Sign in](/docs/plugins/sso#sign-in).
+
+`trustEmailVerified` <span className="opacity-70">`boolean`</span>
+
+**Deprecated.** Reads the provider's email verified flag through `mapping.emailVerified`. Otherwise every SSO user has `emailVerified: false`. Defaults to `false`.
+
+<Callout type="warn">
+  `trustEmailVerified` can lead to account takeover when users can register their own providers, because any provider can then assert a verified email. Use [domain verification](/docs/plugins/sso/domain-verification#enable-domain-verification) or `resolveUser` instead.
+</Callout>
+
+<Accordions>
+  <Accordion title="organizationProvisioning options">
+    `disabled` <span className="opacity-70">`boolean`</span>
+
+    Turns off organization assignment. Defaults to `false`.
+
+    `defaultRole` <span className="opacity-70">`"member" | "admin"`</span>
+
+    Role given to new members. Defaults to `"member"`.
+
+    `getRole` <span className="opacity-70">`({ user, userInfo, token, provider }) => Promise<"member" | "admin">`</span>
+
+    Picks the role per user. Takes precedence over `defaultRole`.
+  </Accordion>
+</Accordions>
+
+### Providers
+
+`defaultSSO` <span className="opacity-70">`array`</span>
+
+Providers defined in code. They are checked before the database, by `providerId` or by email domain at sign-in. With `domainVerification.enabled`, they count as verified without a DNS check. See [Configure providers in code](/docs/plugins/sso#configure-providers-in-code).
+
+`providersLimit` <span className="opacity-70">`number | (user) => Awaitable<number>`</span>
+
+Maximum providers each user can register. `0` disables registration. Any signed-in user can register by default. Defaults to `10`. See [Register a provider](/docs/plugins/sso#register-a-provider).
+
+`redirectURI` <span className="opacity-70">`string`</span>
+
+One OIDC callback for every provider, as a path or a full URL. See [Shared redirect URI](/docs/plugins/sso/oidc#shared-redirect-uri).
+
+`resolvePrivateKey` <span className="opacity-70">`({ providerId, keyId, issuer }) => Promise<{ privateKeyJwk?, privateKeyPem?, kid?, algorithm? }>`</span>
+
+Returns the signing key for `private_key_jwt`, so keys stay out of the database. Registering a `private_key_jwt` provider fails without it. See [Token endpoint authentication](/docs/plugins/sso/oidc#token-endpoint-authentication).
+
+`guardProviderMutation` <span className="opacity-70">`(input, context) => Awaitable<void>`</span>
+
+Runs before a stored provider is updated or deleted. Throw to reject the change, which returns a conflict. Needs native transaction support. See [Manage providers](/docs/plugins/sso#manage-providers).
+
+`domainVerification` <span className="opacity-70">`{ enabled?: boolean; tokenPrefix?: string }`</span>
+
+Requires DNS proof of domain ownership before a provider can sign users in. `tokenPrefix` defaults to `"better-auth-token"`. See [Domain verification](/docs/plugins/sso/domain-verification#enable-domain-verification).
+
+<Accordions>
+  <Accordion title="defaultSSO entry">
+    `providerId` <span className="opacity-70">`string`</span>
+
+    Required. A registered provider cannot reuse this id.
+
+    `domain` <span className="opacity-70">`string`</span>
+
+    Required. A bare email domain such as `example.com`, or several separated by commas.
+
+    `oidcConfig` <span className="opacity-70">`OIDCConfig`</span>
+
+    The stored OIDC shape. `issuer`, `discoveryEndpoint`, and `pkce` are required here. Set `allowIdpInitiated` here, because the API silently drops it.
+
+    `samlConfig` <span className="opacity-70">`SAMLConfig`</span>
+
+    The stored SAML shape. `issuer` is required here.
+
+    `privateKey` <span className="opacity-70">`{ privateKeyJwk?: JsonWebKey; privateKeyPem?: string }`</span>
+
+    Signing key for `private_key_jwt`. It is never stored in the database.
+  </Accordion>
+</Accordions>
+
+### SAML
+
+Set these under `saml`.
+
+`enableInResponseToValidation` <span className="opacity-70">`boolean`</span>
+
+Matches each response to a stored AuthnRequest. Turning it off accepts unsolicited responses for every provider. Defaults to `true`. See [InResponseTo validation](/docs/plugins/sso/saml-security#inresponseto-validation).
+
+`allowIdpInitiated` <span className="opacity-70">`boolean`</span>
+
+Accepts unsolicited responses. Applies only while InResponseTo validation is on. Defaults to `false`. See [IdP-initiated SSO](/docs/plugins/sso/saml#idp-initiated-sso).
+
+`requestTTL` <span className="opacity-70">`number`</span>
+
+Lifetime of an AuthnRequest record, in milliseconds. Defaults to `300000`.
+
+`clockSkew` <span className="opacity-70">`number`</span>
+
+Tolerance for assertion timestamps, in milliseconds. Defaults to `300000`. See [Timestamp validation](/docs/plugins/sso/saml-security#timestamp-validation).
+
+`requireTimestamps` <span className="opacity-70">`boolean`</span>
+
+Rejects assertions without `NotBefore` and `NotOnOrAfter`. Defaults to `false`.
+
+`algorithms` <span className="opacity-70">`object`</span>
+
+Rules for signature and encryption algorithms. See [Algorithm validation](/docs/plugins/sso/saml-security#algorithm-validation).
+
+`maxResponseSize` <span className="opacity-70">`number`</span>
+
+Largest accepted SAML response, in bytes. Defaults to `262144`. See [Size limits](/docs/plugins/sso/saml-security#size-limits).
+
+`maxMetadataSize` <span className="opacity-70">`number`</span>
+
+Largest accepted IdP or SP metadata XML, in bytes. Also enforced when a provider is saved. Defaults to `102400`.
+
+`idpInitiatedCallbackUrl` <span className="opacity-70">`string`</span>
+
+Fallback redirect for IdP-initiated responses when no provider callback applies. An absolute URL or a path starting with `/`. See [ACS and callback URLs](/docs/plugins/sso/saml#acs-and-callback-urls).
+
+`enableSingleLogout` <span className="opacity-70">`boolean`</span>
+
+Adds the Single Logout endpoints and advertises them in SP metadata. Defaults to `false`. See [Single Logout](/docs/plugins/sso/saml#single-logout).
+
+`logoutRequestTTL` <span className="opacity-70">`number`</span>
+
+Lifetime of a LogoutRequest record, in milliseconds. Defaults to `300000`.
+
+`wantLogoutRequestSigned` <span className="opacity-70">`boolean`</span>
+
+Requires signed LogoutRequests from the IdP. Defaults to `false`.
+
+`wantLogoutResponseSigned` <span className="opacity-70">`boolean`</span>
+
+Requires signed LogoutResponses from the IdP. Defaults to `false`.
+
+<Accordions>
+  <Accordion title="algorithms options">
+    `onDeprecated` <span className="opacity-70">`"reject" | "warn" | "allow"`</span>
+
+    What to do when a response or a saved provider uses SHA-1, RSA1\_5, or 3DES. Defaults to `"warn"`.
+
+    `allowedSignatureAlgorithms` <span className="opacity-70">`string[]`</span>
+
+    Signature algorithm URIs to accept, including in `samlConfig.signatureAlgorithm`. When set, it replaces the deprecated check for signatures.
+
+    `allowedDigestAlgorithms` <span className="opacity-70">`string[]`</span>
+
+    Digest algorithm URIs to accept, including in `samlConfig.digestAlgorithm`.
+
+    `allowedKeyEncryptionAlgorithms` <span className="opacity-70">`string[]`</span>
+
+    Accepts only these key encryption algorithm URIs for encrypted assertions.
+
+    `allowedDataEncryptionAlgorithms` <span className="opacity-70">`string[]`</span>
+
+    Accepts only these data encryption algorithm URIs for encrypted assertions.
+  </Accordion>
+</Accordions>
+
+### Schema options
+
+`schema.ssoProvider.modelName` <span className="opacity-70">`string`</span>
+
+Table name. Defaults to `"ssoProvider"`.
+
+`schema.ssoProvider.fields` <span className="opacity-70">`object`</span>
+
+Column names for built-in fields, including `domainVerified`.
+
+`schema.ssoProvider.additionalFields` <span className="opacity-70">`object`</span>
+
+Extra columns. See [Additional provider fields](#additional-provider-fields).
+
+`modelName` <span className="opacity-70">`string`</span>
+
+Same as `schema.ssoProvider.modelName`, and takes precedence over it.
+
+`fields` <span className="opacity-70">`object`</span>
+
+Same as `schema.ssoProvider.fields` without `domainVerified`, and takes precedence over it.
+
+## Provider configuration
+
+### Registration body
+
+The body of `POST /sso/register`. `POST /sso/update-provider` takes `providerId` plus optional `issuer`, `domain`, `oidcConfig`, `samlConfig`, and additional fields. See [Manage providers](/docs/plugins/sso#manage-providers).
+
+`providerId` <span className="opacity-70">`string`</span>
+
+Required and unique. The IDs of built-in providers, your configured social providers, `account.accountLinking.trustedProviders` entries, and `defaultSSO` entries are rejected with 422.
+
+`issuer` <span className="opacity-70">`string`</span>
+
+Required URL. The OIDC issuer, or the SAML SP entity ID.
+
+`domain` <span className="opacity-70">`string`</span>
+
+Required. A bare email domain, or several separated by commas.
+
+`organizationId` <span className="opacity-70">`string`</span>
+
+Links the provider to an organization. The caller must be a member, and an owner or admin when the organization plugin is enabled. See [Link a provider to an organization](/docs/plugins/sso/provisioning#link-a-provider-to-an-organization).
+
+`overrideUserInfo` <span className="opacity-70">`boolean`</span>
+
+OIDC only. On every sign-in, overwrites the user's name, email, image, and mapped additional fields with the provider's values. A changed email takes the provider's verified flag, which is `false` unless `trustEmailVerified` is on. Enable it only when the IdP controls its users' email addresses. Defaults to `defaultOverrideUserInfo`.
+
+`oidcConfig` <span className="opacity-70">`object`</span>
+
+OIDC settings. Pass this, `samlConfig`, or both.
+
+`samlConfig` <span className="opacity-70">`object`</span>
+
+SAML settings. Pass this, `oidcConfig`, or both.
+
+**Additional fields**
+
+Fields from `schema.ssoProvider.additionalFields`.
+
+### oidcConfig
+
+See [Register an OIDC provider](/docs/plugins/sso/oidc#register-an-oidc-provider).
+
+`clientId` <span className="opacity-70">`string`</span>
+
+Required.
+
+`clientSecret` <span className="opacity-70">`string`</span>
+
+Required for `client_secret_basic` and `client_secret_post`.
+
+`discoveryEndpoint` <span className="opacity-70">`string`</span>
+
+Discovery document URL. Defaults to `{issuer}/.well-known/openid-configuration`. See [OIDC discovery](/docs/plugins/sso/oidc#oidc-discovery).
+
+`skipDiscovery` <span className="opacity-70">`boolean`</span>
+
+Skips discovery at registration. Then pass `authorizationEndpoint`, `tokenEndpoint`, and `jwksEndpoint`. Defaults to `false`.
+
+`authorizationEndpoint` <span className="opacity-70">`string`</span>
+
+Authorization endpoint URL. Discovery fills it in when omitted.
+
+`tokenEndpoint` <span className="opacity-70">`string`</span>
+
+Token endpoint URL. Discovery fills it in when omitted.
+
+`userInfoEndpoint` <span className="opacity-70">`string`</span>
+
+UserInfo endpoint URL. Discovery fills it in when omitted.
+
+`jwksEndpoint` <span className="opacity-70">`string`</span>
+
+JWKS URL for ID Token verification. Discovery fills it in when omitted.
+
+`tokenEndpointAuthentication` <span className="opacity-70">`"client_secret_basic" | "client_secret_post" | "private_key_jwt"`</span>
+
+Client authentication at the token endpoint. When omitted, discovery picks it, falling back to `client_secret_basic`. See [Token endpoint authentication](/docs/plugins/sso/oidc#token-endpoint-authentication).
+
+`privateKeyId` <span className="opacity-70">`string`</span>
+
+Key id passed to `resolvePrivateKey` and sent as `kid`.
+
+`privateKeyAlgorithm` <span className="opacity-70">`string`</span>
+
+Signing algorithm for `private_key_jwt`. Defaults to `"RS256"`.
+
+`scopes` <span className="opacity-70">`string[]`</span>
+
+Scopes to request. Defaults to `["openid", "email", "profile", "offline_access"]`.
+
+`pkce` <span className="opacity-70">`boolean`</span>
+
+Sends a PKCE challenge ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636)). Defaults to `true`.
+
+`overrideUserInfo` <span className="opacity-70">`boolean`</span>
+
+Where the top-level `overrideUserInfo` is stored. Ignored at registration, where you set the top-level field. Set it here on update.
+
+`mapping` <span className="opacity-70">`object`</span>
+
+Claim names to read. See [Mapping](/docs/plugins/sso/oidc#mapping).
+
+`allowIdpInitiated` <span className="opacity-70">`boolean`</span>
+
+Accepts callbacks without `state`. Set it only on `defaultSSO` entries; registration and update silently drop it. Defaults to `false`. See [IdP-initiated sign-in](/docs/plugins/sso/oidc#idp-initiated-sign-in).
+
+<Accordions>
+  <Accordion title="oidcConfig.mapping">
+    `email` <span className="opacity-70">`string`</span>
+
+    Claim for the email. Defaults to `email`.
+
+    `emailVerified` <span className="opacity-70">`string`</span>
+
+    Claim for the verified flag. Defaults to `email_verified`. Read only when `trustEmailVerified` is `true`.
+
+    `name` <span className="opacity-70">`string`</span>
+
+    Claim for the name. Defaults to `name`.
+
+    `image` <span className="opacity-70">`string`</span>
+
+    Claim for the image. Defaults to `picture`.
+
+    `extraFields` <span className="opacity-70">`Record<string, string>`</span>
+
+    Maps user fields to claim names.
+  </Accordion>
+</Accordions>
+
+### samlConfig
+
+See [Register a SAML provider](/docs/plugins/sso/saml#register-a-saml-provider). On `defaultSSO` entries, `samlConfig.issuer` is also required.
+
+`entryPoint` <span className="opacity-70">`string`</span>
+
+Required URL. The IdP SSO URL. Ignored when `idpMetadata.metadata` is set.
+
+`cert` <span className="opacity-70">`string | string[]`</span>
+
+IdP signing certificates. Pass an array to rotate. Required unless `idpMetadata.metadata` or `idpMetadata.cert` is set. `idpMetadata.cert` takes precedence. See [Signing certificates and rotation](/docs/plugins/sso/saml#signing-certificates-and-rotation).
+
+`audience` <span className="opacity-70">`string`</span>
+
+Expected assertion audience. Defaults to the SP entity ID: the one in `spMetadata.metadata`, else `spMetadata.entityID`, else `issuer`.
+
+`callbackUrl` <span className="opacity-70">`string`</span>
+
+Where users land after an IdP-initiated or fallback sign-in. Not the ACS URL. See [ACS and callback URLs](/docs/plugins/sso/saml#acs-and-callback-urls).
+
+`idpInitiatedCallbackUrl` <span className="opacity-70">`string`</span>
+
+Fallback for IdP-initiated responses, as an absolute URL or a `/path`. Takes precedence over the plugin option. Pass `null` on update to clear it.
+
+`idpMetadata` <span className="opacity-70">`object`</span>
+
+Required. The IdP's metadata XML or its explicit settings.
+
+`spMetadata` <span className="opacity-70">`object`</span>
+
+Service provider settings. Generated when omitted. See [Service provider settings](/docs/plugins/sso/saml#service-provider-settings).
+
+`wantAssertionsSigned` <span className="opacity-70">`boolean`</span>
+
+Rejects unsigned assertions and advertises `WantAssertionsSigned` ([SAML Metadata §2.4.4](https://docs.oasis-open.org/security/saml/v2.0/saml-metadata-2.0-os.pdf)). Custom SP metadata cannot weaken it. Defaults to `false`. See [Signed assertions](/docs/plugins/sso/saml#signed-assertions).
+
+`authnRequestsSigned` <span className="opacity-70">`boolean`</span>
+
+Signs AuthnRequests. Sign-in returns 400 without a private key. Defaults to `false`. See [Signed AuthnRequests](/docs/plugins/sso/saml#signed-authnrequests).
+
+`signatureAlgorithm` <span className="opacity-70">`string`</span>
+
+Signature algorithm URI or short form such as `rsa-sha256`. Checked against `saml.algorithms` when the provider is saved.
+
+`digestAlgorithm` <span className="opacity-70">`string`</span>
+
+Digest algorithm URI or short form such as `sha256`. Checked against `saml.algorithms` when the provider is saved.
+
+`identifierFormat` <span className="opacity-70">`string`</span>
+
+NameID format advertised in generated SP metadata.
+
+`privateKey` <span className="opacity-70">`string`</span>
+
+SP signing key, used when `spMetadata.privateKey` is not set.
+
+`mapping` <span className="opacity-70">`object`</span>
+
+Attribute names to read. See [Attribute mapping](/docs/plugins/sso/saml#attribute-mapping).
+
+<Accordions>
+  <Accordion title="samlConfig.idpMetadata">
+    `metadata` <span className="opacity-70">`string`</span>
+
+    IdP metadata XML. Pass this or `entityID`. The XML supplies the entity ID, SSO URL, and certificates.
+
+    `entityID` <span className="opacity-70">`string`</span>
+
+    IdP entity ID. Required when `metadata` is not set.
+
+    `cert` <span className="opacity-70">`string | string[]`</span>
+
+    IdP signing certificates, used when `metadata` is not set. Takes precedence over `samlConfig.cert`.
+
+    `singleSignOnService` <span className="opacity-70">`{ Binding: string; Location: string }[]`</span>
+
+    SSO endpoints. Defaults to `entryPoint` with HTTP-Redirect.
+
+    `singleLogoutService` <span className="opacity-70">`{ Binding: string; Location: string }[]`</span>
+
+    SLO endpoints, used with `enableSingleLogout`.
+
+    `isAssertionEncrypted` <span className="opacity-70">`boolean`</span>
+
+    Set to `true` when the IdP encrypts assertions. This turns on decryption, which uses the `spMetadata` keys. See [Encrypted assertions](/docs/plugins/sso/saml#encrypted-assertions).
+
+    `encPrivateKey`, `encPrivateKeyPass`, `privateKey`, `privateKeyPass` <span className="opacity-70">`string`</span>
+
+    Passed to the IdP entity. Typical setups do not need them.
+  </Accordion>
+
+  <Accordion title="samlConfig.spMetadata">
+    `metadata` <span className="opacity-70">`string`</span>
+
+    Custom SP metadata XML. When omitted, metadata is generated from `issuer`, `wantAssertionsSigned`, `authnRequestsSigned`, and `identifierFormat`.
+
+    `entityID` <span className="opacity-70">`string`</span>
+
+    SP entity ID. Defaults to `issuer`.
+
+    `binding` <span className="opacity-70">`string`</span>
+
+    Accepted for compatibility. Not used: AuthnRequests use HTTP-Redirect and responses arrive by HTTP-POST.
+
+    `privateKey`, `privateKeyPass` <span className="opacity-70">`string`</span>
+
+    Key and passphrase that sign AuthnRequests.
+
+    `encPrivateKey`, `encPrivateKeyPass` <span className="opacity-70">`string`</span>
+
+    Key and passphrase that decrypt assertions when `idpMetadata.isAssertionEncrypted` is `true`. See [Encrypted assertions](/docs/plugins/sso/saml#encrypted-assertions).
+
+    `isAssertionEncrypted` <span className="opacity-70">`boolean`</span>
+
+    Accepted, but does not turn on decryption. Set `idpMetadata.isAssertionEncrypted` instead.
+  </Accordion>
+
+  <Accordion title="samlConfig.mapping">
+    `email` <span className="opacity-70">`string`</span>
+
+    Attribute for the email. Defaults to `email`, then the NameID.
+
+    `name` <span className="opacity-70">`string`</span>
+
+    Attribute for the name, read only when neither the first-name nor the last-name attribute is present. Defaults to `displayName`, then the NameID.
+
+    `firstName` <span className="opacity-70">`string`</span>
+
+    Attribute for the first name. Defaults to `givenName`.
+
+    `lastName` <span className="opacity-70">`string`</span>
+
+    Attribute for the last name. Defaults to `surname`.
+
+    `emailVerified` <span className="opacity-70">`string`</span>
+
+    Attribute for the verified flag. No default. Read only when `trustEmailVerified` is `true`.
+
+    `extraFields` <span className="opacity-70">`Record<string, string>`</span>
+
+    Maps user fields to attribute names.
+  </Accordion>
+</Accordions>
+
+## Endpoints
+
+Paths are relative to your auth base path, `/api/auth` by default.
+
+| Method       | Path                                 | Auth                 | Purpose                                                      |
+| ------------ | ------------------------------------ | -------------------- | ------------------------------------------------------------ |
+| `POST`       | `/sso/register`                      | Session              | Register a provider.                                         |
+| `POST`       | `/sign-in/sso`                       | None                 | Start an SSO sign-in.                                        |
+| `GET`        | `/sso/callback/:providerId`          | None                 | OIDC callback.                                               |
+| `GET`        | `/sso/callback`                      | None                 | Shared OIDC callback, used with `redirectURI`.               |
+| `GET` `POST` | `/sso/saml2/sp/acs/:providerId`      | IdP, no origin check | SAML Assertion Consumer Service.                             |
+| `GET`        | `/sso/saml2/sp/metadata?providerId=` | None                 | SP metadata as XML.                                          |
+| `GET` `POST` | `/sso/saml2/sp/slo/:providerId`      | IdP, no origin check | SAML Single Logout, with `enableSingleLogout`.               |
+| `POST`       | `/sso/saml2/logout/:providerId`      | Session              | Start SP-initiated Single Logout, with `enableSingleLogout`. |
+| `GET`        | `/sso/providers`                     | Session              | List the providers you can manage.                           |
+| `GET`        | `/sso/get-provider`                  | Session              | Get one provider by `providerId`.                            |
+| `POST`       | `/sso/update-provider`               | Session              | Update a provider.                                           |
+| `POST`       | `/sso/delete-provider`               | Session              | Delete a provider and its linked accounts.                   |
+| `POST`       | `/sso/request-domain-verification`   | Session              | Get a DNS verification token, with domain verification.      |
+| `POST`       | `/sso/verify-domain`                 | Session              | Check the DNS record, with domain verification.              |
+
+For error codes, see [Discovery errors](/docs/plugins/sso/oidc#discovery-errors) and [SAML security](/docs/plugins/sso/saml-security).
+
+## Additional provider fields
+
+Add columns to `ssoProvider` with `schema.ssoProvider.additionalFields`.
+
+```ts title="auth.ts"
+sso({
+  schema: {
+    ssoProvider: {
+      additionalFields: {
+        displayName: { type: "string", required: true }, // [!code highlight]
+      },
+    },
+  },
+});
+```
+
+Pass the field when you register or update a provider, for example `displayName: "Acme"`. Fields with `input: false` are rejected in requests, and fields with `returned: false` are left out of client types. Pass the same `schema` to `ssoClient()` so client types match.
+
+<Callout type="warn">
+  Startup throws when a field uses a built-in name (`id`, `issuer`, `oidcConfig`, `samlConfig`, `userId`, `providerId`, `organizationId`, `domain`, `domainVerified`) or a response name (`type`, `spMetadataUrl`, `redirectURI`, `domainVerificationToken`), or when its `fieldName` maps to a built-in column.
+</Callout>
+
+## Schema
+
+The plugin adds the `ssoProvider` table. Run `npx auth@latest generate` for the exact schema of your adapter.
+
+export const ssoProviderTableFields = [
+  { name: "id", type: "string", description: "Database ID of the provider", isPrimaryKey: true },
+  { name: "issuer", type: "string", description: "OIDC issuer or SAML SP entity ID" },
+  { name: "domain", type: "string", description: "Email domain, or several separated by commas" },
+  { name: "oidcConfig", type: "string", description: "OIDC configuration as a JSON string, including the client secret, unencrypted", isOptional: true },
+  { name: "samlConfig", type: "string", description: "SAML configuration as a JSON string, including private keys, unencrypted", isOptional: true },
+  { name: "userId", type: "string", description: "User who registered the provider", isForeignKey: true, references: { model: "user", field: "id" } },
+  { name: "providerId", type: "string", description: "Provider ID used at sign-in and in callback URLs", isUnique: true },
+  { name: "organizationId", type: "string", description: "Linked organization", isOptional: true },
+  { name: "domainVerified", type: "boolean", description: "Whether the domain is verified. Added when `domainVerification.enabled` is true.", isOptional: true },
+];
+
+<DatabaseTable name="ssoProvider" fields={ssoProviderTableFields} />
+
+### Verification records
+
+The plugin also writes short-lived records to the verification table, or to secondary storage when one is configured. `saml-used-assertion:` records always need the database; see [Assertion replay protection](/docs/plugins/sso/saml-security#assertion-replay-protection).
+
+| Identifier prefix             | Stores                                                |
+| ----------------------------- | ----------------------------------------------------- |
+| `saml-authn-request:`         | AuthnRequest IDs for InResponseTo validation          |
+| `saml-used-assertion:`        | Assertion IDs already consumed, for replay protection |
+| `saml-session:`               | NameID and SessionIndex for Single Logout             |
+| `saml-session-by-id:`         | Lookup from a session ID to its SAML session record   |
+| `saml-logout-request:`        | LogoutRequest IDs for SP-initiated Single Logout      |
+| `_{tokenPrefix}-{providerId}` | Domain verification tokens                            |
+
+Expired rows can be deleted.
+
+## Related
+
+<Cards>
+  <Card href="/docs/plugins/sso" title="SSO">
+    Install the plugin and register your first provider.
+  </Card>
+
+  <Card href="/docs/plugins/sso/oidc" title="OIDC">
+    Connect an OpenID Connect identity provider.
+  </Card>
+
+  <Card href="/docs/plugins/sso/saml" title="SAML">
+    Connect a SAML 2.0 identity provider.
+  </Card>
+
+  <Card href="/docs/plugins/sso/provisioning" title="Users and organizations">
+    Match, provision, and assign SSO users.
+  </Card>
+</Cards>

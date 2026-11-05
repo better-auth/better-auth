@@ -1,0 +1,852 @@
+---
+icon: pluginsOAuthProviderReference
+sidebarTitle: "Reference"
+title: OAuth Provider reference
+description: OAuth provider options, endpoints, errors, rate limits, extensions, and database schema.
+---
+
+## Plugin options
+
+Pass these options to `oauthProvider()`. Only `loginPage` and `consentPage` are required.
+
+### Sign-in flow
+
+`loginPage` <span className="opacity-70">`string`</span>
+
+Required. Page the authorize endpoint redirects to when the user must sign in. See [Login page](/docs/plugins/oauth-provider/sign-in-flow#login-page).
+
+`consentPage` <span className="opacity-70">`string`</span>
+
+Required. Page the authorize endpoint redirects to when the user must consent. See [Consent page](/docs/plugins/oauth-provider/sign-in-flow#consent-page).
+
+`signup` <span className="opacity-70">`object`</span>
+
+Settings for `prompt=create`. See [Sign-up account screen](/docs/plugins/oauth-provider/sign-in-flow#sign-up-account-screen).
+
+`selectAccount` <span className="opacity-70">`object`</span>
+
+Settings for `prompt=select_account`. See [Select account screen](/docs/plugins/oauth-provider/sign-in-flow#select-account-screen).
+
+`postLogin` <span className="opacity-70">`object`</span>
+
+A step between login and consent, such as choosing an organization. See [Post-login screen](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen).
+
+`allowPublicClientPrelogin` <span className="opacity-70">`boolean`</span>
+
+Lets `/oauth2/public-client-prelogin` answer before sign-in when the request carries a valid signed `oauth_query`. The signed query does not limit which `client_id` is read, so every enabled client's public fields, including `contacts`, become readable without an account. Defaults to `false`.
+
+<Accordions>
+  <Accordion title="signup options">
+    `page` <span className="opacity-70">`string`</span>
+
+    Sign-up page. Defaults to `loginPage`. When sign-up finishes, call `/oauth2/continue` with `created: true`.
+
+    `shouldRedirect` <span className="opacity-70">`(context) => Awaitable<boolean | string>`</span>
+
+    Adds registration steps for a signed-in user. Return `true` to redirect to `page`, a string to redirect to that page, or `false` to continue the flow. The context includes `query`, a copy of the validated authorization request.
+  </Accordion>
+
+  <Accordion title="selectAccount options">
+    `page` <span className="opacity-70">`string`</span>
+
+    Account selection page. Without it, `prompt=select_account` returns an error, and a `true` from `shouldRedirect` sends the user to `loginPage`. After selection, call `/oauth2/continue` with `selected: true`.
+
+    `shouldRedirect` <span className="opacity-70">`(context) => Awaitable<boolean>`</span>
+
+    Required. Return `true` when the user still has to pick an account. The context includes `query`, a copy of the validated authorization request.
+  </Accordion>
+
+  <Accordion title="postLogin options">
+    `page` <span className="opacity-70">`string`</span>
+
+    Required. Page to redirect to when `shouldRedirect` returns `true`.
+
+    `shouldRedirect` <span className="opacity-70">`(context) => Awaitable<boolean>`</span>
+
+    Required. Return `true` while a selection is still needed. The context includes `query`, a copy of the validated authorization request, and `isContinuation`, which is `true` when the user returns through `/oauth2/continue` with `postLogin: true`. The client chooses to send that request, so validate the session before returning `false`.
+
+    `consentReferenceId` <span className="opacity-70">`(context) => Awaitable<string | undefined>`</span>
+
+    Required. The reference that consent is stored under. `undefined` or `""` uses consent given without a reference. Throw here when the requested scopes need a reference and none is set. The context includes `query`, a copy of the validated authorization request. Once the user accepts, it also includes `consent`, whose `referenceId` is the `reference_id` the user chose on the consent page. Check that the user may consent for it before returning it. See [Organization from the request or the consent page](/docs/plugins/oauth-provider/sign-in-flow#organization-from-the-request-or-the-consent-page).
+  </Accordion>
+</Accordions>
+
+### Scopes and claims
+
+`scopes` <span className="opacity-70">`string[]`</span>
+
+Scopes clients may request. Without `openid`, the provider is OAuth only. Defaults to `["openid", "profile", "email", "offline_access"]`. See [Scopes](/docs/plugins/oauth-provider/tokens#scopes).
+
+`advertisedMetadata` <span className="opacity-70">`{ scopes_supported?, claims_supported? }`</span>
+
+Overrides what discovery advertises. Every `scopes_supported` value must be in `scopes`. See [Discovery metadata](/docs/plugins/oauth-provider/openid-connect#discovery-metadata).
+
+`customAccessTokenClaims` <span className="opacity-70">`(info) => Awaitable<Record<string, any>>`</span>
+
+Adds access token claims, also returned by introspection. See [Custom claims](/docs/plugins/oauth-provider/tokens#custom-claims).
+
+`customIdTokenClaims` <span className="opacity-70">`(info) => Awaitable<Record<string, any>>`</span>
+
+Adds ID token claims. Reserved names are stripped. See [ID token claims](/docs/plugins/oauth-provider/openid-connect#id-token-claims).
+
+`customUserInfoClaims` <span className="opacity-70">`(info) => Awaitable<Record<string, any>>`</span>
+
+Adds UserInfo claims. See [UserInfo](/docs/plugins/oauth-provider/openid-connect#userinfo).
+
+`authenticationContext` <span className="opacity-70">`{ acrValuesSupported, resolve }`</span>
+
+Asserts the `acr` and `amr` ID token claims for each authorization request or interaction request, such as a device code or a [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba) request, that the user approves on the provider's pages. `acrValuesSupported` lists the `acr` values the provider may issue, advertised as `acr_values_supported`. It must not be empty or contain an empty string, or the plugin fails at startup. `resolve` returns the `acr` and `amr` the current session established. It is not called for requests without the `openid` scope. Without this option, ID tokens from an approval on the provider's pages carry `acr: "0"` and no `amr`. An ID token from `completeCibaRequest`, or from `issueTokens` in a grant extension, carries the `acr` and `amr` you pass. Without an `acr`, it carries `"0"`. See [Authentication context](/docs/plugins/oauth-provider/openid-connect#authentication-context).
+
+`customTokenResponseFields` <span className="opacity-70">`(info) => Awaitable<Record<string, unknown>>`</span>
+
+Adds fields to the token response body. Standard fields cannot be overridden. See [Custom token response fields](/docs/plugins/oauth-provider/tokens#custom-token-response-fields).
+
+`pairwiseSecret` <span className="opacity-70">`string`</span>
+
+Enables pairwise `sub` values for clients with `subject_type: "pairwise"`. Must be at least 32 characters. See [Pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers).
+
+### Clients and registration
+
+`grantTypes` <span className="opacity-70">`GrantType[]`</span>
+
+Grants the token endpoint accepts. `refresh_token` requires `authorization_code`. Extension grants are added on top. Defaults to `["authorization_code", "client_credentials", "refresh_token"]`.
+
+`validateRedirectUri` <span className="opacity-70">`(uri, registeredUris, defaultResult) => Awaitable<boolean>`</span>
+
+Replaces exact redirect URI matching. See [Custom redirect URI validation](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).
+
+`cachedTrustedClients` <span className="opacity-70">`Set<string>`</span>
+
+Client IDs to cache. Cached clients cannot be changed through the CRUD endpoints. See [Trusted clients](/docs/plugins/oauth-provider/clients#trusted-clients).
+
+`clientPrivileges` <span className="opacity-70">`(context) => Awaitable<boolean | undefined>`</span>
+
+Authorizes client actions: `create`, `read`, `update`, `delete`, `list`, `rotate`, and `configure-client-credentials-scopes`. See [Client CRUD privileges](/docs/plugins/oauth-provider/clients#client-crud-privileges).
+
+`clientReference` <span className="opacity-70">`(context) => Awaitable<string | undefined>`</span>
+
+Returns the owner reference, such as an organization ID, for new clients. See [Organizations](/docs/plugins/oauth-provider/clients#organizations).
+
+`allowDynamicClientRegistration` <span className="opacity-70">`boolean`</span>
+
+Enables `POST /oauth2/register`. Defaults to `false`. See [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
+
+`allowUnauthenticatedClientRegistration` <span className="opacity-70">`boolean`</span>
+
+Accepts registration requests without a session. Defaults to `false`. Anyone on the internet can then register a client; read [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) before you enable it.
+
+`validateInitialAccessToken` <span className="opacity-70">`(context) => Awaitable<{ referenceId?, clientCredentialsScopes? } | false>`</span>
+
+Enables registration with an initial access token ([RFC 7591 §3](https://datatracker.ietf.org/doc/html/rfc7591#section-3)). `referenceId` sets the client's owner. `clientCredentialsScopes` sets the client's scope ceiling for `client_credentials` and defaults to `[]`. See [Dynamic client registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration).
+
+`clientRegistrationDefaultScopes` <span className="opacity-70">`string[]`</span>
+
+Scopes stored on every dynamically registered client. Defaults to `scopes`, so registered clients get every scope your server defines. Narrow it when you enable open registration.
+
+`clientRegistrationAllowedScopes` <span className="opacity-70">`string[]`</span>
+
+Extra scopes a registration may ask for. Every value must be in `scopes`. Defaults to `[]`.
+
+`clientRegistrationRequirePKCE` <span className="opacity-70">`boolean`</span>
+
+Whether dynamically registered confidential clients require PKCE. Defaults to `true`. `false` removes the protection against intercepted and injected codes for every such client, including anonymous ones. See [PKCE](/docs/plugins/oauth-provider/tokens#pkce).
+
+`clientRegistrationDefaultApplicationType` <span className="opacity-70">`"web" | "native" | "infer"`</span>
+
+`application_type` used when a registration omits it. Defaults to `"web"`.
+
+`clientRegistrationClientSecretExpiration` <span className="opacity-70">`number | string | Date`</span>
+
+The `client_secret_expires_at` value returned to dynamically registered clients that receive a secret. A string such as `"30d"` is a duration from registration. A number (Unix seconds) or a `Date` is a fixed time. After that time, the secret is rejected with `invalid_client`. Defaults to no expiry.
+
+`clientRegistrationDefaultResources` <span className="opacity-70">`string[]`</span>
+
+Resources linked to every new client, including CIMD, anonymously registered, and admin-created clients. Each must be in `resources`. Every client that can register can then get tokens for these APIs.
+
+`clientRegistrationAllowedResources` <span className="opacity-70">`string[]`</span>
+
+Resources a registration may request. Each must be in `resources`. When both resource options are omitted, requested resources are rejected.
+
+`assertionMaxLifetime` <span className="opacity-70">`number`</span>
+
+Maximum lifetime in seconds of a `private_key_jwt` assertion. Defaults to `300`. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt).
+
+`allowClientKeyRotation` <span className="opacity-70">`boolean`</span>
+
+Enables `POST /oauth2/client/rotate-keys`. Startup fails on the memory adapter or with `advanced.database.generateId: "serial"`, which cannot keep assertions single-use. Defaults to `false`. See [Rotating client keys](/docs/plugins/oauth-provider/clients#rotating-client-keys).
+
+### Resources
+
+`resources` <span className="opacity-70">`Array<string | OAuthResourceInput>`</span>
+
+Protected resources seeded into `oauthResource` at startup. See [Resources](/docs/plugins/oauth-provider/tokens#resources).
+
+`resourceSeedMode` <span className="opacity-70">`"insertOnly" | "merge" | "overwrite"`</span>
+
+How seeding treats existing rows: skip them, update only the configured fields, or replace them. Defaults to `"insertOnly"`.
+
+`enforcePerClientResources` <span className="opacity-70">`boolean`</span>
+
+Requires a client to be linked to every `resource` it requests ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). Defaults to `true`. `false` lets any client, including self-registered ones, get tokens for every enabled resource.
+
+`cachedResources` <span className="opacity-70">`Set<string>`</span>
+
+Resource identifiers to cache. Writes through the admin endpoints invalidate the cache.
+
+`identifierValidator` <span className="opacity-70">`(identifier) => Awaitable<boolean>`</span>
+
+Validates identifiers created through the admin endpoints or registration. The default requires an absolute URI without a fragment ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)).
+
+`resourcePrivileges` <span className="opacity-70">`(context) => Awaitable<boolean | undefined>`</span>
+
+Authorizes resource actions: `create`, `read`, `update`, `delete`, `list`, `link`, and `unlink`.
+
+<Callout type="warn">
+  Without `resourcePrivileges`, any signed-in user whose headers reach the admin resource endpoints can manage resources. Define it before calling those endpoints from a route.
+</Callout>
+
+### Tokens
+
+`accessTokenExpiresIn` <span className="opacity-70">`number`</span>
+
+Access token lifetime in seconds. Defaults to `3600`. See [Lifetimes](/docs/plugins/oauth-provider/tokens#lifetimes).
+
+`m2mAccessTokenExpiresIn` <span className="opacity-70">`number`</span>
+
+Lifetime in seconds of `client_credentials` access tokens. Defaults to `3600`.
+
+`idTokenExpiresIn` <span className="opacity-70">`number`</span>
+
+ID token lifetime in seconds. Defaults to `36000`.
+
+`refreshTokenExpiresIn` <span className="opacity-70">`number`</span>
+
+Refresh token lifetime in seconds. Defaults to `2592000`. Each refresh starts a new window, so a regularly used grant does not expire.
+
+`codeExpiresIn` <span className="opacity-70">`number`</span>
+
+Authorization code lifetime in seconds. Defaults to `600`.
+
+`scopeExpirations` <span className="opacity-70">`Record<scope, number | string | Date>`</span>
+
+Shorter access token lifetimes per scope. The earliest expiry wins.
+
+`refreshTokenReuseInterval` <span className="opacity-70">`number`</span>
+
+Seconds a rotated refresh token can replay the same response. Defaults to `0`. See [Refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens).
+
+`formatRefreshToken` <span className="opacity-70">`{ encrypt, decrypt }`</span>
+
+Custom refresh token encoding sent to clients.
+
+`disableJwtPlugin` <span className="opacity-70">`boolean`</span>
+
+Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Without the JWT plugin](/docs/plugins/oauth-provider/tokens#without-the-jwt-plugin).
+
+`dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms? }`</span>
+
+DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
+
+`requestUriResolver` <span className="opacity-70">`(input) => Promise<Record<string, string> | null>`</span>
+
+Resolves a `request_uri` at the authorize endpoint for pushed authorization requests ([RFC 9126 §4](https://datatracker.ietf.org/doc/html/rfc9126#section-4)). Return `null` for an unknown or expired URI.
+
+### Storage and generation
+
+`storeClientSecret` <span className="opacity-70">`"hashed" | "encrypted" | { hash, verify? } | { encrypt, decrypt }`</span>
+
+How client secrets are stored. Hashing requires the JWT plugin; encryption requires `disableJwtPlugin`. Defaults to `"hashed"`, or `"encrypted"` with `disableJwtPlugin`. See [Storage](/docs/plugins/oauth-provider/tokens#storage).
+
+`storeTokens` <span className="opacity-70">`"hashed" | { hash }`</span>
+
+How opaque access tokens and refresh tokens are stored. Defaults to `"hashed"`.
+
+`prefix` <span className="opacity-70">`{ opaqueAccessToken?, refreshToken?, clientSecret? }`</span>
+
+Prefixes added to returned values and not stored. Set them before your first deployment; after that, add the prefix in the matching `generate*` function instead.
+
+`generateClientId` <span className="opacity-70">`() => string`</span>
+
+Generates client IDs. Defaults to 32 random letters.
+
+`generateClientSecret` <span className="opacity-70">`() => string`</span>
+
+Generates client secrets. Defaults to 32 random letters.
+
+`generateOpaqueAccessToken` <span className="opacity-70">`() => Awaitable<string>`</span>
+
+Generates opaque access tokens. Defaults to 32 random letters.
+
+`generateRefreshToken` <span className="opacity-70">`() => Awaitable<string>`</span>
+
+Generates refresh tokens. Defaults to 32 random letters.
+
+### Other
+
+`rateLimit` <span className="opacity-70">`object`</span>
+
+Per-endpoint rate limits. For the defaults, see [Rate limits](#rate-limits).
+
+`extensions` <span className="opacity-70">`OAuthProviderExtension[]`</span>
+
+Companion extensions. Plugins usually call `extendOAuthProvider()` instead. See [Provider extensions](#provider-extensions).
+
+`schema` <span className="opacity-70">`object`</span>
+
+Custom model and field names for the plugin tables.
+
+## Endpoints
+
+Paths are relative to your auth base path. Each entry lists the HTTP methods, the server method on `auth.api`, and how the endpoint authenticates. A server-only endpoint is callable through `auth.api` only. Every other endpoint is also reachable over HTTP.
+
+`/.well-known/oauth-authorization-server` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthServerConfig`, which is server-only. Auth: none. The auth handler also serves the document over HTTP at its issuer-relative path ([RFC 8414 §3](https://datatracker.ietf.org/doc/html/rfc8414#section-3)). See [Expose the well-known metadata](/docs/plugins/oauth-provider#expose-the-well-known-metadata).
+
+`/.well-known/openid-configuration` <span className="opacity-70">GET</span>
+
+Server method: `getOpenIdConfig`, which is server-only. Auth: none. When `scopes` includes `openid`, the auth handler also serves the document over HTTP at its issuer-relative path.
+
+`/oauth2/authorize` <span className="opacity-70">GET, POST</span>
+
+Server method: `oauth2Authorize`. Auth: session, or a redirect to `loginPage`.
+
+`/oauth2/consent` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Consent`. Auth: session and signed `oauth_query`.
+
+`/oauth2/continue` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Continue`. Auth: session and signed `oauth_query`.
+
+`/oauth2/token` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Token`. Auth: client authentication.
+
+`/oauth2/introspect` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Introspect`. Auth: client authentication.
+
+`/oauth2/revoke` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Revoke`. Auth: client authentication.
+
+`/oauth2/userinfo` <span className="opacity-70">GET, POST</span>
+
+Server method: `oauth2UserInfo`. Auth: access token with the `openid` scope.
+
+`/oauth2/end-session` <span className="opacity-70">GET, POST</span>
+
+Server method: `oauth2EndSession`. Auth: `id_token_hint`, or user confirmation.
+
+`/oauth2/end-session/confirm` <span className="opacity-70">POST</span>
+
+No server method. Auth: signed confirmation cookie. HTTP only.
+
+`/oauth2/register` <span className="opacity-70">POST</span>
+
+Server method: `registerOAuthClient`. Auth: session, initial access token, or none.
+
+`/admin/oauth2/create-client` <span className="opacity-70">POST</span>
+
+Server method: `adminCreateOAuthClient`. Auth: server call with a session. Server-only.
+
+`/admin/oauth2/update-client` <span className="opacity-70">PATCH</span>
+
+Server method: `adminUpdateOAuthClient`. Auth: server call with a session. Server-only.
+
+`/oauth2/create-client` <span className="opacity-70">POST</span>
+
+Server method: `createOAuthClient`. Auth: session.
+
+`/oauth2/get-client` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthClient`. Auth: session.
+
+`/oauth2/public-client` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthClientPublic`. Auth: session.
+
+`/oauth2/public-client-prelogin` <span className="opacity-70">POST</span>
+
+Server method: `getOAuthClientPublicPrelogin`. Auth: signed `oauth_query`. The endpoint requires `allowPublicClientPrelogin`.
+
+`/oauth2/get-clients` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthClients`. Auth: session.
+
+`/oauth2/update-client` <span className="opacity-70">POST</span>
+
+Server method: `updateOAuthClient`. Auth: session.
+
+`/oauth2/client/rotate-secret` <span className="opacity-70">POST</span>
+
+Server method: `rotateClientSecret`. Auth: session.
+
+`/oauth2/client/rotate-keys` <span className="opacity-70">POST</span>
+
+Server method: `rotateClientKeys`. Auth: client assertion.
+
+`/oauth2/delete-client` <span className="opacity-70">POST</span>
+
+Server method: `deleteOAuthClient`. Auth: session.
+
+`/oauth2/get-consent` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthConsent`. Auth: session.
+
+`/oauth2/get-consents` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthConsents`. Auth: session.
+
+`/oauth2/update-consent` <span className="opacity-70">POST</span>
+
+Server method: `updateOAuthConsent`. Auth: session.
+
+`/oauth2/delete-consent` <span className="opacity-70">POST</span>
+
+Server method: `deleteOAuthConsent`. Auth: session.
+
+`/admin/oauth2/resources` <span className="opacity-70">POST</span>
+
+Server method: `adminCreateOAuthResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources` <span className="opacity-70">GET</span>
+
+Server method: `adminListOAuthResources`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier` <span className="opacity-70">GET</span>
+
+Server method: `adminGetOAuthResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier` <span className="opacity-70">PATCH</span>
+
+Server method: `adminUpdateOAuthResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier` <span className="opacity-70">DELETE</span>
+
+Server method: `adminDeleteOAuthResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier/clients/:client_id` <span className="opacity-70">POST</span>
+
+Server method: `adminLinkClientResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier/clients/:client_id` <span className="opacity-70">DELETE</span>
+
+Server method: `adminUnlinkClientResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+In the browser, `oauthProviderClient()` adds the signed `oauth_query` from the page URL to POST requests. `/oauth2/register` rejects requests unless `allowDynamicClientRegistration` is on, and `/oauth2/client/rotate-keys` unless `allowClientKeyRotation` is on.
+
+Some endpoints behave differently with other plugins or requests:
+
+* With `oauthDeviceAuthorization()`, `/oauth2/authorize` also accepts `user_code` instead of an authorization request. The user approves the device code on the same pages. See [Device code grant](/docs/plugins/oauth-provider/tokens#device-code-grant).
+* With [`ciba()`](/docs/plugins/ciba), `/oauth2/authorize` also accepts `ciba_request_id`. The user approves the backchannel request on the same pages. See [What the user sees](/docs/plugins/ciba#what-the-user-sees).
+* During a browser navigation, `/oauth2/end-session` can return the [front-channel logout](/docs/plugins/oauth-provider/openid-connect#front-channel-logout) page.
+* `/oauth2/token`, `/oauth2/introspect`, and `/oauth2/revoke` return 400 `invalid_request` for a parameter sent more than once. At the token endpoint, only `resource` and `audience` may repeat.
+
+## Token errors
+
+Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) format. The built-in grants authenticate the client before they look up the grant, so an unknown `client_id` returns `invalid_client`, not `invalid_grant`.
+
+`invalid_request` <span className="opacity-70">400</span>
+
+Returned when a required request field is missing or malformed, or a parameter is sent more than once. Only `resource` and `audience` may repeat.
+
+`invalid_client` <span className="opacity-70">400</span>
+
+Returned in any of these cases:
+
+* Client authentication fails.
+* The client uses a method other than its registered `token_endpoint_auth_method`.
+
+`invalid_client` <span className="opacity-70">401</span>
+
+Returned when `client_secret_basic` authentication fails. The response carries a `WWW-Authenticate: Basic` challenge.
+
+`invalid_grant` <span className="opacity-70">400</span>
+
+Returned when the code, refresh token, or PKCE verifier is invalid, expired, or issued to another client.
+
+`invalid_user` <span className="opacity-70">400</span>
+
+Returned when the user who approved an authorization code was deleted before the code was exchanged.
+
+`unauthorized_client` <span className="opacity-70">400</span>
+
+Returned in any of these cases:
+
+* The client is not registered for the grant.
+* A public client uses `client_credentials`.
+* The client has no `client_credentials` scopes.
+
+`unsupported_grant_type` <span className="opacity-70">400</span>
+
+Returned when the grant is not in `grantTypes` and no extension handles it.
+
+`invalid_scope` <span className="opacity-70">400</span>
+
+Returned in any of these cases:
+
+* A requested scope is not allowed for the client.
+* No scope is allowed for a requested resource.
+
+`invalid_target` <span className="opacity-70">400</span>
+
+Returned in any of these cases:
+
+* A `resource` is malformed, unknown, or disabled.
+* A `resource` is not linked to the client while `enforcePerClientResources` is on.
+
+`invalid_dpop_proof` <span className="opacity-70">400</span>
+
+Returned when the DPoP proof is missing or invalid for a DPoP-bound client or resource.
+
+Token exchange has its own conditions for these errors. See [Token exchange errors](/docs/plugins/oauth-provider/tokens#token-exchange-errors).
+
+When `adminCreateOAuthClient` links resources, an invalid identifier fails validation with `VALIDATION_ERROR`, an unknown or disabled resource returns `invalid_target`, and a `resourcePrivileges` denial returns `401`. The call creates nothing in each case.
+
+## Rate limits
+
+Limits apply per IP and per endpoint, and only when Better Auth [rate limiting](/docs/concepts/rate-limit) is enabled, which by default is production only.
+
+| Option key         | Endpoint                     | Window | Max |
+| ------------------ | ---------------------------- | ------ | --- |
+| `token`            | `/oauth2/token`              | 60s    | 20  |
+| `authorize`        | `/oauth2/authorize`          | 60s    | 30  |
+| `introspect`       | `/oauth2/introspect`         | 60s    | 100 |
+| `revoke`           | `/oauth2/revoke`             | 60s    | 30  |
+| `register`         | `/oauth2/register`           | 60s    | 5   |
+| `rotateClientKeys` | `/oauth2/client/rotate-keys` | 60s    | 5   |
+| `userinfo`         | `/oauth2/userinfo`           | 60s    | 60  |
+
+Override a limit with `{ window, max }`, or set it to `false` to fall back to the global limits:
+
+```ts title="auth.ts"
+oauthProvider({
+  rateLimit: {
+    token: { window: 60, max: 50 },
+    introspect: false,
+  },
+})
+```
+
+## Provider extensions
+
+Companion plugins call `extendOAuthProvider()` from their `init()` hook to add token grants, assertion-based client authentication, discovery metadata, claims, client registration metadata, client-id discovery, and interaction requests. The [CIMD plugin](/docs/plugins/cimd) uses this to add URL-based client discovery.
+
+An interaction request is a request other than an authorization request that the user approves through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages. It is approved when the user accepts consent, instead of issuing an authorization code. `oauthDeviceAuthorization()` uses one keyed by `user_code`, and `ciba()` one keyed by `ciba_request_id`.
+
+Add companion plugins such as `oauthDeviceAuthorization()` and `oauthTokenExchange()` to every `betterAuth()` instance that registers OAuth clients, including a separate admin or provisioning instance. An instance without the plugin does not support its extension grant:
+
+* `createOAuthClient`, `adminCreateOAuthClient`, and client updates reject the grant with `invalid_client_metadata`.
+* Dynamic registration drops the grant and registers the client with its other supported grants. It fails with `invalid_client_metadata` only when no supported grant remains.
+* A client metadata document keeps the grant, and the token endpoint refuses it with `unsupported_grant_type`. The document fails with `invalid_client_metadata` only when it lists no supported grant.
+
+```ts title="custom-oauth-extension.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { extendOAuthProvider } from "@better-auth/oauth-provider";
+
+export const customOAuthExtension = () =>
+  ({
+    id: "custom-oauth-extension",
+    init(ctx) {
+      extendOAuthProvider(ctx, {
+        grants: {
+          "urn:example:params:oauth:grant-type:custom": async ({ provider }) => {
+            const scopes = ["openid"];
+            // Passing the scopes checks them against the client's registered
+            // scopes. Without them, the call only authenticates the client.
+            const { client } = await provider.authenticateClient({ scopes });
+            return provider.issueTokens({ client, scopes });
+          },
+        },
+        metadata: () => ({ custom_grant_supported: true }),
+      });
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+* `grants`, `clientAuthentication`, and `interactionRequests` must not overlap across extensions. A duplicate grant type, auth method, assertion type, or interaction parameter fails at startup. Extension grants and auth methods are advertised in discovery.
+* `metadata` and `claims` only add keys. A key the provider owns is kept, and a key two extensions contribute resolves to the first one registered. To advertise extension claims, set `advertisedMetadata.claims_supported`.
+* A `clientDiscovery` entry has a stable `id` stored as client provenance. Changing it requires migrating the owned clients, and removing it makes them fail closed.
+
+A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
+
+<Callout type="warn">
+  `issueTokens` applies the provider's resource policy. Each resource must be registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default). Each resource's `allowedScopes` also applies. It does not re-check anything else it is given. Validate the user, the client's registered scopes, and any grant-specific policy in your handler before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
+</Callout>
+
+When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to check that client credentials are not repeated or combined across authentication methods. The endpoint must therefore keep a readable request after parsing the form.
+
+To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens` or return it from a `clientAuthentication` strategy. Claim contributors cannot set `cnf`.
+
+A grant that consumes a one-time credential, such as a device code, should resolve the binding before it claims the credential. `provider.resolveConfirmation({ client, scopes, resources, confirmation })` returns the confirmation the client proved at authentication. Without one, it verifies the request's DPoP proof by the same rules `issueTokens` applies. Pass the result to `issueTokens` as `confirmation`. A rejected proof then fails before the credential is consumed, so the client can retry with a valid one.
+
+### Client registration metadata
+
+An extension that defines its own client registration fields, such as CIBA's `backchannel_token_delivery_mode`, declares them in `clientMetadata`. The provider stores the fields in the client's `metadata`. `validate` runs whenever a client is registered through `/oauth2/register` or a client metadata document, or an admin creates or updates it. A bad value is therefore rejected with `invalid_client_metadata` at registration, not when the client first uses it.
+
+```ts
+extendOAuthProvider(ctx, {
+  clientMetadata: {
+    fields: ["example_mode"],
+    validate: ({ metadata }) => {
+      if (metadata.example_mode !== undefined && metadata.example_mode !== "ok") {
+        throw new APIError("BAD_REQUEST", {
+          error: "invalid_client_metadata",
+          error_description: "example_mode must be ok",
+        });
+      }
+    },
+  },
+});
+```
+
+Dynamic registration ignores top-level fields it does not recognize ([RFC 7591 §2](https://datatracker.ietf.org/doc/html/rfc7591#section-2)). Fields an extension declares are the exception:
+
+* A registrant sends them as top-level fields, and the provider stores them in `metadata`. A registrant cannot set any other `metadata` key.
+* An admin sets the same fields inside `metadata`.
+* A [client metadata document](/docs/plugins/cimd) carries them as top-level members of the document. The document owns those fields: each refresh replaces them in `metadata`, removing any it no longer declares, and keeps other `metadata` keys, such as ones an admin set.
+
+An extension cannot declare a core client field such as `redirect_uris`, or a server-owned field such as `disabled`, `reference_id`, or `client_credentials_scopes`. The provider rejects these at setup. `validate` receives the core registration metadata after defaults as `client`, and the client's `metadata`. Read extension fields from `metadata`.
+
+### Client authentication obligations
+
+A `clientAuthentication` strategy proves which client sent the assertion and returns its `clientId`. The provider loads and authorizes the client record itself. After verifying the signature, the strategy must bind the audience, bound the lifetime, and reject replayed `jti` values ([RFC 7523 §3](https://datatracker.ietf.org/doc/html/rfc7523#section-3)). `consumeClientAssertion` performs all three:
+
+```ts
+import { consumeClientAssertion } from "@better-auth/oauth-provider";
+import { APIError } from "better-auth/api";
+
+authenticate: async ({ ctx, opts, assertion, expectedAudience }) => {
+  if (!expectedAudience) throw new APIError("BAD_REQUEST", { error: "invalid_client" });
+  const payload = await verifyAssertionSignature(assertion); // your key source
+  await consumeClientAssertion(ctx, opts, {
+    namespace: `urn:example:attestation:${payload.sub}`,
+    payload,
+    expectedAudience,
+  });
+  return { clientId: payload.sub };
+};
+```
+
+### Claim precedence
+
+Extension claims only add claim names. Your own callbacks can override profile claims. The provider always owns identity, lifetime, binding, and authentication-context claims.
+
+| Token        | Order, lowest to highest authority                                                                                                                            | Owned by the provider                                                                                                                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access token | extension `claims.accessToken` \< per-issuance `accessTokenClaims` \< `customAccessTokenClaims` \< per-resource `customClaims`                                | `iss`, `sub`, `aud`, `exp`, `iat`, `jti`, `client_id`, `scope`, `auth_time`, `acr`, `amr`, `cnf`, `reference_id`, stripped before signing. The provider also sets `azp` and `sid` after contributed claims. |
+| ID token     | subject and authentication claims \< `customIdTokenClaims`. Extension and per-issuance `idTokenClaims` only add names and cannot set profile or email claims. | `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`                                                                            |
+| UserInfo     | scope and `claims.userinfo` claims \< extension `claims.userInfo` (add only) \< `customUserInfoClaims`                                                        | `sub`, applied last                                                                                                                                                                                         |
+
+Per-issuance `accessTokenClaims` are signed into JWT access tokens, so introspecting a JWT access token returns them. An opaque access token stores no per-issuance claims, so introspecting it does not return them. A claim that introspection of an opaque token must return belongs in a `claims.accessToken` contributor that does not depend on the grant type.
+
+## Schema
+
+The plugin adds the following tables. Run `npx auth generate` for the exact schema of your adapter.
+
+### OAuth Client
+
+Table Name: `oauthClient`
+
+export const oauthClientTableFields = [
+  { name: "id", type: "string", description: "Database ID of the client", isPrimaryKey: true },
+  { name: "clientId", type: "string", description: "Public client identifier", isUnique: true },
+  { name: "clientSecret", type: "string", description: "Hashed or encrypted secret. Absent for public clients.", isOptional: true },
+  { name: "clientDiscoveryId", type: "string", description: "ID of the client discovery that owns this client, such as `cimd`", isOptional: true },
+  { name: "disabled", type: "boolean", description: "Whether the client is disabled. Defaults to `false`.", isOptional: true },
+  { name: "skipConsent", type: "boolean", description: "Whether the consent screen is skipped", isOptional: true },
+  { name: "enableEndSession", type: "boolean", description: "Whether the client can use `/oauth2/end-session`", isOptional: true },
+  { name: "subjectType", type: "string", description: "`public` or `pairwise`", isOptional: true },
+  { name: "sectorIdentifier", type: "string", description: "Pairwise sector the server assigns when the client is created. Empty for clients created before sectors were stored, which use the host of their first redirect URI.", isOptional: true },
+  { name: "scopes", type: "string[]", description: "Scopes the client may request for users", isOptional: true },
+  { name: "clientCredentialsScopes", type: "string[]", description: "Scopes allowed for `client_credentials`. Empty denies the grant.", isOptional: true },
+  { name: "userId", type: "string", description: "Owning user", isOptional: true, isForeignKey: true, references: { model: "user", field: "id" } },
+  { name: "referenceId", type: "string", description: "Owning reference when the owner is not a user", isOptional: true },
+  { name: "createdAt", type: "Date", description: "Creation time", isOptional: true },
+  { name: "updatedAt", type: "Date", description: "Last update time", isOptional: true },
+  { name: "expiresAt", type: "Date", description: "When the client secret expires. Empty means it never expires.", isOptional: true },
+  { name: "name", type: "string", description: "Display name", isOptional: true },
+  { name: "uri", type: "string", description: "Client website", isOptional: true },
+  { name: "icon", type: "string", description: "Logo URI", isOptional: true },
+  { name: "contacts", type: "string[]", description: "Contact addresses", isOptional: true },
+  { name: "tos", type: "string", description: "Terms of service URI", isOptional: true },
+  { name: "policy", type: "string", description: "Privacy policy URI", isOptional: true },
+  { name: "softwareId", type: "string", description: "Software identifier, stable across versions", isOptional: true },
+  { name: "softwareVersion", type: "string", description: "Software version", isOptional: true },
+  { name: "softwareStatement", type: "string", description: "Signed software statement JWT", isOptional: true },
+  { name: "redirectUris", type: "string[]", description: "Registered redirect URIs" },
+  { name: "postLogoutRedirectUris", type: "string[]", description: "Registered post-logout redirect URIs", isOptional: true },
+  { name: "backchannelLogoutUri", type: "string", description: "URI that receives logout tokens", isOptional: true },
+  { name: "backchannelLogoutSessionRequired", type: "boolean", description: "Whether every logout token must carry `sid`", isOptional: true },
+  { name: "frontchannelLogoutUri", type: "string", description: "URI loaded in a hidden iframe on the logout page when the user's session ends", isOptional: true },
+  { name: "frontchannelLogoutSessionRequired", type: "boolean", description: "Whether the client requires `iss` and `sid` on its front-channel logout URI. Stored for registration round-trips, because Better Auth always sends both.", isOptional: true },
+  { name: "tokenEndpointAuthMethod", type: "string", description: "`none`, `client_secret_basic`, `client_secret_post`, `private_key_jwt`, or an extension method", isOptional: true },
+  { name: "applicationType", type: "string", description: "`web` or `native`", isOptional: true },
+  { name: "jwks", type: "string", description: "Inline public JWK Set as JSON. Exclusive with `jwksUri`.", isOptional: true },
+  { name: "jwksUri", type: "string", description: "HTTPS URI of the public JWK Set. Exclusive with `jwks`.", isOptional: true },
+  { name: "grantTypes", type: "string[]", description: "Allowed grant types", isOptional: true },
+  { name: "responseTypes", type: "string[]", description: "Allowed response types. Only `code`.", isOptional: true },
+  { name: "requirePKCE", type: "boolean", description: "Whether PKCE is required", isOptional: true },
+  { name: "dpopBoundAccessTokens", type: "boolean", description: "Whether tokens must be DPoP-bound. Defaults to `false`.", isOptional: true },
+  { name: "metadata", type: "json", description: "Additional client metadata", isOptional: true },
+];
+
+<DatabaseTable name="oauthClient" fields={oauthClientTableFields} />
+
+### OAuth Resource
+
+Table Name: `oauthResource`
+
+A `null` policy field uses the plugin default at issuance.
+
+export const oauthResourceTableFields = [
+  { name: "id", type: "string", description: "Database ID of the resource", isPrimaryKey: true },
+  { name: "identifier", type: "string", description: "`resource` parameter value and `aud` claim", isUnique: true },
+  { name: "name", type: "string", description: "Display name" },
+  { name: "accessTokenTtl", type: "number", description: "Access token lifetime in seconds", isOptional: true },
+  { name: "refreshTokenTtl", type: "number", description: "Refresh token lifetime in seconds", isOptional: true },
+  { name: "signingAlgorithm", type: "string", description: "JWS algorithm for access tokens", isOptional: true },
+  { name: "signingKeyId", type: "string", description: "Signing key ID for access tokens", isOptional: true },
+  { name: "allowedScopes", type: "string[]", description: "Scopes allowed for this resource. Requested scopes are narrowed to this set.", isOptional: true },
+  { name: "customClaims", type: "json", description: "Claims added to access tokens. Reserved names are stripped.", isOptional: true },
+  { name: "dpopBoundAccessTokensRequired", type: "boolean", description: "Whether access tokens must be DPoP-bound. Defaults to `false`.", isOptional: true },
+  { name: "disabled", type: "boolean", description: "Stops new issuance. Existing tokens verify until they expire. Defaults to `false`.", isOptional: true },
+  { name: "createdAt", type: "Date", description: "Creation time", isOptional: true },
+  { name: "updatedAt", type: "Date", description: "Last update time", isOptional: true },
+  { name: "policyVersion", type: "number", description: "Policy format version. Defaults to `1`.", isOptional: true },
+  { name: "metadata", type: "json", description: "Additional resource metadata", isOptional: true },
+];
+
+<DatabaseTable name="oauthResource" fields={oauthResourceTableFields} />
+
+### OAuth Client Resource
+
+Table Name: `oauthClientResource`
+
+Links a client to a resource. The pair `(clientId, resourceId)` is unique. `enforcePerClientResources` controls whether authorization and token requests check these rows. [Introspection](/docs/plugins/oauth-provider/resource-server#introspection) always uses them to decide whether a resource server can introspect another client's token.
+
+export const oauthClientResourceTableFields = [
+  { name: "id", type: "string", description: "Database ID of the link", isPrimaryKey: true },
+  { name: "clientId", type: "string", description: "Linked client", isForeignKey: true, references: { model: "oauthClient", field: "clientId", onDelete: "cascade" } },
+  { name: "resourceId", type: "string", description: "Linked resource identifier", isForeignKey: true, references: { model: "oauthResource", field: "identifier", onDelete: "cascade" } },
+  { name: "metadata", type: "json", description: "Additional link metadata", isOptional: true },
+  { name: "createdAt", type: "Date", description: "Creation time", isOptional: true },
+];
+
+<DatabaseTable name="oauthClientResource" fields={oauthClientResourceTableFields} />
+
+### OAuth Refresh Token
+
+Table Name: `oauthRefreshToken`
+
+export const oauthRefreshTokenTableFields = [
+  { name: "id", type: "string", description: "Database ID of the refresh token", isPrimaryKey: true },
+  { name: "token", type: "string", description: "Stored token value", isUnique: true },
+  { name: "clientId", type: "string", description: "Client the token was issued to", isForeignKey: true, references: { model: "oauthClient", field: "clientId" } },
+  { name: "sessionId", type: "string", description: "Session at issuance", isOptional: true, isForeignKey: true, references: { model: "session", field: "id", onDelete: "set null" } },
+  { name: "userId", type: "string", description: "User the token was issued for", isForeignKey: true, references: { model: "user", field: "id" } },
+  { name: "referenceId", type: "string", description: "Consent reference", isOptional: true },
+  { name: "authorizationCodeId", type: "string", description: "Authorization code that started this token family", isOptional: true },
+  { name: "resources", type: "string[]", description: "Resources the token may request", isOptional: true },
+  { name: "requestedUserInfoClaims", type: "string[]", description: "UserInfo claims requested with `claims`", isOptional: true },
+  { name: "scopes", type: "string[]", description: "Granted scopes" },
+  { name: "revoked", type: "Date", description: "When the token stopped being active", isOptional: true },
+  { name: "rotatedAt", type: "Date", description: "When rotation consumed the token", isOptional: true },
+  { name: "rotationReplayResponse", type: "string", description: "Encrypted response replayed within `refreshTokenReuseInterval`", isOptional: true },
+  { name: "rotationReplayExpiresAt", type: "Date", description: "When the replay window ends", isOptional: true },
+  { name: "authTime", type: "Date", description: "Original authentication time, kept for `auth_time`", isOptional: true },
+  { name: "acr", type: "string", description: "Authentication context class asserted at authorization, kept across rotation for refreshed ID tokens", isOptional: true },
+  { name: "amr", type: "string[]", description: "Authentication methods asserted at authorization, kept across rotation for refreshed ID tokens", isOptional: true },
+  { name: "confirmation", type: "json", description: "`cnf` binding, such as a DPoP key thumbprint", isOptional: true },
+  { name: "createdAt", type: "Date", description: "Creation time" },
+  { name: "expiresAt", type: "Date", description: "Expiry time" },
+];
+
+<DatabaseTable name="oauthRefreshToken" fields={oauthRefreshTokenTableFields} />
+
+### OAuth Access Token
+
+Table Name: `oauthAccessToken`
+
+Stores opaque access tokens only. JWT access tokens are not stored.
+
+export const oauthAccessTokenTableFields = [
+  { name: "id", type: "string", description: "Database ID of the access token", isPrimaryKey: true },
+  { name: "token", type: "string", description: "Stored token value", isUnique: true },
+  { name: "clientId", type: "string", description: "Client the token was issued to", isForeignKey: true, references: { model: "oauthClient", field: "clientId" } },
+  { name: "sessionId", type: "string", description: "Session at issuance", isOptional: true, isForeignKey: true, references: { model: "session", field: "id", onDelete: "set null" } },
+  { name: "userId", type: "string", description: "User the token was issued for. Absent for `client_credentials`.", isOptional: true, isForeignKey: true, references: { model: "user", field: "id" } },
+  { name: "referenceId", type: "string", description: "Consent reference", isOptional: true },
+  { name: "authorizationCodeId", type: "string", description: "Authorization code that started this token family", isOptional: true },
+  { name: "refreshId", type: "string", description: "Refresh token this access token belongs to", isOptional: true, isForeignKey: true, references: { model: "oauthRefreshToken", field: "id" } },
+  { name: "resources", type: "string[]", description: "Resources the token is valid for", isOptional: true },
+  { name: "requestedUserInfoClaims", type: "string[]", description: "UserInfo claims requested with `claims`", isOptional: true },
+  { name: "scopes", type: "string[]", description: "Granted scopes" },
+  { name: "revoked", type: "Date", description: "When the token was revoked", isOptional: true },
+  { name: "confirmation", type: "json", description: "`cnf` binding, returned by introspection", isOptional: true },
+  { name: "createdAt", type: "Date", description: "Creation time" },
+  { name: "expiresAt", type: "Date", description: "Expiry time" },
+];
+
+<DatabaseTable name="oauthAccessToken" fields={oauthAccessTokenTableFields} />
+
+### OAuth Consent
+
+Table Name: `oauthConsent`
+
+export const oauthConsentTableFields = [
+  { name: "id", type: "string", description: "Database ID of the consent", isPrimaryKey: true },
+  { name: "clientId", type: "string", description: "Client the consent was given to", isForeignKey: true, references: { model: "oauthClient", field: "clientId" } },
+  { name: "userId", type: "string", description: "User who consented", isOptional: true, isForeignKey: true, references: { model: "user", field: "id" } },
+  { name: "referenceId", type: "string", description: "Consent reference", isOptional: true },
+  { name: "resources", type: "string[]", description: "Consented resources", isOptional: true },
+  { name: "requestedUserInfoClaims", type: "string[]", description: "Consented UserInfo claims", isOptional: true },
+  { name: "scopes", type: "string[]", description: "Consented scopes" },
+  { name: "createdAt", type: "Date", description: "Creation time" },
+  { name: "updatedAt", type: "Date", description: "Last update time" },
+];
+
+<DatabaseTable name="oauthConsent" fields={oauthConsentTableFields} />
+
+### OAuth Client Assertion
+
+Table Name: `oauthClientAssertion`
+
+Records each `private_key_jwt` assertion `jti` so it can be used once. The check needs string IDs, so with `advanced.database.generateId: "serial"` Better Auth logs a warning. Rows are never pruned; delete expired rows.
+
+export const oauthClientAssertionTableFields = [
+  { name: "id", type: "string", description: "Digest of the client ID and assertion `jti`", isPrimaryKey: true },
+  { name: "expiresAt", type: "Date", description: "When the row is safe to delete" },
+];
+
+<DatabaseTable name="oauthClientAssertion" fields={oauthClientAssertionTableFields} />
+
+## Optimizations
+
+Database adapters may map `clientId` on `oauthClient` to `id` for faster lookups. The `id` column must then accept strings shaped like UUIDs and URLs.
+
+## Related
+
+<Cards>
+  <Card href="/docs/plugins/oauth-provider" title="OAuth Provider setup">
+    Install the plugin and run your first authorization code flow.
+  </Card>
+
+  <Card href="/docs/plugins/oauth-provider/clients" title="Clients and registration">
+    Register, manage, and authenticate OAuth clients.
+  </Card>
+
+  <Card href="/docs/plugins/oauth-provider/tokens" title="Tokens, scopes, and resources">
+    Control which tokens the provider issues and for how long.
+  </Card>
+
+  <Card href="/docs/plugins/cimd" title="Client ID Metadata Documents">
+    Identify clients by a metadata document URL.
+  </Card>
+
+  <Card href="/docs/plugins/ciba" title="Client-Initiated Backchannel Authentication">
+    Let a client ask a known user to approve access on their own device.
+  </Card>
+</Cards>

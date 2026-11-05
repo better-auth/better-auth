@@ -74,7 +74,7 @@ export const auth = betterAuth({
         paybin: {
             clientId: process.env.PAYBIN_CLIENT_ID as string,
             clientSecret: process.env.PAYBIN_CLIENT_SECRET as string,
-            scope: ["openid", "email", "profile", "transactions"], // [!code highlight]
+            scope: ["openid", "email", "profile", "phone"], // [!code highlight]
         },
     },
 })
@@ -82,10 +82,18 @@ export const auth = betterAuth({
 
 ### User Profile Mapping
 
-Paybin returns user information in the ID token following OpenID Connect standards. The provider automatically extracts:
+Use [`mapProfileToUser`](/docs/concepts/oauth#mapprofiletouser) to customize profile fields.
 
-* `id` from `sub` claim
-* `name` from `name`, `preferred_username`, or `email` (in order of preference)
-* `email` from `email` claim
-* `image` from `picture` claim
-* `emailVerified` from `email_verified` claim
+### ID Token Sign-In
+
+When using a custom `verifyIdToken` with the default `getUserInfo`, pass both the ID token and access token.
+
+```ts title="auth-client.ts"
+await authClient.signIn.social({
+    provider: "paybin",
+    idToken: {
+        token: idToken,
+        accessToken, // [!code highlight]
+    },
+})
+```

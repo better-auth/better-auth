@@ -1,5 +1,45 @@
 # @better-auth/api-key
 
+## 1.8.0-beta.6
+
+## 1.8.0-beta.5
+
+## 1.8.0-beta.4
+
+## 1.8.0-beta.3
+
+## 1.8.0-beta.2
+
+## 1.8.0-beta.1
+
+## 1.8.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1)]:
+  - better-auth@1.8.0-beta.0
+  - @better-auth/core@1.8.0-beta.0
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12107](https://github.com/better-auth/better-auth/pull/12107) [`9ce8b2c`](https://github.com/better-auth/better-auth/commit/9ce8b2c725ef7e088e83a675fe427d92b0c1010d) Thanks [@bytaesu](https://github.com/bytaesu)! - API keys stored in secondary storage now verify, load, and list correctly when the storage client returns already-parsed JSON objects, such as `@upstash/redis`.
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
 ## 1.7.10
 
 ## 1.7.9

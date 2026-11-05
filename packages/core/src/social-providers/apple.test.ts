@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { exportJWK, generateKeyPair, SignJWT, UnsecuredJWT } from "jose";
+import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GenericEndpointContext } from "../types";
 
 vi.mock("@better-fetch/fetch", () => ({
@@ -12,17 +12,18 @@ vi.mock("@better-fetch/fetch", () => ({
 import { betterFetch } from "@better-fetch/fetch";
 
 import { verifyProviderIdToken } from "../oauth2";
+import type { AppleProfile } from "./apple";
 import { apple } from "./apple";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
 
 async function createSignedAppleToken(payloadNonce: string) {
-	const { publicKey, privateKey } = await generateKeyPair("ES256", {
+	const { publicKey, privateKey } = await generateKeyPair("RS256", {
 		extractable: true,
 	});
 	const publicJWK = await exportJWK(publicKey);
 	publicJWK.kid = "test-apple-key";
-	publicJWK.alg = "ES256";
+	publicJWK.alg = "RS256";
 	publicJWK.use = "sig";
 
 	const token = await new SignJWT({
@@ -31,7 +32,7 @@ async function createSignedAppleToken(payloadNonce: string) {
 		email_verified: true,
 		nonce: payloadNonce,
 	})
-		.setProtectedHeader({ alg: "ES256", kid: "test-apple-key" })
+		.setProtectedHeader({ alg: "RS256", kid: "test-apple-key" })
 		.setIssuer("https://appleid.apple.com")
 		.setAudience("com.example.app")
 		.setIssuedAt()
@@ -169,3 +170,35 @@ describe("apple id_token verification", () => {
 		expect(seenPlatform).toBe("ios");
 	});
 });
+
+/**
+ * @see https://developer.apple.com/documentation/signinwithapplejs/authorizationi/id_token
+ */
+it.each([
+	[true, true],
+	[false, false],
+	["true", true],
+	["false", false],
+] as const)(
+	"accepts email_verified=%s without optional claims",
+	async (emailVerified, expected) => {
+		const profile = {
+			sub: "apple-user-123",
+			email_verified: emailVerified,
+		};
+		assertType<AppleProfile>({ ...profile, name: "" });
+		assertType<AppleProfile>({
+			...profile,
+			name: "",
+			is_private_email: "true",
+		});
+		const provider = apple({ clientId: "service.example.app" });
+
+		const result = await provider.getUserInfo({
+			idToken: new UnsecuredJWT(profile).encode(),
+		});
+
+		expect(result?.user.emailVerified).toBe(expected);
+		expect(result?.data.name).toBe("");
+	},
+);

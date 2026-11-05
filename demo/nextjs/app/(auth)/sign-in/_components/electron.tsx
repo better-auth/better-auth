@@ -2,7 +2,7 @@
 
 import { CheckIcon, CopyIcon, Loader2, LogInIcon, XIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
@@ -25,8 +25,15 @@ export function ElectronManualSignInToast({
 					Copy and paste the code into the app to continue.
 				</p>
 				<button
-					onClick={() => {
-						navigator.clipboard.writeText(authorizationCode);
+					onClick={async () => {
+						try {
+							await navigator.clipboard.writeText(authorizationCode);
+						} catch {
+							toast.error(
+								"Could not copy the code. Select and copy it manually.",
+							);
+							return;
+						}
 						setCopied(true);
 						setTimeout(() => setCopied(false), 2000);
 					}}
@@ -47,90 +54,135 @@ export function ElectronManualSignInToast({
 	);
 }
 
+type TransferSession = {
+	user: Pick<
+		typeof authClient.$Infer.Session.user,
+		"id" | "name" | "email" | "image"
+	>;
+	session: Pick<typeof authClient.$Infer.Session.session, "token">;
+};
+
 export function ElectronTransferUser({
 	session: activeSession,
 }: {
 	session: typeof authClient.$Infer.Session;
 }) {
-	const params = Object.fromEntries(useSearchParams().entries());
+	const params = useSearchParams();
+	const request = params.toString();
+	const generation = useRef(0);
 	const [isLoading, startTransition] = useTransition();
-	const [users, setUsers] = useState<(typeof authClient.$Infer.Session)[]>([
-		activeSession,
-	]);
+	const [users, setUsers] = useState<TransferSession[]>([activeSession]);
 	const [authorizationCode, setAuthorizationCode] = useState<string | null>(
 		null,
 	);
 	const [copied, setCopied] = useState(false);
+	useEffect(() => {
+		generation.current += 1;
+		setAuthorizationCode(null);
+		setCopied(false);
+		return () => {
+			generation.current += 1;
+		};
+	}, [request]);
 
 	useEffect(() => {
+		let active = true;
+		setUsers([activeSession]);
 		startTransition(async () => {
-			const { data } = await authClient.multiSession.listDeviceSessions();
-
-			if (data?.length) {
-				setUsers((prev) => {
-					// Filter out unique users from device session
-					const seenUserIds = new Set(prev.map((s) => s.user.id));
-					const users = data.filter((session) => {
-						if (
-							session.user.id === activeSession.user.id || // Skip active user
-							seenUserIds.has(session.user.id)
-						)
-							return false;
-						seenUserIds.add(session.user.id);
-						return true;
-					}) as (typeof authClient.$Infer.Session)[];
-					return [...prev, ...users];
-				});
-			}
-		});
-	}, []);
-
-	const handleContinueAsUser = useCallback(
-		(session: typeof authClient.$Infer.Session) => () =>
-			startTransition(async () => {
-				setAuthorizationCode(null);
-
-				if (session.user.id === activeSession.user.id) {
-					// Continue as current user
-					await authClient.electron.transferUser({
-						fetchOptions: {
-							query: params,
-							onSuccess: (ctx) => {
-								setAuthorizationCode(
-									ctx.data?.electron_authorization_code ?? null,
-								);
-							},
-						},
-					});
+			try {
+				const { data, error } =
+					await authClient.multiSession.listDeviceSessions();
+				if (!active) return;
+				if (error) {
+					toast.error(
+						error.message ??
+							"Could not load other accounts. Continue with the active account or retry.",
+					);
 					return;
 				}
-
-				// Switch to the selected user
-				const originalSessionToken = activeSession.session.token;
-				await authClient.multiSession.setActive({
-					sessionToken: session.session.token,
+				const seen = new Set([activeSession.user.id]);
+				const otherUsers = (data ?? []).filter((session) => {
+					if (seen.has(session.user.id)) return false;
+					seen.add(session.user.id);
+					return true;
 				});
+				setUsers([activeSession, ...otherUsers]);
+			} catch {
+				if (active)
+					toast.error(
+						"Could not load other accounts. Continue with the active account or retry.",
+					);
+			}
+		});
+		return () => {
+			active = false;
+		};
+	}, [activeSession]);
 
-				const promise = authClient.electron.transferUser({
-					fetchOptions: {
-						query: params,
-						onSuccess: (ctx) => {
-							setAuthorizationCode(
-								ctx.data?.electron_authorization_code ?? null,
+	const handleContinueAsUser = useCallback(
+		(session: TransferSession) => () =>
+			startTransition(async () => {
+				const currentGeneration = generation.current;
+				setAuthorizationCode(null);
+				setCopied(false);
+				let switched = false;
+				try {
+					if (session.user.id !== activeSession.user.id) {
+						const { data, error } = await authClient.multiSession.setActive({
+							sessionToken: session.session.token,
+						});
+						if (error || !data?.session) {
+							toast.error(
+								error?.message ?? "Could not switch to the selected account.",
 							);
+							return;
+						}
+						switched = true;
+					}
+					if (generation.current !== currentGeneration) return;
+					const { data, error } = await authClient.electron.transferUser({
+						fetchOptions: {
+							query: Object.fromEntries(new URLSearchParams(request).entries()),
 						},
-					},
-				});
-
-				// Switch back to the original session
-				await authClient.multiSession.setActive({
-					sessionToken: originalSessionToken,
-				});
-
-				// Transfer user
-				await promise;
+					});
+					if (generation.current !== currentGeneration) return;
+					if (error || !data?.electron_authorization_code) {
+						toast.error(
+							error?.message ??
+								"Could not transfer this session. Sign in again from the desktop app.",
+						);
+						return;
+					}
+					const code = authClient.electron.getAuthorizationCode();
+					if (!code) {
+						toast.error(
+							"The desktop code is unavailable. Start sign-in again from the app.",
+						);
+						return;
+					}
+					setAuthorizationCode(code);
+					authClient.ensureElectronRedirect();
+				} catch {
+					toast.error("Could not transfer the session. Try again.");
+				} finally {
+					if (switched) {
+						try {
+							const { error } = await authClient.multiSession.setActive({
+								sessionToken: activeSession.session.token,
+							});
+							if (error)
+								toast.error(
+									"The browser could not restore its original account. Check the active account before continuing.",
+								);
+						} catch {
+							toast.error(
+								"The browser could not restore its original account. Check the active account before continuing.",
+							);
+						}
+					}
+				}
 			}),
-		[params, activeSession],
+		[request, activeSession],
 	);
 
 	return (
@@ -151,8 +203,15 @@ export function ElectronTransferUser({
 					<span className="font-medium">Having trouble being redirected?</span>{" "}
 					Paste the code into the app:{" "}
 					<button
-						onClick={() => {
-							navigator.clipboard.writeText(authorizationCode);
+						onClick={async () => {
+							try {
+								await navigator.clipboard.writeText(authorizationCode);
+							} catch {
+								toast.error(
+									"Could not copy the code. Select and copy it manually.",
+								);
+								return;
+							}
 							setCopied(true);
 							setTimeout(() => setCopied(false), 2000);
 						}}
@@ -176,7 +235,7 @@ function ContinueAsUser({
 	isLoading,
 	onContinue,
 }: {
-	session: typeof authClient.$Infer.Session;
+	session: TransferSession;
 	isLoading: boolean;
 	onContinue: () => void;
 }) {

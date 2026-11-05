@@ -491,7 +491,7 @@ Below is an example of how to add two factor authentication using two factor plu
     }
 
     const verifyTOTP = async() => {
-        const data = await authClient.twoFactor.verifyTOTP({
+        const data = await authClient.twoFactor.verifyTotp({
             code: "123456", // the code entered by the user 
             /**
              * If the device is trusted, the user won't

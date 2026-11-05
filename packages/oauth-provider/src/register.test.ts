@@ -1309,6 +1309,87 @@ describe("oauth register - skip_consent blocked", async () => {
 	});
 });
 
+describe("oauth register - client_credentials scopes from an initial access token", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "https://erp.example.com/oauth/callback";
+	const grantedScopes = new Map<string, string[]>([
+		["grant-invoices", ["invoices:write"]],
+		["grant-unknown", ["not-configured"]],
+	]);
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				scopes: ["openid", "invoices:write"],
+				validateInitialAccessToken: ({ initialAccessToken }) => {
+					const scopes = grantedScopes.get(initialAccessToken);
+					if (!scopes) return false;
+					return { referenceId: "org_1", clientCredentialsScopes: scopes };
+				},
+			}),
+		],
+	});
+
+	const register = (token: string, body: Record<string, unknown> = {}) =>
+		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/register`, {
+			method: "POST",
+			headers: {
+				authorization: `Bearer ${token}`,
+				"content-type": "application/json",
+			},
+			body: JSON.stringify({
+				client_name: "Self-hosted connector",
+				redirect_uris: [redirectUri],
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				...body,
+			}),
+		});
+	const clientCredentials = (clientId: string, clientSecret: string) =>
+		customFetchImpl(`${authServerBaseUrl}/api/auth/oauth2/token`, {
+			method: "POST",
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				client_id: clientId,
+				client_secret: clientSecret,
+				scope: "invoices:write",
+			}),
+		});
+
+	it("gives the client the machine scopes the token authorizes", async () => {
+		const response = await register("grant-invoices");
+		expect(response.status).toBe(201);
+		const body = (await response.json()) as OAuthClient;
+		expect(body.reference_id).toBe("org_1");
+		expect(body).not.toHaveProperty("client_credentials_scopes");
+
+		const token = await clientCredentials(body.client_id, body.client_secret!);
+		expect(token.status).toBe(200);
+	});
+
+	it("rejects a scope the provider does not offer", async () => {
+		const response = await register("grant-unknown");
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ error: "invalid_scope" });
+	});
+
+	it("rejects machine scopes for a client that cannot hold them", async () => {
+		const withoutGrant = await register("grant-invoices", {
+			grant_types: ["authorization_code"],
+		});
+		expect(withoutGrant.status).toBe(400);
+		const publicClient = await register("grant-invoices", {
+			token_endpoint_auth_method: "none",
+		});
+		expect(publicClient.status).toBe(400);
+	});
+});
+
 describe("oauth register - protected dynamic registration", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "https://rp.example.com";

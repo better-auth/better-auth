@@ -177,6 +177,18 @@ export interface GoogleOneTapActionOptions
 				 * Button configuration options
 				 */
 				config?: GsiButtonConfiguration | undefined;
+				/**
+				 * Open the browser's FedCM account chooser when the button is
+				 * clicked, instead of Google's popup window. `autoSelect` then
+				 * signs in a returning user without showing the chooser.
+				 *
+				 * Applies on Chrome 125+ on desktop and Chrome 128+ on Android.
+				 * Other browsers keep the popup.
+				 *
+				 * @see {@link https://developers.google.com/identity/gsi/web/guides/fedcm-migration}
+				 * @default false
+				 */
+				fedCM?: boolean | undefined;
 		  }
 		| undefined;
 }
@@ -299,6 +311,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 							ux_mode: opts?.uxMode || "popup",
 							nonce: opts?.nonce,
 							itp_support: true,
+							// Spread: @types/google.accounts lacks button_auto_select.
+							...(opts.button.fedCM && {
+								use_fedcm_for_button: true,
+								button_auto_select: autoSelect,
+							}),
 							...options.additionalOptions,
 						});
 

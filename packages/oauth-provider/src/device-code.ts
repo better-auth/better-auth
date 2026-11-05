@@ -1,7 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { APIError } from "better-auth/api";
+import { getAuthoritativeSessionFromCtx } from "better-auth/api";
 import type {
 	DeviceAuthorizationGrant,
 	DeviceAuthorizationPluginOptions,
@@ -25,13 +25,16 @@ import type {
 	OAuthProviderExtension,
 	OAuthTokenResponse,
 } from "./types";
+import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
 	getClient,
 	getOAuthProviderPlugin,
 	normalizeClientAuthenticationParameters,
 	normalizeTimestampValue,
+	parseScopes,
 	readFormParams,
+	tokenError,
 	toResourceList,
 	validateClientScopes,
 } from "./utils";
@@ -87,22 +90,6 @@ type OAuthDeviceCodeFields = {
 	amr?: string[] | null;
 };
 
-function tokenError(
-	status: "BAD_REQUEST" | "UNAUTHORIZED" | "INTERNAL_SERVER_ERROR",
-	error: string,
-	errorDescription: string,
-): never {
-	throw new APIError(status, {
-		error,
-		error_description: errorDescription,
-	});
-}
-
-function parseScopes(scope: string | null | undefined): string[] {
-	const normalized = scope?.trim();
-	return normalized ? normalized.split(/\s+/) : [];
-}
-
 /**
  * Exchanges an approved RFC 8628 device code for an OAuth token set. Unlike the
  * device-authorization plugin's `/device/token` (which mints a first-party
@@ -132,14 +119,14 @@ async function exchangeOAuthDeviceCode(
 		requireCredentials: false,
 	});
 	const {
-		authorizationContext: { client, confirmation, scopes },
+		authorizationContext: { client, scopes },
 		claimedDeviceCode,
-		redemptionContext: resources,
+		redemptionContext: { resources, confirmation },
 		user,
 	} = await redeemDeviceCode<
 		OAuthDeviceCodeFields,
 		ClientAuthorization,
-		string[] | undefined
+		{ resources?: string[]; confirmation?: Confirmation }
 	>({
 		ctx,
 		deviceCode,
@@ -190,7 +177,14 @@ async function exchangeOAuthDeviceCode(
 				clientId: authorization.client.clientId,
 				requestedScopes: authorization.scopes,
 			});
-			return resources;
+			// Same for a rejected DPoP proof: the client can retry with a valid one.
+			const confirmation = await provider.resolveConfirmation({
+				client: authorization.client,
+				scopes: authorization.scopes,
+				resources,
+				confirmation: authorization.confirmation,
+			});
+			return { resources, confirmation };
 		},
 	});
 
@@ -205,7 +199,7 @@ async function exchangeOAuthDeviceCode(
 		amr: claimedDeviceCode.amr ?? undefined,
 		// Seed refresh tokens with every approved resource, not the narrowed poll.
 		originalResources: claimedDeviceCode.resources ?? undefined,
-		// Forward a sender-constraint a confidential client-auth strategy proved.
+		// Resolved before the claim: client-auth proof or the poll's DPoP proof.
 		confirmation,
 	});
 }
@@ -267,6 +261,16 @@ function deviceApprovalRequest(
 				// RFC 8628 section 5.4: the user who approves must see consent.
 				requireConsent: true,
 				approve: async (approval) => {
+					// Approval hands the device a token, so a session revoked in the
+					// store must not approve on its cookie cache alone.
+					const session = await getAuthoritativeSessionFromCtx(ctx);
+					if (session?.session.id !== approval.sessionId) {
+						tokenError(
+							"UNAUTHORIZED",
+							"access_denied",
+							"The session that approved this device is no longer active",
+						);
+					}
 					await decideDeviceCode(ctx, {
 						deviceCode,
 						userId: approval.userId,

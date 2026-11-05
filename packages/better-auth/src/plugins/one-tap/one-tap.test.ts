@@ -1001,7 +1001,7 @@ describe("oneTapClient types", () => {
 	});
 });
 
-describe("oneTapClient plugin-level options", async () => {
+describe("oneTapClient initialize config", async () => {
 	const initialize = vi.fn();
 	const renderButton = vi.fn();
 	// Report "not displayed" so the prompt flow resolves after one attempt.
@@ -1080,6 +1080,48 @@ describe("oneTapClient plugin-level options", async () => {
 			);
 		},
 	);
+
+	const container = {} as HTMLElement;
+
+	it("opts the button into the FedCM button flow, with autoSelect as its auto select", async () => {
+		stubBrowser();
+		await client.oneTap({
+			button: { container, fedCM: true },
+			fetchOptions: {},
+		});
+
+		expect(initialize).toHaveBeenCalledWith(
+			expect.objectContaining({
+				use_fedcm_for_button: true,
+				button_auto_select: true,
+			}),
+		);
+	});
+
+	it("leaves a button without fedCM on the popup flow", async () => {
+		stubBrowser();
+		await client.oneTap({ button: { container }, fetchOptions: {} });
+
+		const config = initialize.mock.calls[0]![0];
+		expect(config).not.toHaveProperty("use_fedcm_for_button");
+		expect(config).not.toHaveProperty("button_auto_select");
+	});
+
+	it("sends the button's credential to /one-tap/callback", async () => {
+		stubBrowser();
+		await client.oneTap({ button: { container }, fetchOptions: {} });
+
+		const config = initialize.mock.calls[0]![0] as {
+			callback: (response: { credential: string }) => Promise<void>;
+		};
+		await config.callback({ credential: "stub-id-token" });
+
+		expect(jwtVerify).toHaveBeenCalledWith(
+			"stub-id-token",
+			expect.any(Object),
+			expect.objectContaining({ audience: "test-client" }),
+		);
+	});
 });
 
 /**

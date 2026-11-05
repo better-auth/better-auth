@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { UnsecuredJWT } from "jose";
+import { assertType, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -6,6 +7,8 @@ vi.mock("@better-fetch/fetch", () => ({
 
 import { betterFetch } from "@better-fetch/fetch";
 
+import { verifyProviderIdToken } from "../oauth2/verify-id-token";
+import type { FacebookLimitedLoginProfile } from "./facebook";
 import { facebook } from "./facebook";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -132,5 +135,146 @@ describe("facebook.getUserInfo (opaque access token)", () => {
 		const res = await provider.getUserInfo({} as any);
 		expect(res).toBeNull();
 		expect(mockedBetterFetch).not.toHaveBeenCalled();
+	});
+});
+
+describe("facebook custom getUserInfo on client id_token sign-in", () => {
+	const expectDebugTokenInput = (inputToken: string) =>
+		expect(mockedBetterFetch).toHaveBeenCalledWith(
+			"https://graph.facebook.com/debug_token",
+			expect.objectContaining({
+				query: expect.objectContaining({ input_token: inputToken }),
+			}),
+		);
+
+	beforeEach(() => {
+		mockedBetterFetch.mockReset();
+	});
+
+	it("does not resolve identity from an access token issued to another app", async () => {
+		mockGraphResponses({
+			debug: debugTokenResponse({
+				is_valid: true,
+				app_id: "someone-elses-app",
+				user_id: "victim",
+			}),
+		});
+		const getUserInfo = vi.fn().mockResolvedValue({
+			user: { email: "victim@example.com", emailVerified: true },
+			data: fbProfile("victim"),
+		});
+		const provider = facebook({ ...options, getUserInfo });
+
+		const res = await provider.getUserInfo({
+			idToken: "placeholder",
+			accessToken: "foreign-app-token",
+		});
+
+		expect(res).toBeNull();
+		expectDebugTokenInput("foreign-app-token");
+		expect(getUserInfo).not.toHaveBeenCalled();
+	});
+
+	it.each([undefined, ""])(
+		"checks the opaque id token when the access token is %j",
+		async (accessToken) => {
+			mockGraphResponses({
+				debug: debugTokenResponse({
+					is_valid: true,
+					app_id: "someone-elses-app",
+					user_id: "victim",
+				}),
+			});
+			const getUserInfo = vi.fn();
+			const provider = facebook({ ...options, getUserInfo });
+
+			const res = await provider.getUserInfo({
+				idToken: "foreign-app-token",
+				accessToken,
+			});
+
+			expect(res).toBeNull();
+			expectDebugTokenInput("foreign-app-token");
+			expect(getUserInfo).not.toHaveBeenCalled();
+		},
+	);
+
+	it("does not trust a foreign access token sent alongside a signed id token", async () => {
+		mockGraphResponses({
+			debug: debugTokenResponse({
+				is_valid: true,
+				app_id: "someone-elses-app",
+				user_id: "victim",
+			}),
+		});
+		const getUserInfo = vi.fn();
+		const provider = facebook({ ...options, getUserInfo });
+
+		const res = await provider.getUserInfo({
+			idToken: "header.payload.signature",
+			accessToken: "foreign-app-token",
+		});
+
+		expect(res).toBeNull();
+		expectDebugTokenInput("foreign-app-token");
+		expect(getUserInfo).not.toHaveBeenCalled();
+	});
+
+	it("passes a signed id token without an access token straight to a custom getUserInfo", async () => {
+		mockGraphResponses({});
+		const getUserInfo = vi.fn().mockResolvedValue({
+			user: { email: "u1@example.com", emailVerified: false },
+			data: { sub: "u1" },
+		});
+		const provider = facebook({ ...options, getUserInfo });
+
+		await provider.getUserInfo({ idToken: "header.payload.signature" });
+
+		expect(getUserInfo).toHaveBeenCalledOnce();
+	});
+
+	it("passes an access token bound to this app to a custom getUserInfo", async () => {
+		mockGraphResponses({
+			debug: debugTokenResponse({
+				is_valid: true,
+				app_id: "fb-app",
+				user_id: "u1",
+			}),
+		});
+		const getUserInfo = vi.fn().mockResolvedValue({
+			user: { email: "u1@example.com", emailVerified: true },
+			data: fbProfile("u1"),
+		});
+		const provider = facebook({ ...options, getUserInfo });
+
+		await expect(verifyProviderIdToken(provider, "placeholder")).resolves.toBe(
+			true,
+		);
+		await provider.getUserInfo({
+			idToken: "placeholder",
+			accessToken: "opaque-access-token",
+		});
+
+		expectDebugTokenInput("opaque-access-token");
+		expect(getUserInfo).toHaveBeenCalledOnce();
+	});
+});
+
+/**
+ * @see https://github.com/facebook/facebook-ios-sdk/blob/9a682148e9d5be7930c8c90bb982b6b57bf228e1/FBSDKCoreKit/FBSDKCoreKit/AuthenticationTokenClaims.swift#L62-L85
+ */
+it("accepts Facebook Limited Login without optional profile claims", async () => {
+	const profile = { sub: "fb-user" };
+	assertType<FacebookLimitedLoginProfile>(profile);
+	const result = await facebook(options).getUserInfo({
+		idToken: new UnsecuredJWT(profile).encode(),
+	});
+
+	expect(result?.data).toMatchObject(profile);
+	expect(result?.user).toEqual({
+		name: undefined,
+		email: undefined,
+		image: undefined,
+		emailVerified: false,
 	});
 });

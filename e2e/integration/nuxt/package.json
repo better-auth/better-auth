@@ -10,11 +10,11 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "nuxt": "4.5.2"
+    "nuxt": "4.6.2"
   },
   "devDependencies": {
     "@nuxt/test-utils": "4.3.1",
-    "@playwright/test": "~1.58.2",
+    "@playwright/test": "~1.64.1",
     "typescript": "catalog:",
     "vue-tsc": "3.3.11"
   }

@@ -1,8 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
+import {
+	createAuthEndpoint,
+	sensitiveSessionMiddleware,
+} from "better-auth/api";
 import {
 	parseSetCookieHeader,
 	setSessionCookie,
@@ -17,9 +21,17 @@ import type { ElectronOptions } from "./types";
 
 type ElectronVerificationValue = {
 	userId: string;
+	sourceSessionTokenHash: string;
 	codeChallenge: string;
 	state: string;
 };
+
+/**
+ * Verification rows are readable by hooks and exports, so they hold a digest
+ * of the session token rather than the token itself.
+ */
+export const hashSessionToken = (token: string) =>
+	createHash("SHA-256", "base64urlnopad").digest(token);
 
 const electronTokenBodySchema = z.object({
 	token: z.string().nonempty(),
@@ -34,6 +46,7 @@ export const electronToken = (_opts: ElectronOptions) =>
 			method: "POST",
 			body: electronTokenBodySchema,
 			metadata: {
+				noStore: true,
 				scope: "http",
 				openapi: {
 					description: "Exchange the electron token for a session",
@@ -76,11 +89,8 @@ export const electronToken = (_opts: ElectronOptions) =>
 			}
 
 			const tokenRecord = safeJSONParse<ElectronVerificationValue>(token.value);
-			if (!tokenRecord) {
-				throw APIError.from(
-					"INTERNAL_SERVER_ERROR",
-					ELECTRON_ERROR_CODES.INVALID_TOKEN,
-				);
+			if (!tokenRecord?.sourceSessionTokenHash) {
+				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
 			}
 
 			if (tokenRecord.state !== ctx.body.state) {
@@ -101,6 +111,18 @@ export const electronToken = (_opts: ElectronOptions) =>
 					"BAD_REQUEST",
 					ELECTRON_ERROR_CODES.INVALID_CODE_VERIFIER,
 				);
+			}
+			const sessions = await ctx.context.internalAdapter.listSessions(
+				tokenRecord.userId,
+			);
+			const now = Date.now();
+			const sourceSessionHashes = await Promise.all(
+				sessions
+					.filter((session) => new Date(session.expiresAt).getTime() > now)
+					.map((session) => hashSessionToken(session.token)),
+			);
+			if (!sourceSessionHashes.includes(tokenRecord.sourceSessionTokenHash)) {
+				throw APIError.from("NOT_FOUND", ELECTRON_ERROR_CODES.INVALID_TOKEN);
 			}
 			const user = await ctx.context.internalAdapter.findUserById(
 				tokenRecord.userId,
@@ -250,6 +272,7 @@ export const electronTransferUser = (
 				state: string;
 				code_challenge: string;
 			},
+			sourceSession: NonNullable<GenericEndpointContext["context"]["session"]>,
 		) => Promise<string | null>;
 	},
 ) =>
@@ -259,9 +282,10 @@ export const electronTransferUser = (
 			method: "POST",
 			query: electronTransferUserQuerySchema,
 			body: electronTransferUserBodySchema,
-			use: [sessionMiddleware],
+			use: [sensitiveSessionMiddleware],
 			requireHeaders: true,
 			metadata: {
+				noStore: true,
 				openapi: {
 					description: "Transfer the user to the electron app",
 					operationId: "electronTransferUser",
@@ -299,7 +323,11 @@ export const electronTransferUser = (
 			},
 		},
 		async (ctx) => {
-			const identifier = await handleTransfer(ctx, ctx.query);
+			const identifier = await handleTransfer(
+				ctx,
+				ctx.query,
+				ctx.context.session,
+			);
 			if (identifier === null) {
 				throw APIError.from(
 					"BAD_REQUEST",

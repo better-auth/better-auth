@@ -5,7 +5,7 @@ import { openAPI } from "better-auth/plugins";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { oauthDeviceAuthorizationClient, oauthProviderClient } from "./client";
 import {
@@ -379,6 +379,44 @@ describe("oauth-provider device-code grant", async () => {
 			headers: FORM_HEADERS,
 		});
 	}
+
+	it("keeps an approved device code when the poll's DPoP proof is rejected", async () => {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const proofFor = (htu: string) =>
+			new SignJWT({
+				jti: crypto.randomUUID(),
+				htm: "POST",
+				htu,
+				iat: Math.floor(Date.now() / 1000),
+			})
+				.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
+				.sign(privateKey);
+		const clientId = await createDeviceClient();
+		const deviceCode = await approvedDeviceCode(clientId);
+		const pollWithProof = async (htu: string) =>
+			client.$fetch<Record<string, unknown>>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code: deviceCode,
+					client_id: clientId,
+				}),
+				headers: { ...FORM_HEADERS, dpop: await proofFor(htu) },
+			});
+
+		const rejected = await pollWithProof(
+			`${baseURL}/api/auth/oauth2/introspect`,
+		);
+		expect(rejected.error).toMatchObject({ error: "invalid_dpop_proof" });
+
+		await new Promise((resolve) => setTimeout(resolve, 2_100));
+		const issued = await pollWithProof(`${baseURL}/api/auth/oauth2/token`);
+		expect(issued.error).toBeNull();
+		expect(issued.data?.token_type).toBe("DPoP");
+	});
 
 	it("accepts a confidential client authenticated with Basic without body client_id", async () => {
 		const { headers } = await signInWithTestUser();
@@ -1054,6 +1092,73 @@ describe("oauth-provider device-code grant", async () => {
 		const idToken = decodeJwt(res.data!.id_token as string);
 		expect(idToken.sub).toBe(user.id);
 		expect(idToken.aud).toBe(clientId);
+	});
+
+	it("does not redeem a device grant after approval from a revoked cached session", async () => {
+		const {
+			auth: guardedAuth,
+			client: guardedClient,
+			signInWithTestUser: signIn,
+			cookieSetter,
+		} = await getTestInstance(
+			{
+				baseURL,
+				session: { cookieCache: { enabled: true, maxAge: 60 } },
+				plugins: [
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowDynamicClientRegistration: true,
+						scopes: ["openid", "profile", "email"],
+					}),
+					oauthDeviceAuthorization(),
+				],
+			},
+			{ clientOptions: { plugins: [oauthProviderClient()] } },
+		);
+		const { headers } = await signIn();
+		const registered = await guardedAuth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "none",
+				grant_types: [DEVICE_CODE_GRANT_TYPE],
+				scope: "openid profile email",
+				application_type: "native",
+			},
+		});
+		const current = await guardedClient.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { device_code, user_code } = await guardedAuth.api.deviceCode({
+			body: { client_id: registered!.client_id },
+		});
+		const consent = await openDeviceConsent(guardedClient, user_code, headers);
+		const ctx = await guardedAuth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		const answered = await fetchRedirect(guardedClient, "/oauth2/consent", {
+			method: "POST",
+			headers,
+			body: { accept: true, oauth_query: consent.toString() },
+		});
+		expect(new URL(answered, baseURL).searchParams.get("status")).not.toBe(
+			"approved",
+		);
+		const polled = await guardedClient.$fetch<Record<string, unknown>>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code,
+					client_id: registered!.client_id,
+				}),
+				headers: FORM_HEADERS,
+			},
+		);
+		expect(polled.data?.access_token).toBeUndefined();
+		expect(polled.error).not.toBeNull();
 	});
 
 	it("returns invalid_request when device-code polling omits client_id", async () => {
@@ -1942,7 +2047,10 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			device_code,
 		});
 		expect(tokens.error).toBeNull();
-		expect(decodeJwt(tokens.data!.access_token)[referenceClaim]).toBe("org_1");
+		expect(decodeJwt(tokens.data!.access_token)).toMatchObject({
+			[referenceClaim]: "org_1",
+			reference_id: "org_1",
+		});
 		expect(decodeJwt(tokens.data!.id_token!).auth_time).toEqual(
 			expect.any(Number),
 		);
@@ -1953,9 +2061,10 @@ describe("oauth-provider device approval through the consent flow", async () => 
 			refresh_token: tokens.data!.refresh_token!,
 		});
 		expect(refreshed.error).toBeNull();
-		expect(decodeJwt(refreshed.data!.access_token)[referenceClaim]).toBe(
-			"org_1",
-		);
+		expect(decodeJwt(refreshed.data!.access_token)).toMatchObject({
+			[referenceClaim]: "org_1",
+			reference_id: "org_1",
+		});
 	});
 
 	it("carries the resolved acr and amr into device ID tokens and their refreshes", async () => {
@@ -2259,14 +2368,13 @@ describe("oauth-provider device approval through the consent flow", async () => 
 	});
 
 	it("rejects an approval when the code expires before the final step", async () => {
-		let calls = 0;
-		resolveReference = () => {
-			// The consent endpoint resolves the reference first; expire the code
-			// before the second resolution, which precedes the approval.
-			calls += 1;
-			if (calls === 2) vi.setSystemTime(Date.now() + 31 * 60 * 1000);
-			return "org_1";
-		};
+		resolveReference = () => "org_1";
+		// The authentication context resolves just before the approval; expire
+		// the code then.
+		resolveAuthenticationContext.mockImplementationOnce(() => {
+			vi.setSystemTime(Date.now() + 31 * 60 * 1000);
+			return undefined;
+		});
 		const { user_code, headers } = await startDevice();
 		vi.useFakeTimers({ toFake: ["Date"] });
 		try {

@@ -207,6 +207,18 @@ export function getOAuthProviderApi(
 			}
 			return createUserTokens(ctx, opts, { ...params, grantType });
 		},
+		resolveConfirmation: async (params) => {
+			if (params.confirmation) return params.confirmation;
+			const policy = await resolveResourcePolicy(ctx, opts, {
+				resource: params.resources,
+				clientId: params.client.clientId,
+				requestedScopes: params.scopes,
+			});
+			return resolveIssuanceConfirmation(ctx, opts, {
+				client: params.client,
+				dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
+			});
+		},
 		hashToken: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {
@@ -233,6 +245,8 @@ async function createJwtAccessToken(
 		iat?: number;
 		exp?: number;
 		sid?: string;
+		/** Consent reference from `postLogin.consentReferenceId`. */
+		referenceId?: string;
 		/**
 		 * Per-resource signing config resolved by {@link resolveResourcePolicy}.
 		 * `null` falls back to the JWT plugin's primary key.
@@ -282,6 +296,9 @@ async function createJwtAccessToken(
 			azp: client.clientId,
 			scope: scopes.join(" "),
 			sid: overrides?.sid,
+			// AS-owned, like `sid`: grants derived from this token (token exchange)
+			// read the consent reference back from here.
+			reference_id: overrides?.referenceId,
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
@@ -770,25 +787,61 @@ function clientRequiresDpopBoundAccessTokens(client: SchemaClient<Scope[]>) {
 	);
 }
 
+/**
+ * Resolves the sender-constraint for an issuance: the `confirmation` the client
+ * proved at authentication, or else the request's DPoP proof. With
+ * `expectedJkt`, the binding must use that key and a proof is required, as on
+ * refresh.
+ */
+export async function resolveIssuanceConfirmation(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		dpopBoundAccessTokensRequired: boolean;
+		confirmation?: Confirmation;
+		expectedJkt?: string;
+	},
+): Promise<Confirmation | undefined> {
+	if (params.confirmation) {
+		if (
+			params.expectedJkt !== undefined &&
+			getConfirmationJkt(params.confirmation) !== params.expectedJkt
+		) {
+			throwInvalidDpopProof(
+				"Client authentication confirmation does not match the bound token",
+			);
+		}
+		return params.confirmation;
+	}
+	return resolveDpopTokenBinding(ctx, opts, {
+		client: params.client,
+		grantIssuance: {
+			dpopBoundAccessTokensRequired: params.dpopBoundAccessTokensRequired,
+		},
+		expectedJkt: params.expectedJkt,
+	});
+}
+
 async function resolveDpopTokenBinding(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	params: {
 		client: SchemaClient<Scope[]>;
-		grantIssuance: ResourceGrantIssuance;
+		grantIssuance: Pick<ResourceGrantIssuance, "dpopBoundAccessTokensRequired">;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+		expectedJkt?: string;
 	},
 ): Promise<Confirmation | undefined> {
 	const authCodeDpopJkt = params.verificationValue?.query.dpop_jkt;
 	const refreshJkt = getConfirmationJkt(params.refreshToken?.confirmation);
-	const expectedJkt = refreshJkt ?? authCodeDpopJkt;
+	const expectedJkt = params.expectedJkt ?? refreshJkt ?? authCodeDpopJkt;
 	const dpopProofJwt = getDpopProofJwt(ctx);
 	const dpopRequired =
 		clientRequiresDpopBoundAccessTokens(params.client) ||
 		params.grantIssuance.dpopBoundAccessTokensRequired ||
-		!!authCodeDpopJkt ||
-		!!refreshJkt;
+		!!expectedJkt;
 
 	if (!dpopProofJwt) {
 		if (dpopRequired) {
@@ -1102,7 +1155,20 @@ async function createUserTokens(
 	const baseExpiry = user
 		? (opts.accessTokenExpiresIn ?? 3600)
 		: (opts.m2mAccessTokenExpiresIn ?? 3600);
-	const defaultExp = iat + baseExpiry;
+	// Every other access token expiry is min()-ed against this, so the cap holds.
+	const defaultExp = Math.min(
+		iat + baseExpiry,
+		params.maxExpiresAt
+			? Math.floor(params.maxExpiresAt.getTime() / 1000)
+			: Number.POSITIVE_INFINITY,
+	);
+	// A cap that has already passed would mint a token that is born expired.
+	if (defaultExp <= iat) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_request",
+			error_description: "the token this grant derives from has expired",
+		});
+	}
 	const scopeExp = opts.scopeExpirations
 		? scopes
 				.map((sc) =>
@@ -1248,6 +1314,7 @@ async function createUserTokens(
 						iat,
 						exp,
 						sid: sessionId,
+						referenceId,
 						signingAlgorithm: grantIssuance.signingAlgorithm,
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,
