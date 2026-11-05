@@ -15,7 +15,7 @@ import {
 	oauthTokenExchange,
 	TOKEN_EXCHANGE_GRANT_TYPE,
 } from "./token-exchange";
-import type { OAuthOptions, Scope } from "./types";
+import type { Confirmation, OAuthOptions, Scope } from "./types";
 
 const issuer = "http://localhost:3000";
 const mcp = "https://mcp.example.com";
@@ -33,20 +33,27 @@ type TokenResponse = {
 	scope: string;
 };
 
-async function createDpopProof() {
+/** A DPoP key that signs a fresh token-endpoint proof on each `prove()`. */
+async function createDpopKey() {
 	const { privateKey, publicKey } = await generateKeyPair("ES256", {
 		extractable: true,
 	});
 	const publicJwk = await exportJWK(publicKey);
-	const proof = await new SignJWT({
-		jti: generateRandomString(16),
-		htm: "POST",
-		htu: `${issuer}/api/auth/oauth2/token`,
-		iat: Math.floor(Date.now() / 1000),
-	})
-		.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
-		.sign(privateKey);
-	return { proof, publicJwk };
+	const prove = () =>
+		new SignJWT({
+			jti: generateRandomString(16),
+			htm: "POST",
+			htu: `${issuer}/api/auth/oauth2/token`,
+			iat: Math.floor(Date.now() / 1000),
+		})
+			.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
+			.sign(privateKey);
+	return { publicJwk, prove };
+}
+
+async function createDpopProof() {
+	const { publicJwk, prove } = await createDpopKey();
+	return { proof: await prove(), publicJwk };
 }
 
 /**
@@ -59,9 +66,11 @@ async function bootScenario(
 	{
 		disableJwtPlugin = false,
 		testWith,
+		plugins = [],
 	}: {
 		disableJwtPlugin?: boolean;
 		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+		plugins?: BetterAuthPlugin[];
 	} = {},
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {},
 ) {
@@ -84,6 +93,7 @@ async function bootScenario(
 				...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
 				oauthProvider(opts),
 				oauthTokenExchange(exchange),
+				...plugins,
 			],
 		},
 		// Adapter databases are shared across instances; keep each test user unique.
@@ -173,6 +183,7 @@ async function bootScenario(
 		requester = agent as Requester,
 		resource = mcp as string | null,
 		tokenHeaders = undefined as Record<string, string> | undefined,
+		clientAuth = undefined as Record<string, string> | undefined,
 	} = {}) => {
 		const codeVerifier = generateRandomString(32);
 		const url = await createAuthorizationURL({
@@ -204,7 +215,7 @@ async function bootScenario(
 				code_verifier: codeVerifier,
 				redirect_uri: redirectUri,
 				client_id: requester.client_id,
-				client_secret: requester.client_secret!,
+				...(clientAuth ?? { client_secret: requester.client_secret! }),
 				...(resource ? { resource } : {}),
 			},
 			tokenHeaders,
@@ -718,6 +729,238 @@ describe("oauthTokenExchange", () => {
 		expect(error).toBeNull();
 		expect(data?.token_type).toBe("Bearer");
 		expect(decodeJwt(data!.access_token).cnf).toBeUndefined();
+	});
+
+	it("binds a resource server's exchange of a DPoP-bound token to the resource server's key", async () => {
+		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario();
+		const { proof: clientProof } = await createDpopProof();
+		const subject = await userTokenForMcp({
+			tokenHeaders: { DPoP: clientProof },
+		});
+		const { proof, publicJwk } = await createDpopProof();
+		const { data, error } = await exchangeAs(
+			mcpServer,
+			subject.access_token,
+			{},
+			{ DPoP: proof },
+		);
+		expect(error).toBeNull();
+		expect(data?.token_type).toBe("DPoP");
+		expect(decodeJwt(data!.access_token).cnf).toEqual({
+			jkt: await deriveDpopJkt(publicJwk),
+		});
+	});
+
+	describe.each([
+		["JWT", mcp],
+		["opaque", null],
+	])(
+		"a client exchanging its own DPoP-bound %s access token",
+		(_format, resource) => {
+			async function exchangeOwnBoundToken() {
+				const allowExchange = vi.fn(() => true);
+				const scenario = await bootScenario({ allowExchange });
+				const bff = await scenario.createClient({
+					grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+					redirect_uris: [redirectUri],
+					scope: "openid read write",
+					skip_consent: true,
+					resources: [mcp, api],
+				});
+				const key = await createDpopKey();
+				const subject = await scenario.userTokenForMcp({
+					scope: "openid read",
+					requester: bff,
+					resource,
+					tokenHeaders: { DPoP: await key.prove() },
+				});
+				expect(subject.token_type).toBe("DPoP");
+				return {
+					introspect: scenario.introspect,
+					allowExchange,
+					key,
+					bff,
+					exchange: (dpopHeaders?: Record<string, string>) =>
+						scenario.exchangeAs(bff, subject.access_token, {}, dpopHeaders),
+				};
+			}
+
+			it("requires a DPoP proof before allowExchange runs", async () => {
+				const { exchange, allowExchange } = await exchangeOwnBoundToken();
+				const { error } = await exchange();
+				expect(error).toMatchObject({
+					error: "invalid_dpop_proof",
+					error_description: "DPoP proof header is required",
+				});
+				expect(allowExchange).not.toHaveBeenCalled();
+			});
+
+			it("rejects a reused proof", async () => {
+				const { exchange, key } = await exchangeOwnBoundToken();
+				const proof = await key.prove();
+				expect((await exchange({ DPoP: proof })).error).toBeNull();
+				expect((await exchange({ DPoP: proof })).error).toMatchObject({
+					error: "invalid_dpop_proof",
+					error_description: "DPoP proof jti has already been used",
+				});
+			});
+
+			it("requires the proof to use the subject token's key", async () => {
+				const { exchange } = await exchangeOwnBoundToken();
+				const { proof } = await createDpopProof();
+				const { error } = await exchange({ DPoP: proof });
+				expect(error).toMatchObject({
+					error: "invalid_dpop_proof",
+					error_description: "DPoP proof key does not match the bound token",
+				});
+			});
+
+			it("binds the exchanged token to the subject token's key", async () => {
+				const { exchange, key, bff, introspect } =
+					await exchangeOwnBoundToken();
+				const { data, error } = await exchange({ DPoP: await key.prove() });
+				expect(error).toBeNull();
+				expect(data?.token_type).toBe("DPoP");
+				expect(await introspect(data!.access_token, bff)).toMatchObject({
+					active: true,
+					aud: api,
+					cnf: { jkt: await deriveDpopJkt(key.publicJwk) },
+				});
+			});
+		},
+	);
+
+	it("lets allowExchange accept a sender-constrained subject token only from its own client", async () => {
+		const { createClient, mcpServer, userTokenForMcp, exchangeAs } =
+			await bootScenario({
+				allowExchange: ({ client, subjectToken }) =>
+					!subjectToken.cnf || subjectToken.client_id === client.clientId,
+			});
+		const agentKey = await createDpopKey();
+		const forMcp = await userTokenForMcp({
+			tokenHeaders: { DPoP: await agentKey.prove() },
+		});
+		expect(
+			(await exchangeAs(mcpServer, forMcp.access_token)).error,
+		).toMatchObject({
+			error: "invalid_request",
+			error_description: "token exchange denied by policy",
+		});
+
+		const bearer = await userTokenForMcp();
+		expect((await exchangeAs(mcpServer, bearer.access_token)).error).toBeNull();
+
+		const bff = await createClient({
+			grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+			redirect_uris: [redirectUri],
+			scope: "openid read write",
+			skip_consent: true,
+			resources: [mcp, api],
+		});
+		const bffKey = await createDpopKey();
+		const own = await userTokenForMcp({
+			scope: "openid read",
+			requester: bff,
+			tokenHeaders: { DPoP: await bffKey.prove() },
+		});
+		const { error } = await exchangeAs(
+			bff,
+			own.access_token,
+			{},
+			{ DPoP: await bffKey.prove() },
+		);
+		expect(error).toBeNull();
+	});
+
+	describe("a client whose authentication strategy proves a confirmation", () => {
+		const authMethod = "test_attestation_jwt";
+		const assertionType =
+			"urn:better-auth:test:client-assertion-type:test-attestation";
+
+		async function exchangeWithProvenConfirmation(
+			proven: (subjectJkt: string) => Confirmation,
+		) {
+			let confirmation: Confirmation | undefined;
+			const attestation = {
+				id: "test-attestation",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientAuthentication: {
+							[authMethod]: {
+								assertionTypes: [assertionType],
+								authenticate: async ({ clientId }) => ({
+									clientId: clientId!,
+									confirmation,
+								}),
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin;
+			const allowExchange = vi.fn(() => true);
+			const { createClient, userTokenForMcp, postToken } = await bootScenario(
+				{ allowExchange },
+				{ plugins: [attestation] },
+			);
+			const wallet = await createClient({
+				token_endpoint_auth_method: authMethod,
+				grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+				redirect_uris: [redirectUri],
+				scope: "openid read write",
+				skip_consent: true,
+				resources: [mcp, api],
+			});
+			const clientAuth = {
+				client_assertion_type: assertionType,
+				client_assertion: `assertion:${wallet.client_id}`,
+			};
+			const key = await createDpopKey();
+			const subject = await userTokenForMcp({
+				scope: "openid read",
+				requester: wallet,
+				clientAuth,
+				tokenHeaders: { DPoP: await key.prove() },
+			});
+			const subjectJkt = await deriveDpopJkt(key.publicJwk);
+			expect(decodeJwt(subject.access_token).cnf).toEqual({ jkt: subjectJkt });
+
+			confirmation = proven(subjectJkt);
+			const result = await postToken({
+				grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+				client_id: wallet.client_id,
+				...clientAuth,
+				subject_token: subject.access_token,
+				subject_token_type: ACCESS_TOKEN_TYPE,
+				resource: api,
+			});
+			return { ...result, allowExchange, subjectJkt };
+		}
+
+		it("keeps a confirmation with the subject token's key", async () => {
+			const { data, error, subjectJkt } = await exchangeWithProvenConfirmation(
+				(jkt) => ({ jkt }),
+			);
+			expect(error).toBeNull();
+			expect(data?.token_type).toBe("DPoP");
+			expect(decodeJwt(data!.access_token).cnf).toEqual({ jkt: subjectJkt });
+		});
+
+		it.each([
+			["a different DPoP key", () => ({ jkt: "another-key" })],
+			["a certificate binding", () => ({ "x5t#S256": "attested-certificate" })],
+		] satisfies [string, () => Confirmation][])(
+			"rejects %s before allowExchange runs",
+			async (_label, proven) => {
+				const { error, allowExchange } =
+					await exchangeWithProvenConfirmation(proven);
+				expect(error).toMatchObject({
+					error: "invalid_dpop_proof",
+					error_description:
+						"Client authentication confirmation does not match the bound token",
+				});
+				expect(allowExchange).not.toHaveBeenCalled();
+			},
+		);
 	});
 
 	it.each([
