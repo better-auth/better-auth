@@ -157,7 +157,7 @@ Whether dynamically registered confidential clients require PKCE. Defaults to `t
 
 `clientRegistrationClientSecretExpiration` <span className="opacity-70">`number | string | Date`</span>
 
-The `client_secret_expires_at` value returned to dynamically registered clients that receive a secret. A string such as `"30d"` is a duration from registration. A number (Unix seconds) or a `Date` is a fixed time. Better Auth does not reject the secret after that time. Defaults to no expiry.
+The `client_secret_expires_at` value returned to dynamically registered clients that receive a secret. A string such as `"30d"` is a duration from registration. A number (Unix seconds) or a `Date` is a fixed time. After that time, the secret is rejected with `invalid_client`. Defaults to no expiry.
 
 `clientRegistrationDefaultResources` <span className="opacity-70">`string[]`</span>
 
@@ -666,6 +666,7 @@ export const oauthClientTableFields = [
   { name: "referenceId", type: "string", description: "Owning reference when the owner is not a user", isOptional: true },
   { name: "createdAt", type: "Date", description: "Creation time", isOptional: true },
   { name: "updatedAt", type: "Date", description: "Last update time", isOptional: true },
+  { name: "expiresAt", type: "Date", description: "When the client secret expires. Empty means it never expires.", isOptional: true },
   { name: "name", type: "string", description: "Display name", isOptional: true },
   { name: "uri", type: "string", description: "Client website", isOptional: true },
   { name: "icon", type: "string", description: "Logo URI", isOptional: true },
