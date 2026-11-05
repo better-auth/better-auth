@@ -337,6 +337,8 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 	let runtime: NextDemoRuntime;
 
 	test.beforeAll(async () => {
+		// Hooks run on the project timeout, so let the startup deadline fire first.
+		test.setTimeout(120_000);
 		runtime = await startNextDemoRuntime();
 	});
 
