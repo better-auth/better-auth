@@ -18,9 +18,6 @@ const demoDirectory = resolve(process.cwd(), "../../demo/nextjs");
 interface NextDemoRuntime {
 	baseURL: string;
 	databasePath: string;
-	process: ChildProcessWithoutNullStreams;
-	readOutput: () => string;
-	temporaryDirectory: string;
 }
 
 async function getAvailablePort(): Promise<number> {
@@ -42,109 +39,109 @@ async function getAvailablePort(): Promise<number> {
 	return port;
 }
 
-async function stopProcess(
-	child: ChildProcessWithoutNullStreams | undefined,
-): Promise<void> {
-	if (!child) return;
-	const { terminate } = await import("@better-auth-test/test-utils/playwright");
-	await terminate(child);
-}
-
-async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
-	const temporaryDirectory = await mkdtemp(
-		join(tmpdir(), "better-auth-scim-managed-demo-"),
-	);
-	const port = await getAvailablePort();
-	const baseURL = `http://127.0.0.1:${port}`;
-	const databasePath = join(temporaryDirectory, "demo.sqlite");
-	const environment: NodeJS.ProcessEnv = {
-		...process.env,
-		BETTER_AUTH_SECRET:
-			"better-auth-scim-demo-e2e-secret-at-least-thirty-two-characters",
-		BETTER_AUTH_URL: baseURL,
-		DEMO_SQLITE_PATH: databasePath,
-		NO_COLOR: "1",
-		SCIM_DEMO_CREDENTIAL_PEPPER:
-			"e2e-scim-managed-catalog-secret-at-least-thirty-two-characters",
-		SCIM_DEMO_ENABLED: "true",
-		SCIM_DEMO_OIDC_CLIENT_SECRET:
-			"e2e-scim-demo-oidc-client-secret-at-least-thirty-two-characters",
-		SCIM_DEMO_OIDC_SIGNING_PRIVATE_KEY: undefined,
-	};
+// Startup state lives here so `afterAll` can clean up wherever startup stopped.
+function createNextDemoRuntime() {
+	const children = new Set<ChildProcessWithoutNullStreams>();
 	let output = "";
-	let demoProcess: ChildProcessWithoutNullStreams | undefined;
-	try {
-		const migration = spawn(
-			"node",
-			[
-				"--experimental-strip-types",
-				"--input-type=module",
-				"--eval",
-				[
-					'import { getMigrations } from "better-auth/db/migration";',
-					'const { auth } = await import("./lib/auth.ts");',
-					"const { runMigrations } = await getMigrations(auth.options);",
-					"await runMigrations();",
-				].join("\n"),
-			],
-			{ cwd: demoDirectory, env: environment, stdio: "pipe" },
-		);
-		migration.stdout.on("data", (chunk) => {
-			output += chunk.toString();
-		});
-		migration.stderr.on("data", (chunk) => {
-			output += chunk.toString();
-		});
-		const [migrationExitCode] = await once(migration, "close");
-		if (migrationExitCode !== 0) {
-			throw new Error(`Next.js demo migration failed:\n${output}`);
-		}
+	let temporaryDirectory: string | undefined;
+	let stopped = false;
 
-		demoProcess = spawn(
-			"pnpm",
-			["dev", "--hostname", "127.0.0.1", "--port", String(port)],
-			{
-				cwd: demoDirectory,
-				detached: process.platform !== "win32",
-				env: environment,
-				stdio: "pipe",
-			},
-		);
-		demoProcess.stdout.on("data", (chunk) => {
-			output += chunk.toString();
+	function spawnLogged(
+		command: string,
+		args: readonly string[],
+		env: NodeJS.ProcessEnv,
+	) {
+		// A timed-out `start` keeps running after `stop`, so it must not spawn.
+		if (stopped) throw new Error("Next.js demo stopped during startup");
+		const child = spawn(command, args, {
+			cwd: demoDirectory,
+			detached: process.platform !== "win32",
+			env,
+			stdio: "pipe",
 		});
-		demoProcess.stderr.on("data", (chunk) => {
-			output += chunk.toString();
-		});
-		const deadline = Date.now() + 60_000;
-		while (Date.now() < deadline) {
-			if (demoProcess.exitCode !== null) {
-				throw new Error(`Next.js demo exited before startup:\n${output}`);
-			}
-			try {
-				const response = await fetch(`${baseURL}/sign-in`, {
-					signal: AbortSignal.timeout(1_000),
-				});
-				if (response.ok) {
-					return {
-						baseURL,
-						databasePath,
-						process: demoProcess,
-						readOutput: () => output,
-						temporaryDirectory,
-					};
-				}
-			} catch {
-				// The development server has not bound its port yet.
-			}
-			await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
-		}
-		throw new Error(`Next.js demo did not start:\n${output}`);
-	} catch (error) {
-		await stopProcess(demoProcess);
-		await rm(temporaryDirectory, { recursive: true, force: true });
-		throw error;
+		children.add(child);
+		// A closed child's pid can be reused, so `stop` must not signal it.
+		child.once("close", () => children.delete(child));
+		child.stdout.setEncoding("utf8").on("data", (data) => (output += data));
+		child.stderr.setEncoding("utf8").on("data", (data) => (output += data));
+		return child;
 	}
+
+	return {
+		output: () => output,
+		start: async (): Promise<NextDemoRuntime> => {
+			temporaryDirectory = await mkdtemp(
+				join(tmpdir(), "better-auth-scim-managed-demo-"),
+			);
+			const port = await getAvailablePort();
+			const baseURL = `http://127.0.0.1:${port}`;
+			const databasePath = join(temporaryDirectory, "demo.sqlite");
+			const environment: NodeJS.ProcessEnv = {
+				...process.env,
+				BETTER_AUTH_SECRET:
+					"better-auth-scim-demo-e2e-secret-at-least-thirty-two-characters",
+				BETTER_AUTH_URL: baseURL,
+				DEMO_SQLITE_PATH: databasePath,
+				NO_COLOR: "1",
+				SCIM_DEMO_CREDENTIAL_PEPPER:
+					"e2e-scim-managed-catalog-secret-at-least-thirty-two-characters",
+				SCIM_DEMO_ENABLED: "true",
+				SCIM_DEMO_OIDC_CLIENT_SECRET:
+					"e2e-scim-demo-oidc-client-secret-at-least-thirty-two-characters",
+				SCIM_DEMO_OIDC_SIGNING_PRIVATE_KEY: undefined,
+			};
+			const migration = spawnLogged(
+				"node",
+				[
+					"--experimental-strip-types",
+					"--input-type=module",
+					"--eval",
+					[
+						'import { getMigrations } from "better-auth/db/migration";',
+						'const { auth } = await import("./lib/auth.ts");',
+						"const { runMigrations } = await getMigrations(auth.options);",
+						"await runMigrations();",
+					].join("\n"),
+				],
+				environment,
+			);
+			const [migrationExitCode] = await once(migration, "close");
+			if (migrationExitCode !== 0) {
+				throw new Error(`Next.js demo migration failed:\n${output}`);
+			}
+
+			const demoProcess = spawnLogged(
+				"pnpm",
+				["dev", "--hostname", "127.0.0.1", "--port", String(port)],
+				environment,
+			);
+			const deadline = Date.now() + 60_000;
+			while (Date.now() < deadline) {
+				if (demoProcess.exitCode !== null) {
+					throw new Error(`Next.js demo exited before startup:\n${output}`);
+				}
+				try {
+					const response = await fetch(`${baseURL}/sign-in`, {
+						signal: AbortSignal.timeout(1_000),
+					});
+					if (response.ok) return { baseURL, databasePath };
+				} catch {
+					// The development server has not bound its port yet.
+				}
+				await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
+			}
+			throw new Error(`Next.js demo did not start:\n${output}`);
+		},
+		stop: async () => {
+			stopped = true;
+			const { terminate } = await import(
+				"@better-auth-test/test-utils/playwright"
+			);
+			await Promise.all([...children].map(terminate));
+			if (!temporaryDirectory) return;
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		},
+	};
 }
 
 async function signUp(
@@ -334,26 +331,22 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 	test.describe.configure({ mode: "serial" });
 	test.setTimeout(120_000);
 
+	const demo = createNextDemoRuntime();
 	let runtime: NextDemoRuntime;
 
 	test.beforeAll(async () => {
 		// Hooks run on the project timeout, so let the startup deadline fire first.
 		test.setTimeout(120_000);
-		runtime = await startNextDemoRuntime();
+		runtime = await demo.start();
 	});
 
+	// Runs even when `beforeAll` times out, unlike `afterEach`.
 	test.afterAll(async ({}, testInfo) => {
-		await stopProcess(runtime?.process);
-		if (runtime) {
-			await testInfo.attach("next-dev.log", {
-				body: runtime.readOutput(),
-				contentType: "text/plain",
-			});
-			await rm(runtime.temporaryDirectory, {
-				recursive: true,
-				force: true,
-			});
-		}
+		await demo.stop();
+		await testInfo.attach("next-dev.log", {
+			body: demo.output(),
+			contentType: "text/plain",
+		});
 	});
 
 	/**
@@ -388,7 +381,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		const createResponse = await createResponsePromise;
 		expect(
 			createResponse.status(),
-			`${await createResponse.text()}\n${runtime.readOutput()}`,
+			`${await createResponse.text()}\n${demo.output()}`,
 		).toBe(201);
 		const original = await readIssuedCredential(createResponse);
 		expect(original.token).toMatch(
