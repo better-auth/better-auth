@@ -221,7 +221,7 @@ A client gets DPoP-bound tokens ([RFC 9449](https://datatracker.ietf.org/doc/htm
 * It sends `dpop_jkt` on the authorization request.
 * It requests a resource with `dpopBoundAccessTokensRequired: true`.
 
-The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)) and returns `token_type: "DPoP"`. A refresh needs a proof from the same key. A JWT access token carries the key's thumbprint in `cnf.jkt`. The client calls your API with `Authorization: DPoP <access_token>` and a `DPoP` proof that includes the access token hash, `ath` ([§7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
+The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)) and returns `token_type: "DPoP"`. A refresh needs a proof from the same key. So does a [token exchange](#exchange-dpop-bound-tokens) of the client's own token. A JWT access token carries the key's thumbprint in `cnf.jkt`. The client calls your API with `Authorization: DPoP <access_token>` and a `DPoP` proof that includes the access token hash, `ath` ([§7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
 
 ```ts title="auth.ts"
 oauthProvider({
@@ -406,7 +406,7 @@ await auth.api.adminCreateOAuthClient({
 
 The client's linked [resources](#resources) do two jobs here:
 
-* Linking `https://mcp.example.com` lets the client exchange tokens whose audience is that resource, which are the tokens it receives.
+* Linking `https://mcp.example.com` lets the client exchange tokens whose audience is that resource, which are the tokens it receives. It can exchange them even when they are DPoP-bound to another client. See [Exchange DPoP-bound tokens](#exchange-dpop-bound-tokens).
 * Linking `https://api.example.com` lets the client request tokens for that resource.
 
 `skip_consent` decides whether the user must have approved the exchanging client:
@@ -451,7 +451,38 @@ curl https://auth.example.com/api/auth/oauth2/token \
 
 With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
 
-If the request carries a `DPoP` proof, the exchanged token is bound to that key and `token_type` is `DPoP`, as described in [DPoP](#dpop). A proof is required when the exchanging client or the target resource requires DPoP-bound tokens.
+### Exchange DPoP-bound tokens
+
+[DPoP](#dpop) stops anyone without the client's private key from using a leaked token at your API, as long as the API verifies the proof. When the client the token was issued to exchanges it, the exchanged token stays bound to the same key. A service in the token's audience can also exchange it, without that key.
+
+The exchange request decides how the exchanged token is bound:
+
+* If the request carries a `DPoP` proof, the exchanged token is bound to that key and `token_type` is `DPoP`.
+* A proof is required when the exchanging client or the target resource requires DPoP-bound tokens. It is also required when a client exchanges its own DPoP-bound token.
+* Otherwise, an exchange without a proof returns a bearer token.
+
+A [`clientAuthentication` strategy](/docs/plugins/oauth-provider/reference#provider-extensions) that returns its own `confirmation` binds the exchanged token to that confirmation instead of the proof. When a client exchanges its own DPoP-bound token, that confirmation must carry the same DPoP key. Otherwise, the exchange fails with `invalid_dpop_proof`.
+
+When the subject token is DPoP-bound, the rules depend on who exchanges it:
+
+* **The client the token was issued to** must send a proof signed by the same key, as it does for a refresh. The exchanged token stays bound to that key. A missing proof, or a proof from another key, fails with `invalid_dpop_proof`.
+* **A service in the token's audience**, such as the MCP server that received it, does not hold the client's key. If the service sends its own proof, the exchanged token is bound to the service's key. If it sends no proof and none is required, the exchanged token is a bearer token.
+
+A service that passes the [exchange rules](#exchange-rules) does not need the client's key. It can turn each DPoP-bound token it receives into a token for the APIs it is linked to. To keep those tokens DPoP-bound, require a proof in either of these ways:
+
+* Register the service with `dpop_bound_access_tokens: true`. Every token request from the service then needs a proof, including its exchanges.
+* Set `dpopBoundAccessTokensRequired: true` on the target resource. Every client then needs a proof to get tokens for that resource.
+
+To refuse these exchanges instead, accept a sender-constrained subject token, such as a DPoP-bound one, only from the client it was issued to:
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  allowExchange: ({ client, subjectToken }) =>
+    !subjectToken.cnf || subjectToken.client_id === client.clientId,
+});
+```
+
+A refused exchange fails with `invalid_request`.
 
 ### Exchange rules
 
@@ -462,6 +493,7 @@ The provider applies these rules to every exchange, before your `allowExchange` 
 | The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
 | The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
 | The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
+| A client that exchanges its own DPoP-bound token sends a proof signed by the same key                                                                 | An exchange cannot remove or replace the client's DPoP binding                                                      |
 | The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
 | Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
 | A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
@@ -479,6 +511,7 @@ Scope names are global across resources. A `read` scope on the MCP server and a 
 | An unknown or disabled resource or `audience` value, one not linked to the client while `enforcePerClientResources` is on, or the userinfo endpoint                                                                 | `400 invalid_target`      |
 | Failed client authentication                                                                                                                                                                                        | `invalid_client`          |
 | A client not registered for the token-exchange grant                                                                                                                                                                | `400 unauthorized_client` |
+| An invalid DPoP proof, a missing proof when one is required, or a proof from another key when the client exchanges its own DPoP-bound token                                                                         | `400 invalid_dpop_proof`  |
 
 ### Keep the organization the user approved
 

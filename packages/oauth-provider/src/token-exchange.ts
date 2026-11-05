@@ -1,9 +1,11 @@
 import type { AuthContext } from "@better-auth/core";
 import { isAPIError } from "better-auth/api";
+import { getConfirmationJkt } from "better-auth/oauth2";
 import type { User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { extendOAuthProvider } from "./extensions";
 import { resolveResourcePolicy } from "./resources";
+import { resolveIssuanceConfirmation } from "./token";
 import type {
 	OAuthExtensionGrantHandlerInput,
 	OAuthTokenResponse,
@@ -150,11 +152,12 @@ async function exchangeToken(
 	validateClientScopes(client, scopes);
 	// Resolve the targets now, so consent and allowExchange only ever see valid
 	// targets and the scopes their allowlists leave.
-	const { effectiveScopes } = await resolveResourcePolicy(ctx, opts, {
-		resource: resources,
-		clientId: client.clientId,
-		requestedScopes: scopes,
-	});
+	const { effectiveScopes, dpopBoundAccessTokensRequired } =
+		await resolveResourcePolicy(ctx, opts, {
+			resource: resources,
+			clientId: client.clientId,
+			requestedScopes: scopes,
+		});
 	// Keep the reference the user approved, not their current one (RFC 9068 §2.2.1).
 	const referenceId =
 		(typeof subject.reference_id === "string" && subject.reference_id) ||
@@ -173,6 +176,17 @@ async function exchangeToken(
 			deny("the user has not consented to this client for this exchange");
 		}
 	}
+	// As on refresh, a client exchanging its own DPoP-bound token must prove the
+	// same key. A resource server cannot hold that key, so it binds its own.
+	const binding = await resolveIssuanceConfirmation(ctx, opts, {
+		client,
+		dpopBoundAccessTokensRequired,
+		confirmation,
+		expectedJkt:
+			subject.client_id === client.clientId
+				? getConfirmationJkt(subject.cnf)
+				: undefined,
+	});
 	if (
 		options.allowExchange &&
 		!(await options.allowExchange({
@@ -196,7 +210,7 @@ async function exchangeToken(
 		// Introspection reports the exchanged token inactive once the session ends.
 		sessionId: typeof subject.sid === "string" ? subject.sid : undefined,
 		maxExpiresAt: new Date(subject.exp * 1000),
-		confirmation,
+		confirmation: binding,
 		tokenResponse: { issued_token_type: ACCESS_TOKEN_TYPE },
 	});
 }

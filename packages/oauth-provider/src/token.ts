@@ -214,11 +214,9 @@ export function getOAuthProviderApi(
 				clientId: params.client.clientId,
 				requestedScopes: params.scopes,
 			});
-			return resolveDpopTokenBinding(ctx, opts, {
+			return resolveIssuanceConfirmation(ctx, opts, {
 				client: params.client,
-				grantIssuance: {
-					dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
-				},
+				dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
 			});
 		},
 		hashToken: (token: string, type: StoreTokenType) =>
@@ -789,6 +787,40 @@ function clientRequiresDpopBoundAccessTokens(client: SchemaClient<Scope[]>) {
 	);
 }
 
+/**
+ * Resolves the sender-constraint for an issuance: the `confirmation` the client
+ * proved at authentication, or else the request's DPoP proof. With
+ * `expectedJkt`, the binding must use that key and a proof is required, as on
+ * refresh.
+ */
+export async function resolveIssuanceConfirmation(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: {
+		client: SchemaClient<Scope[]>;
+		dpopBoundAccessTokensRequired: boolean;
+		confirmation?: Confirmation;
+		expectedJkt?: string;
+	},
+): Promise<Confirmation | undefined> {
+	if (params.confirmation) {
+		if (
+			params.expectedJkt !== undefined &&
+			getConfirmationJkt(params.confirmation) !== params.expectedJkt
+		) {
+			throwInvalidDpopProof("DPoP proof key does not match the bound token");
+		}
+		return params.confirmation;
+	}
+	return resolveDpopTokenBinding(ctx, opts, {
+		client: params.client,
+		grantIssuance: {
+			dpopBoundAccessTokensRequired: params.dpopBoundAccessTokensRequired,
+		},
+		expectedJkt: params.expectedJkt,
+	});
+}
+
 async function resolveDpopTokenBinding(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -797,17 +829,17 @@ async function resolveDpopTokenBinding(
 		grantIssuance: Pick<ResourceGrantIssuance, "dpopBoundAccessTokensRequired">;
 		verificationValue?: VerificationValue;
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
+		expectedJkt?: string;
 	},
 ): Promise<Confirmation | undefined> {
 	const authCodeDpopJkt = params.verificationValue?.query.dpop_jkt;
 	const refreshJkt = getConfirmationJkt(params.refreshToken?.confirmation);
-	const expectedJkt = refreshJkt ?? authCodeDpopJkt;
+	const expectedJkt = params.expectedJkt ?? refreshJkt ?? authCodeDpopJkt;
 	const dpopProofJwt = getDpopProofJwt(ctx);
 	const dpopRequired =
 		clientRequiresDpopBoundAccessTokens(params.client) ||
 		params.grantIssuance.dpopBoundAccessTokensRequired ||
-		!!authCodeDpopJkt ||
-		!!refreshJkt;
+		!!expectedJkt;
 
 	if (!dpopProofJwt) {
 		if (dpopRequired) {
