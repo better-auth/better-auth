@@ -568,6 +568,14 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				);
 			}
 
+			// The id is the row's primary key and the identity `adminUserIds` checks against.
+			if (hasDataKey("id")) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ADMIN_ERROR_CODES.USER_ID_CANNOT_BE_UPDATED,
+				);
+			}
+
 			// Role changes must be guarded by `user:set-role` and validated against the role allow-list.
 			if (Object.prototype.hasOwnProperty.call(ctx.body.data, "role")) {
 				const canSetRole = hasPermission({
@@ -664,6 +672,24 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 						);
 					}
 					updateData.email = email;
+				}
+			}
+
+			// A phone number is a sign-in method, so changing it needs `user:set-phone`.
+			if (hasDataKey("phoneNumber") || hasDataKey("phoneNumberVerified")) {
+				const canSetPhone = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["set-phone"],
+					},
+				});
+				if (!canSetPhone) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PHONE_NUMBER,
+					);
 				}
 			}
 

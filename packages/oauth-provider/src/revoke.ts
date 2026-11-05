@@ -6,7 +6,7 @@ import {
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JSONWebKeySet, JWTPayload } from "jose";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { createLocalJWKSet, errors as joseErrors, jwtVerify } from "jose";
 import { isAudienceClaimAllowed } from "./resources";
 import { decodeRefreshToken, invalidateRefreshFamily } from "./token";
 import type {
@@ -20,6 +20,7 @@ import {
 	extractClientCredentials,
 	getJwtPlugin,
 	getStoredToken,
+	isInvalidJwtError,
 	validateClientCredentials,
 } from "./utils";
 
@@ -48,20 +49,26 @@ async function revokeJwtAccessToken(
 	opts: OAuthOptions<Scope[]>,
 	token: string,
 ) {
-	const jwtPlugin = opts.disableJwtPlugin
-		? undefined
-		: getJwtPlugin(ctx.context);
-	const jwtPluginOptions = jwtPlugin?.options;
+	// Without the JWT plugin, this server issues only opaque access tokens.
+	if (opts.disableJwtPlugin) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "JWT access tokens are disabled",
+			error: "invalid_request",
+		});
+	}
+	const jwtPlugin = getJwtPlugin(ctx.context);
+	const jwtPluginOptions = jwtPlugin.options;
 
 	// Verify signature + issuer first, then validate `aud` against the OAuth
 	// resource model. Do not pass jose's `audience` option here: access-token
 	// audiences are resource identifiers, not a single global authorization-server
 	// audience.
+	let jwtPayload: JWTPayload & { azp?: string };
 	try {
 		const jwksFetch = jwtPluginOptions?.jwks?.remoteUrl
 			? jwtPluginOptions.jwks.remoteUrl
 			: async (): Promise<JSONWebKeySet | undefined> => {
-					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+					const jwksRes = await jwtPlugin.endpoints.getJwks(ctx);
 					// @ts-expect-error response is a JSONWebKeySet but within the response field
 					return jwksRes?.response as JSONWebKeySet | undefined;
 				};
@@ -78,32 +85,39 @@ async function revokeJwtAccessToken(
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			},
 		);
-		const userInfoAudience = `${ctx.context.baseURL}/oauth2/userinfo`;
+		jwtPayload = verified.payload;
+	} catch (error) {
+		// jose raises these only after the signature verifies: an expired token,
+		// or a malformed claims set. Check them before `isInvalidJwtError`, which
+		// also matches them.
 		if (
-			!verified.payload.azp ||
-			!(await isAudienceClaimAllowed(ctx, opts, verified.payload.aud, [
-				userInfoAudience,
-			]))
+			error instanceof joseErrors.JWTExpired ||
+			error instanceof joseErrors.JWTInvalid
 		) {
 			return null;
 		}
-	} catch (error) {
-		if (error instanceof Error) {
-			if (error.name === "TypeError" || error.name === "JWSInvalid") {
-				// likely an opaque token
-				throw new APIError("BAD_REQUEST", {
-					error_description: "invalid JWT signature",
-					error: "invalid_request",
-				});
-			} else if (error.name === "JWTExpired") {
-				return null;
-			} else if (error.name === "JWTInvalid") {
-				// issuer or other JWT claim validation failure
-				return null;
-			}
-			throw error;
+		// likely an opaque token, or a JWT this server cannot verify (bad
+		// signature, unknown key, failed claim checks such as `iss`), which
+		// may still be a stored opaque token (`generateOpaqueAccessToken`)
+		if (error instanceof TypeError || isInvalidJwtError(error)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "invalid JWT signature",
+				error: "invalid_request",
+			});
 		}
-		throw new Error(error as unknown as string);
+		throw error;
+	}
+
+	// Outside the try: a database failure here is a server error, not a sign
+	// that the token is opaque.
+	const userInfoAudience = `${ctx.context.baseURL}/oauth2/userinfo`;
+	if (
+		!jwtPayload.azp ||
+		!(await isAudienceClaimAllowed(ctx, opts, jwtPayload.aud, [
+			userInfoAudience,
+		]))
+	) {
+		return null;
 	}
 
 	// Verified: a valid JWT access token for this server. It is self-contained

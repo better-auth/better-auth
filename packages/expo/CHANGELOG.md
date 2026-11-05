@@ -1,5 +1,39 @@
 # @better-auth/expo
 
+## 1.7.17
+
+### Patch Changes
+
+- [#12218](https://github.com/better-auth/better-auth/pull/12218) [`b00bff0`](https://github.com/better-auth/better-auth/commit/b00bff02882839df3df94ce1c103b50b26fb8843) Thanks [@bytaesu](https://github.com/bytaesu)! - When OAuth state is stored in a cookie, Expo social sign-in now rejects authorization URLs without a `state` parameter, the same as with the default database storage.
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy now redirects only to the origin of a configured social or generic OAuth provider's authorization endpoint, or of an SSO provider on a trusted origin. If Expo sign-in through an SSO identity provider fails, add the identity provider's origin to `trustedOrigins`.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy now sets the signed state cookie only for an unexpired state issued by the server. `getAuthStateVerificationIdentifier` is now exported for plugins that look up OAuth state records.
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- [#10207](https://github.com/better-auth/better-auth/pull/10207) [`5d3d5c4`](https://github.com/better-auth/better-auth/commit/5d3d5c4c701dd899894a842008d6bdda180cb048) Thanks [@noobnooc](https://github.com/noobnooc)! - Send the Expo origin header when linking social accounts with an ID token so native link flows that include a session cookie pass origin validation.
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
 ## 1.7.7
 
 ## 1.7.6

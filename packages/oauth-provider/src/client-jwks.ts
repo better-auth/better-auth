@@ -1,5 +1,10 @@
 import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
+import { APIError } from "better-auth/api";
 import type { JSONWebKeySet } from "jose";
+import type { OAuthClient } from "./types/oauth";
+
+/** A client's inline public JWK Set, as registration and key rotation accept it. */
+export type ClientJwks = NonNullable<OAuthClient["jwks"]>;
 
 const EC_PRIVATE_KEY_JWT_ALGORITHM_BY_CURVE = {
 	"P-256": "ES256",
@@ -170,4 +175,18 @@ export function validatePublicClientJwks(
 		valid: true,
 		jwks: { keys } as JSONWebKeySet,
 	};
+}
+
+/**
+ * Throws `invalid_client_metadata` unless `jwks` is a public JWK Set that
+ * {@link validatePublicClientJwks} accepts.
+ */
+export function assertValidClientJwks(jwks: ClientJwks) {
+	const result = validatePublicClientJwks(jwks);
+	if (!result.valid) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: result.error,
+		});
+	}
 }

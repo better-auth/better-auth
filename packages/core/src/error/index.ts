@@ -1,4 +1,5 @@
 import { APIError as BaseAPIError } from "better-call/error";
+import type { RawError } from "../utils/error-codes";
 
 export class BetterAuthError extends Error {
 	constructor(message: string, options?: { cause?: unknown | undefined }) {
@@ -34,11 +35,20 @@ export class APIError extends BaseAPIError {
 
 	static from(
 		status: ConstructorParameters<typeof BaseAPIError>[0],
-		error: { code: string; message: string },
+		error: RawError,
+		options?: ErrorOptions,
 	) {
+		const { code, message } = error;
+		if (options?.cause === undefined) {
+			return new APIError(status, {
+				message,
+				code,
+			});
+		}
 		return new APIError(status, {
-			message: error.message,
-			code: error.code,
+			message,
+			code,
+			cause: options.cause,
 		});
 	}
 }

@@ -50,6 +50,8 @@ updates:
   - package-ecosystem: npm
     directories:
       - "/demo/*"
+    # Demos link the root packages, so take security updates only and bump the rest by hand.
+    open-pull-requests-limit: 0
     schedule:
       interval: weekly
       day: sunday
@@ -58,18 +60,3 @@ updates:
     commit-message:
       prefix: "chore(deps):"
     versioning-strategy: increase
-    cooldown:
-      default-days: 7
-      semver-major-days: 5
-    groups:
-      demo-minor-patch:
-        applies-to: version-updates
-        patterns:
-          - "*"
-        update-types:
-          - minor
-          - patch
-    ignore:
-      - dependency-name: "*"
-        update-types:
-          - version-update:semver-major

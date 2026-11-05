@@ -1,5 +1,35 @@
 # @better-auth/electron
 
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Sign-in and sign-up now return their normal response when the Electron transfer cookie does not hold a valid transfer request.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Desktop authorization codes are now bound to the browser session that issued them and stop working once that session ends.
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
 ## 1.7.7
 
 ## 1.7.6

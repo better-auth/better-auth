@@ -627,6 +627,9 @@ describe("PKCE optional - offline_access scope", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11723
+ */
 describe("PKCE optional - consistency checks", async () => {
 	const authServerBaseUrl = "http://localhost:3003";
 	const rpBaseUrl = "https://rp.example.com";
@@ -713,11 +716,14 @@ describe("PKCE optional - consistency checks", async () => {
 			body,
 			headers,
 			onError(context) {
-				expect(context.response.status).toBe(401);
+				expect(context.response.status).toBe(400);
 			},
 		});
 
 		expect(tokenResponse.error).toBeDefined();
+		expect((tokenResponse.error as { error?: string }).error).toBe(
+			"invalid_request",
+		);
 		expect((tokenResponse.error as any).error_description).toContain(
 			"code_verifier required because PKCE was used in authorization",
 		);
@@ -761,16 +767,22 @@ describe("PKCE optional - consistency checks", async () => {
 			body,
 			headers,
 			onError(context) {
-				expect(context.response.status).toBe(401);
+				expect(context.response.status).toBe(400);
 			},
 		});
 
 		expect(tokenResponse.error).toBeDefined();
+		expect((tokenResponse.error as { error?: string }).error).toBe(
+			"invalid_request",
+		);
 		expect((tokenResponse.error as any).error_description).toContain(
 			"code_verifier provided but PKCE was not used in authorization",
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7636#section-4.6
+	 */
 	it("mismatched PKCE challenge should fail", async () => {
 		// Authorize with PKCE
 		const codeVerifier = generateRandomString(64);
@@ -819,12 +831,15 @@ describe("PKCE optional - consistency checks", async () => {
 				body,
 				headers,
 				onError(context) {
-					expect(context.response.status).toBe(401);
+					expect(context.response.status).toBe(400);
 				},
 			},
 		);
 
 		expect(tokenResponse.error).toBeDefined();
+		expect((tokenResponse.error as { error?: string }).error).toBe(
+			"invalid_grant",
+		);
 		expect((tokenResponse.error as any).error_description).toContain(
 			"code verification failed",
 		);

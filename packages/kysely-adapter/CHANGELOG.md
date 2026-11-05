@@ -1,5 +1,39 @@
 # @better-auth/kysely-adapter
 
+## 1.7.17
+
+### Patch Changes
+
+- [#12220](https://github.com/better-auth/better-auth/pull/12220) [`fc2e00b`](https://github.com/better-auth/better-auth/commit/fc2e00bb4fd65e80246fdefcd5d8d5b1ea9d1512) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, a `create` that fails because the table reports no auto-increment id no longer leaves the inserted row behind, so retrying does not fail with a duplicate key error.
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, resolve the created row from the id reported by the INSERT itself instead of re-reading `LAST_INSERT_ID()` on a separate connection, and fail instead of guessing when no auto-increment id is reported.
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+## 1.7.10
+
+## 1.7.9
+
+## 1.7.8
+
+### Patch Changes
+
+- [#11512](https://github.com/better-auth/better-auth/pull/11512) [`4175b34`](https://github.com/better-auth/better-auth/commit/4175b34a8f70d5abb542ac7fc205dc42f564c03a) Thanks [@bytaesu](https://github.com/bytaesu)! - Align the installed `@better-auth/utils` version with `better-call` while accepting `^0.4.2 || ^0.5.0` across official package peers.
+
+- [#11490](https://github.com/better-auth/better-auth/pull/11490) [`9904b29`](https://github.com/better-auth/better-auth/commit/9904b29ece82ecf10f0bf5aa4b194d77aea2e898) Thanks [@aryan1306](https://github.com/aryan1306)! - Allow concurrent D1 queries on a shared auth instance with Kysely 0.29, avoiding cross-request I/O errors.
+
 ## 1.7.7
 
 ### Patch Changes

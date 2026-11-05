@@ -1,7 +1,7 @@
-import type { SecondaryStorage } from "@better-auth/core/db";
+import type { SecondaryStorage, Session } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { memoryAdapter } from "@better-auth/memory-adapter";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { admin } from "../plugins/admin/admin";
 import { adminClient } from "../plugins/admin/client";
 import { anonymous } from "../plugins/anonymous";
@@ -232,66 +232,66 @@ describe("secondary storage - bulk session cache eviction", () => {
 		);
 	});
 
-	it.each([
-		true,
-		false,
-	])("returns sessions once in input order (secondary storage: %s)", async (secondaryStorageEnabled) => {
-		const store = new Map<string, string>();
-		const { auth, signInWithTestUser } = await getTestInstance({
-			secondaryStorage: secondaryStorageEnabled
-				? createStringSecondaryStorage(store)
-				: undefined,
-			session: { storeSessionInDatabase: true },
-		});
-		const { user } = await signInWithTestUser();
-		const { internalAdapter } = await auth.$context;
-		const first = await internalAdapter.createSession(user.id);
-		const second = await internalAdapter.createSession(user.id);
-		const third = await internalAdapter.createSession(user.id);
-		store.delete(first.token);
-		store.delete(third.token);
+	it.each([true, false])(
+		"returns sessions once in input order (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+			});
+			const { user } = await signInWithTestUser();
+			const { internalAdapter } = await auth.$context;
+			const first = await internalAdapter.createSession(user.id);
+			const second = await internalAdapter.createSession(user.id);
+			const third = await internalAdapter.createSession(user.id);
+			store.delete(first.token);
+			store.delete(third.token);
 
-		const sessions = await internalAdapter.findSessions([
-			third.token,
-			second.token,
-			first.token,
-			third.token,
-			"missing-session",
-		]);
-		expect(sessions.map(({ session }) => session.token)).toEqual([
-			third.token,
-			second.token,
-			first.token,
-		]);
-	});
+			const sessions = await internalAdapter.findSessions([
+				third.token,
+				second.token,
+				first.token,
+				third.token,
+				"missing-session",
+			]);
+			expect(sessions.map(({ session }) => session.token)).toEqual([
+				third.token,
+				second.token,
+				first.token,
+			]);
+		},
+	);
 
-	it.each([
-		true,
-		false,
-	])("returns every requested session beyond the default query limit (secondary storage: %s)", async (secondaryStorageEnabled) => {
-		const store = new Map<string, string>();
-		const { auth, signInWithTestUser } = await getTestInstance({
-			secondaryStorage: secondaryStorageEnabled
-				? createStringSecondaryStorage(store)
-				: undefined,
-			session: { storeSessionInDatabase: true },
-			advanced: { database: { defaultFindManyLimit: 1 } },
-		});
-		const { user } = await signInWithTestUser();
-		const { internalAdapter } = await auth.$context;
-		const first = await internalAdapter.createSession(user.id);
-		const second = await internalAdapter.createSession(user.id);
-		store.clear();
+	it.each([true, false])(
+		"returns every requested session beyond the default query limit (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+				advanced: { database: { defaultFindManyLimit: 1 } },
+			});
+			const { user } = await signInWithTestUser();
+			const { internalAdapter } = await auth.$context;
+			const first = await internalAdapter.createSession(user.id);
+			const second = await internalAdapter.createSession(user.id);
+			store.clear();
 
-		const sessions = await internalAdapter.findSessions([
-			first.token,
-			second.token,
-		]);
-		expect(sessions.map(({ session }) => session.token)).toEqual([
-			first.token,
-			second.token,
-		]);
-	});
+			const sessions = await internalAdapter.findSessions([
+				first.token,
+				second.token,
+			]);
+			expect(sessions.map(({ session }) => session.token)).toEqual([
+				first.token,
+				second.token,
+			]);
+		},
+	);
 
 	it("does not replace corrupt or expired cache entries with database sessions", async () => {
 		const store = new Map<string, string>();
@@ -319,58 +319,58 @@ describe("secondary storage - bulk session cache eviction", () => {
 		).toEqual([]);
 	});
 
-	it.each([
-		true,
-		false,
-	])("keeps valid sessions when a database session has no user (secondary storage: %s)", async (secondaryStorageEnabled) => {
-		const store = new Map<string, string>();
-		const { auth, signInWithTestUser } = await getTestInstance({
-			database: memoryAdapter({
-				user: [],
-				account: [],
-				session: [],
-				verification: [],
-			}),
-			secondaryStorage: secondaryStorageEnabled
-				? createStringSecondaryStorage(store)
-				: undefined,
-			session: { storeSessionInDatabase: true },
-		});
-		const { user } = await signInWithTestUser();
-		const { adapter, internalAdapter } = await auth.$context;
-		const cached = await internalAdapter.createSession(user.id);
-		const evicted = await internalAdapter.createSession(user.id);
-		const deletedUser = await internalAdapter.createUser(
-			{
-				name: "Deleted user",
-				email: "deleted@test.com",
-			},
-			{ method: "test" },
-		);
-		const orphaned = await internalAdapter.createSession(deletedUser.id);
-		await adapter.delete({
-			model: "user",
-			where: [{ field: "id", value: deletedUser.id }],
-		});
-		store.delete(evicted.token);
-		store.delete(orphaned.token);
-		expect(
-			await adapter.findOne({
-				model: "session",
-				where: [{ field: "token", value: orphaned.token }],
-			}),
-		).not.toBeNull();
-		expect(await internalAdapter.findSession(orphaned.token)).toBeNull();
+	it.each([true, false])(
+		"keeps valid sessions when a database session has no user (secondary storage: %s)",
+		async (secondaryStorageEnabled) => {
+			const store = new Map<string, string>();
+			const { auth, signInWithTestUser } = await getTestInstance({
+				database: memoryAdapter({
+					user: [],
+					account: [],
+					session: [],
+					verification: [],
+				}),
+				secondaryStorage: secondaryStorageEnabled
+					? createStringSecondaryStorage(store)
+					: undefined,
+				session: { storeSessionInDatabase: true },
+			});
+			const { user } = await signInWithTestUser();
+			const { adapter, internalAdapter } = await auth.$context;
+			const cached = await internalAdapter.createSession(user.id);
+			const evicted = await internalAdapter.createSession(user.id);
+			const deletedUser = await internalAdapter.createUser(
+				{
+					name: "Deleted user",
+					email: "deleted@test.com",
+				},
+				{ method: "test" },
+			);
+			const orphaned = await internalAdapter.createSession(deletedUser.id);
+			await adapter.delete({
+				model: "user",
+				where: [{ field: "id", value: deletedUser.id }],
+			});
+			store.delete(evicted.token);
+			store.delete(orphaned.token);
+			expect(
+				await adapter.findOne({
+					model: "session",
+					where: [{ field: "token", value: orphaned.token }],
+				}),
+			).not.toBeNull();
+			expect(await internalAdapter.findSession(orphaned.token)).toBeNull();
 
-		const sessions = await internalAdapter.findSessions([
-			cached.token,
-			evicted.token,
-			orphaned.token,
-		]);
-		expect(sessions.map(({ session }) => session.token).sort()).toEqual(
-			[cached.token, evicted.token].sort(),
-		);
-	});
+			const sessions = await internalAdapter.findSessions([
+				cached.token,
+				evicted.token,
+				orphaned.token,
+			]);
+			expect(sessions.map(({ session }) => session.token).sort()).toEqual(
+				[cached.token, evicted.token].sort(),
+			);
+		},
+	);
 });
 
 describe("secondary storage - storeSessionInDatabase", () => {
@@ -752,5 +752,201 @@ describe("secondary storage - /delete-anonymous-user cleans up sessions", async 
 
 		const after = await client.getSession({ fetchOptions: { headers } });
 		expect(after.data).toBeNull();
+	});
+});
+
+/**
+ * The active-sessions index is a read-modify-write list, so concurrent writes
+ * can drop a token from it. Revoking all sessions must still end such a session.
+ */
+describe("secondary storage - bulk revocation of unindexed sessions", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it.for([false, true])(
+		"revokes a session missing from the index (storeSessionInDatabase: %s)",
+		async (storeSessionInDatabase) => {
+			const store = new Map<string, string>();
+			const { client, signInWithTestUser } = await getTestInstance({
+				secondaryStorage: createStringSecondaryStorage(store),
+				session: {
+					storeSessionInDatabase,
+				},
+			});
+			const first = await signInWithTestUser();
+			const unindexed = await signInWithTestUser();
+			const current = await client.getSession({
+				fetchOptions: {
+					headers: unindexed.headers,
+				},
+			});
+			const userId = current.data!.user.id;
+			const indexKey = `active-sessions-${userId}`;
+			const index = JSON.parse(store.get(indexKey)!) as Pick<
+				Session,
+				"token"
+			>[];
+			store.set(
+				indexKey,
+				JSON.stringify(
+					index.filter((s) => s.token !== current.data!.session.token),
+				),
+			);
+			vi.setSystemTime(Date.now() + 1000);
+
+			await client.revokeSessions({
+				fetchOptions: {
+					headers: first.headers,
+				},
+			});
+
+			const revoked = await client.getSession({
+				fetchOptions: {
+					headers: unindexed.headers,
+				},
+			});
+			expect(revoked.data).toBeNull();
+
+			vi.setSystemTime(Date.now() + 1000);
+			const replacement = await signInWithTestUser();
+			const active = await client.getSession({
+				fetchOptions: {
+					headers: replacement.headers,
+				},
+			});
+			expect(active.data?.user.id).toBe(userId);
+		},
+	);
+
+	it("ends an unindexed session when the user is deleted", async () => {
+		const store = new Map<string, string>();
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+		});
+		const unindexed = await signInWithTestUser();
+		const current = await client.getSession({
+			fetchOptions: {
+				headers: unindexed.headers,
+			},
+		});
+		const userId = current.data!.user.id;
+		store.set(`active-sessions-${userId}`, JSON.stringify([]));
+		vi.setSystemTime(Date.now() + 1000);
+
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteUser(userId);
+
+		expect(store.has(`revoked-sessions-before-${userId}`)).toBe(true);
+		const revoked = await client.getSession({
+			fetchOptions: {
+				headers: unindexed.headers,
+			},
+		});
+		expect(revoked.data).toBeNull();
+	});
+
+	it("keeps the cutoff for as long as any session created before it can live", async () => {
+		const ttls = new Map<string, number | undefined>();
+		const store = new Map<string, string>();
+		const storage = createStringSecondaryStorage(store);
+		const { client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: {
+				...storage,
+				set(key, value, ttl) {
+					ttls.set(key, ttl);
+					return storage.set(key, value, ttl);
+				},
+			},
+			session: {
+				expiresIn: 60 * 60,
+			},
+			plugins: [
+				admin({
+					impersonationSessionDuration: 60 * 60 * 24 * 3,
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const current = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		await client.revokeSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(ttls.get(`revoked-sessions-before-${current.data!.user.id}`)).toBe(
+			60 * 60 * 24 * 3,
+		);
+	});
+});
+
+describe("secondary storage - bulk revocation with a replacement session", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("keeps a session created by a session delete hook active", async () => {
+		const store = new Map<string, string>();
+		const replacementTokens: string[] = [];
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: {
+				storeSessionInDatabase: true,
+			},
+			databaseHooks: {
+				session: {
+					delete: {
+						async after(session, ctx) {
+							if (!ctx || replacementTokens.length) return;
+							const replacement =
+								await ctx.context.internalAdapter.createSession(session.userId);
+							replacementTokens.push(replacement.token);
+							// Later revocation work must not move the cutoff past this session.
+							vi.setSystemTime(Date.now() + 1000);
+						},
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const current = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.setSystemTime(Date.now() + 1000);
+
+		await client.revokeSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const { internalAdapter } = await auth.$context;
+		expect(replacementTokens).toHaveLength(1);
+		await expect(
+			internalAdapter.findSession(current.data!.session.token),
+		).resolves.toBeNull();
+		await expect(
+			internalAdapter.findSession(replacementTokens[0]!),
+		).resolves.toMatchObject({
+			session: {
+				userId: current.data!.user.id,
+			},
+		});
 	});
 });

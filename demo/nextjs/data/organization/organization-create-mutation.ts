@@ -25,8 +25,8 @@ export const useOrganizationCreateMutation = () => {
 
 	return useMutation({
 		mutationFn: createOrganization,
-		onSuccess: () => {
-			queryClient.invalidateQueries({
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({
 				queryKey: organizationKeys.all(),
 			});
 			toast.success("Organization created successfully");

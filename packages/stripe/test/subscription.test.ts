@@ -810,102 +810,106 @@ describe("stripe subscription", () => {
 			periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
 			shouldAllow: false,
 		},
-	])("should handle re-subscribing when periodEnd is in the $name", async ({
-		periodEnd,
-		shouldAllow,
-	}, { stripeMock, memory, stripeOptions }) => {
-		const starterPriceId = "price_starter_periodend_test";
-		const subscriptionId = "sub_periodend_test_123";
+	])(
+		"should handle re-subscribing when periodEnd is in the $name",
+		async ({ periodEnd, shouldAllow }, {
+			stripeMock,
+			memory,
+			stripeOptions,
+		}) => {
+			const starterPriceId = "price_starter_periodend_test";
+			const subscriptionId = "sub_periodend_test_123";
 
-		const stripeOptionsWithPrice = {
-			...stripeOptions,
-			subscription: {
-				enabled: true,
-				plans: [
+			const stripeOptionsWithPrice = {
+				...stripeOptions,
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							name: "starter",
+							priceId: starterPriceId,
+						},
+					],
+				},
+			} satisfies StripeOptions;
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptionsWithPrice)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await client.subscription.upgrade({
+				plan: "starter",
+				seats: 1,
+				fetchOptions: { headers },
+			});
+
+			await ctx.adapter.update({
+				model: "subscription",
+				update: {
+					status: "active",
+					seats: 1,
+					periodEnd,
+					stripeSubscriptionId: subscriptionId,
+				},
+				where: [{ field: "referenceId", value: userRes.user.id }],
+			});
+
+			// Mock Stripe to return the existing subscription with the same price ID
+			stripeMock.subscriptions.list.mockResolvedValue({
+				data: [
 					{
-						name: "starter",
-						priceId: starterPriceId,
+						id: subscriptionId,
+						status: "active",
+						items: {
+							data: [
+								{
+									id: "si_periodend_item",
+									price: {
+										id: starterPriceId,
+									},
+									quantity: 1,
+								},
+							],
+						},
 					},
 				],
-			},
-		} satisfies StripeOptions;
+			});
 
-		const { client, auth, sessionSetter } = await getTestInstance(
-			{
-				database: memory,
-				plugins: [stripe(stripeOptionsWithPrice)],
-			},
-			{
-				disableTestUser: true,
-				clientOptions: {
-					plugins: [stripeClient({ subscription: true })],
-				},
-			},
-		);
-		const ctx = await auth.$context;
-
-		const userRes = await client.signUp.email(
-			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
-			{ throw: true },
-		);
-
-		const headers = new Headers();
-		await client.signIn.email(
-			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
-			{ throw: true, onSuccess: sessionSetter(headers) },
-		);
-
-		await client.subscription.upgrade({
-			plan: "starter",
-			seats: 1,
-			fetchOptions: { headers },
-		});
-
-		await ctx.adapter.update({
-			model: "subscription",
-			update: {
-				status: "active",
+			const upgradeRes = await client.subscription.upgrade({
+				plan: "starter",
 				seats: 1,
-				periodEnd,
-				stripeSubscriptionId: subscriptionId,
-			},
-			where: [{ field: "referenceId", value: userRes.user.id }],
-		});
+				fetchOptions: { headers },
+			});
 
-		// Mock Stripe to return the existing subscription with the same price ID
-		stripeMock.subscriptions.list.mockResolvedValue({
-			data: [
-				{
-					id: subscriptionId,
-					status: "active",
-					items: {
-						data: [
-							{
-								id: "si_periodend_item",
-								price: {
-									id: starterPriceId,
-								},
-								quantity: 1,
-							},
-						],
-					},
-				},
-			],
-		});
-
-		const upgradeRes = await client.subscription.upgrade({
-			plan: "starter",
-			seats: 1,
-			fetchOptions: { headers },
-		});
-
-		if (shouldAllow) {
-			expect(upgradeRes.error).toBeNull();
-			expect(upgradeRes.data?.url).toBeDefined();
-		} else {
-			expect(upgradeRes.error?.message).toContain("already subscribed");
-		}
-	});
+			if (shouldAllow) {
+				expect(upgradeRes.error).toBeNull();
+				expect(upgradeRes.data?.url).toBeDefined();
+			} else {
+				expect(upgradeRes.error?.message).toContain("already subscribed");
+			}
+		},
+	);
 
 	test("should create billing portal session", async ({
 		stripeMock,

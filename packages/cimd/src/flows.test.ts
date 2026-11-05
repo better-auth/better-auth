@@ -578,27 +578,26 @@ describe("CIMD - token exchange flow", async () => {
 		expect(discoveryFetchUrls).toContain(jwksUri);
 	});
 
-	it.each([
-		"redirected",
-		"wrong-mime",
-		"oversized",
-	] as const)("rejects a %s discovery-owned JWKS response", async (responseKind) => {
-		const result = await exchangeWithUnsafeJwksResponse(responseKind);
-		expect(
-			fetchClientMetadataResource.mock.calls.some(([input]) => {
-				const requestedUrl =
-					typeof input === "string"
-						? input
-						: input instanceof URL
-							? input.href
-							: input.url;
-				return requestedUrl === result.jwksUri;
-			}),
-		).toBe(true);
-		expect(result).toMatchObject({
-			status: expect.toSatisfy((status: number) => status >= 400),
-		});
-	});
+	it.each(["redirected", "wrong-mime", "oversized"] as const)(
+		"rejects a %s discovery-owned JWKS response",
+		async (responseKind) => {
+			const result = await exchangeWithUnsafeJwksResponse(responseKind);
+			expect(
+				fetchClientMetadataResource.mock.calls.some(([input]) => {
+					const requestedUrl =
+						typeof input === "string"
+							? input
+							: input instanceof URL
+								? input.href
+								: input.url;
+					return requestedUrl === result.jwksUri;
+				}),
+			).toBe(true);
+			expect(result).toMatchObject({
+				status: expect.toSatisfy((status: number) => status >= 400),
+			});
+		},
+	);
 
 	it("returns user claims from /oauth2/userinfo with a CIMD-issued access token", async () => {
 		stubMetadataFetch(clientMetadataUrl, metadataDocument);
@@ -905,6 +904,69 @@ describe("CIMD - refresh preserves admin-set flags", async () => {
 				context: expect.any(Object),
 			}),
 		);
+	});
+
+	it("keeps admin changes made while the refresh fetch is in flight", async () => {
+		const inFlightUrl =
+			"https://mcp-client-refresh-race.example.com/client-metadata.json";
+		const document = { ...metadataDocument, client_id: inFlightUrl };
+		stubMetadataFetch(inFlightUrl, document);
+		const { headers } = await signInWithTestUser();
+		const authedClient = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: { customFetchImpl, headers },
+		});
+		const authorize = () =>
+			authedClient.$fetch(
+				buildAuthorizeUrl(authServerBaseUrl, inFlightUrl, redirectUri),
+				{ method: "GET", onError() {} },
+			);
+		await authorize();
+
+		// The refresh reads the client before fetching. An administrator writes
+		// during the fetch, and the refresh must not restore what it read.
+		const ctx = await authorizationServer.$context;
+		const originalFetch = globalThis.fetch.bind(globalThis);
+		vi.unstubAllGlobals();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const requested =
+					typeof input === "string"
+						? input
+						: input instanceof URL
+							? input.href
+							: input.url;
+				if (requested !== inFlightUrl) return originalFetch(input, init);
+				await ctx.adapter.update({
+					model: "oauthClient",
+					where: [{ field: "clientId", value: inFlightUrl }],
+					update: {
+						disabled: true,
+						skipConsent: true,
+						enableEndSession: true,
+						clientCredentialsScopes: ["service:read"],
+					},
+				});
+				return new Response(JSON.stringify(document), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
+			}),
+		);
+		await authorize();
+
+		const afterRefresh = await ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: inFlightUrl }],
+		});
+		expect(afterRefresh).toMatchObject({
+			disabled: true,
+			skipConsent: true,
+			enableEndSession: true,
+			clientCredentialsScopes: ["service:read"],
+		});
 	});
 });
 

@@ -21,22 +21,29 @@ const maxBatchEntries = 30;
 const maxBatchCharacters = 60_000;
 const maxContextCharacters = 500_000;
 const maxOutputTokensPerBatch = 32_000;
-const maxReviewOutputTokensPerBatch = 8_000;
+const maxReviewOutputTokensPerBatch = 32_000;
 const defaultFallbackReason = "The rewrite was not approved by review.";
 const invalidCopyFallbackReason =
 	"The rewrite did not pass deterministic copy validation.";
 
-const rewriteInstructions = readFileSync(
+// Every step reads the same entry rules, so the writer and reviewer cannot drift.
+const entryRules = readFileSync(
+	new URL("./entry.prompt.md", import.meta.url),
+	"utf-8",
+);
+
+function readInstructions(url: URL): string {
+	return `${readFileSync(url, "utf-8")}\n${entryRules}`;
+}
+
+const rewriteInstructions = readInstructions(
 	new URL("./rewrite.prompt.md", import.meta.url),
-	"utf-8",
 );
-const reviewInstructions = readFileSync(
+const reviewInstructions = readInstructions(
 	new URL("./review.prompt.md", import.meta.url),
-	"utf-8",
 );
-const repairInstructions = readFileSync(
+const repairInstructions = readInstructions(
 	new URL("./repair.prompt.md", import.meta.url),
-	"utf-8",
 );
 
 function buildBatches(context: ReleaseRewriteContext): ReleaseRewriteContext[] {
@@ -136,7 +143,7 @@ function validationFeedback(
 	if (!entry)
 		throw new Error(`Release rewrite context ${rewrite.id} is missing`);
 	try {
-		validateGeneratedReleaseRewrite(rewrite, entry.changeType === "breaking");
+		validateGeneratedReleaseRewrite(rewrite, entry);
 		return null;
 	} catch (error) {
 		return error instanceof Error ? error.message : String(error);
