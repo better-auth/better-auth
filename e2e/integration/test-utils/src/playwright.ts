@@ -1,7 +1,54 @@
-import type { ChildProcess } from "node:child_process";
-import { execFile } from "node:child_process";
+import type {
+	ChildProcess,
+	ChildProcessWithoutNullStreams,
+} from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
+import { createInterface } from "node:readline";
 import { promisify } from "node:util";
+
+// Build and server share one log, so a report shows both.
+export function launch(cwd: string) {
+	const children: ChildProcessWithoutNullStreams[] = [];
+	let output = "";
+
+	function spawnScript(args: readonly string[]) {
+		const child = spawn("pnpm", args, {
+			detached: process.platform !== "win32",
+			cwd,
+			stdio: "pipe",
+			env: { ...process.env, NO_COLOR: "1" },
+		});
+		children.push(child);
+		child.stderr.setEncoding("utf8").on("data", (data) => (output += data));
+		const lines = createInterface({ input: child.stdout });
+		lines.on("line", (line) => (output += `${line}\n`));
+		const exited = (code: number | null) =>
+			new Error(`pnpm ${args.join(" ")} exited with code ${code}\n${output}`);
+		return { child, lines, exited };
+	}
+
+	return {
+		output: () => output,
+		run: async (args: readonly string[]) => {
+			const { child, exited } = spawnScript(args);
+			const [code] = await once(child, "close");
+			if (code !== 0) throw exited(code);
+		},
+		start: (args: readonly string[]) => {
+			const { child, lines, exited } = spawnScript(args);
+			return new Promise<string>((resolve, reject) => {
+				lines.on("line", (line) => {
+					const match = line.match(/http:\/\/localhost:\d+/);
+					if (match) resolve(match[0]);
+				});
+				child.once("error", reject);
+				child.once("close", (code) => reject(exited(code)));
+			});
+		},
+		stop: () => Promise.all(children.map(terminate)),
+	};
+}
 
 // Spawn with detached: true on Unix so the child owns its process group.
 export async function terminate(child: ChildProcess): Promise<void> {
