@@ -55,7 +55,7 @@ Not built in:
   <Step>
     ### Add the plugin to the server
 
-    Your provider signs tokens with the [JWT plugin](/docs/plugins/jwt). Disable the JWT plugin's `/token` route, because clients call `/oauth2/token` instead.
+    Your provider signs tokens with the [JWT plugin](/docs/plugins/jwt). Disable the JWT plugin's `/token` route and its `set-auth-jwt` header. Both give the browser session JWTs signed with the same key as access tokens. Clients get tokens from `/oauth2/token` instead. See [OAuth Provider Mode](/docs/plugins/jwt#oauth-provider-mode).
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -65,7 +65,7 @@ Not built in:
     export const auth = betterAuth({
       disabledPaths: ["/token"], // [!code highlight]
       plugins: [
-        jwt(),
+        jwt({ disableSettingJwtHeader: true }), // [!code highlight]
         oauthProvider({ // [!code highlight]
           loginPage: "/sign-in", // [!code highlight]
           consentPage: "/consent", // [!code highlight]

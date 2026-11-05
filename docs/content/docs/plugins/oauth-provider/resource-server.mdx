@@ -12,6 +12,7 @@ A resource server is the API that receives access tokens from your OAuth clients
 To verify access tokens, call `verifyAccessTokenRequest` from `better-auth/oauth2` on each request. It verifies the token and, when the token is DPoP-bound, also checks the proof against the request method and URL ([RFC 9449 §7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
 
 ```ts title="api/posts.ts"
+import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import { isAPIError } from "better-auth/api";
 import {
   requestToResourceInput,
@@ -33,7 +34,11 @@ export const GET = async (req: Request) => {
     return Response.json({ sub: payload.sub });
   } catch (error) {
     if (!isAPIError(error)) throw error;
-    return Response.json(error.body, { status: error.statusCode });
+    const challenge = createResourceServerChallenge(error, "https://api.example.com");
+    return Response.json(error.body, {
+      status: error.statusCode,
+      headers: challenge?.headers,
+    });
   }
 };
 ```
@@ -42,7 +47,9 @@ export const GET = async (req: Request) => {
 
 `requestToResourceInput` reads the `Authorization` and `DPoP` headers, the method, and the URL from a standard `Request`. If your framework has no `Request`, pass `{ authorizationHeader, dpopProofJwt, method, url }` instead. When the token lacks a required scope, the call throws a 403 `insufficient_scope` error. Its `body.scope` lists every missing scope ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)), so the client knows which scopes to request when it authorizes again. Catch the thrown `APIError` and return its `statusCode`, as above. Most frameworks turn an uncaught error into a `500`.
 
-If the API runs in the same process as your auth server, use the resource client instead. Its 401 and `insufficient_scope` errors carry a `WWW-Authenticate` challenge in `headers`.
+The thrown error has no `WWW-Authenticate` header, which [RFC 6750 §3](https://datatracker.ietf.org/doc/html/rfc6750#section-3) requires when a request has no usable token. To add it, pass the error and your API's resource identifier to `createResourceServerChallenge` from `@better-auth/oauth-provider`, and send the returned `headers`. It returns a challenge for 401 and `insufficient_scope` errors, and `undefined` for any other error. The challenge's `resource_metadata` points to your [protected resource metadata](#protected-resource-metadata).
+
+If the API runs in the same process as your auth server, you can use the resource client instead. Its 401 and `insufficient_scope` errors already carry the challenge in `headers`.
 
 ```ts title="lib/server-client.ts"
 import { createAuthClient } from "better-auth/client";
@@ -54,7 +61,11 @@ export const serverClient = createAuthClient({
 });
 ```
 
-Pass `issuer`, `jwksUrl`, and `audience` explicitly. The defaults come from the `baseURL` you pass to `betterAuth()`. They can miss your base path, such as `/api/auth`.
+Pass `issuer`, `jwksUrl`, and `audience` explicitly. The defaults come from the options you pass to `betterAuth()`. With an origin-only `baseURL`, such as `https://auth.example.com`, they can miss your base path:
+
+* `issuer` defaults to `baseURL` unless the JWT plugin sets `jwt.issuer`. It never adds the base path, but the provider's issuer includes it, such as `https://auth.example.com/api/auth`.
+* `jwksUrl` adds `basePath` only when you set that option. With the default base path, `/api/auth`, it points to `https://auth.example.com/jwks`.
+* `audience` defaults to `baseURL`. See the warning below.
 
 <Callout type="warn">
   Do not rely on the default audience. It is the auth server's URL, not your API's identifier, and it is also the default `aud` of [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWTs. With the defaults, a signed-in user's session JWT can pass as an access token. Set `audience` to your API's resource identifier, and add `typ: "at+jwt"` and `requiredClaims: ["azp"]`.
