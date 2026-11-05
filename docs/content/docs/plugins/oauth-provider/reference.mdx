@@ -95,7 +95,7 @@ Adds UserInfo claims. See [UserInfo](/docs/plugins/oauth-provider/openid-connect
 
 `authenticationContext` <span className="opacity-70">`{ acrValuesSupported, resolve }`</span>
 
-Asserts the `acr` and `amr` ID token claims for each approved authorization request or device code. `acrValuesSupported` lists the `acr` values the provider may issue, advertised as `acr_values_supported`. It must not be empty or contain an empty string, or the plugin fails at startup. `resolve` returns the `acr` and `amr` the current session established. It is not called for requests without the `openid` scope. Without this option, ID tokens carry `acr: "0"` and no `amr`. See [Authentication context](/docs/plugins/oauth-provider/openid-connect#authentication-context).
+Asserts the `acr` and `amr` ID token claims for each authorization request or interaction request, such as a device code or a [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba) request, that the user approves on the provider's pages. `acrValuesSupported` lists the `acr` values the provider may issue, advertised as `acr_values_supported`. It must not be empty or contain an empty string, or the plugin fails at startup. `resolve` returns the `acr` and `amr` the current session established. It is not called for requests without the `openid` scope. Without this option, ID tokens from an approval on the provider's pages carry `acr: "0"` and no `amr`. An ID token from `completeCibaRequest`, or from `issueTokens` in a grant extension, carries the `acr` and `amr` you pass. Without an `acr`, it carries `"0"`. See [Authentication context](/docs/plugins/oauth-provider/openid-connect#authentication-context).
 
 `customTokenResponseFields` <span className="opacity-70">`(info) => Awaitable<Record<string, unknown>>`</span>
 
@@ -297,50 +297,150 @@ Custom model and field names for the plugin tables.
 
 ## Endpoints
 
-Paths are relative to your auth base path. "Server-only" endpoints are callable through `auth.api` only.
+Paths are relative to your auth base path. Each entry lists the HTTP methods, the server method on `auth.api`, and how the endpoint authenticates. A server-only endpoint is callable through `auth.api` only. Every other endpoint is also reachable over HTTP.
 
-| Method       | Path                                                     | Server method                  | Auth                                                   | Server-only |
-| ------------ | -------------------------------------------------------- | ------------------------------ | ------------------------------------------------------ | ----------- |
-| `GET`        | `/.well-known/oauth-authorization-server`                | `getOAuthServerConfig`         | None                                                   | No          |
-| `GET`        | `/.well-known/openid-configuration`                      | `getOpenIdConfig`              | None                                                   | No          |
-| `GET` `POST` | `/oauth2/authorize`                                      | `oauth2Authorize`              | Session, or redirect to `loginPage`                    | No          |
-| `POST`       | `/oauth2/consent`                                        | `oauth2Consent`                | Session and signed `oauth_query`                       | No          |
-| `POST`       | `/oauth2/continue`                                       | `oauth2Continue`               | Session and signed `oauth_query`                       | No          |
-| `POST`       | `/oauth2/token`                                          | `oauth2Token`                  | Client authentication                                  | No          |
-| `POST`       | `/oauth2/introspect`                                     | `oauth2Introspect`             | Client authentication                                  | No          |
-| `POST`       | `/oauth2/revoke`                                         | `oauth2Revoke`                 | Client authentication                                  | No          |
-| `GET` `POST` | `/oauth2/userinfo`                                       | `oauth2UserInfo`               | Access token with `openid`                             | No          |
-| `GET` `POST` | `/oauth2/end-session`                                    | `oauth2EndSession`             | `id_token_hint`, or user confirmation                  | No          |
-| `POST`       | `/oauth2/end-session/confirm`                            | —                              | Signed confirmation cookie                             | HTTP only   |
-| `POST`       | `/oauth2/register`                                       | `registerOAuthClient`          | Session, initial access token, or none                 | No          |
-| `POST`       | `/admin/oauth2/create-client`                            | `adminCreateOAuthClient`       | Server, with a session                                 | Yes         |
-| `PATCH`      | `/admin/oauth2/update-client`                            | `adminUpdateOAuthClient`       | Server, with a session                                 | Yes         |
-| `POST`       | `/oauth2/create-client`                                  | `createOAuthClient`            | Session                                                | No          |
-| `GET`        | `/oauth2/get-client`                                     | `getOAuthClient`               | Session                                                | No          |
-| `GET`        | `/oauth2/public-client`                                  | `getOAuthClientPublic`         | Session                                                | No          |
-| `POST`       | `/oauth2/public-client-prelogin`                         | `getOAuthClientPublicPrelogin` | Signed `oauth_query`, with `allowPublicClientPrelogin` | No          |
-| `GET`        | `/oauth2/get-clients`                                    | `getOAuthClients`              | Session                                                | No          |
-| `POST`       | `/oauth2/update-client`                                  | `updateOAuthClient`            | Session                                                | No          |
-| `POST`       | `/oauth2/client/rotate-secret`                           | `rotateClientSecret`           | Session                                                | No          |
-| `POST`       | `/oauth2/client/rotate-keys`                             | `rotateClientKeys`             | Client assertion                                       | No          |
-| `POST`       | `/oauth2/delete-client`                                  | `deleteOAuthClient`            | Session                                                | No          |
-| `GET`        | `/oauth2/get-consent`                                    | `getOAuthConsent`              | Session                                                | No          |
-| `GET`        | `/oauth2/get-consents`                                   | `getOAuthConsents`             | Session                                                | No          |
-| `POST`       | `/oauth2/update-consent`                                 | `updateOAuthConsent`           | Session                                                | No          |
-| `POST`       | `/oauth2/delete-consent`                                 | `deleteOAuthConsent`           | Session                                                | No          |
-| `POST`       | `/admin/oauth2/resources`                                | `adminCreateOAuthResource`     | Session and `resourcePrivileges`                       | Yes         |
-| `GET`        | `/admin/oauth2/resources`                                | `adminListOAuthResources`      | Session and `resourcePrivileges`                       | Yes         |
-| `GET`        | `/admin/oauth2/resources/:identifier`                    | `adminGetOAuthResource`        | Session and `resourcePrivileges`                       | Yes         |
-| `PATCH`      | `/admin/oauth2/resources/:identifier`                    | `adminUpdateOAuthResource`     | Session and `resourcePrivileges`                       | Yes         |
-| `DELETE`     | `/admin/oauth2/resources/:identifier`                    | `adminDeleteOAuthResource`     | Session and `resourcePrivileges`                       | Yes         |
-| `POST`       | `/admin/oauth2/resources/:identifier/clients/:client_id` | `adminLinkClientResource`      | Session and `resourcePrivileges`                       | Yes         |
-| `DELETE`     | `/admin/oauth2/resources/:identifier/clients/:client_id` | `adminUnlinkClientResource`    | Session and `resourcePrivileges`                       | Yes         |
+`/.well-known/oauth-authorization-server` <span className="opacity-70">GET</span>
 
-The provider also serves both well-known documents at their issuer-relative paths ([RFC 8414 §3](https://datatracker.ietf.org/doc/html/rfc8414#section-3)). Their `auth.api` methods are server-only. In the browser, `oauthProviderClient()` adds the signed `oauth_query` from the page URL to POST requests. `/oauth2/register` rejects requests unless `allowDynamicClientRegistration` is on, and `/oauth2/client/rotate-keys` unless `allowClientKeyRotation` is on.
+Server method: `getOAuthServerConfig`, which is server-only. Auth: none. The auth handler also serves the document over HTTP at its issuer-relative path ([RFC 8414 §3](https://datatracker.ietf.org/doc/html/rfc8414#section-3)). See [Expose the well-known metadata](/docs/plugins/oauth-provider#expose-the-well-known-metadata).
+
+`/.well-known/openid-configuration` <span className="opacity-70">GET</span>
+
+Server method: `getOpenIdConfig`, which is server-only. Auth: none. When `scopes` includes `openid`, the auth handler also serves the document over HTTP at its issuer-relative path.
+
+`/oauth2/authorize` <span className="opacity-70">GET, POST</span>
+
+Server method: `oauth2Authorize`. Auth: session, or a redirect to `loginPage`.
+
+`/oauth2/consent` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Consent`. Auth: session and signed `oauth_query`.
+
+`/oauth2/continue` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Continue`. Auth: session and signed `oauth_query`.
+
+`/oauth2/token` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Token`. Auth: client authentication.
+
+`/oauth2/introspect` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Introspect`. Auth: client authentication.
+
+`/oauth2/revoke` <span className="opacity-70">POST</span>
+
+Server method: `oauth2Revoke`. Auth: client authentication.
+
+`/oauth2/userinfo` <span className="opacity-70">GET, POST</span>
+
+Server method: `oauth2UserInfo`. Auth: access token with the `openid` scope.
+
+`/oauth2/end-session` <span className="opacity-70">GET, POST</span>
+
+Server method: `oauth2EndSession`. Auth: `id_token_hint`, or user confirmation.
+
+`/oauth2/end-session/confirm` <span className="opacity-70">POST</span>
+
+No server method. Auth: signed confirmation cookie. HTTP only.
+
+`/oauth2/register` <span className="opacity-70">POST</span>
+
+Server method: `registerOAuthClient`. Auth: session, initial access token, or none.
+
+`/admin/oauth2/create-client` <span className="opacity-70">POST</span>
+
+Server method: `adminCreateOAuthClient`. Auth: server call with a session. Server-only.
+
+`/admin/oauth2/update-client` <span className="opacity-70">PATCH</span>
+
+Server method: `adminUpdateOAuthClient`. Auth: server call with a session. Server-only.
+
+`/oauth2/create-client` <span className="opacity-70">POST</span>
+
+Server method: `createOAuthClient`. Auth: session.
+
+`/oauth2/get-client` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthClient`. Auth: session.
+
+`/oauth2/public-client` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthClientPublic`. Auth: session.
+
+`/oauth2/public-client-prelogin` <span className="opacity-70">POST</span>
+
+Server method: `getOAuthClientPublicPrelogin`. Auth: signed `oauth_query`. The endpoint requires `allowPublicClientPrelogin`.
+
+`/oauth2/get-clients` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthClients`. Auth: session.
+
+`/oauth2/update-client` <span className="opacity-70">POST</span>
+
+Server method: `updateOAuthClient`. Auth: session.
+
+`/oauth2/client/rotate-secret` <span className="opacity-70">POST</span>
+
+Server method: `rotateClientSecret`. Auth: session.
+
+`/oauth2/client/rotate-keys` <span className="opacity-70">POST</span>
+
+Server method: `rotateClientKeys`. Auth: client assertion.
+
+`/oauth2/delete-client` <span className="opacity-70">POST</span>
+
+Server method: `deleteOAuthClient`. Auth: session.
+
+`/oauth2/get-consent` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthConsent`. Auth: session.
+
+`/oauth2/get-consents` <span className="opacity-70">GET</span>
+
+Server method: `getOAuthConsents`. Auth: session.
+
+`/oauth2/update-consent` <span className="opacity-70">POST</span>
+
+Server method: `updateOAuthConsent`. Auth: session.
+
+`/oauth2/delete-consent` <span className="opacity-70">POST</span>
+
+Server method: `deleteOAuthConsent`. Auth: session.
+
+`/admin/oauth2/resources` <span className="opacity-70">POST</span>
+
+Server method: `adminCreateOAuthResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources` <span className="opacity-70">GET</span>
+
+Server method: `adminListOAuthResources`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier` <span className="opacity-70">GET</span>
+
+Server method: `adminGetOAuthResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier` <span className="opacity-70">PATCH</span>
+
+Server method: `adminUpdateOAuthResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier` <span className="opacity-70">DELETE</span>
+
+Server method: `adminDeleteOAuthResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier/clients/:client_id` <span className="opacity-70">POST</span>
+
+Server method: `adminLinkClientResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+`/admin/oauth2/resources/:identifier/clients/:client_id` <span className="opacity-70">DELETE</span>
+
+Server method: `adminUnlinkClientResource`. Auth: session and `resourcePrivileges`. Server-only.
+
+In the browser, `oauthProviderClient()` adds the signed `oauth_query` from the page URL to POST requests. `/oauth2/register` rejects requests unless `allowDynamicClientRegistration` is on, and `/oauth2/client/rotate-keys` unless `allowClientKeyRotation` is on.
 
 Some endpoints behave differently with other plugins or requests:
 
 * With `oauthDeviceAuthorization()`, `/oauth2/authorize` also accepts `user_code` instead of an authorization request. The user approves the device code on the same pages. See [Device code grant](/docs/plugins/oauth-provider/tokens#device-code-grant).
+* With [`ciba()`](/docs/plugins/ciba), `/oauth2/authorize` also accepts `ciba_request_id`. The user approves the backchannel request on the same pages. See [What the user sees](/docs/plugins/ciba#what-the-user-sees).
 * During a browser navigation, `/oauth2/end-session` can return the [front-channel logout](/docs/plugins/oauth-provider/openid-connect#front-channel-logout) page.
 * `/oauth2/token`, `/oauth2/introspect`, and `/oauth2/revoke` return 400 `invalid_request` for a parameter sent more than once. At the token endpoint, only `resource` and `audience` may repeat.
 
@@ -348,17 +448,58 @@ Some endpoints behave differently with other plugins or requests:
 
 Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#section-5.2) format. The built-in grants authenticate the client before they look up the grant, so an unknown `client_id` returns `invalid_client`, not `invalid_grant`.
 
-| Error                    | Status | Returned when                                                                                                                            |
-| ------------------------ | ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid_request`        | 400    | A required request field is missing or malformed, or a parameter is sent more than once. Only `resource` and `audience` may repeat.      |
-| `invalid_client`         | 400    | Client authentication failed, or the client used a method other than its registered `token_endpoint_auth_method`.                        |
-| `invalid_client`         | 401    | `client_secret_basic` authentication failed. The response carries a `WWW-Authenticate: Basic` challenge.                                 |
-| `invalid_grant`          | 400    | The code, refresh token, or PKCE verifier is invalid, expired, or issued to another client.                                              |
-| `unauthorized_client`    | 400    | The client is not registered for the grant, a public client used `client_credentials`, or the client has no `client_credentials` scopes. |
-| `unsupported_grant_type` | 400    | The grant is not in `grantTypes` and no extension handles it.                                                                            |
-| `invalid_scope`          | 400    | A requested scope is not allowed for the client, or none are allowed for a requested resource.                                           |
-| `invalid_target`         | 400    | A `resource` is malformed, unknown, or disabled, or it is not linked to the client while `enforcePerClientResources` is on.              |
-| `invalid_dpop_proof`     | 400    | The DPoP proof is missing or invalid for a DPoP-bound client or resource.                                                                |
+`invalid_request` <span className="opacity-70">400</span>
+
+Returned when a required request field is missing or malformed, or a parameter is sent more than once. Only `resource` and `audience` may repeat.
+
+`invalid_client` <span className="opacity-70">400</span>
+
+Returned in any of these cases:
+
+* Client authentication fails.
+* The client uses a method other than its registered `token_endpoint_auth_method`.
+
+`invalid_client` <span className="opacity-70">401</span>
+
+Returned when `client_secret_basic` authentication fails. The response carries a `WWW-Authenticate: Basic` challenge.
+
+`invalid_grant` <span className="opacity-70">400</span>
+
+Returned when the code, refresh token, or PKCE verifier is invalid, expired, or issued to another client.
+
+`invalid_user` <span className="opacity-70">400</span>
+
+Returned when the user who approved an authorization code was deleted before the code was exchanged.
+
+`unauthorized_client` <span className="opacity-70">400</span>
+
+Returned in any of these cases:
+
+* The client is not registered for the grant.
+* A public client uses `client_credentials`.
+* The client has no `client_credentials` scopes.
+
+`unsupported_grant_type` <span className="opacity-70">400</span>
+
+Returned when the grant is not in `grantTypes` and no extension handles it.
+
+`invalid_scope` <span className="opacity-70">400</span>
+
+Returned in any of these cases:
+
+* A requested scope is not allowed for the client.
+* No scope is allowed for a requested resource.
+
+`invalid_target` <span className="opacity-70">400</span>
+
+Returned in any of these cases:
+
+* A `resource` is malformed, unknown, or disabled.
+* A `resource` is not linked to the client while `enforcePerClientResources` is on.
+
+`invalid_dpop_proof` <span className="opacity-70">400</span>
+
+Returned when the DPoP proof is missing or invalid for a DPoP-bound client or resource.
 
 Token exchange has its own conditions for these errors. See [Token exchange errors](/docs/plugins/oauth-provider/tokens#token-exchange-errors).
 
@@ -393,12 +534,13 @@ oauthProvider({
 
 Companion plugins call `extendOAuthProvider()` from their `init()` hook to add token grants, assertion-based client authentication, discovery metadata, claims, client registration metadata, client-id discovery, and interaction requests. The [CIMD plugin](/docs/plugins/cimd) uses this to add URL-based client discovery.
 
-An interaction request is a request other than an authorization request that the user approves through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages. It is approved when the user accepts consent, instead of issuing an authorization code. `oauthDeviceAuthorization()` uses one keyed by `user_code`.
+An interaction request is a request other than an authorization request that the user approves through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages. It is approved when the user accepts consent, instead of issuing an authorization code. `oauthDeviceAuthorization()` uses one keyed by `user_code`, and `ciba()` one keyed by `ciba_request_id`.
 
 Add companion plugins such as `oauthDeviceAuthorization()` and `oauthTokenExchange()` to every `betterAuth()` instance that registers OAuth clients, including a separate admin or provisioning instance. An instance without the plugin does not support its extension grant:
 
 * `createOAuthClient`, `adminCreateOAuthClient`, and client updates reject the grant with `invalid_client_metadata`.
 * Dynamic registration drops the grant and registers the client with its other supported grants. It fails with `invalid_client_metadata` only when no supported grant remains.
+* A client metadata document keeps the grant, and the token endpoint refuses it with `unsupported_grant_type`. The document fails with `invalid_client_metadata` only when it lists no supported grant.
 
 ```ts title="custom-oauth-extension.ts"
 import type { BetterAuthPlugin } from "better-auth";
@@ -701,5 +843,9 @@ Database adapters may map `clientId` on `oauthClient` to `id` for faster lookups
 
   <Card href="/docs/plugins/cimd" title="Client ID Metadata Documents">
     Identify clients by a metadata document URL.
+  </Card>
+
+  <Card href="/docs/plugins/ciba" title="Client-Initiated Backchannel Authentication">
+    Let a client ask a known user to approve access on their own device.
   </Card>
 </Cards>

@@ -86,7 +86,7 @@ The **MCP** plugin lets your app act as an OAuth authorization server and protec
 
 ## Endpoints
 
-`mcp()` serves the standard OAuth 2.1 endpoints under `/oauth2/*`:
+`mcp()` serves every [OAuth Provider endpoint](/docs/plugins/oauth-provider/reference#endpoints), including introspection (`/oauth2/introspect`), revocation (`/oauth2/revoke`), consent, and end-session. MCP clients use these:
 
 | Endpoint                                       | Path                |
 | ---------------------------------------------- | ------------------- |
@@ -116,8 +116,9 @@ import { oauthDeviceAuthorization } from "@better-auth/oauth-provider";
 import { mcp } from "@better-auth/mcp";
 
 export const auth = betterAuth({
+  disabledPaths: ["/token"],
   plugins: [
-    jwt(),
+    jwt({ disableSettingJwtHeader: true }),
     mcp({
       loginPage: "/sign-in",
       consentPage: "/consent",

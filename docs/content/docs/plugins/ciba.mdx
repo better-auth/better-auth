@@ -38,7 +38,7 @@ The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) and require
   <Step>
     ### Add the plugin to the server
 
-    Add `ciba()` after `oauthProvider()` and `jwt()`. `sendNotification` sends the user the link, and `resultPage` is the page they land on after deciding.
+    Add `ciba()` after `oauthProvider()` and `jwt()`. `sendNotification` sends the user the link, and `resultPage` is the page they land on after deciding. Disable the JWT plugin's `/token` route and its `set-auth-jwt` header, as [OAuth Provider Mode](/docs/plugins/jwt#oauth-provider-mode) describes.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
@@ -47,8 +47,9 @@ The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) and require
     import { ciba } from "@better-auth/ciba"; // [!code highlight]
 
     export const auth = betterAuth({
+      disabledPaths: ["/token"],
       plugins: [
-        jwt(),
+        jwt({ disableSettingJwtHeader: true }),
         oauthProvider({
           loginPage: "/login",
           consentPage: "/consent",
@@ -223,10 +224,15 @@ await auth.api.completeCibaRequest({
 });
 ```
 
-The provider records the decision only when `userId` is the user the `login_hint` named and the request is still pending; otherwise it returns `invalid_request` and changes nothing. Without `acr`, the ID token claims `"0"`, so state an `acr` when `"0"` is not in `acrValuesSupported`. The approved scopes must be among the requested ones and include `openid`. A ping client is called back as it is after a decision from the link. This call skips the provider's sign-in, post-login, and consent pages, so your app is responsible for:
+The provider records the decision only when `userId` is the user the `login_hint` named and the request is still pending. Otherwise, it returns `invalid_request` and changes nothing. Without `acr`, the ID token claims `"0"`. State an `acr` when `"0"` is not in the provider's [`authenticationContext.acrValuesSupported`](/docs/plugins/oauth-provider/openid-connect#authentication-context). The approved scopes must be among the requested ones and include `openid`. A ping client is called back as it is after a decision from the link.
 
-* authenticating the user before it reports a decision, and
-* showing the client, the scopes, and the binding message before the user approves.
+This call skips the provider's sign-in, post-login, and consent pages. It does not run `postLogin.consentReferenceId`. Tokens issued for a request you decide this way carry no `referenceId`. Your app is responsible for:
+
+* authenticating the user before it reports a decision,
+* showing the client, the scopes, and the binding message before the user approves, and
+* passing `scopes` without any scope that needs a reference, such as an organization scope.
+
+Without `scopes`, the approval covers every requested scope.
 
 The ID token carries only the `auth_time`, `acr`, and `amr` you pass; without `acr` it reports `"0"`.
 
@@ -239,7 +245,7 @@ The ID token carries only the `auth_time`, `acr`, and `amr` you pass; without `a
 
 ### `POST /oauth2/bc-authorize`
 
-Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and `interval`. Each IP address can start 10 requests per minute.
+Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and `interval`. Each IP address can start 10 requests per minute. Discovery metadata advertises it as `backchannel_authentication_endpoint`, with `backchannel_token_delivery_modes_supported` set to `deliveryModes` and `backchannel_user_code_parameter_supported` set to `false`.
 
 | Parameter                   | Required  | Description                                                                                                          |
 | --------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |

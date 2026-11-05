@@ -65,7 +65,8 @@ export interface OAuthAuthenticationContextOptions<
 	acrValuesSupported: string[];
 	/**
 	 * Returns the `acr` and `amr` the current session establishes. Called when
-	 * the user approves an authorization request or a device code. Return only
+	 * the user approves an authorization request or an interaction request, such
+	 * as a device code or a CIBA request, on the provider's pages. Return only
 	 * what the session actually proved; do not raise `acr` to match
 	 * `requestedAcrValues`.
 	 *
@@ -771,7 +772,8 @@ export interface OAuthOptions<
 	 *
 	 * Custom acceptance relaxes the exact matching required by RFC 9700 §2.1.
 	 * Accept only callback hosts you control. For pairwise subject identifiers,
-	 * custom-validated URIs use the sector of the client's first registered URI.
+	 * custom-validated URIs use the sector derived from the client's registered
+	 * redirect URIs, not their own host.
 	 *
 	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation
 	 *
@@ -1450,11 +1452,12 @@ export interface OAuthOptions<
 		requestedClaims: string[];
 	}) => Awaitable<Record<string, any>>;
 	/**
-	 * Asserts the `acr` and `amr` ID token claims for each approved
-	 * authorization request.
+	 * Asserts the `acr` and `amr` ID token claims for each authorization
+	 * request or interaction request, such as a device code or a CIBA
+	 * request, that the user approves on the provider's pages.
 	 *
-	 * Without this option, ID tokens carry `acr: "0"` (OIDC level 0) and no
-	 * `amr`.
+	 * Without this option, ID tokens issued after an approval on the
+	 * provider's pages carry `acr: "0"` (OIDC level 0) and no `amr`.
 	 */
 	authenticationContext?: OAuthAuthenticationContextOptions<Scopes>;
 	/**
