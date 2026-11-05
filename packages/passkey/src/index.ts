@@ -39,7 +39,6 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			webAuthnChallengeCookie: "better-auth-passkey",
 			...options?.advanced,
 		},
-		baseURLFromRequest: false,
 	};
 
 	return {
@@ -47,7 +46,12 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 		version: PACKAGE_VERSION,
 		init(ctx) {
 			assertOriginForWildcardHosts(opts, ctx.options.baseURL);
-			opts.baseURLFromRequest = !ctx.options.baseURL;
+			// Kept on this instance's context, since one plugin result can be shared.
+			return {
+				context: {
+					passkeyBaseURLFromRequest: !ctx.options.baseURL,
+				},
+			};
 		},
 		endpoints: {
 			generatePasskeyRegistrationOptions: generatePasskeyRegistrationOptions(

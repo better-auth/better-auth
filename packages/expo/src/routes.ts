@@ -36,6 +36,10 @@ async function isProviderAuthorizationOrigin(
 	ctx: GenericEndpointContext,
 	url: URL,
 ) {
+	// Every authorization request this server issues carries a state, and the
+	// callback rejects one without it.
+	const state = url.searchParams.get("state");
+	if (!state) return false;
 	const origins = await Promise.all(
 		ctx.context.socialProviders.map((provider) =>
 			getProviderAuthorizationOrigin(ctx, provider),
@@ -44,8 +48,6 @@ async function isProviderAuthorizationOrigin(
 	if (origins.includes(url.origin)) return true;
 	// SSO providers have no static endpoint, so accept the origin their
 	// sign-in issued for this state.
-	const state = url.searchParams.get("state");
-	if (!state) return false;
 	const issued = await ctx.context.internalAdapter.findVerificationValue(
 		getIssuedOriginIdentifier(state),
 	);

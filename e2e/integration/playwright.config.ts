@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Firefox refuses to start as root when $HOME belongs to another user, which
+// is how the CI runners run jobs.
+const firefoxLaunchOptions =
+	process.getuid?.() === 0
+		? { launchOptions: { env: { ...process.env, HOME: "/root" } } }
+		: {};
+
 export default defineConfig({
 	testMatch: "**/e2e/**/*.spec.ts",
 	fullyParallel: true,
@@ -22,7 +29,7 @@ export default defineConfig({
 			? [
 					{
 						name: "firefox",
-						use: { ...devices["Desktop Firefox"] },
+						use: { ...devices["Desktop Firefox"], ...firefoxLaunchOptions },
 						testMatch: "**/e2e/frontchannel-logout.spec.ts",
 					},
 					{

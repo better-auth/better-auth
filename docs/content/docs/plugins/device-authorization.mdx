@@ -123,7 +123,7 @@ Device authorization can finish with two different token types. Choose the token
 
 A command-line application commonly needs the second path: it cannot keep a client secret, but it needs a user-authorized token for your API. Choose the grant by where the CLI runs:
 
-* **The user has a browser on the same machine**, such as a developer laptop: use the authorization code grant with PKCE and a [loopback redirect](https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3). The CLI listens on `http://127.0.0.1` on any free port, opens the browser at `/oauth2/authorize`, and receives the code on that listener. The user signs in and consents with no code to type or compare. Register the CLI as a `native` client with a loopback redirect URI; [the port may vary](/docs/plugins/oauth-provider#custom-redirect-uri-validation).
+* **The user has a browser on the same machine**, such as a developer laptop: use the authorization code grant with PKCE and a [loopback redirect](https://www.rfc-editor.org/rfc/rfc8252.html#section-7.3). The CLI listens on `http://127.0.0.1` on any free port, opens the browser at `/oauth2/authorize`, and receives the code on that listener. The user signs in and consents with no code to type or compare. Register the CLI as a `native` client with a loopback redirect URI; [the port may vary](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).
 * **The CLI cannot open a browser or listen locally**, such as over SSH, in a container, or on a TV: use the device grant below. The user approves in a browser on any device while the CLI polls for an audience-bound OAuth access token.
 
 A CLI can try the loopback flow first and fall back to the device grant when it cannot open a browser.
@@ -232,7 +232,7 @@ const response = await fetch(`${authBaseURL}/oauth2/token`, {
 const tokens = await response.json();
 ```
 
-The access token is a signed JWT whose `aud` identifies `https://api.example.com`. Send it to that API as `Authorization: Bearer <access_token>`, then verify its signature, issuer, audience, expiry, and required scopes at the API. See [API Server verification](/docs/plugins/oauth-provider#api-server). If the CLI requests `offline_access`, store the returned refresh token in the operating system's secure credential store and use it to renew short-lived access tokens.
+The access token is a signed JWT whose `aud` identifies `https://api.example.com`. Send it to that API as `Authorization: Bearer <access_token>`, then verify its signature, issuer, audience, expiry, and required scopes at the API. See [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens). If the CLI requests `offline_access`, store the returned refresh token in the operating system's secure credential store and use it to renew short-lived access tokens.
 
 <Callout type="warn">
   Do not call `authClient.device.token` for this OAuth flow. That client method polls `/device/token` and returns a Better Auth session token. Registered OAuth clients must poll `/oauth2/token`.
@@ -275,7 +275,7 @@ When the code is unknown, expired, or already used, the user returns to your ver
 
 #### Grant device access for an organization
 
-Device approvals run `postLogin`, so [`postLogin.consentReferenceId`](/docs/plugins/oauth-provider#post-login-screen) selects the organization the same way it does for an authorization request. The device's access tokens and refresh tokens carry the returned `referenceId`, so `customAccessTokenClaims` receives it on every issuance, including refreshes:
+Device approvals run `postLogin`, so [`postLogin.consentReferenceId`](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen) selects the organization the same way it does for an authorization request. The device's access tokens and refresh tokens carry the returned `referenceId`, so `customAccessTokenClaims` receives it on every issuance, including refreshes:
 
 ```ts title="auth.ts"
 oauthProvider({

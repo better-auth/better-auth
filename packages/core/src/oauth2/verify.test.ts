@@ -1236,4 +1236,110 @@ describe("verifyBearerToken", () => {
 			).rejects.toThrow();
 		});
 	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9068#section-4
+	 */
+	describe("remote introspection with the RFC 9068 typ check", () => {
+		const introspectUrl = `${issuer}/oauth2/introspect`;
+		const remoteVerify = {
+			introspectUrl,
+			clientId: "rs-client",
+			clientSecret: "rs-secret",
+		};
+		const verifyOptions = { issuer, audience, typ: "at+jwt" };
+
+		function mockActiveIntrospection() {
+			mockJSONResponse({
+				active: true,
+				iss: issuer,
+				aud: audience,
+				sub: "user-123",
+				client_id: "client-123",
+				scope: "read",
+			});
+		}
+
+		function bearerRequest(token: string) {
+			return {
+				authorizationHeader: `Bearer ${token}`,
+				method: "GET",
+				url: audience,
+			};
+		}
+
+		async function createAccessToken(typ: string) {
+			const { publicJWK, privateKey, kid } = await createTestJWKS();
+			const token = await new SignJWT({
+				sub: "user-123",
+				azp: "client-123",
+				scope: "read",
+			})
+				.setProtectedHeader({ alg: "RS256", kid, typ })
+				.setIssuer(issuer)
+				.setAudience(audience)
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(privateKey);
+			return { publicJWK, token };
+		}
+
+		it("should accept an opaque token that introspection reports active", async () => {
+			mockActiveIntrospection();
+
+			await expect(
+				verifyAccessTokenRequest(bearerRequest("opaque-access-token"), {
+					verifyOptions,
+					remoteVerify,
+				}),
+			).resolves.toMatchObject({ sub: "user-123", client_id: "client-123" });
+			expect(mockedFetch).toHaveBeenCalledOnce();
+		});
+
+		it("should accept a JWT access token that passes both checks", async () => {
+			const { publicJWK, token } = await createAccessToken("at+jwt");
+			mockJWKSResponse(publicJWK);
+			mockActiveIntrospection();
+
+			await expect(
+				verifyAccessTokenRequest(bearerRequest(token), {
+					verifyOptions,
+					jwksUrl,
+					remoteVerify,
+				}),
+			).resolves.toMatchObject({ sub: "user-123", client_id: "client-123" });
+			expect(mockedFetch).toHaveBeenCalledTimes(2);
+		});
+
+		it("should accept a JWT access token verified only by forced introspection", async () => {
+			const { token } = await createAccessToken("at+jwt");
+			mockActiveIntrospection();
+
+			await expect(
+				verifyAccessTokenRequest(bearerRequest(token), {
+					verifyOptions,
+					jwksUrl,
+					remoteVerify: { ...remoteVerify, force: true },
+				}),
+			).resolves.toMatchObject({ sub: "user-123", client_id: "client-123" });
+			expect(mockedFetch).toHaveBeenCalledOnce();
+			expect(requestUrl(mockedFetch.mock.calls[0]?.[0])).toBe(introspectUrl);
+		});
+
+		it("should still reject a JWT with another typ during local verification", async () => {
+			const { publicJWK, token } = await createAccessToken("JWT");
+			mockJWKSResponse(publicJWK);
+			mockActiveIntrospection();
+
+			await expectUnauthorized(
+				verifyAccessTokenRequest(bearerRequest(token), {
+					verifyOptions,
+					jwksUrl,
+					remoteVerify,
+				}),
+			);
+			expect(mockedFetch).toHaveBeenCalledOnce();
+			expect(requestUrl(mockedFetch.mock.calls[0]?.[0])).toBe(jwksUrl);
+		});
+	});
 });

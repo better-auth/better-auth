@@ -1,7 +1,9 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { base32 } from "@better-auth/utils/base32";
 import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
+import { createAuthMiddleware } from "../../api";
 import { createAuthClient } from "../../client";
 import { applySetCookies, parseSetCookieHeader } from "../../cookies";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
@@ -9,6 +11,7 @@ import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { anonymous } from "../anonymous";
+import { emailOTP } from "../email-otp";
 import { magicLink } from "../magic-link";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
@@ -3095,5 +3098,118 @@ describe("two-factor password length", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12210
+ */
+describe("trusted device on a custom-gated sign-in path", async () => {
+	let emailCode = "";
+	let factorCode = "";
+	const stepOnEmailOTP = {
+		id: "step-on-email-otp",
+		hooks: {
+			after: [
+				{
+					matcher: (ctx) => ctx.path === "/sign-in/email-otp",
+					handler: createAuthMiddleware(async (ctx) => {
+						if (!ctx.context.newSession?.user.twoFactorEnabled) return;
+						const step = ctx.context
+							.getPlugin("two-factor")!
+							.hooks.after.find((hook) =>
+								hook.matcher({ ...ctx, path: "/sign-in/email" }),
+							)!.handler;
+						// `returnHeaders` changes the runtime shape, which the hook type does not model
+						const { headers, response } = (await step({
+							...ctx,
+							returnHeaders: true,
+						})) as unknown as {
+							headers: Headers;
+							response?: { twoFactorRedirect?: boolean };
+						};
+						headers.forEach((value, key) => {
+							if (key.toLowerCase() === "set-cookie") {
+								ctx.responseHeaders?.append(key, value);
+							} else {
+								ctx.responseHeaders?.set(key, value);
+							}
+						});
+						if (response?.twoFactorRedirect) return ctx.json(response);
+					}),
+				},
+			],
+		},
+	} satisfies BetterAuthPlugin;
+	const { auth } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp }) {
+						emailCode = otp;
+					},
+				}),
+				twoFactor({
+					allowPasswordless: true,
+					otpOptions: {
+						async sendOTP({ otp }) {
+							factorCode = otp;
+						},
+					},
+				}),
+				stepOnEmailOTP,
+			],
+		},
+		{ disableTestUser: true },
+	);
+
+	it("skips the second factor and renews trust on a trusted device", async () => {
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		const email = "trusted-custom-path@example.com";
+		async function post(path: string, body: Record<string, unknown>) {
+			const response = await auth.handler(
+				new Request(`http://localhost:3000/api/auth${path}`, {
+					method: "POST",
+					headers: new Headers({
+						...Object.fromEntries(headers),
+						"content-type": "application/json",
+					}),
+					body: JSON.stringify(body),
+				}),
+			);
+			const data: unknown = await response.json();
+			expect(response.status).toBe(200);
+			applySetCookies(headers, response.headers.getSetCookie());
+			return { data, headers: response.headers };
+		}
+		async function signIn() {
+			await post("/email-otp/send-verification-otp", {
+				email,
+				type: "sign-in",
+			});
+			return post("/sign-in/email-otp", { email, otp: emailCode });
+		}
+
+		await signIn();
+		await post("/two-factor/enable", { method: "otp" });
+		const first = await signIn();
+		expect(first.data).toMatchObject({ twoFactorRedirect: true });
+		await post("/two-factor/send-otp", {});
+		await post("/two-factor/verify-otp", {
+			code: factorCode,
+			trustDevice: true,
+		});
+
+		const next = await signIn();
+		expect(next.data).not.toMatchObject({ twoFactorRedirect: true });
+		expect(next.data).toMatchObject({
+			token: expect.any(String),
+			user: { email },
+		});
+		expect(
+			parseSetCookieHeader(next.headers.get("set-cookie") ?? "").get(
+				"better-auth.trust_device",
+			),
+		).toMatchObject({ value: expect.any(String) });
 	});
 });

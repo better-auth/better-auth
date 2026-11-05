@@ -186,11 +186,11 @@ To get a JWT access token for an API, send its [RFC 8707](https://datatracker.ie
 The link points to `/oauth2/authorize?ciba_request_id=<id>`, so the request runs through the provider's own pages:
 
 1. A signed-out user goes to `loginPage` first. Nothing about the request is shown before sign-in.
-2. [`postLogin`](/docs/plugins/oauth-provider#post-login-screen) runs as it does for an authorization request, and tokens carry the `referenceId` that `consentReferenceId` returns.
+2. [`postLogin`](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen) runs as it does for an authorization request, and tokens carry the `referenceId` that `consentReferenceId` returns.
 3. `consentPage` always opens, even for a client with `skip_consent` or a stored consent, because the user must confirm each request. The user can narrow the scopes there.
 4. The decision is recorded only for the user the `login_hint` named. Anyone else who opens the link, signed in as another account, lands on `resultPage` with an error, and the request stays pending for the right user.
 
-A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what the provider's [`authenticationContext.resolve`](/docs/plugins/oauth-provider) returned for that session.
+A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what the provider's [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context) returned for that session.
 
 ## Decide from your own app
 

@@ -1,0 +1,14 @@
+{
+  "title": "OAuth Provider",
+  "icon": "pluginsOAuthProvider",
+  "pagesIndex": "index",
+  "pages": [
+    "sign-in-flow",
+    "clients",
+    "tokens",
+    "resource-server",
+    "openid-connect",
+    "reference",
+    "..."
+  ]
+}

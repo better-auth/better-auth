@@ -101,6 +101,8 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.17
+
 ## 1.7.16
 
 ## 1.7.15

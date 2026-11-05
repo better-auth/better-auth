@@ -889,3 +889,64 @@ describe("secondary storage - bulk revocation of unindexed sessions", () => {
 		);
 	});
 });
+
+describe("secondary storage - bulk revocation with a replacement session", () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("keeps a session created by a session delete hook active", async () => {
+		const store = new Map<string, string>();
+		const replacementTokens: string[] = [];
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			secondaryStorage: createStringSecondaryStorage(store),
+			session: {
+				storeSessionInDatabase: true,
+			},
+			databaseHooks: {
+				session: {
+					delete: {
+						async after(session, ctx) {
+							if (!ctx || replacementTokens.length) return;
+							const replacement =
+								await ctx.context.internalAdapter.createSession(session.userId);
+							replacementTokens.push(replacement.token);
+							// Later revocation work must not move the cutoff past this session.
+							vi.setSystemTime(Date.now() + 1000);
+						},
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const current = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		vi.setSystemTime(Date.now() + 1000);
+
+		await client.revokeSessions({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const { internalAdapter } = await auth.$context;
+		expect(replacementTokens).toHaveLength(1);
+		await expect(
+			internalAdapter.findSession(current.data!.session.token),
+		).resolves.toBeNull();
+		await expect(
+			internalAdapter.findSession(replacementTokens[0]!),
+		).resolves.toMatchObject({
+			session: {
+				userId: current.data!.user.id,
+			},
+		});
+	});
+});

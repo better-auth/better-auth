@@ -1,0 +1,308 @@
+---
+icon: pluginsOAuthProviderSignInFlow
+sidebarTitle: "Sign-in and consent"
+title: Sign-in and consent screens
+description: Build the login, consent, and account screens that the authorize endpoint redirects to.
+---
+
+When a client sends a user to `/oauth2/authorize`, Better Auth redirects the user through pages you host: login, optional account steps, and consent.
+
+## How the redirect works
+
+To stop anyone from changing the authorize parameters while the user moves through your pages, each redirect carries the original parameters as a signed query. Your pages pass it back as `oauth_query`, and Better Auth verifies it before resuming. A query that was changed or has expired fails with an `invalid_signature` error. For example, a query with a different `redirect_uri` fails. The signature covers every authorize parameter, including custom ones, and expires after `codeExpiresIn` (10 minutes by default).
+
+The `oauthProviderClient` plugin sends `oauth_query` from the current page URL on every POST request. If you call the endpoints another way, send the signed query yourself. Your own page parameters can sit in the same URL, but keep them out of `oauth_query`.
+
+The authorize endpoint runs these steps in order and stops at the first one that needs the user:
+
+1. No session, a session older than `max_age`, or `prompt=login`: redirect to `loginPage`. `prompt=create` redirects to the [sign-up page](#sign-up-account-screen) instead.
+2. `prompt=select_account`, or `selectAccount.shouldRedirect` returns `true`: redirect to the [select account page](#select-account-screen).
+3. `signup.shouldRedirect` returns `true` or a path: redirect to the [sign-up page](#sign-up-account-screen).
+4. `postLogin.shouldRedirect` returns `true`: redirect to the [post login page](#post-login-screen).
+5. `prompt=consent`, or the client lacks `skip_consent` and stored consent does not cover the requested scopes, claims, and resources: redirect to `consentPage`.
+6. Redirect to the client's `redirect_uri` with the authorization code.
+
+With `prompt=none`, any step that needs the user returns an error such as `login_required` or `consent_required` to the client instead of redirecting.
+
+Once Better Auth has validated the request, the `shouldRedirect` callbacks of `signup`, `selectAccount`, and `postLogin`, and `postLogin.consentReferenceId`, receive a `URLSearchParams` copy of it as `query`. Read a parameter the client added with `query.get`, and a repeatable one with `query.getAll`, such as `query.getAll("resource")` for the [resources](/docs/plugins/oauth-provider/tokens#resources) a request targets.
+
+Better Auth also applies these rules to the authorize request ([OAuth 2.1 §4.1.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1-13#section-4.1.1)):
+
+* `response_type` must be `code`, and PKCE accepts only `S256` ([RFC 7636 §4.2](https://datatracker.ietf.org/doc/html/rfc7636#section-4.2)).
+* `state` is optional and echoed back when sent. Clients should still send it ([RFC 6749 §10.12](https://datatracker.ietf.org/doc/html/rfc6749#section-10.12)).
+* Every success and error response includes `iss` ([RFC 9207 §2](https://datatracker.ietf.org/doc/html/rfc9207#section-2)).
+* `resource` restricts the tokens to a resource server ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). See [Resources](/docs/plugins/oauth-provider/tokens#resources).
+
+## Login page
+
+To send users to your sign-in page, set `loginPage`. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. With `oauthProviderClient`, your page needs no OAuth code.
+
+```ts title="auth.ts"
+oauthProvider({
+  loginPage: "/sign-in", // [!code highlight]
+})
+```
+
+## Consent page
+
+To ask users to approve a client, set `consentPage`. A client with `skip_consent: true` skips this page. A request with `prompt=consent` shows it anyway. Device approvals from `oauthDeviceAuthorization()` and [CIBA](/docs/plugins/ciba) requests always show it.
+
+```ts title="auth.ts"
+oauthProvider({
+  consentPage: "/consent", // [!code highlight]
+})
+```
+
+To trust the consent query, verify it on the server before you render the page. The query holds `client_id`, `scope`, and, when requested, `claims`. The helper below keeps only the signed parameters, so your page's own parameters do not break the signature. It reads the provider's secret from `auth.$context`, so run it only on the server.
+
+```ts title="consent-query.ts"
+import { verifyOAuthQueryParams } from "@better-auth/oauth-provider";
+import { auth } from "@/lib/auth";
+
+export async function getVerifiedConsentQuery(request: Request) {
+  const params = new URL(request.url).searchParams;
+  const signed = new Set(["sig", "ba_param", ...params.getAll("ba_param")]);
+  const query = new URLSearchParams(
+    [...params].filter(([key]) => signed.has(key)),
+  ).toString();
+  const { secret } = await auth.$context;
+  if (!(await verifyOAuthQueryParams(query, secret))) return null;
+  return new URLSearchParams(query);
+}
+```
+
+If the helper returns `null`, return an error response. The check rejects only queries that were changed or have expired. It does not prove that the client exists, that the user is signed in, or that the scopes are valid.
+
+To show which client is asking, load it with the signed `client_id`. The call throws a 401 error without a session, and a 404 error for unknown or disabled clients.
+
+```ts title="consent-page.ts"
+const client = await auth.api.getOAuthClientPublic({
+  query: { client_id: query.get("client_id")! },
+  headers: request.headers,
+});
+```
+
+For any client an administrator did not create, whoever registered it chose its name, logo, and links. That includes dynamically registered and CIMD clients, and clients any signed-in user created with `createOAuthClient` while [`clientPrivileges`](/docs/plugins/oauth-provider/clients#client-crud-privileges) is unset. So also show the host of the signed `redirect_uri`. Render `logo_uri`, `client_uri`, `tos_uri`, and `policy_uri` only when they start with `https:`. Then show the requested `scope` and `claims.userinfo` names, and call `oauth2.consent` with the user's choice.
+
+Some requests carry more for the page to show:
+
+* A device approval's query also carries `user_code`. Show it so the user can check that it matches the code on their device.
+* A CIBA request's query carries the client's `binding_message` when the client sent one.
+
+<APIMethod path="/oauth2/consent" method="POST" requireSession>
+  ```ts
+  type oauth2Consent = {
+      /**
+       * Accept or deny the request.
+       */
+      accept: boolean
+      /**
+       * Space-separated accepted scopes, a subset of the requested ones. Defaults to all requested scopes.
+       */
+      scope?: string
+      /**
+       * Accepted OIDC claims request object. Defaults to all requested claims.
+       */
+      claims?: string | Record<string, unknown>
+      /**
+       * The reference the user chose, such as an organization ID. `postLogin.consentReferenceId` receives it as `consent.referenceId` and decides whether to accept it. Without that callback, accepting with it fails with `invalid_request`.
+       */
+      reference_id?: string
+      /**
+       * The signed query of the current page. The client plugin sends it for you.
+       */
+      oauth_query?: string
+  }
+  ```
+</APIMethod>
+
+The response is `{ redirect: true, url }`. By default, the auth client sends the browser to `url`. If you call the endpoint another way, send the browser to `url` yourself.
+
+With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. To remove consent, see [Manage consents](#manage-consents).
+
+## Sign-up account screen
+
+To send `prompt=create` requests ([OpenID Connect Prompt Create](https://openid.net/specs/openid-connect-prompt-create-1_0.html)) to a separate sign-up page, set `signup.page`. Without it, Better Auth redirects to `loginPage`.
+
+```ts title="auth.ts"
+oauthProvider({
+  signup: {
+    page: "/sign-up", // [!code highlight]
+  },
+})
+```
+
+To hold signed-in users on extra registration steps, add `shouldRedirect`. It receives `headers`, `user`, `session`, `scopes`, and `query`. Return `true` to redirect to `page`, a path to redirect there, or `false` to continue.
+
+```ts title="auth.ts"
+oauthProvider({
+  signup: {
+    page: "/sign-up",
+    shouldRedirect: async ({ user }) => { // [!code highlight]
+      return user.onboarded ? false : "/setup";
+    },
+  },
+})
+```
+
+When registration is done, call `authClient.oauth2.continue({ created: true })`. The auth client then sends the browser to the next step. See [Continue endpoint](#continue-endpoint).
+
+## Select account screen
+
+To support `prompt=select_account` ([OIDC Core §3.1.2.1](https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest)), set `selectAccount`. `shouldRedirect` receives `headers`, `user`, `session`, `scopes`, and `query`. It returns `true` to redirect to `page`. Without `selectAccount.page`, that prompt returns an error. This example uses the [multi-session plugin](/docs/plugins/multi-session) and asks whenever more than one session is signed in:
+
+```ts title="auth.ts"
+oauthProvider({
+  selectAccount: {
+    page: "/select-account", // [!code highlight]
+    shouldRedirect: async ({ headers }) => { // [!code highlight]
+      const sessions = await auth.api.listDeviceSessions({ headers });
+      return sessions.length > 1;
+    },
+  },
+})
+```
+
+After the user picks an account, resume the flow:
+
+```ts title="select-account.ts"
+await authClient.multiSession.setActive({ sessionToken });
+await authClient.oauth2.continue({ selected: true });
+```
+
+## Post-login screen
+
+To add a step after sign-in and before consent, such as picking an organization, set `postLogin` with a `page` and these callbacks:
+
+* `shouldRedirect` receives `headers`, `user`, `session`, `scopes`, `query`, and `isContinuation`. It returns `true` to redirect to `page`.
+* `consentReferenceId` receives `user`, `session`, `scopes`, `query`, and, once the user accepts, `consent`. It returns the user's choice, such as an organization ID. Better Auth stores consent separately for each reference. When `consentReferenceId` returns `undefined` or an empty string, the consent given without a reference applies.
+
+```ts title="auth.ts"
+oauthProvider({
+  postLogin: {
+    page: "/select-organization", // [!code highlight]
+    shouldRedirect: async ({ session, headers, isContinuation }) => { // [!code highlight]
+      const orgs = await auth.api.listOrganizations({ headers });
+      if (!orgs.some((org) => org.id === session.activeOrganizationId)) {
+        return true;
+      }
+      return !isContinuation && orgs.length > 1;
+    },
+    consentReferenceId: ({ session }) => // [!code highlight]
+      session.activeOrganizationId as string | undefined,
+  },
+})
+```
+
+When the user returns from your page, `shouldRedirect` runs again with `isContinuation: true`. Ask users with several organizations on a new authorization. On continuation, return `false` once the active organization is one the user belongs to. `isContinuation` does not prove a selection was made, so always check the session.
+
+```ts title="select-organization.ts"
+await authClient.organization.setActive({ organizationId });
+await authClient.oauth2.continue({ postLogin: true });
+```
+
+Device approvals from `oauthDeviceAuthorization()` run this step too, and their tokens carry the `referenceId` it selects.
+
+If some scopes need a reference, throw an `APIError` from `consentReferenceId` when none is set. Better Auth does not check this for you. For how references reach token claims, see [Organizations](/docs/plugins/oauth-provider/clients#organizations) and [Consent reference claim](/docs/plugins/oauth-provider/tokens#consent-reference-claim).
+
+### Organization from the request or the consent page
+
+A client can name the organization it needs in its authorization request, such as `organization=org_123`, and `consentReferenceId` reads it from `query`. Your consent page can instead let the user pick one and send it as `reference_id` to `/oauth2/consent`. `consentReferenceId` receives that pick as `consent.referenceId`. Neither value comes from your server, so check that the user belongs to the organization before returning it.
+
+`consent` is set only when the user accepts. Until then, return `undefined` while no organization is known, so the consent page can ask. A client with `skip_consent` gets no consent page unless its request sends `prompt=consent`, so refuse it instead. The provider accepts repeated parameters, because some, such as `resource`, can repeat. Refuse a request whose organizations disagree.
+
+```ts title="auth.ts"
+// Clients created with `skip_consent` never reach the consent page.
+const skipConsentClientIds = new Set(["internal-dashboard"]);
+
+oauthProvider({
+  scopes: ["openid", "profile", "email", "read:organization"],
+  postLogin: {
+    page: "/select-organization",
+    shouldRedirect: () => false, // the consent page asks instead
+    consentReferenceId: async ({ user, scopes, query, consent }) => {
+      if (!scopes.includes("read:organization")) return undefined;
+
+      // The request and the consent page must agree on one organization.
+      const named = new Set(
+        [...query.getAll("organization"), consent?.referenceId].filter(Boolean),
+      );
+      if (named.size > 1) {
+        throw new APIError("BAD_REQUEST", { error: "invalid_request" });
+      }
+      const [organizationId] = named;
+      const skipsConsent = skipConsentClientIds.has(query.get("client_id") ?? "");
+      // Not chosen yet: let the consent page ask.
+      if (!organizationId && !consent && !skipsConsent) return undefined;
+
+      // `isMember` stands for your own membership lookup.
+      if (!organizationId || !(await isMember(user.id, organizationId))) {
+        throw new APIError("FORBIDDEN", { error: "access_denied" });
+      }
+      return organizationId;
+    },
+  },
+})
+```
+
+Your consent page must show the organization being approved: the one the request names, or the one the user picks. Send the user's pick as `reference_id`:
+
+```ts title="consent-page.ts"
+await authClient.oauth2.consent({
+  accept: true,
+  reference_id: pickedOrganizationId, // the organization the user picked
+});
+```
+
+## Continue endpoint
+
+To resume authorization from an account page, call this endpoint with the flag that matches the page. Better Auth runs the authorize steps again and responds with `{ redirect: true, url }`. The `url` can be another account page, the consent page, or the client's `redirect_uri`. By default, the auth client sends the browser there.
+
+Without a flag or the signed query, the call returns a 400 `invalid_request` error. Call it from the page that Better Auth redirected to, where the URL still carries the signed query. Without `oauthProviderClient`, send that query as `oauth_query`.
+
+<APIMethod path="/oauth2/continue" method="POST" requireSession>
+  ```ts
+  type oauth2Continue = {
+      /**
+       * Confirms an account was selected on the select account page.
+       */
+      selected?: boolean
+      /**
+       * Confirms an account was registered on the sign-up page.
+       */
+      created?: boolean
+      /**
+       * Resumes after the post login page. `postLogin.shouldRedirect` runs again with `isContinuation: true`.
+       */
+      postLogin?: boolean
+      /**
+       * The signed query of the current page. The client plugin sends it for you.
+       */
+      oauth_query?: string
+  }
+  ```
+</APIMethod>
+
+## Manage consents
+
+To let users list and change their consents, use these endpoints. Each requires a session and only returns or changes the signed-in user's consents.
+
+| Server method        | Path                     | Method | Input                             |
+| -------------------- | ------------------------ | ------ | --------------------------------- |
+| `getOAuthConsent`    | `/oauth2/get-consent`    | `GET`  | query `id`                        |
+| `getOAuthConsents`   | `/oauth2/get-consents`   | `GET`  | none                              |
+| `updateOAuthConsent` | `/oauth2/update-consent` | `POST` | body `{ id, update: { scopes } }` |
+| `deleteOAuthConsent` | `/oauth2/delete-consent` | `POST` | body `{ id }`                     |
+
+Updated scopes must be allowed for the client. Deleting a consent makes the next authorization ask again.
+
+```ts title="consents.ts"
+const { error } = await authClient.oauth2.updateConsent({
+  id: consentId,
+  update: { scopes: ["openid", "profile"] },
+});
+
+if (error) {
+  // A scope the client is not allowed to use returns a 400 invalid_request error.
+}
+```

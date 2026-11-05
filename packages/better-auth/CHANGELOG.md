@@ -118,6 +118,33 @@
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.17
+
+### Patch Changes
+
+- [#12181](https://github.com/better-auth/better-auth/pull/12181) [`b6a87ad`](https://github.com/better-auth/better-auth/commit/b6a87ad96f443805eef45f20feed37f867a5f6a7) Thanks [@aliamanatali](https://github.com/aliamanatali)! - A remembered sign-in or sign-up now refreshes its session like any other remembered session, even if an earlier sign-in in the same browser used `rememberMe: false`. Previously the earlier choice stayed in a `dont_remember` cookie until the browser closed, so the new session stopped sliding and expired `expiresIn` after it was created.
+
+- [#12216](https://github.com/better-auth/better-auth/pull/12216) [`cff7c1c`](https://github.com/better-auth/better-auth/commit/cff7c1ceda1fb4446b033b897c84d3cff92c2019) Thanks [@bytaesu](https://github.com/bytaesu)! - Denying a device authorization request now rejects a session that was revoked but still present in the cookie cache, matching the behavior of approving a request.
+
+- [#12217](https://github.com/better-auth/better-auth/pull/12217) [`16aa412`](https://github.com/better-auth/better-auth/commit/16aa41252139533922a4f6324d9a83f36e160eeb) Thanks [@bytaesu](https://github.com/bytaesu)! - IP wildcard trusted origins such as `exp://192.168.*.*:*` no longer match custom-scheme hosts with out-of-range or zero-padded octets like `192.168.999.999`.
+
+- [#12219](https://github.com/better-auth/better-auth/pull/12219) [`9150314`](https://github.com/better-auth/better-auth/commit/9150314da38bfe1d0da718db1e828a41c21f5d3f) Thanks [@bytaesu](https://github.com/bytaesu)! - Signing up with an empty `phoneNumber` with the phone number plugin no longer stores the empty string or makes later sign-ups fail. Linking an account whose profile maps an empty phone number no longer replaces the user's verified number.
+
+- [#12212](https://github.com/better-auth/better-auth/pull/12212) [`f5be351`](https://github.com/better-auth/better-auth/commit/f5be35166ea9f1d2ea81b9eb2d42e36db0d04e69) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed sessions created by a `session.delete.after` hook during "revoke all sessions" being treated as revoked immediately when `secondaryStorage` is used with `storeSessionInDatabase`.
+
+- [#12211](https://github.com/better-auth/better-auth/pull/12211) [`98bcd98`](https://github.com/better-auth/better-auth/commit/98bcd9849c3e392f70d15e768795279109d7c90e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed TOTP verification rejecting sessions created from an API key, so API-key sessions can now finish two-factor enrollment.
+
+- [#12228](https://github.com/better-auth/better-auth/pull/12228) [`fbff537`](https://github.com/better-auth/better-auth/commit/fbff53792533ef5b9b96a6457d77bd71aff8e071) Thanks [@bytaesu](https://github.com/bytaesu)! - Trusted devices are honored again when an app runs the two-factor sign-in step from its own hook on another sign-in path, such as email OTP.
+
+- Updated dependencies [[`fc2e00b`](https://github.com/better-auth/better-auth/commit/fc2e00bb4fd65e80246fdefcd5d8d5b1ea9d1512)]:
+  - @better-auth/kysely-adapter@1.7.17
+  - @better-auth/core@1.7.17
+  - @better-auth/drizzle-adapter@1.7.17
+  - @better-auth/memory-adapter@1.7.17
+  - @better-auth/mongo-adapter@1.7.17
+  - @better-auth/prisma-adapter@1.7.17
+  - @better-auth/telemetry@1.7.17
+
 ## 1.7.16
 
 ### Patch Changes
