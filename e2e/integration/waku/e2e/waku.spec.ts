@@ -1,6 +1,7 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { terminate } from "@better-auth-test/test-utils/playwright";
 import type { Page } from "@playwright/test";
@@ -13,26 +14,6 @@ const servers = {
 	// `--host` keeps the URL on `localhost`, which `allowedHosts` accepts.
 	start: { build: true, command: ["run", "start", "--host", "localhost"] },
 } as const;
-
-function spawnScript(args: readonly string[]) {
-	return spawn("pnpm", args, {
-		detached: process.platform !== "win32",
-		cwd: root,
-		stdio: "pipe",
-		env: { ...process.env, NO_COLOR: "1" },
-	});
-}
-
-async function build() {
-	const child = spawnScript(["run", "build"]);
-	let output = "";
-	child.stdout.on("data", (data) => (output += data.toString()));
-	child.stderr.on("data", (data) => (output += data.toString()));
-	const [code] = await once(child, "close");
-	if (code !== 0) {
-		throw new Error(`waku build exited with code ${code}\n${output}`);
-	}
-}
 
 async function signUp(
 	page: Page,
@@ -68,28 +49,55 @@ for (const [mode, server] of Object.entries(servers)) {
 		// Share a server while keeping failures and retries independent.
 		test.describe.configure({ mode: "default" });
 
-		let child: ChildProcessWithoutNullStreams;
+		const children: ChildProcessWithoutNullStreams[] = [];
 		let baseURL: string;
+		let output = "";
+
+		// Build and server share one log, so a report shows both.
+		function spawnScript(args: readonly string[]) {
+			const child = spawn("pnpm", args, {
+				detached: process.platform !== "win32",
+				cwd: root,
+				stdio: "pipe",
+				env: { ...process.env, NO_COLOR: "1" },
+			});
+			children.push(child);
+			child.stderr.setEncoding("utf8").on("data", (data) => (output += data));
+			const lines = createInterface({ input: child.stdout });
+			lines.on("line", (line) => (output += `${line}\n`));
+			return { child, lines };
+		}
 
 		test.beforeAll(async () => {
 			test.setTimeout(120_000);
 			// Static renders run during the build, outside any request.
-			if (server.build) await build();
-			child = spawnScript(server.command);
-			child.stderr.on("data", (data) => console.error(data.toString()));
+			if (server.build) {
+				const { child } = spawnScript(["run", "build"]);
+				const [code] = await once(child, "close");
+				if (code !== 0) {
+					throw new Error(`waku build exited with code ${code}\n${output}`);
+				}
+			}
+			const { child, lines } = spawnScript(server.command);
 			baseURL = await new Promise<string>((resolve, reject) => {
-				child.stdout.on("data", (data) => {
-					const match = data.toString().match(/http:\/\/localhost:\d+/);
+				lines.on("line", (line) => {
+					const match = line.match(/http:\/\/localhost:\d+/);
 					if (match) resolve(match[0]);
 				});
-				child.on("exit", (code) =>
-					reject(new Error(`waku ${mode} exited with code ${code}`)),
+				child.once("error", reject);
+				child.once("close", (code) =>
+					reject(new Error(`waku ${mode} exited with code ${code}\n${output}`)),
 				);
 			});
 		});
 
-		test.afterAll(async () => {
-			if (child) await terminate(child);
+		// Runs even when `beforeAll` times out, unlike `afterEach`.
+		test.afterAll(async ({}, testInfo) => {
+			await Promise.all(children.map(terminate));
+			await testInfo.attach(`waku-${mode}.log`, {
+				body: output,
+				contentType: "text/plain",
+			});
 		});
 
 		test("forwards session cookies set inside a server action", async ({
