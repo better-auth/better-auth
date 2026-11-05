@@ -1,5 +1,24 @@
 # better-auth
 
+## 1.7.18
+
+### Patch Changes
+
+- [#12259](https://github.com/better-auth/better-auth/pull/12259) [`9e2a0ec`](https://github.com/better-auth/better-auth/commit/9e2a0ecbe7c976a291d214f8e709cfd1f7619c65) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed "revoke all sessions" with `secondaryStorage` and `storeSessionInDatabase` so that sessions created while the revocation runs are revoked too. Sessions created by a `session.delete.after` hook still stay active.
+
+- [#12244](https://github.com/better-auth/better-auth/pull/12244) [`85f4342`](https://github.com/better-auth/better-auth/commit/85f4342472522e91c7a263184962b55d5586778e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `getTestInstance` with `testWith: "mysql"` no longer hangs. It expects a MySQL server at `127.0.0.1:3306` whose `root` password is `root_password`, and it creates and drops a separate database for each instance, so several instances can run in one test file.
+
+- [#12250](https://github.com/better-auth/better-auth/pull/12250) [`278bb28`](https://github.com/better-auth/better-auth/commit/278bb28191fbf16a4df38fce434727c4950991bd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `getTestInstance` from `better-auth/test` now closes the Postgres connection pool and the SQLite database it created when the test file finishes. Previously both stayed open until the test worker exited. With Vitest's default `sequence.hooks: "stack"`, `afterAll` hooks in your test files still run before this cleanup and can keep using the instance.
+
+- Updated dependencies [[`9342a73`](https://github.com/better-auth/better-auth/commit/9342a73e3635719011828c798e276c0f908792de)]:
+  - @better-auth/core@1.7.18
+  - @better-auth/drizzle-adapter@1.7.18
+  - @better-auth/kysely-adapter@1.7.18
+  - @better-auth/memory-adapter@1.7.18
+  - @better-auth/mongo-adapter@1.7.18
+  - @better-auth/prisma-adapter@1.7.18
+  - @better-auth/telemetry@1.7.18
+
 ## 1.7.17
 
 ### Patch Changes
