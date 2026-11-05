@@ -1,5 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -93,12 +94,7 @@ async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
 		migration.stderr.on("data", (chunk) => {
 			output += chunk.toString();
 		});
-		const migrationExitCode = await new Promise<number | null>(
-			(resolveExit, reject) => {
-				migration.once("error", reject);
-				migration.once("exit", resolveExit);
-			},
-		);
+		const [migrationExitCode] = await once(migration, "close");
 		if (migrationExitCode !== 0) {
 			throw new Error(`Next.js demo migration failed:\n${output}`);
 		}
@@ -343,9 +339,13 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		runtime = await startNextDemoRuntime();
 	});
 
-	test.afterAll(async () => {
+	test.afterAll(async ({}, testInfo) => {
 		await stopProcess(runtime?.process);
 		if (runtime) {
+			await testInfo.attach("next-dev.log", {
+				body: runtime.readOutput(),
+				contentType: "text/plain",
+			});
 			await rm(runtime.temporaryDirectory, {
 				recursive: true,
 				force: true,
