@@ -48,7 +48,7 @@ export async function runClient<R>(
 }
 
 export function setup(overrides?: Partial<BetterAuthOptions>) {
-	const app = launch(root);
+	let app = launch(root);
 	let server: Server;
 	const ref = {
 		clientPort: -1,
@@ -57,6 +57,8 @@ export function setup(overrides?: Partial<BetterAuthOptions>) {
 	return {
 		ref,
 		start: async () => {
+			// Each test starts its own server, so it gets its own log.
+			app = launch(root);
 			server = await createAuthServer(undefined, overrides);
 			const [serverPort, clientURL] = await Promise.all([
 				listen(server, "0.0.0.0"),

@@ -13,13 +13,15 @@ export async function runClient<R>(
 }
 
 export function setup() {
-	const app = launch(root);
+	let app = launch(root);
 	const ref = {
 		clientPort: -1,
 	};
 	return {
 		ref,
 		start: async () => {
+			// Each test starts its own server, so it gets its own log.
+			app = launch(root);
 			const clientURL = await app.start(["run", "dev"]);
 			ref.clientPort = Number(new URL(clientURL).port);
 		},
