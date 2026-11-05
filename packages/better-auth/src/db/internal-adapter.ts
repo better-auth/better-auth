@@ -94,7 +94,10 @@ export const createInternalAdapter = (
 	 * or `deleteUserSessions` sweeping a user's accumulated preserved rows) would
 	 * re-match it and re-fire the hooks, re-dispatching back-channel logout.
 	 */
-	const endPreservedSessions = (where: Where[]) => {
+	const endPreservedSessions = (
+		where: Where[],
+		afterEnd?: () => Promise<void>,
+	) => {
 		const liveSessions: Where[] = [
 			...where,
 			{ field: "expiresAt", value: new Date(), operator: "gt" },
@@ -106,6 +109,7 @@ export const createInternalAdapter = (
 					where: liveSessions,
 					update: { expiresAt: new Date() },
 				});
+				await afterEnd?.();
 			},
 			executeMainFn: false,
 		});
@@ -201,7 +205,7 @@ export const createInternalAdapter = (
 		const deletedTokens = new Set(
 			sessionReferences.map((session) => session.token),
 		);
-		for (const { token } of sessionReferences) {
+		for (const token of deletedTokens) {
 			await secondaryStorage.delete(token);
 		}
 
@@ -228,7 +232,6 @@ export const createInternalAdapter = (
 	async function queueCachedUserSessionDeletion(
 		userId: string,
 		sessionReferences?: readonly ActiveSessionReference[],
-		revokedAt = Date.now(),
 	) {
 		if (!secondaryStorage) return;
 
@@ -236,6 +239,7 @@ export const createInternalAdapter = (
 		// replacement session created by a later hook must remain active.
 		const references =
 			sessionReferences ?? (await getActiveSessionReferences(userId));
+		const revokedAt = Date.now();
 		await queueAfterTransactionHook(
 			() => deleteCachedUserSessions(userId, references, revokedAt),
 			{
@@ -1033,50 +1037,50 @@ export const createInternalAdapter = (
 			);
 		},
 		deleteUserSessions: async (userId: string) => {
-			// Take the cutoff before delete hooks run so a replacement session they
-			// create is not treated as revoked.
-			const revokedAt = Date.now();
 			const sessionReferences = await getActiveSessionReferences(userId);
-			if (secondaryStorage) {
-				if (!options.session?.storeSessionInDatabase) {
-					await queueCachedUserSessionDeletion(
-						userId,
-						sessionReferences,
-						revokedAt,
-					);
-					return;
-				}
-				if (ctx.options.session?.preserveSessionInDatabase) {
-					const endedSessions = await endPreservedSessions([
-						{ field: "userId", value: userId },
-					]);
-					if (endedSessions !== null) {
-						await queueCachedUserSessionDeletion(
-							userId,
-							sessionReferences,
-							revokedAt,
-						);
-					}
-					return;
-				}
-			}
-			const deletedSessions = await deleteManyWithHooks(
-				[
-					{
-						field: "userId",
-						value: userId,
-					},
-				],
-				"session",
-				undefined,
-			);
-			if (deletedSessions !== null) {
-				await queueCachedUserSessionDeletion(
-					userId,
-					sessionReferences,
-					revokedAt,
+			if (!secondaryStorage) {
+				await deleteManyWithHooks(
+					[{ field: "userId", value: userId }],
+					"session",
+					undefined,
 				);
+				return;
 			}
+			if (!options.session?.storeSessionInDatabase) {
+				await queueCachedUserSessionDeletion(userId, sessionReferences);
+				return;
+			}
+			// Revoke the cached copies as soon as the rows end, before delete.after
+			// hooks are queued, so replacement sessions those hooks create stay
+			// active. The session index is read again at that point: a session
+			// created while delete.before hooks ran is missing from the first read,
+			// and its creation time can equal the cutoff.
+			const revokeCachedSessions = async () =>
+				queueCachedUserSessionDeletion(userId, [
+					...sessionReferences,
+					...(await getActiveSessionReferences(userId)),
+				]);
+			if (ctx.options.session?.preserveSessionInDatabase) {
+				await endPreservedSessions(
+					[{ field: "userId", value: userId }],
+					revokeCachedSessions,
+				);
+				return;
+			}
+			await deleteManyWithHooks(
+				[{ field: "userId", value: userId }],
+				"session",
+				{
+					fn: async (where) => {
+						const deleted = await (await getCurrentAdapter(adapter)).deleteMany(
+							{ model: "session", where },
+						);
+						await revokeCachedSessions();
+						return deleted;
+					},
+					executeMainFn: false,
+				},
+			);
 		},
 		deleteSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
