@@ -321,7 +321,15 @@ export async function onSubscriptionUpdated(
 		if (!options.subscription?.enabled) {
 			return;
 		}
-		const stripeSubscriptionUpdated = event.data.object as Stripe.Subscription;
+		// Webhook snapshots can arrive out of order; always re-read Stripe's current
+		// subscription before saving so a stale retry cannot overwrite newer state.
+		// @see https://docs.stripe.com/webhooks#handle-duplicate-events
+		const snapshot = event.data.object as Stripe.Subscription;
+		const retrieved = await options.stripeClient.subscriptions.retrieve(
+			snapshot.id,
+		);
+		const stripeSubscriptionUpdated = (retrieved ??
+			snapshot) as Stripe.Subscription;
 		const resolved = await resolvePlanItem(
 			options,
 			stripeSubscriptionUpdated.items.data,
