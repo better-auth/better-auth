@@ -276,6 +276,8 @@ describe("kysely withReturning mysql insert with serial ids", () => {
 				},
 			}),
 		).rejects.toThrow(/did not report an auto-increment id/);
+		// The rejected create must not leave its row behind.
+		expect(sqlite.prepare("SELECT * FROM legacy").all()).toEqual([]);
 	});
 
 	it("still resolves rows by their unique columns when ids are not serial", async () => {

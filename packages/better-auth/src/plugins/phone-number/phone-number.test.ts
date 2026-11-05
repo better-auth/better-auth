@@ -1929,6 +1929,36 @@ describe("phone number at user creation", () => {
 		).toHaveLength(0);
 	});
 
+	it("treats an empty phone number on email sign-up as no number", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				plugins: [phoneNumber()],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [phoneNumberClient()],
+				},
+			},
+		);
+
+		for (const email of ["empty-1@test.com", "empty-2@test.com"]) {
+			const res = await client.signUp.email({
+				email,
+				password: "password123",
+				name: "empty",
+				phoneNumber: "",
+			});
+			expect(res.error).toBeNull();
+		}
+		expect(
+			await db.findMany({
+				model: "user",
+				where: [{ field: "phoneNumber", value: "" }],
+			}),
+		).toHaveLength(0);
+	});
+
 	it("rejects a phone number sent with email OTP sign-in", async () => {
 		let otp = "";
 		const { auth, db } = await getTestInstance(
@@ -2084,7 +2114,7 @@ describe("phone number on account linking", () => {
 		name: "Linked",
 	})}.signature`;
 
-	const setup = async () => {
+	const setup = async (mappedPhoneNumber = phoneNumberValue) => {
 		const { auth, db } = await getTestInstance(
 			{
 				plugins: [phoneNumber()],
@@ -2099,7 +2129,7 @@ describe("phone number on account linking", () => {
 						clientSecret: "test-secret",
 						verifyIdToken: async () => true,
 						mapProfileToUser: () => ({
-							phoneNumber: phoneNumberValue,
+							phoneNumber: mappedPhoneNumber,
 						}),
 					},
 				},
@@ -2147,6 +2177,21 @@ describe("phone number on account linking", () => {
 
 	it("keeps a verified number when the provider maps the same number", async () => {
 		const { ctx, user, link, stored } = await setup();
+		await ctx.internalAdapter.updateUser(user.id, {
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+
+		await link();
+
+		expect(await stored()).toMatchObject({
+			phoneNumber: phoneNumberValue,
+			phoneNumberVerified: true,
+		});
+	});
+
+	it("keeps a verified number when the provider maps an empty number", async () => {
+		const { ctx, user, link, stored } = await setup("");
 		await ctx.internalAdapter.updateUser(user.id, {
 			phoneNumber: phoneNumberValue,
 			phoneNumberVerified: true,

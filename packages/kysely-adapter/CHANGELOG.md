@@ -17,6 +17,12 @@
 - Updated dependencies []:
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.17
+
+### Patch Changes
+
+- [#12220](https://github.com/better-auth/better-auth/pull/12220) [`fc2e00b`](https://github.com/better-auth/better-auth/commit/fc2e00bb4fd65e80246fdefcd5d8d5b1ea9d1512) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, a `create` that fails because the table reports no auto-increment id no longer leaves the inserted row behind, so retrying does not fail with a duplicate key error.
+
 ## 1.7.16
 
 ### Patch Changes

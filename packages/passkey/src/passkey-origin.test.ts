@@ -429,3 +429,77 @@ describe("passkey expected origin", () => {
 		).resolves.toBeDefined();
 	});
 });
+
+/**
+ * One `passkey()` result can be shared by several auth instances, so the
+ * origin source must follow each instance's own `baseURL`.
+ */
+describe("passkey shared across auth instances", () => {
+	it.for([
+		{
+			label: "static baseURL instance built first",
+			staticFirst: true,
+		},
+		{
+			label: "request-derived instance built first",
+			staticFirst: false,
+		},
+	])(
+		"keeps each instance's origin source when the $label",
+		async ({ staticFirst }) => {
+			const plugin = passkey();
+			const buildStatic = () =>
+				getTestInstance({
+					plugins: [plugin],
+				});
+			const buildRequest = () =>
+				getTestInstance({
+					plugins: [plugin],
+					baseURL: undefined,
+					advanced: {
+						trustedProxyHeaders: true,
+					},
+				});
+			const requestFirst = staticFirst ? null : await buildRequest();
+			const staticInstance = await buildStatic();
+			const requestInstance = requestFirst ?? (await buildRequest());
+
+			const staticHeaders = new Headers();
+			await prepareAuthentication(staticInstance, staticHeaders);
+			await expect(
+				staticInstance.auth.api.verifyPasskeyAuthentication({
+					headers: staticHeaders,
+					body: {
+						response: mockAuthenticationResponse,
+					},
+				}),
+			).resolves.toBeDefined();
+			expect(
+				serverMocks.verifyAuthenticationResponse.mock.calls[0]![0]
+					.expectedOrigin,
+			).toEqual([RP_ORIGIN]);
+
+			const requestHeaders = new Headers({
+				origin: SIBLING_ORIGIN,
+				"x-forwarded-host": "sibling.localhost:3000",
+				"x-forwarded-proto": "http",
+			});
+			await prepareAuthentication(requestInstance, requestHeaders);
+			requestHeaders.set("content-type", "application/json");
+			await requestInstance.customFetchImpl(
+				`${RP_ORIGIN}/api/auth/passkey/verify-authentication`,
+				{
+					method: "POST",
+					headers: requestHeaders,
+					body: JSON.stringify({
+						response: mockAuthenticationResponse,
+					}),
+				},
+			);
+			expect(
+				serverMocks.verifyAuthenticationResponse.mock.calls[1]![0]
+					.expectedOrigin,
+			).toEqual([RP_ORIGIN]);
+		},
+	);
+});

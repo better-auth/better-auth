@@ -237,7 +237,8 @@ export interface VerifyAccessTokenRemote {
 	/**
 	 * Forces remote verification of a token.
 	 * This ensures attached session (if applicable)
-	 * is also still active.
+	 * is also still active. The local JWT check is skipped, so
+	 * `verifyOptions.typ` is not enforced.
 	 */
 	force?: boolean;
 	/**
@@ -257,7 +258,10 @@ export interface VerifyAccessTokenRemote {
 }
 
 export interface VerifyAccessTokenOptions {
-	/** Verify options */
+	/**
+	 * Verify options. Introspection results are checked against these too,
+	 * except `typ`, which only the local JWT check can enforce.
+	 */
 	verifyOptions: JWTVerifyOptions &
 		Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 	/** Scopes the token must satisfy. */
@@ -505,15 +509,16 @@ async function verifyAccessTokenPayload(
 		// token issued for a different resource/client on the same issuer would
 		// also pass. Only drop the audience check when the caller has explicitly
 		// opted in via `remoteVerify.allowMissingAudience`.
+		// `typ` checks the JWT header (RFC 9068 §4). An introspection response is
+		// a claim set with no header, so only the local check can enforce it.
 		try {
 			const unsecuredJwt = new UnsecuredJWT(introspect).encode();
-			const { audience: _audience, ...verifyOptionsNoAudience } =
-				opts.verifyOptions;
+			const { typ: _typ, audience, ...claimOptions } = opts.verifyOptions;
 			const skipAudience =
 				!introspect.aud && opts.remoteVerify.allowMissingAudience === true;
 			const verify = UnsecuredJWT.decode(
 				unsecuredJwt,
-				skipAudience ? verifyOptionsNoAudience : opts.verifyOptions,
+				skipAudience ? claimOptions : { ...claimOptions, audience },
 			);
 			payload = verify.payload;
 		} catch (error) {

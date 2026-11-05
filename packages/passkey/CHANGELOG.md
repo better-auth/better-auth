@@ -24,6 +24,12 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.17
+
+### Patch Changes
+
+- [#12225](https://github.com/better-auth/better-auth/pull/12225) [`3ab3dbf`](https://github.com/better-auth/better-auth/commit/3ab3dbf6d4c50f6421f4129f860d1ce1b6894f65) Thanks [@bytaesu](https://github.com/bytaesu)! - Passkey registration and sign-in now work when one `passkey()` plugin is shared between auth instances where some set `baseURL` and others do not. Previously one of the instances could fail with `ORIGIN_NOT_CONFIGURED` or verify against the other instance's origin settings.
+
 ## 1.7.16
 
 ### Patch Changes
