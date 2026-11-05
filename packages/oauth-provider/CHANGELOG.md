@@ -1,5 +1,17 @@
 # @better-auth/oauth-provider
 
+## 1.8.0-beta.6
+
+### Minor Changes
+
+- [#12261](https://github.com/better-auth/better-auth/pull/12261) [`82b3c47`](https://github.com/better-auth/better-auth/commit/82b3c47121cfd16de7ca7606f898e657a55ebe01) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A form-encoded POST to `/oauth2/authorize` now follows the same repeated-parameter rules as a GET request. A standard parameter sent more than once, such as `state=a&state=b`, returns `invalid_request` with "state must not appear more than once". Before, the provider used the last value and could issue a code. A repeated `resource` now keeps every value instead of only the last one. A repeated custom parameter, such as `organization`, reaches `postLogin.consentReferenceId` and the signed `oauth_query` with every value. Clients that send each standard parameter once are unaffected.
+
+### Patch Changes
+
+- [#12262](https://github.com/better-auth/better-auth/pull/12262) [`ba21f31`](https://github.com/better-auth/better-auth/commit/ba21f310679512006f95d5629956889660f7263b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `oauthTokenExchange()`, a client that exchanges its own DPoP-bound access token must now prove the same key, as it does for a refresh. It sends a DPoP proof signed by that key, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key, and a request that does not prove it fails with `invalid_dpop_proof`. Exchanges by a resource server are unchanged: the exchanged token is bound to the resource server's own proof, or is a bearer token when it sends none and none is required.
+
+  DPoP checks on an exchange now run before `allowExchange`. A request that fails them never reaches your policy.
+
 ## 1.8.0-beta.5
 
 ### Minor Changes
