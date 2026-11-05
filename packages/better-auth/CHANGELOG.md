@@ -1,5 +1,18 @@
 # better-auth
 
+## 1.8.0-beta.6
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/core@1.8.0-beta.6
+  - @better-auth/drizzle-adapter@1.8.0-beta.6
+  - @better-auth/kysely-adapter@1.8.0-beta.6
+  - @better-auth/memory-adapter@1.8.0-beta.6
+  - @better-auth/mongo-adapter@1.8.0-beta.6
+  - @better-auth/prisma-adapter@1.8.0-beta.6
+  - @better-auth/telemetry@1.8.0-beta.6
+
 ## 1.8.0-beta.5
 
 ### Minor Changes

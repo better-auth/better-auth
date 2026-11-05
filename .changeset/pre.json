@@ -31,6 +31,7 @@
   "changesets": [
     "after-commit-sign-up-side-effects",
     "apple-profile-types",
+    "authorize-post-repeated-params",
     "bright-cognito-claims",
     "bright-roblox-profile",
     "calm-spotify-profile",
@@ -72,6 +73,7 @@
     "oauth-provider-frontchannel-logout",
     "oauth-provider-interaction-requests",
     "oauth-revoke-introspect-token-lookup",
+    "oauth-token-exchange-dpop-key",
     "oauth-token-exchange",
     "oauth-token-request-params",
     "pairwise-stored-sector",
