@@ -310,7 +310,7 @@ Before the callback runs, Better Auth rejects only malformed URIs, credentials, 
   Accepting extra URIs relaxes the exact matching of [RFC 9700 §2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1). Accept only hosts you control that untrusted people cannot deploy to, and pin the scheme, host suffix, port, path, and query. If untrusted clients can register arbitrary URIs, a match in `registeredUris` does not prove which client it is.
 </Callout>
 
-With [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), every accepted host shares the sector of the client's first registered URI, and so the same `sub`.
+With [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), a URI the callback accepts does not change the client's sector, which comes from its registered redirect URIs. The client receives the same `sub` for a user whichever accepted URI it uses.
 
 ## Private key JWT
 

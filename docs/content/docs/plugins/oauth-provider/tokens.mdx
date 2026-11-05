@@ -463,7 +463,7 @@ The provider applies these rules to every exchange, before your `allowExchange` 
 | The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
 | The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
 | The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
-| Each target resource is registered, enabled, and linked to the client                                                                                 | The client's resource policy still applies, including each resource's `allowedScopes`                               |
+| Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
 | A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
 | The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                           | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
 | No refresh token or ID token is issued                                                                                                                | The service must exchange again when the token expires                                                              |
@@ -492,7 +492,8 @@ The provider reads the reference from the subject token's [`reference_id`](#cons
 
 * `client`: the authenticated client
 * `user`: the user the subject token represents
-* `resources` and `scopes`: the requested resources and scopes
+* `resources`: the requested resources
+* `scopes`: the scopes the exchanged token will carry, after each resource's `allowedScopes` narrows the requested ones
 * `referenceId`: the inherited consent reference
 * `subjectToken`: the subject token's introspection payload
 
