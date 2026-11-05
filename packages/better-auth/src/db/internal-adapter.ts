@@ -271,6 +271,24 @@ export const createInternalAdapter = (
 		}
 	}
 
+	// Best-effort maintenance: a failed sweep must not fail the request it rides on.
+	// Deferred past the caller's transaction so its rows' after-delete hooks run
+	// here, inside the catch, not after the caller's commit.
+	async function deleteExpiredVerifications() {
+		if (options.verification?.disableCleanup) return;
+		await queueAfterTransactionHook(async () => {
+			try {
+				await deleteManyWithHooks(
+					[{ field: "expiresAt", value: new Date(), operator: "lt" }],
+					"verification",
+					undefined,
+				);
+			} catch (error) {
+				logger.error("Failed to delete expired verification values", error);
+			}
+		});
+	}
+
 	return {
 		createOAuthUser: async (
 			user: Omit<User, "id" | "createdAt" | "updatedAt">,
@@ -1444,19 +1462,7 @@ export const createInternalAdapter = (
 				verification = await findByIdentifier(identifier);
 			}
 
-			if (!options.verification?.disableCleanup) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "expiresAt",
-							value: new Date(),
-							operator: "lt",
-						},
-					],
-					"verification",
-					undefined,
-				);
-			}
+			await deleteExpiredVerifications();
 
 			return (verification[0] as Verification) || null;
 		},
@@ -1609,6 +1615,8 @@ export const createInternalAdapter = (
 						),
 					);
 				}
+				// Consume-only flows never call findVerificationValue, so sweep here too.
+				if (consumed) await deleteExpiredVerifications();
 			}
 
 			// Single expiry gate. A row past its `expiresAt` is treated as already

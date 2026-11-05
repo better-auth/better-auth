@@ -27,6 +27,7 @@ import { assertPasswordNotTooLong } from "../../utils/password";
 import { safeCloneRequest } from "../../utils/request";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
+import { consumeIssuedIdTokenNonce } from "./id-token-nonce";
 
 const socialSignInBodySchema = z.object({
 	/**
@@ -286,6 +287,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					);
 				}
 				const { token, nonce } = c.body.idToken;
+				await consumeIssuedIdTokenNonce(c, provider, nonce);
 				const valid = await verifyProviderIdToken(provider, token, nonce, c);
 				if (!valid) {
 					c.context.logger.warn("Invalid id token", {
