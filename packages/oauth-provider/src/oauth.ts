@@ -364,6 +364,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		{
 			method: ["GET", "POST"],
 			body: z.object({}).passthrough(),
+			// The authorization request schema rejects a repeated standard
+			// parameter in a POST form as it does in a query string.
+			formParams: { repeatable: "all" },
 			redirectOnError: authorizeRedirectOnError(opts),
 			metadata: {
 				allowedMediaTypes: ["application/x-www-form-urlencoded"],

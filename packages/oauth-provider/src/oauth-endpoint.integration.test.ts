@@ -332,6 +332,94 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 			);
 		});
 
+		/**
+		 * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+		 */
+		it.each([
+			["response_type", "code"],
+			["state", "other-state"],
+			["scope", "profile"],
+		])(
+			"form POST with a repeated %s → invalid_request (RFC 6749 §3.1)",
+			async (name, value) => {
+				if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+				const body = new URLSearchParams({
+					client_id: oauthClient.client_id,
+					redirect_uri: redirectUri,
+					response_type: "code",
+					scope: "openid",
+					state: "post-state",
+					code_challenge: "a".repeat(43),
+					code_challenge_method: "S256",
+				});
+				body.append(name, value);
+				const { status, location } = await captureRedirect(
+					"/oauth2/authorize",
+					{
+						method: "POST",
+						body,
+						headers: { "content-type": "application/x-www-form-urlencoded" },
+					},
+				);
+				expect(status).toBeGreaterThanOrEqual(300);
+				expect(status).toBeLessThan(400);
+				const redirectLocation = expectRedirectLocation(location);
+				expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+				const errorUrl = new URL(redirectLocation);
+				expect(errorUrl.searchParams.get("code")).toBeNull();
+				expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+				expect(errorUrl.searchParams.get("error_description")).toBe(
+					`${name} must not appear more than once`,
+				);
+			},
+		);
+
+		/**
+		 * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+		 */
+		it.each([
+			["redirect_uri", "https://evil.example.com/callback"],
+			["client_id", "unknown-client"],
+		])(
+			"form POST with a repeated %s → server error page",
+			async (name, decoy) => {
+				if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+				const body = new URLSearchParams({
+					client_id: oauthClient.client_id,
+					redirect_uri: redirectUri,
+					response_type: "code",
+					scope: "openid",
+					state: "post-state",
+					code_challenge: "a".repeat(43),
+					code_challenge_method: "S256",
+				});
+				// The registered value comes last, where a last-value parser looks.
+				const registered = body.get(name) ?? "";
+				body.delete(name);
+				body.append(name, decoy);
+				body.append(name, registered);
+				const { status, location } = await captureRedirect(
+					"/oauth2/authorize",
+					{
+						method: "POST",
+						body,
+						headers: { "content-type": "application/x-www-form-urlencoded" },
+					},
+				);
+				expect(status).toBeGreaterThanOrEqual(300);
+				expect(status).toBeLessThan(400);
+				const redirectLocation = expectRedirectLocation(location);
+				expect(redirectLocation.startsWith(redirectUri)).toBe(false);
+				expect(redirectLocation).not.toContain("evil.example.com");
+				const errorUrl = new URL(redirectLocation);
+				expect(errorUrl.searchParams.get("code")).toBeNull();
+				expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+				expect(errorUrl.searchParams.get("error_description")).toBe(
+					`${name} must not appear more than once`,
+				);
+			},
+		);
+
 		it("missing response_type with trusted redirect_uri → invalid_request", async () => {
 			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
 			const state = "missing-response-type";

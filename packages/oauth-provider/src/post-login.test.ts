@@ -13,11 +13,15 @@ import type { OAuthOptions, Scope } from "./types";
 const baseURL = "http://localhost:3000";
 const redirectURI = "https://client.example.com/callback";
 
-/** Sends an authorization request and returns where the provider redirects. */
+/**
+ * Sends an authorization request, as a query string or a form-encoded POST,
+ * and returns where the provider redirects.
+ */
 async function authorizeRedirect(
 	auth: { handler: (request: Request) => Promise<Response> },
 	headers: Headers,
 	params: Record<string, string | string[]>,
+	method: "GET" | "POST" = "GET",
 ) {
 	const query = new URLSearchParams({
 		redirect_uri: redirectURI,
@@ -29,8 +33,11 @@ async function authorizeRedirect(
 		query.delete(key);
 		for (const item of [value].flat()) query.append(key, item);
 	}
+	const endpoint = `${baseURL}/api/auth/oauth2/authorize`;
 	const response = await auth.handler(
-		new Request(`${baseURL}/api/auth/oauth2/authorize?${query}`, { headers }),
+		method === "GET"
+			? new Request(`${endpoint}?${query}`, { headers })
+			: new Request(endpoint, { method, headers, body: query }),
 	);
 	return new URL(response.headers.get("location") ?? "", baseURL);
 }
@@ -681,4 +688,70 @@ it("gives every interaction hook the validated request, including repeated resou
 	const [accepted] = consentReferenceId.mock.lastCall!;
 	expect(accepted.consent).toBeDefined();
 	expect(accepted.query.getAll("resource")).toEqual(resources);
+});
+
+/**
+ * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+ */
+it("keeps every value of a repeated resource or custom parameter in a form POST", async () => {
+	type Options = OAuthOptions<Scope[]>;
+	const resources = ["https://api.example.com", "https://mcp.example.com"];
+	const organizations = ["org_1", "org_2"];
+	const consentReferenceId =
+		vi.fn<NonNullable<Options["postLogin"]>["consentReferenceId"]>();
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["openid"],
+					resources,
+					enforcePerClientResources: false,
+					postLogin: {
+						page: "/select-organization",
+						shouldRedirect: () => false,
+						consentReferenceId,
+					},
+				}),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: { redirect_uris: [redirectURI] },
+	});
+	const consentPage = await authorizeRedirect(
+		auth,
+		headers,
+		{
+			client_id: oauthClient.client_id,
+			scope: "openid",
+			organization: organizations,
+			resource: resources,
+		},
+		"POST",
+	);
+
+	expect(consentPage.pathname).toBe("/consent");
+	expect(consentPage.searchParams.getAll("organization")).toEqual(
+		organizations,
+	);
+	const [requested] = consentReferenceId.mock.lastCall!;
+	expect(requested.query.getAll("resource")).toEqual(resources);
+	expect(requested.query.getAll("organization")).toEqual(organizations);
+
+	consentReferenceId.mockClear();
+	await client.oauth2.consent({
+		accept: true,
+		oauth_query: consentPage.search.slice(1),
+		fetchOptions: { headers, throw: true },
+	});
+	const [accepted] = consentReferenceId.mock.lastCall!;
+	expect(accepted.query.getAll("resource")).toEqual(resources);
+	expect(accepted.query.getAll("organization")).toEqual(organizations);
 });
