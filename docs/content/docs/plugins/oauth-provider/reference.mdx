@@ -395,7 +395,10 @@ Companion plugins call `extendOAuthProvider()` from their `init()` hook to add t
 
 An interaction request is a request other than an authorization request that the user approves through the `/oauth2/authorize` sign-in, account selection, post-login, and consent pages. It is approved when the user accepts consent, instead of issuing an authorization code. `oauthDeviceAuthorization()` uses one keyed by `user_code`.
 
-Add companion plugins such as `oauthDeviceAuthorization()` and `oauthTokenExchange()` to every `betterAuth()` instance that registers OAuth clients, including a separate admin or provisioning instance. Registration accepts only grant types the instance supports. On an instance without the plugin, registering a client for its extension grant fails with `invalid_client_metadata` and `unsupported grant_type`.
+Add companion plugins such as `oauthDeviceAuthorization()` and `oauthTokenExchange()` to every `betterAuth()` instance that registers OAuth clients, including a separate admin or provisioning instance. An instance without the plugin does not support its extension grant:
+
+* `createOAuthClient`, `adminCreateOAuthClient`, and client updates reject the grant with `invalid_client_metadata`.
+* Dynamic registration drops the grant and registers the client with its other supported grants. It fails with `invalid_client_metadata` only when no supported grant remains.
 
 ```ts title="custom-oauth-extension.ts"
 import type { BetterAuthPlugin } from "better-auth";
@@ -428,7 +431,7 @@ export const customOAuthExtension = () =>
 A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
 
 <Callout type="warn">
-  `issueTokens` applies the provider's resource policy: each resource must be registered and linked, and each resource's `allowedScopes` applies. It does not re-check anything else it is given. Validate the user, the client's registered scopes, and any grant-specific policy in your handler before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
+  `issueTokens` applies the provider's resource policy. Each resource must be registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default). Each resource's `allowedScopes` also applies. It does not re-check anything else it is given. Validate the user, the client's registered scopes, and any grant-specific policy in your handler before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
 </Callout>
 
 When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to check that client credentials are not repeated or combined across authentication methods. The endpoint must therefore keep a readable request after parsing the form.

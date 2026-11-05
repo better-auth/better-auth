@@ -439,15 +439,15 @@ curl https://auth.example.com/api/auth/oauth2/token \
 }
 ```
 
-| Parameter                         | Behavior                                                                                                                                                                               |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `subject_token`                   | Required. An active access token this server issued                                                                                                                                    |
-| `subject_token_type`              | Required. Must be `urn:ietf:params:oauth:token-type:access_token`                                                                                                                      |
-| `resource`                        | Required unless `audience` is sent, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource linked to the client |
-| `scope`                           | Optional. Defaults to the subject token's scopes, without `openid` and `offline_access`, that the client is also registered for                                                        |
-| `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                                             |
-| `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                                                |
-| `audience`                        | Optional, and may repeat. Each value must equal a registered resource identifier and is treated like `resource`                                                                        |
+| Parameter                         | Behavior                                                                                                                                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subject_token`                   | Required. An active access token this server issued                                                                                                                                                                             |
+| `subject_token_type`              | Required. Must be `urn:ietf:params:oauth:token-type:access_token`                                                                                                                                                               |
+| `resource`                        | Required unless `audience` is sent, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource, linked to the client while `enforcePerClientResources` is on |
+| `scope`                           | Optional. Defaults to the subject token's scopes, without `openid` and `offline_access`, that the client is also registered for                                                                                                 |
+| `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                                                                                      |
+| `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                                                                                         |
+| `audience`                        | Optional, and may repeat. Each value must equal a registered resource identifier and is treated like `resource`                                                                                                                 |
 
 With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
 
@@ -463,7 +463,7 @@ The provider applies these rules to every exchange, before your `allowExchange` 
 | The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
 | The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
 | The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
-| Each target resource is registered, enabled, and linked to the client                                                                                 | The client's resource policy still applies, including each resource's `allowedScopes`                               |
+| Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
 | A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
 | The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                           | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
 | No refresh token or ID token is issued                                                                                                                | The service must exchange again when the token expires                                                              |
@@ -476,7 +476,7 @@ Scope names are global across resources. A `read` scope on the MCP server and a 
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
 | Missing or invalid subject token, unsupported `subject_token_type`, `actor_token` or `actor_token_type`, unsupported `requested_token_type`, neither `resource` nor `audience`, missing consent, or a policy denial | `400 invalid_request`     |
 | A scope the subject token or the client does not have, or `openid` or `offline_access`                                                                                                                              | `400 invalid_scope`       |
-| An unknown, disabled, or unlinked resource or `audience` value, or the userinfo endpoint                                                                                                                            | `400 invalid_target`      |
+| An unknown or disabled resource or `audience` value, one not linked to the client while `enforcePerClientResources` is on, or the userinfo endpoint                                                                 | `400 invalid_target`      |
 | Failed client authentication                                                                                                                                                                                        | `invalid_client`          |
 | A client not registered for the token-exchange grant                                                                                                                                                                | `400 unauthorized_client` |
 
@@ -492,7 +492,8 @@ The provider reads the reference from the subject token's [`reference_id`](#cons
 
 * `client`: the authenticated client
 * `user`: the user the subject token represents
-* `resources` and `scopes`: the requested resources and scopes
+* `resources`: the requested resources
+* `scopes`: the scopes the exchanged token will carry, after each resource's `allowedScopes` narrows the requested ones
 * `referenceId`: the inherited consent reference
 * `subjectToken`: the subject token's introspection payload
 

@@ -105,7 +105,7 @@ Some requests carry more for the page to show:
        */
       claims?: string | Record<string, unknown>
       /**
-       * The reference the user chose, such as an organization ID. `postLogin.consentReferenceId` receives it as `consent.referenceId` and decides whether to accept it. Without that callback, accepting with it fails with `invalid_request`.
+       * The reference the user chose, such as an organization ID. `postLogin.consentReferenceId` receives it as `consent.referenceId` and decides whether to accept it. Without that callback, accepting with it fails with `invalid_request`. A denied consent ignores it.
        */
       reference_id?: string
       /**
@@ -209,7 +209,7 @@ If some scopes need a reference, throw an `APIError` from `consentReferenceId` w
 
 A client can name the organization it needs in its authorization request, such as `organization=org_123`, and `consentReferenceId` reads it from `query`. Your consent page can instead let the user pick one and send it as `reference_id` to `/oauth2/consent`. `consentReferenceId` receives that pick as `consent.referenceId`. Neither value comes from your server, so check that the user belongs to the organization before returning it.
 
-`consent` is set only when the user accepts. Until then, return `undefined` while no organization is known, so the consent page can ask. A client with `skip_consent` gets no consent page unless its request sends `prompt=consent`, so refuse it instead. The provider accepts repeated parameters, because some, such as `resource`, can repeat. Refuse a request whose organizations disagree.
+`consent` is set only when the user accepts. Until then, return `undefined` while no organization is known, so the consent page can ask. A client with `skip_consent` gets no consent page unless its request sends `prompt=consent`, so refuse its request with `invalid_request` when it names no organization. The provider accepts repeated parameters, because some, such as `resource`, can repeat. Refuse a request whose organizations disagree.
 
 ```ts title="auth.ts"
 // Clients created with `skip_consent` never reach the consent page.
@@ -235,8 +235,12 @@ oauthProvider({
       // Not chosen yet: let the consent page ask.
       if (!organizationId && !consent && !skipsConsent) return undefined;
 
+      // A `skip_consent` client, or a user who accepted without picking, named none.
+      if (!organizationId) {
+        throw new APIError("BAD_REQUEST", { error: "invalid_request" });
+      }
       // `isMember` stands for your own membership lookup.
-      if (!organizationId || !(await isMember(user.id, organizationId))) {
+      if (!(await isMember(user.id, organizationId))) {
         throw new APIError("FORBIDDEN", { error: "access_denied" });
       }
       return organizationId;
