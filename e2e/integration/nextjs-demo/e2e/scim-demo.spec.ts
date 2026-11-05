@@ -5,6 +5,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import type { SQLOutputValue } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
 import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
@@ -844,7 +845,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		const database = new DatabaseSync(runtime.databasePath, {
 			readOnly: true,
 		});
-		let maya: Record<string, unknown> = {};
+		let maya: Record<string, SQLOutputValue> = {};
 		try {
 			const users = database
 				.prepare(
