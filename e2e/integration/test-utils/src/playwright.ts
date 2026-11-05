@@ -1,7 +1,4 @@
-import type {
-	ChildProcess,
-	ChildProcessWithoutNullStreams,
-} from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
 import { createInterface } from "node:readline";
@@ -9,7 +6,7 @@ import { promisify } from "node:util";
 
 // Build and server share one log, so a report shows both.
 export function launch(cwd: string) {
-	const children: ChildProcessWithoutNullStreams[] = [];
+	const children = new Set<ChildProcess>();
 	let output = "";
 
 	function spawnScript(args: readonly string[]) {
@@ -19,12 +16,16 @@ export function launch(cwd: string) {
 			stdio: "pipe",
 			env: { ...process.env, NO_COLOR: "1" },
 		});
-		children.push(child);
+		children.add(child);
+		// A closed child's pid can be reused, so `stop` must not signal it.
+		child.once("close", () => children.delete(child));
 		child.stderr.setEncoding("utf8").on("data", (data) => (output += data));
 		const lines = createInterface({ input: child.stdout });
 		lines.on("line", (line) => (output += `${line}\n`));
-		const exited = (code: number | null) =>
-			new Error(`pnpm ${args.join(" ")} exited with code ${code}\n${output}`);
+		const exited = (code: number | null, signal: NodeJS.Signals | null) =>
+			new Error(
+				`pnpm ${args.join(" ")} exited with ${signal ?? `code ${code}`}\n${output}`,
+			);
 		return { child, lines, exited };
 	}
 
@@ -32,8 +33,8 @@ export function launch(cwd: string) {
 		output: () => output,
 		run: async (args: readonly string[]) => {
 			const { child, exited } = spawnScript(args);
-			const [code] = await once(child, "close");
-			if (code !== 0) throw exited(code);
+			const [code, signal] = await once(child, "close");
+			if (code !== 0) throw exited(code, signal);
 		},
 		start: (args: readonly string[]) => {
 			const { child, lines, exited } = spawnScript(args);
@@ -43,10 +44,10 @@ export function launch(cwd: string) {
 					if (match) resolve(match[0]);
 				});
 				child.once("error", reject);
-				child.once("close", (code) => reject(exited(code)));
+				child.once("close", (code, signal) => reject(exited(code, signal)));
 			});
 		},
-		stop: () => Promise.all(children.map(terminate)),
+		stop: () => Promise.all([...children].map(terminate)),
 	};
 }
 
