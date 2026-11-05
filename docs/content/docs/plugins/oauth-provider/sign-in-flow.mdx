@@ -201,7 +201,7 @@ await authClient.organization.setActive({ organizationId });
 await authClient.oauth2.continue({ postLogin: true });
 ```
 
-Device approvals from `oauthDeviceAuthorization()` and CIBA requests run this step too, and their tokens carry the `referenceId` it selects.
+Device approvals from `oauthDeviceAuthorization()` and CIBA requests approved on the provider's pages run this step too, and their tokens carry the `referenceId` it selects. [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app) skips this step, so its tokens carry no `referenceId`.
 
 If some scopes need a reference, throw an `APIError` from `consentReferenceId` when none is set. Better Auth does not check this for you. For how references reach token claims, see [Organizations](/docs/plugins/oauth-provider/clients#organizations) and [Consent reference claim](/docs/plugins/oauth-provider/tokens#consent-reference-claim).
 

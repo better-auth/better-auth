@@ -165,7 +165,7 @@ To set up the second case, [register your API as a resource](/docs/plugins/oauth
 
 An access token tied to a session is reported inactive once that session ends. A refresh token stays active after its session ends, until it expires or is revoked. For such a refresh token, the response omits `sid`.
 
-The [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2) includes extension access token claims, `customAccessTokenClaims`, per-resource `customClaims`, and the reserved claims the server owns (`iss`, `sub`, `aud`, `scope`, and similar). A JWT access token returns the claims signed at issuance. An opaque access token returns claims recomputed at introspection. Per-issuance claims and claims that depend on the grant type therefore appear only for JWT access tokens. See [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
+For an access token, the [introspection response](https://datatracker.ietf.org/doc/html/rfc7662#section-2.2) includes extension access token claims, `customAccessTokenClaims`, per-resource `customClaims`, and the reserved claims the server owns (`iss`, `sub`, `aud`, `scope`, and similar). A JWT access token returns the claims signed at issuance. An opaque access token returns claims recomputed at introspection. Per-issuance claims and claims that depend on the grant type therefore appear only for JWT access tokens. A refresh token response omits `aud`, extension claims, `customAccessTokenClaims`, and per-resource `customClaims`. See [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
 
 A callback that returns a reserved claim name has that claim dropped. See [Custom claims](/docs/plugins/oauth-provider/tokens#custom-claims).
 
