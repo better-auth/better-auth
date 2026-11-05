@@ -22,29 +22,29 @@ export function launch(cwd: string) {
 		child.stderr.setEncoding("utf8").on("data", (data) => (output += data));
 		const lines = createInterface({ input: child.stdout });
 		lines.on("line", (line) => (output += `${line}\n`));
-		const exited = (code: number | null, signal: NodeJS.Signals | null) =>
+		const exitError = (code: number | null, signal: NodeJS.Signals | null) =>
 			new Error(
 				`pnpm ${args.join(" ")} exited with ${signal ?? `code ${code}`}\n${output}`,
 			);
-		return { child, lines, exited };
+		return { child, lines, exitError };
 	}
 
 	return {
 		output: () => output,
 		run: async (args: readonly string[]) => {
-			const { child, exited } = spawnScript(args);
+			const { child, exitError } = spawnScript(args);
 			const [code, signal] = await once(child, "close");
-			if (code !== 0) throw exited(code, signal);
+			if (code !== 0) throw exitError(code, signal);
 		},
 		start: (args: readonly string[]) => {
-			const { child, lines, exited } = spawnScript(args);
+			const { child, lines, exitError } = spawnScript(args);
 			return new Promise<string>((resolve, reject) => {
 				lines.on("line", (line) => {
 					const match = line.match(/http:\/\/localhost:\d+/);
 					if (match) resolve(match[0]);
 				});
 				child.once("error", reject);
-				child.once("close", (code, signal) => reject(exited(code, signal)));
+				child.once("close", (code, signal) => reject(exitError(code, signal)));
 			});
 		},
 		stop: () => Promise.all([...children].map(terminate)),
