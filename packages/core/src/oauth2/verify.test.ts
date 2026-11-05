@@ -1096,6 +1096,29 @@ describe("verifyBearerToken", () => {
 	 * @see https://github.com/better-auth/better-auth/issues/11611
 	 */
 	describe("rejected JWKS fetch", () => {
+		it("should propagate remote JWKS fetch errors as server errors without masking as 401", async () => {
+			vi.resetModules();
+			const { verifyBearerToken: verify } = await import("./verify");
+			const { privateKey, kid } = await createTestJWKS();
+			const token = await createSignedToken(privateKey, kid);
+			mockedFetch.mockResolvedValueOnce(
+				new Response("Gateway Timeout", {
+					status: 504,
+					statusText: "Gateway Timeout",
+				}),
+			);
+
+			await expect(
+				verify(token, {
+					jwksUrl,
+					verifyOptions: { issuer, audience },
+				}),
+			).rejects.toThrow("Jwks failed: Gateway Timeout");
+
+			mockedFetch.mockReset();
+			vi.resetModules();
+		});
+
 		it("should report the failure even when the logger throws", async () => {
 			const { privateKey, kid } = await createTestJWKS();
 			const token = await createSignedToken(privateKey, kid);

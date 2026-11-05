@@ -191,4 +191,15 @@ describe("createMcpProtectedRequestHandler", () => {
 			),
 		).not.toThrow();
 	});
+
+	it("propagates a Jwks failed error as a server error rather than challenging as 401", async () => {
+		const failure = new Error("Jwks failed: 502 Bad Gateway");
+		verifyAccessTokenRequest.mockRejectedValue(failure);
+
+		await expect(
+			createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
+				return new Response("unreachable");
+			})(request()),
+		).rejects.toBe(failure);
+	});
 });
