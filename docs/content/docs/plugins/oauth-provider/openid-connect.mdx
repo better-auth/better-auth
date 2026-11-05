@@ -61,7 +61,7 @@ With `disableJwtPlugin: true`, ID tokens are signed with `HS256` using the clien
 To assert a stronger authentication class in `acr`, or the methods the user signed in with in `amr`, set `authenticationContext` with both fields:
 
 * `acrValuesSupported` lists the `acr` values the provider may issue. Discovery advertises it as `acr_values_supported`. Include `"0"` if `resolve` can return no `acr`.
-* `resolve` returns the `acr` and `amr` the current session established. It runs once, when the user approves an authorization request or a device code with the `openid` scope. It receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`).
+* `resolve` returns the `acr` and `amr` the current session established. For requests with the `openid` scope, it runs once, when the user approves an authorization request, a device code, or a [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba) request on the provider's pages. It receives `user`, `session`, `client`, the approved `scopes`, the request `headers`, and `requestedAcrValues` (from `claims.id_token.acr` and `acr_values`). [`completeCibaRequest`](/docs/plugins/ciba#decide-from-your-own-app) does not call `resolve`, and records the `acr` and `amr` you pass instead.
 
 Return only what the session proved. Better Auth does not record how a session signed in, so track it yourself. The example below marks sessions created by a completed two-factor challenge. Sessions created through a trusted device skip that challenge and stay unmarked.
 
@@ -142,7 +142,7 @@ Claims follow the granted [scopes](https://openid.net/specs/openid-connect-core-
 | `profile` | `name`, `picture`, `given_name`, `family_name` |
 | `email`   | `email`, `email_verified`                      |
 
-Claims requested through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests) are added when they appear in `claims_supported` and a value exists. Missing values are omitted, not returned as `null`. This per-claim selection works only with opaque access tokens. With a JWT access token, UserInfo returns only the claims its scopes cover.
+When a claim from the table above is requested through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests) and appears in `claims_supported`, Better Auth returns it if a value exists, even when its scope was not granted. Better Auth does not fill in other requested names, such as `locale`. To return them, read `requestedClaims` in `customUserInfoClaims`, described below. Missing values are omitted, not returned as `null`. This per-claim selection works only with opaque access tokens. With a JWT access token, UserInfo returns only the claims its scopes cover.
 
 To add claims to the [UserInfo response](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse), set `customUserInfoClaims`. It receives the `user`, the access token's `scopes`, the access token payload as `jwt`, and `requestedClaims`. `requestedClaims` lists the claim names requested through `claims.userinfo`. It returns an object of claims to add:
 
@@ -183,7 +183,7 @@ Changing a client's redirect URIs recomputes its sector, so moving to another ho
   `pairwiseSecret` must be at least 32 characters. Changing it changes every pairwise `sub` and breaks existing client accounts. Treat it as permanent.
 </Callout>
 
-`sector_identifier_uri` is not supported. All `redirect_uris` of a pairwise client must therefore share one host. Pairwise clients also cannot use custom-scheme redirect URIs with a host, such as `app://rp.example.com/callback`. Any app can claim a custom scheme, and that app would receive the same `sub` as a pairwise web client that redirects to `rp.example.com`. Registration fails with `invalid_client_metadata` in either case.
+`sector_identifier_uri` is not supported. All `redirect_uris` of a pairwise client must therefore share one host and port. Pairwise clients also cannot use custom-scheme redirect URIs with a host, such as `app://rp.example.com/callback`. Any app can claim a custom scheme. The host in such a URI therefore does not identify the client. Registration fails with `invalid_client_metadata` in either case.
 
 ## RP-initiated logout
 
@@ -194,14 +194,15 @@ await auth.api.adminCreateOAuthClient({
   headers,
   body: {
     redirect_uris: ["https://app.example.com/callback"],
+    post_logout_redirect_uris: ["https://app.example.com/logout"],
     enable_end_session: true, // [!code highlight]
   },
 });
 ```
 
-* It accepts GET query parameters or a form-encoded POST body.
+* It accepts GET query parameters, a form-encoded POST body, or a JSON POST body. `authClient.oauth2.endSession()` sends a JSON body when you pass the fields directly.
 * A valid `id_token_hint` for the current browser session ends it immediately. Without one, or with a hint for a different session, the user must confirm first. In a browser, Better Auth serves the confirmation page.
-* Better Auth [redirects after logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout) only when `post_logout_redirect_uri` exactly matches a registered URI, and adds `state` only to that redirect. For example, `https://app.example.com/logout/` does not match a registered `https://app.example.com/logout`. Without a matching URI, a browser shows a logged-out page from Better Auth.
+* Better Auth [redirects after logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout) only when `post_logout_redirect_uri` exactly matches one of the client's registered `post_logout_redirect_uris`, and adds `state` only to that redirect. For example, `https://app.example.com/logout/` does not match a registered `https://app.example.com/logout`. Without a matching URI, a browser shows a logged-out page from Better Auth.
 * When clients registered for [front-channel logout](#front-channel-logout) must be notified, a browser gets the front-channel logout page instead. That page then redirects or shows the logged-out message.
 
 Enable this only for clients you trust. The client, or anyone holding an ID token it received, can end that token's session without confirmation, for these reasons:
@@ -242,7 +243,7 @@ await auth.api.adminCreateOAuthClient({
 
 ## Front-channel logout
 
-[Front-Channel Logout](https://openid.net/specs/openid-connect-frontchannel-1_0.html) notifies clients through the user's browser. When a user logs out at `/oauth2/end-session`, Better Auth renders a page with one hidden iframe per client that holds tokens on the session. Each iframe loads that client's `frontchannel_logout_uri`, so the client can clear its own session cookies.
+[Front-Channel Logout](https://openid.net/specs/openid-connect-frontchannel-1_0.html) notifies clients through the user's browser. When a user logs out at `/oauth2/end-session`, Better Auth renders a page with one hidden iframe per client that holds tokens on the session. Each iframe loads that client's `frontchannel_logout_uri`, so the client can clear its own session cookies. As with back-channel logout, clients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token gets no iframe.
 
 <Callout type="warn">
   The iframes are third-party content. Safari blocks third-party cookies, Firefox partitions them by default, and Chrome blocks them in Incognito and for users who turn them off. A client on a different site therefore often cannot see its session cookie inside the iframe. Front-channel logout is reliable only when your provider and its clients share a registrable domain, such as `auth.example.com` and `app.example.com`. Use [back-channel logout](#back-channel-logout) when clients run on other sites or when logout must not depend on the browser.

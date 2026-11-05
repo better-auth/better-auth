@@ -223,7 +223,7 @@ await auth.api.completeCibaRequest({
 });
 ```
 
-The provider records the decision only when `userId` is the user the `login_hint` named and the request is still pending; otherwise it returns `invalid_request` and changes nothing. Without `acr`, the ID token claims `"0"`, so state an `acr` when `"0"` is not in `acrValuesSupported`. The approved scopes must be among the requested ones and include `openid`. A ping client is called back as it is after a decision from the link. This call skips the provider's sign-in, post-login, and consent pages, so your app is responsible for:
+The provider records the decision only when `userId` is the user the `login_hint` named and the request is still pending; otherwise it returns `invalid_request` and changes nothing. Without `acr`, the ID token claims `"0"`, so state an `acr` when `"0"` is not in the provider's [`authenticationContext.acrValuesSupported`](/docs/plugins/oauth-provider/openid-connect#authentication-context). The approved scopes must be among the requested ones and include `openid`. A ping client is called back as it is after a decision from the link. This call skips the provider's sign-in, post-login, and consent pages. Its tokens carry no `referenceId`, and your app is responsible for:
 
 * authenticating the user before it reports a decision, and
 * showing the client, the scopes, and the binding message before the user approves.
@@ -239,7 +239,7 @@ The ID token carries only the `auth_time`, `acr`, and `amr` you pass; without `a
 
 ### `POST /oauth2/bc-authorize`
 
-Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and `interval`. Each IP address can start 10 requests per minute.
+Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and `interval`. Each IP address can start 10 requests per minute. Discovery metadata advertises it as `backchannel_authentication_endpoint`, with `backchannel_token_delivery_modes_supported` set to `deliveryModes` and `backchannel_user_code_parameter_supported` set to `false`.
 
 | Parameter                   | Required  | Description                                                                                                          |
 | --------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |

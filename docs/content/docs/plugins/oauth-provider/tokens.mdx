@@ -7,7 +7,7 @@ description: Control which tokens the provider issues, for which APIs, and for h
 
 ## Token endpoint
 
-`POST /oauth2/token` supports the `authorization_code`, `client_credentials`, and `refresh_token` grants. Companion plugins add the [device code](#device-code-grant) and [token exchange](#token-exchange) grants. A confidential client must authenticate with the method it registered, using one of the methods from [RFC 6749 §2.3.1](https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1) and [OIDC Core §9](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication):
+`POST /oauth2/token` supports the `authorization_code`, `client_credentials`, and `refresh_token` grants. Companion plugins add the [device code](#device-code-grant), [token exchange](#token-exchange), and [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba) grants. A confidential client must authenticate with the method it registered, using one of the methods from [RFC 6749 §2.3.1](https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1) and [OIDC Core §9](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication):
 
 | Method                | How the client authenticates                                                                         |
 | --------------------- | ---------------------------------------------------------------------------------------------------- |
@@ -22,12 +22,12 @@ To get a JWT access token, include a `resource` in the request and enable the JW
 
 To control which scopes your clients may request, set `scopes`. It defaults to `["openid", "profile", "email", "offline_access"]`. Your provider acts as an OpenID provider only when the list includes `openid`.
 
-| Scope            | Grants                                                         |
-| ---------------- | -------------------------------------------------------------- |
-| `openid`         | An ID token and the `sub` claim                                |
-| `profile`        | `name`, `picture`, `given_name`, and `family_name` at UserInfo |
-| `email`          | `email` and `email_verified` at UserInfo                       |
-| `offline_access` | A refresh token                                                |
+| Scope            | Grants                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `openid`         | An ID token and the `sub` claim                                                            |
+| `profile`        | `name`, `picture`, `given_name`, and `family_name` at UserInfo                             |
+| `email`          | `email` and `email_verified` at UserInfo                                                   |
+| `offline_access` | A refresh token, when the client is registered for `refresh_token` or `authorization_code` |
 
 Standard claims are returned at UserInfo, not in the ID token, as [OIDC Core §5.4](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims) describes for flows that issue an access token.
 
@@ -149,6 +149,8 @@ oauthProvider({
 
 To change the string sent to the client, set `formatRefreshToken`. `encrypt` receives the generated refresh token (before it is hashed for storage) and, when there is one, the session ID. It returns the string sent to the client, before the provider adds `prefix.refreshToken`. `decrypt` receives the string the client sends back, without the `prefix.refreshToken` prefix. It must return an object with the `token` that `encrypt` received and, optionally, the `sessionId`.
 
+When the value is not a refresh token, `decrypt` should throw an `APIError` with status 400. An error from `jose`, such as the one `compactDecrypt` throws, counts the same. The provider then treats the value as not a refresh token: a refresh fails with `invalid_grant`, and revocation and introspection go on to check the other token types. Any other error fails the request. Revocation and introspection can also pass access tokens to `decrypt`.
+
 ```ts title="auth.ts"
 oauthProvider({
   formatRefreshToken: {
@@ -220,6 +222,7 @@ A client gets DPoP-bound tokens ([RFC 9449](https://datatracker.ietf.org/doc/htm
 * It registered with `dpop_bound_access_tokens: true` ([§5.2](https://datatracker.ietf.org/doc/html/rfc9449#section-5.2)).
 * It sends `dpop_jkt` on the authorization request.
 * It requests a resource with `dpopBoundAccessTokensRequired: true`.
+* It sends a `DPoP` proof with the token request.
 
 The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)) and returns `token_type: "DPoP"`. A refresh needs a proof from the same key. A JWT access token carries the key's thumbprint in `cnf.jkt`. The client calls your API with `Authorization: DPoP <access_token>` and a `DPoP` proof that includes the access token hash, `ath` ([§7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
 
@@ -309,7 +312,7 @@ What the endpoint does depends on the token:
 * **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
 * **Refresh token**: marked revoked, so it can no longer issue tokens. The opaque access tokens it issued are deleted. JWT access tokens it issued stay valid until they expire.
 * **Refresh token that was already revoked or rotated**: treated as replay. The endpoint still returns 200, and it deletes the client's refresh tokens for that user, along with the opaque access tokens they issued. An access token issued without a refresh token, and any JWT access token, stays valid until it expires.
-* **JWT access token**: cannot be revoked, because it is never stored. A valid one returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)).
+* **JWT access token**: cannot be revoked, because it is never stored. A JWT that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)). An expired JWT, or one whose audience names a resource that is not registered, is treated as unknown and returns 200.
 
 To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session. Its lifetime is the only limit.
 
@@ -360,11 +363,11 @@ The user approves a device code through `/oauth2/authorize?user_code=…`, on th
 
 A service that receives a user's access token sometimes needs to call another API as that user. Forwarding the token fails the API's audience check and gives the API more access than it needs. Token exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693)) lets the service trade the token at the token endpoint for a new access token for the other API. The new token has the same user as `sub`, the downstream API as `aud`, and the exchanging service as `client_id`.
 
-The exchanged token impersonates the user: it represents the user and does not name the service as an actor (`act`). A typical case is an MCP server that receives a token for itself and calls a downstream API. Such a server must not pass the user's token through. It should exchange the token for one to that API instead.
+The exchanged token impersonates the user: it represents the user and does not name the service as an actor (`act`). A typical case is an MCP server that receives a token for itself and calls a downstream API.
 
 ### Set up token exchange
 
-Add `oauthTokenExchange()` after `oauthProvider()`, and list both the resource the service receives tokens for and the resource it calls:
+Add `oauthTokenExchange()` after `oauthProvider()`. List the scopes the service uses in `scopes`, and list both the resource the service receives tokens for and the resource it calls:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -377,6 +380,7 @@ export const auth = betterAuth({
     oauthProvider({
       loginPage: "/sign-in",
       consentPage: "/consent",
+      scopes: ["openid", "profile", "email", "offline_access", "read", "write"],
       resources: ["https://mcp.example.com", "https://api.example.com"],
     }),
     oauthTokenExchange(), // [!code highlight]
@@ -475,7 +479,7 @@ Scope names are global across resources. A `read` scope on the MCP server and a 
 | Condition                                                                                                                                                                                                           | Error                     |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
 | Missing or invalid subject token, unsupported `subject_token_type`, `actor_token` or `actor_token_type`, unsupported `requested_token_type`, neither `resource` nor `audience`, missing consent, or a policy denial | `400 invalid_request`     |
-| A scope the subject token or the client does not have, or `openid` or `offline_access`                                                                                                                              | `400 invalid_scope`       |
+| A scope the subject token or the client does not have, `openid` or `offline_access`, or a target resource whose `allowedScopes` allows none of the requested scopes                                                 | `400 invalid_scope`       |
 | An unknown or disabled resource or `audience` value, one not linked to the client while `enforcePerClientResources` is on, or the userinfo endpoint                                                                 | `400 invalid_target`      |
 | Failed client authentication                                                                                                                                                                                        | `invalid_client`          |
 | A client not registered for the token-exchange grant                                                                                                                                                                | `400 unauthorized_client` |

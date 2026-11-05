@@ -13,7 +13,7 @@ The Device Authorization plugin implements the code issuance and approval flow f
 You can test the device authorization flow right now using the Better Auth CLI:
 
 ```package-install
-npx auth login
+npx auth@latest login
 ```
 
 This will demonstrate the complete device authorization flow by:
@@ -58,13 +58,13 @@ This will demonstrate the complete device authorization flow by:
     <Tabs items={["migrate", "generate"]}>
       <Tab value="migrate">
         ```package-install
-        npx auth migrate
+        npx auth@latest migrate
         ```
       </Tab>
 
       <Tab value="generate">
         ```package-install
-        npx auth generate
+        npx auth@latest generate
         ```
       </Tab>
     </Tabs>
@@ -155,6 +155,8 @@ export const auth = betterAuth({
   ],
 });
 ```
+
+Then run `npx auth@latest migrate`, or `npx auth@latest generate` and apply the schema, to create the `deviceCode` table with the OAuth fields listed in [Schema](#schema).
 
 Register the CLI as a public native client and link it to the API resource. Public clients use `token_endpoint_auth_method: "none"` because an installed CLI cannot keep a shared secret confidential:
 
@@ -540,7 +542,6 @@ export default function DeviceApprovalPage() {
   const [request, setRequest] = useState<{
     client_id?: string;
     scope?: string;
-    resource?: string | string[];
   } | null>(null);
 
   useEffect(() => {
@@ -596,11 +597,6 @@ export default function DeviceApprovalPage() {
       <h2>Device Authorization Request</h2>
       <p>Client: {request?.client_id}</p>
       <p>Scopes: {request?.scope || "None"}</p>
-      <p>
-        Resources: {Array.isArray(request?.resource)
-          ? request.resource.join(", ")
-          : request?.resource || "None"}
-      </p>
       <p>Code: {userCode}</p>
       
       <button onClick={handleApprove} disabled={isProcessing}>
