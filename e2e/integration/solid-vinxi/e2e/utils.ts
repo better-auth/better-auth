@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { launch } from "@better-auth-test/test-utils/playwright";
-import type { Page } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -23,6 +23,12 @@ export function setup() {
 			const clientURL = await app.start(["run", "dev"]);
 			ref.clientPort = Number(new URL(clientURL).port);
 		},
-		clean: () => app.stop(),
+		clean: async (testInfo: TestInfo) => {
+			await app.stop();
+			await testInfo.attach("vinxi-dev.log", {
+				body: app.output(),
+				contentType: "text/plain",
+			});
+		},
 	};
 }

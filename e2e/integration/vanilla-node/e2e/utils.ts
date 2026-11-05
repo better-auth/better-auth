@@ -2,7 +2,7 @@ import { once } from "node:events";
 import type { Server } from "node:http";
 import { fileURLToPath } from "node:url";
 import { launch } from "@better-auth-test/test-utils/playwright";
-import type { Page } from "@playwright/test";
+import type { Page, TestInfo } from "@playwright/test";
 import type { BetterAuthOptions } from "better-auth";
 import { createAuthServer } from "./app";
 
@@ -65,9 +65,13 @@ export function setup(overrides?: Partial<BetterAuthOptions>) {
 			ref.serverPort = serverPort;
 			ref.clientPort = Number(new URL(clientURL).port);
 		},
-		clean: async () => {
+		clean: async (testInfo: TestInfo) => {
 			server.close();
 			await app.stop();
+			await testInfo.attach("vite-client.log", {
+				body: app.output(),
+				contentType: "text/plain",
+			});
 		},
 	};
 }
