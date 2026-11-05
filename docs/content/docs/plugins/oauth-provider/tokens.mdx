@@ -461,11 +461,11 @@ The exchange request decides how the exchanged token is bound:
 * A proof is required when the exchanging client or the target resource requires DPoP-bound tokens. It is also required when a client exchanges its own DPoP-bound token.
 * Otherwise, an exchange without a proof returns a bearer token.
 
-A [`clientAuthentication` strategy](/docs/plugins/oauth-provider/reference#provider-extensions) that returns its own `confirmation` binds the exchanged token to that confirmation instead of the proof. When a client exchanges its own DPoP-bound token, that confirmation must carry the same DPoP key. Otherwise, the exchange fails with `invalid_dpop_proof`.
+A [`clientAuthentication` strategy](/docs/plugins/oauth-provider/reference#provider-extensions) can prove a key itself and return it as `confirmation`. The exchanged token is then bound to that confirmation instead of a proof, and no DPoP proof is required.
 
 When the subject token is DPoP-bound, the rules depend on who exchanges it:
 
-* **The client the token was issued to** must send a proof signed by the same key, as it does for a refresh. The exchanged token stays bound to that key. A missing proof, or a proof from another key, fails with `invalid_dpop_proof`.
+* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A missing proof, or a proof or `confirmation` with another key, fails with `invalid_dpop_proof`.
 * **A service in the token's audience**, such as the MCP server that received it, does not hold the client's key. If the service sends its own proof, the exchanged token is bound to the service's key. If it sends no proof and none is required, the exchanged token is a bearer token.
 
 A service that passes the [exchange rules](#exchange-rules) does not need the client's key. It can turn each DPoP-bound token it receives into a token for the APIs it is linked to. To keep those tokens DPoP-bound, require a proof in either of these ways:
@@ -511,7 +511,7 @@ Scope names are global across resources. A `read` scope on the MCP server and a 
 | An unknown or disabled resource or `audience` value, one not linked to the client while `enforcePerClientResources` is on, or the userinfo endpoint                                                                 | `400 invalid_target`      |
 | Failed client authentication                                                                                                                                                                                        | `invalid_client`          |
 | A client not registered for the token-exchange grant                                                                                                                                                                | `400 unauthorized_client` |
-| An invalid DPoP proof, a missing proof when one is required, or a proof from another key when the client exchanges its own DPoP-bound token                                                                         | `400 invalid_dpop_proof`  |
+| An invalid DPoP proof, a missing proof when one is required, or, when the client exchanges its own DPoP-bound token, a proof or strategy `confirmation` with another key                                            | `400 invalid_dpop_proof`  |
 
 ### Keep the organization the user approved
 
