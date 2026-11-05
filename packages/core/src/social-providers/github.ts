@@ -167,7 +167,12 @@ export const github = (options: GithubOptions) => {
 				},
 			});
 
-			if (!profile.email && emails) {
+			// The public profile email is a contact address the user chose to
+			// display; prefer the verified primary email when GitHub returns it.
+			const primaryEmail = emails?.find((e) => e.primary && e.verified);
+			if (primaryEmail) {
+				profile.email = primaryEmail.email;
+			} else if (!profile.email && emails) {
 				profile.email = (emails.find((e) => e.primary) ?? emails[0])
 					?.email as string;
 			}

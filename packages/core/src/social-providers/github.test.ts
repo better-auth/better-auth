@@ -127,3 +127,98 @@ it("types additional GitHub account fields", () => {
 	>();
 	expectTypeOf<GithubProfile["ldap_dn"]>().toEqualTypeOf<string | undefined>();
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12135
+ */
+describe("github email selection", () => {
+	function mockGithubApi(email: string | null, emails: () => Response) {
+		mockedFetch.mockImplementation(async (input, init) => {
+			const request = new Request(input, init);
+			if (request.url === "https://api.github.com/user")
+				return Response.json({ ...publicProfile, email });
+			expect(request.url).toBe("https://api.github.com/user/emails");
+			return emails();
+		});
+	}
+
+	it("uses the verified primary email over a different public profile email", async () => {
+		mockGithubApi("public@example.com", () =>
+			Response.json([
+				{
+					email: "public@example.com",
+					primary: false,
+					verified: true,
+					visibility: null,
+				},
+				{
+					email: "primary@example.com",
+					primary: true,
+					verified: true,
+					visibility: "private",
+				},
+			]),
+		);
+		const provider = github({ clientId: "github-app" });
+		const result = await provider.getUserInfo({ accessToken: "access-token" });
+		expect(result?.user.email).toBe("primary@example.com");
+		expect(result?.user.emailVerified).toBe(true);
+	});
+
+	it("keeps the public profile email when the primary email is unverified", async () => {
+		mockGithubApi("public@example.com", () =>
+			Response.json([
+				{
+					email: "public@example.com",
+					primary: false,
+					verified: true,
+					visibility: "public",
+				},
+				{
+					email: "primary@example.com",
+					primary: true,
+					verified: false,
+					visibility: "private",
+				},
+			]),
+		);
+		const provider = github({ clientId: "github-app" });
+		const result = await provider.getUserInfo({ accessToken: "access-token" });
+		expect(result?.user.email).toBe("public@example.com");
+		expect(result?.user.emailVerified).toBe(true);
+	});
+
+	it("keeps the public profile email when the email list is unavailable", async () => {
+		mockGithubApi(
+			"public@example.com",
+			() => new Response(null, { status: 403 }),
+		);
+		const provider = github({ clientId: "github-app" });
+		const result = await provider.getUserInfo({ accessToken: "access-token" });
+		expect(result?.user.email).toBe("public@example.com");
+		expect(result?.user.emailVerified).toBe(false);
+	});
+
+	it("uses the primary email when the profile has no public email", async () => {
+		mockGithubApi(null, () =>
+			Response.json([
+				{
+					email: "other@example.com",
+					primary: false,
+					verified: true,
+					visibility: "private",
+				},
+				{
+					email: "primary@example.com",
+					primary: true,
+					verified: true,
+					visibility: "private",
+				},
+			]),
+		);
+		const provider = github({ clientId: "github-app" });
+		const result = await provider.getUserInfo({ accessToken: "access-token" });
+		expect(result?.user.email).toBe("primary@example.com");
+		expect(result?.user.emailVerified).toBe(true);
+	});
+});
