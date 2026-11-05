@@ -1,5 +1,37 @@
 # @better-auth/stripe
 
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Stripe customer ids and the subscription fields the plugin manages can no longer be set from sign-up or update-user requests and are removed from their input types. This includes server calls such as `auth.api.updateUser`; write them through your database adapter instead.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - When several records share a Stripe customer id, subscriptions created outside checkout now go to the owner recorded on the Stripe customer, and are skipped with a warning when no recorded owner holds the id.
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12102](https://github.com/better-auth/better-auth/pull/12102) [`3b3a595`](https://github.com/better-auth/better-auth/commit/3b3a5957a0ce1bde906954c5490735706a5202f9) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now checks the `callbackURL` against trusted origins after replacing `{CHECKOUT_SESSION_ID}`, so a `checkoutSessionId` value can no longer redirect to an untrusted origin.
+
+- [#12105](https://github.com/better-auth/better-auth/pull/12105) [`4af793f`](https://github.com/better-auth/better-auth/commit/4af793f1c8db057d2822b59c2d9099d76a0fb279) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now rejects non-string `callbackURL` and `checkoutSessionId` query values, such as duplicated parameters, with a 400 instead of failing with a 500.
+
+## 1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11954](https://github.com/better-auth/better-auth/pull/11954) [`da53fae`](https://github.com/better-auth/better-auth/commit/da53faea2530df6fda47f83f72da3eb5557ae60d) Thanks [@godwit-bo](https://github.com/godwit-bo)! - Support Stripe SDK v23.
+
+## 1.7.12
+
+## 1.7.11
+
 ## 1.7.10
 
 ## 1.7.9

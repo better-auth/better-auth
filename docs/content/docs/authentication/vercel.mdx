@@ -8,7 +8,7 @@ description: Vercel provider setup and usage.
   <Step>
     ### Get your Vercel credentials
 
-    To use Sign in with Vercel, you need a client ID and client secret. You can get them from the [Vercel Dashboard](https://vercel.com/dashboard) by [creating a Vercel App](https://vercel.com/docs/sign-in-with-vercel/manage-from-dashboard).
+    To use Sign in with Vercel, [create a Vercel App](https://vercel.com/docs/sign-in-with-vercel/manage-from-dashboard) to obtain its client ID. The default configuration also requires a client secret. Applications deployed on Vercel can instead use [OIDC client authentication](#oidc-client-authentication) without a client secret.
 
     Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/vercel` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
 
@@ -58,7 +58,128 @@ const signIn = async () => {
 
 ## Options
 
+To use Sign in with Vercel with the default configuration, you need a client ID and client secret. You can get them from the [Vercel Dashboard](https://vercel.com/dashboard) by [creating a Vercel App](https://vercel.com/docs/sign-in-with-vercel/manage-from-dashboard). For applications deployed on Vercel, you can instead use [OIDC client authentication](#oidc-client-authentication) without a client secret.
+
 For the full list of options supported by all social providers, check the [Provider Options](/docs/concepts/oauth#provider-options).
+
+### Token endpoint authentication
+
+Set `tokenEndpointAuth` to choose how the application authenticates when exchanging an authorization code. It accepts the shared OAuth authentication strategies: `client_secret_basic`, `client_secret_post`, `none`, `private_key_jwt`, and `custom`. Enable the corresponding method on your Vercel App. When omitted, Better Auth sends `clientSecret` in the request body if it is configured.
+
+The `custom` strategy owns client authentication: it must set `client_id` and the required credential parameters or headers. Better Auth continues to handle the authorization code, redirect URI, PKCE, token response, and user profile. The hook runs on the server for each exchange; it does not change the browser callback URL.
+
+#### OIDC client authentication
+
+For an application deployed on Vercel, use its workload OIDC token instead of a long-lived client secret:
+
+1. In your Vercel App's **Authentication** settings, enable **OpenID Connect (`oidc_token`)** and configure the trusted issuer and claims. Match the deployment token's issuer and audience, and restrict access to the intended team, project, and environments. See [Vercel's OIDC client authentication guide](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api#authenticate-with-an-oidc-token) and [OIDC claim reference](https://vercel.com/docs/oidc/reference).
+2. Install `@vercel/oidc` in your application.
+3. Configure an async token request hook:
+
+```ts title="auth.ts"
+import { getVercelOidcToken } from "@vercel/oidc"
+import { betterAuth } from "better-auth"
+
+const clientId = process.env.VERCEL_CLIENT_ID as string
+
+export const auth = betterAuth({
+    socialProviders: {
+        vercel: {
+            clientId,
+            tokenEndpointAuth: {
+                method: "custom",
+                async customizeRequest({ body }) {
+                    const token = await getVercelOidcToken()
+                    body.set("client_id", clientId)
+                    body.set("client_assertion", token)
+                    body.set(
+                        "client_assertion_type",
+                        "urn:vercel:params:oauth:client-assertion-type:oidc-bearer",
+                    )
+                },
+            },
+        },
+    },
+})
+```
+
+Retrieve the OIDC token inside the hook so each exchange uses the current token. Do not store a token at module initialization or pass it as `clientSecret`. If the hook throws, Better Auth stops the exchange. Local development also needs a valid workload token and matching trust configuration to use this method.
+
+<Callout type="info">
+  When using [OAuth Proxy](/docs/plugins/oauth-proxy) with `productionURL`, preview sign-ins exchange their authorization code on the production deployment. The OIDC token therefore identifies that production deployment. Configure trust for its team, project, and `production` environment; trusting only `preview` will reject these exchanges.
+</Callout>
+
+This authenticates your application's workload. The person signing in still uses the normal Sign in with Vercel flow, and Better Auth still needs its session secret.
+
+#### Private key JWT client authentication
+
+Enable `private_key_jwt` on your Vercel App and configure its **JWKS URL**. Better Auth calls `getClientAssertion` for each token exchange with the client ID, token endpoint, and grant type. Omit `clientSecret` when using this strategy. See [Vercel's private key JWT guide](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api#authenticate-with-a-jwt-assertion).
+
+For an application running on Vercel, [Vercel KMS](https://vercel.com/docs/kms) can sign assertions without storing a private key in the deployment:
+
+1. Create a KMS issuer in your team's **Key Management** settings.
+2. Add a [project grant](https://vercel.com/docs/kms/concepts/project-grants) for the intended project and environments.
+3. Set the Vercel App's JWKS URL to `https://kms.vercel.com/<issuerId>/jwks.json` and install `@vercel/kms`.
+4. Sign a fresh assertion inside `getClientAssertion`:
+
+```ts title="auth.ts"
+import { signJWT } from "@vercel/kms"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        vercel: {
+            clientId: process.env.VERCEL_CLIENT_ID as string,
+            tokenEndpointAuth: {
+                method: "private_key_jwt",
+                async getClientAssertion({ clientId, tokenEndpoint }) {
+                    const { token } = await signJWT({
+                        issuerId: process.env.VERCEL_KMS_ISSUER_ID as string,
+                        claims: {
+                            iss: clientId,
+                            sub: clientId,
+                            aud: tokenEndpoint,
+                            jti: crypto.randomUUID(),
+                        },
+                        ttl: 60,
+                    })
+                    return token
+                },
+            },
+        },
+    },
+})
+```
+
+[KMS](https://vercel.com/docs/kms/ts-sdk-reference#signjwt) uses the deployment's current OIDC token to authorize signing and sets the JWT's `kid`, `iat`, `nbf`, and `exp`. Call it inside the callback, where a request context is available. The `iss` and `sub` claims must be the OAuth client ID, rather than the KMS issuer URL. Use a lifetime of at most 60 seconds. See [Vercel's KMS assertion example](https://vercel.com/docs/sign-in-with-vercel/authorization-server-api#sign-the-assertion-with-vercel-kms).
+
+If you manage your own signing key, use Better Auth's `createPrivateKeyJwtClientAssertionGetter` instead. This helper accepts local key material; it does not call KMS. Set `expiresIn: 60` to override its 120-second default, and set `kid` to the matching public key's ID in your JWKS:
+
+```ts
+import { betterAuth } from "better-auth"
+import { createPrivateKeyJwtClientAssertionGetter } from "better-auth/oauth2"
+
+const getClientAssertion = createPrivateKeyJwtClientAssertionGetter({
+    privateKeyPem: process.env.VERCEL_APP_PRIVATE_KEY as string,
+    algorithm: "RS256",
+    kid: process.env.VERCEL_APP_KEY_ID as string,
+    expiresIn: 60,
+})
+
+export const auth = betterAuth({
+    socialProviders: {
+        vercel: {
+            clientId: process.env.VERCEL_CLIENT_ID as string,
+            tokenEndpointAuth: {
+                method: "private_key_jwt",
+                getClientAssertion,
+            },
+        },
+    },
+})
+```
+
+Always include a matching `kid`; Vercel requires it when the JWKS contains more than one key. Keep private keys on the server and publish only public keys in the JWKS.
 
 ### Available Scopes
 

@@ -26,16 +26,17 @@ export const auth = betterAuth({
 
 ### SentinelOptions
 
-| Option       | Type              | Description                                                                                                                                                                       |
-| ------------ | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apiUrl`     | `string`          | Better Auth infrastructure API URL. Default: `https://dash.better-auth.com`                                                                                                       |
-| `kvUrl`      | `string`          | Better Auth identification infrastructure URL. Default: `https://kv.better-auth.com`                                                                                              |
-| `apiKey`     | `string`          | Your API key for authentication. Falls back to `BETTER_AUTH_API_KEY` in env.                                                                                                      |
-| `apiOptions` | `object`          | Dash API HTTP options. Accepts `timeout?: number` (ms, default `3000`) and `headers?: Record<string, string>`.                                                                    |
-| `kvOptions`  | `object`          | KV HTTP options. Accepts `timeout?: number` (ms, default `1000`), `retry?: { attempts?: number; baseDelay?: number; maxDelay?: number }`, and `headers?: Record<string, string>`. |
-| `apiTimeout` | `number`          | Deprecated alias for `apiOptions.timeout`.                                                                                                                                        |
-| `kvTimeout`  | `number`          | Deprecated alias for `kvOptions.timeout`.                                                                                                                                         |
-| `security`   | `SecurityOptions` | Security feature configuration.                                                                                                                                                   |
+| Option            | Type                   | Description                                                                                                                                                                       |
+| ----------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiUrl`          | `string`               | Better Auth infrastructure API URL. Default: `https://dash.better-auth.com`                                                                                                       |
+| `kvUrl`           | `string`               | Better Auth identification infrastructure URL. Default: `https://kv.better-auth.com`                                                                                              |
+| `apiKey`          | `string`               | Your API key for authentication. Falls back to `BETTER_AUTH_API_KEY` in env.                                                                                                      |
+| `apiOptions`      | `object`               | Dash API HTTP options. Accepts `timeout?: number` (ms, default `3000`) and `headers?: Record<string, string>`.                                                                    |
+| `kvOptions`       | `object`               | KV HTTP options. Accepts `timeout?: number` (ms, default `1000`), `retry?: { attempts?: number; baseDelay?: number; maxDelay?: number }`, and `headers?: Record<string, string>`. |
+| `apiTimeout`      | `number`               | Deprecated alias for `apiOptions.timeout`.                                                                                                                                        |
+| `kvTimeout`       | `number`               | Deprecated alias for `kvOptions.timeout`.                                                                                                                                         |
+| `sentinelHeaders` | `"legacy" \| "modern"` | Header names for identification and PoW. Default: `"legacy"`. Must match the client. See [Protocol headers](#protocol-headers-sentinelheaders).                                   |
+| `security`        | `SecurityOptions`      | Security feature configuration.                                                                                                                                                   |
 
 ### SecurityOptions
 
@@ -308,6 +309,86 @@ sentinel({
 }),
 ```
 
+## Protocol headers (`sentinelHeaders`)
+
+Sentinel carries visitor identity and PoW challenges over HTTP headers. The default `"legacy"` names (`X-Request-Id`, `X-Visitor-Id`, `X-PoW-*`) are sometimes rewritten by proxies. Set `sentinelHeaders: "modern"` for proxy-safe `X-Sentinel-*` names instead.
+
+Available on `sentinel()`, `sentinelClient()`, and `sentinelNativeClient()`. Default: `"legacy"`. Match the value on server and client. Writers use only the configured family; readers accept either.
+
+| Role          | `"legacy"` (default) | `"modern"`                 |
+| ------------- | -------------------- | -------------------------- |
+| Request id    | `X-Request-Id`       | `X-Sentinel-Request-Id`    |
+| Visitor id    | `X-Visitor-Id`       | `X-Sentinel-Visitor-Id`    |
+| PoW challenge | `X-PoW-Challenge`    | `X-Sentinel-PoW-Challenge` |
+| PoW reason    | `X-PoW-Reason`       | `X-Sentinel-PoW-Reason`    |
+| PoW solution  | `X-PoW-Solution`     | `X-Sentinel-PoW-Solution`  |
+
+```ts title="auth.ts"
+sentinel({
+  apiKey: process.env.BETTER_AUTH_API_KEY,
+  sentinelHeaders: "modern",
+})
+```
+
+```ts title="auth-client.ts"
+sentinelClient({
+  sentinelHeaders: "modern",
+  autoSolveChallenge: true,
+})
+```
+
+```ts title="auth-client.native.ts"
+sentinelNativeClient({
+  sentinelHeaders: "modern",
+  autoSolveChallenge: true,
+})
+```
+
+### Cross-origin CORS
+
+Same-origin browser apps and native clients do not need CORS configuration for Sentinel headers.
+
+Cross-origin browser clients do. Visitor-id and PoW headers are non-simple, so the browser will not send or read them unless your auth API lists the **exact** names — not `Access-Control-Allow-Headers: *` or `Access-Control-Expose-Headers: *` on credentialed requests.
+
+Configure CORS for the header family you use (`sentinelHeaders`):
+
+|            | Allow on preflight (request)                                                | Expose on response                                  |
+| ---------- | --------------------------------------------------------------------------- | --------------------------------------------------- |
+| `"legacy"` | `X-Request-Id`, `X-Visitor-Id`, `X-PoW-Solution`                            | `X-PoW-Challenge`, `X-PoW-Reason`                   |
+| `"modern"` | `X-Sentinel-Request-Id`, `X-Sentinel-Visitor-Id`, `X-Sentinel-PoW-Solution` | `X-Sentinel-PoW-Challenge`, `X-Sentinel-PoW-Reason` |
+
+* **Allow (request)** — headers the client sends: request id, visitor id, and PoW solution on challenge retry.
+* **Expose (response)** — headers the client must read for auto-solve: PoW challenge and reason on `423` responses.
+
+If server and clients temporarily disagree on `sentinelHeaders`, allow and expose **both** families so either side can still send and read headers.
+
+Example for `"modern"`:
+
+```ts
+{
+  // Your real app origin only — not "*"
+  origin: "https://app.example.com",
+  credentials: true,
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Sentinel-Request-Id",
+    "X-Sentinel-Visitor-Id",
+    "X-Sentinel-PoW-Solution",
+  ],
+  exposedHeaders: [
+    "X-Sentinel-PoW-Challenge",
+    "X-Sentinel-PoW-Reason",
+  ],
+}
+```
+
+For `"legacy"`, use the legacy names from the table instead of the `X-Sentinel-*` names.
+
+<Callout type="warn">
+  Restrict CORS to origins you control (see [trusted origins](/docs/reference/security#trusted-origins)). Do not pair `origin: "*"` with credentialed auth requests.
+</Callout>
+
 ## Proof-of-Work Challenges
 
 When a security check results in a "challenge" action, Sentinel issues a Proof-of-Work (PoW) challenge that must be solved by the client.
@@ -353,19 +434,20 @@ export const authClient = createAuthClient({
 
 ### Configuration
 
-| Option                | Type                            | Default                                                                    | Description                                     |
-| --------------------- | ------------------------------- | -------------------------------------------------------------------------- | ----------------------------------------------- |
-| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL` or `https://kv.better-auth.com`                       | Base URL for the identify endpoint.             |
-| `identifyOptions`     | `object`                        | `{ timeout: 1000, retry: { attempts: 2, baseDelay: 400, maxDelay: 600 } }` | Identify HTTP timeout and retry policy.         |
-| `autoSolveChallenge`  | `boolean`                       | `true`                                                                     | Automatically solve PoW challenges.             |
-| `kvTimeout`           | `number`                        | `1000`                                                                     | Deprecated alias for `identifyOptions.timeout`. |
-| `onChallengeReceived` | `(reason: string) => void`      | —                                                                          | Called when a PoW challenge is received.        |
-| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                                          | Called after a successful solve.                |
-| `onChallengeFailed`   | `(error: Error) => void`        | —                                                                          | Called if solving fails.                        |
+| Option                | Type                            | Default                                                                    | Description                                                                                                        |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL` or `https://kv.better-auth.com`                       | Base URL for the identify endpoint.                                                                                |
+| `identifyOptions`     | `object`                        | `{ timeout: 1000, retry: { attempts: 2, baseDelay: 400, maxDelay: 600 } }` | Identify HTTP timeout and retry policy.                                                                            |
+| `sentinelHeaders`     | `"legacy" \| "modern"`          | `"legacy"`                                                                 | Header names for visitor id and PoW. Must match server. See [Protocol headers](#protocol-headers-sentinelheaders). |
+| `autoSolveChallenge`  | `boolean`                       | `true`                                                                     | Automatically solve PoW challenges.                                                                                |
+| `kvTimeout`           | `number`                        | `1000`                                                                     | Deprecated alias for `identifyOptions.timeout`.                                                                    |
+| `onChallengeReceived` | `(reason: string) => void`      | —                                                                          | Called when a PoW challenge is received.                                                                           |
+| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                                          | Called after a successful solve.                                                                                   |
+| `onChallengeFailed`   | `(error: Error) => void`        | —                                                                          | Called if solving fails.                                                                                           |
 
 ### Browser Fingerprinting
 
-The client automatically includes a visitor ID in requests via the `X-Visitor-Id` header. This fingerprint is used for:
+The client automatically includes a visitor ID in requests via the visitor-id header (`X-Visitor-Id`, or `X-Sentinel-Visitor-Id` when `sentinelHeaders: "modern"`). This fingerprint is used for:
 
 * Credential stuffing detection
 * Free trial abuse prevention
@@ -373,7 +455,7 @@ The client automatically includes a visitor ID in requests via the `X-Visitor-Id
 
 ### PoW Solution Header
 
-When auto-solving is enabled, solved challenges are sent via the `X-PoW-Solution` header.
+When auto-solving is enabled, solved challenges are sent via the PoW solution header (`X-PoW-Solution`, or `X-Sentinel-PoW-Solution` when `sentinelHeaders: "modern"`).
 
 ### Expo and React Native
 
@@ -440,36 +522,28 @@ export const authClient = createAuthClient({
 
 #### `sentinelNativeClient` options
 
-| Option                | Type                            | Default                                                                    | Description                                                                  |
-| --------------------- | ------------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com`                    | Identify endpoint base URL.                                                  |
-| `identifyOptions`     | `object`                        | `{ timeout: 1000, retry: { attempts: 2, baseDelay: 400, maxDelay: 600 } }` | Identify HTTP timeout and retry policy.                                      |
-| `kvTimeout`           | `number`                        | `1000`                                                                     | Deprecated alias for `identifyOptions.timeout`.                              |
-| `autoSolveChallenge`  | `boolean`                       | `true`                                                                     | On `423` with `X-PoW-Challenge`, solve and retry once with `X-PoW-Solution`. |
-| `onChallengeReceived` | `(reason: string) => void`      | —                                                                          | Called when a PoW challenge is received.                                     |
-| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                                          | Called after a successful solve.                                             |
-| `onChallengeFailed`   | `(error: Error) => void`        | —                                                                          | Called if solving fails.                                                     |
-| `storage`             | `{ getItem, setItem }`          | Async Storage when installed                                               | Persistent async storage for a stable per-install visitor ID.                |
+| Option                | Type                            | Default                                                                    | Description                                                                                                        |
+| --------------------- | ------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `identifyUrl`         | `string`                        | `BETTER_AUTH_KV_URL`, then `https://kv.better-auth.com`                    | Identify endpoint base URL.                                                                                        |
+| `identifyOptions`     | `object`                        | `{ timeout: 1000, retry: { attempts: 2, baseDelay: 400, maxDelay: 600 } }` | Identify HTTP timeout and retry policy.                                                                            |
+| `sentinelHeaders`     | `"legacy" \| "modern"`          | `"legacy"`                                                                 | Header names for visitor id and PoW. Must match server. See [Protocol headers](#protocol-headers-sentinelheaders). |
+| `kvTimeout`           | `number`                        | `1000`                                                                     | Deprecated alias for `identifyOptions.timeout`.                                                                    |
+| `autoSolveChallenge`  | `boolean`                       | `true`                                                                     | On `423` with a PoW challenge header, solve and retry once with the solution header.                               |
+| `onChallengeReceived` | `(reason: string) => void`      | —                                                                          | Called when a PoW challenge is received.                                                                           |
+| `onChallengeSolved`   | `(solveTimeMs: number) => void` | —                                                                          | Called after a successful solve.                                                                                   |
+| `onChallengeFailed`   | `(error: Error) => void`        | —                                                                          | Called if solving fails.                                                                                           |
+| `storage`             | `{ getItem, setItem }`          | Async Storage when installed                                               | Persistent async storage for a stable per-install visitor ID.                                                      |
 
 ## Security Events
 
-Sentinel tracks the following security event types:
+Sentinel records security activity as audit events:
 
-| Event Type                      | Description                         |
-| ------------------------------- | ----------------------------------- |
-| `security_blocked`              | Request was blocked                 |
-| `security_allowed`              | Request was allowed after challenge |
-| `security_credential_stuffing`  | Credential stuffing detected        |
-| `security_impossible_travel`    | Impossible travel detected          |
-| `security_geo_blocked`          | Geo-blocking triggered              |
-| `security_bot_blocked`          | Bot detected and blocked            |
-| `security_suspicious_ip`        | Suspicious IP detected              |
-| `security_velocity_exceeded`    | Rate limit exceeded                 |
-| `security_free_trial_abuse`     | Free trial abuse detected           |
-| `security_compromised_password` | Compromised password detected       |
-| `security_stale_account`        | Stale account reactivation          |
+| Event Type        | Description                                                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `security_check`  | One event per protected user action. `eventData.outcome` is `passed`, `challenged`, or `blocked`. Includes `evaluatedChecks`, `triggeredBy`, and `reason`. |
+| `security_signal` | Informational detection detail for the Security dashboard. Does not count toward security usage.                                                           |
 
-These events are visible in the Security dashboard and included in audit logs.
+These events are visible in the Security dashboard and included in [audit logs](/docs/infrastructure/plugins/audit-logs).
 
 ## Complete Example
 

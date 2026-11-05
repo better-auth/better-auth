@@ -7,10 +7,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { AccountKey } from "@better-auth/core/db";
 import { accountSchema, userSchema } from "@better-auth/core/db";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { safeJSONParse } from "@better-auth/core/utils/json";
 import { defu } from "defu";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -21,16 +18,12 @@ import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import type { EncryptionPurpose } from "../../crypto/purpose";
 import { derivePurposeKey } from "../../crypto/purpose";
-import {
-	resolveOAuthAccountKey,
-	toOAuthProfileRecord,
-} from "../../oauth2/account-key";
+import { exchangeOAuthCallback } from "../../oauth2/callback";
 import { redirectOnError } from "../../oauth2/errors";
 import {
 	handleOAuthUserInfo,
 	linkOAuthAccount,
 } from "../../oauth2/link-account";
-import { getOAuthCallbackPath } from "../../oauth2/utils";
 import type { StateData } from "../../state";
 import {
 	getAuthStateVerificationIdentifier,
@@ -165,6 +158,8 @@ const oauthCallbackQuerySchema = z.object({
 	code: z.string().optional(),
 	error: z.string().optional(),
 	user: z.string().optional(),
+	iss: z.string().optional(),
+	device_id: z.string().optional(),
 });
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
@@ -455,7 +450,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							);
 							return;
 						}
-						const { code, error, user: userData } = query.data;
+						const {
+							code,
+							error,
+							user: userData,
+							iss,
+							device_id: deviceId,
+						} = query.data;
 
 						// Decrypt state to get codeVerifier and callbackURL
 						let stateData: StateData;
@@ -509,74 +510,23 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
 						}
 
-						// Exchange code for tokens
-						let tokens: OAuth2Tokens | null;
-						try {
-							tokens = await provider.validateAuthorizationCode({
-								code,
-								codeVerifier: stateData.codeVerifier,
-								redirectURI: `${ctx.context.baseURL}${getOAuthCallbackPath(provider)}`,
-							});
-						} catch (e) {
-							ctx.context.logger.error(
-								"Failed to validate authorization code",
-								e,
-							);
-							throw redirectOnError(ctx, errorURL, "invalid_code");
-						}
-
-						if (!tokens) {
-							throw redirectOnError(ctx, errorURL, "invalid_code");
-						}
-
-						const parsedUserData = userData
-							? safeJSONParse<{
-									name?: {
-										firstName?: string;
-										lastName?: string;
-									};
-									email?: string;
-								}>(userData)
-							: null;
-
-						// Get user info from provider
-						const userInfoResult = await provider.getUserInfo({
-							...tokens,
-							/**
-							 * The user object from the provider
-							 * This is only available for some providers like Apple
-							 */
-							user: parsedUserData ?? undefined,
+						const exchanged = await exchangeOAuthCallback(ctx, provider, {
+							code,
+							codeVerifier: stateData.codeVerifier,
+							iss,
+							deviceId,
+							user: userData,
+							idTokenNonce: stateData.idTokenNonce,
 						});
-						const userInfo = userInfoResult?.user;
-
-						if (!userInfo) {
-							ctx.context.logger.error("Unable to get user info from provider");
-							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
+						if (exchanged.error) {
+							throw redirectOnError(ctx, errorURL, exchanged.error);
 						}
+						const { tokens, userInfo, providerProfile, accountKey } = exchanged;
 
 						if (!userInfo.email) {
 							ctx.context.logger.error("Provider did not return email");
 							throw redirectOnError(ctx, errorURL, "email_not_found");
 						}
-						let accountKey: AccountKey;
-						try {
-							accountKey = await resolveOAuthAccountKey(
-								provider,
-								tokens,
-								userInfoResult.data,
-							);
-						} catch (error) {
-							ctx.context.logger.error(
-								"Unable to derive provider account identity",
-								{
-									providerId: provider.id,
-									error,
-								},
-							);
-							throw redirectOnError(ctx, errorURL, "unable_to_get_user_info");
-						}
-						const providerProfile = toOAuthProfileRecord(userInfoResult.data);
 
 						const proxyCallbackURL = new URL(stateData.callbackURL);
 						const finalCallbackURL =

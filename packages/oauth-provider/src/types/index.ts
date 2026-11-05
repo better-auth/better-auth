@@ -557,7 +557,7 @@ export interface OAuthOptions<
 	 * Accept only callback hosts you control. For pairwise subject identifiers,
 	 * custom-validated URIs use the sector of the client's first registered URI.
 	 *
-	 * @see https://www.better-auth.com/docs/plugins/oauth-provider#custom-redirect-uri-validation
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation
 	 *
 	 * @param redirectUri - The redirect_uri from the authorization request
 	 * @param registeredUris - Registered redirect URIs for the client

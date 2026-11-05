@@ -15,6 +15,7 @@ import {
 	uuidTestSuite,
 } from "../adapter-factory";
 import { compoundIndexTestSuite } from "../adapter-factory/compound-index-test-suite";
+import { emailLookupTestSuite } from "../adapter-factory/email-lookup-test-suite";
 
 const dbPath = path.join(__dirname, "test.db");
 let database = new Database(dbPath);
@@ -48,6 +49,7 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
+		emailLookupTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),

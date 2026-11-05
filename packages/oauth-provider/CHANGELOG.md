@@ -1,5 +1,27 @@
 # @better-auth/oauth-provider
 
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- [#11830](https://github.com/better-auth/better-auth/pull/11830) [`a1f6f0b`](https://github.com/better-auth/better-auth/commit/a1f6f0bf19ba1be85e977d891d0f0ca43723c0a3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps using the CIMD plugin no longer lose an administrator's change to a discovered client when a metadata refresh is running at the same time. Before, disabling the client, setting `skipConsent` or `enableEndSession`, or assigning `client_credentials` scopes while its document was being fetched could be undone by the refresh. No action is needed.
+
+- [#10881](https://github.com/better-auth/better-auth/pull/10881) [`37debaa`](https://github.com/better-auth/better-auth/commit/37debaa8a17d11d05f8eeabdb94877a4b1575a1d) Thanks [@sahiljagtap08](https://github.com/sahiljagtap08)! - Corrected the OpenAPI response schemas for `/oauth2/consent` and `/oauth2/continue` to describe `{ redirect: true, url: string }`, so generated clients no longer expect a nonexistent `redirect_uri` field. Runtime responses are unchanged.
+
 ## 1.7.10
 
 ### Patch Changes
@@ -48,7 +70,7 @@
 
 - [#11185](https://github.com/better-auth/better-auth/pull/11185) [`0a1a87e`](https://github.com/better-auth/better-auth/commit/0a1a87e388c0b50c8d18f3c411c6963c205b11f1) Thanks [@johanneskares](https://github.com/johanneskares)! - If you use `postLogin` with the documented organization selector, users who belong to more than one organization can now finish authorization. Since v1.6.16, selecting an organization and calling `oauth2.continue({ postLogin: true })` sent these users back to the selection page every time.
 
-  `postLogin.shouldRedirect` now receives `isContinuation`, which is `true` when the user returns from your post login page. To stop the loop, update your callback to match the [Post Login Screen example](https://www.better-auth.com/docs/plugins/oauth-provider#post-login-screen): on a new authorization, ask users with several organizations to choose; on continuation, return `false` once the session's active organization is one the user belongs to. Callbacks that do not read `isContinuation` behave as before.
+  `postLogin.shouldRedirect` now receives `isContinuation`, which is `true` when the user returns from your post login page. To stop the loop, update your callback to match the [Post Login Screen example](https://www.better-auth.com/docs/plugins/oauth-provider/sign-in-flow#post-login-screen): on a new authorization, ask users with several organizations to choose; on continuation, return `false` once the session's active organization is one the user belongs to. Callbacks that do not read `isContinuation` behave as before.
 
 ## 1.7.8
 

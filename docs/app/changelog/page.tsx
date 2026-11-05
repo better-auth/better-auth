@@ -38,7 +38,10 @@ function getContributorAvatarLinks(usernames: string[]) {
 }
 
 function getContent(content: string) {
-	const lines = content.split("\n");
+	// remark-gfm has no GitHub alerts, so drop the marker and keep a plain quote.
+	const lines = content
+		.split("\n")
+		.filter((line) => !/^>\s*\[!\w+\]\s*$/.test(line.trim()));
 	let inContributorsSection = false;
 	const newContext = lines.map((line) => {
 		if (line.trim().startsWith("## ") || line.trim().startsWith("### ")) {
@@ -55,8 +58,9 @@ function getContent(content: string) {
 			}
 		}
 		if (line.trim().startsWith("- ")) {
-			const [mainContent, , context] = line.split(";");
-			const cleanedContent = (mainContent || line).replace(/&nbsp/g, "");
+			// Older release notes put the author after "&nbsp;-&nbsp;".
+			const [mainContent, context] = line.split("&nbsp;-&nbsp;");
+			const cleanedContent = mainContent.replaceAll("&nbsp;", "");
 			const usernames = context ? getMentionUsernames(context) : [];
 			if (usernames.length === 0) {
 				return cleanedContent;

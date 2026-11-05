@@ -71,7 +71,7 @@ const releaseRewriteSchema = z.strictObject({
 		.max(500)
 		.regex(/^[^\r\n]+$/)
 		.nullable()
-		.describe("A migration action for breaking changes, otherwise null"),
+		.describe("An action users must take, otherwise null"),
 });
 
 export const releaseRewritesSchema = z.strictObject({

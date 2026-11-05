@@ -3,7 +3,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { JWTPayload } from "jose";
 import { importJWK, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
-import { getJwksAdapter } from "./adapter";
+import { getDefaultKeyAlg, getJwksAdapter } from "./adapter";
 import type { JWSAlgorithms, JwtOptions, ResolvedSigningKey } from "./types";
 import { createJwk, toExpJWT } from "./utils";
 
@@ -128,7 +128,7 @@ export async function resolveSigningKey(
 			// the same fallback adapter.getLatestKeyByAlg uses so a pinned
 			// (kid, alg) pair where the row matches the configured default
 			// algorithm doesn't spuriously throw.
-			const configAlg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+			const configAlg = getDefaultKeyAlg(options);
 			const effectiveAlg = key.alg ?? configAlg;
 			if (effectiveAlg !== overrides.signingAlgorithm) {
 				throw new BetterAuthError(
@@ -157,7 +157,7 @@ export async function resolveSigningKey(
 		// transactional mint primitive on the adapter.
 		key = await adapter.getLatestKeyByAlg(ctx, overrides.signingAlgorithm);
 		if (!key) {
-			const primaryAlg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+			const primaryAlg = getDefaultKeyAlg(options);
 			const preconfig = options?.jwks?.keyPairConfigs?.find(
 				(c) => c.alg === overrides.signingAlgorithm,
 			);
@@ -192,7 +192,7 @@ export async function resolveSigningKey(
 		// lifetime of the deployment regardless of how many extra algs are
 		// provisioned for audience pinning. Falls back to `getLatestKey()`
 		// when no key with the primary alg exists yet (fresh deploy).
-		const primaryAlg = options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+		const primaryAlg = getDefaultKeyAlg(options);
 		key =
 			(await adapter.getLatestKeyByAlg(ctx, primaryAlg)) ??
 			(await adapter.getLatestKey(ctx));
@@ -224,7 +224,7 @@ export async function resolveSigningKey(
 				);
 			})
 		: key.privateKey;
-	const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
+	const alg = key.alg ?? getDefaultKeyAlg(options);
 	const privateKey = await importJWK(JSON.parse(privateWebKey), alg);
 	return { alg, kid: key.id, privateKey };
 }
@@ -287,7 +287,7 @@ export async function signJWT(
 	// Nbf
 	const nbf = payload.nbf!;
 
-	// At handler-time, options.baseURL is always a resolved string origin
+	// Empty only for a direct `auth.api` call when no baseURL is configured
 	const baseURLOrigin =
 		typeof ctx.context.options.baseURL === "string"
 			? ctx.context.options.baseURL
@@ -300,6 +300,12 @@ export async function signJWT(
 	// Aud
 	const aud = payload.aud;
 	const defaultAud = options?.jwt?.audience ?? baseURLOrigin;
+
+	if (!(iss ?? defaultIss) || !(aud ?? defaultAud)) {
+		ctx.context.logger.warn(
+			"[better-auth] The JWT plugin signed a JWT without an issuer or audience because no base URL was resolved for this call. Set `baseURL`, or `jwt.issuer` and `jwt.audience` in the JWT plugin options.",
+		);
+	}
 
 	// Custom/remote signing function
 	if (options?.jwt?.sign) {

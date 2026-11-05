@@ -1,5 +1,67 @@
 # @better-auth/core
 
+## 1.7.18
+
+### Patch Changes
+
+- [#12249](https://github.com/better-auth/better-auth/pull/12249) [`9342a73`](https://github.com/better-auth/better-auth/commit/9342a73e3635719011828c798e276c0f908792de) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource servers that set `verifyOptions.typ`, such as `"at+jwt"`, together with `remoteVerify` now accept tokens that introspection reports as active. Previously every token was rejected, because the `typ` check ran against the introspection response, which has no JWT header. The local JWT check still enforces `typ`. That check runs only when `jwksUrl` is set and `remoteVerify.force` is not `true`. Otherwise `typ` is not enforced, and the introspection result alone decides. This also fixes MCP servers that set `jwtVerifyOptions.typ` with `remoteVerify`.
+
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Generic OAuth providers whose discovery document has a `jwks_uri` now reject a user profile whose `sub` differs from the ID token's `sub`. Direct ID-token sign-in and linking with a generic OAuth provider now resolve the profile from the verified ID token only and ignore a submitted access or refresh token.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Account linking and new OAuth users now count an email as verified only when the provider claim is `true` or the string `"true"`, which covers generic OAuth, Cognito, and Microsoft Entra ID claims sent as strings. Any other `emailVerified` value, including a non-boolean value returned from `mapProfileToUser` such as `1`, now reads as unverified.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Zoom social provider now applies its configured provider options, so `disableSignUp`, `requireEmailVerification`, and `overrideUserInfoOnSignIn` take effect for Zoom sign-ins.
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12106](https://github.com/better-auth/better-auth/pull/12106) [`9ef0c5b`](https://github.com/better-auth/better-auth/commit/9ef0c5bda9c5ebc46d2c5d93fc0874893d1c6256) Thanks [@bytaesu](https://github.com/bytaesu)! - Built-in social providers no longer follow HTTP redirects on token exchange, refresh, verification, and signing key (JWKS) requests, matching the other server-side OAuth requests.
+
+## 1.7.14
+
+### Patch Changes
+
+- [#12045](https://github.com/better-auth/better-auth/pull/12045) [`2947ab7`](https://github.com/better-auth/better-auth/commit/2947ab76c3a141f205813de9201661ee21e327c2) Thanks [@honuuk](https://github.com/honuuk)! - Kakao sign-in now passes `loginHint` to Kakao, so the Kakao Account login page opens with the ID field prefilled.
+
+## 1.7.13
+
+### Patch Changes
+
+- [#11997](https://github.com/better-auth/better-auth/pull/11997) [`2712441`](https://github.com/better-auth/better-auth/commit/2712441e355204389c88a7eb546974cce1936b5f) Thanks [@bytaesu](https://github.com/bytaesu)! - The Cloudflare provider now accepts `tokenEndpointAuth: { method }`. The existing `tokenEndpointAuthMethod` option is marked as deprecated and remains supported for backward compatibility.
+
+- [#11948](https://github.com/better-auth/better-auth/pull/11948) [`1cf4b2c`](https://github.com/better-auth/better-auth/commit/1cf4b2c8f5bffdbdb101f11a6fefedbab6cf2994) Thanks [@allenzhou101](https://github.com/allenzhou101)! - Allow the Vercel social provider to configure token endpoint authentication, including dynamic OIDC tokens and private key JWT client assertions, without replacing the built-in sign-in flow.
+
+## 1.7.12
+
+### Patch Changes
+
+- [#11924](https://github.com/better-auth/better-auth/pull/11924) [`681aa5c`](https://github.com/better-auth/better-auth/commit/681aa5c4439a5845e027d41eda01b84acc9c58b6) Thanks [@bytaesu](https://github.com/bytaesu)! - `APIError.from()` accepts `{ cause }` as a third argument to keep the underlying error for server-side callers without exposing it in the response.
+
+- [#11931](https://github.com/better-auth/better-auth/pull/11931) [`4bc78ba`](https://github.com/better-auth/better-auth/commit/4bc78baa83aecea47ff30062d68820a578efeed3) Thanks [@bytaesu](https://github.com/bytaesu)! - ID token sign-in now rejects tokens when the provider has no client ID, because their audience cannot be checked and a token issued to another app would otherwise be accepted. Set `clientId` on the provider to every client ID your apps sign in with.
+
+- [#11919](https://github.com/better-auth/better-auth/pull/11919) [`876608d`](https://github.com/better-auth/better-auth/commit/876608da86036d9ca4b5c2a37ed0b01e29264e52) Thanks [@bytaesu](https://github.com/bytaesu)! - A custom Facebook `getUserInfo` no longer receives client-submitted access tokens issued to another Facebook app, and ID tokens missing `exp` or `iat` are now rejected.
+
+- [#11918](https://github.com/better-auth/better-auth/pull/11918) [`083a743`](https://github.com/better-auth/better-auth/commit/083a74329be51ed35c1981524f9c543984f08bd3) Thanks [@alpcanaydin](https://github.com/alpcanaydin)! - Fix `mapProfileToUser` failing to typecheck under `exactOptionalPropertyTypes` when it returns `undefined` for `name`, `email` or `image`, for example to drop the provider's profile picture.
+
+- [#11920](https://github.com/better-auth/better-auth/pull/11920) [`492134a`](https://github.com/better-auth/better-auth/commit/492134aeba6707bdfb371cf8ef817c945d6fb44f) Thanks [@bytaesu](https://github.com/bytaesu)! - Restore the Twitch and Paybin ID token handling from before 1.7.11, which made account info fail once the ID token stored at sign-in expired.
+
+## 1.7.11
+
+### Patch Changes
+
+- [#11623](https://github.com/better-auth/better-auth/pull/11623) [`ce96569`](https://github.com/better-auth/better-auth/commit/ce965696d1f8695e96e6b88490fc8ea2f8ab78ae) Thanks [@cpojer](https://github.com/cpojer)! - Reduce installation size by removing the semantic conventions production dependency while preserving all instrumentation attribute keys.
+
+- [#11907](https://github.com/better-auth/better-auth/pull/11907) [`2f6ca3f`](https://github.com/better-auth/better-auth/commit/2f6ca3f370e80081d911a5e95a39393920b6d22e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix plugins whose `init` returns `options: undefined`, such as `testUtils()`, failing to typecheck when `exactOptionalPropertyTypes` is enabled.
+
+- [#11884](https://github.com/better-auth/better-auth/pull/11884) [`dfd8dd2`](https://github.com/better-auth/better-auth/commit/dfd8dd287a4cfeb1d3541bb4e004e8f33edce15f) Thanks [@bytaesu](https://github.com/bytaesu)! - Twitch and Paybin sign-in now verify ID token signatures and identity claims before mapping profiles, with 30 seconds of clock tolerance. Custom Paybin issuers must expose RS256 signing keys at `<issuer>/.well-known/jwks.json`.
+
 ## 1.7.10
 
 ### Patch Changes

@@ -45,8 +45,34 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				options: {
 					databaseHooks: {
 						user: {
+							create: {
+								// An unproven number is still unique, so storing one could squat
+								// someone else's number. Only this plugin's verified path sets it.
+								async before(data, ctx) {
+									// An empty string is no number, so it is dropped like one.
+									if (
+										data[opts.phoneNumber] == null ||
+										data[opts.phoneNumberVerified] === true
+									) {
+										return;
+									}
+									if (ctx?.body?.[opts.phoneNumber]) {
+										throw APIError.from(
+											"BAD_REQUEST",
+											PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_CANNOT_BE_SET,
+										);
+									}
+									return {
+										data: {
+											...data,
+											[opts.phoneNumber]: null,
+											[opts.phoneNumberVerified]: false,
+										},
+									};
+								},
+							},
 							update: {
-								async before(data) {
+								async before(data, ctx) {
 									// Atomically reset verified flag when the number is cleared
 									if (
 										opts.phoneNumber in data &&
@@ -59,6 +85,23 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 											},
 										};
 									}
+									// Requests only set a number through this plugin's verified path
+									// or an admin update, so a profile sync on account linking cannot
+									// claim one. Dropping it keeps an existing verified number intact.
+									if (
+										!ctx ||
+										data[opts.phoneNumber] == null ||
+										data[opts.phoneNumberVerified] === true ||
+										ctx.path === "/admin/update-user"
+									) {
+										return;
+									}
+									return {
+										data: {
+											...data,
+											[opts.phoneNumber]: undefined,
+										},
+									};
 								},
 							},
 						},
