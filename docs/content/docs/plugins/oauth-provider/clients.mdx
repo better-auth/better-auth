@@ -12,7 +12,7 @@ An OAuth client is an app that signs users in with your provider or calls your A
 Two properties of a client are independent:
 
 * **Public or confidential** ([RFC 6749 §2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-2.1)). Set `token_endpoint_auth_method` to `"none"` for a public client. For a confidential client, use `client_secret_basic`, `client_secret_post`, or [`private_key_jwt`](#private-key-jwt).
-* **`application_type`** ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)). `web` (the default) or `native`. It controls only which [redirect URIs](#redirect-uri-forms) the client may register.
+* **`application_type`** ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)). `web` or `native`. It controls only which [redirect URIs](#redirect-uri-forms) the client may register. It defaults to `web`. For dynamic registration, [`clientRegistrationDefaultApplicationType`](#dynamic-client-registration) sets the default. The `"infer"` value picks `web` or `native` from the redirect URIs. A [CIMD](/docs/plugins/cimd) document that omits it may register any web or native redirect URI form.
 
 A native client may be confidential, and a web client may be public. A secret shipped inside a mobile, desktop, or single-page app can be extracted, so register such an app as a public client ([RFC 8252 §8.5](https://datatracker.ietf.org/doc/html/rfc8252#section-8.5)). Use a confidential client only when the secret stays on a server you run.
 
@@ -47,7 +47,9 @@ To create a client owned by the signed-in user, or by the organization that [`cl
   ```
 </APIMethod>
 
-A client that uses `client_secret_basic` or `client_secret_post` gets its `client_secret` only in this response, so store it now. Public and `private_key_jwt` clients get only a `client_id`.
+A client that uses `client_secret_basic` or `client_secret_post` gets its `client_secret` only in this response, so store it now. Clients that use any other method, such as `none` or `private_key_jwt`, get only a `client_id`.
+
+Without `grant_types`, the client gets the `authorization_code` grant, which requires `redirect_uris`. A client that uses only another grant, such as `client_credentials`, can omit `redirect_uris`.
 
 Most of the other client endpoints take a `client_id`. Each requires a session, and the table notes the exceptions:
 
@@ -64,7 +66,7 @@ Most of the other client endpoints take a `client_id`. Each requires a session, 
 
 You cannot change `token_endpoint_auth_method` after creation, and an update cannot set the secret. Client secrets do not expire, so to retire one, rotate it with `rotateClientSecret`.
 
-An update takes the fields from the create request. Omitted fields keep their current values. To remove a logout URI, send `null` for `backchannel_logout_uri` or `frontchannel_logout_uri`. Better Auth also clears the matching `backchannel_logout_session_required` or `frontchannel_logout_session_required` flag, and the client stops receiving [back-channel](/docs/plugins/oauth-provider/openid-connect#back-channel-logout) or [front-channel](/docs/plugins/oauth-provider/openid-connect#front-channel-logout) logout notifications.
+An update takes the fields from the create request, except `jwks`, `jwks_uri`, and `subject_type`. It ignores those fields, and any other field it does not accept, without returning an error. Only `adminUpdateOAuthClient` can change `dpop_bound_access_tokens`. To let a client replace its own inline `jwks`, see [Rotating client keys](#rotating-client-keys). Omitted fields keep their current values. To remove a logout URI, send `null` for `backchannel_logout_uri` or `frontchannel_logout_uri`. Better Auth also clears the matching `backchannel_logout_session_required` or `frontchannel_logout_session_required` flag, and the client stops receiving [back-channel](/docs/plugins/oauth-provider/openid-connect#back-channel-logout) or [front-channel](/docs/plugins/oauth-provider/openid-connect#front-channel-logout) logout notifications.
 
 To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, but that query is not bound to the client whose fields it reads. Anyone can get one by starting an authorization request. Enabling the option therefore makes the public fields of every enabled client, including `contacts`, readable without an account.
 
@@ -78,7 +80,7 @@ Only the server-only `adminCreateOAuthClient` and `adminUpdateOAuthClient` metho
 * `client_credentials_scopes`: see [Client credentials scopes](#client-credentials-scopes). Protected dynamic registration can also set it through `validateInitialAccessToken`.
 * `resources`: create only. Links the client to [resources](/docs/plugins/oauth-provider/tokens#resources). When `resourcePrivileges` is set, it must approve the `link` action for each one.
 * `disabled`: update only. Pauses the client.
-* `metadata`: data attached to the client. The public endpoints do not return it, but the client's owner can read it, and so can members of an [owning organization](#an-organization-owns-the-client). Do not store secrets here.
+* `metadata`: data attached to the client. The public endpoints do not return it, but the client's owner can read it, and so can members of an [owning organization](#an-organization-owns-the-client). Do not store secrets here. Fields that extensions declare, such as the `backchannel_token_delivery_mode` of [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba), are stored here too. A `metadata` value in `adminUpdateOAuthClient` replaces the whole stored object, including those fields. Include every key you want to keep. See [Client registration metadata](/docs/plugins/oauth-provider/reference#client-registration-metadata).
 
 Both methods:
 
