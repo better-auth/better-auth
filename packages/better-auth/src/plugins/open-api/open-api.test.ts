@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { createAuthEndpoint } from "../../api";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { anonymous } from "../anonymous";
 import { emailOTP } from "../email-otp";
 import { phoneNumber } from "../phone-number";
 import { username } from "../username";
@@ -339,6 +340,9 @@ describe("open-api", async () => {
 	});
 	const { auth: authWithWrapperSemantics } = await getTestInstance({
 		plugins: [openAPI(), wrapperSemanticsPlugin],
+	});
+	const { auth: authWithAnonymous } = await getTestInstance({
+		plugins: [openAPI(), anonymous()],
 	});
 
 	it("should generate OpenAPI schema", async () => {
@@ -1143,5 +1147,50 @@ describe("open-api", async () => {
 		).toBeDefined();
 		expect(requestBodySchema.required).not.toContain("caughtOptional");
 		expect(requestBodySchema.required).not.toContain("preprocessedOptional");
+	});
+
+	it("should only use media type object fields in request and response content", async () => {
+		const schema = await authWithAnonymous.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const methods = ["get", "post", "put", "patch", "delete"] as const;
+		const mediaTypeFields = new Set([
+			"schema",
+			"example",
+			"examples",
+			"encoding",
+		]);
+		const unexpected: string[] = [];
+		for (const [path, item] of Object.entries(paths)) {
+			for (const method of methods) {
+				const operation = item[method];
+				if (!operation) continue;
+				const contents: [string, Record<string, object | undefined>?][] = [
+					["requestBody", operation.requestBody?.content],
+					...Object.entries(operation.responses ?? {}).map(
+						([status, response]): [
+							string,
+							Record<string, object | undefined>?,
+						] => [status, response.content],
+					),
+				];
+				for (const [where, content] of contents) {
+					for (const [mediaType, media] of Object.entries(content ?? {})) {
+						for (const field of Object.keys(media ?? {})) {
+							if (!mediaTypeFields.has(field) && !field.startsWith("x-")) {
+								unexpected.push(
+									`${method} ${path} ${where} ${mediaType} ${field}`,
+								);
+							}
+						}
+					}
+				}
+			}
+		}
+		expect(unexpected).toEqual([]);
+		expect(
+			paths["/delete-anonymous-user"]?.post?.responses?.["400"]?.content?.[
+				"application/json"
+			]?.schema?.required,
+		).toEqual(["message"]);
 	});
 });
