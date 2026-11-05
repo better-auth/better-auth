@@ -529,4 +529,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/slargat.png",
 		},
 	},
+	{
+		name: "better-auth-trustware",
+		url: "https://github.com/danielmerja/better-auth-trustware",
+		description:
+			"Crypto billing for Better Auth, settled through Trustware: subscriptions with renewal invoices and grace periods, one-time purchases, prorated plan changes, trials, organization billing, and feature and limit access control.",
+		author: {
+			name: "Daniel Merja",
+			github: "danielmerja",
+			avatar: "https://github.com/danielmerja.png",
+		},
+	},
 ];

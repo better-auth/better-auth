@@ -24,6 +24,7 @@ const stateDataSchema = z.looseObject({
 		.object({
 			email: z.string(),
 			userId: z.coerce.string(),
+			encryptedSessionToken: z.string().optional(),
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
@@ -42,7 +43,9 @@ const stateDataSchema = z.looseObject({
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
-/** Verification key for database-backed OAuth and SAML relay state. */
+/**
+ * Verification key for database-backed OAuth and SAML relay state.
+ */
 export const getAuthStateVerificationIdentifier = (state: string) =>
 	`auth-state:${state}`;
 

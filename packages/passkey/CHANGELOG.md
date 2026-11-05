@@ -1,5 +1,23 @@
 # @better-auth/passkey
 
+## 1.7.17
+
+### Patch Changes
+
+- [#12225](https://github.com/better-auth/better-auth/pull/12225) [`3ab3dbf`](https://github.com/better-auth/better-auth/commit/3ab3dbf6d4c50f6421f4129f860d1ce1b6894f65) Thanks [@bytaesu](https://github.com/bytaesu)! - Passkey registration and sign-in now work when one `passkey()` plugin is shared between auth instances where some set `baseURL` and others do not. Previously one of the instances could fail with `ORIGIN_NOT_CONFIGURED` or verify against the other instance's origin settings.
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Passkey registration, device authorization, two-factor enrollment and verification, social account linking, and phone number changes now reject a session revoked in the database or secondary storage, even when cookie caching is enabled. Sessions created from API keys are refused on these routes, except two-factor enrollment and phone number changes.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The expected WebAuthn origin now comes from server configuration instead of the request: the `origin` option, or the `baseURL` origin plus a frontend origin listed exactly in `trustedOrigins`. Set `origin` when `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - `authenticatorSelection.userVerification` now applies to authentication as well as registration: it is requested in authentication options, and with `required` passkey registration and sign-in reject responses without user verification.
+
+## 1.7.15
+
 ## 1.7.14
 
 ## 1.7.13

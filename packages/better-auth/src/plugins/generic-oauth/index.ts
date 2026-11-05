@@ -15,7 +15,9 @@ import {
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
+import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, decodeJwt } from "jose";
+import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type {
@@ -105,6 +107,18 @@ const getPendingDiscovery = (ctx: AuthContext) =>
 	(ctx as AuthContext & { genericOAuthPendingDiscovery?: PendingDiscovery })
 		.genericOAuthPendingDiscovery;
 
+/**
+ * Reads ID token claims, or null for a token that is not a JWS, so a
+ * malformed token fails the sign-in instead of throwing.
+ */
+const readIdTokenClaims = (idToken: string) => {
+	try {
+		return decodeJwt(idToken);
+	} catch {
+		return null;
+	}
+};
+
 async function fetchDiscovery(
 	url: string,
 	headers?: Record<string, string>,
@@ -133,6 +147,7 @@ async function fetchDiscovery(
 async function fetchUserInfo(
 	tokens: OAuth2Tokens,
 	userInfoUrl: string | undefined,
+	idTokenClaims?: JWTPayload,
 ): Promise<GenericOAuthUserInfo | null> {
 	// When the provider declares an `idToken` config (OIDC discovery published
 	// a jwks_uri), the caller has already verified this token through
@@ -140,28 +155,25 @@ async function fetchUserInfo(
 	// verification is the OIDC Core 1.0 §3.1.3.7 posture for tokens received
 	// over the TLS-protected token-endpoint channel.
 	if (tokens.idToken) {
-		try {
-			const decoded = decodeJwt(tokens.idToken) as {
-				sub: string;
-				email_verified: boolean;
-				email: string;
-				name: string;
-				picture: string;
+		// Malformed ID token — fall through to userinfo endpoint
+		const decoded = (idTokenClaims ?? readIdTokenClaims(tokens.idToken)) as {
+			sub: string;
+			email_verified: boolean;
+			email: string;
+			name: string;
+			picture: string;
+		} | null;
+		if (decoded?.sub && decoded?.email) {
+			return {
+				id: decoded.sub,
+				emailVerified: toBoolean(decoded.email_verified),
+				image: decoded.picture,
+				...decoded,
 			};
-			if (decoded?.sub && decoded?.email) {
-				return {
-					id: decoded.sub,
-					emailVerified: decoded.email_verified,
-					image: decoded.picture,
-					...decoded,
-				};
-			}
-		} catch {
-			// Malformed ID token — fall through to userinfo endpoint
 		}
 	}
 
-	if (!userInfoUrl) {
+	if (!userInfoUrl || !tokens.accessToken) {
 		return null;
 	}
 
@@ -184,7 +196,7 @@ async function fetchUserInfo(
 	return {
 		...userInfo.data,
 		email: userInfo.data.email,
-		emailVerified: userInfo.data.email_verified ?? false,
+		emailVerified: toBoolean(userInfo.data.email_verified),
 		image: userInfo.data.picture,
 		name: userInfo.data.name,
 	};
@@ -315,6 +327,39 @@ export const genericOAuth = <const ID extends string>(
 				);
 			}
 
+			const resolveUserInfo = async (
+				tokens: OAuth2Tokens,
+				idTokenClaims?: JWTPayload,
+			) => {
+				const raw = c.getUserInfo
+					? await c.getUserInfo(tokens)
+					: await fetchUserInfo(tokens, userInfoUrl, idTokenClaims);
+				if (!raw) return null;
+
+				// Custom profiles may use a different identifier and omit `sub`.
+				const requiresSubjectMatch = !c.getUserInfo || raw.sub != null;
+				if (
+					idTokenClaims?.sub !== undefined &&
+					requiresSubjectMatch &&
+					String(raw.sub) !== idTokenClaims.sub
+				) {
+					return null;
+				}
+
+				const mapped = c.mapProfileToUser ? await c.mapProfileToUser(raw) : {};
+				const user = {
+					email: raw.email,
+					emailVerified: toBoolean(raw.emailVerified),
+					image: raw.image,
+					name: raw.name,
+					...mapped,
+				};
+				return {
+					user: { ...user, image: user.image ?? undefined },
+					data: raw,
+				};
+			};
+
 			const accountSubject = c.accountSubject;
 			const provider: OAuthProvider = {
 				id: c.providerId,
@@ -327,9 +372,15 @@ export const genericOAuth = <const ID extends string>(
 					if (accountSubject) {
 						return accountSubject({ tokens, profile: genericProfile });
 					}
-					return isOidc
-						? (genericProfile.sub ?? "")
-						: (genericProfile.id ?? "");
+					if (!isOidc) {
+						return genericProfile.id ?? "";
+					}
+					// getUserInfo or the id_token sign-in route verified this token,
+					// so it names the subject; the profile only describes it.
+					if (idTokenConfig && tokens.idToken) {
+						return readIdTokenClaims(tokens.idToken)?.sub ?? "";
+					}
+					return genericProfile.sub ?? "";
 				},
 				idToken: idTokenConfig,
 				requiresIdTokenNonce:
@@ -441,46 +492,32 @@ export const genericOAuth = <const ID extends string>(
 					});
 					return applyDefaultAccessTokenExpiry(tokens, c.accessTokenExpiresIn);
 				},
+				async getUserInfoFromIdToken(idToken) {
+					const claims = provider.idToken
+						? readIdTokenClaims(idToken)
+						: undefined;
+					if (claims === null) return null;
+					return resolveUserInfo({ idToken }, claims);
+				},
 				async getUserInfo(tokens) {
 					const { expectedIdTokenNonce, ...oauthTokens } = tokens;
-					// Fail closed: when discovery published a JWKS, an id_token
-					// that cannot be verified must not become an identity source.
-					if (oauthTokens.idToken && provider.idToken) {
-						const verified = await verifyProviderIdToken(
-							provider,
-							oauthTokens.idToken,
-							expectedIdTokenNonce,
-						);
-						if (!verified) {
-							ctx.logger.error(
-								`Provider "${c.providerId}": id_token failed verification against the discovery JWKS or expected nonce`,
-							);
-							return null;
-						}
+					if (!oauthTokens.idToken || !provider.idToken) {
+						return resolveUserInfo(oauthTokens);
 					}
-					const raw = c.getUserInfo
-						? await c.getUserInfo(oauthTokens)
-						: await fetchUserInfo(oauthTokens, userInfoUrl);
-					if (!raw) {
+
+					const valid = await verifyProviderIdToken(
+						provider,
+						oauthTokens.idToken,
+						expectedIdTokenNonce,
+					);
+					const claims = valid ? readIdTokenClaims(oauthTokens.idToken) : null;
+					if (!claims) {
+						ctx.logger.error(
+							`Provider "${c.providerId}": id_token failed verification against the discovery JWKS or expected nonce`,
+						);
 						return null;
 					}
-					const mapped = c.mapProfileToUser
-						? await c.mapProfileToUser(raw)
-						: {};
-					const user = {
-						email: raw.email,
-						emailVerified: raw.emailVerified,
-						image: raw.image,
-						name: raw.name,
-						...mapped,
-					};
-					return {
-						user: {
-							...user,
-							image: user.image ?? undefined,
-						},
-						data: raw,
-					};
+					return resolveUserInfo(oauthTokens, claims);
 				},
 				async refreshAccessToken(
 					refreshToken: string,

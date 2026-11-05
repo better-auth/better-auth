@@ -993,7 +993,11 @@ describe("Email Verification Secondary Storage", async () => {
 				},
 			});
 
-		const { runWithUser } = await signInWithTestUser();
+		const { runWithUser, user } = await signInWithTestUser();
+		// Only a requester with a verified current address gets a verified new one.
+		await (await auth.$context).internalAdapter.updateUser(user.id, {
+			emailVerified: true,
+		});
 
 		await runWithUser(async (headers) => {
 			// Request email change
@@ -1002,6 +1006,15 @@ describe("Email Verification Secondary Storage", async () => {
 					newEmail: "newemail@example.com",
 				},
 				headers,
+			});
+
+			await client.verifyEmail({
+				query: {
+					token: capturedToken,
+				},
+				fetchOptions: {
+					headers,
+				},
 			});
 
 			// Verify new email (change-email-verification flow)

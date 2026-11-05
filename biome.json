@@ -129,6 +129,7 @@
       "!!**/.output",
       "!**/.contentlayer",
       "!**/.tmp",
+      "!**/pages.gen.ts",
       "!**/tmp-docs-fetch",
       "!**/dev/cloudflare/drizzle"
     ]

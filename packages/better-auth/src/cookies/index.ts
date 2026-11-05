@@ -392,6 +392,10 @@ export async function setSessionCookie(
 			ctx.context.secret,
 			ctx.context.authCookies.dontRememberToken.attributes,
 		);
+	} else if (dontRememberMeCookie) {
+		// A marker left by an earlier non-remembered session would otherwise
+		// keep this persistent session from being refreshed.
+		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
 	ctx.context.setNewSession(session);

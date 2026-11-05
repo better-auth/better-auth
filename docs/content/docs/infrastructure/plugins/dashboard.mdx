@@ -426,27 +426,34 @@ The dash plugin automatically tracks the following events:
 
 ### User Events
 
-| Event                        | Trigger                      |
-| ---------------------------- | ---------------------------- |
-| `user_signed_up`             | New user registration        |
-| `user_profile_updated`       | User updates their profile   |
-| `user_profile_image_updated` | User changes their avatar    |
-| `user_email_verified`        | Email verification completed |
-| `user_banned`                | User is banned               |
-| `user_unbanned`              | User is unbanned             |
-| `user_deleted`               | User account deleted         |
+| Event                      | Trigger                                       |
+| -------------------------- | --------------------------------------------- |
+| `user_created`             | New user registration                         |
+| `profile_updated`          | User updates their profile                    |
+| `profile_image_updated`    | User changes their avatar                     |
+| `email_verified`           | Email verification completed                  |
+| `email_changed`            | User email address changed                    |
+| `user_banned`              | User is banned                                |
+| `user_unbanned`            | User is unbanned                              |
+| `user_role_updated`        | App-level user role changed                   |
+| `user_deleted`             | User account deleted                          |
+| `anonymous_user_converted` | Anonymous guest linked to a permanent account |
+| `two_factor_enabled`       | Two-factor authentication enabled             |
+| `two_factor_disabled`      | Two-factor authentication disabled            |
+| `two_factor_verified`      | Two-factor verification succeeded             |
 
 ### Session Events
 
-| Event                        | Trigger                         |
-| ---------------------------- | ------------------------------- |
-| `user_signed_in`             | Successful sign-in              |
-| `user_signed_out`            | User signs out                  |
-| `session_created`            | New session created             |
-| `session_revoked`            | Single session revoked          |
-| `sessions_revoked_all`       | All sessions revoked            |
-| `user_impersonated`          | Admin starts impersonating user |
-| `user_impersonation_stopped` | Admin stops impersonating       |
+| Event                       | Trigger                         |
+| --------------------------- | ------------------------------- |
+| `user_signed_in`            | Successful sign-in              |
+| `user_signed_out`           | User signs out                  |
+| `user_sign_in_failed`       | Failed sign-in attempt          |
+| `session_created`           | New session created             |
+| `session_revoked`           | Single session revoked          |
+| `all_sessions_revoked`      | All sessions revoked            |
+| `user_impersonated`         | Admin starts impersonating user |
+| `user_impersonated_stopped` | Admin stops impersonating       |
 
 ### Account Events
 
@@ -468,22 +475,23 @@ The dash plugin automatically tracks the following events:
 
 If you're using the organization plugin, these events are also tracked:
 
-| Event                  | Trigger                          |
-| ---------------------- | -------------------------------- |
-| `organization_created` | New organization created         |
-| `organization_updated` | Organization settings changed    |
-| `member_added`         | Member added to organization     |
-| `member_removed`       | Member removed from organization |
-| `member_role_updated`  | Member role changed              |
-| `member_invited`       | Invitation sent                  |
-| `invite_accepted`      | Invitation accepted              |
-| `invite_rejected`      | Invitation rejected              |
-| `invite_cancelled`     | Invitation cancelled             |
-| `team_created`         | Team created                     |
-| `team_updated`         | Team updated                     |
-| `team_deleted`         | Team deleted                     |
-| `team_member_added`    | Member added to team             |
-| `team_member_removed`  | Member removed from team         |
+| Event                                 | Trigger                          |
+| ------------------------------------- | -------------------------------- |
+| `organization_created`                | New organization created         |
+| `organization_updated`                | Organization settings changed    |
+| `organization_deleted`                | Organization deleted             |
+| `organization_member_added`           | Member added to organization     |
+| `organization_member_removed`         | Member removed from organization |
+| `organization_member_role_updated`    | Member role changed              |
+| `organization_member_invited`         | Invitation sent                  |
+| `organization_member_invite_accepted` | Invitation accepted              |
+| `organization_member_invite_rejected` | Invitation rejected              |
+| `organization_member_invite_canceled` | Invitation cancelled             |
+| `organization_team_created`           | Team created                     |
+| `organization_team_updated`           | Team updated                     |
+| `organization_team_deleted`           | Team deleted                     |
+| `organization_team_member_added`      | Member added to team             |
+| `organization_team_member_removed`    | Member removed from team         |
 
 ## Dashboard Endpoints
 
