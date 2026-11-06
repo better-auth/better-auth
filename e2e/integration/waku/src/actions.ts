@@ -1,6 +1,6 @@
 "use server";
 
-import { getRequest } from "waku/router/server";
+import { getRequest, unstable_redirect as redirect } from "waku/router/server";
 import { auth } from "./auth";
 
 export async function signUp(formData: FormData) {
@@ -12,4 +12,10 @@ export async function signUp(formData: FormData) {
 		},
 		headers: getRequest().headers,
 	});
+	redirect("/dashboard");
+}
+
+export async function signOut() {
+	await auth.api.signOut({ headers: getRequest().headers });
+	redirect("/dashboard");
 }
