@@ -551,4 +551,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/tianhuil.png",
 		},
 	},
+	{
+		name: "@byo-oss/support",
+		url: "https://github.com/byo-oss/support",
+		description:
+			"Customer support for Better Auth apps: tickets, replies, internal notes and attachments in your database, with a widget for customers and an inbox for your staff.",
+		author: {
+			name: "byo-oss",
+			github: "byo-oss",
+			avatar: "https://github.com/byo-oss.png",
+		},
+	},
 ];
