@@ -293,6 +293,7 @@ export function createSAMLPostForm(
 	const safeSamlValue = escapeHtml(samlValue);
 	const safeRelayState = relayState ? escapeHtml(relayState) : undefined;
 
-	const html = `<!DOCTYPE html><html><body onload="document.forms[0].submit();"><form method="POST" action="${safeAction}"><input type="hidden" name="${safeSamlParam}" value="${safeSamlValue}" />${safeRelayState ? `<input type="hidden" name="RelayState" value="${safeRelayState}" />` : ""}<noscript><input type="submit" value="Continue" /></noscript></form></body></html>`;
+	// Submit before load: front-channel IdPs may finish logout when this iframe loads.
+	const html = `<!DOCTYPE html><html><body><form method="POST" action="${safeAction}"><input type="hidden" name="${safeSamlParam}" value="${safeSamlValue}" />${safeRelayState ? `<input type="hidden" name="RelayState" value="${safeRelayState}" />` : ""}<noscript><input type="submit" value="Continue" /></noscript></form><script>document.forms[0].submit();</script></body></html>`;
 	return new Response(html, { headers: { "Content-Type": "text/html" } });
 }
