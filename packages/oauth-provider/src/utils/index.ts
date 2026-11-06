@@ -1,6 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { decodeBasicCredentials } from "@better-auth/core/oauth2";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import {
@@ -1225,4 +1226,41 @@ export function isPKCERequired(
 	}
 
 	return false;
+}
+
+/**
+ * Applies the redirect URI HTTPS policy: `http:` is allowed on loopback hosts
+ * for clients that are not `web`, or when `allowInsecureRedirectUri` accepts
+ * the URL. A throwing callback rejects the URI.
+ */
+export function isRedirectUriTransportAllowed(
+	opts: OAuthOptions<Scope[]>,
+	uri: string,
+	isWebClient = false,
+): boolean {
+	let url: URL;
+	try {
+		url = new URL(uri);
+	} catch {
+		return false;
+	}
+	if (url.protocol !== "http:") return true;
+	if (!isWebClient && isLoopbackHost(url.host)) return true;
+	return isInsecureRedirectUriAllowed(opts, url);
+}
+
+/**
+ * Runs `allowInsecureRedirectUri` for an `http:` URL, failing closed. URLs
+ * with credentials are never accepted.
+ */
+export function isInsecureRedirectUriAllowed(
+	opts: OAuthOptions<Scope[]>,
+	url: URL,
+): boolean {
+	if (url.username || url.password) return false;
+	try {
+		return opts.allowInsecureRedirectUri?.(url) === true;
+	} catch {
+		return false;
+	}
 }
