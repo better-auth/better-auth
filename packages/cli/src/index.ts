@@ -18,8 +18,9 @@ import { cliVersion } from "./version";
 import "dotenv/config";
 
 // handle exit
-process.on("SIGINT", () => process.exit(0));
-process.on("SIGTERM", () => process.exit(0));
+// 128 + signal number, so an interrupted run never reads as a success.
+process.on("SIGINT", () => process.exit(130));
+process.on("SIGTERM", () => process.exit(143));
 
 async function main() {
 	const program = new Command("better-auth");

@@ -208,8 +208,27 @@ describe("create-admin", () => {
 		).rejects.toThrow(/missing user table/);
 	});
 
+	it("exits 130 when the email prompt is canceled", async () => {
+		await setupAuth();
+		vi.mocked(process.exit).mockClear();
+		const { default: realPrompts } = await vi.importActual<{
+			default: typeof prompts;
+		}>("prompts");
+		realPrompts.inject([new Error("canceled")]);
+		vi.mocked(prompts).mockImplementationOnce(realPrompts);
+
+		await expect(
+			createAdminAction({
+				cwd: process.cwd(),
+				config: "test/auth.ts",
+			}),
+		).rejects.toThrow();
+		expect(process.exit).toHaveBeenNthCalledWith(1, 130);
+	});
+
 	it("asks for confirmation when users already exist", async () => {
 		const auth = await setupAuth();
+		vi.mocked(process.exit).mockClear();
 		vi.mocked(prompts).mockResolvedValueOnce({ confirmed: false });
 
 		await auth.api.signUpEmail({
@@ -220,13 +239,16 @@ describe("create-admin", () => {
 			},
 		});
 
-		await createAdminAction({
-			cwd: process.cwd(),
-			config: "test/auth.ts",
-			email: "admin@example.com",
-			password: "secure-password",
-			name: "Root Admin",
-		});
+		await expect(
+			createAdminAction({
+				cwd: process.cwd(),
+				config: "test/auth.ts",
+				email: "admin@example.com",
+				password: "secure-password",
+				name: "Root Admin",
+			}),
+		).rejects.toThrow();
+		expect(process.exit).toHaveBeenNthCalledWith(1, 130);
 
 		expect(prompts).toHaveBeenCalledWith(
 			expect.objectContaining({

@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
+import type { PromptObject } from "prompts";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
@@ -23,12 +24,12 @@ interface McpEntry {
 
 function cancelled(): never {
 	console.log(chalk.yellow("\n✋ Setup cancelled."));
-	process.exit(0);
+	process.exit(130);
 }
 
-function check<T>(value: T | undefined): T {
-	if (value === undefined || value === null) cancelled();
-	return value;
+// Ctrl+C or Escape on any prompt ends the setup instead of answering it.
+function ask(question: PromptObject) {
+	return prompts(question, { onCancel: cancelled });
 }
 
 // ── Main ──────────────────────────────────────────
@@ -44,7 +45,7 @@ async function aiAction() {
 	);
 	console.log();
 
-	const { setup } = await prompts({
+	const { setup } = await ask({
 		type: "select",
 		name: "setup",
 		message: "What would you like to do?",
@@ -62,8 +63,6 @@ async function aiAction() {
 		],
 	});
 
-	check(setup);
-
 	if (setup === "client") {
 		await setupClient();
 	} else {
@@ -74,7 +73,7 @@ async function aiAction() {
 // ── Client Integration ────────────────────────────
 
 async function setupClient() {
-	const { method } = await prompts({
+	const { method } = await ask({
 		type: "select",
 		name: "method",
 		message: "How do you want to integrate?",
@@ -92,8 +91,6 @@ async function setupClient() {
 		],
 	});
 
-	check(method);
-
 	if (method === "mcp") {
 		await setupMcp();
 	} else {
@@ -104,7 +101,7 @@ async function setupClient() {
 // ── Server Selection ──────────────────────────────
 
 async function setupServerSelection() {
-	const { implementation } = await prompts({
+	await ask({
 		type: "select",
 		name: "implementation",
 		message: "Choose an implementation",
@@ -117,15 +114,13 @@ async function setupServerSelection() {
 		],
 	});
 
-	check(implementation);
-
 	await setupServer();
 }
 
 // ── MCP Server Setup ──────────────────────────────
 
 async function setupMcp() {
-	const { tool } = await prompts({
+	const { tool } = await ask({
 		type: "select",
 		name: "tool",
 		message: "Which AI tool?",
@@ -139,7 +134,6 @@ async function setupMcp() {
 			{ title: "Other", value: "other" },
 		],
 	});
-	check(tool);
 
 	let scope: "project" | "global" = "global";
 
@@ -148,7 +142,7 @@ async function setupMcp() {
 			tool === "cursor" ? ".cursor/mcp.json" : ".vscode/mcp.json";
 		const hintGlobal =
 			tool === "cursor" ? "~/.cursor/mcp.json" : "user settings";
-		const { s } = await prompts({
+		const { s } = await ask({
 			type: "select",
 			name: "s",
 			message: "Where should it be configured?",
@@ -165,11 +159,10 @@ async function setupMcp() {
 				},
 			],
 		});
-		check(s);
 		scope = s;
 	}
 
-	const { registryUrl } = await prompts({
+	const { registryUrl } = await ask({
 		type: "text",
 		name: "registryUrl",
 		message: "Registry URL",
@@ -205,7 +198,7 @@ async function setupMcp() {
 }
 
 async function setupClaudeCode(args: string[]) {
-	const { scope } = await prompts({
+	const { scope } = await ask({
 		type: "select",
 		name: "scope",
 		message: "Where should it be configured?",
@@ -222,7 +215,6 @@ async function setupClaudeCode(args: string[]) {
 			},
 		],
 	});
-	check(scope);
 
 	const cmdParts = [
 		"claude",
@@ -240,7 +232,7 @@ async function setupClaudeCode(args: string[]) {
 	console.log(chalk.bold.white("\nRun this command:"));
 	console.log(chalk.cyan(`  ${cmd}\n`));
 
-	const { run } = await prompts({
+	const { run } = await ask({
 		type: "confirm",
 		name: "run",
 		message: "Run it now?",
@@ -258,6 +250,7 @@ async function setupClaudeCode(args: string[]) {
 			s.success("Added to Claude Code.");
 		} catch {
 			s.stop();
+			process.exitCode = 1;
 			console.log(chalk.yellow("⚠ Could not run the command automatically."));
 			console.log(chalk.gray("  Run the command above manually."));
 		}
@@ -275,7 +268,7 @@ async function setupOpenCode(args: string[]) {
 		enabled: true,
 	};
 
-	const { write } = await prompts({
+	const { write } = await ask({
 		type: "confirm",
 		name: "write",
 		message: `Write config to ${chalk.cyan(display)}?`,
@@ -287,6 +280,7 @@ async function setupOpenCode(args: string[]) {
 			console.log(chalk.green(`\n✓ Written to ${display}`));
 			return;
 		}
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				`\n⚠ Could not read ${display} as a JSON object, so it was left unchanged.`,
@@ -343,7 +337,7 @@ async function writeMcpConfigInteractive(
 	}
 
 	const display = displayPath(configPath, scope);
-	const { write } = await prompts({
+	const { write } = await ask({
 		type: "confirm",
 		name: "write",
 		message: `Write config to ${chalk.cyan(display)}?`,
@@ -355,6 +349,7 @@ async function writeMcpConfigInteractive(
 			console.log(chalk.green(`\n✓ Written to ${display}`));
 			return;
 		}
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				`\n⚠ Could not read ${display} as a JSON object, so it was left unchanged.`,
@@ -367,7 +362,7 @@ async function writeMcpConfigInteractive(
 // ── CLI Setup ─────────────────────────────────────
 
 async function setupCli() {
-	const { installCli } = await prompts({
+	const { installCli } = await ask({
 		type: "confirm",
 		name: "installCli",
 		message: `Install ${chalk.cyan(AGENT_CLI_PKG)} globally?`,
@@ -385,6 +380,7 @@ async function setupCli() {
 			s.success(`${AGENT_CLI_PKG} installed globally.`);
 		} catch {
 			s.stop();
+			process.exitCode = 1;
 			console.log(
 				chalk.yellow("⚠ Could not install automatically. Run manually:"),
 			);
@@ -433,7 +429,7 @@ async function setupCli() {
 // ── Server Setup ──────────────────────────────────
 
 async function setupServer() {
-	const { source } = await prompts({
+	const { source } = await ask({
 		type: "select",
 		name: "source",
 		message: "How do you want to define capabilities?",
@@ -455,17 +451,15 @@ async function setupServer() {
 			},
 		],
 	});
-	check(source);
 
-	const { name } = await prompts({
+	const { name } = await ask({
 		type: "text",
 		name: "name",
 		message: "What's your service called?",
 		validate: (v: string) => (v?.trim() ? true : "Name is required."),
 	});
-	check(name);
 
-	const { description } = await prompts({
+	const { description } = await ask({
 		type: "text",
 		name: "description",
 		message: `Short description ${chalk.dim("(press Enter to skip)")}`,
@@ -475,28 +469,26 @@ async function setupServer() {
 
 	let sourceUrl: string | undefined;
 	if (source === "openapi") {
-		const { url } = await prompts({
+		const { url } = await ask({
 			type: "text",
 			name: "url",
 			message: `OpenAPI spec URL ${chalk.dim("(e.g. https://api.example.com/openapi.json)")}`,
 			validate: (v: string) => (v?.trim() ? true : "URL is required."),
 		});
-		check(url);
 		sourceUrl = url.trim();
 	} else if (source === "mcp") {
-		const { url } = await prompts({
+		const { url } = await ask({
 			type: "text",
 			name: "url",
 			message: `MCP server URL ${chalk.dim("(e.g. https://api.example.com/mcp)")}`,
 			validate: (v: string) => (v?.trim() ? true : "URL is required."),
 		});
-		check(url);
 		sourceUrl = url.trim();
 	}
 
 	const code = generateServerCode(name.trim(), desc, source, sourceUrl);
 
-	const { write } = await prompts({
+	const { write } = await ask({
 		type: "confirm",
 		name: "write",
 		message: "Generate an auth config file?",
@@ -504,7 +496,7 @@ async function setupServer() {
 	});
 
 	if (write) {
-		const { filePath } = await prompts({
+		const { filePath } = await ask({
 			type: "text",
 			name: "filePath",
 			message: "File path",
@@ -514,7 +506,7 @@ async function setupServer() {
 		const target = filePath?.trim() || "lib/auth.ts";
 
 		if (fs.existsSync(target)) {
-			const { overwrite } = await prompts({
+			const { overwrite } = await ask({
 				type: "confirm",
 				name: "overwrite",
 				message: `${chalk.yellow(target)} already exists. Overwrite?`,
@@ -658,7 +650,7 @@ function showServerOutro() {
 // ── Helpers ───────────────────────────────────────
 
 async function offerSkillInstall(skillName: string) {
-	const { installSkill } = await prompts({
+	const { installSkill } = await ask({
 		type: "confirm",
 		name: "installSkill",
 		message: `Install the ${chalk.cyan(skillName)} skill for your coding agents?`,
@@ -678,6 +670,7 @@ async function offerSkillInstall(skillName: string) {
 		s.success(`${skillName} skill installed.`);
 	} catch {
 		s.stop();
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow("⚠ Could not install automatically. Run manually:"),
 		);

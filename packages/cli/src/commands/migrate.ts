@@ -38,7 +38,7 @@ export async function migrateAction(opts: any) {
 		console.error(
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 		);
-		return;
+		process.exit(1);
 	}
 
 	const db = await getAdapter(config);
@@ -217,7 +217,7 @@ export async function migrateAction(opts: any) {
 				},
 			});
 		} catch {}
-		process.exit(0);
+		process.exit(130);
 	}
 
 	spinner?.start("migrating...");

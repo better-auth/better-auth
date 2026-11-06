@@ -155,7 +155,7 @@ export async function upgradeAction(opts: unknown) {
 
 	if (!confirmed) {
 		console.log("Upgrade cancelled.");
-		return;
+		process.exit(130);
 	}
 
 	const { packageManager } = await detectPackageManager(cwd, packageJson);

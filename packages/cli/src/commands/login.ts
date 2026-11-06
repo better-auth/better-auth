@@ -124,6 +124,7 @@ async function logoutAction() {
 		log.warn(
 			"Removed the local token, but could not revoke the session on the server",
 		);
+		process.exitCode = 1;
 		return;
 	}
 	log.success("Logged out");
