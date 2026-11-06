@@ -8,7 +8,7 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
-import { generateKeyPair, SignJWT } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type {
@@ -5837,6 +5837,89 @@ describe("oauth2", async () => {
 				expect((await signIn(instance)).url).toContain(authorizeUrl);
 			}
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12277
+	 */
+	it("follows a provider that moves to a newly listed ID token algorithm", async () => {
+		const origin = "https://rotating-idp.test";
+		const idp = { algorithms: ["ES256"], fetches: 0 };
+		const keys = await Promise.all(
+			["ES256", "RS256"].map(async (alg) => {
+				const { publicKey, privateKey } = await generateKeyPair(alg);
+				return {
+					alg,
+					privateKey,
+					jwk: { ...(await exportJWK(publicKey)), alg, kid: alg },
+				};
+			}),
+		);
+		mswServer.use(
+			http.get(`${origin}/.well-known/openid-configuration`, () => {
+				idp.fetches++;
+				return HttpResponse.json({
+					issuer: origin,
+					authorization_endpoint: `${origin}/authorize`,
+					token_endpoint: `${origin}/token`,
+					jwks_uri: `${origin}/jwks`,
+					id_token_signing_alg_values_supported: idp.algorithms,
+				});
+			}),
+			// The provider publishes the new key next to the old one ahead of the move.
+			http.get(`${origin}/jwks`, () =>
+				HttpResponse.json({ keys: keys.map((key) => key.jwk) }),
+			),
+		);
+		const { auth } = await getTestInstance(
+			{
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "rotating-idp",
+								clientId,
+								clientSecret,
+								discoveryUrl: `${origin}/.well-known/openid-configuration`,
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: true },
+		);
+		const provider = (await auth.$context).socialProviders.find(
+			(p) => p.id === "rotating-idp",
+		);
+		assert(provider);
+		const signInWith = async (alg: string) => {
+			const key = keys.find((k) => k.alg === alg)!;
+			const idToken = await new SignJWT({
+				email: "rotating@test.com",
+				email_verified: true,
+				name: "Rotating",
+			})
+				.setProtectedHeader({ alg, kid: alg })
+				.setSubject("rotating-user")
+				.setIssuer(origin)
+				.setAudience(clientId)
+				.setIssuedAt()
+				.setExpirationTime("5m")
+				.sign(key.privateKey);
+			return provider.getUserInfo({ accessToken: "access-token", idToken });
+		};
+
+		expect((await signInWith("ES256"))?.user.email).toBe("rotating@test.com");
+		expect(idp.fetches).toBe(1);
+
+		idp.algorithms = ["RS256"];
+		expect((await signInWith("RS256"))?.user.email).toBe("rotating@test.com");
+		expect(idp.fetches).toBe(2);
+
+		// The provider no longer lists ES256, and discovery is not read again
+		// within the cooldown.
+		expect(await signInWith("ES256")).toBeNull();
+		expect(idp.fetches).toBe(2);
 	});
 
 	describe("string email_verified claims", () => {

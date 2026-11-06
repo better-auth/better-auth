@@ -16,7 +16,7 @@ import {
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
-import { createRemoteJWKSet, decodeJwt } from "jose";
+import { createRemoteJWKSet, decodeJwt, decodeProtectedHeader } from "jose";
 import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
@@ -91,6 +91,9 @@ function isClientSecretTokenEndpointAuth(
 
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
+
+/** How often an ID token with an unlisted `alg` may re-read discovery (jose's JWKS cooldown is 30s too). */
+const ID_TOKEN_ALGORITHMS_REFRESH_COOLDOWN_MS = 30_000;
 
 type PendingDiscovery = Map<
 	string,
@@ -360,6 +363,59 @@ export const genericOAuth = <const ID extends string>(
 				};
 			};
 
+			// The allowed algorithms come from discovery at init. A provider that moves
+			// to an algorithm it newly lists would be refused until restart, because jose
+			// checks `alg` before it looks up the key. Read discovery again, shared by
+			// concurrent requests and at most once per cooldown, when a token's `alg` is
+			// not on the list. Resolves to whether the token's `alg` is now allowed.
+			let algorithmsRefresh: Promise<boolean> | undefined;
+			let algorithmsRefreshedAt: number | undefined;
+			const refreshIdTokenAlgorithms = async (idToken: string) => {
+				const config = idTokenConfig;
+				if (!c.discoveryUrl || !config || !("jwks" in config)) return false;
+				if (!config.algorithms) return false;
+				let header: ReturnType<typeof decodeProtectedHeader>;
+				try {
+					header = decodeProtectedHeader(idToken);
+				} catch {
+					return false;
+				}
+				const alg = header.alg;
+				if (!alg || config.algorithms.includes(alg)) return false;
+				if (algorithmsRefresh !== undefined) return algorithmsRefresh;
+				if (
+					algorithmsRefreshedAt !== undefined &&
+					Date.now() - algorithmsRefreshedAt <
+						ID_TOKEN_ALGORITHMS_REFRESH_COOLDOWN_MS
+				) {
+					return false;
+				}
+				algorithmsRefreshedAt = Date.now();
+				algorithmsRefresh = fetchDiscovery(
+					c.discoveryUrl,
+					c.discoveryHeaders,
+					DISCOVERY_RETRY_TIMEOUT_MS,
+				)
+					.catch(() => null)
+					.then((discovered) => {
+						const signingAlgs =
+							discovered?.id_token_signing_alg_values_supported;
+						if (
+							discovered?.issuer !== config.issuer ||
+							!Array.isArray(signingAlgs) ||
+							signingAlgs.length === 0
+						) {
+							return false;
+						}
+						config.algorithms = signingAlgs;
+						return signingAlgs.includes(alg);
+					})
+					.finally(() => {
+						algorithmsRefresh = undefined;
+					});
+				return algorithmsRefresh;
+			};
+
 			const accountSubject = c.accountSubject;
 			const provider: OAuthProvider = {
 				id: c.providerId,
@@ -505,11 +561,18 @@ export const genericOAuth = <const ID extends string>(
 						return resolveUserInfo(oauthTokens);
 					}
 
-					const valid = await verifyProviderIdToken(
+					let valid = await verifyProviderIdToken(
 						provider,
 						oauthTokens.idToken,
 						expectedIdTokenNonce,
 					);
+					if (!valid && (await refreshIdTokenAlgorithms(oauthTokens.idToken))) {
+						valid = await verifyProviderIdToken(
+							provider,
+							oauthTokens.idToken,
+							expectedIdTokenNonce,
+						);
+					}
 					const claims = valid ? readIdTokenClaims(oauthTokens.idToken) : null;
 					if (!claims) {
 						ctx.logger.error(
