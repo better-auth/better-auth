@@ -452,6 +452,77 @@ describe("info command", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11738
+	 */
+	it("should redact nested values and sensitive key variants", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({
+				name: "test-project",
+				version: "1.0.0",
+				dependencies: {
+					"better-auth": "^1.0.0",
+				},
+			}),
+		);
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";
+
+			export const auth = betterAuth({
+				emailAndPassword: {
+					enabled: true,
+					minPasswordLength: 12,
+				},
+				plugins: [
+					{
+						id: "custom",
+						options: {
+							issuer: "https://idp.example.com",
+							privateKey: {
+								privateKeyPem: "pem-value-should-be-redacted",
+								privateKeyJwk: { d: "jwk-d-value-should-be-redacted" },
+							},
+							encPrivateKeyPass: "passphrase-should-be-redacted",
+							client_secret: "snake-secret-should-be-redacted",
+							"api-key": "kebab-key-should-be-redacted",
+							lookupKey: "pro_monthly",
+							authTokens: "plural-token-should-be-redacted",
+							apiKeyHeaders: "x-api-key",
+							tokenUrl: "https://idp.example.com/token",
+						},
+					},
+				],
+			})`,
+		);
+
+		const { stdout } = await runInfoCommand();
+		const { stdout: text } = await runInfoTextCommand();
+
+		const { config } = JSON.parse(stdout).betterAuth;
+		const options = config.plugins[0].config.options;
+		expect(config.emailAndPassword).toEqual({
+			enabled: true,
+			minPasswordLength: 12,
+		});
+		expect(options.issuer).toBe("https://idp.example.com");
+		expect(options.privateKey).toEqual({
+			privateKeyPem: "[REDACTED]",
+			privateKeyJwk: { d: "[REDACTED]" },
+		});
+		expect(options.encPrivateKeyPass).toBe("[REDACTED]");
+		expect(options.client_secret).toBe("[REDACTED]");
+		expect(options["api-key"]).toBe("[REDACTED]");
+		expect(options.authTokens).toBe("[REDACTED]");
+		expect(options.apiKeyHeaders).toBe("x-api-key");
+		expect(options.tokenUrl).toBe("https://idp.example.com/token");
+		expect(options.lookupKey).toBe("pro_monthly");
+		for (const output of [stdout, text]) {
+			expect(output).not.toContain("should-be-redacted");
+		}
+	});
+
 	it("should handle missing package.json gracefully", async () => {
 		// Don't create package.json
 		const { stdout } = await runInfoCommand();
