@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthMiddleware } from "better-auth/api";
+import { applySetCookies } from "better-auth/cookies";
 import { getContext } from "hono/context-storage";
 
 const database = {
@@ -41,6 +42,8 @@ function wakuCookies() {
 								...(c.get("betterAuthSetCookie") ?? []),
 								...setCookies,
 							]);
+							// The cookies changed, so the next read fetches the session again
+							c.set("sessionPromise", undefined);
 						}
 					}),
 				},
@@ -71,7 +74,9 @@ export function getSession() {
 	const c = getContext<AuthEnv>();
 	const existing = c.get("sessionPromise");
 	if (existing) return existing;
-	const sessionPromise = auth.api.getSession({ headers: c.req.raw.headers });
+	const headers = new Headers(c.req.raw.headers);
+	applySetCookies(headers, c.get("betterAuthSetCookie") ?? []);
+	const sessionPromise = auth.api.getSession({ headers });
 	c.set("sessionPromise", sessionPromise);
 	return sessionPromise;
 }

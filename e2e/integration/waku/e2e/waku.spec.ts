@@ -18,13 +18,15 @@ async function signUp(
 	email: string,
 ) {
 	await page.goto(baseURL);
+	// Submit after hydration, so the form calls the server action over RSC.
+	await page.waitForLoadState("networkidle");
 	await page.getByLabel("Name").fill(name);
 	await page.getByLabel("Email").fill(email);
 	await page.getByLabel("Password").fill("password123");
 	const [response] = await Promise.all([
 		page.waitForResponse(
 			(response) =>
-				new URL(response.url()).origin === new URL(baseURL).origin &&
+				new URL(response.url()).pathname.startsWith("/RSC/F/") &&
 				response.request().method() === "POST",
 		),
 		page.getByRole("button", { name: "Sign up" }).click(),
@@ -83,6 +85,43 @@ for (const [mode, server] of Object.entries(servers)) {
 
 			await page.goto(baseURL);
 			await expect(page.getByText("Signed in as Action User")).toBeVisible();
+		});
+
+		/**
+		 * @see https://waku.gg/guides/authentication#reading-a-queued-cookie-in-the-same-request
+		 */
+		test("renders the redirect after a server-action sign-up with the new session", async ({
+			page,
+		}) => {
+			await signUp(page, baseURL, "Redirect User", "redirect@example.com");
+
+			await expect(page).toHaveURL(new URL("/dashboard", baseURL).href);
+			await expect(page.getByText("Signed in as Redirect User")).toBeVisible();
+		});
+
+		/**
+		 * @see https://waku.gg/guides/authentication#reading-a-queued-cookie-in-the-same-request
+		 */
+		test("renders the redirect after a server-action sign-out without the session", async ({
+			page,
+		}) => {
+			await signUp(
+				page,
+				baseURL,
+				"Action Sign Out User",
+				"action-signout@example.com",
+			);
+			await page.goto(new URL("/dashboard", baseURL).href);
+			await expect(
+				page.getByText("Signed in as Action Sign Out User"),
+			).toBeVisible();
+
+			await page.getByRole("button", { name: "Sign out" }).click();
+
+			await expect(page.getByText("Signed out", { exact: true })).toBeVisible();
+			expect(
+				await getCookie(page, "better-auth.session_token"),
+			).toBeUndefined();
 		});
 
 		test("clears session cookies on API sign-out when the cookie cache is missing", async ({
