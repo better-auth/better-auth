@@ -11,6 +11,7 @@ type StoredAdapter = DBTransactionAdapter<BetterAuthOptions>;
 type HookContext = {
 	adapter: StoredAdapter;
 	pendingHooks: Array<() => Promise<void>>;
+	rollbackHooks: Array<() => Promise<void>>;
 	isTransactionActive: boolean;
 };
 
@@ -73,6 +74,7 @@ export const runWithAdapter = async <
 					{
 						adapter: adapter as unknown as StoredAdapter,
 						pendingHooks,
+						rollbackHooks: [],
 						isTransactionActive: false,
 					},
 					fn,
@@ -131,6 +133,14 @@ export const runWithTransaction = async <
 			const pendingSchemaCheck = runtimeSchemaCheckFor(adapter)?.();
 			if (pendingSchemaCheck) await pendingSchemaCheck;
 			let pendingHooks: Array<() => Promise<void>> = [];
+			let rollbackHooks: Array<() => Promise<void>> = [];
+			const runRollbackHooks = async () => {
+				const hooks = rollbackHooks;
+				rollbackHooks = [];
+				for (const hook of hooks) {
+					await hook();
+				}
+			};
 			let result: Awaited<R>;
 			let error: unknown;
 			let hasError = false;
@@ -138,11 +148,13 @@ export const runWithTransaction = async <
 				result = await adapter.transaction(async (trx) => {
 					// An adapter may run this callback again after a transient abort.
 					// Only the hooks of the attempt that commits may run.
+					await runRollbackHooks();
 					pendingHooks = [];
 					return als.run(
 						{
 							adapter: trx as unknown as StoredAdapter,
 							pendingHooks,
+							rollbackHooks,
 							isTransactionActive: true,
 						},
 						fn,
@@ -183,9 +195,12 @@ export const runWithTransaction = async <
 				// those writes still have to run. The original error wins over theirs.
 				if (adapter.options?.adapterConfig.transaction === false) {
 					await runPendingHooks("log");
+				} else {
+					await runRollbackHooks();
 				}
 				throw error;
 			}
+			rollbackHooks = [];
 			await runPendingHooks("throw");
 			return result!;
 		})
@@ -229,4 +244,38 @@ export const queueAfterTransactionHook = async (
 	const store = storage.getStore();
 	if (!store?.isTransactionActive) return executeHook();
 	store.pendingHooks.push(executeHook);
+};
+
+/**
+ * Queue a hook that undoes a write outside the database (such as a cache entry)
+ * when the current transaction does not commit. It runs when the transaction
+ * fails or the adapter retries it, and is dropped on commit. Outside a
+ * transaction it never runs.
+ */
+export const queueOnTransactionRollback = async (
+	hook: () => Promise<void>,
+	options?: {
+		/** Handles a failure of the cleanup so the original error is kept. */
+		onError?: (error: unknown) => void | Promise<void>;
+	},
+): Promise<void> => {
+	let storage: Awaited<ReturnType<typeof ensureAsyncStorage>>;
+	try {
+		storage = await ensureAsyncStorage();
+	} catch {
+		return;
+	}
+	const store = storage.getStore();
+	if (!store?.isTransactionActive) return;
+	store.rollbackHooks.push(async () => {
+		try {
+			await hook();
+		} catch (error) {
+			try {
+				await options?.onError?.(error);
+			} catch {
+				// Cleanup must not replace the original failure.
+			}
+		}
+	});
 };
