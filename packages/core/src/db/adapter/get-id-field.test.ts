@@ -2,7 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
 import type { BetterAuthDBSchema } from "../type";
-import { encodeDeterministicId, initGetIdField } from "./get-id-field";
+import {
+	encodeDeterministicId,
+	initGetIdField,
+	usesObjectIdKeys,
+} from "./get-id-field";
 
 const minimalSchema: BetterAuthDBSchema = {
 	user: {
@@ -240,6 +244,56 @@ describe("encodeDeterministicId", () => {
 			expect(encodeDeterministicId(digest(2), options)).not.toBe(id);
 		},
 	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12071
+	 */
+	it("encodes ObjectId hex when an ObjectId adapter generates ids", () => {
+		const options = {
+			advanced: { database: { generateId: false } },
+		} as const;
+		const target = { model: "verification", objectIdKeys: true };
+		expect(encodeDeterministicId(digest(1), options, target)).toBe(
+			"1f262d343b424950575e656c",
+		);
+		expect(
+			encodeDeterministicId(
+				digest(1),
+				{
+					advanced: {
+						database: {
+							generateId: ({ model }) =>
+								model === "verification" ? false : "custom",
+						},
+					},
+				},
+				target,
+			),
+		).toBe("1f262d343b424950575e656c");
+	});
+
+	it("keeps base64url ids for text-id adapters when the database generates ids", () => {
+		const options = {
+			advanced: { database: { generateId: false } },
+		} as const;
+		expect(encodeDeterministicId(digest(1), options)).toBe(
+			encodeDeterministicId(digest(1), {}),
+		);
+		expect(
+			encodeDeterministicId(digest(1), options, {
+				model: "verification",
+				objectIdKeys: false,
+			}),
+		).toBe(encodeDeterministicId(digest(1), {}));
+	});
+
+	it("detects ObjectId keys from the adapter provider", () => {
+		expect(usesObjectIdKeys({ options: { provider: "mongodb" } })).toBe(true);
+		expect(usesObjectIdKeys({ options: { provider: "postgresql" } })).toBe(
+			false,
+		);
+		expect(usesObjectIdKeys({})).toBe(false);
+	});
 
 	it("formats a uuid when ids are uuids", () => {
 		const id = encodeDeterministicId(digest(1), {

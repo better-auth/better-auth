@@ -1,5 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { encodeDeterministicId } from "@better-auth/core/db/internal";
+import {
+	encodeDeterministicId,
+	usesObjectIdKeys,
+} from "@better-auth/core/db/internal";
 import {
 	CLIENT_ASSERTION_TYPE,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
@@ -414,6 +417,10 @@ export async function consumeClientAssertion(
 	const jtiId = encodeDeterministicId(
 		new Uint8Array(jtiDigest).slice(0, 24),
 		ctx.context.options,
+		{
+			model: "oauthClientAssertion",
+			objectIdKeys: usesObjectIdKeys(ctx.context.adapter),
+		},
 	);
 	try {
 		await ctx.context.adapter.create({
