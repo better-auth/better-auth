@@ -2044,6 +2044,7 @@ describe("oauth authorize - default scopes when scope is omitted", async () => {
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
 				scopes: ["openid", "profile", "files:read", "members:write"],
 				clientRegistrationDefaultScopes: ["openid", "files:read"],
 				clientRegistrationAllowedScopes: [
@@ -2056,6 +2057,14 @@ describe("oauth authorize - default scopes when scope is omitted", async () => {
 		],
 	});
 	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
 	const unauthenticatedClient = createAuthClient({
 		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
@@ -2064,20 +2073,11 @@ describe("oauth authorize - default scopes when scope is omitted", async () => {
 		},
 	});
 
-	it("falls back to the operator default scopes, not the client's whole persisted set", async () => {
-		const client = await auth.api.adminCreateOAuthClient({
-			headers,
-			body: {
-				redirect_uris: ["http://localhost:5000/callback"],
-				application_type: "native",
-			},
-		});
-		expect(client?.client_id).toBeDefined();
-
+	async function assignedScopeFor(clientId: string) {
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.search = new URLSearchParams({
 			response_type: "code",
-			client_id: client.client_id,
+			client_id: clientId,
 			redirect_uri: "http://localhost:5000/callback",
 			code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
 			code_challenge_method: "S256",
@@ -2091,20 +2091,60 @@ describe("oauth authorize - default scopes when scope is omitted", async () => {
 		});
 		expect(loginRedirectUrl).toContain("/login");
 		const redirectUrl = new URL(loginRedirectUrl, authServerBaseUrl);
-		const assignedScope = redirectUrl.searchParams.get("scope") ?? "";
+		return redirectUrl.searchParams.get("scope") ?? "";
+	}
+
+	it("falls back to the operator default scopes, not the client's whole persisted set", async () => {
+		const registered = await client.oauth2.register({
+			redirect_uris: ["http://localhost:5000/callback"],
+			token_endpoint_auth_method: "client_secret_post",
+			application_type: "native",
+		});
+		expect(registered.error).toBeNull();
+		// Registration persists the union of defaults and allowed scopes as the
+		// client's capability set.
+		expect(registered.data?.scope?.split(" ")).toEqual([
+			"openid",
+			"files:read",
+			"members:write",
+		]);
+
+		const assignedScope = await assignedScopeFor(registered.data!.client_id);
 		expect(assignedScope.split(" ")).toEqual(["openid", "files:read"]);
 		expect(assignedScope).not.toContain("members:write");
+	});
+
+	it("intersects the defaults with a narrowed persisted set", async () => {
+		const registered = await client.oauth2.register({
+			redirect_uris: ["http://localhost:5000/callback"],
+			token_endpoint_auth_method: "client_secret_post",
+			application_type: "native",
+		});
+		expect(registered.error).toBeNull();
+		// The operator later narrows the client's persisted set, dropping one of
+		// the default scopes it was registered with.
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.data!.client_id,
+				update: { scope: "openid members:write" },
+			},
+		});
+
+		const assignedScope = await assignedScopeFor(registered.data!.client_id);
+		expect(assignedScope).toBe("openid");
 	});
 });
 
 describe("oauth authorize - empty registration default scopes", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
 			oauthProvider({
 				loginPage: "/login",
 				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
 				scopes: ["openid", "profile", "files:read", "members:write"],
 				clientRegistrationDefaultScopes: [],
 				clientRegistrationAllowedScopes: [
@@ -2117,6 +2157,14 @@ describe("oauth authorize - empty registration default scopes", async () => {
 		],
 	});
 	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
 	const unauthenticatedClient = createAuthClient({
 		plugins: [oauthProviderClient()],
 		baseURL: authServerBaseUrl,
@@ -2126,19 +2174,17 @@ describe("oauth authorize - empty registration default scopes", async () => {
 	});
 
 	it("assigns no scopes when the operator configured an empty default list", async () => {
-		const client = await auth.api.adminCreateOAuthClient({
-			headers,
-			body: {
-				redirect_uris: ["http://localhost:5000/callback"],
-				application_type: "native",
-			},
+		const registered = await client.oauth2.register({
+			redirect_uris: ["http://localhost:5000/callback"],
+			token_endpoint_auth_method: "client_secret_post",
+			application_type: "native",
 		});
-		expect(client?.client_id).toBeDefined();
+		expect(registered.error).toBeNull();
 
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.search = new URLSearchParams({
 			response_type: "code",
-			client_id: client.client_id,
+			client_id: registered.data!.client_id,
 			redirect_uri: "http://localhost:5000/callback",
 			code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
 			code_challenge_method: "S256",
