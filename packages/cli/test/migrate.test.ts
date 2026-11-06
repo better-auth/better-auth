@@ -6,6 +6,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 describe("migrate base auth instance", () => {
 	const db = new Database(":memory:");
 

@@ -6,6 +6,9 @@ import prompts from "prompts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ai } from "../src/commands/ai";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 vi.mock(import("node:child_process"), () => ({
 	execSync: vi.fn(),
 }));

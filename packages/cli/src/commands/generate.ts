@@ -9,11 +9,11 @@ import {
 import { getAdapter } from "better-auth/db/adapter";
 import chalk from "chalk";
 import { Command } from "commander";
-import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
 import { generateSchema } from "../generators";
 import { getConfig } from "../utils/get-config";
+import { prompt } from "../utils/prompt";
 
 function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 	// Map dialect to provider format for each adapter
@@ -248,15 +248,21 @@ async function generateAction(opts: any) {
 	if (schema.overwrite) {
 		let confirm = options.y || options.yes;
 		if (!confirm) {
-			const response = await prompts({
-				type: "confirm",
-				name: "confirm",
-				message: `The file ${
-					schema.fileName
-				} already exists. Do you want to ${chalk.yellow(
-					`${schema.overwrite ? "overwrite" : "append"}`,
-				)} the schema to the file?`,
-			});
+			const response = await prompt(
+				{
+					type: "confirm",
+					name: "confirm",
+					message: `The file ${
+						schema.fileName
+					} already exists. Do you want to ${chalk.yellow(
+						`${schema.overwrite ? "overwrite" : "append"}`,
+					)} the schema to the file?`,
+				},
+				{
+					action: `overwrite ${schema.fileName}`,
+					input: "--yes",
+				},
+			);
 			confirm = response.confirm;
 		}
 
@@ -318,13 +324,19 @@ async function generateAction(opts: any) {
 	let confirm = options.yes;
 
 	if (!confirm) {
-		const response = await prompts({
-			type: "confirm",
-			name: "confirm",
-			message: `Do you want to generate the schema to ${chalk.yellow(
-				schema.fileName,
-			)}?`,
-		});
+		const response = await prompt(
+			{
+				type: "confirm",
+				name: "confirm",
+				message: `Do you want to generate the schema to ${chalk.yellow(
+					schema.fileName,
+				)}?`,
+			},
+			{
+				action: `generate the schema to ${schema.fileName}`,
+				input: "--yes",
+			},
+		);
 		confirm = response.confirm;
 	}
 

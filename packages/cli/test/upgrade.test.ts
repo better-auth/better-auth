@@ -7,6 +7,9 @@ import { detectPackageManager } from "../src/utils/check-package-managers";
 import { getPackageInfo } from "../src/utils/get-package-info";
 import { installDependencies } from "../src/utils/install-dependencies";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 vi.mock(import("../src/version"), () => ({
 	cliVersion: "1.7.0-rc.4",
 }));

@@ -7,6 +7,9 @@ import { createAdminAction } from "../src/commands/create-admin";
 import { migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 vi.mock("prompts", () => ({
 	default: vi.fn(),
 }));
@@ -250,12 +253,10 @@ describe("create-admin", () => {
 		).rejects.toThrow();
 		expect(process.exit).toHaveBeenNthCalledWith(1, 130);
 
-		expect(prompts).toHaveBeenCalledWith(
-			expect.objectContaining({
-				type: "confirm",
-				name: "confirmed",
-			}),
-		);
+		expect(vi.mocked(prompts).mock.lastCall?.[0]).toMatchObject({
+			type: "confirm",
+			name: "confirmed",
+		});
 		const count = db.prepare("SELECT COUNT(*) as count FROM user").get() as {
 			count: number;
 		};

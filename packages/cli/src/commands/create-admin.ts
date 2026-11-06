@@ -4,9 +4,9 @@ import { APIError } from "@better-auth/core/error";
 import { betterAuth } from "better-auth";
 import chalk from "chalk";
 import { Command } from "commander";
-import prompts from "prompts";
 import * as z from "zod";
 import { getConfig } from "../utils/get-config";
+import { prompt } from "../utils/prompt";
 
 type CreateUserApi = (input: {
 	body: {
@@ -57,25 +57,33 @@ async function resolveRequiredInput(options: {
 	let { email, password } = options;
 
 	if (!email) {
-		const response = await prompts(
+		const response = await prompt(
 			{
 				type: "text",
 				name: "email",
 				message: "Admin email",
 			},
-			{ onCancel: cancel },
+			{
+				action: "create an admin user",
+				input: "--email",
+				onCancel: cancel,
+			},
 		);
 		email = response.email;
 	}
 
 	if (!password) {
-		const response = await prompts(
+		const response = await prompt(
 			{
 				type: "password",
 				name: "password",
 				message: "Admin password",
 			},
-			{ onCancel: cancel },
+			{
+				action: "create an admin user",
+				input: "--password",
+				onCancel: cancel,
+			},
 		);
 		password = response.password;
 	}
@@ -164,14 +172,20 @@ export async function createAdminAction(opts: unknown) {
 			),
 		);
 	if (totalUsers > 0 && !options.force && !options.yes) {
-		const response = await prompts({
-			type: "confirm",
-			name: "confirmed",
-			message: `Found ${totalUsers} existing user${
-				totalUsers === 1 ? "" : "s"
-			}. Create an admin user anyway?`,
-			initial: false,
-		});
+		const response = await prompt(
+			{
+				type: "confirm",
+				name: "confirmed",
+				message: `Found ${totalUsers} existing user${
+					totalUsers === 1 ? "" : "s"
+				}. Create an admin user anyway?`,
+				initial: false,
+			},
+			{
+				action: "create an admin user while users exist",
+				input: "--yes",
+			},
+		);
 		if (!response.confirmed) cancel();
 	}
 
