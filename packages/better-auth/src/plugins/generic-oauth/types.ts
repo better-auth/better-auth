@@ -247,7 +247,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	authentication?: ("basic" | "post") | undefined;
 	/**
-	 * Custom headers to include in the discovery request.
+	 * Custom headers to include in the discovery request and same-origin JWKS requests.
 	 * Useful for providers like Epic that require specific headers (e.g., Epic-Client-ID).
 	 */
 	discoveryHeaders?: Record<string, string> | undefined;
