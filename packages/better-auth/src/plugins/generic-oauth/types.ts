@@ -241,6 +241,13 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	disableSignUp?: boolean | undefined;
 	/**
+	 * Reject a client-submitted `idToken` on `/sign-in/social` and `/link-social`
+	 * for this provider, so it only signs in through the authorization code
+	 * redirect.
+	 * @default false
+	 */
+	disableIdTokenSignIn?: boolean | undefined;
+	/**
 	 * Authentication method for token requests.
 	 * "basic" requires clientSecret.
 	 * @default "post"

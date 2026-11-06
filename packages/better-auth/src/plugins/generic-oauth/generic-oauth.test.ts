@@ -3070,10 +3070,12 @@ describe("oauth2", async () => {
 				issuer: "https://dev-12345.okta.com/oauth2/default",
 				pkce: true,
 				disableImplicitSignUp: true,
+				disableIdTokenSignIn: true,
 			});
 
 			expect(oktaConfig.pkce).toBe(true);
 			expect(oktaConfig.disableImplicitSignUp).toBe(true);
+			expect(oktaConfig.disableIdTokenSignIn).toBe(true);
 		});
 	});
 
@@ -5428,6 +5430,106 @@ describe("oauth2", async () => {
 					).toBe(0);
 				},
 			);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12152
+		 */
+		it("should reject a client-submitted id_token when disableIdTokenSignIn is set", async () => {
+			const discoveryUrl = `http://localhost:${port}/.well-known/openid-configuration`;
+			const { client, signInWithTestUser, customFetchImpl, cookieSetter } =
+				await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "id-token-enabled",
+									discoveryUrl,
+									clientId,
+									clientSecret,
+									pkce: true,
+								},
+								{
+									providerId: "id-token-disabled",
+									discoveryUrl,
+									clientId,
+									clientSecret,
+									pkce: true,
+									disableIdTokenSignIn: true,
+								},
+							],
+						}),
+					],
+				});
+			const token = await server.issuer.buildToken({
+				scopesOrTransform: (_header, payload) => {
+					Object.assign(payload, {
+						aud: clientId,
+						sub: "disabled-id-token-user",
+						email: "disabled-id-token@test.com",
+						email_verified: true,
+						name: "Disabled Id Token",
+					});
+				},
+			});
+
+			const enabled = await client.signIn.social({
+				provider: "id-token-enabled",
+				idToken: { token },
+			});
+			expect(enabled.error).toBeNull();
+
+			const signIn = await client.signIn.social({
+				provider: "id-token-disabled",
+				idToken: { token },
+			});
+			expect(signIn.error?.status).toBe(404);
+			expect(signIn.error?.code).toBe("ID_TOKEN_NOT_SUPPORTED");
+
+			const { headers } = await signInWithTestUser();
+			const link = await client.linkSocial(
+				{
+					provider: "id-token-disabled",
+					idToken: { token },
+				},
+				{ headers },
+			);
+			expect(link.error?.status).toBe(404);
+			expect(link.error?.code).toBe("ID_TOKEN_NOT_SUPPORTED");
+
+			// The redirect flow still verifies the token endpoint's id_token.
+			const addClaims = (token: { payload: Record<string, unknown> }) => {
+				Object.assign(token.payload, {
+					email: "disabled-id-token-redirect@test.com",
+					email_verified: true,
+					name: "Disabled Id Token Redirect",
+				});
+			};
+			server.service.on("beforeTokenSigning", addClaims);
+			try {
+				const stateHeaders = new Headers();
+				const redirect = await client.signIn.social({
+					provider: "id-token-disabled",
+					callbackURL: "http://localhost:3000/dashboard",
+					newUserCallbackURL: "http://localhost:3000/new_user",
+					fetchOptions: { onSuccess: cookieSetter(stateHeaders) },
+				});
+				expect(redirect.error).toBeNull();
+				const callback = await simulateOAuthFlow(
+					redirect.data?.url || "",
+					stateHeaders,
+					customFetchImpl,
+				);
+				expect(callback.callbackURL).toBe("http://localhost:3000/new_user");
+				const session = await client.getSession({
+					fetchOptions: { headers: callback.headers },
+				});
+				expect(session.data?.user.email).toBe(
+					"disabled-id-token-redirect@test.com",
+				);
+			} finally {
+				server.service.off("beforeTokenSigning", addClaims);
+			}
 		});
 
 		it("should keep the decode posture for providers without discovery", async () => {
