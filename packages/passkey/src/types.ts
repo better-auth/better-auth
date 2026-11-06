@@ -113,11 +113,18 @@ export interface PasskeyOptions {
 	/**
 	 * The origin, or list of origins, where registrations and authentications
 	 * run, without a trailing `/`. Set it when `rpID` is set and a wildcard in
-	 * `baseURL.allowedHosts` covers it.
+	 * `baseURL.allowedHosts` covers it. May be a function of the request (sync
+	 * or async), matching `trustedOrigins`, so multi-tenant hosts can vouch for
+	 * an exact origin per ceremony.
 	 *
 	 * @default the origin of `baseURL`, plus a frontend origin listed exactly in `trustedOrigins`
 	 */
-	origin?: (string | string[] | null) | undefined;
+	origin?:
+		| (string | string[] | null)
+		| ((
+				request: Request,
+		  ) => (string | string[] | null) | Promise<string | string[] | null>)
+		| undefined;
 	/**
 	 * Allow customization of the authenticatorSelection options
 	 * during passkey registration.
