@@ -294,21 +294,35 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 		  }
 		| undefined,
 ) {
+	const merged = Object.fromEntries(
+		Object.entries(schema).map(([table, definition]) => [
+			table,
+			{
+				...definition,
+				fields: Object.fromEntries(
+					Object.entries(definition.fields).map(([name, field]) => [
+						name,
+						{ ...field },
+					]),
+				),
+			},
+		]),
+	) as S;
 	if (!newSchema) {
-		return schema;
+		return merged;
 	}
 	for (const table in newSchema) {
 		const newModelName = newSchema[table]?.modelName;
 		if (newModelName) {
-			schema[table]!.modelName = newModelName;
+			merged[table]!.modelName = newModelName;
 		}
-		for (const field in schema[table]!.fields) {
+		for (const field in merged[table]!.fields) {
 			const newField = newSchema[table]?.fields?.[field];
 			if (!newField) {
 				continue;
 			}
-			schema[table]!.fields[field]!.fieldName = newField;
+			merged[table]!.fields[field]!.fieldName = newField;
 		}
 	}
-	return schema;
+	return merged;
 }
