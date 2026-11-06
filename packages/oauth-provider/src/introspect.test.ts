@@ -3,6 +3,7 @@ import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	refreshAccessTokenRequest,
 	verifyAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -611,6 +612,55 @@ describe("oauth introspect", async () => {
 			iss: authServerBaseUrl,
 			exp: expect.any(Number),
 			iat: expect.any(Number),
+		});
+		expect(introspection.data?.sid).toBeUndefined();
+	});
+
+	it("reports a jwt access_token refreshed after the session expired as active", async () => {
+		const { headers: testHeaders } = await signInWithTestUser();
+		const tokens = await getTokens(
+			undefined,
+			{ resource: validResource },
+			testHeaders,
+		);
+		const current = await auth.api.getSession({ headers: testHeaders });
+		const context = await auth.$context;
+		await context.internalAdapter.updateSession(current!.session.token, {
+			expiresAt: new Date(Date.now() - 1000),
+		});
+
+		const refresh = await refreshAccessTokenRequest({
+			refreshToken: tokens.data?.refresh_token!,
+			options: {
+				clientId: oauthClient?.client_id!,
+				clientSecret: oauthClient?.client_secret!,
+				redirectURI: redirectUri,
+			},
+			resource: validResource,
+		});
+		const refreshed = await client.$fetch<{ access_token?: string }>(
+			"/oauth2/token",
+			{ method: "POST", body: refresh.body, headers: refresh.headers },
+		);
+		expect(refreshed.data?.access_token).toBeDefined();
+
+		const introspection = await client.oauth2.introspect(
+			{
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				token: refreshed.data?.access_token!,
+				token_type_hint: "access_token",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(introspection.data).toMatchObject({
+			active: true,
+			client_id: oauthClient?.client_id,
 		});
 		expect(introspection.data?.sid).toBeUndefined();
 	});
