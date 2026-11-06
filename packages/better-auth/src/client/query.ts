@@ -126,7 +126,7 @@ export const useAuthQuery = <T>(
 					if (requestId === latestRequestId) {
 						const currentValue = value.get();
 						value.set({
-							isPending: currentValue.data === null,
+							isPending: currentValue.isPending,
 							data: currentValue.data,
 							error: null,
 							isRefetching: true,
