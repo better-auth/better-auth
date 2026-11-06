@@ -581,7 +581,8 @@ function NavigationFolder({
 						initial={{ opacity: 0, height: 0 }}
 						animate={{ opacity: 1, height: "auto" }}
 						exit={{ opacity: 0, height: 0 }}
-						onAnimationComplete={onAnimationComplete}
+						// Only re-scroll for the route's folder so manual browsing keeps its position.
+						onAnimationComplete={active ? onAnimationComplete : undefined}
 						className="overflow-hidden"
 					>
 						<NavigationNodes
