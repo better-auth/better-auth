@@ -1,7 +1,15 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	onTestFinished,
+	vi,
+} from "vitest";
 import { cliPath } from "./utils";
 
 const projects: string[] = [];
@@ -37,6 +45,10 @@ function startCli(args: string[], cwd: string) {
 	const child = spawn(process.execPath, [cliPath, ...args], {
 		cwd,
 		env: { ...process.env, BETTER_AUTH_TELEMETRY_DISABLED: "true" },
+	});
+	// A failed or timed-out test would otherwise leave the CLI running.
+	onTestFinished(() => {
+		child.kill();
 	});
 	let output = "";
 	child.stdout.on("data", (chunk) => {
@@ -90,7 +102,8 @@ describe("exit codes", () => {
 		},
 	);
 
-	it.each([
+	// Windows has no POSIX signals, so kill() terminates without running the handler.
+	it.skipIf(process.platform === "win32").each([
 		["SIGINT", 130],
 		["SIGTERM", 143],
 	] as const)("exits %s with %i", async (signal, expected) => {
