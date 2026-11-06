@@ -37,7 +37,7 @@ export const fr: TranslationDictionary = {
 		"L'utilisateur a déjà un mot de passe. Fournissez-le pour supprimer le compte.",
 	VERIFICATION_EMAIL_NOT_ENABLED: "L'e-mail de vérification n'est pas activé",
 	EMAIL_ALREADY_VERIFIED: "L'adresse e-mail est déjà vérifiée",
-	EMAIL_MISMATCH: "Discordance d'adresses e-mail",
+	EMAIL_MISMATCH: "Discordance d'addresses e-mail",
 	SESSION_NOT_FRESH: "La session n'est pas récente",
 	LINKED_ACCOUNT_ALREADY_EXISTS: "Le compte lié existe déjà",
 	VALIDATION_ERROR: "Erreur de validation",
