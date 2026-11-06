@@ -1899,7 +1899,7 @@ export interface SchemaClient<
 	/**
 	 * Additional metadata about the client.
 	 */
-	metadata?: string; // in JSON format
+	metadata?: Record<string, unknown> | string; // a JSON string on older rows
 }
 
 export interface OAuthOpaqueAccessToken<
