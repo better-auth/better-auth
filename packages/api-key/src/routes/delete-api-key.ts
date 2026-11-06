@@ -1,5 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
@@ -136,7 +137,7 @@ export function deleteApiKey({
 			try {
 				if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
 					await deleteApiKeyFromStorage(ctx, apiKey, opts);
-					await ctx.context.adapter.delete<ApiKey>({
+					await (await getCurrentAdapter(ctx.context.adapter)).delete<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [
 							{
@@ -146,7 +147,7 @@ export function deleteApiKey({
 						],
 					});
 				} else if (opts.storage === "database") {
-					await ctx.context.adapter.delete<ApiKey>({
+					await (await getCurrentAdapter(ctx.context.adapter)).delete<ApiKey>({
 						model: API_KEY_TABLE_NAME,
 						where: [
 							{

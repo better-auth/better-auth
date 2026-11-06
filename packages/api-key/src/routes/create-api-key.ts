@@ -1,5 +1,6 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -500,7 +501,10 @@ export function createApiKey({
 			let apiKey: ApiKey;
 
 			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
-				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+				apiKey = await (await getCurrentAdapter(ctx.context.adapter)).create<
+					Omit<ApiKey, "id">,
+					ApiKey
+				>({
 					model: API_KEY_TABLE_NAME,
 					data: data,
 				});
@@ -516,7 +520,10 @@ export function createApiKey({
 				} as ApiKey;
 				await setApiKey(ctx, apiKey, opts);
 			} else {
-				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+				apiKey = await (await getCurrentAdapter(ctx.context.adapter)).create<
+					Omit<ApiKey, "id">,
+					ApiKey
+				>({
 					model: API_KEY_TABLE_NAME,
 					data: data,
 				});
