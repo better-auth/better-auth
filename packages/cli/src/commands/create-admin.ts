@@ -143,30 +143,29 @@ export async function createAdminAction(opts: unknown) {
 		emailVerified: options.emailVerified,
 	};
 
-	try {
-		const context = await auth.$context;
-		const totalUsers = await context.internalAdapter.countTotalUsers();
-		if (totalUsers > 0 && !options.force && !options.yes) {
-			const response = await prompts({
-				type: "confirm",
-				name: "confirmed",
-				message: `Found ${totalUsers} existing user${
-					totalUsers === 1 ? "" : "s"
-				}. Create an admin user anyway?`,
-				initial: false,
-			});
-			if (!response.confirmed) {
-				console.log("Create admin cancelled.");
-				process.exit(0);
-				return;
-			}
-		}
-	} catch (error) {
-		exitWithError(
-			`Failed to inspect existing users. Make sure your database is reachable and your Better Auth schema is migrated before running this command.${
-				error instanceof Error ? `\n${error.message}` : ""
-			}`,
+	const totalUsers = await auth.$context
+		.then((context) => context.internalAdapter.countTotalUsers())
+		.catch((error: unknown) =>
+			exitWithError(
+				`Failed to inspect existing users. Make sure your database is reachable and your Better Auth schema is migrated before running this command.${
+					error instanceof Error ? `\n${error.message}` : ""
+				}`,
+			),
 		);
+	if (totalUsers > 0 && !options.force && !options.yes) {
+		const response = await prompts({
+			type: "confirm",
+			name: "confirmed",
+			message: `Found ${totalUsers} existing user${
+				totalUsers === 1 ? "" : "s"
+			}. Create an admin user anyway?`,
+			initial: false,
+		});
+		if (!response.confirmed) {
+			console.log("Create admin cancelled.");
+			process.exit(0);
+			return;
+		}
 	}
 
 	try {
