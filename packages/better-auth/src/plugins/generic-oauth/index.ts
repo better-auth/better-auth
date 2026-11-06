@@ -368,12 +368,14 @@ export const genericOAuth = <const ID extends string>(
 			// checks `alg` before it looks up the key. Read discovery again, shared by
 			// concurrent requests and at most once per cooldown, when a token's `alg` is
 			// not on the list. Resolves to whether the token's `alg` is now allowed.
-			let algorithmsRefresh: Promise<boolean> | undefined;
+			let algorithmsRefresh: Promise<void> | undefined;
 			let algorithmsRefreshedAt: number | undefined;
 			const refreshIdTokenAlgorithms = async (idToken: string) => {
 				const config = idTokenConfig;
 				if (!c.discoveryUrl || !config || !("jwks" in config)) return false;
 				if (!config.algorithms) return false;
+				// Only a compact JWS reaches signature checks, so only it can pass on retry.
+				if (idToken.split(".").length !== 3) return false;
 				let header: ReturnType<typeof decodeProtectedHeader>;
 				try {
 					header = decodeProtectedHeader(idToken);
@@ -382,38 +384,39 @@ export const genericOAuth = <const ID extends string>(
 				}
 				const alg = header.alg;
 				if (!alg || config.algorithms.includes(alg)) return false;
-				if (algorithmsRefresh !== undefined) return algorithmsRefresh;
-				if (
-					algorithmsRefreshedAt !== undefined &&
-					Date.now() - algorithmsRefreshedAt <
-						ID_TOKEN_ALGORITHMS_REFRESH_COOLDOWN_MS
-				) {
-					return false;
+				if (algorithmsRefresh === undefined) {
+					if (
+						algorithmsRefreshedAt !== undefined &&
+						Date.now() - algorithmsRefreshedAt <
+							ID_TOKEN_ALGORITHMS_REFRESH_COOLDOWN_MS
+					) {
+						return false;
+					}
+					algorithmsRefreshedAt = Date.now();
+					algorithmsRefresh = fetchDiscovery(
+						c.discoveryUrl,
+						c.discoveryHeaders,
+						DISCOVERY_RETRY_TIMEOUT_MS,
+					)
+						.catch(() => null)
+						.then((discovered) => {
+							const signingAlgs =
+								discovered?.id_token_signing_alg_values_supported;
+							if (
+								discovered?.issuer === config.issuer &&
+								Array.isArray(signingAlgs) &&
+								signingAlgs.length > 0
+							) {
+								config.algorithms = signingAlgs;
+							}
+						})
+						.finally(() => {
+							algorithmsRefresh = undefined;
+						});
 				}
-				algorithmsRefreshedAt = Date.now();
-				algorithmsRefresh = fetchDiscovery(
-					c.discoveryUrl,
-					c.discoveryHeaders,
-					DISCOVERY_RETRY_TIMEOUT_MS,
-				)
-					.catch(() => null)
-					.then((discovered) => {
-						const signingAlgs =
-							discovered?.id_token_signing_alg_values_supported;
-						if (
-							discovered?.issuer !== config.issuer ||
-							!Array.isArray(signingAlgs) ||
-							signingAlgs.length === 0
-						) {
-							return false;
-						}
-						config.algorithms = signingAlgs;
-						return signingAlgs.includes(alg);
-					})
-					.finally(() => {
-						algorithmsRefresh = undefined;
-					});
-				return algorithmsRefresh;
+				// Each caller checks its own `alg` against the refreshed list.
+				await algorithmsRefresh;
+				return config.algorithms?.includes(alg) === true;
 			};
 
 			const accountSubject = c.accountSubject;
