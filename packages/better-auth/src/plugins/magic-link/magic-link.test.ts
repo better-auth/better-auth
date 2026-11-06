@@ -1000,3 +1000,131 @@ describe("magic link callback URL encoding", async () => {
 		});
 	});
 });
+
+describe("magic link when the user is created concurrently", async () => {
+	const email = "concurrent-magic-link@email.com";
+	const rejectedEmail = "rejected-magic-link@email.com";
+	const failedSetupEmail = "failed-setup-magic-link@email.com";
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+	let createRacingUser = false;
+	const { auth, customFetchImpl, sessionSetter } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					verificationEmail = data;
+				},
+			}),
+		],
+		databaseHooks: {
+			user: {
+				create: {
+					// Stands in for a concurrent request that creates the same user
+					// between the lookup and the insert.
+					before: async (user) => {
+						if (user.email === rejectedEmail) {
+							throw new Error("rejected by before hook");
+						}
+						if (!createRacingUser || user.email !== email) {
+							return;
+						}
+						createRacingUser = false;
+						const ctx = await auth.$context;
+						await ctx.adapter.create({
+							model: "user",
+							data: {
+								email,
+								name: "Created concurrently",
+								emailVerified: false,
+								createdAt: new Date(),
+								updatedAt: new Date(),
+							},
+						});
+					},
+					after: async (user) => {
+						if (user.email === failedSetupEmail) {
+							throw new Error("rejected by after hook");
+						}
+					},
+				},
+			},
+		},
+	});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12094
+	 */
+	it("should sign in the existing user instead of failing on a unique violation", async () => {
+		await client.signIn.magicLink({ email, name: "test" });
+		createRacingUser = true;
+
+		const headers = new Headers();
+		await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const session = await client.getSession({ fetchOptions: { headers } });
+
+		expect(session.data?.user).toMatchObject({
+			name: "Created concurrently",
+			email,
+			emailVerified: true,
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12094
+	 */
+	it("should not create a session when creating the user fails and no user exists", async () => {
+		await client.signIn.magicLink({ email: rejectedEmail, name: "test" });
+
+		const headers = new Headers();
+		await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const session = await client.getSession({ fetchOptions: { headers } });
+
+		expect(session.data).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12094
+	 */
+	it("should not create a session when a user.create.after hook throws after our own insert", async () => {
+		await client.signIn.magicLink({ email: failedSetupEmail, name: "test" });
+
+		const headers = new Headers();
+		await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+		const session = await client.getSession({ fetchOptions: { headers } });
+
+		expect(session.data).toBeNull();
+	});
+});

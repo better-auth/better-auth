@@ -3124,3 +3124,105 @@ describe("email-otp send origin/CSRF protection", async () => {
 		expect(sendVerificationOTP).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe("sign-in when the user is created concurrently", async () => {
+	const email = "concurrent-signup@domain.com";
+	const rejectedEmail = "rejected-signup@domain.com";
+	const failedSetupEmail = "failed-setup-signup@domain.com";
+	let otp = "";
+	let createRacingUser = false;
+	const { client, auth } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						// Stands in for a concurrent request that creates the same user
+						// between the lookup and the insert.
+						before: async (user) => {
+							if (user.email === rejectedEmail) {
+								throw new Error("rejected by before hook");
+							}
+							if (!createRacingUser || user.email !== email) {
+								return;
+							}
+							createRacingUser = false;
+							const ctx = await auth.$context;
+							await ctx.adapter.create({
+								model: "user",
+								data: {
+									email,
+									name: "Created concurrently",
+									emailVerified: false,
+									createdAt: new Date(),
+									updatedAt: new Date(),
+								},
+							});
+						},
+						after: async (user) => {
+							if (user.email === failedSetupEmail) {
+								throw new Error("rejected by after hook");
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12094
+	 */
+	it("should sign in the existing user instead of failing on a unique violation", async () => {
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		createRacingUser = true;
+
+		const res = await client.signIn.emailOtp({ email, otp });
+
+		expect(res.error).toBeNull();
+		expect(res.data?.token).toBeDefined();
+		expect(res.data?.user.email).toBe(email);
+		expect(res.data?.user.name).toBe("Created concurrently");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12094
+	 */
+	it("should rethrow when creating the user fails and no user exists", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: rejectedEmail,
+			type: "sign-in",
+		});
+
+		const res = await client.signIn.emailOtp({ email: rejectedEmail, otp });
+
+		expect(res.data).toBeNull();
+		expect(res.error).not.toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12094
+	 */
+	it("should not sign in when a user.create.after hook throws after our own insert", async () => {
+		await client.emailOtp.sendVerificationOtp({
+			email: failedSetupEmail,
+			type: "sign-in",
+		});
+
+		const res = await client.signIn.emailOtp({ email: failedSetupEmail, otp });
+
+		expect(res.data).toBeNull();
+		expect(res.error).not.toBeNull();
+	});
+});
