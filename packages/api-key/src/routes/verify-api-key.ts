@@ -584,14 +584,8 @@ export function verifyApiKey({
 					});
 				}
 
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "INVALID_API_KEY" as const,
-					},
-					key: null,
-				});
+				// Not a verdict on the key (e.g. the database is unreachable), so it must not read as an invalid key.
+				throw error;
 			}
 
 			const { key: _, ...returningApiKey } = apiKey ?? {
