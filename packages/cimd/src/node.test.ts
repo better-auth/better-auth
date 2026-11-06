@@ -165,22 +165,123 @@ describe("Node CIMD metadata transport", () => {
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10810
+	 * @see https://github.com/better-auth/better-auth/issues/12224
 	 */
 	it("fetches metadata when Node requests all addresses", async () => {
-		mocks.lookup.mockResolvedValue([
-			{ address: "93.184.216.34", family: 4 },
+		const addresses = [
 			{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
-		]);
-		mockHttpsResponse({
-			body: "ok",
-			lookupOptions: { all: true },
-		});
+			{ address: "93.184.216.34", family: 4 },
+		];
+		mocks.lookup.mockResolvedValue(addresses);
+		let lookupResult: MockLookupAddress[] | undefined;
+		mocks.request.mockImplementationOnce(
+			(
+				_url: URL,
+				requestOptions: {
+					lookup: (
+						hostname: string,
+						lookupOptions: { all?: boolean },
+						callback: (
+							error: Error | null,
+							result: string | MockLookupAddress[],
+							family?: number,
+						) => void,
+					) => void;
+				},
+				onResponse: (response: Readable) => void,
+			) => {
+				const request = new EventEmitter() as EventEmitter & {
+					end: () => void;
+					destroy: (error?: Error) => void;
+				};
+				request.end = () => {
+					requestOptions.lookup(
+						"client.example.com",
+						{ all: true },
+						(error, result) => {
+							if (error) {
+								request.emit("error", error);
+								return;
+							}
+							lookupResult = result as MockLookupAddress[];
+							const response = Readable.from([
+								Buffer.from("ok"),
+							]) as Readable & {
+								headers: Record<string, string>;
+								statusCode: number;
+								statusMessage: string;
+							};
+							response.headers = { "content-type": "text/plain" };
+							response.statusCode = 200;
+							response.statusMessage = "OK";
+							onResponse(response);
+						},
+					);
+				};
+				request.destroy = () => {};
+				return request;
+			},
+		);
 
 		const response = await fetchClientMetadataResource(
 			"https://client.example.com/client.json",
 		);
 
 		expect(await response.text()).toBe("ok");
+		expect(lookupResult).toEqual(addresses);
+	});
+
+	it("prefers IPv4 when Node requests a single pinned address", async () => {
+		mocks.lookup.mockResolvedValue([
+			{ address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },
+			{ address: "93.184.216.34", family: 4 },
+		]);
+		let pinnedAddress: string | undefined;
+		mockHttpsResponse({ body: "ok" });
+		mocks.request.mockImplementationOnce(
+			(
+				url: URL,
+				options: {
+					lookup: (
+						hostname: string,
+						options: object,
+						callback: (
+							error: Error | null,
+							address: string,
+							family: number,
+						) => void,
+					) => void;
+				},
+				onResponse: (response: Readable) => void,
+			) => {
+				const request = new EventEmitter() as EventEmitter & {
+					end: () => void;
+					destroy: (error?: Error) => void;
+				};
+				request.end = () => {
+					options.lookup(url.hostname, {}, (_error, address) => {
+						pinnedAddress = address;
+						const response = Readable.from([Buffer.from("ok")]) as Readable & {
+							headers: Record<string, string>;
+							statusCode: number;
+							statusMessage: string;
+						};
+						response.headers = { "content-type": "text/plain" };
+						response.statusCode = 200;
+						response.statusMessage = "OK";
+						onResponse(response);
+					});
+				};
+				request.destroy = () => {};
+				return request;
+			},
+		);
+
+		const response = await fetchClientMetadataResource(
+			"https://client.example.com/client.json",
+		);
+		expect(await response.text()).toBe("ok");
+		expect(pinnedAddress).toBe("93.184.216.34");
 	});
 
 	it("returns redirect responses without following them", async () => {

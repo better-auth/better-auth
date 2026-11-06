@@ -57,7 +57,12 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 			);
 		}
 	}
-	const pinnedAddress = addresses[0] as (typeof addresses)[number];
+	// Prefer IPv4 for the single-address branch (autoSelectFamily off) so dual-stack
+	// hosts without outbound IPv6 still connect. When Node asks for all answers,
+	// return every validated address so family selection can fall back.
+	const pinnedAddress =
+		addresses.find((a) => a.family === 4) ??
+		(addresses[0] as (typeof addresses)[number]);
 
 	const headers = Object.fromEntries(webRequest.headers.entries());
 	headers.host = url.host;
@@ -81,15 +86,16 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 				 * Node requests all lookup results when automatic address-family
 				 * selection is enabled. The callback must receive an address array for
 				 * `all: true`, and the legacy address and family arguments otherwise.
-				 * Both forms return only the previously validated address to preserve
-				 * connection pinning.
+				 * Every address was already validated as public-routable; returning the
+				 * full list lets Node fall back when the first family is unreachable,
+				 * without re-querying DNS (no rebinding window).
 				 *
 				 * @see https://nodejs.org/api/net.html#socketconnectoptions-connectlistener
 				 * @see https://nodejs.org/api/dns.html#dnslookuphostname-options-callback
 				 */
 				lookup: (_hostname, options, callback) => {
 					if (options.all) {
-						callback(null, [pinnedAddress]);
+						callback(null, addresses);
 					} else {
 						callback(null, pinnedAddress.address, pinnedAddress.family);
 					}
