@@ -112,8 +112,9 @@ describe.skipIf(process.platform === "win32")("login and logout", () => {
 			],
 		});
 
-		await run(["login", "--server-url", server.url]);
+		const { stdout } = await run(["login", "--server-url", server.url]);
 
+		expect(stdout).toBe("");
 		expect(server.requests).toEqual([
 			"POST /api/auth/device/code ",
 			"POST /api/auth/device/token ",
