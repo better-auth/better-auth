@@ -259,6 +259,17 @@ export interface InternalAdapter<
 
 	updateAccount(id: string, data: Partial<Account>): Promise<Account>;
 
+	/**
+	 * Update an account only while its stored refresh token is still
+	 * `refreshToken`. The guarded update is atomic, so it returns `null`
+	 * instead of overwriting a token another writer stored first.
+	 */
+	updateAccountIfRefreshTokenMatches(
+		id: string,
+		refreshToken: string,
+		data: Partial<Account>,
+	): Promise<Account | null>;
+
 	createVerificationValue(
 		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 			Partial<Verification>,

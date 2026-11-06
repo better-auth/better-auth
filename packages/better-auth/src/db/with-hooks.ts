@@ -153,6 +153,11 @@ export function getWithHooks(
 						where,
 					})
 				: customUpdated;
+		// A guarded update that matched no row wrote nothing, so there is no
+		// record to hand to the after hooks.
+		if (updated === null && (!customUpdateFn || customUpdateFn.executeMainFn)) {
+			return null;
+		}
 
 		for (const { source, hooks } of hooksEntries) {
 			const toRun = hooks[model]?.update?.after;

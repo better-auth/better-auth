@@ -1354,6 +1354,22 @@ export const createInternalAdapter = (
 			);
 			return account;
 		},
+		updateAccountIfRefreshTokenMatches: async (
+			id: string,
+			refreshToken: string,
+			data: Partial<Account>,
+		) => {
+			const account = await updateWithHooks<Account>(
+				data,
+				[
+					{ field: "id", value: id },
+					{ field: "refreshToken", value: refreshToken },
+				],
+				"account",
+				undefined,
+			);
+			return account;
+		},
 		createVerificationValue: async (
 			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 				Partial<Verification>,
