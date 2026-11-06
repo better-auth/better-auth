@@ -551,4 +551,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/tianhuil.png",
 		},
 	},
+	{
+		name: "@byo-oss/entitlements",
+		url: "https://github.com/byo-oss/entitlements",
+		description:
+			"Plans, features, limits and usage for Better Auth organizations, in your database. One typed plan catalog, race-safe usage counters, and plan state from @better-auth/stripe if you use it.",
+		author: {
+			name: "byo-oss",
+			github: "byo-oss",
+			avatar: "https://github.com/byo-oss.png",
+		},
+	},
 ];
