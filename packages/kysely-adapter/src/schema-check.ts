@@ -115,6 +115,63 @@ export async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
 	return result.rows[0]?.schemaName || "dbo";
 }
 
+/**
+ * Reads the tables in `schemas` with the metadata Kysely's PostgreSQL
+ * introspector reports. That introspector reads every schema and resolves
+ * each one by name, so a schema another connection drops during the read
+ * fails it with "schema does not exist" or "relation does not exist".
+ */
+export async function introspectPostgresTables(
+	db: Kysely<unknown>,
+	schemas: readonly string[],
+): Promise<TableMetadata[]> {
+	if (schemas.length === 0) return [];
+	const { rows } = await sql<{
+		schema: string;
+		table: string;
+		isView: boolean;
+		column: string;
+		dataType: string;
+		isNullable: boolean;
+		hasDefaultValue: boolean;
+		isAutoIncrementing: boolean;
+	}>`
+		SELECT
+			ns.nspname AS "schema",
+			c.relname AS "table",
+			c.relkind = 'v' AS "isView",
+			a.attname AS "column",
+			typ.typname AS "dataType",
+			NOT a.attnotnull AS "isNullable",
+			a.atthasdef AS "hasDefaultValue",
+			pg_catalog.pg_get_serial_sequence(
+				pg_catalog.quote_ident(ns.nspname) || '.' || pg_catalog.quote_ident(c.relname),
+				a.attname
+			) IS NOT NULL AS "isAutoIncrementing"
+		FROM pg_catalog.pg_attribute AS a
+		INNER JOIN pg_catalog.pg_class AS c ON c.oid = a.attrelid
+		INNER JOIN pg_catalog.pg_namespace AS ns ON ns.oid = c.relnamespace
+		INNER JOIN pg_catalog.pg_type AS typ ON typ.oid = a.atttypid
+		WHERE ns.nspname IN (${sql.join(schemas)})
+			AND ns.nspname !~ '^pg_'
+			AND pg_catalog.has_schema_privilege(ns.oid, 'USAGE')
+			AND c.relkind IN ('r', 'v', 'p')
+			AND a.attnum >= 0
+			AND NOT a.attisdropped
+		ORDER BY ns.nspname, c.relname, a.attnum
+	`.execute(db.withoutPlugins());
+	const tables: TableMetadata[] = [];
+	let current: TableMetadata | undefined;
+	for (const { schema, table, isView, column, ...metadata } of rows) {
+		if (current?.schema !== schema || current.name !== table) {
+			current = { name: table, schema, isView, columns: [] };
+			tables.push(current);
+		}
+		current.columns.push({ name: column, ...metadata });
+	}
+	return tables;
+}
+
 async function schemaSearchPath(
 	db: Kysely<unknown>,
 	dbType: KyselyDatabaseType | undefined,
@@ -152,7 +209,12 @@ export async function findSchemaProblems(
 	return db.connection().execute(async (connection) => {
 		const searchPath = await schemaSearchPath(connection, dbType);
 		const tables = toIntrospectedTables(
-			await connection.introspection.getTables(),
+			dbType === "postgres"
+				? await introspectPostgresTables(connection, [
+						...(searchPath ?? []),
+						...Object.values(physical).flatMap(({ schema }) => schema ?? []),
+					])
+				: await connection.introspection.getTables(),
 		);
 		for (const [name, table] of Object.entries(physical)) {
 			if (table.schema !== undefined || !searchPath) continue;

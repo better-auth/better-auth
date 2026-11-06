@@ -286,4 +286,33 @@ describe("PostgreSQL schema validation", () => {
 			}),
 		).resolves.toEqual([]);
 	});
+
+	it("ignores schemas outside the search path that are dropped during the check", async ({
+		onTestFinished,
+	}) => {
+		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+		const other = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		onTestFinished(async () => {
+			await db.destroy();
+			await other.end();
+		});
+		const dropped = `ba_dropped_${randomUUID().replaceAll("-", "")}`;
+		const table = `ba_missing_${randomUUID().replaceAll("-", "")}`;
+		await other.query(`CREATE SCHEMA "${dropped}"`);
+		await other.query(`CREATE TABLE "${dropped}".session (id serial)`);
+
+		// The snapshot predates the drop, so the catalog still lists the dropped
+		// table while lookups by name no longer find it.
+		await pool.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+		try {
+			await pool.query("SELECT 1");
+			await other.query(`DROP SCHEMA "${dropped}" CASCADE`);
+			await expect(
+				findSchemaProblems(db, "postgres", { [table]: { fields: {} } }),
+			).resolves.toEqual([{ kind: "missing-table", table }]);
+		} finally {
+			await pool.query("ROLLBACK");
+		}
+	});
 });
