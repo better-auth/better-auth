@@ -115,7 +115,7 @@ export const getArgumentsPrompt = async (
 		const res = await prompts(questions, {
 			onCancel: () => {
 				console.log("✋ Operation cancelled.");
-				process.exit(0);
+				process.exit(130);
 			},
 		});
 		batchAnswers = (res ?? {}) as Record<string, unknown>;

@@ -127,6 +127,22 @@ describe.skipIf(process.platform === "win32")("login and logout", () => {
 		expect((await fs.stat(tokenFile)).mode & 0o777).toBe(0o600);
 	});
 
+	it("logout exits 1 when the server does not revoke the session", async () => {
+		const { tokenFile, run } = await setupCli();
+		const server = await startServer({});
+		await fs.mkdir(path.dirname(tokenFile), { recursive: true });
+		await fs.writeFile(
+			tokenFile,
+			JSON.stringify({
+				serverUrl: server.url,
+				access_token: "session-token",
+			}),
+		);
+
+		await expect(run(["logout"])).rejects.toMatchObject({ code: 1 });
+		await expect(fs.access(tokenFile)).rejects.toThrow();
+	});
+
 	it("logout revokes the session and removes the token without spawning another CLI", async () => {
 		const { tokenFile, run, npxCalls } = await setupCli();
 		const server = await startServer({

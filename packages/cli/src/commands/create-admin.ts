@@ -29,6 +29,11 @@ function exitWithError(message: string): never {
 	process.exit(1);
 }
 
+function cancel(): never {
+	console.log("Create admin cancelled.");
+	process.exit(130);
+}
+
 function parseData(data: string | undefined) {
 	if (!data) return undefined;
 	try {
@@ -52,20 +57,26 @@ async function resolveRequiredInput(options: {
 	let { email, password } = options;
 
 	if (!email) {
-		const response = await prompts({
-			type: "text",
-			name: "email",
-			message: "Admin email",
-		});
+		const response = await prompts(
+			{
+				type: "text",
+				name: "email",
+				message: "Admin email",
+			},
+			{ onCancel: cancel },
+		);
 		email = response.email;
 	}
 
 	if (!password) {
-		const response = await prompts({
-			type: "password",
-			name: "password",
-			message: "Admin password",
-		});
+		const response = await prompts(
+			{
+				type: "password",
+				name: "password",
+				message: "Admin password",
+			},
+			{ onCancel: cancel },
+		);
 		password = response.password;
 	}
 
@@ -161,11 +172,7 @@ export async function createAdminAction(opts: unknown) {
 			}. Create an admin user anyway?`,
 			initial: false,
 		});
-		if (!response.confirmed) {
-			console.log("Create admin cancelled.");
-			process.exit(0);
-			return;
-		}
+		if (!response.confirmed) cancel();
 	}
 
 	try {

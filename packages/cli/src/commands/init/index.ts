@@ -105,7 +105,7 @@ const isCancel = (value: any): boolean => {
 
 const cancel = (message: string) => {
 	console.log(message);
-	process.exit(0);
+	process.exit(130);
 };
 
 const log = {
@@ -1201,7 +1201,10 @@ export const auth = betterAuth({
 					message: `The file ${chalk.yellow(outputPath)} already exists. Do you want to overwrite it?`,
 					initial: false,
 				});
-				if (isCancel(shouldOverwrite) || !shouldOverwrite) {
+				if (isCancel(shouldOverwrite)) {
+					cancel("✋ Operation cancelled.");
+				}
+				if (!shouldOverwrite) {
 					log.info("Schema generation cancelled.");
 					return;
 				}
@@ -1509,20 +1512,10 @@ export const auth = betterAuth({
 	// If the user cancels the prompt, `connect` will be undefined.
 	// Treat this as a cancellation of the remaining init flow.
 	if (connectResponse.connect === undefined) {
-		console.log(
+		cancel(
 			chalk.yellow("\n✖ ") +
 				"Setup cancelled before connecting to Better Auth infrastructure.\n",
 		);
-		return;
-	}
-	// If the user cancels the prompt, `connect` will be undefined.
-	// Treat this as a cancellation of the remaining init flow.
-	if (connectResponse.connect === undefined) {
-		console.log(
-			chalk.yellow("\n✖ ") +
-				"Setup cancelled before connecting to Better Auth infrastructure.\n",
-		);
-		return;
 	}
 	if (connectResponse.connect) {
 		await open("https://dash.better-auth.com/onboarding");

@@ -165,7 +165,7 @@ async function generateAction(opts: any) {
 		console.error(
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 		);
-		return;
+		process.exit(1);
 	}
 	await removeGeneratedStub();
 
@@ -306,7 +306,7 @@ async function generateAction(opts: any) {
 					},
 				});
 			} catch {}
-			process.exit(1);
+			process.exit(130);
 		}
 	}
 
@@ -342,7 +342,7 @@ async function generateAction(opts: any) {
 				},
 			});
 		} catch {}
-		process.exit(1);
+		process.exit(130);
 	}
 
 	const writePath = resolvedOutputPath ?? path.join(cwd, schema.fileName);
