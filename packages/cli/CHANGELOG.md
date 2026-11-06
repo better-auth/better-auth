@@ -1,5 +1,20 @@
 # auth
 
+## 1.7.19
+
+### Patch Changes
+
+- [#12275](https://github.com/better-auth/better-auth/pull/12275) [`56a849b`](https://github.com/better-auth/better-auth/commit/56a849bb7c9aee7c786616cb2a143d71d1d66673) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed the CLI exiting with code 0 after a canceled or failed run, so scripts no longer continue as if it succeeded. Canceling a prompt or pressing Ctrl+C now exits with 130, and failures such as a missing configuration file or a failed `auth mcp` setup exit with 1.
+
+- [#12286](https://github.com/better-auth/better-auth/pull/12286) [`9a5b6ac`](https://github.com/better-auth/better-auth/commit/9a5b6acda7bbe22324d32709b5b8fac2c01b7eda) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed CLI commands hanging or exiting with code 0 at a prompt in CI or without a terminal. They now exit with code 2 and name what they need instead, such as `--yes`. Prompts now appear on stderr, so redirecting stdout no longer hides them.
+
+- [#12287](https://github.com/better-auth/better-auth/pull/12287) [`6a32d8e`](https://github.com/better-auth/better-auth/commit/6a32d8e69604825269151b763e8bf6e840273446) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed CLI notices mixing into the output of `auth info` and `auth secret`. `auth info --json --copy` now prints valid JSON, and `auth secret` prints only the `BETTER_AUTH_SECRET` line on stdout. Messages from `auth login` and `auth logout` now go to stderr, and `auth info` shows its tips only in an interactive terminal.
+
+- Updated dependencies []:
+  - better-auth@1.7.19
+  - @better-auth/core@1.7.19
+  - @better-auth/telemetry@1.7.19
+
 ## 1.7.18
 
 ### Patch Changes
