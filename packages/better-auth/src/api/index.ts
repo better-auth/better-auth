@@ -361,8 +361,14 @@ export const router = <Option extends BetterAuthOptions>(
 			}
 			if (options.onAPIError?.onError) {
 				try {
-					await options.onAPIError.onError(e, ctx);
+					const replacement = await options.onAPIError.onError(e, ctx);
+					if (isAPIError(replacement)) {
+						throw replacement;
+					}
 				} catch (hookError) {
+					if (isAPIError(hookError)) {
+						throw hookError;
+					}
 					ctx.logger.error("onAPIError.onError threw", hookError);
 				}
 				return;
