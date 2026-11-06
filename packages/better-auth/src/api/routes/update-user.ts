@@ -499,6 +499,7 @@ export const deleteUser = createAuthEndpoint(
 					token: ctx.body.token,
 				},
 			});
+			deleteSessionCookie(ctx);
 			return ctx.json({
 				success: true,
 				message: "User deleted",
