@@ -12,6 +12,7 @@ import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
 import { getConfig } from "../utils/get-config";
+import { requireInteractive } from "../utils/interactive";
 
 /** @internal */
 export async function migrateAction(opts: any) {
@@ -196,6 +197,7 @@ export async function migrateAction(opts: any) {
 
 	let migrate = options.yes;
 	if (!migrate) {
+		requireInteractive("run these migrations", "--yes");
 		const response = await prompts({
 			type: "confirm",
 			name: "migrate",

@@ -8,6 +8,7 @@ import type { PromptObject } from "prompts";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
+import { requireInteractive } from "../utils/interactive";
 
 const PROTOCOL_URL = "https://agent-auth-protocol.com";
 const AGENT_CLI_PKG = "@auth/agent-cli";
@@ -35,6 +36,7 @@ function ask(question: PromptObject) {
 // ── Main ──────────────────────────────────────────
 
 async function aiAction() {
+	requireInteractive("run auth ai", "a terminal");
 	console.log(
 		"\n" +
 			[

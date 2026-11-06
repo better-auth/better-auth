@@ -13,6 +13,7 @@ import changesetConfig from "../../../../.changeset/config.json" with {
 import { detectPackageManager } from "../utils/check-package-managers";
 import { getPackageInfo } from "../utils/get-package-info";
 import { installDependencies } from "../utils/install-dependencies";
+import { requireInteractive } from "../utils/interactive";
 import { cliVersion } from "../version";
 
 const dependencyMapSchema = z
@@ -144,6 +145,7 @@ export async function upgradeAction(opts: unknown) {
 
 	let confirmed = options.yes;
 	if (!confirmed) {
+		requireInteractive("install these upgrades", "--yes");
 		const response = await prompts({
 			type: "confirm",
 			name: "confirmed",

@@ -21,6 +21,7 @@ import {
 import { getPackageInfo, hasDependency } from "../../utils/get-package-info";
 import { generateSecretHash, tryCatch } from "../../utils/helper";
 import { installDependencies } from "../../utils/install-dependencies";
+import { requireInteractive } from "../../utils/interactive";
 import { cliVersion } from "../../version";
 import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
@@ -361,6 +362,7 @@ export async function initAction(opts: any) {
 		);
 		process.exit(1);
 	}
+	requireInteractive("run auth init", "a terminal");
 
 	let currentStep = 0;
 

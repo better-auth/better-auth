@@ -193,6 +193,16 @@ The CLI also provides a way to generate a secret key for your Better Auth instan
 npx auth@latest secret
 ```
 
+## Scripts and CI
+
+Without an interactive terminal, such as in CI, the CLI can't prompt. Pass the answers as flags instead, such as `--yes` to confirm:
+
+```package-install title="Terminal"
+npx auth@latest migrate --yes
+```
+
+If a flag is missing, the command fails and names the flag to add.
+
 ## Common Issues
 
 **Error: Cannot find module X**

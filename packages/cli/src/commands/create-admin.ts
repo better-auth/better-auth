@@ -7,6 +7,7 @@ import { Command } from "commander";
 import prompts from "prompts";
 import * as z from "zod";
 import { getConfig } from "../utils/get-config";
+import { requireInteractive } from "../utils/interactive";
 
 type CreateUserApi = (input: {
 	body: {
@@ -57,6 +58,7 @@ async function resolveRequiredInput(options: {
 	let { email, password } = options;
 
 	if (!email) {
+		requireInteractive("create an admin user", "--email");
 		const response = await prompts(
 			{
 				type: "text",
@@ -69,6 +71,7 @@ async function resolveRequiredInput(options: {
 	}
 
 	if (!password) {
+		requireInteractive("create an admin user", "--password");
 		const response = await prompts(
 			{
 				type: "password",
@@ -164,6 +167,7 @@ export async function createAdminAction(opts: unknown) {
 			),
 		);
 	if (totalUsers > 0 && !options.force && !options.yes) {
+		requireInteractive("create an admin user while users exist", "--yes");
 		const response = await prompts({
 			type: "confirm",
 			name: "confirmed",

@@ -7,6 +7,9 @@ import { createAdminAction } from "../src/commands/create-admin";
 import { migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 vi.mock("prompts", () => ({
 	default: vi.fn(),
 }));

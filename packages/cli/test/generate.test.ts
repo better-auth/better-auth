@@ -21,6 +21,9 @@ import * as config from "../src/utils/get-config";
 import { getPrismaVersion } from "../src/utils/get-package-info";
 import { cliPath } from "./utils";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 const execFileAsync = promisify(execFile);
 
 const compoundIndexPlugin = (): BetterAuthPlugin => ({

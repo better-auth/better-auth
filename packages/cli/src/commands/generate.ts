@@ -14,6 +14,7 @@ import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
 import { generateSchema } from "../generators";
 import { getConfig } from "../utils/get-config";
+import { requireInteractive } from "../utils/interactive";
 
 function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 	// Map dialect to provider format for each adapter
@@ -248,6 +249,7 @@ async function generateAction(opts: any) {
 	if (schema.overwrite) {
 		let confirm = options.y || options.yes;
 		if (!confirm) {
+			requireInteractive(`overwrite ${schema.fileName}`, "--yes");
 			const response = await prompts({
 				type: "confirm",
 				name: "confirm",
@@ -318,6 +320,7 @@ async function generateAction(opts: any) {
 	let confirm = options.yes;
 
 	if (!confirm) {
+		requireInteractive(`generate the schema to ${schema.fileName}`, "--yes");
 		const response = await prompts({
 			type: "confirm",
 			name: "confirm",

@@ -11,6 +11,9 @@ import { getPackageInfo, hasDependency } from "../src/utils/get-package-info";
 import { installDependencies } from "../src/utils/install-dependencies";
 import { testWithTmpDir } from "./test-utils";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 vi.mock(import("../src/version"), () => ({
 	cliVersion: "1.0.0",
 }));
