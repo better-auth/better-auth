@@ -4,6 +4,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import type {
+	DBAdapter,
 	DBTransactionAdapter,
 	WhereOperator,
 } from "@better-auth/core/db/adapter";
@@ -158,11 +159,35 @@ async function createTeamMemberWithKey(
 		});
 		return { status: "created" as const, member };
 	} catch (error) {
-		const existing = await findTeamMemberByKeyOrPair(adapter, data);
+		// Postgres rejects reads in a failed transaction; keep the insert error.
+		const existing = await findTeamMemberByKeyOrPair(adapter, data).catch(
+			() => null,
+		);
 		if (existing) {
 			return { status: "existing" as const, member: existing };
 		}
 		throw error;
+	}
+}
+
+/**
+ * Re-reads the membership once the failed transaction has rolled back, so a
+ * lost duplicate-add race still resolves to the existing member.
+ */
+async function recoverExistingTeamMember(
+	baseAdapter: DBAdapter,
+	data: { teamId: string; userId: string },
+) {
+	try {
+		const adapter = await getCurrentAdapter(baseAdapter);
+		const membershipKey = await computeTeamMembershipKey(data);
+		return await findTeamMemberByKeyOrPair(adapter, {
+			...data,
+			membershipKey,
+		});
+	} catch {
+		// Still inside an aborted outer transaction.
+		return null;
 	}
 }
 
@@ -1060,25 +1085,37 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			teamId: string;
 			userId: string;
 		}) => {
-			return runWithTransaction(baseAdapter, async () => {
-				const adapter = await getCurrentAdapter(baseAdapter);
-				const membershipKey = await computeTeamMembershipKey(data);
-				const existing = await findTeamMemberByKeyOrPair(adapter, {
-					...data,
-					membershipKey,
-				});
-				if (existing) return stripTeamMembershipKey(existing);
+			let insertFailure: { error: unknown } | undefined;
+			try {
+				return await runWithTransaction(baseAdapter, async () => {
+					const adapter = await getCurrentAdapter(baseAdapter);
+					const membershipKey = await computeTeamMembershipKey(data);
+					const existing = await findTeamMemberByKeyOrPair(adapter, {
+						...data,
+						membershipKey,
+					});
+					if (existing) return stripTeamMembershipKey(existing);
 
-				await syncTeamMemberCount(adapter, data.teamId);
-				const result = await createTeamMemberWithKey(adapter, {
-					...data,
-					membershipKey,
+					await syncTeamMemberCount(adapter, data.teamId);
+					const result = await createTeamMemberWithKey(adapter, {
+						...data,
+						membershipKey,
+					}).catch((error: unknown) => {
+						insertFailure = { error };
+						throw error;
+					});
+					if (result.status === "created") {
+						await incrementTeamMemberCount(adapter, data.teamId);
+					}
+					return stripTeamMembershipKey(result.member);
 				});
-				if (result.status === "created") {
-					await incrementTeamMemberCount(adapter, data.teamId);
-				}
-				return stripTeamMembershipKey(result.member);
-			});
+			} catch (error) {
+				// Only a failed membership insert may resolve to the existing member.
+				if (insertFailure?.error !== error) throw error;
+				const existing = await recoverExistingTeamMember(baseAdapter, data);
+				if (!existing) throw error;
+				return stripTeamMembershipKey(existing);
+			}
 		},
 		/**
 		 * Adds a user to a team by reserving capacity on the team row before
@@ -1093,44 +1130,64 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		}): Promise<
 			{ status: "added"; member: TeamMember } | { status: "limitReached" }
 		> => {
-			return runWithTransaction(baseAdapter, async () => {
-				const adapter = await getCurrentAdapter(baseAdapter);
-				const membershipKey = await computeTeamMembershipKey(data);
-				const existing = await findTeamMemberByKeyOrPair(adapter, {
-					teamId: data.teamId,
-					userId: data.userId,
-					membershipKey,
-				});
-				if (existing) {
-					return { status: "added", member: stripTeamMembershipKey(existing) };
-				}
-				await syncTeamMemberCount(adapter, data.teamId);
-				const reserved = await reserveTeamSeat(adapter, {
-					teamId: data.teamId,
-					maximumMembersPerTeam: data.maximumMembersPerTeam,
-				});
-				if (!reserved) {
-					return { status: "limitReached" };
-				}
-				let result: Awaited<ReturnType<typeof createTeamMemberWithKey>>;
-				try {
-					result = await createTeamMemberWithKey(adapter, {
+			let insertFailure: { error: unknown } | undefined;
+			try {
+				return await runWithTransaction(baseAdapter, async () => {
+					const adapter = await getCurrentAdapter(baseAdapter);
+					const membershipKey = await computeTeamMembershipKey(data);
+					const existing = await findTeamMemberByKeyOrPair(adapter, {
 						teamId: data.teamId,
 						userId: data.userId,
 						membershipKey,
 					});
-				} catch (error) {
-					await releaseTeamSeats(adapter, data.teamId, 1);
-					throw error;
+					if (existing) {
+						return {
+							status: "added",
+							member: stripTeamMembershipKey(existing),
+						};
+					}
+					await syncTeamMemberCount(adapter, data.teamId);
+					const reserved = await reserveTeamSeat(adapter, {
+						teamId: data.teamId,
+						maximumMembersPerTeam: data.maximumMembersPerTeam,
+					});
+					if (!reserved) {
+						return { status: "limitReached" };
+					}
+					const result = await createTeamMemberWithKey(adapter, {
+						teamId: data.teamId,
+						userId: data.userId,
+						membershipKey,
+					}).catch((error: unknown) => {
+						insertFailure = { error };
+						throw error;
+					});
+					if (result.status === "existing") {
+						await releaseTeamSeats(adapter, data.teamId, 1);
+					}
+					return {
+						status: "added",
+						member: stripTeamMembershipKey(result.member),
+					};
+				});
+			} catch (error) {
+				// Only a failed membership insert may resolve to the existing member.
+				if (insertFailure?.error !== error) throw error;
+				// A rollback frees the seat; without transactions it must be released here.
+				if (baseAdapter.options?.adapterConfig.transaction === false) {
+					await getCurrentAdapter(baseAdapter)
+						.then((adapter) => releaseTeamSeats(adapter, data.teamId, 1))
+						.catch((releaseError: unknown) => {
+							context.logger.error(
+								"Failed to release team seat after member insert failure",
+								releaseError,
+							);
+						});
 				}
-				if (result.status === "existing") {
-					await releaseTeamSeats(adapter, data.teamId, 1);
-				}
-				return {
-					status: "added",
-					member: stripTeamMembershipKey(result.member),
-				};
-			});
+				const existing = await recoverExistingTeamMember(baseAdapter, data);
+				if (!existing) throw error;
+				return { status: "added", member: stripTeamMembershipKey(existing) };
+			}
 		},
 		removeTeamMember: async (data: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
