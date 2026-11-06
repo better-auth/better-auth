@@ -8,7 +8,7 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
-import { generateKeyPair, SignJWT } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type {
@@ -5836,6 +5836,113 @@ describe("oauth2", async () => {
 			for (const instance of [first, second]) {
 				expect((await signIn(instance)).url).toContain(authorizeUrl);
 			}
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12277
+	 */
+	describe("ID token algorithms that change after startup", () => {
+		// Serves discovery for `${providerId}.test` listing `idp.algorithms`, and a JWKS
+		// that already holds every key, as a provider does ahead of a move.
+		async function rotatingProvider(providerId: string) {
+			const origin = `https://${providerId}.test`;
+			const idp = { algorithms: ["ES256"], fetches: 0 };
+			const keys = await Promise.all(
+				["ES256", "RS256", "PS256"].map(async (alg) => {
+					const { publicKey, privateKey } = await generateKeyPair(alg);
+					return {
+						alg,
+						privateKey,
+						jwk: { ...(await exportJWK(publicKey)), alg, kid: alg },
+					};
+				}),
+			);
+			mswServer.use(
+				http.get(`${origin}/.well-known/openid-configuration`, () => {
+					idp.fetches++;
+					return HttpResponse.json({
+						issuer: origin,
+						authorization_endpoint: `${origin}/authorize`,
+						token_endpoint: `${origin}/token`,
+						jwks_uri: `${origin}/jwks`,
+						id_token_signing_alg_values_supported: idp.algorithms,
+					});
+				}),
+				http.get(`${origin}/jwks`, () =>
+					HttpResponse.json({ keys: keys.map((key) => key.jwk) }),
+				),
+			);
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId,
+									clientId,
+									clientSecret,
+									discoveryUrl: `${origin}/.well-known/openid-configuration`,
+								},
+							],
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+			const provider = (await auth.$context).socialProviders.find(
+				(p) => p.id === providerId,
+			);
+			assert(provider);
+			const issueIdToken = (alg: string) => {
+				const key = keys.find((k) => k.alg === alg)!;
+				return new SignJWT({
+					email: "rotating@test.com",
+					email_verified: true,
+					name: "Rotating",
+				})
+					.setProtectedHeader({ alg, kid: alg })
+					.setSubject("rotating-user")
+					.setIssuer(origin)
+					.setAudience(clientId)
+					.setIssuedAt()
+					.setExpirationTime("5m")
+					.sign(key.privateKey);
+			};
+			const verify = (idToken: string) =>
+				provider.getUserInfo({ accessToken: "access-token", idToken });
+			const signInWith = async (alg: string) => verify(await issueIdToken(alg));
+			return { idp, issueIdToken, verify, signInWith };
+		}
+
+		it("follows a provider that moves to a newly listed ID token algorithm", async () => {
+			const { idp, signInWith } = await rotatingProvider("rotating-idp");
+			expect((await signInWith("ES256"))?.user.email).toBe("rotating@test.com");
+			expect(idp.fetches).toBe(1);
+
+			idp.algorithms = ["RS256"];
+			expect((await signInWith("RS256"))?.user.email).toBe("rotating@test.com");
+			expect(idp.fetches).toBe(2);
+
+			// The provider no longer lists ES256, and discovery is not read again
+			// within the cooldown.
+			expect(await signInWith("ES256")).toBeNull();
+			expect(idp.fetches).toBe(2);
+		});
+
+		it("checks each concurrent token against the refreshed algorithms", async () => {
+			const { idp, issueIdToken, verify } =
+				await rotatingProvider("concurrent-idp");
+			const tokens = await Promise.all([
+				issueIdToken("PS256"),
+				issueIdToken("RS256"),
+			]);
+			idp.algorithms = ["RS256"];
+			// The PS256 token starts the refresh; the RS256 token waits on it.
+			const [unlisted, listed] = await Promise.all(tokens.map(verify));
+			expect(unlisted).toBeNull();
+			expect(listed?.user.email).toBe("rotating@test.com");
+			expect(idp.fetches).toBe(2);
 		});
 	});
 
