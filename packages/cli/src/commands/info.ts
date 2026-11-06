@@ -9,6 +9,7 @@ import {
 	getInstalledPackageVersion,
 	getPackageInfo,
 } from "../utils/get-package-info";
+import { isInteractive } from "../utils/interactive";
 
 type ReportedDependency = {
 	name: string;
@@ -409,14 +410,15 @@ const clipboardCommands: Partial<Record<NodeJS.Platform, string>> = {
 	win32: "clip",
 };
 
-function copyToClipboard(text: string, prefix: string) {
+// The notice goes to stderr so stdout keeps only the info itself.
+function copyToClipboard(text: string) {
 	const command = clipboardCommands[os.platform()];
 	if (!command) return;
 	try {
 		execSync(command, { input: text });
-		console.log(chalk.green(`${prefix}✓ Copied to clipboard`));
+		console.error(chalk.green("✓ Copied to clipboard"));
 	} catch {
-		console.log(chalk.yellow(`${prefix}⚠ Could not copy to clipboard`));
+		console.error(chalk.yellow("⚠ Could not copy to clipboard"));
 	}
 }
 
@@ -500,7 +502,7 @@ export const info = new Command("info")
 			console.log(jsonOutput);
 
 			if (options.copy) {
-				copyToClipboard(jsonOutput, "\n");
+				copyToClipboard(jsonOutput);
 			}
 			return;
 		}
@@ -538,11 +540,16 @@ export const info = new Command("info")
 		}
 
 		console.log(chalk.gray("\n" + "=".repeat(50)));
-		console.log(chalk.gray("\n💡 Tip: Use --json flag for JSON output"));
-		console.log(chalk.gray("💡 Use --copy flag to copy output to clipboard"));
-		console.log(
-			chalk.gray("💡 When reporting issues, include this information\n"),
-		);
+		// Tips are for a person at a terminal, never for CI or a script.
+		if (isInteractive()) {
+			console.error(chalk.gray("\n💡 Tip: Use --json flag for JSON output"));
+			console.error(
+				chalk.gray("💡 Use --copy flag to copy output to clipboard"),
+			);
+			console.error(
+				chalk.gray("💡 When reporting issues, include this information\n"),
+			);
+		}
 
 		if (options.copy) {
 			const textOutput = `
@@ -568,6 +575,6 @@ Better Auth:
 ${JSON.stringify(betterAuthInfo, null, 2)}
 `;
 
-			copyToClipboard(textOutput, "");
+			copyToClipboard(textOutput);
 		}
 	});

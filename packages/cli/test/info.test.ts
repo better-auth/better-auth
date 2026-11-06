@@ -130,6 +130,41 @@ describe("info command", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/11126#discussion_r3920527164
 	 */
+	it("keeps --json output parseable when --copy fails", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({ name: "test-project" }),
+		);
+
+		// No clipboard tool is on an empty PATH, so the copy fails and says so.
+		const { stdout, stderr } = await execFileAsync(
+			process.execPath,
+			[cliPath, "info", "--json", "--copy"],
+			{
+				cwd: tmpDir,
+				env: {
+					...process.env,
+					PATH: "",
+				},
+			},
+		);
+
+		expect(JSON.parse(stdout)).toHaveProperty("system");
+		expect(stderr).toContain("Could not copy to clipboard");
+	});
+
+	it("prints no tips in a non-interactive run", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({ name: "test-project" }),
+		);
+
+		const { stdout, stderr } = await runInfoTextCommand();
+
+		expect(stdout).toContain("Better Auth System Information");
+		expect(stdout + stderr).not.toContain("Tip:");
+	});
+
 	it("reports the installed version when config loading fails", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "package.json"),

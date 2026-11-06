@@ -1,4 +1,13 @@
 /**
+ * Whether someone at a terminal can answer a prompt and read optional hints.
+ */
+export function isInteractive() {
+	return (
+		Boolean(process.stdin.isTTY && process.stderr.isTTY) && !process.env.CI
+	);
+}
+
+/**
  * Exits before a prompt when the run has no terminal to answer it, naming the
  * input that replaces the answer.
  *
@@ -12,7 +21,7 @@ export function requireInteractive({
 	action: string;
 	input: string;
 }) {
-	if (process.stdin.isTTY && process.stderr.isTTY && !process.env.CI) return;
+	if (isInteractive()) return;
 	console.error(`Can't ${action} without ${input} in non-interactive mode.`);
 	process.exit(2);
 }
