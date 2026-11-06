@@ -19,7 +19,7 @@ concurrency:
 jobs:
   acknowledge:
     if: >-
-      github.repository_owner == 'better-auth' &&
+      github.repository == 'better-auth/better-auth' &&
       github.event.issue.pull_request &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       startsWith(github.event.comment.body, '/release-notes')
@@ -72,7 +72,7 @@ jobs:
 
   generate:
     if: >-
-      github.repository_owner == 'better-auth' &&
+      github.repository == 'better-auth/better-auth' &&
       github.event.issue.pull_request &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       startsWith(github.event.comment.body, '/release-notes')

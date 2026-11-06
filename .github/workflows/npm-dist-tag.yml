@@ -21,7 +21,7 @@ permissions: {}
 
 jobs:
   dist-tag:
-    if: github.repository_owner == 'better-auth'
+    if: github.repository == 'better-auth/better-auth'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
