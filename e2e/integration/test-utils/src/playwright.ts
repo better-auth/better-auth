@@ -13,7 +13,8 @@ export function launch(cwd: string) {
 		const child = spawn("pnpm", args, {
 			detached: process.platform !== "win32",
 			cwd,
-			stdio: "pipe",
+			// Nothing writes to stdin, so leave no pipe open for a child to wait on.
+			stdio: ["ignore", "pipe", "pipe"],
 			env: { ...process.env, NO_COLOR: "1" },
 		});
 		children.add(child);

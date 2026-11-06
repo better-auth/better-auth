@@ -1,4 +1,4 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -41,7 +41,7 @@ async function getAvailablePort(): Promise<number> {
 
 // Startup state lives here so `afterAll` can clean up wherever startup stopped.
 function createNextDemoRuntime() {
-	const children = new Set<ChildProcessWithoutNullStreams>();
+	const children = new Set<ChildProcess>();
 	let output = "";
 	let temporaryDirectory: string | undefined;
 	let stopped = false;
@@ -57,7 +57,8 @@ function createNextDemoRuntime() {
 			cwd: demoDirectory,
 			detached: process.platform !== "win32",
 			env,
-			stdio: "pipe",
+			// Nothing writes to stdin, so leave no pipe open for a child to wait on.
+			stdio: ["ignore", "pipe", "pipe"],
 		});
 		children.add(child);
 		// An unhandled spawn error would crash the worker.
