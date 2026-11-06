@@ -1481,7 +1481,7 @@ describe("oauth-provider device-code grant", async () => {
 		expect(res.error?.status).toBe(400);
 		expect(res.error).toMatchObject({
 			error: "invalid_client",
-			error_description: "client not found",
+			error_description: "client authentication failed",
 		});
 	});
 

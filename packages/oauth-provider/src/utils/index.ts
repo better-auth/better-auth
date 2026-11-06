@@ -406,7 +406,7 @@ async function verifyStoredClientSecret(
 			clientSecret = clientSecret.replace(opts.prefix.clientSecret, "");
 		} else {
 			throw new APIError("UNAUTHORIZED", {
-				error_description: "invalid client_secret",
+				error_description: "client authentication failed",
 				error: "invalid_client",
 			});
 		}
@@ -770,20 +770,19 @@ export async function validateClientCredentials(
 	authMethod?: TokenEndpointAuthMethod,
 ) {
 	const client = await getClient(ctx, options, clientId);
+	// RFC 6749 §5.2: do not reveal why client authentication failed (#12227).
+	const authFailed = "client authentication failed";
 	if (!client) {
-		throwInvalidClient("client not found", { method: authMethod });
+		throwInvalidClient(authFailed, { method: authMethod });
 	}
 	if (client.disabled) {
-		throwInvalidClient("client is disabled", { method: authMethod });
+		throwInvalidClient(authFailed, { method: authMethod });
 	}
 
 	const registeredAuthMethod =
 		client.tokenEndpointAuthMethod ?? "client_secret_basic";
 	if (authMethod && registeredAuthMethod !== authMethod) {
-		throwInvalidClient(
-			`client registered for ${registeredAuthMethod} cannot use ${authMethod}`,
-			{ method: authMethod },
-		);
+		throwInvalidClient(authFailed, { method: authMethod });
 	}
 	if (
 		(client.tokenEndpointAuthMethod === "private_key_jwt" ||
@@ -803,17 +802,14 @@ export async function validateClientCredentials(
 	if (!preVerified) {
 		// Only token_endpoint_auth_method=none identifies a public client.
 		if (client.tokenEndpointAuthMethod !== "none" && !clientSecret) {
-			throwInvalidClient("client secret must be provided", {
+			throwInvalidClient(authFailed, {
 				method: authMethod,
 			});
 		}
 
 		// Secret should not be received
 		if (clientSecret && !client.clientSecret) {
-			throwInvalidClient(
-				"public client, client secret should not be received",
-				{ method: authMethod },
-			);
+			throwInvalidClient(authFailed, { method: authMethod });
 		}
 
 		// Compare Secrets when secret is provided
@@ -826,7 +822,7 @@ export async function validateClientCredentials(
 				clientSecret,
 			))
 		) {
-			throwInvalidClient("invalid client_secret", { method: authMethod });
+			throwInvalidClient(authFailed, { method: authMethod });
 		}
 	}
 
