@@ -297,7 +297,7 @@ Update a user's details.
 
 ### Ban User
 
-Bans a user, preventing them from signing in and revokes all of their existing sessions.
+Bans a user, preventing them from signing in and revokes all of their existing sessions. If you use the [API Key plugin](/docs/plugins/api-key), the banned user's API keys are also rejected until the ban is lifted or expires.
 
 <APIMethod path="/admin/ban-user" method="POST" requireSession noResult>
   ```ts
