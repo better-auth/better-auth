@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cliPath } from "./utils";
 
 const projects: string[] = [];
@@ -64,16 +64,6 @@ async function runCli(args: string[], cwd: string) {
 	};
 }
 
-async function waitForOutput(read: () => string, text: string) {
-	const deadline = Date.now() + 30_000;
-	while (!read().includes(text)) {
-		if (Date.now() > deadline) {
-			throw new Error(`Timed out waiting for "${text}" in:\n${read()}`);
-		}
-		await new Promise((resolve) => setTimeout(resolve, 50));
-	}
-}
-
 beforeAll(() => {
 	if (!fs.existsSync(cliPath)) {
 		throw new Error(
@@ -106,7 +96,9 @@ describe("exit codes", () => {
 	] as const)("exits %s with %i", async (signal, expected) => {
 		const cwd = createProject(true);
 		const run = startCli(["migrate"], cwd);
-		await waitForOutput(run.output, "run these migrations");
+		await vi.waitUntil(() => run.output().includes("run these migrations"), {
+			timeout: 30_000,
+		});
 
 		run.child.kill(signal);
 

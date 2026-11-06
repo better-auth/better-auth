@@ -5,7 +5,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mcp } from "../src/commands/mcp";
 
-vi.mock("node:child_process", () => ({
+vi.mock(import("node:child_process"), () => ({
 	execSync: vi.fn(),
 }));
 

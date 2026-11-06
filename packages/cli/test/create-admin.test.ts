@@ -211,10 +211,11 @@ describe("create-admin", () => {
 	it("exits 130 when the email prompt is canceled", async () => {
 		await setupAuth();
 		vi.mocked(process.exit).mockClear();
-		vi.mocked(prompts).mockImplementationOnce(async (question, options) => {
-			options?.onCancel?.(question as never, {});
-			return {};
-		});
+		const { default: realPrompts } = await vi.importActual<{
+			default: typeof prompts;
+		}>("prompts");
+		realPrompts.inject([new Error("canceled")]);
+		vi.mocked(prompts).mockImplementationOnce(realPrompts);
 
 		await expect(
 			createAdminAction({

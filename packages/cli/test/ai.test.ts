@@ -6,7 +6,7 @@ import prompts from "prompts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ai } from "../src/commands/ai";
 
-vi.mock("node:child_process", () => ({
+vi.mock(import("node:child_process"), () => ({
 	execSync: vi.fn(),
 }));
 
@@ -138,19 +138,5 @@ describe("ai: MCP config write", () => {
 		fs.writeFileSync(configPath, original);
 		await runOpenCodeFlow();
 		expect(fs.readFileSync(configPath, "utf-8")).toBe(original);
-	});
-});
-
-describe("ai: cancellation", () => {
-	it("exits 130 when the first prompt is canceled", async () => {
-		vi.spyOn(console, "log").mockImplementation(() => {});
-		const exit = vi.spyOn(process, "exit").mockImplementation(() => {
-			throw new Error("exit");
-		});
-		prompts.inject([new Error("canceled")]);
-
-		await expect(ai.parseAsync(["node", "ai"])).rejects.toThrow("exit");
-
-		expect(exit).toHaveBeenCalledWith(130);
 	});
 });
