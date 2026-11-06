@@ -1,10 +1,19 @@
-import { safeJSONParse } from "@better-auth/core/utils/json";
+import { logger } from "@better-auth/core/env";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthDeviceAuthorization } from "./device-code";
 import type { oauthProvider } from "./oauth";
 import { buildSignedOAuthQuery } from "./signed-query";
 import { PACKAGE_VERSION } from "./version";
+
+function parseJSONBody(body: string): Record<string, unknown> | null {
+	try {
+		return JSON.parse(body || "{}");
+	} catch (e) {
+		logger.error("Error parsing JSON", { error: e });
+		return null;
+	}
+}
 
 export const oauthProviderClient = () => {
 	return {
@@ -17,25 +26,36 @@ export const oauthProviderClient = () => {
 				description: "Adds the current page query to oauth requests",
 				hooks: {
 					async onRequest(ctx) {
-						const headers = ctx.headers;
-						const body =
-							typeof ctx.body === "string"
-								? headers.get("content-type") ===
-									"application/x-www-form-urlencoded"
-									? Object.fromEntries(new URLSearchParams(ctx.body))
-									: safeJSONParse<Record<string, unknown>>(ctx.body ?? "{}")
-								: ctx.body;
-						if (body?.oauth_query) return;
 						if (
-							typeof window !== "undefined" &&
-							window?.location?.search &&
-							!(ctx.method === "GET" || ctx.method === "DELETE")
+							typeof window === "undefined" ||
+							!window?.location?.search ||
+							ctx.method === "GET" ||
+							ctx.method === "DELETE"
 						) {
-							ctx.body = JSON.stringify({
-								...body,
-								oauth_query: buildSignedOAuthQuery(window.location.search),
-							});
+							return;
 						}
+						const isForm =
+							ctx.headers.get("content-type") ===
+							"application/x-www-form-urlencoded";
+						if (typeof ctx.body === "string" && isForm) {
+							const params = new URLSearchParams(ctx.body);
+							if (params.get("oauth_query")) return;
+							const oauthQuery = buildSignedOAuthQuery(window.location.search);
+							if (oauthQuery === undefined) return;
+							params.set("oauth_query", oauthQuery);
+							ctx.body = params.toString();
+							return;
+						}
+						// Plain JSON.parse so ISO date strings are sent back unchanged.
+						const body =
+							typeof ctx.body === "string" ? parseJSONBody(ctx.body) : ctx.body;
+						if (body?.oauth_query) return;
+						const oauthQuery = buildSignedOAuthQuery(window.location.search);
+						if (oauthQuery === undefined) return;
+						ctx.body = JSON.stringify({
+							...body,
+							oauth_query: oauthQuery,
+						});
 					},
 				},
 			},
