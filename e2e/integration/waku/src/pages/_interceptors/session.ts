@@ -10,12 +10,11 @@ import { getSession } from "../../auth";
  */
 const sessionInterceptor: HandlerInterceptor = async (next) => {
 	// Static renders at build time have no Hono context, and no session.
-	const isRequestRender = tryGetContext() !== undefined;
+	if (!tryGetContext()) return next();
 	// Under `/api/auth`, a refreshed session cookie would override sign-out's.
-	const isApiRoute = new URL(getRequest().url).pathname.startsWith("/api/");
-	if (isRequestRender && !isApiRoute) {
-		await getSession();
-	}
+	const { pathname } = new URL(getRequest().url);
+	if (pathname.startsWith("/api/")) return next();
+	await getSession();
 	return next();
 };
 
