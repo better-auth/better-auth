@@ -149,6 +149,8 @@ await authClient.revokeSession({
 })
 ```
 
+When you revoke the session of the device you are calling from, the response expires that device's session cookies (including the [cookie cache](#session-caching)), so the caller is signed out immediately. Revoking another device's session leaves the current device's cookies untouched.
+
 ### Revoke Other Sessions
 
 To revoke all other sessions except the current session, you can use the `revokeOtherSessions` function.
@@ -168,6 +170,8 @@ import { authClient } from "@/lib/auth-client"
 
 await authClient.revokeSessions()
 ```
+
+Since the current session is revoked along with all others, the response also expires the current device's session cookies (including the [cookie cache](#session-caching)).
 
 ### Update Session
 
