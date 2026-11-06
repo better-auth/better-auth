@@ -3,6 +3,9 @@ import type {
 	SCIMConnectionDecommissionStatus,
 } from "./configuration";
 
+/** Limit for reads that must return every matching row, which the adapter otherwise caps at `advanced.database.defaultFindManyLimit`. */
+export const SCIM_UNBOUNDED_ROW_LIMIT = 2_147_483_647;
+
 /** Immutable connection scope plus durable decommission reconciliation state. */
 export interface SCIMConnectionBinding {
 	id: string;
