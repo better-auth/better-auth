@@ -127,9 +127,6 @@ describe("info command", () => {
 		});
 	});
 
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/11126#discussion_r3920527164
-	 */
 	it("keeps --json output parseable when --copy fails", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "package.json"),
@@ -165,6 +162,9 @@ describe("info command", () => {
 		expect(stdout + stderr).not.toContain("Tip:");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/pull/11126#discussion_r3920527164
+	 */
 	it("reports the installed version when config loading fails", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "package.json"),
