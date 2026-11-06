@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "waku";
 import { getSession } from "../auth";
+import { Hydrated } from "../components/hydrated";
 
 export default async function RootLayout({
 	children,
@@ -15,6 +16,7 @@ export default async function RootLayout({
 			</nav>
 			<p>{session ? `Signed in as ${session.user.name}` : "Signed out"}</p>
 			<main>{children}</main>
+			<Hydrated />
 		</>
 	);
 }

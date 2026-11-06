@@ -11,6 +11,24 @@ const servers = {
 	start: { build: true, command: ["run", "start", "--host", "localhost"] },
 } as const;
 
+async function waitForHydration(page: Page) {
+	await expect(page.locator("[data-hydrated]")).toBeAttached();
+}
+
+async function submitAction(page: Page, button: string) {
+	// Before hydration the form would post natively and redirect in a new request.
+	await waitForHydration(page);
+	const [response] = await Promise.all([
+		page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname.startsWith("/RSC/F/") &&
+				response.request().method() === "POST",
+		),
+		page.getByRole("button", { name: button }).click(),
+	]);
+	expect(response.ok()).toBe(true);
+}
+
 async function signUp(
 	page: Page,
 	baseURL: string,
@@ -18,20 +36,10 @@ async function signUp(
 	email: string,
 ) {
 	await page.goto(baseURL);
-	// Submit after hydration, so the form calls the server action over RSC.
-	await page.waitForLoadState("networkidle");
 	await page.getByLabel("Name").fill(name);
 	await page.getByLabel("Email").fill(email);
 	await page.getByLabel("Password").fill("password123");
-	const [response] = await Promise.all([
-		page.waitForResponse(
-			(response) =>
-				new URL(response.url()).pathname.startsWith("/RSC/F/") &&
-				response.request().method() === "POST",
-		),
-		page.getByRole("button", { name: "Sign up" }).click(),
-	]);
-	expect(response.ok()).toBe(true);
+	await submitAction(page, "Sign up");
 }
 
 async function getCookie(page: Page, name: string) {
@@ -116,7 +124,7 @@ for (const [mode, server] of Object.entries(servers)) {
 				page.getByText("Signed in as Action Sign Out User"),
 			).toBeVisible();
 
-			await page.getByRole("button", { name: "Sign out" }).click();
+			await submitAction(page, "Sign out");
 
 			await expect(page.getByText("Signed out", { exact: true })).toBeVisible();
 			expect(
