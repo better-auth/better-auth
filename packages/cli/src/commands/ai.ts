@@ -5,10 +5,10 @@ import * as path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
 import type { PromptObject } from "prompts";
-import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
 import { requireInteractive } from "../utils/interactive";
+import { prompt } from "../utils/prompt";
 
 const PROTOCOL_URL = "https://agent-auth-protocol.com";
 const AGENT_CLI_PKG = "@auth/agent-cli";
@@ -28,15 +28,24 @@ function cancelled(): never {
 	process.exit(130);
 }
 
+// The setup has no flags for its answers, so it only runs in a terminal.
+const aiPrompt = {
+	action: "run auth ai",
+	input: "a terminal",
+};
+
 // Ctrl+C or Escape on any prompt ends the setup instead of answering it.
 function ask(question: PromptObject) {
-	return prompts(question, { onCancel: cancelled });
+	return prompt(question, {
+		...aiPrompt,
+		onCancel: cancelled,
+	});
 }
 
 // ── Main ──────────────────────────────────────────
 
 async function aiAction() {
-	requireInteractive("run auth ai", "a terminal");
+	requireInteractive(aiPrompt);
 	console.log(
 		"\n" +
 			[

@@ -5,7 +5,13 @@
  * A prompt in CI or behind a pipe either waits forever or ends with exit code 0
  * as if it had succeeded. Missing input is a usage error, so it exits with 2.
  */
-export function requireInteractive(action: string, input: string) {
+export function requireInteractive({
+	action,
+	input,
+}: {
+	action: string;
+	input: string;
+}) {
 	if (process.stdin.isTTY && process.stderr.isTTY && !process.env.CI) return;
 	console.error(`Can't ${action} without ${input} in non-interactive mode.`);
 	process.exit(2);
