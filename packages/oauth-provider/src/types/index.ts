@@ -769,6 +769,7 @@ export interface OAuthOptions<
 	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
+	 * The requested `client_id` must match the signed query's.
 	 */
 	allowPublicClientPrelogin?: boolean;
 	/**

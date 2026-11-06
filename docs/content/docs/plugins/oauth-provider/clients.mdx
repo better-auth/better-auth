@@ -64,7 +64,7 @@ Most of the other client endpoints take a `client_id`. Each requires a session, 
 
 You cannot change `token_endpoint_auth_method` after creation, and an update cannot set the secret. Client secrets do not expire, so to retire one, rotate it with `rotateClientSecret`.
 
-To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, but that query is not bound to the client whose fields it reads. Anyone can get one by starting an authorization request. Enabling the option therefore makes the public fields of every enabled client, including `contacts`, readable without an account.
+To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, and `client_id` must match the client in that query; a request for any other client gets a `401`. Anyone can get a signed query by starting an authorization request, so a client's public fields, including `contacts`, are readable without an account by anyone who knows its `client_id` and a registered redirect URI.
 
 ### Restricted fields
 
