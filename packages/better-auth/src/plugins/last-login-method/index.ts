@@ -93,6 +93,8 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		if (path.includes("/passkey/verify-authentication")) return "passkey";
 		if (path.startsWith("/magic-link/verify")) return "magic-link";
 		if (path === "/sign-in/email-otp") return "email-otp";
+		if (path === "/sign-in/username") return "username";
+		if (path === "/sign-in/phone-number") return "phone-number";
 		return null;
 	};
 	const getResolveContext = (ctx: GenericEndpointContext) => {
