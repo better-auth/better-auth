@@ -457,18 +457,34 @@ async function batchCheckOrgAdmin(
 		return new Set();
 	}
 
-	const members = await ctx.context.adapter.findMany<Member>({
-		model: "member",
-		where: [
-			{ field: "userId", value: userId },
-			{ field: "organizationId", value: organizationIds, operator: "in" },
-		],
-	});
-
 	const adminOrgIds = new Set<string>();
-	for (const member of members) {
-		if (hasOrgAdminRole(member)) {
-			adminOrgIds.add(member.organizationId);
+	const PAGE_SIZE = 100;
+
+	for (let i = 0; i < organizationIds.length; i += PAGE_SIZE) {
+		const chunk = organizationIds.slice(i, i + PAGE_SIZE);
+		let memberOffset = 0;
+		while (true) {
+			const members = await ctx.context.adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{ field: "userId", value: userId },
+					{ field: "organizationId", value: chunk, operator: "in" },
+				],
+				limit: PAGE_SIZE,
+				offset: memberOffset,
+				sortBy: { field: "id", direction: "asc" },
+			});
+
+			for (const member of members) {
+				if (hasOrgAdminRole(member)) {
+					adminOrgIds.add(member.organizationId);
+				}
+			}
+
+			if (members.length < PAGE_SIZE) {
+				break;
+			}
+			memberOffset += members.length;
 		}
 	}
 
@@ -572,10 +588,23 @@ export const listSSOProviders = (options?: SSOOptions) => {
 		async (ctx) => {
 			const userId = ctx.context.session.user.id;
 
-			const allProviders =
-				await ctx.context.adapter.findMany<SSOProviderRecord>({
+			const allProviders: SSOProviderRecord[] = [];
+			let offset = 0;
+			const PAGE_SIZE = 100;
+
+			while (true) {
+				const page = await ctx.context.adapter.findMany<SSOProviderRecord>({
 					model: "ssoProvider",
+					limit: PAGE_SIZE,
+					offset,
+					sortBy: { field: "providerId", direction: "asc" },
 				});
+				allProviders.push(...page);
+				if (page.length < PAGE_SIZE) {
+					break;
+				}
+				offset += page.length;
+			}
 
 			const userOwnedProviders = allProviders.filter(
 				(p) => p.userId === userId && !p.organizationId,
