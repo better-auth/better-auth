@@ -140,7 +140,34 @@ export const auth = betterAuth({
 });
 ```
 
-`resolvePrivateKey` receives `{ providerId, keyId, issuer }` and returns `{ privateKeyJwk?, privateKeyPem?, kid?, algorithm? }`. `keyId` and `issuer` come from the stored provider config, which the registrant sets. Look the key up by `providerId`, and confirm that the provider belongs to the tenant the key was issued for. A lookup by `keyId` alone lets one registrant name another tenant's key.
+`resolvePrivateKey` receives `{ providerId, keyId, issuer }` and returns `{ privateKeyJwk?, privateKeyPem?, kid?, algorithm?, clientAssertion? }`. `keyId` and `issuer` come from the stored provider config, which the registrant sets. Look the key up by `providerId`, and confirm that the provider belongs to the tenant the key was issued for. A lookup by `keyId` alone lets one registrant name another tenant's key.
+
+Better Auth signs the assertion with only `alg`, `typ`, and `kid` in its header. If your IdP needs other header parameters, return `clientAssertion` and sign the JWT yourself. It receives `{ clientId, tokenEndpoint, grantType }` and is used instead of the key fields. Microsoft Entra ID, for example, identifies the certificate by `x5t#S256` ([certificate credentials](https://learn.microsoft.com/en-us/entra/identity-platform/certificate-credentials)):
+
+```ts title="auth.ts"
+import { importPKCS8, SignJWT } from "jose";
+
+sso({
+	resolvePrivateKey: async ({ providerId }) => {
+		const { privateKeyPem, x5tS256 } = await secrets.get(`sso/${providerId}`);
+		const key = await importPKCS8(privateKeyPem, "PS256");
+		return {
+			clientAssertion: ({ clientId, tokenEndpoint }) => { // [!code highlight]
+				const now = Math.floor(Date.now() / 1000);
+				return new SignJWT({})
+					.setProtectedHeader({ alg: "PS256", typ: "JWT", "x5t#S256": x5tS256 }) // [!code highlight]
+					.setIssuer(clientId)
+					.setSubject(clientId)
+					.setAudience(tokenEndpoint)
+					.setIssuedAt(now)
+					.setExpirationTime(now + 120)
+					.setJti(crypto.randomUUID())
+					.sign(key);
+			},
+		};
+	},
+});
+```
 
 ## Shared redirect URI
 
