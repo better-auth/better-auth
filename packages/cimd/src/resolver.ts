@@ -10,6 +10,7 @@ import { toExpJWT } from "better-auth/plugins";
 import { APIError } from "better-call";
 import type { MetadataDocumentResponseCacheHeaders } from "./client-store";
 import {
+	assertClientIdUrlFetchable,
 	fetchClientMetadataDocument,
 	persistMetadataDocumentClient,
 } from "./client-store";
@@ -476,18 +477,45 @@ export function createCimdResolver(cimdOptions: CimdOptions): CimdResolver {
 			);
 		}
 		const oauthOptions = provider.options as OAuthOptions<Scope[]>;
-		const cachedEntry = readCacheEntry(clientId);
-		const nowMs = Date.now();
-
-		if (cachedEntry && cachedEntry.expiresAt > nowMs) {
+		const resolveFromCache = (entry: CimdMetadataCacheEntry) => {
 			if (existingClient) return existingClient;
 			return persistMetadataDocumentClient(
 				ctx,
 				clientId,
-				cachedEntry.metadata,
+				entry.metadata,
 				cimdOptions,
 				oauthOptions,
 			);
+		};
+
+		const initialEntry = readCacheEntry(clientId);
+		if (initialEntry && initialEntry.expiresAt > Date.now()) {
+			return resolveFromCache(initialEntry);
+		}
+
+		// Every caller that would fetch or join a fetch evaluates the URL policy
+		// itself, before any permit is taken: refused URLs never spend the fetch
+		// budget, and a context-dependent policy is never skipped by coalescing.
+		await assertClientIdUrlFetchable(ctx, clientId, cimdOptions);
+
+		// Another caller may have cached or started a fetch while the policy ran.
+		// A refresh in that window may have updated the stored client, so read it
+		// again instead of returning the caller's earlier snapshot.
+		const cachedEntry = readCacheEntry(clientId);
+		if (cachedEntry && cachedEntry.expiresAt > Date.now()) {
+			if (!existingClient) return resolveFromCache(cachedEntry);
+			const storedClient = await ctx.context.adapter.findOne<
+				SchemaClient<Scope[]>
+			>({
+				model: oauthOptions.schema?.oauthClient?.modelName ?? "oauthClient",
+				where: [{ field: "clientId", value: clientId }],
+			});
+			if (
+				!storedClient ||
+				storedClient.clientDiscoveryId !== existingClient.clientDiscoveryId
+			)
+				throw invalidClient("client no longer exists");
+			return storedClient;
 		}
 
 		const inFlightResolution = inFlightResolutionByClientId.get(clientId);
