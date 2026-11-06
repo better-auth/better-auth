@@ -13,11 +13,14 @@ test.beforeAll(async () => {
 
 // Runs even when `beforeAll` times out, unlike `afterEach`.
 test.afterAll(async ({}, testInfo) => {
-	await app.stop();
-	await testInfo.attach("vite-dev.log", {
-		body: app.output(),
-		contentType: "text/plain",
-	});
+	try {
+		await app.stop();
+	} finally {
+		await testInfo.attach("vite-dev.log", {
+			body: app.output(),
+			contentType: "text/plain",
+		});
+	}
 });
 
 /**

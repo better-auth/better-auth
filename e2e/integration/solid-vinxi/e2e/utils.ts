@@ -26,11 +26,14 @@ export function setup() {
 			ref.clientPort = Number(new URL(clientURL).port);
 		},
 		clean: async (testInfo: TestInfo) => {
-			await app.stop();
-			await testInfo.attach("vinxi-dev.log", {
-				body: app.output(),
-				contentType: "text/plain",
-			});
+			try {
+				await app.stop();
+			} finally {
+				await testInfo.attach("vinxi-dev.log", {
+					body: app.output(),
+					contentType: "text/plain",
+				});
+			}
 		},
 	};
 }

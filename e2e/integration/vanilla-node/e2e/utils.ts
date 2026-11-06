@@ -69,11 +69,14 @@ export function setup(overrides?: Partial<BetterAuthOptions>) {
 		},
 		clean: async (testInfo: TestInfo) => {
 			server.close();
-			await app.stop();
-			await testInfo.attach("vite-client.log", {
-				body: app.output(),
-				contentType: "text/plain",
-			});
+			try {
+				await app.stop();
+			} finally {
+				await testInfo.attach("vite-client.log", {
+					body: app.output(),
+					contentType: "text/plain",
+				});
+			}
 		},
 	};
 }

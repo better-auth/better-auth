@@ -57,11 +57,14 @@ for (const [mode, server] of Object.entries(servers)) {
 
 		// Runs even when `beforeAll` times out, unlike `afterEach`.
 		test.afterAll(async ({}, testInfo) => {
-			await app.stop();
-			await testInfo.attach(`waku-${mode}.log`, {
-				body: app.output(),
-				contentType: "text/plain",
-			});
+			try {
+				await app.stop();
+			} finally {
+				await testInfo.attach(`waku-${mode}.log`, {
+					body: app.output(),
+					contentType: "text/plain",
+				});
+			}
 		});
 
 		test("forwards session cookies set inside a server action", async ({

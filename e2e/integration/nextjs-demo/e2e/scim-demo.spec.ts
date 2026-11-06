@@ -342,11 +342,14 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 
 	// Runs even when `beforeAll` times out, unlike `afterEach`.
 	test.afterAll(async ({}, testInfo) => {
-		await demo.stop();
-		await testInfo.attach("next-dev.log", {
-			body: demo.output(),
-			contentType: "text/plain",
-		});
+		try {
+			await demo.stop();
+		} finally {
+			await testInfo.attach("next-dev.log", {
+				body: demo.output(),
+				contentType: "text/plain",
+			});
+		}
 	});
 
 	/**
