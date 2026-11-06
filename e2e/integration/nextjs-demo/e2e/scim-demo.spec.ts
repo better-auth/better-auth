@@ -60,6 +60,8 @@ function createNextDemoRuntime() {
 			stdio: "pipe",
 		});
 		children.add(child);
+		// An unhandled spawn error would crash the worker.
+		child.on("error", (error) => (output += `${error}\n`));
 		// A closed child's pid can be reused, so `stop` must not signal it.
 		child.once("close", () => children.delete(child));
 		child.stdout.setEncoding("utf8").on("data", (data) => (output += data));
@@ -117,7 +119,7 @@ function createNextDemoRuntime() {
 			);
 			const deadline = Date.now() + 60_000;
 			while (Date.now() < deadline) {
-				if (demoProcess.exitCode !== null) {
+				if (demoProcess.exitCode !== null || demoProcess.signalCode !== null) {
 					throw new Error(`Next.js demo exited before startup:\n${output}`);
 				}
 				try {
