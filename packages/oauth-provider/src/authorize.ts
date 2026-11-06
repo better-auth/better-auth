@@ -643,7 +643,16 @@ export async function authorizeEndpoint(
 	}
 	// Always set default scopes if not originally sent
 	if (!requestedScopes) {
-		requestedScopes = client.scopes ?? opts.scopes ?? [];
+		const persistedScopes = client.scopes ?? opts.scopes ?? [];
+		// The persisted scope list is the client's capability set, not an
+		// authorization grant. When the request omits `scope`, fall back to
+		// the operator's registration default scopes, intersected with what
+		// this client actually holds.
+		requestedScopes = opts.clientRegistrationDefaultScopes
+			? persistedScopes.filter((scope) =>
+					opts.clientRegistrationDefaultScopes?.includes(scope),
+				)
+			: persistedScopes;
 		query.scope = requestedScopes.join(" ");
 	}
 	const openidRequested = requestedScopes.includes("openid");

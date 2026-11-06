@@ -5451,3 +5451,285 @@ describe("confirmationTokenType", () => {
 		expect(confirmationTokenType(undefined)).toBe("Bearer");
 	});
 });
+
+describe("oauth token - omitted scope with registration defaults", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const redirectUri = `${rpBaseUrl}/callback`;
+	// RFC 7636 appendix B verifier/challenge pair
+	const codeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+	const codeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				scopes: ["openid", "profile", "members:write"],
+				clientRegistrationDefaultScopes: ["openid", "profile"],
+				clientRegistrationAllowedScopes: ["openid", "profile", "members:write"],
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	async function registerClient() {
+		const response = await client.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "client_secret_post",
+			application_type: "native",
+		});
+		expect(response.error).toBeNull();
+		const registered = response.data!;
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.client_id,
+				update: { skip_consent: true },
+			},
+		});
+		return registered;
+	}
+
+	async function authorizeWithoutScope(clientId: string) {
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: clientId,
+			redirect_uri: redirectUri,
+			state: "123",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+		}).toString();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		return new URL(callbackRedirectUrl).searchParams.get("code")!;
+	}
+
+	async function exchangeCode(
+		clientId: string,
+		clientSecret: string,
+		code: string,
+	) {
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId,
+				clientSecret,
+				redirectURI: redirectUri,
+			},
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	it("exchanges an omitted-scope code for the registration default scopes", async () => {
+		const registered = await registerClient();
+		const code = await authorizeWithoutScope(registered.client_id);
+		const tokens = await exchangeCode(
+			registered.client_id,
+			registered.client_secret!,
+			code,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.scope).toBe("openid profile");
+	});
+
+	it("intersects the defaults with the client's current persisted scopes", async () => {
+		const registered = await registerClient();
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.client_id,
+				update: { scope: "openid members:write" },
+			},
+		});
+		const code = await authorizeWithoutScope(registered.client_id);
+		const tokens = await exchangeCode(
+			registered.client_id,
+			registered.client_secret!,
+			code,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeDefined();
+		expect(tokens.data?.scope).toBe("openid");
+	});
+
+	it("exchanges an empty-scope code when persisted scopes no longer cover the defaults", async () => {
+		const registered = await registerClient();
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.client_id,
+				update: { scope: "members:write" },
+			},
+		});
+		const code = await authorizeWithoutScope(registered.client_id);
+		const tokens = await exchangeCode(
+			registered.client_id,
+			registered.client_secret!,
+			code,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeUndefined();
+		expect(tokens.data?.scope).toBeFalsy();
+	});
+
+	it("still honors an explicit scope parameter", async () => {
+		const registered = await registerClient();
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: registered.client_id,
+			redirect_uri: redirectUri,
+			state: "123",
+			scope: "openid members:write",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+		}).toString();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain("code=");
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+		const tokens = await exchangeCode(
+			registered.client_id,
+			registered.client_secret!,
+			code,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.scope).toBe("openid members:write");
+	});
+});
+
+describe("oauth token - omitted scope with empty registration defaults", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const redirectUri = `${rpBaseUrl}/callback`;
+	// RFC 7636 appendix B verifier/challenge pair
+	const codeVerifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+	const codeChallenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt({
+				jwt: {
+					issuer: authServerBaseUrl,
+				},
+			}),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				scopes: ["openid"],
+				clientRegistrationDefaultScopes: [],
+				clientRegistrationAllowedScopes: ["openid"],
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	it("exchanges an empty-scope code instead of rejecting it with invalid_scope", async () => {
+		const response = await client.oauth2.register({
+			redirect_uris: [redirectUri],
+			token_endpoint_auth_method: "client_secret_post",
+			application_type: "native",
+		});
+		expect(response.error).toBeNull();
+		const registered = response.data!;
+		await auth.api.adminUpdateOAuthClient({
+			headers,
+			body: {
+				client_id: registered.client_id,
+				update: { skip_consent: true },
+			},
+		});
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: registered.client_id,
+			redirect_uri: redirectUri,
+			state: "123",
+			code_challenge: codeChallenge,
+			code_challenge_method: "S256",
+		}).toString();
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).toContain(redirectUri);
+		expect(callbackRedirectUrl).toContain("code=");
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: registered.client_id,
+				clientSecret: registered.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		const tokens = await client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+		expect(tokens.data?.id_token).toBeUndefined();
+		expect(tokens.data?.scope).toBeFalsy();
+	});
+});
