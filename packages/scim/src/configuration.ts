@@ -400,6 +400,60 @@ export interface SCIMCompatibilityOptions {
 	microsoftEntra?: SCIMMicrosoftEntraCompatibilityOptions;
 }
 
+/**
+ * The SCIM attribute types supported by a custom User schema extension.
+ *
+ * Only simple, singular attributes are supported. Complex and multi-valued
+ * attributes are intentionally out of scope.
+ */
+export type SCIMUserSchemaExtensionAttributeType =
+	| "string"
+	| "boolean"
+	| "integer"
+	| "decimal"
+	| "dateTime"
+	| "reference";
+
+/** One simple, singular attribute declared on a custom User schema extension. */
+export interface SCIMUserSchemaExtensionAttribute {
+	/** The attribute's SCIM name. Must be unique within its extension. */
+	name: string;
+	/** The attribute's SCIM type. Defaults to `"string"`. */
+	type?: SCIMUserSchemaExtensionAttributeType;
+	/** Whether the attribute is required when its extension schema is present. */
+	required?: boolean;
+	/** Whether string comparisons are case sensitive. Defaults to `false`. */
+	caseExact?: boolean;
+	/**
+	 * When the attribute is returned in a response. Defaults to `"default"`.
+	 * `"never"` keeps a stored value out of SCIM responses.
+	 */
+	returned?: "default" | "always" | "never";
+	/** Human readable description advertised through discovery. */
+	description?: string;
+	/**
+	 * The `user.additionalFields` key this attribute is written to.
+	 *
+	 * When present, the value is persisted to the Better Auth user so it can be
+	 * queried outside SCIM. The field must be declared on the core `user` model,
+	 * be optional, and have a compatible type. When absent, the attribute is only
+	 * stored in the SCIM resource and echoed back in responses.
+	 */
+	mapTo?: string;
+}
+
+/** A custom User schema extension declared by the application. */
+export interface SCIMUserSchemaExtension {
+	/** The extension's schema URN. Must be unique and not a built-in schema. */
+	urn: string;
+	/** A short human readable name advertised through discovery. */
+	name: string;
+	/** Human readable description advertised through discovery. */
+	description?: string;
+	/** The simple, singular attributes declared on the extension. */
+	attributes: readonly SCIMUserSchemaExtensionAttribute[];
+}
+
 /** Configuration for the SCIM plugin. */
 export interface SCIMOptions {
 	/**
@@ -418,4 +472,10 @@ export interface SCIMOptions {
 	projection?: SCIMProjection;
 	/** Narrow ingress compatibility for documented provider request shapes. */
 	compatibility?: SCIMCompatibilityOptions;
+	/**
+	 * Custom User schema extensions advertised, validated, stored, and
+	 * round-tripped by the SCIM endpoint. Each attribute may optionally be mapped
+	 * to a `user.additionalFields` key so it is queryable outside SCIM.
+	 */
+	userSchemaExtensions?: readonly SCIMUserSchemaExtension[];
 }

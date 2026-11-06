@@ -168,6 +168,8 @@ The plugin keeps directory resources and application access separate:
 
 You can configure several connections. Their credentials remain isolated, while multiple connections may contribute to the same provisioning domain.
 
+To carry application-specific attributes — such as an identifier from another system — through provisioning, declare [custom User schema extensions](/docs/plugins/scim/reference#custom-user-schema-extensions) and optionally map each attribute onto a queryable `user` field.
+
 ## Provision users
 
 When a directory creates a SCIM User, Better Auth creates a User by default, or links one when `identity.resolveUser` returns `link`. The directory can then update the profile, set `active`, or delete the SCIM resource. A SCIM User does not create an authentication account, so the user still needs SSO, a passkey, credentials, or another sign-in method.

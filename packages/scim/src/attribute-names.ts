@@ -44,6 +44,10 @@ function findAttribute(
 
 function readResourceAttributeNames(
 	resourceType: SCIMResourceType,
+	customExtensions: readonly {
+		id: string;
+		attributes: readonly SCIMAttributeName[];
+	}[] = [],
 ): SCIMResourceAttributeNames {
 	const registry = SCIM_RESOURCE_SCHEMA_REGISTRY[resourceType];
 	return {
@@ -51,12 +55,15 @@ function readResourceAttributeNames(
 			...SCIM_COMMON_ATTRIBUTES,
 			...registry.discoverySchema.attributes,
 		],
-		extensions: registry.schemas
-			.filter((schema) => schema.id !== registry.schemaId)
-			.map((schema) => ({
-				id: schema.id,
-				attributes: schema.discoverySchema.attributes,
-			})),
+		extensions: [
+			...registry.schemas
+				.filter((schema) => schema.id !== registry.schemaId)
+				.map((schema) => ({
+					id: schema.id,
+					attributes: schema.discoverySchema.attributes,
+				})),
+			...customExtensions,
+		],
 	};
 }
 
@@ -148,7 +155,14 @@ export function canonicalizeSCIMPatchRequestBody(
 export function canonicalizeSCIMResourceAttributeNames(
 	resourceType: SCIMResourceType,
 	resource: unknown,
+	customExtensions: readonly {
+		id: string;
+		attributes: readonly SCIMAttributeName[];
+	}[] = [],
 ): unknown {
 	if (!isRecord(resource)) return resource;
-	return canonicalizeRecord(resource, readResourceAttributeNames(resourceType));
+	return canonicalizeRecord(
+		resource,
+		readResourceAttributeNames(resourceType, customExtensions),
+	);
 }
