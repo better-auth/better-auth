@@ -37,7 +37,7 @@ jobs:
   release:
     if: >
       (github.event_name != 'workflow_dispatch' || inputs.snapshot == '') &&
-      github.repository_owner == 'better-auth' &&
+      github.repository == 'better-auth/better-auth' &&
       (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next' || (startsWith(github.ref, 'refs/heads/v') && endsWith(github.ref, '.x')))
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -364,7 +364,7 @@ jobs:
           fi
 
   snapshot:
-    if: github.event_name == 'workflow_dispatch' && inputs.snapshot != '' && github.repository_owner == 'better-auth'
+    if: github.event_name == 'workflow_dispatch' && inputs.snapshot != '' && github.repository == 'better-auth/better-auth'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: Release

@@ -1,0 +1,284 @@
+---
+icon: pluginsOAuthProvider
+sidebarTitle: "OAuth Provider"
+title: OAuth 2.1 Provider
+description: Make your app an OAuth 2.1 and OpenID Connect provider that other apps sign in with.
+---
+
+The OAuth Provider plugin turns your Better Auth server into an authorization server that implements [OAuth 2.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1), [OpenID Connect Core](https://openid.net/specs/openid-connect-core-1_0.html), and [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) metadata. Other applications send users to your app to sign in and receive access tokens for your APIs.
+
+<Callout type="info">
+  To sign users in to your app with another provider, use [social providers](/docs/concepts/oauth), [Generic OAuth](/docs/plugins/generic-oauth), or [SSO](/docs/plugins/sso) instead.
+</Callout>
+
+## What the provider supports
+
+| OAuth concept                | Support                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Grants                       | Authorization code, [client credentials](/docs/plugins/oauth-provider/clients#client-credentials-scopes), and [rotating refresh tokens](/docs/plugins/oauth-provider/tokens#refresh-tokens) with `offline_access`. [Device code](/docs/plugins/device-authorization) through `oauthDeviceAuthorization()`. Other grants through [extensions](/docs/plugins/oauth-provider/reference#provider-extensions). |
+| Authorization requests       | [`response_type=code`](/docs/plugins/oauth-provider/sign-in-flow#how-the-redirect-works) with the `query` response mode. `prompt` accepts `none`, `login`, `consent`, `select_account`, and `create`.                                                                                                                                                                                                     |
+| PKCE                         | Required by default, `S256` only (RFC 7636). An admin can [exempt a confidential client](/docs/plugins/oauth-provider/tokens#pkce).                                                                                                                                                                                                                                                                       |
+| Redirect URIs                | [Exact match](/docs/plugins/oauth-provider/clients#redirect-uri-forms) by default. A native client may vary the loopback port.                                                                                                                                                                                                                                                                            |
+| Client authentication        | `client_secret_basic`, `client_secret_post`, [`private_key_jwt`](/docs/plugins/oauth-provider/clients#private-key-jwt) (RFC 7523), and `none` for public clients. Other assertion-based methods through [extensions](/docs/plugins/oauth-provider/reference#provider-extensions).                                                                                                                         |
+| Client registration          | Admin and user [client APIs](/docs/plugins/oauth-provider/clients#manage-clients), [dynamic registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) (RFC 7591), and [Client ID Metadata Documents](/docs/plugins/cimd).                                                                                                                                                           |
+| Resource indicators          | [Resources](/docs/plugins/oauth-provider/tokens#resources) (RFC 8707). By default, a client gets tokens only for the resources it is linked to.                                                                                                                                                                                                                                                           |
+| Access tokens                | [JWT](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens) (RFC 9068) when the request names a resource and the JWT plugin is enabled. Otherwise opaque.                                                                                                                                                                                                                                    |
+| Sender-constrained tokens    | [DPoP](/docs/plugins/oauth-provider/tokens#dpop) (RFC 9449).                                                                                                                                                                                                                                                                                                                                              |
+| Introspection and revocation | [Introspection](/docs/plugins/oauth-provider/resource-server#introspection) (RFC 7662) and [revocation](/docs/plugins/oauth-provider/tokens#revocation) (RFC 7009).                                                                                                                                                                                                                                       |
+| Discovery                    | [Authorization server metadata](#expose-the-well-known-metadata) (RFC 8414) and OpenID Connect discovery. `iss` in every authorization response (RFC 9207). [Protected resource metadata](/docs/plugins/oauth-provider/resource-server#protected-resource-metadata) for your API (RFC 9728).                                                                                                              |
+| Consent                      | Stored per user, client, and optional [reference](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen), such as an organization. Users can [list, update, and delete](/docs/plugins/oauth-provider/sign-in-flow#manage-consents) their consents.                                                                                                                                                  |
+| OpenID Connect               | [ID tokens and UserInfo](/docs/plugins/oauth-provider/openid-connect), the `claims` parameter, and [pairwise subjects](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers).                                                                                                                                                                                                         |
+| Logout                       | [RP-initiated](/docs/plugins/oauth-provider/openid-connect#rp-initiated-logout) and [back-channel](/docs/plugins/oauth-provider/openid-connect#back-channel-logout) logout.                                                                                                                                                                                                                               |
+
+Not built in:
+
+* Implicit and password grants. OAuth 2.1 removes both.
+* The `id_token` and hybrid response types, and the `form_post` response mode.
+* Request objects (JAR).
+* A pushed authorization request endpoint. [`requestUriResolver`](/docs/plugins/oauth-provider/reference#tokens) can resolve `request_uri` values from your own endpoint.
+* `client_secret_jwt` and mutual-TLS client authentication.
+* Token exchange (RFC 8693). An [extension grant](/docs/plugins/oauth-provider/reference#provider-extensions) can add it.
+* Front-channel logout and OpenID Connect session management.
+* The RFC 7592 client configuration endpoint. Use the [client APIs](/docs/plugins/oauth-provider/clients#manage-clients) instead.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```package-install
+    @better-auth/oauth-provider
+    ```
+  </Step>
+
+  <Step>
+    ### Add the plugin to the server
+
+    Your provider signs tokens with the [JWT plugin](/docs/plugins/jwt). Disable the JWT plugin's `/token` route, because clients call `/oauth2/token` instead.
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { jwt } from "better-auth/plugins";
+    import { oauthProvider } from "@better-auth/oauth-provider"; // [!code highlight]
+
+    export const auth = betterAuth({
+      disabledPaths: ["/token"], // [!code highlight]
+      plugins: [
+        jwt(),
+        oauthProvider({ // [!code highlight]
+          loginPage: "/sign-in", // [!code highlight]
+          consentPage: "/consent", // [!code highlight]
+        }), // [!code highlight]
+      ],
+    });
+    ```
+
+    <Callout type="warn">
+      If you use [secondary storage](/docs/concepts/database#secondary-storage), also set `session.storeSessionInDatabase: true`. The provider looks sessions up in the database. Without `storeSessionInDatabase`, the server fails at startup.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Migrate the database
+
+    To add the plugin's fields and tables to your database, run the migration or generate the schema.
+
+    <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+        ```package-install
+        npx auth migrate
+        ```
+      </Tab>
+
+      <Tab value="generate">
+        ```package-install
+        npx auth generate
+        ```
+      </Tab>
+    </Tabs>
+
+    See the [Schema](/docs/plugins/oauth-provider/reference#schema) section to add the fields manually.
+  </Step>
+
+  <Step>
+    ### Expose the well-known metadata
+
+    Clients fetch your provider's metadata from the paths below, and the auth handler serves them when requests reach it. Most frameworks forward only your auth base path, such as `/api/auth/*`, to `auth.handler`. For each path outside it, such as the RFC 8414 path at the root of your domain, add a route.
+
+    | Metadata                                                                                              | Path                                                                                                          | Helper                              |
+    | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+    | [RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414#section-3) authorization server              | `{issuer}/.well-known/oauth-authorization-server` and `/.well-known/oauth-authorization-server/{issuer-path}` | `oauthProviderAuthServerMetadata`   |
+    | [OpenID Connect Discovery](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig) | `{issuer}/.well-known/openid-configuration`                                                                   | `oauthProviderOpenIdConfigMetadata` |
+
+    The OpenID configuration is served only when `scopes` includes `openid`, which it does by default. Without a custom issuer, the issuer path is your `basePath`, such as `/api/auth`.
+
+    ```ts title="app/.well-known/oauth-authorization-server/api/auth/route.ts"
+    import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
+    import { auth } from "@/lib/auth";
+
+    export const GET = oauthProviderAuthServerMetadata(auth);
+    ```
+
+    <Callout type="info">
+      If a browser-based client fetches your metadata from another origin, enable CORS on these routes. The metadata is public, so `oauthProviderAuthServerMetadata(auth, { headers: { "Access-Control-Allow-Origin": "*" } })` is fine. Do not allow credentials.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Add the client plugins
+
+    To resume the flow after each step, add `oauthProviderClient` to the app that renders your login and consent pages. It carries the authorization request through sign-in and consent.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { oauthProviderClient } from "@better-auth/oauth-provider/client"; // [!code highlight]
+
+    export const authClient = createAuthClient({
+      plugins: [oauthProviderClient()], // [!code highlight]
+    });
+    ```
+
+    To verify access tokens in your API, use `oauthProviderResourceClient`; see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
+  </Step>
+</Steps>
+
+## Login and consent pages
+
+The authorize endpoint redirects to `loginPage` when the user has no session, and to `consentPage` when the client needs the user's approval. Both receive a signed copy of the authorization request.
+
+On your login page, sign the user in as usual. When the session is created, the plugin continues the authorization request. On your consent page, call `authClient.oauth2.consent`. On both pages, the auth client sends the browser to the next step, so your pages need no redirect code. To build both, see [Sign-in and consent screens](/docs/plugins/oauth-provider/sign-in-flow).
+
+## Run your first flow
+
+To try the provider end to end, follow this flow. It issues an access token for one API, `https://api.example.com`. Build your login and consent pages first, because step 3 redirects to them.
+
+<Steps>
+  <Step>
+    ### Register the API and a client
+
+    Add the API to `resources`, then create a client linked to it. The authorize and token endpoints reject a `resource` the client is not linked to; see [Resources](/docs/plugins/oauth-provider/tokens#resources).
+
+    To create the client, call `adminCreateOAuthClient`. It runs only on the server and needs a signed-in user's session, so call it from a route that:
+
+    * only administrators can reach
+    * [checks the request's `Origin`](/docs/reference/security#csrf-protection)
+    * passes the request's headers
+
+    ```ts title="auth.ts"
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      resources: ["https://api.example.com"], // [!code highlight]
+    })
+    ```
+
+    ```ts title="admin-route.ts"
+    // Inside an admin-only server route that receives `request`; check its Origin first
+    const client = await auth.api.adminCreateOAuthClient({
+      headers: request.headers,
+      body: {
+        client_name: "Example App",
+        redirect_uris: ["https://app.example.com/callback"],
+        resources: ["https://api.example.com"],
+      },
+    });
+    // Store client.client_id and client.client_secret in the client app.
+    ```
+
+    To register a public client, such as a single-page or native app, add `token_endpoint_auth_method: "none"`. The client gets no secret and authenticates with PKCE alone.
+  </Step>
+
+  <Step>
+    ### Send the user to the authorize endpoint
+
+    The client app generates a PKCE verifier, then redirects with its S256 challenge as described in [RFC 7636 §4.2](https://datatracker.ietf.org/doc/html/rfc7636#section-4.2).
+
+    ```txt
+    https://auth.example.com/api/auth/oauth2/authorize
+      ?response_type=code
+      &client_id=CLIENT_ID
+      &redirect_uri=https://app.example.com/callback
+      &scope=openid profile offline_access
+      &state=STATE
+      &code_challenge=CODE_CHALLENGE
+      &code_challenge_method=S256
+      &resource=https://api.example.com
+    ```
+  </Step>
+
+  <Step>
+    ### Sign in and consent
+
+    The user signs in on `loginPage` and approves on `consentPage`. The provider then redirects to `redirect_uri` with `code`, `state`, and `iss`.
+  </Step>
+
+  <Step>
+    ### Exchange the code for tokens
+
+    The client app posts the code and the PKCE verifier to the token endpoint.
+
+    ```bash
+    curl -X POST https://auth.example.com/api/auth/oauth2/token \
+      -u "CLIENT_ID:CLIENT_SECRET" \
+      -d grant_type=authorization_code \
+      -d code=CODE \
+      -d redirect_uri=https://app.example.com/callback \
+      -d code_verifier=CODE_VERIFIER \
+      -d resource=https://api.example.com
+    ```
+
+    The response holds an access token for `https://api.example.com`, an ID token, and a refresh token.
+  </Step>
+
+  <Step>
+    ### Check the token
+
+    Call UserInfo with the access token. A 200 response with the user's `sub` and `name` means the flow worked.
+
+    ```bash
+    curl https://auth.example.com/api/auth/oauth2/userinfo \
+      -H "Authorization: Bearer ACCESS_TOKEN"
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+<Cards>
+  <Card href="/docs/plugins/oauth-provider/sign-in-flow" title="Sign-in and consent">
+    Build the login, consent, account selection, and post-login screens.
+  </Card>
+
+  <Card href="/docs/plugins/oauth-provider/clients" title="Clients">
+    Create and manage clients, enable dynamic registration, and use `private_key_jwt`.
+  </Card>
+
+  <Card href="/docs/plugins/oauth-provider/tokens" title="Tokens and scopes">
+    Configure scopes, resources, lifetimes, refresh tokens, PKCE, and DPoP.
+  </Card>
+
+  <Card href="/docs/plugins/oauth-provider/resource-server" title="Protect your API">
+    Verify access tokens in your API or another service.
+  </Card>
+
+  <Card href="/docs/plugins/oauth-provider/openid-connect" title="OpenID Connect">
+    Configure discovery, ID token and UserInfo claims, and logout.
+  </Card>
+
+  <Card href="/docs/plugins/oauth-provider/reference" title="Reference">
+    Review options, endpoints, errors, rate limits, and schema.
+  </Card>
+
+  <Card href="/docs/plugins/mcp" title="MCP">
+    Protect an MCP server with this provider. `mcp()` replaces `oauthProvider()`, so do not register both.
+  </Card>
+
+  <Card href="/docs/plugins/device-authorization" title="Device Authorization">
+    Sign in CLIs and limited-input devices.
+  </Card>
+
+  <Card href="/docs/plugins/cimd" title="Client ID Metadata Documents">
+    Identify clients by a metadata document URL.
+  </Card>
+</Cards>

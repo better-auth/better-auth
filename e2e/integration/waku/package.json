@@ -1,0 +1,25 @@
+{
+  "name": "@better-auth-test/fixtures-waku",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "waku dev",
+    "build": "waku build",
+    "start": "waku start",
+    "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "better-auth": "workspace:*",
+    "hono": "4.13.13",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19",
+    "react-server-dom-webpack": "19.3.1",
+    "waku": "1.0.0-rc.4"
+  },
+  "devDependencies": {
+    "@better-auth-test/test-utils": "workspace:*",
+    "@playwright/test": "~1.64.1",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19"
+  }
+}

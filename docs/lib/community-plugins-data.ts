@@ -529,4 +529,26 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/slargat.png",
 		},
 	},
+	{
+		name: "better-auth-trustware",
+		url: "https://github.com/danielmerja/better-auth-trustware",
+		description:
+			"Crypto billing for Better Auth, settled through Trustware: subscriptions with renewal invoices and grace periods, one-time purchases, prorated plan changes, trials, organization billing, and feature and limit access control.",
+		author: {
+			name: "Daniel Merja",
+			github: "danielmerja",
+			avatar: "https://github.com/danielmerja.png",
+		},
+	},
+	{
+		name: "@mockatoo/connect-better-auth",
+		url: "https://github.com/mockatoo/connectors/tree/main/packages/connectors/better-auth",
+		description:
+			"Hosted mock OAuth provider for development, E2E tests, CI and coding agents. Drop-in mocks of the Google, GitHub, Microsoft, Apple, Discord, LinkedIn, X and Facebook providers, so app code and the real token exchange stay unchanged, with no app registration or real accounts.",
+		author: {
+			name: "Tianhui Michael Li",
+			github: "tianhuil",
+			avatar: "https://github.com/tianhuil.png",
+		},
+	},
 ];

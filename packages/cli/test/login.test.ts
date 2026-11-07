@@ -112,8 +112,9 @@ describe.skipIf(process.platform === "win32")("login and logout", () => {
 			],
 		});
 
-		await run(["login", "--server-url", server.url]);
+		const { stdout } = await run(["login", "--server-url", server.url]);
 
+		expect(stdout).toBe("");
 		expect(server.requests).toEqual([
 			"POST /api/auth/device/code ",
 			"POST /api/auth/device/token ",
@@ -125,6 +126,22 @@ describe.skipIf(process.platform === "win32")("login and logout", () => {
 		});
 		expect((await fs.stat(path.dirname(tokenFile))).mode & 0o777).toBe(0o700);
 		expect((await fs.stat(tokenFile)).mode & 0o777).toBe(0o600);
+	});
+
+	it("logout exits 1 when the server does not revoke the session", async () => {
+		const { tokenFile, run } = await setupCli();
+		const server = await startServer({});
+		await fs.mkdir(path.dirname(tokenFile), { recursive: true });
+		await fs.writeFile(
+			tokenFile,
+			JSON.stringify({
+				serverUrl: server.url,
+				access_token: "session-token",
+			}),
+		);
+
+		await expect(run(["logout"])).rejects.toMatchObject({ code: 1 });
+		await expect(fs.access(tokenFile)).rejects.toThrow();
 	});
 
 	it("logout revokes the session and removes the token without spawning another CLI", async () => {

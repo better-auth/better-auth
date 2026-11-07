@@ -66,6 +66,7 @@ async function handleCursorAction() {
 		execSync(cmd, { stdio: "inherit" });
 		console.log(chalk.green("\n✓ Better Auth MCP server installed!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically open Cursor for MCP installation.",
@@ -96,6 +97,7 @@ function handleCodexAction() {
 		execSync(command, { stdio: "inherit" });
 		console.log(chalk.green("\n✓ Codex MCP configured!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically add to Codex. Please run this command manually:",
@@ -122,6 +124,7 @@ function handleClaudeCodeAction() {
 		execSync(command, { stdio: "inherit" });
 		console.log(chalk.green("\n✓ Claude Code MCP configured!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically add to Claude Code. Please run this command manually:",
@@ -184,6 +187,7 @@ function handleOpenCodeAction() {
 		);
 		console.log(chalk.green("✓ Better Auth MCP server added successfully!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically write opencode.json. Please add this configuration manually:",
@@ -226,6 +230,7 @@ function handleManualAction() {
 		console.log(chalk.green(`\n✓ MCP configuration written to ${configPath}`));
 		console.log(chalk.green("✓ Better Auth MCP server added successfully!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically write mcp.json. Please add this configuration manually:",

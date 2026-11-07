@@ -9,6 +9,7 @@ import {
 	getInstalledPackageVersion,
 	getPackageInfo,
 } from "../utils/get-package-info";
+import { isInteractive } from "../utils/interactive";
 
 type ReportedDependency = {
 	name: string;
@@ -403,6 +404,24 @@ async function getBetterAuthInfo(
 	}
 }
 
+const clipboardCommands: Partial<Record<NodeJS.Platform, string>> = {
+	darwin: "pbcopy",
+	linux: "xclip -selection clipboard",
+	win32: "clip",
+};
+
+// The notice goes to stderr so stdout keeps only the info itself.
+function copyToClipboard(text: string) {
+	const command = clipboardCommands[os.platform()];
+	if (!command) return;
+	try {
+		execSync(command, { input: text });
+		console.error(chalk.green("✓ Copied to clipboard"));
+	} catch {
+		console.error(chalk.yellow("⚠ Could not copy to clipboard"));
+	}
+}
+
 function formatOutput(data: any, indent = 0): string {
 	const spaces = " ".repeat(indent);
 
@@ -483,21 +502,7 @@ export const info = new Command("info")
 			console.log(jsonOutput);
 
 			if (options.copy) {
-				try {
-					const platform = os.platform();
-					if (platform === "darwin") {
-						execSync("pbcopy", { input: jsonOutput });
-						console.log(chalk.green("\n✓ Copied to clipboard"));
-					} else if (platform === "linux") {
-						execSync("xclip -selection clipboard", { input: jsonOutput });
-						console.log(chalk.green("\n✓ Copied to clipboard"));
-					} else if (platform === "win32") {
-						execSync("clip", { input: jsonOutput });
-						console.log(chalk.green("\n✓ Copied to clipboard"));
-					}
-				} catch {
-					console.log(chalk.yellow("\n⚠ Could not copy to clipboard"));
-				}
+				copyToClipboard(jsonOutput);
 			}
 			return;
 		}
@@ -535,11 +540,16 @@ export const info = new Command("info")
 		}
 
 		console.log(chalk.gray("\n" + "=".repeat(50)));
-		console.log(chalk.gray("\n💡 Tip: Use --json flag for JSON output"));
-		console.log(chalk.gray("💡 Use --copy flag to copy output to clipboard"));
-		console.log(
-			chalk.gray("💡 When reporting issues, include this information\n"),
-		);
+		// Tips are for a person at a terminal, never for CI or a script.
+		if (isInteractive()) {
+			console.error(chalk.gray("\n💡 Tip: Use --json flag for JSON output"));
+			console.error(
+				chalk.gray("💡 Use --copy flag to copy output to clipboard"),
+			);
+			console.error(
+				chalk.gray("💡 When reporting issues, include this information\n"),
+			);
+		}
 
 		if (options.copy) {
 			const textOutput = `
@@ -565,20 +575,6 @@ Better Auth:
 ${JSON.stringify(betterAuthInfo, null, 2)}
 `;
 
-			try {
-				const platform = os.platform();
-				if (platform === "darwin") {
-					execSync("pbcopy", { input: textOutput });
-					console.log(chalk.green("✓ Copied to clipboard"));
-				} else if (platform === "linux") {
-					execSync("xclip -selection clipboard", { input: textOutput });
-					console.log(chalk.green("✓ Copied to clipboard"));
-				} else if (platform === "win32") {
-					execSync("clip", { input: textOutput });
-					console.log(chalk.green("✓ Copied to clipboard"));
-				}
-			} catch {
-				console.log(chalk.yellow("⚠ Could not copy to clipboard"));
-			}
+			copyToClipboard(textOutput);
 		}
 	});

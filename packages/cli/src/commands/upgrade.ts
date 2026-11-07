@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
-import prompts from "prompts";
 import * as semver from "semver";
 import type { PackageJson } from "type-fest";
 import yoctoSpinner from "yocto-spinner";
@@ -13,6 +12,7 @@ import changesetConfig from "../../../../.changeset/config.json" with {
 import { detectPackageManager } from "../utils/check-package-managers";
 import { getPackageInfo } from "../utils/get-package-info";
 import { installDependencies } from "../utils/install-dependencies";
+import { prompt } from "../utils/prompt";
 import { cliVersion } from "../version";
 
 const dependencyMapSchema = z
@@ -144,18 +144,24 @@ export async function upgradeAction(opts: unknown) {
 
 	let confirmed = options.yes;
 	if (!confirmed) {
-		const response = await prompts({
-			type: "confirm",
-			name: "confirmed",
-			message: "Do you want to upgrade these packages?",
-			initial: true,
-		});
+		const response = await prompt(
+			{
+				type: "confirm",
+				name: "confirmed",
+				message: "Do you want to upgrade these packages?",
+				initial: true,
+			},
+			{
+				action: "install these upgrades",
+				input: "--yes",
+			},
+		);
 		confirmed = response.confirmed;
 	}
 
 	if (!confirmed) {
 		console.log("Upgrade cancelled.");
-		return;
+		process.exit(130);
 	}
 
 	const { packageManager } = await detectPackageManager(cwd, packageJson);

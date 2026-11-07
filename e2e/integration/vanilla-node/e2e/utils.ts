@@ -1,12 +1,22 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { spawn } from "node:child_process";
+import { once } from "node:events";
+import type { Server } from "node:http";
 import { fileURLToPath } from "node:url";
-import { terminate } from "@better-auth-test/test-utils/playwright";
-import type { Page } from "@playwright/test";
+import { launch } from "@better-auth-test/test-utils/playwright";
+import type { Page, TestInfo } from "@playwright/test";
 import type { BetterAuthOptions } from "better-auth";
 import { createAuthServer } from "./app";
 
 type ServerExtras = Parameters<typeof createAuthServer>[2];
+
+async function listen(server: Server, hostname: string) {
+	server.listen(0, hostname);
+	await once(server, "listening");
+	const address = server.address();
+	if (!address || typeof address === "string") {
+		throw new Error("Failed to get server port");
+	}
+	return address.port;
+}
 
 /**
  * Spins up the auth server (no Vite client) on an ephemeral port.
@@ -17,17 +27,7 @@ export async function setupServer(
 	extras?: ServerExtras,
 ) {
 	const server = await createAuthServer(undefined, overrides, extras);
-	const port = await new Promise<number>((resolve, reject) => {
-		server.once("error", reject);
-		server.listen(0, "127.0.0.1", () => {
-			const address = server.address();
-			if (address && typeof address === "object") {
-				resolve(address.port);
-			} else {
-				reject(new Error("Failed to get server port"));
-			}
-		});
-	});
+	const port = await listen(server, "127.0.0.1");
 	return {
 		port,
 		stop: () =>
@@ -48,64 +48,34 @@ export async function runClient<R>(
 }
 
 export function setup(overrides?: Partial<BetterAuthOptions>) {
-	let server: Awaited<ReturnType<typeof createAuthServer>>;
-	let clientChild: ChildProcessWithoutNullStreams;
-	const ref: {
-		clientPort: number;
-		serverPort: number;
-	} = {
+	let app = launch(root);
+	let server: Server;
+	const ref = {
 		clientPort: -1,
 		serverPort: -1,
 	};
 	return {
 		ref,
 		start: async () => {
+			// Each test starts its own server, so it gets its own log.
+			app = launch(root);
 			server = await createAuthServer(undefined, overrides);
-			clientChild = spawn("pnpm", ["run", "start:client"], {
-				detached: process.platform !== "win32",
-				cwd: root,
-				stdio: "pipe",
-			});
-			clientChild.stderr.on("data", (data) => {
-				const message = data.toString();
-				console.error(message);
-			});
-			clientChild.stdout.on("data", (data) => {
-				const message = data.toString();
-				console.log(message);
-			});
-
-			await Promise.all([
-				new Promise<void>((resolve) => {
-					server.listen(0, "0.0.0.0", () => {
-						const address = server.address();
-						if (address && typeof address === "object") {
-							ref.serverPort = address.port;
-							resolve();
-						}
-					});
-				}),
-				new Promise<void>((resolve) => {
-					clientChild.stdout.on("data", (data) => {
-						const message = data.toString();
-						// find: http://localhost:5173/
-						if (message.includes("http://localhost:")) {
-							const port: string = message
-								.split("http://localhost:")[1]
-								.split("/")[0]
-								.trim();
-							ref.clientPort = Number(port.replace(/\x1b\[[0-9;]*m/g, ""));
-							resolve();
-						}
-					});
-				}),
+			const [serverPort, clientURL] = await Promise.all([
+				listen(server, "0.0.0.0"),
+				app.start(["run", "start:client"]),
 			]);
+			ref.serverPort = serverPort;
+			ref.clientPort = Number(new URL(clientURL).port);
 		},
-		clean: async () => {
+		clean: async (testInfo: TestInfo) => {
+			server.close();
 			try {
-				await terminate(clientChild);
+				await app.stop();
 			} finally {
-				server.close();
+				await testInfo.attach("vite-client.log", {
+					body: app.output(),
+					contentType: "text/plain",
+				});
 			}
 		},
 	};

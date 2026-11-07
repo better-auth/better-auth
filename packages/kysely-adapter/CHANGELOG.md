@@ -1,5 +1,19 @@
 # @better-auth/kysely-adapter
 
+## 1.7.18
+
+## 1.7.17
+
+### Patch Changes
+
+- [#12220](https://github.com/better-auth/better-auth/pull/12220) [`fc2e00b`](https://github.com/better-auth/better-auth/commit/fc2e00bb4fd65e80246fdefcd5d8d5b1ea9d1512) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, a `create` that fails because the table reports no auto-increment id no longer leaves the inserted row behind, so retrying does not fail with a duplicate key error.
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, resolve the created row from the id reported by the INSERT itself instead of re-reading `LAST_INSERT_ID()` on a separate connection, and fail instead of guessing when no auto-increment id is reported.
+
 ## 1.7.15
 
 ## 1.7.14

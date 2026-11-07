@@ -111,12 +111,11 @@ export interface PasskeyOptions {
 	 */
 	rpName?: string | undefined;
 	/**
-	 * The URL at which registrations and authentications should occur.
-	 * `http://localhost` and `http://localhost:PORT` are also valid.
-	 * Do NOT include any trailing /
+	 * The origin, or list of origins, where registrations and authentications
+	 * run, without a trailing `/`. Set it when `rpID` is set and a wildcard in
+	 * `baseURL.allowedHosts` covers it.
 	 *
-	 * if this isn't provided. The client itself will
-	 * pass this value.
+	 * @default the origin of `baseURL`, plus a frontend origin listed exactly in `trustedOrigins`
 	 */
 	origin?: (string | string[] | null) | undefined;
 	/**
