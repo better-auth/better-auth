@@ -48,7 +48,7 @@ export const Route = createFileRoute('/api/auth/$')({
 ### Usage tips
 
 * We recommend using the client SDK or `authClient` to handle authentication, rather than server actions with `auth.api`.
-* When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `tanstackStartCookies` plugin to automatically handle this for you.
+* When you call functions that need to set cookies (like `signOut`) on the server, you'll need to handle cookie setting for TanStack Start. Better Auth provides a `tanstackStartCookies` plugin to automatically handle this for you.
 
 For React (TanStack Start with React):
 
@@ -77,16 +77,15 @@ export const auth = betterAuth({
 Now, when you call functions that set cookies, they will be automatically set using TanStack Start's cookie handling system.
 
 ```ts
+import { createServerFn } from "@tanstack/react-start";
+import { getRequestHeaders } from "@tanstack/react-start/server";
 import { auth } from "@/lib/auth"
 
-const signIn = async () => {
-    await auth.api.signInEmail({
-        body: {
-            email: "user@email.com",
-            password: "password",
-        }
+export const signOut = createServerFn({ method: "POST" }).handler(async () => {
+    await auth.api.signOut({
+        headers: getRequestHeaders()
     })
-}
+})
 ```
 
 ### Protecting Resources
