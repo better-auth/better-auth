@@ -1176,3 +1176,54 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 		expect(secondUser.banExpires).toBeNull();
 	});
 });
+
+describe("sign-up enumeration protection — adapter that omits unset fields", async () => {
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendVerificationEmail: vi.fn(),
+			},
+			plugins: [admin()],
+		},
+		{
+			disableTestUser: true,
+			testWith: "mongodb",
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12297
+	 */
+	it("should return the same user keys for a new and an existing email on MongoDB", async () => {
+		const send = (password: string) =>
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-up/email", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						name: "Mongo Shape",
+						email: "mongo-shape@test.com",
+						password,
+					}),
+				}),
+			);
+
+		const firstResponse = await send("password123");
+		const secondResponse = await send("password456");
+		expect(firstResponse.status).toBe(200);
+		expect(secondResponse.status).toBe(200);
+		const first = await firstResponse.json();
+		const second = await secondResponse.json();
+
+		expect(Object.keys(second.user)).toEqual(Object.keys(first.user));
+		for (const key of ["image", "banReason", "banExpires"]) {
+			expect(first.user).toHaveProperty(key, null);
+			expect(second.user).toHaveProperty(key, null);
+		}
+		expect(first.user.id).not.toBe(second.user.id);
+	});
+});
