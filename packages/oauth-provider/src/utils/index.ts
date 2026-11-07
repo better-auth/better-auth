@@ -10,6 +10,7 @@ import {
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
+import type { Session } from "better-auth/types";
 import { APIError } from "better-call";
 import { errors as joseErrors } from "jose";
 import {
@@ -204,6 +205,23 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 		normalizeTimestampValue((nested as Record<string, unknown>).createdAt) ??
 		normalizeTimestampValue((nested as Record<string, unknown>).created_at)
 	);
+}
+
+/**
+ * The session a refresh token was issued in, while it is still active.
+ * Refresh tokens outlive the session, so the tokens they mint must not name
+ * one that has ended.
+ */
+export async function findActiveSessionId(
+	ctx: GenericEndpointContext,
+	sessionId: string | null | undefined,
+): Promise<string | undefined> {
+	if (!sessionId) return undefined;
+	const session = await ctx.context.adapter.findOne<Session>({
+		model: "session",
+		where: [{ field: "id", value: sessionId }],
+	});
+	return session && session.expiresAt >= new Date() ? sessionId : undefined;
 }
 
 /**
