@@ -45,7 +45,14 @@ async function main() {
 }
 
 main().catch((error) => {
-	if (error instanceof BetterAuthError) {
+	// A coded error (ECONNREFUSED, a database driver error) describes the
+	// environment, not a CLI bug, so its stack only buries the message.
+	const expected =
+		error instanceof BetterAuthError ||
+		(error instanceof Error &&
+			"code" in error &&
+			typeof error.code === "string");
+	if (expected) {
 		console.error(error.message);
 	} else {
 		console.error("Error running Better Auth CLI:", error);

@@ -1,9 +1,30 @@
 import type { Stats } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
+import { BetterAuthError } from "@better-auth/core/error";
 import { Command } from "commander";
 import * as z from "zod";
-import { getAuth } from "../utils/get-config";
+import { findProjectFrame, getAuth } from "../utils/get-config";
+
+/**
+ * A code is a fixed label, unlike a message that can carry the connection
+ * string, so it is the part of a foreign error that is safe to show.
+ */
+const codeSuffix = (error: unknown) =>
+	error instanceof Error && "code" in error && typeof error.code === "string"
+		? ` (${error.code})`
+		: "";
+
+/**
+ * The CLI's own messages are safe to show, but an error thrown by the config can
+ * carry the connection string, so only its code and the line that threw are shown.
+ */
+function describeLoadFailure(error: unknown, cwd: string) {
+	if (error instanceof BetterAuthError) return error.message;
+	const headline = `Could not load the Better Auth configuration${codeSuffix(error)}.`;
+	const frame = findProjectFrame(error, cwd);
+	return frame ? `${headline}\n  ${frame}` : headline;
+}
 
 const sourceLabels = {
 	database: "the live database",
@@ -47,8 +68,8 @@ async function checkSchemaAction(input: unknown): Promise<void> {
 			configPath: options.config,
 			shouldThrowOnError: true,
 		});
-	} catch {
-		console.error("Could not load the Better Auth configuration.");
+	} catch (error) {
+		console.error(describeLoadFailure(error, cwd));
 		process.exitCode = 2;
 		return;
 	}
@@ -86,8 +107,9 @@ async function checkSchemaAction(input: unknown): Promise<void> {
 			process.exitCode = 1;
 			return;
 		}
+		// A driver message can carry the connection string, so only its code is shown.
 		console.error(
-			"Could not validate the schema. Check the auth configuration and database connection.",
+			`Could not validate the schema${codeSuffix(error)}. Check the auth configuration and database connection.`,
 		);
 		process.exitCode = 2;
 	}

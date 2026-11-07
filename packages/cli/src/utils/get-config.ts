@@ -308,6 +308,25 @@ const isServerOnlyError = (e: unknown): boolean =>
 		"This module cannot be imported from a Client Component module",
 	);
 
+/**
+ * The first stack frame in the project outside node_modules, so a config that
+ * throws can point at the user's own line.
+ */
+export function findProjectFrame(error: unknown, cwd: string) {
+	if (!(error instanceof Error)) return;
+	const prefix = `${cwd}${path.sep}`;
+	return error.stack
+		?.split("\n")
+		.map((line) => line.trim())
+		.find(
+			(line) =>
+				line.startsWith("at ") &&
+				line.includes(prefix) &&
+				!line.split(prefix)[1]?.includes("node_modules"),
+		)
+		?.replace(prefix, "");
+}
+
 const SERVER_ONLY_HINT = `Please remove import 'server-only' from your auth config file temporarily. The CLI cannot resolve the configuration with it included. You can re-add it after running the CLI.`;
 
 /** Strips a source extension so paths can be compared across TS and JS inputs. */
@@ -379,12 +398,23 @@ async function getLoadedConfig({
 }: ConfigInput): Promise<LoadedAuth | null> {
 	const fail = (message: string, error?: unknown): never => {
 		if (shouldThrowOnError)
-			throw error instanceof Error ? error : new Error(message);
-		const log = `[#better-auth]: ${message}`;
-		if (error) console.error(log, error);
-		else console.error(log);
+			throw error instanceof Error ? error : new BetterAuthError(message);
+		const frame = findProjectFrame(error, cwd);
+		console.error(
+			[
+				message,
+				error instanceof Error ? error.message : error,
+				frame && `  ${frame}`,
+			]
+				.filter(Boolean)
+				.join("\n"),
+		);
 		process.exit(1);
 	};
+	const failToLoad = (file: string, error: unknown) =>
+		isServerOnlyError(error)
+			? fail(SERVER_ONLY_HINT)
+			: fail(`Couldn't load your auth config in ${file}.`, error);
 
 	const resolvedOutputPath = outputPath
 		? path.resolve(cwd, outputPath)
@@ -437,7 +467,12 @@ async function getLoadedConfig({
 			const resolvedPath = existsSync(configPath)
 				? configPath
 				: path.join(cwd, configPath);
-			const { config } = await load(resolvedPath);
+			if (!existsSync(resolvedPath)) {
+				return fail(`Couldn't find the config file ${resolvedPath}.`);
+			}
+			const { config } = await load(resolvedPath).catch((error) =>
+				failToLoad(resolvedPath, error),
+			);
 			const options = config?.options;
 			if (!options) {
 				return fail(
@@ -452,8 +487,7 @@ async function getLoadedConfig({
 			try {
 				({ config } = await load(possiblePath));
 			} catch (e) {
-				if (isServerOnlyError(e)) return fail(SERVER_ONLY_HINT);
-				return fail("Couldn't read your auth config.", e);
+				return failToLoad(possiblePath, e);
 			}
 			// c12 returns `{}` when no file was found at this path; keep searching.
 			if (Object.keys(config).length === 0) continue;
