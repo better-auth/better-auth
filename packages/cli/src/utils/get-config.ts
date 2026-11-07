@@ -312,7 +312,7 @@ const isServerOnlyError = (e: unknown): boolean =>
  * The first stack frame in the project outside node_modules, so a config that
  * throws can point at the user's own line.
  */
-export function findProjectFrame(error: unknown, cwd: string) {
+function findProjectFrame(error: unknown, cwd: string) {
 	if (!(error instanceof Error)) return;
 	const prefix = `${cwd}${path.sep}`;
 	return error.stack
@@ -398,7 +398,7 @@ async function getLoadedConfig({
 }: ConfigInput): Promise<LoadedAuth | null> {
 	const fail = (message: string, error?: unknown): never => {
 		if (shouldThrowOnError)
-			throw error instanceof Error ? error : new BetterAuthError(message);
+			throw error instanceof Error ? error : new Error(message);
 		const frame = findProjectFrame(error, cwd);
 		console.error(
 			[
@@ -466,13 +466,14 @@ async function getLoadedConfig({
 			// If the configPath is a file, use it as is, as it means the path wasn't relative.
 			const resolvedPath = existsSync(configPath)
 				? configPath
-				: path.join(cwd, configPath);
-			if (!existsSync(resolvedPath)) {
-				return fail(`Couldn't find the config file ${resolvedPath}.`);
-			}
-			const { config } = await load(resolvedPath).catch((error) =>
+				: path.resolve(cwd, configPath);
+			// c12 resolves a path without an extension, so only it knows whether the file exists.
+			const { config, _configFile } = await load(resolvedPath).catch((error) =>
 				failToLoad(resolvedPath, error),
 			);
+			if (!_configFile) {
+				return fail(`Couldn't find the config file ${resolvedPath}.`);
+			}
 			const options = config?.options;
 			if (!options) {
 				return fail(

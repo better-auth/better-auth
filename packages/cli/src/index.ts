@@ -47,13 +47,13 @@ async function main() {
 main().catch((error) => {
 	// A coded error (ECONNREFUSED, a database driver error) describes the
 	// environment, not a CLI bug, so its stack only buries the message.
-	const expected =
-		error instanceof BetterAuthError ||
-		(error instanceof Error &&
-			"code" in error &&
-			typeof error.code === "string");
-	if (expected) {
-		console.error(error.message);
+	const code =
+		error instanceof Error && "code" in error && typeof error.code === "string"
+			? error.code
+			: undefined;
+	if (error instanceof BetterAuthError || code) {
+		// A dual-stack ECONNREFUSED is an AggregateError with an empty message.
+		console.error(error.message || code);
 	} else {
 		console.error("Error running Better Auth CLI:", error);
 	}

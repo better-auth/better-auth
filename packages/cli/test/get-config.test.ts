@@ -47,6 +47,20 @@ describe("getConfig", async () => {
 		);
 	});
 
+	it("resolves a --config path without an extension", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";\nexport const auth = betterAuth({});\n`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "auth",
+		});
+
+		expect(config).not.toBe(null);
+	});
+
 	it("shows where the config threw without the CLI stack", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "auth.ts"),
