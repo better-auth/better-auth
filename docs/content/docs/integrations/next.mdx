@@ -115,7 +115,7 @@ Now, when you call functions that set cookies, they will be automatically set.
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth"
 
-const signOut = async () => {
+export const signOut = async () => {
     await auth.api.signOut({
         headers: await headers()
     })
