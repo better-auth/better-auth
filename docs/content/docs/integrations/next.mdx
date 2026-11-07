@@ -94,7 +94,7 @@ export async function ServerComponent() {
 
 ### Server Action Cookies
 
-When you call a function that needs to set cookies, like `signInEmail` or `signUpEmail` in a server action, cookies won’t be set. This is because server actions need to use the `cookies` helper from Next.js to set cookies.
+When you call a function that needs to set cookies, like `signOut` in a server action, cookies won’t be set. This is because server actions need to use the `cookies` helper from Next.js to set cookies.
 
 To simplify this, you can use the `nextCookies` plugin, which will automatically set cookies for you whenever a `Set-Cookie` header is present in the response.
 
@@ -112,14 +112,12 @@ Now, when you call functions that set cookies, they will be automatically set.
 
 ```ts
 "use server";
+import { headers } from "next/headers";
 import { auth } from "@/lib/auth"
 
-const signIn = async () => {
-    await auth.api.signInEmail({
-        body: {
-            email: "user@email.com",
-            password: "password",
-        }
+export const signOut = async () => {
+    await auth.api.signOut({
+        headers: await headers()
     })
 }
 ```
