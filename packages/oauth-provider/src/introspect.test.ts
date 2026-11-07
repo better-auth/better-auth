@@ -643,6 +643,13 @@ describe("oauth introspect", async () => {
 			{ method: "POST", body: refresh.body, headers: refresh.headers },
 		);
 		expect(refreshed.data?.access_token).toBeDefined();
+		// The rotated refresh token stays bound to the session, so back-channel
+		// logout still finds it when the session is deleted.
+		const bound = await context.adapter.findMany<{ revoked?: Date | null }>({
+			model: "oauthRefreshToken",
+			where: [{ field: "sessionId", value: current!.session.id }],
+		});
+		expect(bound.filter((token) => !token.revoked)).toHaveLength(1);
 
 		const introspection = await client.oauth2.introspect(
 			{

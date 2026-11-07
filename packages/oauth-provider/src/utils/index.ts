@@ -208,9 +208,6 @@ export function resolveSessionAuthTime(value: unknown): Date | undefined {
 }
 
 /**
- * Normalizes OAuth resource values into a non-empty string array.
- */
-/**
  * The session a refresh token was issued in, while it is still active.
  * Refresh tokens outlive the session, so the tokens they mint must not name
  * one that has ended.
@@ -227,6 +224,9 @@ export async function findActiveSessionId(
 	return session && session.expiresAt >= new Date() ? sessionId : undefined;
 }
 
+/**
+ * Normalizes OAuth resource values into a non-empty string array.
+ */
 export function toResourceList(
 	value: string | string[] | undefined,
 ): string[] | undefined {

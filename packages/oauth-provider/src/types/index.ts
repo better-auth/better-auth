@@ -383,7 +383,7 @@ export interface OAuthClaimExtensionInput {
 	 * Session the tokens are issued for, when one is available. Best-effort:
 	 * set on the session-backed grants (authorization_code, refresh_token),
 	 * undefined otherwise (client_credentials, introspection, or a session that
-	 * was deleted or unlinked). Treat as possibly undefined.
+	 * has expired, was deleted, or was unlinked). Treat as possibly undefined.
 	 */
 	sessionId?: string;
 	resources?: string[];
