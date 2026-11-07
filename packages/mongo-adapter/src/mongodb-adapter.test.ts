@@ -887,6 +887,57 @@ describe("field-level indexes", () => {
 		expect(calls.at(-1)).toBe("aggregate");
 	});
 
+	it("creates field indexes on plural collection names", async () => {
+		const { db, createIndex } = createMockDb();
+		const adapter = mongodbAdapter(db, {
+			transaction: false,
+			usePlural: true,
+		})({});
+
+		await adapter.create({ model: "user", data: user("a@example.com") });
+
+		expect(db.collection).toHaveBeenCalledWith("users");
+		expect(db.collection).not.toHaveBeenCalledWith("user");
+		expect(createIndex).toHaveBeenCalledWith(
+			{ email: 1 },
+			{ name: "users_email_uidx", unique: true },
+		);
+	});
+
+	it("does not retry a failed index build inside a transaction", async () => {
+		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
+		let emailAttempts = 0;
+		const { db, createIndex, insertOne } = createMockDb(
+			async (keys, options) => {
+				if ("email" in keys && emailAttempts++ === 0) {
+					throw new Error("connection reset");
+				}
+				return options.name;
+			},
+		);
+		const client = {
+			startSession: () => ({
+				withTransaction: async (callback: () => Promise<unknown>) => callback(),
+				endSession: async () => {},
+			}),
+		} as unknown as MongoClient;
+		const adapter = mongodbAdapter(db, { client })({});
+
+		await adapter.transaction(async (trx) => {
+			await trx.findOne({
+				model: "user",
+				where: [{ field: "email", value: "a@example.com" }],
+			});
+			await trx.create({ model: "user", data: user("a@example.com") });
+		});
+		expect(indexCalls(createIndex, "user_email_uidx")).toHaveLength(1);
+		expect(insertOne).toHaveBeenCalledOnce();
+
+		await adapter.create({ model: "user", data: user("b@example.com") });
+		expect(indexCalls(createIndex, "user_email_uidx")).toHaveLength(2);
+		errorLog.mockRestore();
+	});
+
 	it("uses configured field and model names", async () => {
 		const { db, createIndex } = createMockDb();
 		const adapter = mongodbAdapter(db, { transaction: false })({

@@ -163,7 +163,7 @@ export const mongodbAdapter = (
 			db: Db,
 			session?: ClientSession | undefined,
 		): AdapterFactoryCustomizeAdapterCreator =>
-		({ getFieldAttributes, getFieldName, schema, options }) => {
+		({ getFieldAttributes, getFieldName, getModelName, schema, options }) => {
 			const customIdGen = getCustomIdGenerator(options);
 			const useUUIDs = options.advanced?.database?.generateId === "uuid";
 			const resolvedIndexesByModel = new Map<
@@ -347,12 +347,23 @@ export const mongodbAdapter = (
 			 */
 			const ensureFieldIndexes = () =>
 				Promise.all(
-					Object.entries(schema).flatMap(([modelKey, table]) =>
-						getFieldIndexes(table.modelName, modelKey).map((index) =>
-							ensureFieldIndex(table.modelName, index),
-						),
-					),
+					Object.keys(schema).flatMap((modelKey) => {
+						const model = getModelName(modelKey);
+						return getFieldIndexes(model, modelKey).map((index) =>
+							ensureFieldIndex(model, index),
+						);
+					}),
 				);
+
+			// A transaction waits for index setup only once, before its first
+			// operation touches a collection. Retries after a failure happen in
+			// later operations outside the transaction.
+			let transactionIndexSetup: Promise<unknown> | undefined;
+			const ensureFieldIndexesBeforeOperation = () => {
+				if (!session) return ensureFieldIndexes();
+				transactionIndexSetup ??= ensureFieldIndexes();
+				return transactionIndexSetup;
+			};
 
 			const ensureModelIndexes = async (model: string, modelKey: string) => {
 				const indexes = getResolvedModelIndexes(model, modelKey);
@@ -647,14 +658,14 @@ export const mongodbAdapter = (
 
 			return {
 				async create({ model, modelKey = model, data: values }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					await ensureModelIndexes(model, modelKey);
 					const res = await db.collection(model).insertOne(values, { session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
 				async findOne({ model, modelKey = model, where, select, join }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -771,7 +782,7 @@ export const mongodbAdapter = (
 					sortBy,
 					join,
 				}) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -900,7 +911,7 @@ export const mongodbAdapter = (
 					return res as any;
 				},
 				async count({ model, modelKey = model, where }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -915,7 +926,7 @@ export const mongodbAdapter = (
 					return res[0]?.total ?? 0;
 				},
 				async update({ model, modelKey = model, where, update: values }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 
@@ -933,7 +944,7 @@ export const mongodbAdapter = (
 					return doc as any;
 				},
 				async updateMany({ model, modelKey = model, where, update: values }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 
@@ -947,12 +958,12 @@ export const mongodbAdapter = (
 					return res.modifiedCount;
 				},
 				async delete({ model, modelKey = model, where }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					const clause = convertWhereClause({ where, modelKey });
 					await db.collection(model).deleteOne(clause, { session });
 				},
 				async deleteMany({ model, modelKey = model, where }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					const clause = convertWhereClause({ where, modelKey });
 					const res = await db
 						.collection(model)
@@ -960,7 +971,7 @@ export const mongodbAdapter = (
 					return res.deletedCount;
 				},
 				async consumeOne({ model, modelKey = model, where }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					const clause = convertWhereClause({ where, modelKey });
 					const doc = await db.collection(model).findOneAndDelete(clause, {
 						session,
@@ -969,7 +980,7 @@ export const mongodbAdapter = (
 					return ((doc as any)?.value as any) ?? null;
 				},
 				async incrementOne({ model, modelKey = model, where, increment, set }) {
-					await ensureFieldIndexes();
+					await ensureFieldIndexesBeforeOperation();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 					// Only include operators that carry fields. An empty `$inc: {}`
