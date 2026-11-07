@@ -340,6 +340,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					],
 				}),
 			]);
+			// On an empty page the user lookup below would build `IN ()` and
+			// `limit: 0`, which MSSQL rejects as a syntax error.
+			if (!members[0].length) {
+				return { members: [], total: members[1] };
+			}
 			// Prisma/Drizzle default findMany to ~100 when limit is omitted.
 			// Bound by the members result so every joined user row is fetched.
 			const users = await adapter.findMany<User>({
