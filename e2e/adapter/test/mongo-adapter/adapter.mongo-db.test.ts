@@ -179,19 +179,28 @@ const fieldLevelIndexTestSuite = createTestSuite(
 	},
 );
 
+let currentAdapter:
+	| { optionsKey: string; adapter: ReturnType<typeof mongodbAdapter> }
+	| undefined;
+
 const { execute } = await testAdapter({
-	adapter: async () => {
-		// The adapter is rebuilt when a test changes the schema options. Drop the
-		// indexes created for the previous options, as a migration would.
+	adapter: async (options) => {
+		const optionsKey = JSON.stringify(options);
+		if (currentAdapter?.optionsKey === optionsKey)
+			return currentAdapter.adapter;
+		// New schema options: drop the indexes created for the previous ones, as a
+		// migration would.
 		const collections = await db
 			.listCollections({}, { nameOnly: true })
 			.toArray();
 		await Promise.all(
 			collections.map(({ name }) => db.collection(name).dropIndexes()),
 		);
-		return mongodbAdapter(db, {
+		const adapter = mongodbAdapter(db, {
 			transaction: false,
 		});
+		currentAdapter = { optionsKey, adapter };
+		return adapter;
 	},
 	runMigrations: async (betterAuthOptions) => {},
 	tests: [

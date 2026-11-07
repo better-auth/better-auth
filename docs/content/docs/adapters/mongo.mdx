@@ -65,9 +65,9 @@ Without transactions, an earlier write may remain if a later write fails. When y
 
 For MongoDB, we don't need to generate or migrate the schema.
 
-The adapter creates the indexes the schema declares before the first write to each collection, including a unique index for every field marked `unique` (such as `user.email` and `session.token`). Optional unique fields get a partial index, so documents without a value don't conflict. Tables with `disableMigrations` are skipped.
+Before its first operation, the adapter creates a unique index for every scalar field marked `unique` (such as `user.email` and `session.token`) and an index for every field marked `index`. Table-level `indexes` declared by plugins are created before the first write to their collection. Optional unique fields get a partial index, so documents without a value don't conflict. JSON and array fields, fields already covered by a single-field table index with the same uniqueness, and tables with `disableMigrations` are skipped.
 
-If an index cannot be created, for example because the collection already contains duplicate values, Better Auth logs an error and keeps serving requests without that index. Remove the duplicates and restart the application to create it. An equivalent index that you created yourself under another name is reused.
+If one of these field-level indexes cannot be created, for example because the collection already contains duplicate values, Better Auth logs an error and keeps serving requests without that index. Remove the duplicates and restart the application to create it. An equivalent index that you created yourself under another name is reused. Table-level `indexes` declared by plugins still reject the write when they cannot be created.
 
 ## Joins
 

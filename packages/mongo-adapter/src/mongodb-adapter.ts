@@ -128,7 +128,7 @@ const DUPLICATE_KEY = 11000;
  * these types skips missing and `null` values, which SQL unique constraints
  * also allow more than once.
  */
-const UNIQUE_VALUE_BSON_TYPES: Record<string, string | string[]> = {
+const UNIQUE_VALUE_BSON_TYPES: Record<string, string> = {
 	string: "string",
 	number: "number",
 	boolean: "bool",
@@ -193,7 +193,7 @@ export const mongodbAdapter = (
 			/**
 			 * Field-level `unique` and `index` attributes, which SQL databases get
 			 * from migrations. Fields already covered by a single-field table index
-			 * are skipped.
+			 * with the same uniqueness are skipped.
 			 */
 			const getFieldIndexes = (model: string, modelKey: string) => {
 				const cachedIndexes = fieldIndexesByModel.get(model);
@@ -202,11 +202,10 @@ export const mongodbAdapter = (
 				const table = schema[modelKey];
 				const fieldIndexes: MongoFieldIndex[] = [];
 				if (table && !table.disableMigrations) {
-					const tableIndexColumns = new Set(
-						getResolvedModelIndexes(model, modelKey)
-							.filter((index) => index.columns.length === 1)
-							.map((index) => index.columns[0]),
-					);
+					const singleFieldTableIndexes = getResolvedModelIndexes(
+						model,
+						modelKey,
+					).filter((index) => index.columns.length === 1);
 					for (const [fieldName, field] of Object.entries(table.fields)) {
 						if (!field.unique && !field.index) continue;
 						if (
@@ -217,15 +216,22 @@ export const mongodbAdapter = (
 							continue;
 						}
 						const column = field.fieldName || fieldName;
-						if (column === "id" || tableIndexColumns.has(column)) continue;
+						if (column === "id") continue;
 						const unique = field.unique === true;
+						const coveredByTableIndex = singleFieldTableIndexes.some(
+							(index) =>
+								index.columns[0] === column &&
+								(!unique || index.unique === true),
+						);
+						if (coveredByTableIndex) continue;
 						let partialFilterExpression: Document | undefined;
 						if (unique && field.required === false) {
-							const bsonType = field.references
-								? ["string", "objectId", "binData"]
-								: typeof field.type === "string"
-									? UNIQUE_VALUE_BSON_TYPES[field.type]
-									: undefined;
+							const bsonType =
+								field.references?.field === "id"
+									? ["string", "objectId", "binData"]
+									: Array.isArray(field.type)
+										? "string"
+										: UNIQUE_VALUE_BSON_TYPES[field.type];
 							if (bsonType === undefined) continue;
 							partialFilterExpression = { [column]: { $type: bsonType } };
 						}
@@ -241,9 +247,14 @@ export const mongodbAdapter = (
 				return fieldIndexes;
 			};
 
+			const isEquivalentIndex = (existing: Document, index: MongoFieldIndex) =>
+				(existing.unique === true) === index.unique &&
+				JSON.stringify(existing.partialFilterExpression ?? null) ===
+					JSON.stringify(index.partialFilterExpression ?? null);
+
 			/**
-			 * Creates field-level indexes. Failures are logged instead of failing
-			 * the write, so deployments with existing duplicates or their own
+			 * Creates a field-level index. Failures are logged instead of failing
+			 * the operation, so deployments with existing duplicates or their own
 			 * indexes keep working.
 			 */
 			const ensureFieldIndex = (model: string, index: MongoFieldIndex) => {
@@ -257,10 +268,53 @@ export const mongodbAdapter = (
 				const existingSetup = fieldIndexSetupByDefinition.get(definition);
 				if (existingSetup !== undefined) return existingSetup;
 
+				const collection = db.collection(model);
 				const target = `"${index.name}" on ${model}.${index.column}`;
+				const handleError = async (error: unknown) => {
+					if (
+						error instanceof MongoServerError &&
+						error.code === INDEX_OPTIONS_CONFLICT
+					) {
+						const existing = (await collection.listIndexes().toArray()).find(
+							(candidate) =>
+								JSON.stringify(candidate.key) ===
+								JSON.stringify({ [index.column]: 1 }),
+						);
+						if (existing && isEquivalentIndex(existing, index)) return;
+						logger.error(
+							`Could not create the MongoDB index ${target} because the index "${existing?.name ?? "unknown"}" has the same key and different options. Drop it and restart the application.`,
+							error,
+						);
+						return;
+					}
+					if (
+						error instanceof MongoServerError &&
+						error.code === DUPLICATE_KEY
+					) {
+						logger.error(
+							`Could not create the unique MongoDB index ${target} because the collection already contains duplicate values. Uniqueness is not enforced until the duplicates are removed and the application restarts.`,
+							error,
+						);
+						return;
+					}
+					if (
+						error instanceof MongoServerError &&
+						error.code === INDEX_KEY_SPECS_CONFLICT
+					) {
+						logger.error(
+							`Could not create the MongoDB index ${target} because an index with that name and a different definition already exists. Drop or rename it and restart the application.`,
+							error,
+						);
+						return;
+					}
+					// Possibly temporary (network, failover, timeout), so the next
+					// operation tries again.
+					fieldIndexSetupByDefinition.delete(definition);
+					logger.error(`Failed to create the MongoDB index ${target}`, error);
+				};
 				const setup = Promise.resolve()
 					.then(() =>
-						db.collection(model).createIndex(
+						collection.createIndex(
 							{ [index.column]: 1 },
 							{
 								name: index.name,
@@ -273,49 +327,38 @@ export const mongodbAdapter = (
 					)
 					.then(
 						() => undefined,
-						(error: unknown) => {
-							if (!(error instanceof MongoServerError)) {
-								// Not answered by the server, so the next write tries again.
+						(error: unknown) =>
+							handleError(error).catch((inspectError: unknown) => {
 								fieldIndexSetupByDefinition.delete(definition);
 								logger.error(
 									`Failed to create the MongoDB index ${target}`,
-									error,
+									inspectError,
 								);
-								return;
-							}
-							if (error.code === INDEX_OPTIONS_CONFLICT) return;
-							if (error.code === DUPLICATE_KEY) {
-								logger.error(
-									`Could not create the unique MongoDB index ${target} because the collection already contains duplicate values. Uniqueness is not enforced until the duplicates are removed and the application restarts.`,
-									error,
-								);
-								return;
-							}
-							if (error.code === INDEX_KEY_SPECS_CONFLICT) {
-								logger.error(
-									`Could not create the MongoDB index ${target} because an index with that name and a different definition already exists. Drop or rename it and restart the application.`,
-									error,
-								);
-								return;
-							}
-							logger.error(
-								`Failed to create the MongoDB index ${target}`,
-								error,
-							);
-						},
+							}),
 					);
 				fieldIndexSetupByDefinition.set(definition, setup);
 				return setup;
 			};
 
+			/**
+			 * Field indexes for every model are created before the adapter's first
+			 * operation of any kind. An index build waits for open transactions
+			 * that touched its collection, so it must not start inside one.
+			 */
+			const ensureFieldIndexes = () =>
+				Promise.all(
+					Object.entries(schema).flatMap(([modelKey, table]) =>
+						getFieldIndexes(table.modelName, modelKey).map((index) =>
+							ensureFieldIndex(table.modelName, index),
+						),
+					),
+				);
+
 			const ensureModelIndexes = async (model: string, modelKey: string) => {
 				const indexes = getResolvedModelIndexes(model, modelKey);
 
-				await Promise.all([
-					...getFieldIndexes(model, modelKey).map((index) =>
-						ensureFieldIndex(model, index),
-					),
-					...indexes.map((index) => {
+				await Promise.all(
+					indexes.map((index) => {
 						const physicalFieldNames = index.columns.map((fieldName) =>
 							fieldName === "id" ? "_id" : fieldName,
 						);
@@ -346,7 +389,7 @@ export const mongodbAdapter = (
 						});
 						return indexSetup;
 					}),
-				]);
+				);
 			};
 
 			function coerceToIdType(value: string): ObjectId | UUID {
@@ -604,12 +647,14 @@ export const mongodbAdapter = (
 
 			return {
 				async create({ model, modelKey = model, data: values }) {
+					await ensureFieldIndexes();
 					await ensureModelIndexes(model, modelKey);
 					const res = await db.collection(model).insertOne(values, { session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
 				async findOne({ model, modelKey = model, where, select, join }) {
+					await ensureFieldIndexes();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -726,6 +771,7 @@ export const mongodbAdapter = (
 					sortBy,
 					join,
 				}) {
+					await ensureFieldIndexes();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -854,6 +900,7 @@ export const mongodbAdapter = (
 					return res as any;
 				},
 				async count({ model, modelKey = model, where }) {
+					await ensureFieldIndexes();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -868,6 +915,7 @@ export const mongodbAdapter = (
 					return res[0]?.total ?? 0;
 				},
 				async update({ model, modelKey = model, where, update: values }) {
+					await ensureFieldIndexes();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 
@@ -885,6 +933,7 @@ export const mongodbAdapter = (
 					return doc as any;
 				},
 				async updateMany({ model, modelKey = model, where, update: values }) {
+					await ensureFieldIndexes();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 
@@ -898,10 +947,12 @@ export const mongodbAdapter = (
 					return res.modifiedCount;
 				},
 				async delete({ model, modelKey = model, where }) {
+					await ensureFieldIndexes();
 					const clause = convertWhereClause({ where, modelKey });
 					await db.collection(model).deleteOne(clause, { session });
 				},
 				async deleteMany({ model, modelKey = model, where }) {
+					await ensureFieldIndexes();
 					const clause = convertWhereClause({ where, modelKey });
 					const res = await db
 						.collection(model)
@@ -909,6 +960,7 @@ export const mongodbAdapter = (
 					return res.deletedCount;
 				},
 				async consumeOne({ model, modelKey = model, where }) {
+					await ensureFieldIndexes();
 					const clause = convertWhereClause({ where, modelKey });
 					const doc = await db.collection(model).findOneAndDelete(clause, {
 						session,
@@ -917,6 +969,7 @@ export const mongodbAdapter = (
 					return ((doc as any)?.value as any) ?? null;
 				},
 				async incrementOne({ model, modelKey = model, where, increment, set }) {
+					await ensureFieldIndexes();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 					// Only include operators that carry fields. An empty `$inc: {}`
