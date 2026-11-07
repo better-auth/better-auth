@@ -402,9 +402,13 @@ describe("removeMember with >100 members", async () => {
 				model: "user",
 				data: { email: `${slug}-${i}@test.com`, name: `${slug}-${i}` },
 			});
+			// Fixed, ordered ids: removeMember pages through owner candidates
+			// sorted by id, so these 110 fill the first page deterministically.
 			await ctx.adapter.create({
 				model: "member",
+				forceAllowId: true,
 				data: {
+					id: `${slug}-member-${String(i).padStart(3, "0")}`,
 					organizationId: org.id,
 					userId: user.id,
 					role: "co-owner",
@@ -429,14 +433,19 @@ describe("removeMember with >100 members", async () => {
 				name: "late-owner-org-second-owner",
 			},
 		});
-		const secondOwner = await auth.api.addMember({
-			body: {
+		// An id that sorts after every co-owner above, so the only other owner
+		// is reachable only from the second page of candidates.
+		await ctx.adapter.create({
+			model: "member",
+			forceAllowId: true,
+			data: {
+				id: "late-owner-org-member-zzz",
 				organizationId: org.id,
 				userId: secondOwnerUser.id,
 				role: "owner",
+				createdAt: new Date(),
 			},
 		});
-		if (!secondOwner) throw new Error("Second owner not added");
 
 		const removed = await auth.api.removeMember({
 			body: {
