@@ -1,6 +1,6 @@
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { createTestSuite, testAdapter } from "@better-auth/test-utils/adapter";
-import type { Session, User } from "better-auth";
+import type { BetterAuthOptions, Session, User } from "better-auth";
 import { MongoClient, ObjectId } from "mongodb";
 import { expect } from "vitest";
 import {
@@ -76,8 +76,119 @@ const updateObjectIdTestSuite = createTestSuite(
 	},
 );
 
+const handlePluginOptions = {
+	plugins: [
+		{
+			id: "field-index-handle",
+			schema: {
+				user: {
+					fields: {
+						handle: { type: "string", required: false, unique: true },
+					},
+				},
+			},
+		},
+	],
+} satisfies BetterAuthOptions;
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12296
+ */
+const fieldLevelIndexTestSuite = createTestSuite(
+	"field-level-indexes",
+	{},
+	(helpers) => {
+		const userData = (email: string, extra: Record<string, unknown> = {}) => ({
+			name: "Index User",
+			email,
+			emailVerified: false,
+			createdAt: new Date(),
+			updatedAt: new Date(),
+			...extra,
+		});
+		return {
+			"unique fields - concurrent creates with the same email keep one user":
+				async () => {
+					const results = await Promise.allSettled(
+						Array.from({ length: 10 }, () =>
+							helpers.adapter.create<User>({
+								model: "user",
+								data: userData("race@example.com"),
+							}),
+						),
+					);
+					expect(
+						results.filter((result) => result.status === "fulfilled"),
+					).toHaveLength(1);
+					expect(
+						await db
+							.collection("user")
+							.countDocuments({ email: "race@example.com" }),
+					).toBe(1);
+				},
+			"unique fields - optional values may be missing on many documents": {
+				migrateBetterAuth: handlePluginOptions,
+				async test() {
+					await helpers.adapter.create({
+						model: "user",
+						data: userData("no-handle-1@example.com"),
+					});
+					await helpers.adapter.create({
+						model: "user",
+						data: userData("no-handle-2@example.com", { handle: null }),
+					});
+					await helpers.adapter.create({
+						model: "user",
+						data: userData("handle-1@example.com", { handle: "ada" }),
+					});
+					await expect(
+						helpers.adapter.create({
+							model: "user",
+							data: userData("handle-2@example.com", { handle: "ada" }),
+						}),
+					).rejects.toThrow(/duplicate key/);
+				},
+			},
+			"unique fields - existing duplicates do not block writes": async () => {
+				const collection = db.collection("existing_duplicates_user");
+				await collection.insertMany([
+					{ name: "A", email: "dup@example.com" },
+					{ name: "B", email: "dup@example.com" },
+				]);
+				try {
+					const adapter = mongodbAdapter(db, { transaction: false })({
+						user: { modelName: "existing_duplicates_user" },
+					});
+					await expect(
+						adapter.create<User>({
+							model: "user",
+							data: userData("new@example.com"),
+						}),
+					).resolves.toMatchObject({ email: "new@example.com" });
+					const indexNames = (await collection.indexes()).map(
+						(index) => index.name,
+					);
+					expect(indexNames).not.toContain(
+						"existing_duplicates_user_email_uidx",
+					);
+				} finally {
+					await collection.drop();
+				}
+			},
+		};
+	},
+);
+
 const { execute } = await testAdapter({
-	adapter: (options) => {
+	adapter: async () => {
+		// The adapter is rebuilt when a test changes the schema options. Drop the
+		// indexes created for the previous options, as a migration would.
+		const collections = await db
+			.listCollections({}, { nameOnly: true })
+			.toArray();
+		await Promise.all(
+			collections.map(({ name }) => db.collection(name).dropIndexes()),
+		);
 		return mongodbAdapter(db, {
 			transaction: false,
 		});
@@ -91,6 +202,7 @@ const { execute } = await testAdapter({
 		caseInsensitiveTestSuite(),
 		updateObjectIdTestSuite(),
 		uuidTestSuite(),
+		fieldLevelIndexTestSuite(),
 		compoundIndexTestSuite({
 			mismatchError: /existing index has the same name/i,
 			async verifyIndexState() {

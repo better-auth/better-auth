@@ -1,3 +1,4 @@
+import { logger } from "@better-auth/core/env";
 import type { Db } from "mongodb";
 import {
 	MongoClient,
@@ -773,5 +774,203 @@ describe("uuid support", () => {
 
 		expect(result).not.toBeNull();
 		expect((result as Record<string, unknown>).id).toBe(uuid);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12296
+ */
+describe("field-level indexes", () => {
+	const createMockDb = (createIndex: (...args: unknown[]) => unknown) => {
+		const insertOne = vi.fn(async (document: Record<string, unknown>) => ({
+			insertedId: document._id,
+		}));
+		const db = { collection: vi.fn(() => ({ createIndex, insertOne })) };
+		return { db: db as unknown as Db, insertOne };
+	};
+	const user = (email: string) => ({
+		name: "Test User",
+		email,
+		emailVerified: false,
+		createdAt: new Date(),
+		updatedAt: new Date(),
+	});
+
+	it("creates a unique index for each unique field before the first write", async () => {
+		const calls: string[] = [];
+		const createIndex = vi.fn(async (_keys: unknown, options: unknown) => {
+			calls.push("createIndex");
+			return (options as { name: string }).name;
+		});
+		const { db, insertOne } = createMockDb(createIndex);
+		insertOne.mockImplementation(async (document) => {
+			calls.push("insertOne");
+			return { insertedId: document._id };
+		});
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+
+		await adapter.create({ model: "user", data: user("a@example.com") });
+		await adapter.create({ model: "user", data: user("b@example.com") });
+
+		expect(createIndex).toHaveBeenCalledExactlyOnceWith(
+			{ email: 1 },
+			{ name: "user_email_uidx", unique: true },
+		);
+		expect(calls).toEqual(["createIndex", "insertOne", "insertOne"]);
+	});
+
+	it("uses configured field and model names", async () => {
+		const createIndex = vi.fn(async () => "index");
+		const { db } = createMockDb(createIndex);
+		const adapter = mongodbAdapter(db, { transaction: false })({
+			session: { modelName: "sessions", fields: { token: "session_token" } },
+		});
+
+		await adapter.create({
+			model: "session",
+			data: {
+				token: "token",
+				userId: new ObjectId().toHexString(),
+				expiresAt: new Date(),
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		expect(db.collection).toHaveBeenCalledWith("sessions");
+		expect(createIndex).toHaveBeenCalledWith(
+			{ session_token: 1 },
+			{ name: "sessions_session_token_uidx", unique: true },
+		);
+		expect(createIndex).toHaveBeenCalledWith(
+			{ userId: 1 },
+			{ name: "sessions_userId_idx", unique: false },
+		);
+	});
+
+	it("only enforces optional unique fields on documents that have a value", async () => {
+		const createIndex = vi.fn(async () => "index");
+		const { db } = createMockDb(createIndex);
+		const adapter = mongodbAdapter(db, { transaction: false })({
+			plugins: [
+				{
+					id: "handles",
+					schema: {
+						user: {
+							fields: {
+								handle: { type: "string", required: false, unique: true },
+								settings: { type: "json", required: false, unique: true },
+							},
+						},
+					},
+				},
+			],
+		});
+
+		await adapter.create({ model: "user", data: user("a@example.com") });
+
+		expect(createIndex).toHaveBeenCalledWith(
+			{ handle: 1 },
+			{
+				name: "user_handle_uidx",
+				unique: true,
+				partialFilterExpression: { handle: { $type: "string" } },
+			},
+		);
+		expect(createIndex).not.toHaveBeenCalledWith(
+			{ settings: 1 },
+			expect.anything(),
+		);
+	});
+
+	it("does not create field indexes for tables with migrations disabled", async () => {
+		const createIndex = vi.fn(async () => "index");
+		const { db, insertOne } = createMockDb(createIndex);
+		const adapter = mongodbAdapter(db, { transaction: false })({
+			plugins: [
+				{
+					id: "external",
+					schema: {
+						externalUser: {
+							disableMigration: true,
+							fields: { email: { type: "string", unique: true } },
+						},
+					},
+				},
+			],
+		});
+
+		await adapter.create({
+			model: "externalUser",
+			data: { email: "a@example.com" },
+		});
+
+		expect(createIndex).not.toHaveBeenCalled();
+		expect(insertOne).toHaveBeenCalledOnce();
+	});
+
+	it("logs existing duplicates once and keeps accepting writes", async () => {
+		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const duplicate = new MongoServerError({
+			errmsg: "E11000 duplicate key error",
+			code: 11000,
+		});
+		const createIndex = vi.fn(async () => {
+			throw duplicate;
+		});
+		const { db, insertOne } = createMockDb(createIndex);
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+
+		await adapter.create({ model: "user", data: user("a@example.com") });
+		await adapter.create({ model: "user", data: user("b@example.com") });
+
+		expect(insertOne).toHaveBeenCalledTimes(2);
+		expect(createIndex).toHaveBeenCalledOnce();
+		expect(errorLog).toHaveBeenCalledExactlyOnceWith(
+			expect.stringContaining(
+				'"user_email_uidx" on user.email because the collection already contains duplicate values',
+			),
+			duplicate,
+		);
+		errorLog.mockRestore();
+	});
+
+	it("accepts an equivalent index that exists under another name", async () => {
+		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const createIndex = vi.fn(async () => {
+			throw new MongoServerError({
+				errmsg: "Index already exists with a different name: email_1",
+				code: 85,
+			});
+		});
+		const { db, insertOne } = createMockDb(createIndex);
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+
+		await adapter.create({ model: "user", data: user("a@example.com") });
+		await adapter.create({ model: "user", data: user("b@example.com") });
+
+		expect(createIndex).toHaveBeenCalledOnce();
+		expect(insertOne).toHaveBeenCalledTimes(2);
+		expect(errorLog).not.toHaveBeenCalled();
+		errorLog.mockRestore();
+	});
+
+	it("retries index creation after an error the server did not answer", async () => {
+		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const createIndex = vi
+			.fn()
+			.mockRejectedValueOnce(new Error("connection reset"))
+			.mockResolvedValue("user_email_uidx");
+		const { db, insertOne } = createMockDb(createIndex);
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+
+		await adapter.create({ model: "user", data: user("a@example.com") });
+		await adapter.create({ model: "user", data: user("b@example.com") });
+		await adapter.create({ model: "user", data: user("c@example.com") });
+
+		expect(createIndex).toHaveBeenCalledTimes(2);
+		expect(insertOne).toHaveBeenCalledTimes(3);
+		expect(errorLog).toHaveBeenCalledOnce();
+		errorLog.mockRestore();
 	});
 });

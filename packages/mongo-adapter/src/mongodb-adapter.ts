@@ -7,10 +7,19 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
-import { resolveDatabaseTableIndexes } from "@better-auth/core/db/internal";
+import {
+	getDatabaseFieldIndexName,
+	resolveDatabaseTableIndexes,
+} from "@better-auth/core/db/internal";
 import { logger } from "@better-auth/core/env";
-import type { ClientSession, Db, MongoClient } from "mongodb";
-import { MongoError, MongoErrorLabel, ObjectId, UUID } from "mongodb";
+import type { ClientSession, Db, Document, MongoClient } from "mongodb";
+import {
+	MongoError,
+	MongoErrorLabel,
+	MongoServerError,
+	ObjectId,
+	UUID,
+} from "mongodb";
 import {
 	escapeForMongoRegex,
 	insensitiveContains,
@@ -108,12 +117,38 @@ export interface MongoDBAdapterConfig {
 	transaction?: boolean | undefined;
 }
 
+/** MongoDB server code for an equivalent index that exists under another name. */
+const INDEX_OPTIONS_CONFLICT = 85;
+/** MongoDB server code for an index whose name is taken by another definition. */
+const INDEX_KEY_SPECS_CONFLICT = 86;
+const DUPLICATE_KEY = 11000;
+
+/**
+ * BSON types a value of an optional unique field can have. A partial index on
+ * these types skips missing and `null` values, which SQL unique constraints
+ * also allow more than once.
+ */
+const UNIQUE_VALUE_BSON_TYPES: Record<string, string | string[]> = {
+	string: "string",
+	number: "number",
+	boolean: "bool",
+	date: "date",
+};
+
+interface MongoFieldIndex {
+	name: string;
+	column: string;
+	unique: boolean;
+	partialFilterExpression?: Document | undefined;
+}
+
 export const mongodbAdapter = (
 	db: Db,
 	config?: MongoDBAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null;
 	const indexSetupByDefinition = new Map<string, Promise<string>>();
+	const fieldIndexSetupByDefinition = new Map<string, Promise<void>>();
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator = options.advanced?.database?.generateId;
@@ -153,11 +188,134 @@ export const mongodbAdapter = (
 				return indexes;
 			};
 
+			const fieldIndexesByModel = new Map<string, MongoFieldIndex[]>();
+
+			/**
+			 * Field-level `unique` and `index` attributes, which SQL databases get
+			 * from migrations. Fields already covered by a single-field table index
+			 * are skipped.
+			 */
+			const getFieldIndexes = (model: string, modelKey: string) => {
+				const cachedIndexes = fieldIndexesByModel.get(model);
+				if (cachedIndexes) return cachedIndexes;
+
+				const table = schema[modelKey];
+				const fieldIndexes: MongoFieldIndex[] = [];
+				if (table && !table.disableMigrations) {
+					const tableIndexColumns = new Set(
+						getResolvedModelIndexes(model, modelKey)
+							.filter((index) => index.columns.length === 1)
+							.map((index) => index.columns[0]),
+					);
+					for (const [fieldName, field] of Object.entries(table.fields)) {
+						if (!field.unique && !field.index) continue;
+						if (
+							field.type === "json" ||
+							field.type === "string[]" ||
+							field.type === "number[]"
+						) {
+							continue;
+						}
+						const column = field.fieldName || fieldName;
+						if (column === "id" || tableIndexColumns.has(column)) continue;
+						const unique = field.unique === true;
+						let partialFilterExpression: Document | undefined;
+						if (unique && field.required === false) {
+							const bsonType = field.references
+								? ["string", "objectId", "binData"]
+								: typeof field.type === "string"
+									? UNIQUE_VALUE_BSON_TYPES[field.type]
+									: undefined;
+							if (bsonType === undefined) continue;
+							partialFilterExpression = { [column]: { $type: bsonType } };
+						}
+						fieldIndexes.push({
+							name: getDatabaseFieldIndexName(model, column, unique),
+							column,
+							unique,
+							partialFilterExpression,
+						});
+					}
+				}
+				fieldIndexesByModel.set(model, fieldIndexes);
+				return fieldIndexes;
+			};
+
+			/**
+			 * Creates field-level indexes. Failures are logged instead of failing
+			 * the write, so deployments with existing duplicates or their own
+			 * indexes keep working.
+			 */
+			const ensureFieldIndex = (model: string, index: MongoFieldIndex) => {
+				const definition = JSON.stringify([
+					model,
+					index.name,
+					index.column,
+					index.unique,
+					index.partialFilterExpression ?? null,
+				]);
+				const existingSetup = fieldIndexSetupByDefinition.get(definition);
+				if (existingSetup !== undefined) return existingSetup;
+
+				const target = `"${index.name}" on ${model}.${index.column}`;
+				const setup = Promise.resolve()
+					.then(() =>
+						db.collection(model).createIndex(
+							{ [index.column]: 1 },
+							{
+								name: index.name,
+								unique: index.unique,
+								...(index.partialFilterExpression
+									? { partialFilterExpression: index.partialFilterExpression }
+									: {}),
+							},
+						),
+					)
+					.then(
+						() => undefined,
+						(error: unknown) => {
+							if (!(error instanceof MongoServerError)) {
+								// Not answered by the server, so the next write tries again.
+								fieldIndexSetupByDefinition.delete(definition);
+								logger.error(
+									`Failed to create the MongoDB index ${target}`,
+									error,
+								);
+								return;
+							}
+							if (error.code === INDEX_OPTIONS_CONFLICT) return;
+							if (error.code === DUPLICATE_KEY) {
+								logger.error(
+									`Could not create the unique MongoDB index ${target} because the collection already contains duplicate values. Uniqueness is not enforced until the duplicates are removed and the application restarts.`,
+									error,
+								);
+								return;
+							}
+							if (error.code === INDEX_KEY_SPECS_CONFLICT) {
+								logger.error(
+									`Could not create the MongoDB index ${target} because an index with that name and a different definition already exists. Drop or rename it and restart the application.`,
+									error,
+								);
+								return;
+							}
+							logger.error(
+								`Failed to create the MongoDB index ${target}`,
+								error,
+							);
+						},
+					);
+				fieldIndexSetupByDefinition.set(definition, setup);
+				return setup;
+			};
+
 			const ensureModelIndexes = async (model: string, modelKey: string) => {
 				const indexes = getResolvedModelIndexes(model, modelKey);
 
-				await Promise.all(
-					indexes.map((index) => {
+				await Promise.all([
+					...getFieldIndexes(model, modelKey).map((index) =>
+						ensureFieldIndex(model, index),
+					),
+					...indexes.map((index) => {
 						const physicalFieldNames = index.columns.map((fieldName) =>
 							fieldName === "id" ? "_id" : fieldName,
 						);
@@ -188,7 +346,7 @@ export const mongodbAdapter = (
 						});
 						return indexSetup;
 					}),
-				);
+				]);
 			};
 
 			function coerceToIdType(value: string): ObjectId | UUID {
