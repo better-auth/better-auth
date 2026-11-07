@@ -231,7 +231,7 @@ This page contains frequently asked questions, common issues, and other helpful 
     <Callout type="info">
       **For Cloudflare Workers users:**
 
-      Make sure you have the `nodejs_compat` compatibility flag enabled in your `wrangler.toml`:
+      If your `compatibility_date` is earlier than `2026-08-04`, make sure you have the `nodejs_compat` compatibility flag enabled in your `wrangler.toml`. Later compatibility dates enable Node.js compatibility by default.
 
       ```toml title="wrangler.toml"
       compatibility_flags = ["nodejs_compat"]
