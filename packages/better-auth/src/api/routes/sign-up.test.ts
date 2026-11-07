@@ -1177,38 +1177,34 @@ describe("sign-up enumeration protection — customSyntheticUser with admin plug
 	});
 });
 
-describe("sign-up enumeration protection — adapter that omits unset fields", async () => {
-	const { auth } = await getTestInstance(
-		{
-			emailAndPassword: {
-				enabled: true,
-				requireEmailVerification: true,
-			},
-			emailVerification: {
-				sendVerificationEmail: vi.fn(),
-			},
-			plugins: [admin()],
-		},
-		{
-			disableTestUser: true,
-			testWith: "mongodb",
-		},
-	);
-
+describe("sign-up enumeration protection — adapter that omits unset fields", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12297
 	 */
 	it("should return the same user keys for a new and an existing email on MongoDB", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+				emailVerification: {
+					sendVerificationEmail: vi.fn(),
+				},
+				plugins: [admin()],
+			},
+			{
+				disableTestUser: true,
+				testWith: "mongodb",
+			},
+		);
+		const email = `mongo-shape-${crypto.randomUUID()}@test.com`;
 		const send = (password: string) =>
 			auth.handler(
 				new Request("http://localhost:3000/api/auth/sign-up/email", {
 					method: "POST",
 					headers: { "content-type": "application/json" },
-					body: JSON.stringify({
-						name: "Mongo Shape",
-						email: "mongo-shape@test.com",
-						password,
-					}),
+					body: JSON.stringify({ name: "Mongo Shape", email, password }),
 				}),
 			);
 
