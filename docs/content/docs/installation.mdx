@@ -346,14 +346,17 @@ description: Learn how to configure Better Auth in your project.
         ```
 
         <Callout type="info">
-          **Node.js AsyncLocalStorage Support**: Better Auth uses AsyncLocalStorage for async context tracking. To enable this in Cloudflare Workers, add the `nodejs_compat` flag to your `wrangler.toml`:
+          **Node.js AsyncLocalStorage Support**: Better Auth uses AsyncLocalStorage for async context tracking. Whether you need to enable it depends on your Worker's `compatibility_date`:
+
+          - `2026-08-04` or later: Node.js compatibility, including AsyncLocalStorage, is enabled by default. No flag is needed.
+          - Earlier than `2026-08-04`: add the `nodejs_compat` flag to your `wrangler.toml`.
 
           ```toml title="wrangler.toml"
           compatibility_flags = ["nodejs_compat"]
           compatibility_date = "2024-09-23"
           ```
 
-          Alternatively, if you only need AsyncLocalStorage support:
+          Alternatively, on an earlier compatibility date where you only need AsyncLocalStorage support:
 
           ```toml title="wrangler.toml"
           compatibility_flags = ["nodejs_als"]

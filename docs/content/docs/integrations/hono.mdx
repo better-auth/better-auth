@@ -58,7 +58,7 @@ If you're using another runtime, keep your existing entry point and add the same
 
 #### Cloudflare Workers
 
-Better Auth uses `AsyncLocalStorage`. Add the [`nodejs_compat` compatibility flag](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag) to your Wrangler configuration:
+Better Auth uses `AsyncLocalStorage`. With a `compatibility_date` of `2026-08-04` or later, Node.js compatibility is enabled by default and no flag is needed. For earlier compatibility dates, add the [`nodejs_compat` compatibility flag](https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag) to your Wrangler configuration:
 
 ```jsonc title="wrangler.jsonc"
 {
