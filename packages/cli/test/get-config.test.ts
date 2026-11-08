@@ -35,6 +35,50 @@ describe("getConfig", async () => {
 		await fs.rm(tmpDir, { recursive: true });
 	});
 
+	it("names a --config file that does not exist", async () => {
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await expect(
+			getConfig({ cwd: tmpDir, configPath: "auht.ts" }),
+		).rejects.toThrow();
+
+		expect(error).toHaveBeenCalledWith(
+			`Couldn't find the config file ${path.join(tmpDir, "auht.ts")}.`,
+		);
+	});
+
+	it("resolves a --config path without an extension", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { betterAuth } from "better-auth";\nexport const auth = betterAuth({});\n`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+			configPath: "auth",
+		});
+
+		expect(config).not.toBe(null);
+	});
+
+	it("shows where the config threw without the CLI stack", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`throw new Error("DATABASE_URL is not set");\n`,
+		);
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		await expect(
+			getConfig({ cwd: tmpDir, configPath: "auth.ts" }),
+		).rejects.toThrow();
+
+		expect(error).toHaveBeenCalledWith(
+			expect.stringMatching(
+				/^Couldn't load your auth config in .*auth\.ts\.\nDATABASE_URL is not set\n {2}at auth\.ts:\d+:\d+$/,
+			),
+		);
+	});
+
 	it("should resolve resolver type alias", async () => {
 		const authPath = path.join(tmpDir, "server", "auth");
 		const dbPath = path.join(tmpDir, "server", "db");
@@ -363,10 +407,9 @@ describe("getConfig", async () => {
 		).rejects.toThrowError();
 
 		expect(consoleErrorSpy).toHaveBeenCalledWith(
-			expect.stringContaining("Couldn't read your auth config."),
-			expect.objectContaining({
-				code: "MODULE_NOT_FOUND",
-			}),
+			expect.stringMatching(
+				/^Couldn't load your auth config in .*auth\.ts\.\nCannot find module/,
+			),
 		);
 	});
 

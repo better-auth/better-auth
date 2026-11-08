@@ -52,6 +52,10 @@ describe("ai: MCP config write", () => {
 		await ai.parseAsync(["node", "ai"]);
 	}
 
+	function logged() {
+		return vi.mocked(console.log).mock.calls.flat().join("\n");
+	}
+
 	function writeCursorConfig(content: string) {
 		fs.mkdirSync(path.join(dir, ".cursor"), { recursive: true });
 		const configPath = path.join(dir, ".cursor", "mcp.json");
@@ -71,10 +75,12 @@ describe("ai: MCP config write", () => {
 		]);
 	});
 
-	it("exits 1 when the config cannot be written", async () => {
+	it("exits 1 without claiming success when the config cannot be written", async () => {
 		writeCursorConfig("null\n");
 		await runCursorProjectFlow();
 		expect(process.exitCode).toBe(1);
+		expect(logged()).toContain("Setup incomplete.");
+		expect(logged()).not.toContain("Done!");
 	});
 
 	it("exits 1 when the skill cannot be installed", async () => {

@@ -92,6 +92,30 @@ describe("exit codes", () => {
 		},
 	);
 
+	/**
+	 * @see https://nodejs.org/api/net.html#socketconnectoptions-connectlistener
+	 */
+	it("migrate prints the cause of a refused connection without a stack", async () => {
+		const cwd = createProject({
+			"auth.ts": `import { betterAuth } from "better-auth";
+
+// What a pool rejects with when localhost refuses on both IPv4 and IPv6.
+const refused = Object.assign(new AggregateError([], ""), {
+	code: "ECONNREFUSED",
+});
+
+export const auth = betterAuth({
+	database: { connect: async () => Promise.reject(refused) },
+});
+`,
+		});
+		const { exitCode, output } = await runCli(["migrate", "--yes"], cwd);
+
+		expect(output).toMatch(/^ECONNREFUSED$/m);
+		expect(output).not.toContain("Error running Better Auth CLI");
+		expect(exitCode).toBe(1);
+	});
+
 	// Windows has no POSIX signals, so kill() terminates without running the handler.
 	it.skipIf(process.platform === "win32").each([
 		["SIGINT", 130],
