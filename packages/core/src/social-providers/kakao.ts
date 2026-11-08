@@ -1,13 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt, importJWK } from "jose";
-import { APIError } from "../error";
+import { createRemoteJWKSet, decodeJwt } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
-import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
 
 interface Partner {
 	/** Partner-specific ID (consent required: kakaotalk_message) */
@@ -173,7 +171,10 @@ export const kakao = (options: KakaoOptions) => {
 					});
 				},
 		idToken: {
-			jwks: (header) => getKakaoPublicKey(header.kid!),
+			// https://developers.kakao.com/docs/en/kakaologin/rest-api#oidc-find-public-key
+			jwks: createRemoteJWKSet(
+				new URL("https://kauth.kakao.com/.well-known/jwks.json"),
+			),
 			issuer: "https://kauth.kakao.com",
 			audience: options.clientId,
 			algorithms: ["RS256"],
@@ -240,27 +241,4 @@ export const kakao = (options: KakaoOptions) => {
 		},
 		options,
 	} satisfies OAuthProvider<KakaoProfile>;
-};
-
-export const getKakaoPublicKey = async (kid: string) => {
-	const { data } = await fetchRefusingRedirects<{
-		keys: Array<{
-			kid: string;
-			alg: string;
-			kty: string;
-			use: string;
-			n: string;
-			e: string;
-		}>;
-	}>("https://kauth.kakao.com/.well-known/jwks.json");
-	if (!data?.keys) {
-		throw new APIError("BAD_REQUEST", {
-			message: "Keys not found",
-		});
-	}
-	const jwk = data.keys.find((key) => key.kid === kid);
-	if (!jwk) {
-		throw new Error(`JWK with kid ${kid} not found`);
-	}
-	return await importJWK(jwk, jwk.alg);
 };

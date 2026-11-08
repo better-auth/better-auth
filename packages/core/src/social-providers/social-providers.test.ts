@@ -325,10 +325,9 @@ async function createSignedKakaoToken({
 }
 
 function mockKakaoJwks(publicJWK: JWK) {
-	mockedBetterFetch.mockResolvedValueOnce({
-		data: { keys: [publicJWK] },
-		error: null,
-	});
+	return vi
+		.spyOn(globalThis, "fetch")
+		.mockResolvedValue(Response.json({ keys: [publicJWK] }));
 }
 
 describe("kakao provider", () => {
@@ -386,6 +385,18 @@ describe("kakao provider", () => {
 			mockKakaoJwks(publicJWK);
 
 			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(false);
+		});
+
+		it("reuses the fetched JWKS across verifications", async () => {
+			const provider = kakao({ ...credentials, clientId: restApiKey });
+			const { publicJWK, token } = await createSignedKakaoToken({
+				audience: restApiKey,
+			});
+			const fetchSpy = mockKakaoJwks(publicJWK);
+
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(true);
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(true);
+			expect(fetchSpy).toHaveBeenCalledTimes(1);
 		});
 
 		it("builds the user from the ID token claims without calling the user info API", async () => {
