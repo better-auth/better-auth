@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api/routes/session";
+import { getAuthoritativeSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import type { User } from "../../types";
 import type { Where } from "../../types/adapter";
@@ -473,6 +473,7 @@ const deviceTokenErrorSchema = z.object({
 			"expired_token",
 			"access_denied",
 			"invalid_request",
+			"invalid_client",
 			"invalid_grant",
 		])
 		.meta({
@@ -695,6 +696,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													"expired_token",
 													"access_denied",
 													"invalid_request",
+													"invalid_client",
 													"invalid_grant",
 												],
 											},
@@ -717,7 +719,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				const isValid = await opts.validateClient(client_id);
 				if (!isValid) {
 					throw new APIError("BAD_REQUEST", {
-						error: "invalid_grant",
+						error: "invalid_client",
 						error_description: "Invalid client ID",
 					});
 				}
@@ -864,7 +866,7 @@ export const deviceVerify = <
 				});
 			}
 
-			const session = await getSessionFromCtx(ctx);
+			const session = await getAuthoritativeSessionFromCtx(ctx);
 			if (
 				session?.user?.id &&
 				!deviceCodeRecord.userId &&
@@ -959,7 +961,7 @@ export const deviceApprove = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const session = await getSessionFromCtx(ctx);
+		const session = await getAuthoritativeSessionFromCtx(ctx);
 		if (!session) {
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",
@@ -1082,7 +1084,7 @@ export const deviceDeny = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		const session = await getSessionFromCtx(ctx);
+		const session = await getAuthoritativeSessionFromCtx(ctx);
 		if (!session) {
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",

@@ -12,6 +12,7 @@ import {
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../adapter-factory";
+import { emailLookupTestSuite } from "../adapter-factory/email-lookup-test-suite";
 import { scimHttpTestSuite } from "../adapter-factory/scim-http-test-suite";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 import { pushDrizzleSchema } from "./push-drizzle-schema";
@@ -67,6 +68,7 @@ const { execute } = await testAdapter({
 		normalTestSuite(),
 		transactionsTestSuite(),
 		authFlowTestSuite(),
+		emailLookupTestSuite(),
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),

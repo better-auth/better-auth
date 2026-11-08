@@ -4,7 +4,6 @@ import path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
 import open from "open";
-import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import * as z from "zod";
 import { generateDrizzleSchema } from "../../generators/drizzle";
@@ -21,6 +20,8 @@ import {
 import { getPackageInfo, hasDependency } from "../../utils/get-package-info";
 import { generateSecretHash, tryCatch } from "../../utils/helper";
 import { installDependencies } from "../../utils/install-dependencies";
+import { requireInteractive } from "../../utils/interactive";
+import { prompt } from "../../utils/prompt";
 import { cliVersion } from "../../version";
 import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
@@ -49,16 +50,19 @@ import {
 	updateEnvFiles,
 } from "./utility/env";
 import { detectFramework } from "./utility/framework";
-import { getFlagVariable } from "./utility/prompt";
+import { getFlagVariable, initPrompt } from "./utility/prompt";
 
 // Helper functions to replace @clack/prompts
 const confirm = async (options: { message: string; initial?: boolean }) => {
-	const response = await prompts({
-		type: "confirm",
-		name: "value",
-		message: options.message,
-		initial: options.initial ?? true,
-	});
+	const response = await prompt(
+		{
+			type: "confirm",
+			name: "value",
+			message: options.message,
+			initial: options.initial ?? true,
+		},
+		initPrompt,
+	);
 	return response?.value ?? null;
 };
 
@@ -67,18 +71,21 @@ const select = async (options: {
 	options: Array<{ value: string; label: string }>;
 	initialValue?: string;
 }) => {
-	const response = await prompts({
-		type: "select",
-		name: "value",
-		message: options.message,
-		choices: options.options.map((opt) => ({
-			title: opt.label,
-			value: opt.value,
-		})),
-		initial: options.initialValue
-			? options.options.findIndex((opt) => opt.value === options.initialValue)
-			: undefined,
-	});
+	const response = await prompt(
+		{
+			type: "select",
+			name: "value",
+			message: options.message,
+			choices: options.options.map((opt) => ({
+				title: opt.label,
+				value: opt.value,
+			})),
+			initial: options.initialValue
+				? options.options.findIndex((opt) => opt.value === options.initialValue)
+				: undefined,
+		},
+		initPrompt,
+	);
 	return response?.value ?? null;
 };
 
@@ -86,16 +93,19 @@ const multiselect = async (options: {
 	message: string;
 	options: Array<{ value: string; label: string }>;
 }) => {
-	const response = await prompts({
-		type: "multiselect",
-		name: "value",
-		message: options.message,
-		choices: options.options.map((opt) => ({
-			title: opt.label,
-			value: opt.value,
-		})),
-		instructions: false,
-	});
+	const response = await prompt(
+		{
+			type: "multiselect",
+			name: "value",
+			message: options.message,
+			choices: options.options.map((opt) => ({
+				title: opt.label,
+				value: opt.value,
+			})),
+			instructions: false,
+		},
+		initPrompt,
+	);
 	return response?.value ?? null;
 };
 
@@ -105,7 +115,7 @@ const isCancel = (value: any): boolean => {
 
 const cancel = (message: string) => {
 	console.log(message);
-	process.exit(0);
+	process.exit(130);
 };
 
 const log = {
@@ -361,6 +371,7 @@ export async function initAction(opts: any) {
 		);
 		process.exit(1);
 	}
+	requireInteractive(initPrompt);
 
 	let currentStep = 0;
 
@@ -453,21 +464,27 @@ export async function initAction(opts: any) {
 				process.exit(0);
 			}
 			if (shouldCreateEnv) {
-				const { providedSecret } = await prompts({
-					type: "text",
-					name: "providedSecret",
-					message: `Better Auth secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
-				});
+				const { providedSecret } = await prompt(
+					{
+						type: "text",
+						name: "providedSecret",
+						message: `Better Auth secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
+					},
+					initPrompt,
+				);
 				if (isCancel(providedSecret)) {
 					cancel("✋ Operation cancelled.");
 					process.exit(0);
 				}
-				const { providedURL } = await prompts({
-					type: "text",
-					name: "providedURL",
-					message: `Better Auth Base URL (your auth server URL):`,
-					initial: "http://localhost:3000",
-				});
+				const { providedURL } = await prompt(
+					{
+						type: "text",
+						name: "providedURL",
+						message: `Better Auth Base URL (your auth server URL):`,
+						initial: "http://localhost:3000",
+					},
+					initPrompt,
+				);
 				if (isCancel(providedURL)) {
 					cancel("✋ Operation cancelled.");
 					process.exit(0);
@@ -511,11 +528,14 @@ export async function initAction(opts: any) {
 
 				for (const v of missingVars) {
 					if (v === "BETTER_AUTH_SECRET") {
-						const { providedSecret } = await prompts({
-							type: "text",
-							name: "providedSecret",
-							message: `Better Auth secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
-						});
+						const { providedSecret } = await prompt(
+							{
+								type: "text",
+								name: "providedSecret",
+								message: `Better Auth secret (used for encryption, hashing, and signing). ${chalk.dim("(Press Enter to auto generate)")}`,
+							},
+							initPrompt,
+						);
 						if (isCancel(providedSecret)) {
 							cancel("✋ Operation cancelled.");
 							process.exit(0);
@@ -524,12 +544,15 @@ export async function initAction(opts: any) {
 							`BETTER_AUTH_SECRET="${providedSecret || generateSecretHash()}"`,
 						);
 					} else if (v === "BETTER_AUTH_URL") {
-						const { providedURL } = await prompts({
-							type: "text",
-							name: "providedURL",
-							message: `Better Auth base URL (your auth server URL):`,
-							initial: "http://localhost:3000",
-						});
+						const { providedURL } = await prompt(
+							{
+								type: "text",
+								name: "providedURL",
+								message: `Better Auth base URL (your auth server URL):`,
+								initial: "http://localhost:3000",
+							},
+							initPrompt,
+						);
 						if (isCancel(providedURL)) {
 							cancel("✋ Operation cancelled.");
 							process.exit(0);
@@ -657,12 +680,15 @@ export async function initAction(opts: any) {
 		// Convert absolute path to relative path for display
 		const relativeDefaultPath = path.relative(cwd, defaultAuthConfigPath);
 
-		const { filePath } = await prompts({
-			type: "text",
-			name: "filePath",
-			message: `Where would you like to create the auth instance?`,
-			initial: relativeDefaultPath,
-		});
+		const { filePath } = await prompt(
+			{
+				type: "text",
+				name: "filePath",
+				message: `Where would you like to create the auth instance?`,
+				initial: relativeDefaultPath,
+			},
+			initPrompt,
+		);
 
 		if (isCancel(filePath)) {
 			cancel("✋ Operation cancelled.");
@@ -806,19 +832,22 @@ export const auth = betterAuth({
 		if (database) {
 			const databaseConfig = getDatabaseCode(database as DatabaseAdapter);
 			if (databaseConfig && databaseConfig.dependencies.length > 0) {
-				const { shouldInstallDeps } = await prompts({
-					type: "confirm",
-					name: "shouldInstallDeps",
-					message: `Would you like to install the following dependencies: ${[
-						...new Set([
-							...databaseConfig.dependencies,
-							...(databaseConfig.devDependencies || []),
-						]),
-					]
-						.map((x) => chalk.cyan(x))
-						.join(", ")}?`,
-					initial: true,
-				});
+				const { shouldInstallDeps } = await prompt(
+					{
+						type: "confirm",
+						name: "shouldInstallDeps",
+						message: `Would you like to install the following dependencies: ${[
+							...new Set([
+								...databaseConfig.dependencies,
+								...(databaseConfig.devDependencies || []),
+							]),
+						]
+							.map((x) => chalk.cyan(x))
+							.join(", ")}?`,
+						initial: true,
+					},
+					initPrompt,
+				);
 
 				if (isCancel(shouldInstallDeps)) {
 					cancel("✋ Operation cancelled.");
@@ -850,12 +879,15 @@ export const auth = betterAuth({
 
 			// For ORMs (Drizzle, Prisma), ask to generate schema
 			if (isDrizzle || isPrisma) {
-				const response = await prompts({
-					type: "confirm",
-					name: "shouldGenerate",
-					message: `Would you like to generate the database schema?`,
-					initial: true,
-				});
+				const response = await prompt(
+					{
+						type: "confirm",
+						name: "shouldGenerate",
+						message: `Would you like to generate the database schema?`,
+						initial: true,
+					},
+					initPrompt,
+				);
 
 				if (isCancel(response.shouldGenerate)) {
 					cancel("✋ Operation cancelled.");
@@ -875,12 +907,15 @@ export const auth = betterAuth({
 
 			// For Kysely dialects (SQLite, MySQL, PostgreSQL, MSSQL), ask to run migration
 			if (isKysely) {
-				const response = await prompts({
-					type: "confirm",
-					name: "shouldMigrate",
-					message: `Would you like to run database migration?`,
-					initial: true,
-				});
+				const response = await prompt(
+					{
+						type: "confirm",
+						name: "shouldMigrate",
+						message: `Would you like to run database migration?`,
+						initial: true,
+					},
+					initPrompt,
+				);
 
 				if (isCancel(response.shouldMigrate)) {
 					cancel("✋ Operation cancelled.");
@@ -1201,7 +1236,10 @@ export const auth = betterAuth({
 					message: `The file ${chalk.yellow(outputPath)} already exists. Do you want to overwrite it?`,
 					initial: false,
 				});
-				if (isCancel(shouldOverwrite) || !shouldOverwrite) {
+				if (isCancel(shouldOverwrite)) {
+					cancel("✋ Operation cancelled.");
+				}
+				if (!shouldOverwrite) {
 					log.info("Schema generation cancelled.");
 					return;
 				}
@@ -1255,12 +1293,15 @@ export const auth = betterAuth({
 		// Convert absolute path to relative path for display
 		const relativeHandlerPath = path.relative(cwd, fullPath);
 
-		const { filePath } = await prompts({
-			type: "text",
-			name: "filePath",
-			message: `Enter the path to the route handler file:`,
-			initial: relativeHandlerPath,
-		});
+		const { filePath } = await prompt(
+			{
+				type: "text",
+				name: "filePath",
+				message: `Enter the path to the route handler file:`,
+				initial: relativeHandlerPath,
+			},
+			initPrompt,
+		);
 		if (isCancel(filePath)) {
 			cancel("✋ Operation cancelled.");
 			process.exit(0);
@@ -1404,12 +1445,15 @@ export const auth = betterAuth({
 		// Convert absolute path to relative path for display
 		const relativeDefaultClientPath = path.relative(cwd, defaultAuthClientPath);
 
-		const { filePath } = await prompts({
-			type: "text",
-			name: "filePath",
-			message: `Enter the path to the auth-client.ts file:`,
-			initial: relativeDefaultClientPath,
-		});
+		const { filePath } = await prompt(
+			{
+				type: "text",
+				name: "filePath",
+				message: `Enter the path to the auth-client.ts file:`,
+				initial: relativeDefaultClientPath,
+			},
+			initPrompt,
+		);
 		if (isCancel(filePath)) {
 			cancel("✋ Operation cancelled.");
 			process.exit(0);
@@ -1499,30 +1543,23 @@ export const auth = betterAuth({
 		await step();
 	}
 
-	const connectResponse = await prompts({
-		type: "confirm",
-		name: "connect",
-		message:
-			"Would you like to connect your app to Better Auth infrastructure?",
-		initial: true,
-	});
+	const connectResponse = await prompt(
+		{
+			type: "confirm",
+			name: "connect",
+			message:
+				"Would you like to connect your app to Better Auth infrastructure?",
+			initial: true,
+		},
+		initPrompt,
+	);
 	// If the user cancels the prompt, `connect` will be undefined.
 	// Treat this as a cancellation of the remaining init flow.
 	if (connectResponse.connect === undefined) {
-		console.log(
+		cancel(
 			chalk.yellow("\n✖ ") +
 				"Setup cancelled before connecting to Better Auth infrastructure.\n",
 		);
-		return;
-	}
-	// If the user cancels the prompt, `connect` will be undefined.
-	// Treat this as a cancellation of the remaining init flow.
-	if (connectResponse.connect === undefined) {
-		console.log(
-			chalk.yellow("\n✖ ") +
-				"Setup cancelled before connecting to Better Auth infrastructure.\n",
-		);
-		return;
 	}
 	if (connectResponse.connect) {
 		await open("https://dash.better-auth.com/onboarding");

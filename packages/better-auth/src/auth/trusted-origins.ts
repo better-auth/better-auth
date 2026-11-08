@@ -1,9 +1,27 @@
+import * as z from "zod";
 import { getHost, getOrigin, getProtocol } from "../utils/url";
 import { wildcardMatch } from "../utils/wildcard";
 
 const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f-\u009f]/;
 const RELATIVE_URL_PARSER_ORIGIN = "https://better-auth.invalid";
 const ENCODED_PATH_SEPARATOR_PATTERN = /%2[fF]|%5[cC]/;
+const IP_WILDCARD_HOST_PATTERN = /^(?=.*\d)[\d*?.]+$/;
+const ipv4Schema = z.ipv4();
+
+/**
+ * A wildcard host made only of digits, dots and wildcards (`192.168.*.*`,
+ * `10.*`) names an address range, so it admits only an IPv4 address. A plain
+ * `*` would otherwise cross `.` and let `192.168.attacker.com` match. Other
+ * hosts keep the documented subdomain matching.
+ */
+const isAllowedIPv4Host = (patternAuthority: string, authority: string) => {
+	const [patternHost = ""] = patternAuthority.split(":");
+	if (!IP_WILDCARD_HOST_PATTERN.test(patternHost)) {
+		return true;
+	}
+	const [host = ""] = authority.split(":");
+	return z.validate(ipv4Schema, host);
+};
 
 /**
  * Resolves `.` and `..` segments in a path after percent-decoding so a
@@ -42,7 +60,7 @@ const normalizePath = (path: string): string => {
  * host); the path is percent-decoded and resolved so traversal cannot bypass
  * a path-pinned pattern.
  */
-const parseCustomSchemeOrigin = (value: string) => {
+const parseCustomSchemeOrigin = (value: string, wildcardPattern = false) => {
 	if (CONTROL_CHARACTER_PATTERN.test(value)) {
 		return null;
 	}
@@ -56,9 +74,8 @@ const parseCustomSchemeOrigin = (value: string) => {
 	let authority = "";
 	if (rest.startsWith("//")) {
 		rest = rest.slice(2);
-		// The authority ends at the first "/", "?" or "#" (RFC 3986); the
-		// remainder is the path, with any query/fragment stripped below.
-		const authorityEnd = rest.search(/[/?#]/);
+		// In a pattern, "?" is a wildcard rather than a query delimiter.
+		const authorityEnd = rest.search(wildcardPattern ? /[/#]/ : /[/?#]/);
 		if (authorityEnd === -1) {
 			authority = rest;
 			rest = "";
@@ -67,7 +84,7 @@ const parseCustomSchemeOrigin = (value: string) => {
 			rest = rest.slice(authorityEnd);
 		}
 	}
-	const pathEnd = rest.search(/[?#]/);
+	const pathEnd = rest.search(wildcardPattern ? /#/ : /[?#]/);
 	const path = normalizePath(pathEnd === -1 ? rest : rest.slice(0, pathEnd));
 	return { scheme, authority: authority.toLowerCase(), path };
 };
@@ -124,21 +141,29 @@ export const matchesOriginPattern = (
 
 	// Check if pattern contains wildcard characters (*, **, or ?)
 	const hasWildcard = pattern.includes("*") || pattern.includes("?");
-	if (hasWildcard) {
-		// For protocol-specific wildcards, match the full origin
-		if (pattern.includes("://")) {
-			return wildcardMatch(pattern)(getOrigin(url) || url);
-		}
+	if (hasWildcard && !pattern.includes("://")) {
 		const host = getHost(url);
 		if (!host) {
 			return false;
 		}
 		// For host-only wildcards, match just the host
-		return wildcardMatch(pattern)(host);
+		return wildcardMatch(pattern)(host) && isAllowedIPv4Host(pattern, host);
 	}
 	const protocol = getProtocol(url);
 	if (protocol === "http:" || protocol === "https:" || !protocol) {
-		return pattern === getOrigin(url);
+		if (!hasWildcard) {
+			return pattern === getOrigin(url);
+		}
+		// For protocol-specific wildcards, match the full origin. A URL without
+		// one is never matched as a raw string.
+		const origin = getOrigin(url);
+		if (origin === null || !wildcardMatch(pattern)(origin)) {
+			return false;
+		}
+		return isAllowedIPv4Host(
+			pattern.slice(pattern.indexOf("://") + 3),
+			origin.slice(origin.indexOf("://") + 3),
+		);
 	}
 	// Custom schemes (e.g. myapp://, exp://). A pattern matches by scheme and,
 	// when it pins a host, by exact authority, so "myapp://callback" is not
@@ -146,9 +171,29 @@ export const matchesOriginPattern = (
 	// ("myapp://", "exp://", "myapp:/") trusts every host of the scheme, since
 	// for custom schemes the OS-registered scheme is the trust boundary.
 	const parsed = parseCustomSchemeOrigin(url);
-	const parsedPattern = parseCustomSchemeOrigin(pattern);
+	const parsedPattern = parseCustomSchemeOrigin(pattern, hasWildcard);
 	if (!parsed || !parsedPattern || parsed.scheme !== parsedPattern.scheme) {
 		return false;
+	}
+	if (hasWildcard) {
+		// Userinfo is never part of an app origin. A wildcard must not reach
+		// past it to match the real host.
+		if (parsed.authority.includes("@")) {
+			return false;
+		}
+		if (
+			parsedPattern.authority &&
+			!(
+				wildcardMatch(parsedPattern.authority)(parsed.authority) &&
+				isAllowedIPv4Host(parsedPattern.authority, parsed.authority)
+			)
+		) {
+			return false;
+		}
+		return (
+			!parsedPattern.path ||
+			wildcardMatch(parsedPattern.path)(parsed.path || "/")
+		);
 	}
 	if (parsedPattern.authority && parsed.authority !== parsedPattern.authority) {
 		return false;

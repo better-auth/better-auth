@@ -72,6 +72,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
     <Callout type="info">
       **Upgrading from Stripe v18?** Version 19 uses async webhook signature verification (`constructEventAsync`) which is handled internally by the plugin. No code changes required on your end!
     </Callout>
+
     <Callout type="info">
       **Upgrading to Stripe v23?** Version 23 uses API version `2026-09-30.endive`, which rejects `payment_method_types` when creating a Checkout Session. If you pass it through `getCheckoutSessionParams`, use `allowed_payment_method_types` or `excluded_payment_method_types` instead, or remove it to manage payment methods from the Stripe Dashboard.
     </Callout>
@@ -678,7 +679,7 @@ export const stripeUserTableFields = [
 	{
 		name: "stripeCustomerId",
 		type: "string",
-		description: "The Stripe customer ID",
+		description: "The Stripe customer ID, set by the server",
 		isOptional: true,
 	},
 ];
@@ -693,7 +694,7 @@ export const stripeOrganizationTableFields = [
 	{
 		name: "stripeCustomerId",
 		type: "string",
-		description: "The Stripe customer ID for the organization",
+		description: "The Stripe customer ID for the organization, set by the server",
 		isOptional: true,
 	},
 ];

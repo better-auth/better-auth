@@ -1,0 +1,14 @@
+{
+  "title": "SSO",
+  "icon": "pluginsSSO",
+  "pagesIndex": "index",
+  "pages": [
+    "oidc",
+    "saml",
+    "saml-security",
+    "provisioning",
+    "domain-verification",
+    "reference",
+    "..."
+  ]
+}

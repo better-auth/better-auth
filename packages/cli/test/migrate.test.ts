@@ -1,9 +1,13 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { betterAuth } from "better-auth";
 import Database from "better-sqlite3";
+import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
+
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
 
 describe("migrate base auth instance", () => {
 	const db = new Database(":memory:");
@@ -138,5 +142,32 @@ describe("migrate an index-only schema change", () => {
 				)
 				.run("du2", "okta", "employee-1"),
 		).toThrow();
+	});
+});
+
+describe("migrate: declined confirmation", () => {
+	const db = new Database(":memory:");
+	const auth = betterAuth({
+		baseURL: "http://localhost:3000",
+		database: db,
+	});
+
+	beforeEach(() => {
+		vi.spyOn(console, "log").mockImplementation(() => {});
+		vi.spyOn(config, "getConfig").mockImplementation(async () => auth.options);
+	});
+
+	it("exits 130 without running the migrations", async () => {
+		const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+			throw new Error("exit");
+		});
+		prompts.inject([false]);
+
+		await expect(migrateAction({ cwd: process.cwd() })).rejects.toThrow("exit");
+
+		expect(exit).toHaveBeenCalledWith(130);
+		expect(
+			db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all(),
+		).toEqual([]);
 	});
 });

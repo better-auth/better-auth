@@ -4,7 +4,7 @@ import { runClient, setup } from "./utils";
 const { ref, start, clean } = setup();
 test.describe("vanilla-node", () => {
 	test.beforeEach(async () => start());
-	test.afterEach(async () => clean());
+	test.afterEach(async ({}, testInfo) => clean(testInfo));
 
 	test("signIn with existing email and password should work", async ({
 		page,

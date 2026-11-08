@@ -12,7 +12,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import type { Passkey } from ".";
+import type { Passkey, PasskeyOptions } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
 
@@ -52,6 +52,131 @@ const mockRegistrationVerification = {
 		},
 	},
 };
+
+describe("passkey registration session authority", () => {
+	it("rejects a revoked cached session before issuing registration options", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [passkey()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		expect(headers.get("cookie")).toContain("session_data");
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		const options = await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+		});
+		expect(options.error?.status).toBe(401);
+	});
+
+	it("rejects a session-backed optional registration after source revocation", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "unused-resolver",
+							name: "unused@example.com",
+						}),
+					},
+				}),
+			],
+		});
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			auth.api.verifyPasskeyRegistration({
+				headers,
+				body: { response: mockRegistrationResponse },
+			}),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		expect(serverMocks.verifyRegistrationResponse).not.toHaveBeenCalled();
+	});
+
+	it("stores a digest of the session token in the challenge and accepts the same live session", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			plugins: [
+				passkey({
+					registration: {
+						requireSession: false,
+						resolveUser: async () => ({
+							id: "unused-resolver",
+							name: "unused@example.com",
+						}),
+					},
+				}),
+			],
+		});
+		const headers = new Headers({ origin: "http://localhost:3000" });
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers },
+		});
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		const ctx = await auth.$context;
+		const rows = await ctx.adapter.findMany<Verification>({
+			model: "verification",
+		});
+		const challenge = rows.find((row) =>
+			row.value.includes('"registrationSource"'),
+		);
+		expect(challenge).toBeDefined();
+		expect(challenge!.value).not.toContain(current.data!.session.token);
+
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		const registered = await auth.api.verifyPasskeyRegistration({
+			headers,
+			body: { response: mockRegistrationResponse },
+		});
+		expect(registered).toBeTruthy();
+	});
+});
 
 describe("passkey", async () => {
 	const {
@@ -1543,5 +1668,76 @@ describe("passkey expirationTime per-request", () => {
 		const expiresAt = new Date(passkeyVerification.expiresAt).getTime();
 
 		expect(expiresAt).toBeGreaterThan(currentTime);
+	});
+});
+
+/**
+ * The required policy must check the signed user verification flag.
+ *
+ * @see https://www.w3.org/TR/webauthn-2/#sctn-registering-a-new-credential
+ */
+describe("passkey user verification policy at registration", () => {
+	afterEach(() => {
+		serverMocks.verifyRegistrationResponse.mockReset();
+	});
+
+	async function runRegistration(
+		authenticatorSelection?: PasskeyOptions["authenticatorSelection"],
+	) {
+		const { auth, client, cookieSetter, signInWithTestUser } =
+			await getTestInstance({
+				plugins: [
+					passkey({
+						authenticatorSelection,
+					}),
+				],
+			});
+		const { headers } = await signInWithTestUser();
+		headers.set("origin", "http://localhost:3000");
+		await client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: cookieSetter(headers),
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValue(
+			mockRegistrationVerification,
+		);
+		await auth.api.verifyPasskeyRegistration({
+			headers,
+			body: {
+				response: mockRegistrationResponse,
+			},
+		});
+	}
+
+	it("enforces user verification when required", async () => {
+		await runRegistration({
+			userVerification: "required",
+		});
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requireUserVerification: true,
+			}),
+		);
+	});
+
+	it("keeps user verification optional by default", async () => {
+		await runRegistration();
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requireUserVerification: false,
+			}),
+		);
+	});
+
+	it("does not enforce user verification when discouraged", async () => {
+		await runRegistration({
+			userVerification: "discouraged",
+		});
+		expect(serverMocks.verifyRegistrationResponse).toHaveBeenCalledWith(
+			expect.objectContaining({
+				requireUserVerification: false,
+			}),
+		);
 	});
 });

@@ -7,7 +7,7 @@ permissions: {}
 
 jobs:
   promote:
-    if: github.repository_owner == 'better-auth' && github.ref == 'refs/heads/next'
+    if: github.repository == 'better-auth/better-auth' && github.ref == 'refs/heads/next'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

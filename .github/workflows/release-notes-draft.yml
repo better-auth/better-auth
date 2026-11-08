@@ -17,7 +17,7 @@ concurrency:
 jobs:
   draft:
     if: >-
-      github.repository_owner == 'better-auth' &&
+      github.repository == 'better-auth/better-auth' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       (startsWith(github.event.pull_request.head.ref, 'changeset-release/') ||
        (github.event.pull_request.head.ref == 'next' &&
