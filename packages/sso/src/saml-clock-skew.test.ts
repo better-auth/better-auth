@@ -205,7 +205,7 @@ describe("SAML assertion clock skew", () => {
 
 		await expect(
 			postResponse({ notOnOrAfter: minutesFromNow(-6) }),
-		).resolves.toMatchObject({ signedIn: false });
+		).resolves.toEqual({ error: "saml_error", signedIn: false });
 	});
 
 	it("applies a configured clock skew to the assertion window", async () => {
@@ -213,7 +213,8 @@ describe("SAML assertion clock skew", () => {
 		const lenient = await setup(3 * 60_000);
 		const notOnOrAfter = minutesFromNow(-2);
 
-		await expect(strict({ notOnOrAfter })).resolves.toMatchObject({
+		await expect(strict({ notOnOrAfter })).resolves.toEqual({
+			error: "saml_error",
 			signedIn: false,
 		});
 		await expect(lenient({ notOnOrAfter })).resolves.toEqual({
