@@ -8,7 +8,7 @@ description: Kakao provider setup and usage.
   <Step>
     ### Get your Kakao Credentials
 
-    To use Kakao sign in, you need a client ID and client secret. You can get them from the [Kakao Developer Portal](https://developers.kakao.com).
+    To use Kakao sign in, you need a Kakao REST API key and client secret. Use the REST API key as the `clientId`. Kakao enables the client secret by default, so `clientSecret` must be configured. You can get them from the [Kakao Developer Portal](https://developers.kakao.com).
 
     Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/kakao` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
   </Step>
@@ -20,7 +20,8 @@ description: Kakao provider setup and usage.
 
     <Callout type="info">
       * The default scopes are `account_email`, `profile_image`, and `profile_nickname`.
-      * Note that retrieving `account_email` requires the app to be a **Biz App** (an app that has completed business verification). For more details, refer to the [Kakao Login scopes documentation](https://developers.kakao.com/docs/latest/kakaologin/utilize#scope-user).
+      * Retrieving `account_email` requires the app to be a **Biz App** (an app that has completed business verification). Otherwise, Kakao may return `KOE205`. For more details, refer to the [Kakao Login utilization documentation](https://developers.kakao.com/docs/en/kakaologin/utilize).
+      * If your app cannot request `account_email`, set `disableDefaultScope` to `true`.
     </Callout>
 
     ```ts title="auth.ts"
@@ -28,10 +29,28 @@ description: Kakao provider setup and usage.
 
     export const auth = betterAuth({
         socialProviders: {
-            kakao: { // [!code highlight]
-                clientId: process.env.KAKAO_CLIENT_ID as string, // [!code highlight]
-                clientSecret: process.env.KAKAO_CLIENT_SECRET as string, // [!code highlight]
-            }, // [!code highlight]
+            kakao: {
+                clientId: process.env.KAKAO_CLIENT_ID as string,
+                clientSecret: process.env.KAKAO_CLIENT_SECRET as string,
+            },
+        }
+    })
+    ```
+
+    <Callout type="info">
+      For users who do not provide an email address, see [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
+    </Callout>
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+
+    export const auth = betterAuth({
+        socialProviders: {
+            kakao: {
+                clientId: process.env.KAKAO_CLIENT_ID as string,
+                clientSecret: process.env.KAKAO_CLIENT_SECRET as string,
+                disableDefaultScope: true,
+            },
         }
     })
     ```
