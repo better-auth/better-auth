@@ -236,6 +236,14 @@ Without `secondaryStorage`, rate limits are kept in memory by default. On Lambda
   On Lambda, create the pool outside your handler so warm invocations reuse the same connections.
 </Callout>
 
+DSQL closes every connection after 60 minutes. The connector already replaces pooled connections after 55 minutes, so leave its `maxLifetimeSeconds` at the default, or at least under an hour. `dsqlDialect` handles the rest:
+
+* A connection that has been idle for more than 30 seconds is checked before it's reused, and replaced if it's dead. This covers a Lambda that was frozen for a while.
+* Opening a connection is retried a few times when it fails with a connection error, such as DSQL's connection rate limit.
+* If the pool has no `error` listener, the dialect adds one that logs a dropped idle connection, so it doesn't crash the process.
+
+A query that loses its connection partway through still fails, because there's no way to know whether it ran.
+
 To use a schema other than `public`, pass `schemaName` to the adapter:
 
 ```ts title="auth.ts"

@@ -16,6 +16,7 @@ import {
 	PostgresDialect,
 	RawNode,
 } from "kysely";
+import { withConnectionChecksConfig } from "./connection";
 import { withDsqlRetry } from "./retry";
 
 const dsqlAdapters = new WeakSet<object>();
@@ -142,9 +143,15 @@ export async function waitForIndex(
 
 /**
  * PostgreSQL dialect for Aurora DSQL.
+ *
+ * It also checks idle connections before reusing them, retries opening a
+ * connection when that fails, and keeps a dropped idle connection from
+ * crashing the process.
  */
 export function dsqlDialect(config: PostgresDialectConfig): Dialect {
-	return withDsqlDialect(new PostgresDialect(config));
+	return withDsqlDialect(
+		new PostgresDialect(withConnectionChecksConfig(config)),
+	);
 }
 
 /**
