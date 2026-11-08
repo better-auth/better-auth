@@ -757,7 +757,7 @@ authenticateCLI().catch((err) => {
 
 **generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>` with at most 191 characters.
 
-**validateClient**: Optional callback for custom client ID validation in the first-party session flow.
+**validateClient**: Optional `(clientId: string) => boolean | Promise<boolean>` callback for custom client ID validation in the first-party session flow.
 
 **onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
 
