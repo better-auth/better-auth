@@ -21,7 +21,7 @@ description: Kakao provider setup and usage.
     <Callout type="info">
       * The default scopes are `account_email`, `profile_image`, and `profile_nickname`.
       * Retrieving `account_email` requires the app to be a **Biz App** (an app that has completed business verification). Otherwise, Kakao may return `KOE205`. For more details, refer to the [Kakao Login utilization documentation](https://developers.kakao.com/docs/en/kakaologin/utilize).
-      * If your app cannot request `account_email`, set `disableDefaultScope` to `true`.
+      * If your app cannot request `account_email`, set `disableDefaultScope` to `true` and list the scopes you still need under `scope`.
     </Callout>
 
     ```ts title="auth.ts"
@@ -50,6 +50,12 @@ description: Kakao provider setup and usage.
                 clientId: process.env.KAKAO_CLIENT_ID as string,
                 clientSecret: process.env.KAKAO_CLIENT_SECRET as string,
                 disableDefaultScope: true,
+                scope: ["profile_image", "profile_nickname"],
+                mapProfileToUser: (profile) => ({
+                    email:
+                        profile.kakao_account?.email ??
+                        `${profile.id}@kakao.placeholder.invalid`,
+                }),
             },
         }
     })
