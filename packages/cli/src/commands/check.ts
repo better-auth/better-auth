@@ -86,8 +86,15 @@ async function checkSchemaAction(input: unknown): Promise<void> {
 			process.exitCode = 1;
 			return;
 		}
+		// A driver message can carry the connection string, so only its code is shown.
+		const code =
+			error instanceof Error &&
+			"code" in error &&
+			typeof error.code === "string"
+				? ` (${error.code})`
+				: "";
 		console.error(
-			"Could not validate the schema. Check the auth configuration and database connection.",
+			`Could not validate the schema${code}. Check the auth configuration and database connection.`,
 		);
 		process.exitCode = 2;
 	}
