@@ -38,8 +38,7 @@ export function isConnectionError(error: unknown): boolean {
 		return connectionErrorCodes.has(error.code) || error.code.startsWith("08");
 	}
 	return (
-		"message" in error &&
-		error.message === "Connection terminated unexpectedly"
+		"message" in error && error.message === "Connection terminated unexpectedly"
 	);
 }
 
