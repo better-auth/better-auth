@@ -12,6 +12,10 @@ vi.mock(import("node:child_process"), () => ({
 describe("mcp: failed setup", () => {
 	let dir: string;
 
+	function logged() {
+		return vi.mocked(console.log).mock.calls.flat().join("\n");
+	}
+
 	beforeEach(() => {
 		dir = fs.mkdtempSync(path.join(os.tmpdir(), "ba-mcp-"));
 		vi.spyOn(process, "cwd").mockReturnValue(dir);
@@ -33,6 +37,7 @@ describe("mcp: failed setup", () => {
 			await mcp.parseAsync(["node", "mcp", option]);
 
 			expect(process.exitCode).toBe(1);
+			expect(logged()).not.toContain("Next Steps");
 		},
 	);
 
@@ -45,6 +50,7 @@ describe("mcp: failed setup", () => {
 		await mcp.parseAsync(["node", "mcp", option]);
 
 		expect(process.exitCode).toBe(1);
+		expect(logged()).not.toContain("Next Steps");
 		expect(fs.readFileSync(path.join(dir, file), "utf-8")).toBe("not json");
 	});
 });
