@@ -66,7 +66,7 @@ Most of the other client endpoints take a `client_id`. Each requires a session, 
 
 You cannot change `token_endpoint_auth_method` after creation, and an update cannot set the secret. Client secrets do not expire, so to retire one, rotate it with `rotateClientSecret`.
 
-An update takes the fields from the create request, except `jwks`, `jwks_uri`, and `subject_type`. It ignores those fields, and any other field it does not accept, without returning an error. Only `adminUpdateOAuthClient` can change `dpop_bound_access_tokens`. To let a client replace its own inline `jwks`, see [Rotating client keys](#rotating-client-keys). Omitted fields keep their current values.
+An update takes the fields from the create request, except `jwks`, `jwks_uri`, and `subject_type`. It ignores those fields, and any other field it does not accept, without returning an error. Only `adminUpdateOAuthClient` can change `dpop_bound_access_tokens`. To let a client replace its own inline `jwks`, see [Rotating client keys](#rotating-client-keys). Omitted fields keep their current values, with one exception: an update that removes `client_credentials` from `grant_types` also clears `client_credentials_scopes`. Adding the grant back does not restore them, so set them again with `adminUpdateOAuthClient`.
 
 To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, but that query is not bound to the client whose fields it reads. Anyone can get one by starting an authorization request. Enabling the option therefore makes the public fields of every enabled client, including `contacts`, readable without an account.
 
@@ -80,7 +80,7 @@ Only the server-only `adminCreateOAuthClient` and `adminUpdateOAuthClient` metho
 * `client_credentials_scopes`: see [Client credentials scopes](#client-credentials-scopes).
 * `resources`: create only. Links the client to [resources](/docs/plugins/oauth-provider/tokens#resources). When `resourcePrivileges` is set, it must approve the `link` action for each one.
 * `disabled`: update only. Pauses the client.
-* `metadata`: data attached to the client. The public endpoints do not return it, but the client's owner can read it, and so can members of an [owning organization](#an-organization-owns-the-client). Do not store secrets here. A `metadata` value in `adminUpdateOAuthClient` replaces the whole stored object. Include every key you want to keep.
+* `metadata`: data attached to the client. The public endpoints do not return it, but the client's owner can read it, and so can members of an [owning organization](#an-organization-owns-the-client). Do not store secrets here. A non-empty `metadata` value in `adminUpdateOAuthClient` replaces the whole stored object, so include every key you want to keep. An empty object, or one that holds only reserved keys such as client field names, leaves the stored metadata unchanged.
 
 Both methods:
 
