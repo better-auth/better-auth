@@ -25,6 +25,11 @@ const EMPLOYEE_SIGN_IN_ROUTES = [
 	"/api/scim-demo/idp/jwks",
 ];
 
+// Playwright's request client ignores the server's `Keep-Alive: timeout` and
+// can reuse a connection just as the dev server closes it. The server resets
+// that request without reading it, so one retry is safe.
+const CONNECTION_RESET_RETRIES = 1;
+
 interface NextDemoRuntime {
 	baseURL: string;
 	databasePath: string;
@@ -192,6 +197,7 @@ async function signUp(
 				...input,
 				password: "correct-horse-battery-staple",
 			},
+			maxRetries: CONNECTION_RESET_RETRIES,
 		},
 	);
 	expect(response.ok(), await response.text()).toBe(true);
@@ -210,6 +216,7 @@ async function createOrganization(
 				name,
 				slug: `${name.toLowerCase().replaceAll(" ", "-")}-${Date.now()}`,
 			},
+			maxRetries: CONNECTION_RESET_RETRIES,
 		},
 	);
 	const body: unknown = await response.json();
@@ -269,6 +276,7 @@ async function scimRequest(
 			authorization: `Bearer ${token}`,
 			"content-type": "application/scim+json",
 		},
+		maxRetries: CONNECTION_RESET_RETRIES,
 		...(input.data === undefined ? {} : { data: input.data }),
 	});
 }
@@ -442,6 +450,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		try {
 			const unauthenticated = await anonymousContext.request.get(
 				managementURL(runtime.baseURL, organizationId),
+				{ maxRetries: CONNECTION_RESET_RETRIES },
 			);
 			expect(unauthenticated.status()).toBe(401);
 		} finally {
@@ -452,6 +461,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 			{
 				headers: { origin: "https://attacker.invalid" },
 				data: { organizationId },
+				maxRetries: CONNECTION_RESET_RETRIES,
 			},
 		);
 		expect(crossOriginMutation.status()).toBe(403);
@@ -671,6 +681,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 				{
 					headers: { origin: runtime.baseURL },
 					data: { organizationId: tenantBOrganizationId },
+					maxRetries: CONNECTION_RESET_RETRIES,
 				},
 			);
 			expect(tenantBCreate.status()).toBe(201);
@@ -687,6 +698,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 				(
 					await page.request.get(
 						managementURL(runtime.baseURL, tenantBOrganizationId),
+						{ maxRetries: CONNECTION_RESET_RETRIES },
 					)
 				).status(),
 			).toBe(403);
@@ -734,6 +746,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		).toBe(true);
 		const finalManagementResponse = await page.request.get(
 			managementURL(runtime.baseURL, organizationId),
+			{ maxRetries: CONNECTION_RESET_RETRIES },
 		);
 		expect(finalManagementResponse.status()).toBe(200);
 		const finalManagementBody: unknown = await finalManagementResponse.json();
@@ -941,6 +954,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 					organizationId,
 					scimUserId: maya.id,
 				},
+				maxRetries: CONNECTION_RESET_RETRIES,
 			},
 		);
 		expect(
