@@ -1,3 +1,5 @@
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { beforeEach, describe, expect, it, test, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
@@ -10,7 +12,7 @@ import type {
 	OAuthProvider,
 	ProviderOptions,
 } from "../oauth2";
-import { CLIENT_ASSERTION_TYPE } from "../oauth2";
+import { CLIENT_ASSERTION_TYPE, verifyProviderIdToken } from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { socialProviders } from "./index";
@@ -292,6 +294,43 @@ describe("discord provider", () => {
 	});
 });
 
+async function createSignedKakaoToken({
+	audience,
+	issuer = "https://kauth.kakao.com",
+}: {
+	audience: string;
+	issuer?: string;
+}) {
+	const { publicKey, privateKey } = await generateKeyPair("RS256", {
+		extractable: true,
+	});
+	const publicJWK = await exportJWK(publicKey);
+	publicJWK.kid = "test-kakao-key";
+	publicJWK.alg = "RS256";
+
+	const token = await new SignJWT({
+		nickname: "Kakao User",
+		picture: "https://example.com/thumbnail.jpg",
+		email: "user@example.com",
+	})
+		.setProtectedHeader({ alg: "RS256", kid: "test-kakao-key" })
+		.setIssuer(issuer)
+		.setAudience(audience)
+		.setSubject("123456789")
+		.setIssuedAt()
+		.setExpirationTime("1h")
+		.sign(privateKey);
+
+	return { publicJWK, token };
+}
+
+function mockKakaoJwks(publicJWK: JWK) {
+	mockedBetterFetch.mockResolvedValueOnce({
+		data: { keys: [publicJWK] },
+		error: null,
+	});
+}
+
 describe("kakao provider", () => {
 	/**
 	 * @see https://developers.kakao.com/docs/en/kakaologin/rest-api#request-code-login-hint
@@ -303,6 +342,85 @@ describe("kakao provider", () => {
 			loginHint: "user@example.com",
 		});
 		expect(url.searchParams.get("login_hint")).toBe("user@example.com");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12293
+	 */
+	describe("ID token", () => {
+		const restApiKey = "rest-api-key";
+		const nativeAppKey = "native-app-key";
+
+		it("accepts an ID token issued for any configured app key", async () => {
+			const provider = kakao({
+				clientId: [restApiKey, nativeAppKey],
+				clientSecret: credentials.clientSecret,
+			});
+			const { publicJWK, token } = await createSignedKakaoToken({
+				audience: nativeAppKey,
+			});
+			mockKakaoJwks(publicJWK);
+
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(true);
+		});
+
+		it("rejects an ID token issued for another app", async () => {
+			const provider = kakao({
+				clientId: [restApiKey, nativeAppKey],
+				clientSecret: credentials.clientSecret,
+			});
+			const { publicJWK, token } = await createSignedKakaoToken({
+				audience: "other-app-key",
+			});
+			mockKakaoJwks(publicJWK);
+
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(false);
+		});
+
+		it("rejects an ID token from another issuer", async () => {
+			const provider = kakao({ ...credentials, clientId: restApiKey });
+			const { publicJWK, token } = await createSignedKakaoToken({
+				audience: restApiKey,
+				issuer: "https://attacker.example",
+			});
+			mockKakaoJwks(publicJWK);
+
+			await expect(verifyProviderIdToken(provider, token)).resolves.toBe(false);
+		});
+
+		it("builds the user from the ID token claims without calling the user info API", async () => {
+			const provider = kakao({ ...credentials, clientId: restApiKey });
+			const { token } = await createSignedKakaoToken({ audience: restApiKey });
+
+			const userInfo = await provider.getUserInfoFromIdToken(token);
+
+			expect(mockedBetterFetch).not.toHaveBeenCalled();
+			expect(userInfo?.user).toEqual({
+				name: "Kakao User",
+				email: "user@example.com",
+				image: "https://example.com/thumbnail.jpg",
+				emailVerified: false,
+			});
+			const subject = await provider.accountSubject({
+				tokens: { idToken: token },
+				profile: userInfo!.data,
+			});
+			expect(String(subject)).toBe("123456789");
+		});
+
+		it("passes only the ID token to a custom getUserInfo", async () => {
+			const getUserInfo = vi.fn(async () => null);
+			const provider = kakao({
+				...credentials,
+				clientId: restApiKey,
+				getUserInfo,
+			});
+			const { token } = await createSignedKakaoToken({ audience: restApiKey });
+
+			await provider.getUserInfoFromIdToken(token);
+
+			expect(getUserInfo).toHaveBeenCalledWith({ idToken: token });
+		});
 	});
 });
 
