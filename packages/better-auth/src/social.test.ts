@@ -23,6 +23,7 @@ import {
 	describe,
 	expect,
 	it,
+	onTestFinished,
 	vi,
 } from "vitest";
 import { createAuthMiddleware } from "./api";
@@ -886,6 +887,45 @@ describe("signin", async () => {
 		});
 		await migrations.runMigrations();
 	});
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12046
+	 */
+	it("does not create OAuth state already expired during a DST fall-back hour", async () => {
+		onTestFinished(() => {
+			vi.useRealTimers();
+			vi.unstubAllEnvs();
+		});
+		vi.stubEnv("TZ", "Europe/Helsinki");
+		vi.useFakeTimers({ toFake: ["Date"] });
+		// 03:30 local time occurs twice in Helsinki on this night
+		vi.setSystemTime(new Date("2026-10-25T01:30:00Z"));
+		const expiries: Date[] = [];
+		const { client } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+			databaseHooks: {
+				verification: {
+					create: {
+						after: async (verification) => {
+							expiries.push(verification.expiresAt);
+						},
+					},
+				},
+			},
+		});
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+		});
+
+		expect(expiries).toHaveLength(1);
+		expect(expiries[0]!.getTime()).toBeGreaterThan(Date.now());
+	});
+
 	it("should allow user info override during sign in", async () => {
 		let state = "";
 		const headers = new Headers();
