@@ -45,14 +45,15 @@ async function getPackageVersion(pkg: string): Promise<string | undefined> {
 		const dirs =
 			createRequire(path.join(cwd, "package.json")).resolve.paths(pkg) ?? [];
 		for (const dir of dirs) {
-			try {
-				const raw = await fsPromises.readFile(
-					path.join(dir, pkg, "package.json"),
-					"utf-8",
+			const raw = await fsPromises
+				.readFile(path.join(dir, pkg, "package.json"), "utf-8")
+				.catch(() => undefined);
+			if (raw) {
+				return (
+					(JSON.parse(raw).version as string | undefined) ||
+					getVersionFromLocalPackageJson(pkg)
 				);
-				const version = JSON.parse(raw).version;
-				if (version) return version as string;
-			} catch {}
+			}
 		}
 	} catch {}
 
