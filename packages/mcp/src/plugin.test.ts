@@ -306,6 +306,19 @@ describe("mcp plugin", async () => {
 				}),
 			).not.toThrow();
 		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11337
+		 */
+		it("accepts an HTTP resource on a .localhost subdomain", () => {
+			expect(() =>
+				mcp({
+					loginPage: "/login",
+					consentPage: "/consent",
+					resource: "http://my-branch.api.localhost/mcp",
+				}),
+			).not.toThrow();
+		});
 	});
 
 	describe("requireMcpAuth", () => {

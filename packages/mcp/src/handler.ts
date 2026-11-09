@@ -1,4 +1,5 @@
 import type { Awaitable } from "@better-auth/core";
+import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
 import type {
 	DpopReplayStore,
@@ -49,15 +50,6 @@ export interface McpProtectedRequestHandlerOptions {
 		signingAlgorithms?: readonly string[];
 		replayStore?: DpopReplayStore;
 	};
-}
-
-function isLoopbackHost(hostname: string): boolean {
-	const ipv4Octets = hostname.split(".");
-	const isIpv4Loopback =
-		ipv4Octets.length === 4 &&
-		ipv4Octets[0] === "127" &&
-		ipv4Octets.every((octet) => /^\d+$/.test(octet) && Number(octet) <= 255);
-	return hostname === "localhost" || hostname === "[::1]" || isIpv4Loopback;
 }
 
 /**
