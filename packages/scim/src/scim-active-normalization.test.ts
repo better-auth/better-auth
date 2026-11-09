@@ -47,23 +47,26 @@ describe("SCIM User active ingress helper", () => {
 		["False", false],
 		["FALSE", false],
 		["fAlSe", false],
-	] as const)("normalizes the exact case-insensitive string %s at POST and PUT boundaries", (value, expected) => {
-		for (const method of ["POST", "PUT"] as const) {
-			const body = {
-				schemas: [SCIM_USER_SCHEMA],
-				userName: "boundary@example.com",
-				active: value,
-			};
-			const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
-				method,
-				body,
-			);
+	] as const)(
+		"normalizes the exact case-insensitive string %s at POST and PUT boundaries",
+		(value, expected) => {
+			for (const method of ["POST", "PUT"] as const) {
+				const body = {
+					schemas: [SCIM_USER_SCHEMA],
+					userName: "boundary@example.com",
+					active: value,
+				};
+				const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
+					method,
+					body,
+				);
 
-			expect(normalized).not.toBe(body);
-			expect(normalized).toEqual({ ...body, active: expected });
-			expect(body.active).toBe(value);
-		}
-	});
+				expect(normalized).not.toBe(body);
+				expect(normalized).toEqual({ ...body, active: expected });
+				expect(body.active).toBe(value);
+			}
+		},
+	);
 
 	it.each([
 		true,
@@ -82,19 +85,22 @@ describe("SCIM User active ingress helper", () => {
 		[true],
 		{},
 		{ value: true },
-	] as const)("leaves the rejected near-miss unchanged at POST and PUT boundaries", (value) => {
-		for (const method of ["POST", "PUT"] as const) {
-			const body = {
-				schemas: [SCIM_USER_SCHEMA],
-				userName: "boundary@example.com",
-				active: value,
-			};
+	] as const)(
+		"leaves the rejected near-miss unchanged at POST and PUT boundaries",
+		(value) => {
+			for (const method of ["POST", "PUT"] as const) {
+				const body = {
+					schemas: [SCIM_USER_SCHEMA],
+					userName: "boundary@example.com",
+					active: value,
+				};
 
-			expect(normalizeSCIMUserEntraCompatibilityRequestBody(method, body)).toBe(
-				body,
-			);
-		}
-	});
+				expect(
+					normalizeSCIMUserEntraCompatibilityRequestBody(method, body),
+				).toBe(body);
+			}
+		},
+	);
 
 	it("copies only User active containers whose values change", () => {
 		const untouchedOperation = {
@@ -251,37 +257,40 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 		["False", false],
 		["FALSE", false],
 		["fAlSe", false],
-	] as const)("normalizes the exact case-insensitive string %s for every multi-valued primary at POST and PUT boundaries", (value, expected) => {
-		for (const method of ["POST", "PUT"] as const) {
-			const body = {
-				schemas: [SCIM_USER_SCHEMA],
-				userName: "primary-boundary@example.com",
-				emails: [
-					{
-						value: "primary-boundary@example.com",
-						type: "work",
-						primary: value,
-					},
-				],
-				phoneNumbers: [{ value: "+1-555-0100", primary: value }],
-				addresses: [{ formatted: "1 Infinite Loop", primary: value }],
-				roles: [{ value: "engineer", primary: value }],
-				entitlements: [{ value: "license", primary: value }],
-			};
-			const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
-				method,
-				body,
-			) as typeof body;
+	] as const)(
+		"normalizes the exact case-insensitive string %s for every multi-valued primary at POST and PUT boundaries",
+		(value, expected) => {
+			for (const method of ["POST", "PUT"] as const) {
+				const body = {
+					schemas: [SCIM_USER_SCHEMA],
+					userName: "primary-boundary@example.com",
+					emails: [
+						{
+							value: "primary-boundary@example.com",
+							type: "work",
+							primary: value,
+						},
+					],
+					phoneNumbers: [{ value: "+1-555-0100", primary: value }],
+					addresses: [{ formatted: "1 Infinite Loop", primary: value }],
+					roles: [{ value: "engineer", primary: value }],
+					entitlements: [{ value: "license", primary: value }],
+				};
+				const normalized = normalizeSCIMUserEntraCompatibilityRequestBody(
+					method,
+					body,
+				) as typeof body;
 
-			expect(normalized).not.toBe(body);
-			expect(normalized.emails[0]?.primary).toBe(expected);
-			expect(normalized.phoneNumbers[0]?.primary).toBe(expected);
-			expect(normalized.addresses[0]?.primary).toBe(expected);
-			expect(normalized.roles[0]?.primary).toBe(expected);
-			expect(normalized.entitlements[0]?.primary).toBe(expected);
-			expect(body.emails[0]?.primary).toBe(value);
-		}
-	});
+				expect(normalized).not.toBe(body);
+				expect(normalized.emails[0]?.primary).toBe(expected);
+				expect(normalized.phoneNumbers[0]?.primary).toBe(expected);
+				expect(normalized.addresses[0]?.primary).toBe(expected);
+				expect(normalized.roles[0]?.primary).toBe(expected);
+				expect(normalized.entitlements[0]?.primary).toBe(expected);
+				expect(body.emails[0]?.primary).toBe(value);
+			}
+		},
+	);
 
 	it.each([
 		true,
@@ -298,19 +307,22 @@ describe("SCIM User multi-valued primary ingress helper", () => {
 		null,
 		[],
 		{},
-	] as const)("leaves the rejected near-miss primary value unchanged at POST and PUT boundaries", (value) => {
-		for (const method of ["POST", "PUT"] as const) {
-			const body = {
-				schemas: [SCIM_USER_SCHEMA],
-				userName: "primary-near-miss@example.com",
-				emails: [{ value: "primary-near-miss@example.com", primary: value }],
-			};
+	] as const)(
+		"leaves the rejected near-miss primary value unchanged at POST and PUT boundaries",
+		(value) => {
+			for (const method of ["POST", "PUT"] as const) {
+				const body = {
+					schemas: [SCIM_USER_SCHEMA],
+					userName: "primary-near-miss@example.com",
+					emails: [{ value: "primary-near-miss@example.com", primary: value }],
+				};
 
-			expect(normalizeSCIMUserEntraCompatibilityRequestBody(method, body)).toBe(
-				body,
-			);
-		}
-	});
+				expect(
+					normalizeSCIMUserEntraCompatibilityRequestBody(method, body),
+				).toBe(body);
+			}
+		},
+	);
 
 	it("copies only the multi-valued entries whose primary value changes", () => {
 		const untouchedEmail = {
@@ -676,45 +688,18 @@ describe("SCIM User active HTTP normalization", () => {
 		active: string;
 		expected: boolean;
 		expectedStatus: number;
-	}[])("normalizes $scenario string active values at the real HTTP ingress", async ({
-		scenario,
-		active,
-		expected,
-		expectedStatus,
-	}) => {
-		const { instance, sqlite } = await createTestInstance();
-		try {
-			const userName = `${scenario}@example.com`;
-			let userId: string;
-			let response: Response;
+	}[])(
+		"normalizes $scenario string active values at the real HTTP ingress",
+		async ({ scenario, active, expected, expectedStatus }) => {
+			const { instance, sqlite } = await createTestInstance();
+			try {
+				const userName = `${scenario}@example.com`;
+				let userId: string;
+				let response: Response;
 
-			if (scenario === "create") {
-				response = await fetch(`${instance.baseURL}/api/auth/scim/v2/Users`, {
-					method: "POST",
-					headers: createSCIMHeaders(),
-					body: JSON.stringify({
-						schemas: [SCIM_USER_SCHEMA],
-						externalId: `entra-${scenario}`,
-						userName,
-						displayName: "Entra Active User",
-						emails: [
-							{
-								value: userName,
-								type: "work",
-								primary: true,
-							},
-						],
-						active,
-					}),
-				});
-				userId = (await readJSON<SCIMUserResponse>(response.clone())).id;
-			} else {
-				const user = await createUser(instance.baseURL, !expected, userName);
-				userId = user.id;
-				const userURL = `${instance.baseURL}/api/auth/scim/v2/Users/${encodeURIComponent(user.id)}`;
-				if (scenario === "replace") {
-					response = await fetch(userURL, {
-						method: "PUT",
+				if (scenario === "create") {
+					response = await fetch(`${instance.baseURL}/api/auth/scim/v2/Users`, {
+						method: "POST",
 						headers: createSCIMHeaders(),
 						body: JSON.stringify({
 							schemas: [SCIM_USER_SCHEMA],
@@ -731,48 +716,73 @@ describe("SCIM User active HTTP normalization", () => {
 							active,
 						}),
 					});
+					userId = (await readJSON<SCIMUserResponse>(response.clone())).id;
 				} else {
-					const path =
-						scenario === "pathless-patch"
-							? undefined
-							: scenario === "schema-qualified-patch"
-								? `${SCIM_USER_SCHEMA}:active`
-								: "active";
-					response = await fetch(userURL, {
-						method: "PATCH",
-						headers: createSCIMHeaders(),
-						body: JSON.stringify({
-							schemas: [SCIM_PATCH_SCHEMA],
-							Operations: [
-								path
-									? { op: "replace", path, value: active }
-									: { op: "replace", value: { active } },
-							],
-						}),
-					});
+					const user = await createUser(instance.baseURL, !expected, userName);
+					userId = user.id;
+					const userURL = `${instance.baseURL}/api/auth/scim/v2/Users/${encodeURIComponent(user.id)}`;
+					if (scenario === "replace") {
+						response = await fetch(userURL, {
+							method: "PUT",
+							headers: createSCIMHeaders(),
+							body: JSON.stringify({
+								schemas: [SCIM_USER_SCHEMA],
+								externalId: `entra-${scenario}`,
+								userName,
+								displayName: "Entra Active User",
+								emails: [
+									{
+										value: userName,
+										type: "work",
+										primary: true,
+									},
+								],
+								active,
+							}),
+						});
+					} else {
+						const path =
+							scenario === "pathless-patch"
+								? undefined
+								: scenario === "schema-qualified-patch"
+									? `${SCIM_USER_SCHEMA}:active`
+									: "active";
+						response = await fetch(userURL, {
+							method: "PATCH",
+							headers: createSCIMHeaders(),
+							body: JSON.stringify({
+								schemas: [SCIM_PATCH_SCHEMA],
+								Operations: [
+									path
+										? { op: "replace", path, value: active }
+										: { op: "replace", value: { active } },
+								],
+							}),
+						});
+					}
 				}
-			}
 
-			expect(response.status).toBe(expectedStatus);
-			const resourceResponse = await fetch(
-				`${instance.baseURL}/api/auth/scim/v2/Users/${encodeURIComponent(userId)}`,
-				{ headers: createSCIMHeaders() },
-			);
-			expect(resourceResponse.status).toBe(200);
-			const resource = await readJSON<SCIMUserResponse>(resourceResponse);
-			expect(resource.active).toBe(expected);
-			expect(typeof resource.active).toBe("boolean");
-			const persisted = await instance.db.findOne<{ active: boolean }>({
-				model: "scimUser",
-				where: [{ field: "id", value: userId }],
-			});
-			expect(persisted?.active).toBe(expected);
-			expect(typeof persisted?.active).toBe("boolean");
-		} finally {
-			await instance.server.close();
-			sqlite.close();
-		}
-	});
+				expect(response.status).toBe(expectedStatus);
+				const resourceResponse = await fetch(
+					`${instance.baseURL}/api/auth/scim/v2/Users/${encodeURIComponent(userId)}`,
+					{ headers: createSCIMHeaders() },
+				);
+				expect(resourceResponse.status).toBe(200);
+				const resource = await readJSON<SCIMUserResponse>(resourceResponse);
+				expect(resource.active).toBe(expected);
+				expect(typeof resource.active).toBe("boolean");
+				const persisted = await instance.db.findOne<{ active: boolean }>({
+					model: "scimUser",
+					where: [{ field: "id", value: userId }],
+				});
+				expect(persisted?.active).toBe(expected);
+				expect(typeof persisted?.active).toBe("boolean");
+			} finally {
+				await instance.server.close();
+				sqlite.close();
+			}
+		},
+	);
 
 	it("preserves native Boolean provider requests and Boolean schema discovery", async () => {
 		const { instance, sqlite } = await createTestInstance();
@@ -1009,45 +1019,45 @@ describe("SCIM User multi-valued primary HTTP normalization", () => {
 			entry: { value: "+1-555-0100", type: "work", primary: "true" },
 		},
 		{ attribute: "entitlements", entry: { value: "license", primary: "true" } },
-	])("normalizes a string primary for $attribute at the real HTTP create ingress", async ({
-		attribute,
-		entry,
-	}) => {
-		const { instance, sqlite } = await createTestInstance();
-		try {
-			const response = await fetch(
-				`${instance.baseURL}/api/auth/scim/v2/Users`,
-				{
-					method: "POST",
-					headers: createSCIMHeaders(),
-					body: JSON.stringify({
-						schemas: [SCIM_USER_SCHEMA],
-						userName: `${attribute}-primary@example.com`,
-						displayName: "Entra Primary User",
-						emails: [
-							{
-								value: `${attribute}-primary@example.com`,
-								type: "work",
-								primary: true,
-							},
-						],
-						[attribute]: [entry],
-					}),
-				},
-			);
+	])(
+		"normalizes a string primary for $attribute at the real HTTP create ingress",
+		async ({ attribute, entry }) => {
+			const { instance, sqlite } = await createTestInstance();
+			try {
+				const response = await fetch(
+					`${instance.baseURL}/api/auth/scim/v2/Users`,
+					{
+						method: "POST",
+						headers: createSCIMHeaders(),
+						body: JSON.stringify({
+							schemas: [SCIM_USER_SCHEMA],
+							userName: `${attribute}-primary@example.com`,
+							displayName: "Entra Primary User",
+							emails: [
+								{
+									value: `${attribute}-primary@example.com`,
+									type: "work",
+									primary: true,
+								},
+							],
+							[attribute]: [entry],
+						}),
+					},
+				);
 
-			expect(response.status).toBe(201);
-			const resource = await readJSON<Record<string, unknown>>(response);
-			const normalizedEntry = (
-				resource[attribute] as { primary?: unknown }[]
-			)[0];
-			expect(normalizedEntry?.primary).toBe(true);
-			expect(typeof normalizedEntry?.primary).toBe("boolean");
-		} finally {
-			await instance.server.close();
-			sqlite.close();
-		}
-	});
+				expect(response.status).toBe(201);
+				const resource = await readJSON<Record<string, unknown>>(response);
+				const normalizedEntry = (
+					resource[attribute] as { primary?: unknown }[]
+				)[0];
+				expect(normalizedEntry?.primary).toBe(true);
+				expect(typeof normalizedEntry?.primary).toBe("boolean");
+			} finally {
+				await instance.server.close();
+				sqlite.close();
+			}
+		},
+	);
 
 	/**
 	 * Mirrors the exact payload shape sent by Microsoft's SCIM Validator,

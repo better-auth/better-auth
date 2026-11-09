@@ -10,6 +10,8 @@ import { oAuthState } from "./oauth";
 import { getSupportedClaims } from "./standard-claims";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import {
+	findConsent,
+	getConsentReferenceId,
 	isSessionFreshForSignedQuery,
 	parsePrompt,
 	removeMaxAgeFromQuery,
@@ -104,33 +106,16 @@ export async function consentEndpoint<Result>(
 		return await authorize(ctx);
 	}
 
-	const referenceId = await opts.postLogin?.consentReferenceId?.({
+	const referenceId = await getConsentReferenceId(opts, {
 		user: session?.user!,
 		session: session?.session!,
 		scopes: requestedScopes ?? originalRequestedScopes,
 	});
-	const foundConsent = await ctx.context.adapter.findOne<OAuthConsent<Scope[]>>(
-		{
-			model: "oauthConsent",
-			where: [
-				{
-					field: "clientId",
-					value: clientId,
-				},
-				{
-					field: "userId",
-					value: session?.user.id!,
-				},
-				...(referenceId
-					? [
-							{
-								field: "referenceId",
-								value: referenceId,
-							},
-						]
-					: []),
-			],
-		},
+	const foundConsent = await findConsent(
+		ctx,
+		clientId,
+		session?.user.id!,
+		referenceId,
 	);
 	const iat = Math.floor(Date.now() / 1000);
 	const resource = query.getAll("resource");

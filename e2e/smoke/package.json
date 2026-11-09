@@ -18,7 +18,8 @@
     "@types/babel__core": "^7.20.5",
     "better-auth": "workspace:*",
     "ioredis": "^5.11.1",
-    "msw": "^2.14.6"
+    "msw": "^2.14.6",
+    "oauth4webapi": "3.8.8"
   },
   "scripts": {
     "e2e:smoke": "node --test ./test/*.spec.ts"

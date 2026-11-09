@@ -29,20 +29,26 @@ describe("(cloudflare) simple server", () => {
 	 */
 	it("builds and runs the Worker", async (t) => {
 		const cp = spawn("pnpm", ["run", "e2e:smoke"], {
+			detached: process.platform !== "win32",
 			cwd: join(fixturesDir, "cloudflare"),
 			stdio: "pipe",
 		});
 
-		const stopProcessTree = async () => {
-			if (
-				cp.pid === undefined ||
-				cp.exitCode !== null ||
-				cp.signalCode !== null
-			) {
-				return;
-			}
-			await terminate(cp.pid);
+		const stopProcessTree = () => terminate(cp);
+		const stopOnSignal = (signal: NodeJS.Signals) => {
+			const exitWithSignal = () => {
+				process.off("SIGINT", stopOnSignal);
+				process.off("SIGTERM", stopOnSignal);
+				process.kill(process.pid, signal);
+			};
+			void stopProcessTree().then(exitWithSignal, exitWithSignal);
 		};
+		process.on("SIGINT", stopOnSignal);
+		process.on("SIGTERM", stopOnSignal);
+		cp.once("close", () => {
+			process.off("SIGINT", stopOnSignal);
+			process.off("SIGTERM", stopOnSignal);
+		});
 		t.after(stopProcessTree);
 
 		const unexpectedWarnings = new Set(["node:sqlite", "node:async_hooks"]);

@@ -225,18 +225,21 @@ describe("encodeDeterministicId", () => {
 			{ generateId: "uuid" },
 			{ supportsUUIDs: true },
 		],
-	] as const)("keeps the id under the %s strategy", (_, database, initExtra) => {
-		const options = {
-			database: {} as any,
-			advanced: { database },
-		} as BetterAuthOptions;
-		const id = encodeDeterministicId(digest(1), options);
-		const field = getField(options, initExtra, { forceAllowId: true });
+	] as const)(
+		"keeps the id under the %s strategy",
+		(_, database, initExtra) => {
+			const options = {
+				database: {} as any,
+				advanced: { database },
+			} as BetterAuthOptions;
+			const id = encodeDeterministicId(digest(1), options);
+			const field = getField(options, initExtra, { forceAllowId: true });
 
-		expect(field.transform.input(id)).toBe(id);
-		expect(encodeDeterministicId(digest(1), options)).toBe(id);
-		expect(encodeDeterministicId(digest(2), options)).not.toBe(id);
-	});
+			expect(field.transform.input(id)).toBe(id);
+			expect(encodeDeterministicId(digest(1), options)).toBe(id);
+			expect(encodeDeterministicId(digest(2), options)).not.toBe(id);
+		},
+	);
 
 	it("formats a uuid when ids are uuids", () => {
 		const id = encodeDeterministicId(digest(1), {

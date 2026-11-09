@@ -187,7 +187,8 @@ describe("mongodb-adapter", () => {
 			}),
 		).rejects.toBe(callbackError);
 		expect(commit).not.toHaveBeenCalled();
-		expect(abort).not.toHaveBeenCalled();
+		// `withTransaction` aborts a failed callback itself; no raw command is needed.
+		expect(abort).toHaveBeenCalledOnce();
 		expect(command).not.toHaveBeenCalled();
 		expect(end).toHaveBeenCalledOnce();
 		await client.close();
@@ -607,6 +608,32 @@ describe("mongodb-adapter", () => {
 		});
 
 		expect(result).toBeNull();
+	});
+});
+
+describe("transactions", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11514
+	 * @see https://www.mongodb.com/docs/manual/core/transactions-in-applications/
+	 */
+	it("retries the callback when MongoDB aborts the transaction with a transient error", async () => {
+		const client = new MongoClient("mongodb://localhost:27017");
+		const adapter = mongodbAdapter(client.db("test"), { client })({});
+		let attempts = 0;
+
+		const result = await adapter.transaction(async () => {
+			attempts += 1;
+			if (attempts === 1) {
+				const writeConflict = new MongoServerError({ errmsg: "WriteConflict" });
+				writeConflict.addErrorLabel(MongoErrorLabel.TransientTransactionError);
+				throw writeConflict;
+			}
+			return "committed";
+		});
+
+		expect(result).toBe("committed");
+		expect(attempts).toBe(2);
+		await client.close();
 	});
 });
 

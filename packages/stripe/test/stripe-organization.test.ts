@@ -1243,6 +1243,7 @@ describe("stripe - organization customer", () => {
 					reason: "cancellation_requested",
 					comment: "User requested cancellation",
 					feedback: null,
+					feedback_option: null,
 				},
 			},
 		);

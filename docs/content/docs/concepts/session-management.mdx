@@ -250,6 +250,8 @@ export const auth = betterAuth({
   * Use `disableCookieCache: true` for sensitive operations
 </Callout>
 
+When sessions are stored in a database or secondary storage, passkey registration, device authorization, two-factor verification, social account linking, and phone number changes always check the session there, so a revoked session can't use them even while its cookie cache is valid.
+
 #### Cookie Cache Strategies
 
 Better Auth supports three different encoding strategies for cookie cache:
