@@ -156,6 +156,7 @@ export function getSessionAtom(
 				try {
 					const refreshRes = await $fetch<SessionResponse>("/get-session", {
 						method: "POST",
+						body: {},
 						signal,
 					});
 					if (signal.aborted) {
