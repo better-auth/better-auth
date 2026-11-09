@@ -1,15 +1,9 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import type { AccountKey } from "@better-auth/core/db";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { safeJSONParse } from "@better-auth/core/utils/json";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import * as z from "zod";
 import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
-import {
-	resolveOAuthAccountKey,
-	toOAuthProfileRecord,
-} from "../../oauth2/account-key";
+import { exchangeOAuthCallback } from "../../oauth2/callback";
 import {
 	missingEmailLogMessage,
 	OAUTH_CALLBACK_ERROR_CODES,
@@ -171,88 +165,18 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.PROVIDER_NOT_FOUND);
 		}
 
-		// RFC 9207: validate authorization server issuer identifier.
-		// Only validated when the provider sends the iss parameter;
-		// older OAuth servers that don't support RFC 9207 omit it.
-		if (iss && provider.issuer && iss !== provider.issuer) {
-			c.context.logger.error("OAuth issuer mismatch", {
-				expected: provider.issuer,
-				received: iss,
-			});
-			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.ISSUER_MISMATCH);
-		}
-
-		// Fail closed: a provider that requires id_token nonce binding must carry
-		// an expected nonce recovered from state. If it is absent (a flow minted
-		// before binding was enabled, or a dropped state field), the redirect
-		// cannot enforce the binding, so refuse rather than trust an unbound
-		// id_token.
-		if (provider.requiresIdTokenNonce && !idTokenNonce) {
-			c.context.logger.error(
-				"OAuth id_token nonce binding required but no expected nonce was found in state",
-				{ providerId: provider.id },
-			);
-			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.NONCE_BINDING_MISSING);
-		}
-
-		let tokens: OAuth2Tokens | null;
-		try {
-			tokens = await provider.validateAuthorizationCode({
-				code: code,
-				codeVerifier,
-				deviceId: device_id,
-				redirectURI: `${c.context.baseURL}${getOAuthCallbackPath(provider)}`,
-			});
-		} catch (e) {
-			c.context.logger.error("", e);
-			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE);
-		}
-		if (!tokens) {
-			throw redirectOnError(OAUTH_CALLBACK_ERROR_CODES.INVALID_CODE);
-		}
-		const parsedUserData = userData
-			? safeJSONParse<{
-					name?: {
-						firstName?: string;
-						lastName?: string;
-					};
-					email?: string;
-				}>(userData)
-			: null;
-
-		const providerResult = await provider.getUserInfo({
-			...tokens,
-			...(idTokenNonce ? { expectedIdTokenNonce: idTokenNonce } : {}),
-			/**
-			 * The user object from the provider
-			 * This is only available for some providers like Apple
-			 */
-			user: parsedUserData ?? undefined,
+		const exchanged = await exchangeOAuthCallback(c, provider, {
+			code,
+			codeVerifier,
+			iss,
+			deviceId: device_id,
+			user: userData,
+			idTokenNonce,
 		});
-		if (!providerResult?.user) {
-			c.context.logger.error("Unable to get user info");
-			return redirectOnError(
-				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
-			);
+		if (exchanged.error) {
+			throw redirectOnError(exchanged.error);
 		}
-		const userInfo = providerResult.user;
-		const providerProfile = toOAuthProfileRecord(providerResult.data);
-		let accountKey: AccountKey;
-		try {
-			accountKey = await resolveOAuthAccountKey(
-				provider,
-				tokens,
-				providerResult.data,
-			);
-		} catch (error) {
-			c.context.logger.error("Unable to derive provider account identity", {
-				providerId: provider.id,
-				error,
-			});
-			return redirectOnError(
-				OAUTH_CALLBACK_ERROR_CODES.UNABLE_TO_GET_USER_INFO,
-			);
-		}
+		const { tokens, userInfo, providerProfile, accountKey } = exchanged;
 		const { accountId } = accountKey;
 
 		if (!callbackURL) {

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, test, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -14,6 +14,7 @@ import { CLIENT_ASSERTION_TYPE } from "../oauth2";
 import { cognito } from "./cognito";
 import { discord } from "./discord";
 import { socialProviders } from "./index";
+import { kakao } from "./kakao";
 import { microsoft } from "./microsoft-entra-id";
 import { roblox } from "./roblox";
 import { slack } from "./slack";
@@ -51,6 +52,7 @@ describe("OAuth account identity contract", () => {
 	const providers: OAuthProvider[] = [
 		socialProviders.apple(providerOptions),
 		socialProviders.atlassian(providerOptions),
+		socialProviders.cloudflare(providerOptions),
 		socialProviders.cognito(providerOptions),
 		socialProviders.discord(providerOptions),
 		socialProviders.dropbox(providerOptions),
@@ -89,8 +91,22 @@ describe("OAuth account identity contract", () => {
 		socialProviders.zoom(providerOptions),
 	];
 
+	it("covers every built-in provider", () => {
+		expect(providers.map((provider) => provider.id).sort()).toEqual(
+			Object.keys(socialProviders).sort(),
+		);
+	});
+
 	it.each(providers)("$id declares a stable account subject", (provider) => {
 		expect(provider.accountSubject).toBeDefined();
+	});
+
+	it.for(providers)("$id exposes its configured options", (provider) => {
+		expect(provider.options).toMatchObject(
+			provider.id === "tiktok"
+				? { clientKey: providerOptions.clientKey }
+				: { clientId: providerOptions.clientId },
+		);
 	});
 
 	it("keeps mapped local-user fields separate from provider identity", () => {
@@ -276,6 +292,20 @@ describe("discord provider", () => {
 	});
 });
 
+describe("kakao provider", () => {
+	/**
+	 * @see https://developers.kakao.com/docs/en/kakaologin/rest-api#request-code-login-hint
+	 */
+	it("forwards loginHint as login_hint", async () => {
+		const provider = kakao({ ...credentials });
+		const url = await provider.createAuthorizationURL({
+			...baseInput,
+			loginHint: "user@example.com",
+		});
+		expect(url.searchParams.get("login_hint")).toBe("user@example.com");
+	});
+});
+
 describe("roblox provider", () => {
 	it("preserves the authorize URL shape after the shared-helper refactor", async () => {
 		const provider = roblox({ ...credentials });
@@ -454,4 +484,31 @@ describe("cognito provider", () => {
 		const url = await provider.createAuthorizationURL(baseInput);
 		expect(url.searchParams.get("identity_provider")).toBeNull();
 	});
+
+	test.for([
+		[true, true],
+		["true", true],
+		["false", false],
+		["TRUE", false],
+		[["true"], false],
+	] as const)(
+		"reads a UserInfo email_verified %j as verified=%s",
+		async ([claim, verified]) => {
+			mockedBetterFetch.mockResolvedValueOnce({
+				data: {
+					sub: "cognito-user",
+					email: "user@example.com",
+					email_verified: claim,
+				},
+				error: null,
+			} as Awaited<ReturnType<typeof betterFetch>>);
+			const provider = cognito(cognitoConfig);
+
+			const result = await provider.getUserInfo({
+				accessToken: "cognito-access-token",
+			});
+
+			expect(result?.user.emailVerified).toBe(verified);
+		},
+	);
 });

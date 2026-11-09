@@ -6,7 +6,15 @@ import {
 } from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	onTestFinished,
+	vi,
+} from "vitest";
 import { betterAuth } from "../auth/full";
 import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
@@ -902,6 +910,51 @@ describe("internal adapter test", async () => {
 		);
 		expect(actualExp! - expectedExp).toBeLessThanOrEqual(1); // max 1s clock drift between check and set
 		expect(actualExp! - expectedExp).toBeGreaterThanOrEqual(0); // max 1s clock drift between check and set
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10992
+	 */
+	it("does not store the active-sessions list with a zero ttl", async () => {
+		const store = new Map<string, string>();
+		const ttls = new Map<string, number>();
+		const { client, testUser, signInWithTestUser, sessionSetter } =
+			await getTestInstance({
+				secondaryStorage: createStringSecondaryStorage(store, ttls),
+				session: {
+					expiresIn: 7200,
+				},
+			});
+		const { user } = await signInWithTestUser();
+		const listKey = `active-sessions-${user.id}`;
+		const [{ expiresAt: firstExpiry }] = JSON.parse(store.get(listKey)!) as [
+			{ expiresAt: number },
+		];
+
+		vi.useFakeTimers({ toFake: ["Date"] });
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		vi.setSystemTime(firstExpiry - 3_600_000);
+		const headers = new Headers();
+		const second = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		// The surviving session has less than a second left, so its ttl floors to 0.
+		vi.setSystemTime(firstExpiry - 300);
+		await client.revokeSession({
+			token: second.data!.token,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(ttls.get(listKey)).toBeUndefined();
 	});
 
 	it("should delete a single account", async () => {

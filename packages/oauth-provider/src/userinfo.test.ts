@@ -28,6 +28,7 @@ describe("oauth userinfo", async () => {
 	const validResource = "https://myapi.example.com";
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: `${authServerBaseUrl}/api/auth/`,
+		advanced: { skipTrailingSlashes: true },
 		plugins: [
 			jwt({
 				jwt: {
@@ -546,6 +547,56 @@ describe("oauth userinfo", async () => {
 		});
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-4.3
+	 */
+	it("keeps the trailing slash of a DPoP userinfo request when skipTrailingSlashes is on", async () => {
+		const dpopKey = await createDpopKey();
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			additionalParams: { dpop_jkt: dpopKey.jkt },
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const tokens = await validateAuthCode(
+			{
+				code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+				codeVerifier,
+				resource: validResource,
+			},
+			{
+				DPoP: await createDpopProof({
+					privateKey: dpopKey.privateKey,
+					publicJwk: dpopKey.publicJwk,
+					method: "POST",
+					url: `${authServerBaseUrl}/api/auth/oauth2/token`,
+					jti: "trailing-slash-token-proof",
+				}),
+			},
+		);
+		const accessToken = tokens.data?.access_token ?? "";
+		const userinfoUrl = `${authServerBaseUrl}/api/auth/oauth2/userinfo/`;
+		const response = await customFetchImpl(userinfoUrl, {
+			headers: {
+				authorization: `DPoP ${accessToken}`,
+				DPoP: await createDpopProof({
+					privateKey: dpopKey.privateKey,
+					publicJwk: dpopKey.publicJwk,
+					method: "GET",
+					url: userinfoUrl,
+					jti: "trailing-slash-userinfo-proof",
+					accessToken,
+				}),
+			},
+		});
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({ sub: user.id });
+	});
+
 	it("should pass provide scoped user information - sub only", async () => {
 		const tokens = await getTokens({
 			scopes: ["openid"],
@@ -735,5 +786,59 @@ describe("oauth userinfo", async () => {
 		expect(userinfo.data?.name).toBeUndefined();
 		expect(userinfo.data?.given_name).toBeUndefined();
 		expect(userinfo.data?.family_name).toBeUndefined();
+	});
+});
+
+describe("oauth userinfo - unresolved baseURL", async () => {
+	const { auth } = await getTestInstance({
+		baseURL: "",
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				disableJwtPlugin: true,
+				scopes: ["openid", "read:posts"],
+				clientPrivileges: () => true,
+			}),
+		],
+	});
+
+	/**
+	 * Without a static `baseURL` or an HTTP request, `context.baseURL` stays
+	 * empty; a headers-only call must still reach the normal token checks.
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/8806
+	 */
+	it("evaluates a headers-only call without a configured baseURL", async () => {
+		const { token } = await auth.api.signInEmail({
+			body: { email: "test@test.com", password: "test123456" },
+		});
+		const client = await auth.api.adminCreateOAuthClient({
+			headers: new Headers({ authorization: `Bearer ${token}` }),
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:posts"],
+			},
+		});
+		const tokens = await auth.api.oauth2Token({
+			body: {
+				grant_type: "client_credentials",
+				client_id: client.client_id,
+				client_secret: client.client_secret,
+				scope: "read:posts",
+			},
+		});
+
+		await expect(
+			auth.api.oauth2UserInfo({
+				headers: new Headers({
+					authorization: `Bearer ${tokens.access_token}`,
+				}),
+			}),
+		).rejects.toMatchObject({
+			statusCode: 400,
+			body: { error: "invalid_scope" },
+		});
 	});
 });
