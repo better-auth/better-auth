@@ -2847,6 +2847,56 @@ describe("admin create-user password length", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11706
+ */
+describe("admin create-user password hashing", async () => {
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: {
+				hash: async (password) => {
+					if (password === "rejected-password") {
+						throw new Error("rejected by hasher");
+					}
+					return `hashed:${password}`;
+				},
+				verify: async ({ hash, password }) => hash === `hashed:${password}`,
+			},
+		},
+		plugins: [admin()],
+	});
+
+	it("should not leave a user behind when hashing the password fails", async () => {
+		const body = {
+			email: "hash-first@test.com",
+			name: "Hash First",
+		};
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					...body,
+					password: "rejected-password",
+				},
+			}),
+		).rejects.toThrow("rejected by hasher");
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					...body,
+					password: "accepted-password",
+				},
+			}),
+		).resolves.toMatchObject({
+			user: {
+				email: body.email,
+			},
+		});
+	});
+});
+
 describe("admin update-user phone number with default roles", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance(
 		{
