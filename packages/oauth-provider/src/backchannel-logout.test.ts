@@ -44,7 +44,7 @@ interface ReceivedLogoutRequest {
  * returns a configurable status, with optional artificial latency.
  */
 async function startMockRp(
-	options: { status?: number; delayMs?: number } = {},
+	options: { status?: number; delayMs?: number; location?: string } = {},
 ) {
 	const received: ReceivedLogoutRequest[] = [];
 	const server = createServer((req, res) => {
@@ -63,6 +63,7 @@ async function startMockRp(
 				await new Promise((r) => setTimeout(r, options.delayMs));
 			}
 			res.statusCode = options.status ?? 200;
+			if (options.location) res.setHeader("location", options.location);
 			res.end();
 		});
 	});
@@ -651,6 +652,37 @@ describe("oauth back-channel logout", async () => {
 		const result = await client.signOut({ fetchOptions: { headers } });
 		expect(result.error).toBeNull();
 		await waitForDispatches();
+		expect(rp.received).toHaveLength(1);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11328
+	 */
+	it("delivers the logout token on runtimes without redirect: error", async () => {
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+		// Cloudflare Workers only accepts "follow" and "manual".
+		const routedFetch = globalThis.fetch;
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+			if (init?.redirect === "error") {
+				return Promise.reject(new TypeError("Invalid redirect value"));
+			}
+			return routedFetch(input, init);
+		});
+
+		await client.signOut({ fetchOptions: { headers } });
+
+		expect(rp.received).toHaveLength(1);
+	});
+
+	it("does not follow a redirect from the back-channel logout URI", async () => {
+		await rp.close();
+		rp = await startMockRp({ status: 307, location: "/followed" });
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+
+		await client.signOut({ fetchOptions: { headers } });
+
 		expect(rp.received).toHaveLength(1);
 	});
 
