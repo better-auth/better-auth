@@ -155,7 +155,7 @@ export async function refreshAccessToken({
 		throw error;
 	}
 	// A response without an access token is not a successful one, even with a 200 status.
-	if (!data.access_token) {
+	if (typeof data.access_token !== "string" || !data.access_token) {
 		throw data;
 	}
 	const tokens: OAuth2Tokens = {

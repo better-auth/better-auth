@@ -131,6 +131,12 @@ describe("refreshAccessToken", () => {
 				access_token: "",
 			},
 		},
+		{
+			name: "a non-string access token",
+			body: {
+				access_token: 123,
+			},
+		},
 	])("rejects a successful status with $name", async ({ body }) => {
 		mockedBetterFetch.mockResolvedValueOnce({
 			data: body,
