@@ -186,8 +186,8 @@ describe("createDynamicPathProxy", () => {
 			getClientConfig({
 				baseURL: "http://localhost:3000",
 				fetchOptions: {
-					customFetchImpl: async (_, init) =>
-						Response.json({ method: init?.method }),
+					customFetchImpl: async (input, init) =>
+						Response.json({ method: new Request(input, init).method }),
 				},
 			});
 		const proxy = createDynamicPathProxy(
@@ -208,5 +208,8 @@ describe("createDynamicPathProxy", () => {
 
 		expect(post.data).toEqual({ method: "POST" });
 		expect(get.data).toEqual({ method: "GET" });
+		await expect(proxy.probe({}, { method: "get" })).resolves.toMatchObject({
+			data: { method: "GET" },
+		});
 	});
 });

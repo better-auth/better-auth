@@ -5,6 +5,7 @@ import type {
 } from "@better-auth/core";
 import { toKebabCase } from "@better-auth/core/utils/string";
 import type { BetterFetch } from "@better-fetch/fetch";
+import { isPayloadMethod } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
 import type { ProxyRequest } from "./path-to-object";
@@ -58,13 +59,12 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					(Object.keys(body).length > 0 ? "POST" : "GET");
 				return await client(routePath, {
 					...options,
-					body:
-						method === "GET"
-							? undefined
-							: {
-									...body,
-									...(options?.body || {}),
-								},
+					body: isPayloadMethod(method)
+						? {
+								...body,
+								...(options?.body || {}),
+							}
+						: undefined,
 					query: query || options?.query,
 					method,
 					async onSuccess(context) {
