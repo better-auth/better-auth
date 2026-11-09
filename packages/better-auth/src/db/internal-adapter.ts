@@ -883,6 +883,19 @@ export const createInternalAdapter = (
 		},
 		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
+				if (options.session?.storeSessionInDatabase) {
+					const deleteRes = ctx.options.session?.preserveSessionInDatabase
+						? await endPreservedSessions([{ field: "token", value: token }])
+						: await deleteWithHooks(
+								[{ field: "token", value: token }],
+								"session",
+								undefined,
+							);
+					if (deleteRes === null) {
+						return null;
+					}
+				}
+
 				// remove the session from the active sessions list
 				const data = await secondaryStorage.get(token);
 				if (data) {
@@ -930,13 +943,11 @@ export const createInternalAdapter = (
 				}
 
 				await secondaryStorage.delete(token);
+				return;
+			}
 
-				if (!options.session?.storeSessionInDatabase) {
-					return;
-				}
-				if (ctx.options.session?.preserveSessionInDatabase) {
-					return await endPreservedSessions([{ field: "token", value: token }]);
-				}
+			if (ctx.options.session?.preserveSessionInDatabase) {
+				return await endPreservedSessions([{ field: "token", value: token }]);
 			}
 
 			return await deleteWithHooks(

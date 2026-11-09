@@ -1295,6 +1295,92 @@ describe("Admin plugin", async () => {
 		expect(res.data?.success).toBe(false);
 	});
 
+	it("should return success false when session deletion is vetoed by hook under preserveSessionInDatabase", async () => {
+		const secondaryStore = new Map<string, string>();
+		const {
+			auth: pAuth,
+			signInWithTestUser: pSignIn,
+			customFetchImpl: pFetch,
+			db: pDb,
+		} = await getTestInstance(
+			{
+				secondaryStorage: {
+					get: async (key: string) => secondaryStore.get(key) || null,
+					set: async (key: string, value: string) => {
+						secondaryStore.set(key, value);
+					},
+					delete: async (key: string) => {
+						secondaryStore.delete(key);
+					},
+				},
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+				plugins: [admin()],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (u) => ({
+								data: {
+									...u,
+									emailVerified: true,
+									...(u.name === "Admin" ? { role: "admin" } : {}),
+								},
+							}),
+						},
+					},
+					session: {
+						delete: {
+							before: () => false,
+						},
+					},
+				},
+			},
+			{ testUser: { name: "Admin" } },
+		);
+
+		const pClient = createAuthClient({
+			fetchOptions: { customFetchImpl: pFetch },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+
+		const { headers: pAdminHeaders } = await pSignIn();
+
+		const targetHeaders = new Headers();
+		await pClient.signUp.email({
+			email: "admin-target-user@test.com",
+			password: "password123!",
+			name: "Target User",
+			fetchOptions: {
+				onSuccess: (ctx) => {
+					const setCookie = ctx.response.headers.get("set-cookie");
+					if (setCookie) targetHeaders.set("cookie", setCookie);
+				},
+			},
+		});
+
+		const targetSession = await pClient.getSession({
+			fetchOptions: { headers: targetHeaders },
+		});
+		const targetToken = targetSession.data?.session?.token;
+		expect(targetToken).toBeDefined();
+
+		const res = await pClient.admin.revokeUserSession(
+			{ sessionToken: targetToken! },
+			{ headers: pAdminHeaders },
+		);
+		expect(res.data?.success).toBe(false);
+
+		const preserved = await pDb.findOne<{ id: string; expiresAt: Date }>({
+			model: "session",
+			where: [{ field: "token", value: targetToken! }],
+		});
+		expect(preserved).not.toBeNull();
+		expect(new Date(preserved!.expiresAt).getTime()).toBeGreaterThan(Date.now());
+	});
+
 	it("should not allow non-admin to revoke user sessions", async () => {
 		const res = await client.admin.revokeUserSessions(
 			{ userId: newUser?.id || "" },

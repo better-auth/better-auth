@@ -817,6 +817,52 @@ describe("session storage", async () => {
 			expect(sessionAfter.data).not.toBeNull();
 		});
 	});
+
+	it("should return status false when hook vetoes revocation with secondaryStorage and preserveSessionInDatabase", async () => {
+		const secondaryStore = new Map<string, string>();
+		const { client: preserveClient, signInWithTestUser: preserveSignIn, db } =
+			await getTestInstance({
+				secondaryStorage: {
+					get: async (key: string) => secondaryStore.get(key) || null,
+					set: async (key: string, value: string) => {
+						secondaryStore.set(key, value);
+					},
+					delete: async (key: string) => {
+						secondaryStore.delete(key);
+					},
+				},
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+				databaseHooks: {
+					session: {
+						delete: {
+							before: () => false,
+						},
+					},
+				},
+			});
+
+		const { runWithUser } = await preserveSignIn();
+		await runWithUser(async () => {
+			const session = await preserveClient.getSession();
+			expect(session.data).not.toBeNull();
+			const token = session.data?.session?.token || "";
+
+			const res = await preserveClient.revokeSession({
+				token,
+			});
+			expect(res.data?.status).toBe(false);
+
+			const dbSession = await db.findOne<{ id: string; expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: token }],
+			});
+			expect(dbSession).not.toBeNull();
+			expect(new Date(dbSession!.expiresAt).getTime()).toBeGreaterThan(Date.now());
+		});
+	});
 });
 
 describe("cookie cache", () => {

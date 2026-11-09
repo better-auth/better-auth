@@ -2,6 +2,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import type { Session } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { whereOperators } from "@better-auth/core/db/adapter";
@@ -1489,7 +1490,13 @@ export const revokeUserSession = (opts: AdminOptions) =>
 				});
 			}
 
-			await ctx.context.internalAdapter.deleteSession(ctx.body.sessionToken);
+			const deletedSessionResult =
+				await ctx.context.internalAdapter.deleteSession(ctx.body.sessionToken);
+			if (deletedSessionResult === null) {
+				return ctx.json({
+					success: false,
+				});
+			}
 
 			const remainingSession = await ctx.context.internalAdapter.findSession(
 				ctx.body.sessionToken,
@@ -1498,6 +1505,22 @@ export const revokeUserSession = (opts: AdminOptions) =>
 				return ctx.json({
 					success: false,
 				});
+			}
+
+			if (ctx.context.options.session?.preserveSessionInDatabase) {
+				const currentAdapter = await getCurrentAdapter(ctx.context.adapter);
+				const livePreservedSession = await currentAdapter.findOne<Session>({
+					model: "session",
+					where: [
+						{ field: "token", value: ctx.body.sessionToken },
+						{ field: "expiresAt", value: new Date(), operator: "gt" },
+					],
+				});
+				if (livePreservedSession) {
+					return ctx.json({
+						success: false,
+					});
+				}
 			}
 
 			return ctx.json({

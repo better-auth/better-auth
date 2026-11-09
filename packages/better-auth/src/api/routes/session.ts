@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 
 import * as z from "zod";
@@ -737,8 +738,10 @@ export const revokeSession = createAuthEndpoint(
 			});
 		}
 
+		let deletedSessionResult: any;
 		try {
-			await ctx.context.internalAdapter.deleteSession(token);
+			deletedSessionResult =
+				await ctx.context.internalAdapter.deleteSession(token);
 		} catch (error) {
 			ctx.context.logger.error(
 				error && typeof error === "object" && "name" in error
@@ -752,12 +755,34 @@ export const revokeSession = createAuthEndpoint(
 			});
 		}
 
+		if (deletedSessionResult === null) {
+			return ctx.json({
+				status: false,
+			});
+		}
+
 		const postDeleteSession =
 			await ctx.context.internalAdapter.findSession(token);
 		if (postDeleteSession) {
 			return ctx.json({
 				status: false,
 			});
+		}
+
+		if (ctx.context.options.session?.preserveSessionInDatabase) {
+			const currentAdapter = await getCurrentAdapter(ctx.context.adapter);
+			const livePreservedSession = await currentAdapter.findOne<Session>({
+				model: "session",
+				where: [
+					{ field: "token", value: token },
+					{ field: "expiresAt", value: new Date(), operator: "gt" },
+				],
+			});
+			if (livePreservedSession) {
+				return ctx.json({
+					status: false,
+				});
+			}
 		}
 
 		return ctx.json({
