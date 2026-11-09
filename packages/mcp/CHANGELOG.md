@@ -1,5 +1,125 @@
 # @better-auth/mcp
 
+## 1.8.0-beta.6
+
+### Patch Changes
+
+- Updated dependencies [[`82b3c47`](https://github.com/better-auth/better-auth/commit/82b3c47121cfd16de7ca7606f898e657a55ebe01), [`ba21f31`](https://github.com/better-auth/better-auth/commit/ba21f310679512006f95d5629956889660f7263b)]:
+  - @better-auth/oauth-provider@1.8.0-beta.6
+
+## 1.8.0-beta.5
+
+### Patch Changes
+
+- Updated dependencies [[`de9fb2b`](https://github.com/better-auth/better-auth/commit/de9fb2b91d3248f844729477b050f9bd8e8dbfda)]:
+  - @better-auth/oauth-provider@1.8.0-beta.5
+
+## 1.8.0-beta.4
+
+## 1.7.18
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.18
+
+## 1.7.17
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.8.0-beta.4
+
+## 1.8.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.8.0-beta.3
+
+## 1.8.0-beta.2
+
+### Patch Changes
+
+- Updated dependencies [[`39235e1`](https://github.com/better-auth/better-auth/commit/39235e1433118ca3359bc7b7cc22979f47f05b12)]:
+  - @better-auth/oauth-provider@1.8.0-beta.2
+
+## 1.8.0-beta.1
+
+### Patch Changes
+
+- Updated dependencies [[`92ec221`](https://github.com/better-auth/better-auth/commit/92ec221d66693e518635c6f3052a29fa7d403183)]:
+  - @better-auth/oauth-provider@1.8.0-beta.1
+
+## 1.8.0-beta.0
+
+### Patch Changes
+
+- Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`94907fd`](https://github.com/better-auth/better-auth/commit/94907fd5ffc10ad8263b77b49dd7539f5fa72651), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`296133c`](https://github.com/better-auth/better-auth/commit/296133cc414ac24283ed8e33501e2e4e501ab5e0), [`cd404a0`](https://github.com/better-auth/better-auth/commit/cd404a0b46abb929ccaea0129ecdff23fb074a8f), [`ed71a21`](https://github.com/better-auth/better-auth/commit/ed71a211e803f9f336ebfa83c4ef96610e621fd1), [`c750fc5`](https://github.com/better-auth/better-auth/commit/c750fc5ad2cccf42d3bc6de9820c510a8cdb2cd4), [`2417879`](https://github.com/better-auth/better-auth/commit/2417879cf6b2cb5c97ab679b83df0038760e045d), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`c750fc5`](https://github.com/better-auth/better-auth/commit/c750fc5ad2cccf42d3bc6de9820c510a8cdb2cd4), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1), [`9f53222`](https://github.com/better-auth/better-auth/commit/9f532221bee7cd99a5c4e6593313dead87bf8f0d), [`c7c8331`](https://github.com/better-auth/better-auth/commit/c7c83314009540df912fb608b746fad3c02214ee), [`0d4609f`](https://github.com/better-auth/better-auth/commit/0d4609f4a904d919353acae7ef04d2e68ff1be15), [`6e5a88e`](https://github.com/better-auth/better-auth/commit/6e5a88e57b0b5253bc49797cede415ff27a82931)]:
+  - better-auth@1.8.0-beta.0
+  - @better-auth/oauth-provider@1.8.0-beta.0
+  - @better-auth/core@1.8.0-beta.0
+
+  - @better-auth/oauth-provider@1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.15
+
+## 1.7.14
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.14
+
+## 1.7.13
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.13
+
+## 1.7.12
+
+### Patch Changes
+
+- [#11934](https://github.com/better-auth/better-auth/pull/11934) [`2a576f3`](https://github.com/better-auth/better-auth/commit/2a576f39dc6a3c278e28b6ee004c40396b4bab7c) Thanks [@bytaesu](https://github.com/bytaesu)! - `requireMcpAuth` now accepts only OAuth access tokens and rejects session JWTs from the JWT plugin, even when they share the issuer and audience.
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.12
+
+## 1.7.11
+
+### Patch Changes
+
+- Updated dependencies [[`a1f6f0b`](https://github.com/better-auth/better-auth/commit/a1f6f0bf19ba1be85e977d891d0f0ca43723c0a3), [`37debaa`](https://github.com/better-auth/better-auth/commit/37debaa8a17d11d05f8eeabdb94877a4b1575a1d)]:
+  - @better-auth/oauth-provider@1.7.11
+
+## 1.7.10
+
+### Patch Changes
+
+- Updated dependencies [[`cdd491b`](https://github.com/better-auth/better-auth/commit/cdd491b9d023f57f511d2905e0dcf55f565666d6), [`44f14bb`](https://github.com/better-auth/better-auth/commit/44f14bbf82be7352bdafbd78ebdcfa90850eaab0), [`fe550a9`](https://github.com/better-auth/better-auth/commit/fe550a9c57fa0454c6234cd9e46af4ed9eef9201), [`99cdfe7`](https://github.com/better-auth/better-auth/commit/99cdfe7c2e6bb3b8556b1ea8c3a336369cba6976), [`906c32f`](https://github.com/better-auth/better-auth/commit/906c32f4b595c01f14917f753a79b77a068f36f0), [`2fa7e2f`](https://github.com/better-auth/better-auth/commit/2fa7e2f8bb603c1013855d43888ec54f6a442ba4), [`8f3da46`](https://github.com/better-auth/better-auth/commit/8f3da46ae5b1fe577b38bd7952af1116af3087ff), [`963b7f9`](https://github.com/better-auth/better-auth/commit/963b7f9417d676725215ce97e9910370f18d5477), [`e34b828`](https://github.com/better-auth/better-auth/commit/e34b8282747b3b0148b011be4c2f8b07364788a7), [`f42c0c2`](https://github.com/better-auth/better-auth/commit/f42c0c220d42fbfcb672c492e5ef1d2b29da3d2f), [`4d7da0b`](https://github.com/better-auth/better-auth/commit/4d7da0bef84d78e39e855efabbe913067225ce8f)]:
+  - @better-auth/oauth-provider@1.7.10
+
+## 1.7.9
+
+### Patch Changes
+
+- Updated dependencies [[`54a0994`](https://github.com/better-auth/better-auth/commit/54a09948e8a98f9166b650f791b083818c3dab27), [`0a1a87e`](https://github.com/better-auth/better-auth/commit/0a1a87e388c0b50c8d18f3c411c6963c205b11f1)]:
+  - @better-auth/oauth-provider@1.7.9
+
 ## 1.7.8
 
 ### Patch Changes

@@ -430,6 +430,74 @@ describe("initAction", () => {
 		},
 	);
 
+	testWithTmpDir(
+		"should tell the user to register the React Router route handler",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({ name: "test-project", version: "1.0.0" }),
+			);
+			mockHasDependency.mockImplementation(
+				(_packageJson, dependency) => dependency === "react-router",
+			);
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				JSON.stringify({ compilerOptions: { paths: { "~/*": ["./app/*"] } } }),
+			);
+
+			mockPrompts.mockImplementation(async (questions: any) => {
+				const question = Array.isArray(questions) ? questions[0] : questions;
+
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
+				}
+				if (question.name === "providedSecret") {
+					return { providedSecret: "" };
+				}
+				if (question.name === "providedURL") {
+					return { providedURL: "http://localhost:3000" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("auth instance")
+				) {
+					return { filePath: "app/lib/auth.server.ts" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("route handler")
+				) {
+					return { filePath: "app/routes/api.auth.$.ts" };
+				}
+				if (question.message?.includes("configure a database")) {
+					return { value: "stateless" };
+				}
+				if (question.message?.includes("auth client configuration")) {
+					return { value: false };
+				}
+				if (question.name === "connect") {
+					return { connect: false };
+				}
+
+				return {};
+			});
+
+			await initAction({ cwd: tmp });
+
+			const routeCode = await fs.readFile(
+				path.join(tmp, "app/routes/api.auth.$.ts"),
+				"utf-8",
+			);
+			expect(routeCode).toContain(`import { auth } from "~/lib/auth.server";`);
+			expect(routeCode).toContain(
+				`import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";`,
+			);
+			const output = vi.mocked(console.log).mock.calls.flat().join("\n");
+			expect(output).toContain("app/routes.ts");
+			expect(output).not.toContain("normalizedBasePath");
+		},
+	);
+
 	testWithTmpDir("should handle existing auth config file", async ({ tmp }) => {
 		await fs.writeFile(
 			path.join(tmp, "package.json"),
@@ -1227,6 +1295,73 @@ describe("initAction", () => {
 			await initAction({ cwd: tmp });
 
 			expect(mockExec).not.toHaveBeenCalled();
+		},
+	);
+
+	testWithTmpDir(
+		"should run the migration without waiting for confirmation",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({ name: "test-project", version: "1.0.0" }),
+			);
+
+			mockPrompts.mockImplementation(async (questions: any) => {
+				const question = Array.isArray(questions) ? questions[0] : questions;
+
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
+				}
+				if (
+					question.type === "confirm" &&
+					question.message?.includes(".env file")
+				) {
+					return { value: false };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("auth instance")
+				) {
+					return { filePath: "auth.ts" };
+				}
+				if (
+					question.name === "filePath" &&
+					question.message?.includes("route handler")
+				) {
+					return { filePath: "src/app/api/auth/[...all]/route.ts" };
+				}
+				if (question.message?.includes("configure a database")) {
+					return { value: "yes" };
+				}
+				if (question.message?.includes("Select the database")) {
+					return { value: "sqlite-better-sqlite3" };
+				}
+				if (question.name === "shouldInstallDeps") {
+					return { shouldInstallDeps: false };
+				}
+				if (question.name === "shouldMigrate") {
+					return { shouldMigrate: true };
+				}
+				if (question.message?.includes("email & password")) {
+					return { value: true };
+				}
+				if (question.message?.includes("setup social providers")) {
+					return { value: false };
+				}
+				if (question.message?.includes("auth client configuration")) {
+					return { value: false };
+				}
+
+				return {};
+			});
+
+			await initAction({ cwd: tmp });
+
+			expect(mockExec).toHaveBeenCalledWith(
+				"npx auth migrate --yes",
+				{ cwd: tmp },
+				expect.any(Function),
+			);
 		},
 	);
 

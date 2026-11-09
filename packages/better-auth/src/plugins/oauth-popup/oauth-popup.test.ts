@@ -67,6 +67,10 @@ describe("oauth popup server flow", async () => {
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
+		// Only the ID token has an audience, so align its subject with UserInfo.
+		server.service.on("beforeTokenSigning", (token) => {
+			if (token.payload.aud) token.payload.sub = "popup";
+		});
 	});
 
 	server.service.on("beforeUserinfo", (userInfoResponse) => {

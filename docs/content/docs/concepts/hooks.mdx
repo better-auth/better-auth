@@ -206,7 +206,7 @@ The `ctx` object contains another `context` object inside that's meant to hold c
 
 #### New Session
 
-The newly created session after an endpoint is run. This only exist in after hook.
+The newly created session after an endpoint is run. This only exist in after hook. Plugin after hooks on credential sign-in routes run after the [two-factor](/docs/plugins/2fa) check, so `newSession` is `null` while a second factor is pending. Top-level `hooks.after` runs before plugin hooks, so it can still see that pending session.
 
 ```ts title="auth.ts"
 import { createAuthMiddleware } from "better-auth/api";

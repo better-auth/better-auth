@@ -9,6 +9,9 @@ import {
 export type LoginType =
 	| 0 /** Facebook OAuth */
 	| 1 /** Google OAuth */
+	| 11 /** Phone number */
+	| 21 /** WeChat */
+	| 23 /** Alipay */
 	| 24 /** Apple OAuth */
 	| 27 /** Microsoft OAuth */
 	| 97 /** Mobile device */
@@ -222,5 +225,6 @@ export const zoom = (userOptions: ZoomOptions) => {
 				},
 			};
 		},
+		options,
 	} satisfies OAuthProvider<ZoomProfile>;
 };

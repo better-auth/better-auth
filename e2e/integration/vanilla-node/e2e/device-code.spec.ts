@@ -171,27 +171,36 @@ test.describe("OAuth device-code grant over HTTP", () => {
 			);
 			expect(signUpResponse.ok(), await signUpResponse.text()).toBe(true);
 
-			const verificationResponse = await approvalContext.request.get(
-				`${authBaseURL}/device?user_code=${encodeURIComponent(deviceAuthorizationResult.user_code)}`,
+			const userCode = deviceAuthorizationResult.user_code;
+			const consentResponse = await approvalContext.request.get(
+				`${authBaseURL}/oauth2/authorize?user_code=${encodeURIComponent(userCode)}`,
+				{ headers: { accept: "application/json" } },
 			);
-			expect(verificationResponse.ok(), await verificationResponse.text()).toBe(
-				true,
+			expect(consentResponse.ok(), await consentResponse.text()).toBe(true);
+			const consentURL = new URL(
+				((await consentResponse.json()) as { url: string }).url,
+				origin,
 			);
-			expect(await verificationResponse.json()).toMatchObject({
-				status: "pending",
+			expect(consentURL.pathname).toBe("/consent");
+			expect(Object.fromEntries(consentURL.searchParams)).toMatchObject({
+				user_code: userCode,
 				client_id: registeredClient.client_id,
 				scope: "openid profile email",
 				resource,
 			});
 
 			const approvalResponse = await approvalContext.request.post(
-				`${authBaseURL}/device/approve`,
+				`${authBaseURL}/oauth2/consent`,
 				{
-					headers: { origin },
-					data: { userCode: deviceAuthorizationResult.user_code },
+					headers: { origin, accept: "application/json" },
+					data: { accept: true, oauth_query: consentURL.search.slice(1) },
 				},
 			);
 			expect(approvalResponse.ok(), await approvalResponse.text()).toBe(true);
+			expect(await approvalResponse.json()).toEqual({
+				redirect: true,
+				url: `${origin}/device?user_code=${encodeURIComponent(userCode)}&status=approved`,
+			});
 
 			const standaloneTokenResponse = await fetch(
 				`${authBaseURL}/device/token`,

@@ -93,52 +93,54 @@ describe("React auth query hydration", () => {
 		expect(container.textContent).toBe("Save");
 	});
 
-	it.each([
-		"signed in",
-		"signed out",
-	])("hydrates a late session subscriber after the session resolves %s", async (status) => {
-		const { client, signInWithTestUser } = await getTestInstance();
-		stores.push(client.useSession);
+	it.each(["signed in", "signed out"])(
+		"hydrates a late session subscriber after the session resolves %s",
+		async (status) => {
+			const { client, signInWithTestUser } = await getTestInstance();
+			stores.push(client.useSession);
 
-		function Session() {
-			const { data, isPending } = useStore(client.useSession);
-			return createElement(
-				isPending ? "span" : "p",
-				null,
-				isPending ? "Loading" : data ? data.user.email : "Signed out",
-			);
-		}
-
-		const container = document.createElement("div");
-		container.innerHTML = renderToString(createElement(Session));
-		expect(container.innerHTML).toBe("<span>Loading</span>");
-		const early = document.createElement("div");
-		const earlyRoot = createRoot(early);
-		roots.push(earlyRoot);
-		await act(async () => earlyRoot.render(createElement(Session)));
-
-		await act(async () => {
-			if (status === "signed in") {
-				const { runWithUser } = await signInWithTestUser();
-				await runWithUser(async () => client.useSession.get().refetch());
-			} else {
-				await client.useSession.get().refetch();
+			function Session() {
+				const { data, isPending } = useStore(client.useSession);
+				return createElement(
+					isPending ? "span" : "p",
+					null,
+					isPending ? "Loading" : data ? data.user.email : "Signed out",
+				);
 			}
-		});
-		expect(client.useSession.get().isPending).toBe(false);
-		expect(early.textContent).toBe(
-			status === "signed in" ? "test@test.com" : "Signed out",
-		);
 
-		const onRecoverableError = vi.fn();
-		await act(async () => {
-			roots.push(
-				hydrateRoot(container, createElement(Session), { onRecoverableError }),
+			const container = document.createElement("div");
+			container.innerHTML = renderToString(createElement(Session));
+			expect(container.innerHTML).toBe("<span>Loading</span>");
+			const early = document.createElement("div");
+			const earlyRoot = createRoot(early);
+			roots.push(earlyRoot);
+			await act(async () => earlyRoot.render(createElement(Session)));
+
+			await act(async () => {
+				if (status === "signed in") {
+					const { runWithUser } = await signInWithTestUser();
+					await runWithUser(async () => client.useSession.get().refetch());
+				} else {
+					await client.useSession.get().refetch();
+				}
+			});
+			expect(client.useSession.get().isPending).toBe(false);
+			expect(early.textContent).toBe(
+				status === "signed in" ? "test@test.com" : "Signed out",
 			);
-		});
-		expect(onRecoverableError).not.toHaveBeenCalled();
-		expect(container.innerHTML).toBe(early.innerHTML);
-	});
+
+			const onRecoverableError = vi.fn();
+			await act(async () => {
+				roots.push(
+					hydrateRoot(container, createElement(Session), {
+						onRecoverableError,
+					}),
+				);
+			});
+			expect(onRecoverableError).not.toHaveBeenCalled();
+			expect(container.innerHTML).toBe(early.innerHTML);
+		},
+	);
 
 	it("hydrates a session seeded with hydrateSession before the first subscriber", async () => {
 		const { client, auth, signInWithTestUser } = await getTestInstance();

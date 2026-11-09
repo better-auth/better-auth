@@ -100,7 +100,8 @@ function createCardinalityRaceAdapter(
 								release = resolve;
 							});
 							groupLockTails.set(groupId, currentTail);
-							if (previousTail) cardinalityReadsMayContinue.resolve();
+							if (previousTail !== undefined)
+								cardinalityReadsMayContinue.resolve();
 							await previousTail;
 							heldGroupIds.add(groupId);
 							releases.push(() => {

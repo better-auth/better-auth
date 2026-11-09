@@ -15,7 +15,7 @@ export interface PhoneNumberOptions {
 	 */
 	otpLength?: number | undefined;
 	/**
-	 * Send OTP code to the user
+	 * Required callback to deliver the phone verification OTP.
 	 *
 	 * @param phoneNumber
 	 * @param code
@@ -28,8 +28,9 @@ export interface PhoneNumberOptions {
 	/**
 	 * Custom OTP verification function
 	 *
-	 * If provided, this function will be called instead of the internal verification logic.
-	 * This is useful when using SMS providers that handle their own OTP generation and verification.
+	 * Replaces OTP validation for phone verification, consumePhoneNumberOTP,
+	 * and password reset. The provider must enforce expiry, attempt limits,
+	 * and single-use acceptance. Account ownership is checked separately.
 	 *
 	 * @param data - Contains phone number and OTP code
 	 * @param request - The request object
@@ -71,13 +72,18 @@ export interface PhoneNumberOptions {
 		| ((phoneNumber: string) => Awaitable<boolean>)
 		| undefined;
 	/**
-	 * Require a phone number verification before signing in
+	 * Require a phone number verification before signing in.
+	 * For an unverified number, a correct password returns PHONE_NUMBER_NOT_VERIFIED
+	 * (401), sends an OTP, and sets a signed proof cookie. Keep this cookie for
+	 * verification in the same caller context. The stored proof expires after
+	 * min(expiresIn, 300) seconds.
 	 *
 	 * @default false
 	 */
 	requireVerification?: boolean | undefined;
 	/**
-	 * Callback when phone number is verified
+	 * Called after an authorized phone verification updates or creates the user,
+	 * before session creation. Not called when OTP validation or account ownership fails.
 	 */
 	callbackOnVerification?:
 		| ((

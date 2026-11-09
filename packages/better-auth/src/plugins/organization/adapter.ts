@@ -1200,12 +1200,17 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				options?.invitationExpiresIn || defaultExpiration,
 				"sec",
 			);
+			// Invitation ids gate unverified accepts, so they must stay opaque even
+			// when the adapter's own default id is sequential (e.g. MongoDB ObjectId).
 			const invite = await adapter.create<
 				InvitationInput,
 				InferInvitation<O, false>
 			>({
 				model: "invitation",
 				data: {
+					...(context.options.advanced?.database?.generateId === undefined && {
+						id: context.generateId({ model: "invitation" }),
+					}),
 					status: "pending",
 					expiresAt,
 					createdAt: new Date(),

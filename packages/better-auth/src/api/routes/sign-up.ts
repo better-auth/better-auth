@@ -413,6 +413,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 								user.email,
 								undefined,
 								ctx.context.options.emailVerification?.expiresIn,
+								{ userId: user.id },
 							);
 							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 							await ctx.context.runInBackgroundOrAwait(

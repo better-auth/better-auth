@@ -41,6 +41,13 @@ export type CimdMetadataValidationResult =
 export interface CimdMetadataValidationOptions {
 	originBoundFields?: readonly string[];
 	metadataProfile?: CimdMetadataProfile;
+	/**
+	 * Registration fields that OAuth provider extensions declare, such as
+	 * CIBA's `backchannel_token_delivery_mode`. They are kept in the validated
+	 * metadata instead of being ignored as unknown members; the provider
+	 * validates them when it registers the client.
+	 */
+	extensionFields?: ReadonlySet<string>;
 }
 
 /**
@@ -184,7 +191,16 @@ export function validateCimdMetadata(
 		};
 	}
 
-	const doc = parsedMetadata.data;
+	// Declared extension fields join the parsed document before the checks
+	// below, so origin-bound rules apply to them too.
+	const doc = {
+		...Object.fromEntries(
+			Object.entries(raw).filter(([field]) =>
+				options.extensionFields?.has(field),
+			),
+		),
+		...parsedMetadata.data,
+	};
 	const warnings: string[] = [];
 
 	// §4.1: client_id MUST equal the fetch URL (simple string comparison)

@@ -61,11 +61,16 @@ export function hubspot(
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
 	): Promise<GenericOAuthUserInfo | null> => {
-		const tokenInfoUrl = `https://api.hubapi.com/oauth/v1/access-tokens/${tokens.accessToken}`;
+		if (!tokens.accessToken) {
+			return null;
+		}
 
 		const { data: profile, error } = await betterFetch<HubSpotProfile>(
-			tokenInfoUrl,
+			"https://api.hubapi.com/oauth/v1/access-tokens/:token",
 			{
+				params: {
+					token: tokens.accessToken,
+				},
 				headers: {
 					"Content-Type": "application/json",
 				},

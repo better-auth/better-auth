@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
@@ -10,32 +9,36 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
-import { ID_TOKEN_CLOCK_TOLERANCE_SECONDS } from "../oauth2/verify-id-token";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
+import { getIdTokenVerifyOptions } from "../oauth2/verify-id-token";
 
+/**
+ * Claims from a Google ID token.
+ */
 export interface GoogleProfile {
 	aud: string;
-	azp: string;
-	email: string;
-	email_verified: boolean;
+	azp?: string | undefined;
+	email?: string | undefined;
+	email_verified?: boolean | undefined;
 	exp: number;
 	/**
 	 * The family name of the user, or last name in most
 	 * Western languages.
 	 */
-	family_name: string;
+	family_name?: string | undefined;
 	/**
 	 * The given name of the user, or first name in most
 	 * Western languages.
 	 */
-	given_name: string;
+	given_name?: string | undefined;
 	hd?: string | undefined;
 	iat: number;
 	iss: string;
 	jti?: string | undefined;
 	locale?: string | undefined;
-	name: string;
+	name?: string | undefined;
 	nbf?: number | undefined;
-	picture: string;
+	picture?: string | undefined;
 	sub: string;
 }
 
@@ -108,13 +111,16 @@ export const verifyGoogleIdToken = async ({
 		const publicKeys = await getGooglePublicKeys(kid);
 		for (const publicKey of publicKeys) {
 			try {
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
-					issuer: ["https://accounts.google.com", "accounts.google.com"],
-					audience,
-					maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
-					clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
-				});
+				const { payload: jwtClaims } = await jwtVerify(
+					token,
+					publicKey,
+					getIdTokenVerifyOptions({
+						issuer: ["https://accounts.google.com", "accounts.google.com"],
+						audience,
+						algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
+						maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+					}),
+				);
 
 				if (nonce && jwtClaims.nonce !== nonce) {
 					return null;
@@ -225,6 +231,7 @@ export const google = (options: GoogleOptions) => {
 			jwks: (header) => getGooglePublicKey(header.kid!),
 			issuer: ["https://accounts.google.com", "accounts.google.com"],
 			audience: options.clientId,
+			algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
 			maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
 			// Google's `hd` authorization parameter is only a UI hint and can be
 			// removed or changed by the user. When a hosted domain is configured,
@@ -260,7 +267,7 @@ export const google = (options: GoogleOptions) => {
 					name: user.name,
 					email: user.email,
 					image: user.picture,
-					emailVerified: user.email_verified,
+					emailVerified: user.email_verified ?? false,
 					...userMap,
 				},
 				data: user,
@@ -279,7 +286,7 @@ export const getGooglePublicKey = async (kid: string) => {
 };
 
 const getGooglePublicKeys = async (kid?: string) => {
-	const { data } = await betterFetch<{
+	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
 			kid: string;
 			alg?: string;

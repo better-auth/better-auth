@@ -25,7 +25,7 @@ export function generateIdTokenNonce(provider: {
  */
 export interface GenerateStateOptions {
 	/** Link target when this flow links a provider identity to an existing user. */
-	link?: { email: string; userId: string } | undefined;
+	link?: StateData["link"];
 	/** Extra data to round-trip through state; `false` writes none. */
 	additionalData?: Record<string, any> | false | undefined;
 	/** The `state` nonce already used to build the authorization URL. Minted when omitted. */

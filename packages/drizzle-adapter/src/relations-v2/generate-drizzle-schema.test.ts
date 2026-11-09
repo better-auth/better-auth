@@ -72,6 +72,31 @@ function typeErrors(code: string): string[] {
 }
 
 describe("relations-v2 schema generator", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10947
+	 */
+	describe("field nullability", () => {
+		it.each(["sqlite", "mysql", "pg"] as const)(
+			"treats only required: false as nullable for %s",
+			async (provider) => {
+				const { code } = await generateFor(provider, {
+					user: {
+						additionalFields: {
+							omitted: { type: "string" },
+							required: { type: "string", required: true },
+							optional: { type: "string", required: false },
+						},
+					},
+				});
+
+				expect(code).toContain("omitted: text('omitted').notNull()");
+				expect(code).toContain("required: text('required').notNull()");
+				expect(code).toContain("optional: text('optional')");
+				expect(code).not.toContain("optional: text('optional').notNull()");
+			},
+		);
+	});
+
 	test("generates valid TypeScript for the default schema", async () => {
 		const { code = "" } = await generate({});
 		expect(typeErrors(code)).toEqual([]);

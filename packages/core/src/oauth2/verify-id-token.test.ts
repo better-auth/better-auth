@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import type { JWK } from "jose";
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
+import { apple } from "../social-providers/apple";
+import { cognito } from "../social-providers/cognito";
 import { facebook } from "../social-providers/facebook";
+import { google } from "../social-providers/google";
+import { microsoft } from "../social-providers/microsoft-entra-id";
 import { paypal } from "../social-providers/paypal";
 import type { OAuthIdTokenConfig } from "./oauth-provider";
 import {
@@ -39,7 +43,7 @@ function providerWith(
 	idToken: OAuthIdTokenConfig | undefined,
 	options: Record<string, unknown> = {},
 ): ProviderWithIdTokenConfig {
-	return { idToken, options };
+	return { id: "test-provider", idToken, options };
 }
 
 const sha256Hex = (value: string) =>
@@ -91,6 +95,26 @@ describe("verifyProviderIdToken", () => {
 		})}.`;
 		const provider = providerWith({ jwks, issuer: ISSUER, audience: AUDIENCE });
 		expect(await verifyProviderIdToken(provider, none)).toBe(false);
+	});
+
+	it("requires the exp and iat claims every ID token carries", async () => {
+		const { jwks, privateKey } = await makeKeyset();
+		const provider = providerWith({ jwks, issuer: ISSUER, audience: AUDIENCE });
+		const withoutExp = await new SignJWT({ sub: "u1" })
+			.setProtectedHeader({ alg: "RS256", kid: "test-key" })
+			.setIssuer(ISSUER)
+			.setAudience(AUDIENCE)
+			.setIssuedAt()
+			.sign(privateKey);
+		const withoutIat = await new SignJWT({ sub: "u1" })
+			.setProtectedHeader({ alg: "RS256", kid: "test-key" })
+			.setIssuer(ISSUER)
+			.setAudience(AUDIENCE)
+			.setExpirationTime("1h")
+			.sign(privateKey);
+
+		expect(await verifyProviderIdToken(provider, withoutExp)).toBe(false);
+		expect(await verifyProviderIdToken(provider, withoutIat)).toBe(false);
 	});
 
 	it("rejects a wrong issuer or audience", async () => {
@@ -209,26 +233,50 @@ describe("verifyProviderIdToken", () => {
 			["iat", 35, false],
 			["exp", -25, true],
 			["exp", -35, false],
-		] as const)("%s %is from now verifies: %s", async (claim, offset, valid) => {
-			const { jwks, privateKey } = await makeKeyset();
-			const now = Math.floor(Date.now() / 1000);
-			const times = { iat: now - 60, exp: now + 3600, [claim]: now + offset };
-			const token = await new SignJWT(
-				claim === "nbf" ? { sub: "u1", nbf: times.nbf } : { sub: "u1" },
-			)
-				.setProtectedHeader({ alg: "RS256", kid: "test-key" })
-				.setIssuer(ISSUER)
-				.setAudience(AUDIENCE)
-				.setIssuedAt(times.iat)
-				.setExpirationTime(times.exp)
-				.sign(privateKey);
+		] as const)(
+			"%s %is from now verifies: %s",
+			async (claim, offset, valid) => {
+				const { jwks, privateKey } = await makeKeyset();
+				const now = Math.floor(Date.now() / 1000);
+				const times = { iat: now - 60, exp: now + 3600, [claim]: now + offset };
+				const token = await new SignJWT(
+					claim === "nbf" ? { sub: "u1", nbf: times.nbf } : { sub: "u1" },
+				)
+					.setProtectedHeader({ alg: "RS256", kid: "test-key" })
+					.setIssuer(ISSUER)
+					.setAudience(AUDIENCE)
+					.setIssuedAt(times.iat)
+					.setExpirationTime(times.exp)
+					.sign(privateKey);
+				const provider = providerWith({
+					jwks,
+					issuer: ISSUER,
+					audience: AUDIENCE,
+					maxTokenAge: "1h",
+				});
+				expect(await verifyProviderIdToken(provider, token)).toBe(valid);
+			},
+		);
+	});
+
+	describe("without a configured audience", () => {
+		it.each<[string, string | string[] | undefined]>([
+			["missing", undefined],
+			["an empty string", ""],
+			["an empty list", []],
+			["a list of empty strings", [""]],
+		])("rejects a token when the audience is %s", async (_, audience) => {
+			const { jwks, sign } = await makeKeyset();
 			const provider = providerWith({
 				jwks,
 				issuer: ISSUER,
-				audience: AUDIENCE,
-				maxTokenAge: "1h",
+				// Providers pass `clientId` through, which is undefined when it is not set.
+				audience: audience as string | string[],
 			});
-			expect(await verifyProviderIdToken(provider, token)).toBe(valid);
+
+			await expect(
+				verifyProviderIdToken(provider, await sign({ sub: "u1" })),
+			).resolves.toBe(false);
 		});
 	});
 
@@ -247,6 +295,38 @@ describe("verifyProviderIdToken", () => {
 			expect(
 				await verifyProviderIdToken(provider, "opaque-graph-access-token"),
 			).toBe(true);
+		});
+
+		it("pins the signing algorithms of every provider that verifies against a JWKS", () => {
+			const providers = [
+				apple({ clientId: "c", clientSecret: "s" }),
+				cognito({
+					clientId: "c",
+					clientSecret: "s",
+					domain: "auth.example.com",
+					region: "us-east-1",
+					userPoolId: "us-east-1_pool",
+				}),
+				facebook({ clientId: "c", clientSecret: "s" }),
+				google({ clientId: "c", clientSecret: "s" }),
+				microsoft({ clientId: "c", clientSecret: "s" }),
+			];
+			const pinned = Object.fromEntries(
+				providers.map((provider) => [
+					provider.id,
+					provider.idToken && "jwks" in provider.idToken
+						? provider.idToken.algorithms
+						: undefined,
+				]),
+			);
+
+			expect(pinned).toEqual({
+				apple: ["RS256"],
+				cognito: ["RS256"],
+				facebook: ["RS256"],
+				google: ["RS256"],
+				microsoft: ["RS256"],
+			});
 		});
 	});
 });

@@ -283,8 +283,6 @@ const generateAuthImportPath = async (
 		// Normalize the base path (handle . and ./ and empty string)
 		const normalizedBasePath = path.normalize(aliasBasePath);
 
-		console.log(chalk.dim(`    normalizedBasePath: ${normalizedBasePath}`));
-
 		// If base path is "." or empty, it means the alias points to the project root
 		if (
 			normalizedBasePath === "." ||
@@ -1094,7 +1092,7 @@ export const auth = betterAuth({
 				s.start();
 
 				await new Promise<void>((resolve, reject) => {
-					exec(`npx auth migrate`, { cwd }, (error, stdout, stderr) => {
+					exec(`npx auth migrate --yes`, { cwd }, (error, stdout, stderr) => {
 						if (error) {
 							s.stop();
 							log.error(`Failed to run migration: ${error.message}`);
@@ -1233,6 +1231,7 @@ export const auth = betterAuth({
 	})();
 
 	// Generate the route handler file.
+	let routeHandlerNextStep: string | undefined;
 	await (async () => {
 		// Skip route handler generation if framework wasn't detected
 		if (!frameworkWasDetected) {
@@ -1304,6 +1303,10 @@ export const auth = betterAuth({
 				updatedCode = newCode;
 				break;
 			}
+		}
+
+		if ("nextStep" in routeHandler) {
+			routeHandlerNextStep = routeHandler.nextStep;
 		}
 
 		filesToWrite.push(async () => {
@@ -1571,6 +1574,11 @@ export const auth = betterAuth({
 			`     Use ${chalk.cyan("auth.handler")} with a Web API compatible request object\n` +
 				`     Default route: ${chalk.cyan('"/api/auth"')} (configurable via ${chalk.cyan("basePath")})`,
 		);
+		nextStepNum++;
+	}
+
+	if (routeHandlerNextStep) {
+		logs.push(`  ${nextStepNum}. ${routeHandlerNextStep}`);
 		nextStepNum++;
 	}
 

@@ -7,6 +7,22 @@ import {
 } from "../oauth2";
 import { createPlaceholderEmail } from "../utils/email";
 
+interface TwitterUrlEntity {
+	start: number;
+	end: number;
+	url: string;
+	expanded_url?: string | null;
+	display_url?: string | null;
+	unwound_url?: string | null;
+	title?: string | null;
+	description?: string | null;
+	status?: number | null;
+	media_key?: string | null;
+	images?:
+		| { url?: string | null; width?: number | null; height?: number | null }[]
+		| null;
+}
+
 export interface TwitterProfile {
 	data: {
 		/**
@@ -24,67 +40,64 @@ export interface TwitterProfile {
 		 * The location specified in the user's profile, if the user provided one.
 		 * As this is a freeform value, it may not indicate a valid location, but it may be fuzzily evaluated when performing searches with location queries.
 		 *
-		 * To return this field, add `user.fields=location` in the authorization request's query parameter.
+		 * To return this field, add `user.fields=location` in the `/2/users/me` query parameters of a custom `getUserInfo` request.
 		 */
 		location?: string | undefined;
 		/**
 		 * This object and its children fields contain details about text that has a special meaning in the user's description.
 		 *
-		 *To return this field, add `user.fields=entities` in the authorization request's query parameter.
+		 * To return this field, add `user.fields=entities` in the `/2/users/me` query parameters of a custom `getUserInfo` request.
 		 */
 		entities?:
 			| {
 					/** Contains details about the user's profile website. */
-					url: {
+					url?: {
 						/** Contains details about the user's profile website. */
-						urls: Array<{
-							/** The start position (zero-based) of the recognized user's profile website. All start indices are inclusive. */
-							start: number;
-							/** The end position (zero-based) of the recognized user's profile website. This end index is exclusive. */
-							end: number;
-							/** The URL in the format entered by the user. */
-							url: string;
-							/** The fully resolved URL. */
-							expanded_url: string;
-							/** The URL as displayed in the user's profile. */
-							display_url: string;
-						}>;
-					};
+						urls?: TwitterUrlEntity[] | null;
+					} | null;
 					/** Contains details about URLs, Hashtags, Cashtags, or mentions located within a user's description. */
-					description: {
-						hashtags: Array<{
+					description?: {
+						cashtags?: { start: number; end: number; tag: string }[] | null;
+						mentions?:
+							| {
+									start: number;
+									end: number;
+									username: string;
+									id?: string | null;
+							  }[]
+							| null;
+						urls?: TwitterUrlEntity[] | null;
+						hashtags?: Array<{
 							start: number;
 							end: number;
 							tag: string;
-						}>;
-					};
+						}> | null;
+					} | null;
 			  }
 			| undefined;
 		/**
 		 * Indicate if this user is a verified Twitter user.
 		 *
-		 * To return this field, add `user.fields=verified` in the authorization request's query parameter.
+		 * To return this field, add `user.fields=verified` in the `/2/users/me` query parameters of a custom `getUserInfo` request.
 		 */
 		verified?: boolean | undefined;
 		/**
 		 * The text of this user's profile description (also known as bio), if the user provided one.
 		 *
-		 * To return this field, add `user.fields=description` in the authorization request's query parameter.
+		 * To return this field, add `user.fields=description` in the `/2/users/me` query parameters of a custom `getUserInfo` request.
 		 */
 		description?: string | undefined;
 		/**
 		 * The URL specified in the user's profile, if present.
 		 *
-		 * To return this field, add `user.fields=url` in the authorization request's query parameter.
+		 * To return this field, add `user.fields=url` in the `/2/users/me` query parameters of a custom `getUserInfo` request.
 		 */
 		url?: string | undefined;
 		/** The URL to the profile image for this user, as shown on the user's profile. */
 		profile_image_url?: string | undefined;
 		protected?: boolean | undefined;
 		/**
-		 * Unique identifier of this user's pinned Tweet.
-		 *
-		 *  You can obtain the expanded object in `includes.tweets` by adding `expansions=pinned_tweet_id` in the authorization request's query parameter.
+		 * The identifier of the user's pinned post.
 		 */
 		pinned_tweet_id?: string | undefined;
 		created_at?: string | undefined;

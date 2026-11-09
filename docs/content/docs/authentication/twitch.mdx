@@ -56,3 +56,17 @@ description: Twitch provider setup and usage.
     </Callout>
   </Step>
 </Steps>
+
+## ID Token Sign-In
+
+When using a custom `verifyIdToken` with the default `getUserInfo`, pass both the ID token and access token.
+
+```ts title="auth-client.ts"
+await authClient.signIn.social({
+    provider: "twitch",
+    idToken: {
+        token: idToken,
+        accessToken, // [!code highlight]
+    },
+})
+```

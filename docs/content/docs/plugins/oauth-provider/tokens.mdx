@@ -1,0 +1,577 @@
+---
+icon: pluginsOAuthProviderTokens
+sidebarTitle: "Tokens and scopes"
+title: Tokens, scopes, and resources
+description: Control which tokens the provider issues, for which APIs, and for how long.
+---
+
+## Token endpoint
+
+`POST /oauth2/token` supports the `authorization_code`, `client_credentials`, and `refresh_token` grants. Companion plugins add the [device code](#device-code-grant), [token exchange](#token-exchange), and [CIBA (Client-Initiated Backchannel Authentication)](/docs/plugins/ciba) grants. A confidential client must authenticate with the method it registered, using one of the methods from [RFC 6749 §2.3.1](https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1) and [OIDC Core §9](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication):
+
+| Method                | How the client authenticates                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `client_secret_basic` | `client_id` and `client_secret` in an HTTP Basic `Authorization` header (default)                    |
+| `client_secret_post`  | `client_id` and `client_secret` in the request body                                                  |
+| `private_key_jwt`     | A signed JWT assertion. See [Private key JWT](/docs/plugins/oauth-provider/clients#private-key-jwt). |
+| `none`                | Public client. PKCE is required.                                                                     |
+
+To get a JWT access token, include a `resource` in the request and enable the JWT plugin. The token's `aud` is that resource. When the scopes also include `openid`, `aud` is an array that also holds the UserInfo endpoint URL. If either is missing, the access token is opaque. Error codes are listed in [Token errors](/docs/plugins/oauth-provider/reference#token-errors).
+
+## Scopes
+
+To control which scopes your clients may request, set `scopes`. It defaults to `["openid", "profile", "email", "offline_access"]`. Your provider acts as an OpenID provider only when the list includes `openid`.
+
+| Scope            | Grants                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `openid`         | An ID token and the `sub` claim                                                            |
+| `profile`        | `name`, `picture`, `given_name`, and `family_name` at UserInfo                             |
+| `email`          | `email` and `email_verified` at UserInfo                                                   |
+| `offline_access` | A refresh token, when the client is registered for `refresh_token` or `authorization_code` |
+
+Standard claims are returned at UserInfo, not in the ID token, as [OIDC Core §5.4](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims) describes for flows that issue an access token.
+
+```ts title="auth.ts"
+oauthProvider({
+  scopes: ["openid", "profile", "offline_access", "read:post", "write:post"],
+})
+```
+
+## Resources
+
+A resource is a protected API that your provider issues access tokens for. Its `identifier` is the `resource` parameter value from [RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2) and becomes the `aud` of a JWT access token.
+
+<Callout type="warn">
+  A client can get access tokens only for resources it is linked to. The authorize and token endpoints reject any other `resource` with `invalid_target`. To link a client, pass `resources` to `adminCreateOAuthClient` or call `adminLinkClientResource`. Setting `enforcePerClientResources: false` lets any client request any enabled resource, which removes the per-client audience restriction. With dynamic registration or CIMD, a client anyone registered could then get tokens for every enabled API. Keep the default, `true`, and link clients explicitly or through `clientRegistrationDefaultResources`.
+</Callout>
+
+```ts title="auth.ts"
+oauthProvider({
+  resources: [
+    "https://api.example.com",
+    {
+      identifier: "https://api.example.com/mcp",
+      allowedScopes: ["mcp:read", "mcp:write"],
+      accessTokenTtl: 300, // 5 minutes, in seconds
+    },
+  ],
+})
+```
+
+A string uses the plugin defaults. An object sets per-resource policy:
+
+| Field                           | Effect                                                                                              |
+| ------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `name`                          | Label for admin screens.                                                                            |
+| `allowedScopes`                 | Requested scopes are narrowed to this list. If none remain, the request fails with `invalid_scope`. |
+| `accessTokenTtl`                | Access token lifetime in seconds. Defaults to `accessTokenExpiresIn`.                               |
+| `refreshTokenTtl`               | Refresh token lifetime in seconds. Defaults to `refreshTokenExpiresIn`.                             |
+| `signingAlgorithm`              | JWS algorithm for this resource's access tokens. Defaults to the JWT plugin's latest key.           |
+| `signingKeyId`                  | Key ID to sign this resource's access tokens with.                                                  |
+| `customClaims`                  | Claims added to every access token for this resource. Reserved JWT claims are stripped.             |
+| `dpopBoundAccessTokensRequired` | Issue only [DPoP](#dpop)-bound tokens for this resource.                                            |
+| `disabled`                      | Stop issuing tokens for this resource. Tokens already issued still verify until they expire.        |
+
+In a request for several resources, a `signingAlgorithm` or `signingKeyId` set on one of them applies to the whole token, and resources without one do not conflict with it. The request fails with `invalid_request` only when two resources set different values, because one token carries one signature. To fix it, set the same value on both resources, or leave it unset on one of them.
+
+The resources you configure are written to the `oauthResource` table at startup. Set `resourceSeedMode` to choose what happens to a row that already exists:
+
+* `insertOnly` (default): only adds missing rows, so edits made through the admin endpoints survive restarts.
+* `merge`: adds missing rows and updates the fields present in the config.
+* `overwrite`: replaces existing rows with the config values.
+
+### Manage resources at runtime
+
+To change resources without a restart, call these server-only endpoints. Each one needs a session. `resourcePrivileges` decides which users may call them. Without `resourcePrivileges`, any signed-in user may.
+
+| Server method               | Method   | Path                                                     |
+| --------------------------- | -------- | -------------------------------------------------------- |
+| `adminCreateOAuthResource`  | `POST`   | `/admin/oauth2/resources`                                |
+| `adminListOAuthResources`   | `GET`    | `/admin/oauth2/resources`                                |
+| `adminGetOAuthResource`     | `GET`    | `/admin/oauth2/resources/:identifier`                    |
+| `adminUpdateOAuthResource`  | `PATCH`  | `/admin/oauth2/resources/:identifier`                    |
+| `adminDeleteOAuthResource`  | `DELETE` | `/admin/oauth2/resources/:identifier`                    |
+| `adminLinkClientResource`   | `POST`   | `/admin/oauth2/resources/:identifier/clients/:client_id` |
+| `adminUnlinkClientResource` | `DELETE` | `/admin/oauth2/resources/:identifier/clients/:client_id` |
+
+```ts title="link-resource.ts"
+await auth.api.adminLinkClientResource({
+  params: { identifier: "https://api.example.com", client_id: clientId },
+  headers,
+});
+```
+
+Deleting a resource makes introspection report its tokens as inactive, while `disabled: true` only stops new issuance. If your API verifies JWTs locally with the JWKS, it keeps accepting them until they expire. Use [introspection](/docs/plugins/oauth-provider/resource-server#introspection) if you need deletion to cut off access immediately. To attach resources during dynamic registration, see [Resources for registered clients](/docs/plugins/oauth-provider/clients#resources-for-registered-clients).
+
+<Callout type="warn">
+  If you use Prisma on PostgreSQL, CockroachDB, or MongoDB, declare `allowedScopes` on every resource. Prisma cannot write `null` to a list column, so a resource without `allowedScopes` cannot be stored. Requests that use any configured resource fail until every resource declares it. For the resource the [MCP plugin](/docs/plugins/mcp) adds, declare it in `resources` with the same identifier.
+</Callout>
+
+## Lifetimes
+
+All values are in seconds.
+
+| Option                    | Default             | Applies to                              |
+| ------------------------- | ------------------- | --------------------------------------- |
+| `accessTokenExpiresIn`    | `3600` (1 hour)     | Access tokens issued for a user         |
+| `m2mAccessTokenExpiresIn` | `3600` (1 hour)     | Access tokens from `client_credentials` |
+| `idTokenExpiresIn`        | `36000` (10 hours)  | ID tokens                               |
+| `refreshTokenExpiresIn`   | `2592000` (30 days) | Refresh tokens                          |
+| `codeExpiresIn`           | `600` (10 minutes)  | Authorization codes                     |
+| `assertionMaxLifetime`    | `300` (5 minutes)   | `private_key_jwt` client assertions     |
+
+A refresh token's lifetime restarts at each refresh: the replacement token gets a new `refreshTokenExpiresIn` window. A client that refreshes regularly therefore keeps its grant indefinitely. To end a grant, [revoke](#revocation) the refresh token. Deleting the user's [consent](/docs/plugins/oauth-provider/sign-in-flow#manage-consents) does not revoke tokens already issued.
+
+To shorten access tokens that carry high-privilege scopes, set `scopeExpirations`. A resource's `accessTokenTtl` and `refreshTokenTtl` can also shorten these lifetimes, but not extend them. When several limits apply, the earliest expiry wins. For example, with the config below, a token with both `read:payments` and `write:payments` expires after 5 minutes.
+
+```ts title="auth.ts"
+oauthProvider({
+  scopeExpirations: {
+    "write:payments": "5m", // 5 minutes after issuance
+    "read:payments": "30m", // 30 minutes after issuance
+  },
+})
+```
+
+## Refresh tokens
+
+Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
+
+Keep the default, `0`, unless your clients lose refresh responses. To let a client retry a refresh after a lost response, set `refreshTokenReuseInterval` to a number of seconds. A retry within that window gets the same response back, including the replacement refresh token. The retry gets that response only when it uses the same client, scopes, resources, and DPoP key as the first refresh. A retry that differs but is otherwise valid gets `invalid_grant`.
+
+Inside the window, reuse is not treated as replay, and the token family is never revoked. A stolen rotated token that passes these checks therefore gets the replacement refresh token. Keep the interval short.
+
+```ts title="auth.ts"
+oauthProvider({
+  refreshTokenReuseInterval: 5, // 5 seconds
+})
+```
+
+To change the string sent to the client, set `formatRefreshToken`. `encrypt` receives the generated refresh token (before it is hashed for storage) and, when there is one, the session ID. It returns the string sent to the client, before the provider adds `prefix.refreshToken`. `decrypt` receives the string the client sends back, without the `prefix.refreshToken` prefix. It must return an object with the `token` that `encrypt` received and, optionally, the `sessionId`.
+
+When the value is not a refresh token, `decrypt` should throw an `APIError` with status 400. An error from `jose`, such as the one `compactDecrypt` throws, counts the same when your app and the provider resolve the same copy of `jose`. If they resolve different copies, catch the error and throw an `APIError` with status 400.
+
+When `decrypt` throws either error, the provider treats the value as not a refresh token. A refresh with that value fails with `invalid_grant`. Revocation and introspection go on to check the other token types. Any other error fails the request. Revocation and introspection can also pass access tokens to `decrypt`.
+
+The first example below does not throw. When `decrypt` does not recognize the value, it returns `{ token: value }`. A refresh token sent to the client without the format keeps working, such as one issued before you set `formatRefreshToken` or one issued without a session ID. For any other value, the provider finds no refresh token. The result is the same as when `decrypt` throws.
+
+```ts title="auth.ts"
+oauthProvider({
+  formatRefreshToken: {
+    encrypt: (token, sessionId) => (sessionId ? `1.${token}.${sessionId}` : token),
+    decrypt: (value) => {
+      const [version, token, sessionId] = value.split(".");
+      return version === "1" && token && sessionId ? { token, sessionId } : { token: value };
+    },
+  },
+})
+```
+
+To encrypt the refresh token as a JWE:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { base64url, CompactEncrypt, compactDecrypt } from "jose";
+import { oauthProvider } from "@better-auth/oauth-provider";
+
+// A random 256-bit key kept in your secret store, base64url-encoded.
+// Generate one with `openssl rand -base64 32 | tr '+/' '-_' | tr -d '='`.
+const key = base64url.decode(process.env.REFRESH_TOKEN_KEY!);
+const alg = "A256KW";
+const enc = "A256GCM";
+
+const auth = betterAuth({
+  plugins: [
+    oauthProvider({
+      formatRefreshToken: {
+        encrypt: async (token, sessionId) => {
+          const value = JSON.stringify({ sessionId, token });
+          return new CompactEncrypt(new TextEncoder().encode(value))
+            .setProtectedHeader({ alg, enc })
+            .encrypt(key);
+        },
+        decrypt: async (token) => {
+          const { plaintext } = await compactDecrypt(token, key);
+          return JSON.parse(new TextDecoder().decode(plaintext));
+        },
+      },
+    }),
+  ],
+});
+```
+
+## PKCE
+
+PKCE ([RFC 7636](https://datatracker.ietf.org/doc/html/rfc7636#section-1)) is **required** for every authorization code flow, and only the `S256` method is accepted. To let an admin-created confidential client skip PKCE, set `require_pkce: false` on it. That client then has no protection against intercepted or injected authorization codes beyond its secret and `state` ([RFC 9700 §2.1.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1.1)). Public clients cannot opt out. For dynamically registered confidential clients, set the default with `clientRegistrationRequirePKCE`.
+
+```ts title="admin-create-client.ts"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    token_endpoint_auth_method: "client_secret_post",
+    require_pkce: false, // [!code highlight]
+  },
+})
+```
+
+A client without PKCE that requests `offline_access` must send both `openid` and `nonce`. Keep PKCE on unless a legacy client cannot send it, as [OAuth 2.1 §7.5.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-7.5.1) recommends.
+
+## DPoP
+
+DPoP stops anyone who lacks the client's private key from replaying a leaked access token, as long as your API verifies the proof. A DPoP-bound token works only alongside a proof signed by that key.
+
+A client gets DPoP-bound tokens ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449#section-4)) in any of these cases:
+
+* It registered with `dpop_bound_access_tokens: true` ([§5.2](https://datatracker.ietf.org/doc/html/rfc9449#section-5.2)).
+* It sends `dpop_jkt` on the authorization request.
+* It requests a resource with `dpopBoundAccessTokensRequired: true`.
+* It sends a `DPoP` proof with the token request.
+
+The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)) and returns `token_type: "DPoP"`. A refresh needs a proof from the same key. So does a [token exchange](#exchange-dpop-bound-tokens) of the client's own token. A JWT access token carries the key's thumbprint in `cnf.jkt`. The client calls your API with `Authorization: DPoP <access_token>` and a `DPoP` proof that includes the access token hash, `ath` ([§7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
+
+```ts title="auth.ts"
+oauthProvider({
+  dpop: {
+    proofMaxAgeSeconds: 300, // 5 minutes, in seconds (the default)
+    signingAlgorithms: ["ES256", "EdDSA"],
+  },
+})
+```
+
+<Callout type="warn">
+  Set `baseURL` to the public URL clients call. Otherwise proofs fail behind a proxy that rewrites the host, because the expected `htu` comes from `baseURL`, not from the request host.
+</Callout>
+
+To verify DPoP-bound tokens in your API, see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
+
+## Custom claims
+
+To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, and the client's `metadata`. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, throw from the callback.
+
+```ts title="auth.ts"
+oauthProvider({
+  customAccessTokenClaims: ({ user, scopes, referenceId, resources }) => ({
+    "https://example.com/org": referenceId,
+    "https://example.com/roles": ["editor"],
+  }),
+})
+```
+
+For ID token and UserInfo claims, see [OpenID Connect](/docs/plugins/oauth-provider/openid-connect#id-token-claims).
+
+### Client-specific access token claims
+
+`customAccessTokenClaims` receives only the client's `metadata`. To base a claim on the full client record, add an `extensions[].claims.accessToken` contributor. It receives the full `client` record, `user`, `scopes`, `referenceId`, `resources`, and the client's `metadata`. When a JWT access token is minted, it also receives `grantType`, and `sessionId` for a session-backed grant. It returns an object of claims to add:
+
+```ts title="auth.ts"
+oauthProvider({
+  extensions: [{
+    claims: {
+      accessToken: ({ client }) =>
+        client.referenceId ? { "https://example.com/org": client.referenceId } : {},
+    },
+  }],
+})
+```
+
+`client.referenceId` is the client's owner, set by [`clientReference`](/docs/plugins/oauth-provider/clients#organizations). It differs from the top-level `referenceId`, which is the consent reference from `postLogin.consentReferenceId`. Opaque-token introspection re-runs contributors without `grantType` or `sessionId`, so base the claim on the client, scopes, and resources. When names collide, see [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
+
+A JWT keeps its claims until it expires. An organization claim does not prove the client is still enabled. If your resource server must react to a disabled client right away, it should introspect the token. Introspection reports tokens of disabled clients as inactive.
+
+### Consent reference claim
+
+When `postLogin.consentReferenceId` returns a consent reference, `customAccessTokenClaims` receives it as `referenceId`. The provider also puts it in the access token as the `reference_id` claim, and introspection returns it for opaque access tokens and refresh tokens. The provider owns this claim, so a claim contributor cannot set or override it.
+
+[Token exchange](#keep-the-organization-the-user-approved) uses the claim to keep the reference on exchanged tokens. Resource servers can read it too, but a claim you derive in `customAccessTokenClaims` keeps your own name and shape.
+
+### Custom token response fields
+
+To add fields to the token endpoint's JSON response, set `customTokenResponseFields`. It receives `grantType`, `user`, `scopes`, and the client's `metadata`. For the `authorization_code` grant, it also receives `verificationValue`, which holds the original authorization request (`query`), the consent `referenceId`, and the `sessionId`. It returns an object of fields to add. The fields go in the response, not in the token itself. The callback cannot override standard fields such as `access_token` or `scope`. It runs before any token is created.
+
+```ts title="auth.ts"
+oauthProvider({
+  customTokenResponseFields: ({ grantType, verificationValue }) =>
+    grantType === "authorization_code" && verificationValue?.referenceId
+      ? { tenant_id: verificationValue.referenceId }
+      : {},
+})
+```
+
+## Revocation
+
+`POST /oauth2/revoke` implements [RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1). It applies these request rules:
+
+* A parameter sent more than once returns 400 `invalid_request`. An empty value counts as omitted.
+* An unknown, expired, or already revoked token returns 200 instead of an error ([RFC 7009 §2.2](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2)).
+* `token_type_hint` only sets which token type is checked first. A token sent with the wrong hint is still revoked.
+
+A client can only revoke tokens issued to it ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)):
+
+* A confidential client that sends another client's token gets 400 `invalid_request`.
+* A public client gets 200 and the token stays valid, so a public client can't use the endpoint to test whether a token exists.
+
+What the endpoint does depends on the token:
+
+* **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
+* **Refresh token**: marked revoked, so it can no longer issue tokens. The opaque access tokens it issued are deleted. JWT access tokens it issued stay valid until they expire.
+* **Refresh token that was already revoked or rotated**: treated as replay. The endpoint still returns 200, and it deletes the client's refresh tokens for that user, along with the opaque access tokens they issued. An access token issued without a refresh token, and any JWT access token, stays valid until it expires.
+* **JWT access token**: cannot be revoked, because it is never stored. An expired JWT is treated as unknown and returns 200. A JWT issued to the calling client that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), unless its audience names a resource that is not registered. Such a JWT returns 200 instead.
+
+To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session. Its lifetime is the only limit.
+
+## Without the JWT plugin
+
+To run without the [JWT plugin](/docs/plugins/jwt), set `disableJwtPlugin: true`:
+
+* Access tokens are always opaque, even when a `resource` is requested. The requested resources are still bound to the token and returned by introspection.
+* ID tokens are signed with HS256 using the client secret. Public clients have no secret and get no ID token. They can still call UserInfo with the access token.
+* `storeClientSecret` defaults to `"encrypted"`, since the secret must be readable to sign ID tokens.
+
+```ts title="auth.ts"
+oauthProvider({
+  disableJwtPlugin: true, // [!code highlight]
+})
+```
+
+## Storage
+
+By default, your database stores opaque access tokens and refresh tokens as hashes. Client secrets are hashed with the JWT plugin and encrypted without it.
+
+* `storeClientSecret`: `"hashed"` or `{ hash, verify? }` with the JWT plugin; `"encrypted"` or `{ encrypt, decrypt }` without it. The provider fails to start on any other combination.
+* `storeTokens`: `"hashed"` or `{ hash: (token, type) => string }`.
+
+To make issued values recognizable to secret scanners, set `prefix`:
+
+```ts title="auth.ts"
+oauthProvider({
+  prefix: {
+    opaqueAccessToken: "myapp_at_",
+    refreshToken: "myapp_rt_",
+    clientSecret: "myapp_cs_",
+  },
+})
+```
+
+<Callout type="warn">
+  Set prefixes before your first production deployment and keep them fixed afterwards. To add a prefix to a provider that has already issued values, use `generateOpaqueAccessToken`, `generateRefreshToken`, or `generateClientSecret` instead.
+</Callout>
+
+## Device code grant
+
+To enable the device code grant ([RFC 8628 §3.4](https://datatracker.ietf.org/doc/html/rfc8628#section-3.4)) at `/oauth2/token`, add `oauthDeviceAuthorization()` next to `oauthProvider()`. See [Device Authorization](/docs/plugins/device-authorization) for setup.
+
+The user approves a device code through `/oauth2/authorize?user_code=…`, on the same sign-in, account selection, post-login, and consent pages as an authorization request. See [Approve the device](/docs/plugins/device-authorization#approve-the-device). The integration adds the OAuth client, RFC 8707 resource, consent reference, authentication time, and authentication context (`acr`, `amr`) fields to the device code. Standalone Device Authorization installations are unchanged.
+
+## Token exchange
+
+A service that receives a user's access token sometimes needs to call another API as that user. Forwarding the token fails the API's audience check and gives the API more access than it needs. Token exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693)) lets the service trade the token at the token endpoint for a new access token for the other API. The new token has the same user as `sub`, the downstream API as `aud`, and the exchanging service as `client_id`.
+
+The exchanged token impersonates the user: it represents the user and does not name the service as an actor (`act`). A typical case is an MCP server that receives a token for itself and calls a downstream API.
+
+### Set up token exchange
+
+Add `oauthTokenExchange()` after `oauthProvider()`. List the scopes the service uses in `scopes`. Then list both the resource the service receives tokens for and the resource it calls.
+
+Disable the JWT plugin's `/token` endpoint and its `set-auth-jwt` header, as [OAuth Provider Mode](/docs/plugins/jwt#oauth-provider-mode) describes. Both give a signed-in user a session JWT, signed with the same keys as access tokens. By default, that JWT carries the auth server's URL as its issuer and audience. If either path stays enabled, a resource server that checks only signature, issuer, and audience can accept the session JWT as an access token. The example disables both:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+import { oauthProvider, oauthTokenExchange } from "@better-auth/oauth-provider"; // [!code highlight]
+
+export const auth = betterAuth({
+  disabledPaths: ["/token"], // [!code highlight]
+  plugins: [
+    jwt({ disableSettingJwtHeader: true }), // [!code highlight]
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      scopes: ["openid", "profile", "email", "offline_access", "read", "write"],
+      resources: ["https://mcp.example.com", "https://api.example.com"],
+    }),
+    oauthTokenExchange(), // [!code highlight]
+  ],
+});
+```
+
+The grant `urn:ietf:params:oauth:grant-type:token-exchange` is then advertised in `grant_types_supported`. RFC 8693 defines no other discovery metadata.
+
+Register the exchanging service as a confidential client with `TOKEN_EXCHANGE_GRANT_TYPE`. Public clients cannot exchange tokens.
+
+```ts title="register-exchanging-client.ts"
+import { TOKEN_EXCHANGE_GRANT_TYPE } from "@better-auth/oauth-provider";
+
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    client_name: "MCP server",
+    grant_types: [TOKEN_EXCHANGE_GRANT_TYPE],
+    token_endpoint_auth_method: "client_secret_basic",
+    scope: "read write",
+    resources: ["https://mcp.example.com", "https://api.example.com"],
+    skip_consent: true,
+  },
+});
+```
+
+The client's linked [resources](#resources) do two jobs here:
+
+* Linking `https://mcp.example.com` lets the client exchange tokens whose audience is that resource, which are the tokens it receives. It can exchange them even when they are DPoP-bound to another client. See [Exchange DPoP-bound tokens](#exchange-dpop-bound-tokens).
+* Linking `https://api.example.com` lets the client request tokens for that resource.
+
+`skip_consent` decides whether the user must have approved the exchanging client:
+
+* With `skip_consent: true`, which only an admin can set, the client may exchange any token it is allowed to receive. Use it for first-party services.
+* Otherwise, the user must already have a stored consent for this client that covers the requested scopes and resources, for example from an earlier authorization code flow with that client. Without one, the exchange fails with `invalid_request`. A client created through [dynamic registration](/docs/plugins/oauth-provider/clients#dynamic-client-registration) cannot set `skip_consent`, so it can only reach what the user has already approved for it.
+
+### Exchange a token
+
+The service sends the user's token as `subject_token` and names the target with `resource`:
+
+```bash
+curl https://auth.example.com/api/auth/oauth2/token \
+  -u "$EXCHANGING_CLIENT_ID:$EXCHANGING_CLIENT_SECRET" \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  --data-urlencode "subject_token=$USER_ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  --data-urlencode resource=https://api.example.com \
+  -d scope=read
+```
+
+```json
+{
+  "access_token": "eyJ...",
+  "issued_token_type": "urn:ietf:params:oauth:token-type:access_token",
+  "token_type": "Bearer",
+  "expires_in": 58,
+  "expires_at": 1767225658,
+  "scope": "read"
+}
+```
+
+| Parameter                         | Behavior                                                                                                                                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `subject_token`                   | Required. An active access token this server issued                                                                                                                                                                             |
+| `subject_token_type`              | Required. Must be `urn:ietf:params:oauth:token-type:access_token`                                                                                                                                                               |
+| `resource`                        | Required unless `audience` is sent, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource, linked to the client while `enforcePerClientResources` is on |
+| `scope`                           | Optional. Defaults to the subject token's scopes, without `openid` and `offline_access`, that the client is also registered for                                                                                                 |
+| `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                                                                                      |
+| `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                                                                                         |
+| `audience`                        | Optional, and may repeat. Each value must equal a registered resource identifier and is treated like `resource`                                                                                                                 |
+
+With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
+
+### Exchange DPoP-bound tokens
+
+[DPoP](#dpop) stops anyone without the client's private key from using a leaked token at your API, as long as the API verifies the proof. When the client the token was issued to exchanges it, the exchanged token stays bound to the same key. A service in the token's audience can also exchange it, without that key.
+
+The exchange request decides how the exchanged token is bound:
+
+* If the request carries a `DPoP` proof, the exchanged token is bound to that key and `token_type` is `DPoP`.
+* A proof is required when the exchanging client or the target resource requires DPoP-bound tokens. It is also required when a client exchanges its own DPoP-bound token.
+* Otherwise, an exchange without a proof returns a bearer token.
+
+A [`clientAuthentication` strategy](/docs/plugins/oauth-provider/reference#provider-extensions) can prove a key itself and return it as `confirmation`. The exchanged token is then bound to that confirmation instead of a proof, and no DPoP proof is required.
+
+When the subject token is DPoP-bound, the rules depend on who exchanges it:
+
+* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A missing proof, or a proof or `confirmation` with another key, fails with `invalid_dpop_proof`.
+* **A service in the token's audience**, such as the MCP server that received it, does not hold the client's key. If the service sends its own proof, the exchanged token is bound to the service's key. If it sends no proof and none is required, the exchanged token is a bearer token.
+
+A service that passes the [exchange rules](#exchange-rules) does not need the client's key. It can turn each DPoP-bound token it receives into a token for the APIs it is linked to. To keep those tokens DPoP-bound, require a proof in either of these ways:
+
+* Register the service with `dpop_bound_access_tokens: true`. Every token request from the service then needs a proof, including its exchanges.
+* Set `dpopBoundAccessTokensRequired: true` on the target resource. Every client then needs a proof to get tokens for that resource.
+
+To refuse these exchanges instead, accept a sender-constrained subject token, such as a DPoP-bound one, only from the client it was issued to:
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  allowExchange: ({ client, subjectToken }) =>
+    !subjectToken.cnf || subjectToken.client_id === client.clientId,
+});
+```
+
+A refused exchange fails with `invalid_request`.
+
+### Exchange rules
+
+The provider applies these rules to every exchange, before your `allowExchange` policy:
+
+| Rule                                                                                                                                                  | Why                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
+| The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
+| The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
+| A client that exchanges its own DPoP-bound token sends a proof signed by the same key                                                                 | An exchange cannot remove or replace the client's DPoP binding                                                      |
+| The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
+| Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
+| A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
+| The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                           | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
+| No refresh token or ID token is issued                                                                                                                | The service must exchange again when the token expires                                                              |
+
+Scope names are global across resources. A `read` scope on the MCP server and a `read` scope on the API are the same scope, so restrict what a resource accepts with its `allowedScopes`.
+
+### Token exchange errors
+
+A token exchange fails with one of these errors:
+
+* `invalid_request` (400), when any of these applies:
+  * The subject token is missing or invalid.
+  * `subject_token_type` is unsupported.
+  * The request sends `actor_token` or `actor_token_type`.
+  * `requested_token_type` is unsupported.
+  * The request sends neither `resource` nor `audience`.
+  * The user has no stored consent for the client that covers the request.
+  * Your `allowExchange` policy denies the exchange.
+* `invalid_scope` (400), when any of these applies:
+  * The request names a scope that the subject token or the client does not have.
+  * The request names `openid` or `offline_access`.
+  * A target resource's `allowedScopes` allows none of the requested scopes.
+* `invalid_target` (400), when any of these applies:
+  * A `resource` or `audience` value is unknown or disabled.
+  * A `resource` or `audience` value is not linked to the client while `enforcePerClientResources` is on.
+  * A `resource` or `audience` value is the userinfo endpoint.
+* `invalid_client`, when client authentication fails.
+* `unauthorized_client` (400), when the client is not registered for the token-exchange grant.
+* `invalid_dpop_proof` (400), when any of these applies:
+  * The DPoP proof is invalid.
+  * A proof is required and the request has none.
+  * The client exchanges its own DPoP-bound token with a proof, or a strategy `confirmation`, for another key.
+
+### Keep the organization the user approved
+
+When `postLogin.consentReferenceId` picks a reference during authorization, such as the [organization](/docs/plugins/oauth-provider/clients#organizations) the user approved, the exchanged token keeps the subject token's reference. It does not switch to the user's current active organization. `customAccessTokenClaims` receives the same `referenceId`, so a claim you derive from it carries over to the downstream API. A client that does not skip consent needs a stored consent under that same reference.
+
+The provider reads the reference from the subject token's [`reference_id`](#consent-reference-claim) claim, so no extra configuration is needed. An exchange cannot change the organization. To act in another one, the user authorizes the client for that organization.
+
+### Add your own policy
+
+`allowExchange` runs after every built-in rule passes. Return `false` to deny the exchange with `invalid_request`, or throw an `APIError` to return a different OAuth error. It receives:
+
+* `client`: the authenticated client
+* `user`: the user the subject token represents
+* `resources`: the requested resources
+* `scopes`: the scopes the exchanged token will carry, after each resource's `allowedScopes` narrows the requested ones
+* `referenceId`: the inherited consent reference
+* `subjectToken`: the subject token's introspection payload
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  allowExchange: ({ client, resources }) =>
+    client.clientId === process.env.MCP_SERVER_CLIENT_ID &&
+    resources.every((resource) => resource === "https://api.example.com"),
+});
+```
+
+### Limitations
+
+* **No delegation.** `actor_token` is rejected, and exchanged tokens carry no `act` claim. The exchanging service is identified only by `client_id`.
+* **No refresh tokens** are issued for exchanged tokens.
+* **Own access tokens only.** ID tokens, refresh tokens, and tokens from other issuers cannot be exchanged.
+* **Signing out and local JWT verification.** Signing out makes exchanged tokens inactive at introspection. A resource server that verifies JWT access tokens locally against the JWKS keeps accepting them until `exp`, which is never later than the subject token's `exp`.
+* **Subject tokens without a session.** An access token refreshed from an `offline_access` refresh token after the user signed out carries no `sid`. A token exchanged from it is not tied to a session and lasts until its `exp`. Return `false` from `allowExchange` when `subjectToken.sid` is missing if exchanges must always end with the session.
+* **`may_act` is not evaluated.**
+* **Pairwise subjects.** The exchanged token belongs to the exchanging service, so introspection reports that service's `sub` for the user. A service that exchanges a pairwise client's token can link that client's `sub` to its own.
+* **Registration default resources.** `clientRegistrationDefaultResources` links every dynamically registered client to those resources. Such a client then counts as a resource server for tokens whose audience is one of them, so the audience rule does not tell it apart from your own service. The consent rule still limits it to what the user approved for that client.

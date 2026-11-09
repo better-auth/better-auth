@@ -124,25 +124,29 @@ describe("resource server challenge", () => {
 		).toThrow("invalid error_description");
 	});
 
-	it.each([
-		42,
-		null,
-	])("rejects a non-string insufficient-scope error_description during serialization: %j", (description) => {
-		const insufficientScopeError = createInsufficientScopeError([
-			"files:write",
-		]);
-		if (!insufficientScopeError.body) {
-			throw new Error("insufficient-scope error body was not created");
-		}
-		Reflect.set(insufficientScopeError.body, "error_description", description);
+	it.each([42, null])(
+		"rejects a non-string insufficient-scope error_description during serialization: %j",
+		(description) => {
+			const insufficientScopeError = createInsufficientScopeError([
+				"files:write",
+			]);
+			if (!insufficientScopeError.body) {
+				throw new Error("insufficient-scope error body was not created");
+			}
+			Reflect.set(
+				insufficientScopeError.body,
+				"error_description",
+				description,
+			);
 
-		expect(() =>
-			createResourceServerChallenge(
-				insufficientScopeError,
-				"https://api.example.com",
-			),
-		).toThrow(new TypeError("invalid error_description"));
-	});
+			expect(() =>
+				createResourceServerChallenge(
+					insufficientScopeError,
+					"https://api.example.com",
+				),
+			).toThrow(new TypeError("invalid error_description"));
+		},
+	);
 
 	it("rejects invalid configured challenge scope tokens", () => {
 		expect(() =>
@@ -170,21 +174,19 @@ describe("resource server challenge", () => {
 		);
 	});
 
-	it.each([
-		'bad "quote"',
-		"bad\\slash",
-		"café",
-		"bad\r\ninjected",
-	])("rejects an invalid DPoP error_description: %s", (description) => {
-		expect(() =>
-			createResourceServerChallenge(
-				new APIError("UNAUTHORIZED", {
-					message: description,
-					error: "invalid_dpop_proof",
-					error_description: description,
-				}),
-				"https://api.example.com",
-			),
-		).toThrow("invalid error_description");
-	});
+	it.each(['bad "quote"', "bad\\slash", "café", "bad\r\ninjected"])(
+		"rejects an invalid DPoP error_description: %s",
+		(description) => {
+			expect(() =>
+				createResourceServerChallenge(
+					new APIError("UNAUTHORIZED", {
+						message: description,
+						error: "invalid_dpop_proof",
+						error_description: description,
+					}),
+					"https://api.example.com",
+				),
+			).toThrow("invalid error_description");
+		},
+	);
 });

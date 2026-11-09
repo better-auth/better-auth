@@ -113,29 +113,29 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10752#pullrequestreview-4910497732
 	 */
-	it.each([
-		"/oauth2/introspect",
-		"/oauth2/revoke",
-	])("%s rejects repeated form client authentication fields", async (path) => {
-		if (!oauthClient?.client_id || !oauthClient.client_secret) {
-			throw new Error("OAuth client was not created");
-		}
-		const { status, body } = await captureJsonResponse(path, {
-			method: "POST",
-			body: new URLSearchParams([
-				["client_id", oauthClient.client_id],
-				["client_secret", oauthClient.client_secret],
-				["client_secret", "duplicate-secret"],
-				["token", "opaque-token"],
-			]),
-			headers: {
-				"content-type": "application/x-www-form-urlencoded",
-			},
-		});
+	it.each(["/oauth2/introspect", "/oauth2/revoke"])(
+		"%s rejects repeated form client authentication fields",
+		async (path) => {
+			if (!oauthClient?.client_id || !oauthClient.client_secret) {
+				throw new Error("OAuth client was not created");
+			}
+			const { status, body } = await captureJsonResponse(path, {
+				method: "POST",
+				body: new URLSearchParams([
+					["client_id", oauthClient.client_id],
+					["client_secret", oauthClient.client_secret],
+					["client_secret", "duplicate-secret"],
+					["token", "opaque-token"],
+				]),
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			});
 
-		expect(status).toBe(400);
-		expect(body?.error).toBe("invalid_request");
-	});
+			expect(status).toBe(400);
+			expect(body?.error).toBe("invalid_request");
+		},
+	);
 
 	/**
 	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-3.2
@@ -191,18 +191,18 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 					["token", ""],
 				],
 			],
-		] as [
-			string,
-			[string, string][],
-		][])("treats an empty value %s a valid one as omitted", async (_label, params) => {
-			const { status, body } = await postWithBasicAuth(
-				"/oauth2/introspect",
-				params,
-			);
+		] as [string, [string, string][]][])(
+			"treats an empty value %s a valid one as omitted",
+			async (_label, params) => {
+				const { status, body } = await postWithBasicAuth(
+					"/oauth2/introspect",
+					params,
+				);
 
-			expect(status).toBe(200);
-			expect(body).toEqual({ active: false });
-		});
+				expect(status).toBe(200);
+				expect(body).toEqual({ active: false });
+			},
+		);
 	});
 
 	describe("oauth2Token (JSON delivery)", () => {
@@ -331,6 +331,94 @@ describe("RFC envelope compliance across OAuth endpoints", async () => {
 				/response_type/,
 			);
 		});
+
+		/**
+		 * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+		 */
+		it.each([
+			["response_type", "code"],
+			["state", "other-state"],
+			["scope", "profile"],
+		])(
+			"form POST with a repeated %s → invalid_request (RFC 6749 §3.1)",
+			async (name, value) => {
+				if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+				const body = new URLSearchParams({
+					client_id: oauthClient.client_id,
+					redirect_uri: redirectUri,
+					response_type: "code",
+					scope: "openid",
+					state: "post-state",
+					code_challenge: "a".repeat(43),
+					code_challenge_method: "S256",
+				});
+				body.append(name, value);
+				const { status, location } = await captureRedirect(
+					"/oauth2/authorize",
+					{
+						method: "POST",
+						body,
+						headers: { "content-type": "application/x-www-form-urlencoded" },
+					},
+				);
+				expect(status).toBeGreaterThanOrEqual(300);
+				expect(status).toBeLessThan(400);
+				const redirectLocation = expectRedirectLocation(location);
+				expect(redirectLocation.startsWith(redirectUri)).toBe(true);
+				const errorUrl = new URL(redirectLocation);
+				expect(errorUrl.searchParams.get("code")).toBeNull();
+				expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+				expect(errorUrl.searchParams.get("error_description")).toBe(
+					`${name} must not appear more than once`,
+				);
+			},
+		);
+
+		/**
+		 * @see https://openid.net/specs/openid-connect-core-1_0.html#AuthRequest
+		 */
+		it.each([
+			["redirect_uri", "https://evil.example.com/callback"],
+			["client_id", "unknown-client"],
+		])(
+			"form POST with a repeated %s → server error page",
+			async (name, decoy) => {
+				if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");
+				const body = new URLSearchParams({
+					client_id: oauthClient.client_id,
+					redirect_uri: redirectUri,
+					response_type: "code",
+					scope: "openid",
+					state: "post-state",
+					code_challenge: "a".repeat(43),
+					code_challenge_method: "S256",
+				});
+				// The registered value comes last, where a last-value parser looks.
+				const registered = body.get(name) ?? "";
+				body.delete(name);
+				body.append(name, decoy);
+				body.append(name, registered);
+				const { status, location } = await captureRedirect(
+					"/oauth2/authorize",
+					{
+						method: "POST",
+						body,
+						headers: { "content-type": "application/x-www-form-urlencoded" },
+					},
+				);
+				expect(status).toBeGreaterThanOrEqual(300);
+				expect(status).toBeLessThan(400);
+				const redirectLocation = expectRedirectLocation(location);
+				expect(redirectLocation.startsWith(redirectUri)).toBe(false);
+				expect(redirectLocation).not.toContain("evil.example.com");
+				const errorUrl = new URL(redirectLocation);
+				expect(errorUrl.searchParams.get("code")).toBeNull();
+				expect(errorUrl.searchParams.get("error")).toBe("invalid_request");
+				expect(errorUrl.searchParams.get("error_description")).toBe(
+					`${name} must not appear more than once`,
+				);
+			},
+		);
 
 		it("missing response_type with trusted redirect_uri → invalid_request", async () => {
 			if (!oauthClient?.client_id) throw new Error("beforeAll didn't run");

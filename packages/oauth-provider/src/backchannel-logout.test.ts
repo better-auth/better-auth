@@ -664,7 +664,9 @@ describe("oauth back-channel logout", async () => {
 		await ctx.adapter.update({
 			model: "oauthClient",
 			where: [{ field: "clientId", value: malformedClient.client_id }],
-			update: { redirectUris: [] },
+			// Without a stored sector or a redirect URI, the pairwise sub cannot
+			// be derived.
+			update: { redirectUris: [], sectorIdentifier: null },
 		});
 
 		await client.signOut({ fetchOptions: { headers } });

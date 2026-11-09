@@ -47,6 +47,7 @@ import {
 } from "./resources";
 import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
+import { readSignedOAuthQuery } from "./signed-query";
 import { STANDARD_CLAIM_NAMES, STANDARD_CLAIMS } from "./standard-claims";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
@@ -58,13 +59,10 @@ import {
 import { userInfoEndpoint } from "./userinfo";
 import {
 	getJwtPlugin,
-	getSignedQueryIssuedAt,
 	isSessionFreshForSignedQuery,
-	postLoginClearedParam,
 	removeMaxAgeFromQuery,
 	removePromptFromQuery,
 	searchParamsToQuery,
-	signedQueryIssuedAtParam,
 	verifyOAuthQueryParams,
 } from "./utils";
 import { PACKAGE_VERSION } from "./version";
@@ -163,6 +161,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 		}
+	}
+	const acrValuesSupported = options.authenticationContext?.acrValuesSupported;
+	if (
+		acrValuesSupported &&
+		(acrValuesSupported.length === 0 || acrValuesSupported.includes(""))
+	) {
+		throw new BetterAuthError(
+			"authenticationContext.acrValuesSupported must list at least one non-empty acr value",
+		);
 	}
 	for (const sc of options.advertisedMetadata?.scopes_supported ?? []) {
 		if (!scopes?.has(sc)) {
@@ -357,6 +364,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		{
 			method: ["GET", "POST"],
 			body: z.object({}).passthrough(),
+			// The authorization request schema rejects a repeated standard
+			// parameter in a POST form as it does in a query string.
+			formParams: { repeatable: "all" },
 			redirectOnError: authorizeRedirectOnError(opts),
 			metadata: {
 				allowedMediaTypes: ["application/x-www-form-urlencoded"],
@@ -372,11 +382,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "OAuth 2.1 response type (e.g., 'code')",
 						},
 						{
+							name: "user_code",
+							in: "query",
+							required: false,
+							schema: { type: "string" },
+							description:
+								"Device user code to approve instead of an authorization request (requires oauthDeviceAuthorization())",
+						},
+						{
 							name: "client_id",
 							in: "query",
-							required: true,
+							required: false,
 							schema: { type: "string" },
-							description: "OAuth 2.1 client ID",
+							description:
+								"OAuth 2.1 client ID, required for authorization requests (not for user_code)",
 						},
 						{
 							name: "redirect_uri",
@@ -520,6 +539,25 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				);
 			}
 
+			// A replayed rotation assertion would hand over a client's keys, so
+			// rotation needs the jti tombstone to be single-use. The memory adapter
+			// does not enforce primary keys, and "serial" ids replace the derived id.
+			// shortcut: lists the known built-in gaps only; replace with a core check
+			// when the FIXME(serial-derived-ids) in get-id-field.ts is resolved.
+			if (opts.allowClientKeyRotation) {
+				const gap =
+					ctx.adapter.id === "memory"
+						? "the memory adapter"
+						: ctx.options.advanced?.database?.generateId === "serial"
+							? '`advanced.database.generateId: "serial"`'
+							: undefined;
+				if (gap) {
+					throw new BetterAuthError(
+						`\`allowClientKeyRotation\` requires single-use client assertions, which ${gap} does not enforce`,
+					);
+				}
+			}
+
 			// Seed `oauthResource` rows from plugin config. A failure must not
 			// reject init (a failed init is cached and breaks every route);
 			// `getResource` retries the seed on first resource access.
@@ -630,19 +668,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 								error: "invalid_signature",
 							});
 						}
-						const signedQueryIssuedAt = getSignedQueryIssuedAt(query);
-						const queryParams = new URLSearchParams(query);
-						const postLoginClearedForSession =
-							queryParams.get(postLoginClearedParam) ?? undefined;
-						queryParams.delete("sig");
-						queryParams.delete("exp");
-						queryParams.delete(signedQueryIssuedAtParam);
-						queryParams.delete(postLoginClearedParam);
-						await oAuthState.set({
-							query: queryParams.toString(),
-							signedQueryIssuedAt: signedQueryIssuedAt ?? undefined,
-							postLoginClearedForSession,
-						});
+						const signed = readSignedOAuthQuery(query);
+						await oAuthState.set(signed);
 
 						// On the social sign-in path the authorize query has to survive the
 						// provider redirect to be resumed after login. Carry it in the
@@ -650,10 +677,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						// through the request body.
 						if (ctx.path === "/sign-in/social") {
 							await addOAuthServerContext({
-								query: queryParams.toString(),
-								...(signedQueryIssuedAt
+								query: signed.query,
+								...(signed.signedQueryIssuedAt
 									? {
-											[signedQueryIssuedAtMsKey]: signedQueryIssuedAt.getTime(),
+											[signedQueryIssuedAtMsKey]:
+												signed.signedQueryIssuedAt.getTime(),
 										}
 									: {}),
 							});
@@ -791,6 +819,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description:
 								"Accepted OIDC claims request object. If none is provided, then all originally requested claims are accepted.",
 						}),
+						reference_id: z.string().min(1).optional().meta({
+							description:
+								"The reference the user chose for this consent, such as an organization ID. postLogin.consentReferenceId receives it and decides whether to accept it.",
+						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
 						}),
@@ -807,14 +839,20 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
+													redirect: {
+														type: "boolean",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"Always true. Indicates the caller should redirect to `url`.",
+														enum: [true],
+													},
+													url: {
+														type: "string",
+														format: "uri-reference",
+														description:
+															"The absolute or relative URI to redirect to next.",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
@@ -840,7 +878,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Confirms an account was registered",
 						}),
 						postLogin: z.boolean().optional().meta({
-							description: "Confirms organization and/or team selection.",
+							description:
+								"Resumes after the post login page. postLogin.shouldRedirect runs again with isContinuation: true.",
 						}),
 						oauth_query: z.string().optional().meta({
 							description: "The redirected page's query parameters",
@@ -852,20 +891,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							description: "Continues OAuth2 authorization flow",
 							responses: {
 								"200": {
-									description: "Consent processed successfully",
+									description: "Authorization flow continued successfully",
 									content: {
 										"application/json": {
 											schema: {
 												type: "object",
 												properties: {
-													redirect_uri: {
-														type: "string",
-														format: "uri",
+													redirect: {
+														type: "boolean",
 														description:
-															"The URI to redirect to, either with an authorization code or an error",
+															"Always true. Indicates the caller should redirect to `url`.",
+														enum: [true],
+													},
+													url: {
+														type: "string",
+														format: "uri-reference",
+														description:
+															"The absolute or relative URI to redirect to next.",
 													},
 												},
-												required: ["redirect_uri"],
+												required: ["redirect", "url"],
 											},
 										},
 									},
@@ -1493,7 +1538,10 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: clientRegistrationRequestSchema,
+					// Loose so extension-defined fields reach the handler, which keeps
+					// those and drops every other unrecognized field (RFC 7591 §2).
+					// The declared type stays strict.
+					body: clientRegistrationRequestSchema.loose() as unknown as typeof clientRegistrationRequestSchema,
 					errorCodesByField: {
 						redirect_uris: "invalid_redirect_uri",
 						post_logout_redirect_uris: "invalid_redirect_uri",
@@ -1689,6 +1737,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			adminUpdateOAuthClient: oauthClientEndpoints.adminUpdateOAuthClient(opts),
 			updateOAuthClient: oauthClientEndpoints.updateOAuthClient(opts),
 			rotateClientSecret: oauthClientEndpoints.rotateClientSecret(opts),
+			rotateClientKeys: oauthClientEndpoints.rotateClientKeys(opts),
 			deleteOAuthClient: oauthClientEndpoints.deleteOAuthClient(opts),
 			getOAuthConsent: oauthConsentEndpoints.getOAuthConsent(opts),
 			getOAuthConsents: oauthConsentEndpoints.getOAuthConsents(opts),
@@ -1760,6 +1809,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							pathMatcher: (path: string) => path === "/oauth2/register",
 							window: opts.rateLimit?.register?.window ?? 60,
 							max: opts.rateLimit?.register?.max ?? 5,
+						},
+					]
+				: []),
+			// Client key rotation - replaces credentials, so keep it tight
+			...(opts.rateLimit?.rotateClientKeys !== false
+				? [
+						{
+							pathMatcher: (path: string) =>
+								path === "/oauth2/client/rotate-keys",
+							window: opts.rateLimit?.rotateClientKeys?.window ?? 60,
+							max: opts.rateLimit?.rotateClientKeys?.max ?? 5,
 						},
 					]
 				: []),

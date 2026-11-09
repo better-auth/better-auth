@@ -15,23 +15,23 @@ export interface NaverProfile {
 		/** Unique Naver user identifier */
 		id: string;
 		/** User nickname */
-		nickname: string;
+		nickname?: string;
 		/** User real name */
-		name: string;
+		name?: string;
 		/** User email address */
-		email: string;
+		email?: string;
 		/** Gender (F: female, M: male, U: unknown) */
-		gender: string;
+		gender?: string;
 		/** Age range */
-		age: string;
+		age?: string;
 		/** Birthday (MM-DD format) */
-		birthday: string;
+		birthday?: string;
 		/** Birth year */
-		birthyear: string;
+		birthyear?: string;
 		/** Profile image URL */
-		profile_image: string;
+		profile_image?: string;
 		/** Mobile phone number */
-		mobile: string;
+		mobile?: string;
 	};
 }
 

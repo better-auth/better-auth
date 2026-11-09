@@ -10,7 +10,7 @@ export interface KickProfile {
 	/**
 	 * The user id of the user
 	 */
-	user_id: string;
+	user_id: number;
 	/**
 	 * The name of the user
 	 */

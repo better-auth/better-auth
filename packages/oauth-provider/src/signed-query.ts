@@ -62,10 +62,34 @@ export function buildSignedOAuthQuery(search: string) {
 	return signedParams.toString();
 }
 
-export function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
+function getSignedQueryIssuedAt(oauthQuery: string): Date | null {
 	const raw = new URLSearchParams(oauthQuery).get(signedQueryIssuedAtParam);
 	if (!raw) return null;
 	const issuedAt = Number(raw);
 	if (!Number.isFinite(issuedAt) || issuedAt <= 0) return null;
 	return new Date(issuedAt);
+}
+
+/**
+ * Reads a verified signed query: the authorization request without the
+ * parameters added to sign it, and the flags it carried.
+ */
+export function readSignedOAuthQuery(signedQuery: string) {
+	const params = new URLSearchParams(signedQuery);
+	const postLoginClearedForSession =
+		params.get(postLoginClearedParam) ?? undefined;
+	for (const name of [
+		"sig",
+		"exp",
+		signedQueryIssuedAtParam,
+		signedQueryParameterNameParam,
+		postLoginClearedParam,
+	]) {
+		params.delete(name);
+	}
+	return {
+		query: params.toString(),
+		signedQueryIssuedAt: getSignedQueryIssuedAt(signedQuery) ?? undefined,
+		postLoginClearedForSession,
+	};
 }

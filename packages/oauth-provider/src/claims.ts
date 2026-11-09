@@ -29,6 +29,7 @@ const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
 	"acr",
 	"amr",
 	"cnf",
+	"reference_id",
 ]);
 
 /**

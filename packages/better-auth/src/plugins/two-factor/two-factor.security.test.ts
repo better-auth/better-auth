@@ -163,57 +163,55 @@ describe("two-factor security: sign-in does not leak session cookies (cookieCach
 		},
 	];
 
-	it.each(
-		cases,
-	)("$path: response carries no valid signed session_token or session_data", async ({
-		call,
-	}) => {
-		const res = await call();
-		expect(res.status).toBe(200);
-		expect(res.headers.get("x-new-session-visible")).toBeNull();
+	it.each(cases)(
+		"$path: response carries no valid signed session_token or session_data",
+		async ({ call }) => {
+			const res = await call();
+			expect(res.status).toBe(200);
+			expect(res.headers.get("x-new-session-visible")).toBeNull();
 
-		const setCookies = extractSetCookies(res);
-		expect(setCookies.length).toBeGreaterThan(0);
+			const setCookies = extractSetCookies(res);
+			expect(setCookies.length).toBeGreaterThan(0);
 
-		const sessionEntries = setCookies.filter(
-			(entry) =>
-				entry.startsWith("better-auth.session_token=") ||
-				entry.startsWith("better-auth.session_data=") ||
-				entry.startsWith("better-auth.session_data."),
-		);
+			const sessionEntries = setCookies.filter(
+				(entry) =>
+					entry.startsWith("better-auth.session_token=") ||
+					entry.startsWith("better-auth.session_data=") ||
+					entry.startsWith("better-auth.session_data."),
+			);
 
-		for (const entry of sessionEntries) {
-			expect(getCookieValue(entry)).toBe("");
-		}
+			for (const entry of sessionEntries) {
+				expect(getCookieValue(entry)).toBe("");
+			}
 
-		const twoFactorEntry = setCookies.find((entry) =>
-			entry.startsWith("better-auth.two_factor="),
-		);
-		expect(twoFactorEntry).toBeDefined();
-	});
+			const twoFactorEntry = setCookies.find((entry) =>
+				entry.startsWith("better-auth.two_factor="),
+			);
+			expect(twoFactorEntry).toBeDefined();
+		},
+	);
 
-	it.each(
-		cases,
-	)("$path: replaying captured cookies cannot authenticate or disable 2FA", async ({
-		call,
-	}) => {
-		const res = await call();
-		const setCookies = extractSetCookies(res);
-		const replay = buildCookieHeader(setCookies, [
-			"better-auth.session_token",
-			"better-auth.session_data",
-		]);
+	it.each(cases)(
+		"$path: replaying captured cookies cannot authenticate or disable 2FA",
+		async ({ call }) => {
+			const res = await call();
+			const setCookies = extractSetCookies(res);
+			const replay = buildCookieHeader(setCookies, [
+				"better-auth.session_token",
+				"better-auth.session_data",
+			]);
 
-		const session = await auth.api.getSession({ headers: replay });
-		expect(session).toBeNull();
+			const session = await auth.api.getSession({ headers: replay });
+			expect(session).toBeNull();
 
-		const disableRes = await auth.api.disableTwoFactor({
-			body: { password: testUser.password },
-			headers: replay,
-			asResponse: true,
-		});
-		expect(disableRes.status).toBe(401);
-	});
+			const disableRes = await auth.api.disableTwoFactor({
+				body: { password: testUser.password },
+				headers: replay,
+				asResponse: true,
+			});
+			expect(disableRes.status).toBe(401);
+		},
+	);
 });
 
 describe("two-factor security: sign-in does not leak session cookies (cookieCache disabled)", async () => {
@@ -730,4 +728,44 @@ describe("two-factor security: OTP attempts are atomic under concurrency", async
 		const successCount = results.filter((res) => res.status === 200).length;
 		expect(successCount).toBeLessThanOrEqual(1);
 	});
+});
+
+describe("two-factor security: challenge precedes other plugin after hooks", () => {
+	for (const order of ["probe-first", "two-factor-first"] as const) {
+		it(`hides the challenged session from plugin after hooks (${order})`, async () => {
+			const observed: Array<string | null> = [];
+			const probe = {
+				id: "new-session-probe",
+				hooks: {
+					after: [
+						{
+							matcher: (ctx) => ctx.path === "/sign-in/email",
+							handler: createAuthMiddleware(async (ctx) => {
+								observed.push(ctx.context.newSession?.session.token ?? null);
+							}),
+						},
+					],
+				},
+			} satisfies BetterAuthPlugin;
+			const { auth, signInWithTestUser, testUser } = await getTestInstance({
+				plugins:
+					order === "probe-first"
+						? [probe, twoFactor({ skipVerificationOnEnable: true })]
+						: [twoFactor({ skipVerificationOnEnable: true }), probe],
+			});
+			const { headers } = await signInWithTestUser();
+			await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+			});
+			observed.length = 0;
+
+			const response = await auth.api.signInEmail({
+				body: { email: testUser.email, password: testUser.password },
+			});
+
+			expect(response).toMatchObject({ twoFactorRedirect: true });
+			expect(observed).toEqual([null]);
+		});
+	}
 });

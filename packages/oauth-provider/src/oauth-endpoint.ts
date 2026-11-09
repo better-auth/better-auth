@@ -117,9 +117,11 @@ export interface OAuthEndpointExtras<
 	 * Re-reads the raw form before validation, because the form parser keeps
 	 * only the last value of a repeated key. Empty values count as omitted and
 	 * repeated parameters return `invalid_request` (RFC 6749 §3.2), except the
-	 * names in `repeatable`, which become arrays. Enables `cloneRequest`.
+	 * names in `repeatable`, which become arrays. `repeatable: "all"` keeps
+	 * every value as a query string does and leaves cardinality to the schema.
+	 * Enables `cloneRequest`.
 	 */
-	formParams?: { repeatable?: readonly string[] };
+	formParams?: { repeatable?: readonly string[] | "all" };
 }
 
 /**

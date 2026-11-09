@@ -583,22 +583,18 @@ describe("legacy adapter atomic fallbacks", () => {
 			first.incrementOne({ ...request, increment: { attempts: 1 } }),
 		).rejects.toThrow(/contention/);
 	});
-	it.for([
-		2,
-		-1,
-		0.5,
-		Number.NaN,
-	])("rejects invalid affected counts (%s)", async (count, {
-		onTestFinished,
-	}) => {
-		const { raw, first } = setup(onTestFinished);
-		raw.deleteMany = async () => count;
-		raw.updateMany = async () => count;
-		await expect(first.consumeOne(request)).rejects.toThrow(/affected/);
-		await expect(
-			first.incrementOne({ ...request, increment: { attempts: 1 } }),
-		).rejects.toThrow(/affected/);
-	});
+	it.for([2, -1, 0.5, Number.NaN])(
+		"rejects invalid affected counts (%s)",
+		async (count, { onTestFinished }) => {
+			const { raw, first } = setup(onTestFinished);
+			raw.deleteMany = async () => count;
+			raw.updateMany = async () => count;
+			await expect(first.consumeOne(request)).rejects.toThrow(/affected/);
+			await expect(
+				first.incrementOne({ ...request, increment: { attempts: 1 } }),
+			).rejects.toThrow(/affected/);
+		},
+	);
 	it("identifies invalid increment input before writing", async ({
 		onTestFinished,
 	}) => {

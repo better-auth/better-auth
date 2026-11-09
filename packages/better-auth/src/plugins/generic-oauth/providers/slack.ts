@@ -9,12 +9,13 @@ import type {
 export interface SlackOptions extends BaseOAuthProviderOptions {}
 
 interface SlackProfile {
+	ok: boolean;
 	sub: string;
 	"https://slack.com/user_id": string;
 	"https://slack.com/team_id": string;
-	email: string;
-	email_verified: boolean;
-	name: string;
+	email?: string;
+	email_verified?: boolean;
+	name?: string;
 	picture?: string;
 	given_name?: string;
 	family_name?: string;
@@ -55,13 +56,14 @@ export function slack(options: SlackOptions): GenericOAuthConfig<"slack"> {
 		const { data: profile, error } = await betterFetch<SlackProfile>(
 			"https://slack.com/api/openid.connect.userInfo",
 			{
+				method: "POST",
 				headers: {
 					Authorization: `Bearer ${tokens.accessToken}`,
 				},
 			},
 		);
 
-		if (error || !profile) {
+		if (error || !profile || !profile.ok) {
 			return null;
 		}
 

@@ -12,6 +12,104 @@ import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
 
+describe("device approval session authority", () => {
+	it("does not claim a device code for a revoked cached session", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.userId ?? null).toBeNull();
+	});
+
+	it("does not approve a claimed code after the session is revoked", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
+
+	it("does not deny a claimed code after the session is revoked", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			auth.api.deviceDeny({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
+});
+
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
 		const options = deviceAuthorizationOptionsSchema.parse({});
@@ -234,8 +332,7 @@ describe("grant request validation", () => {
 			},
 			deviceCodeSchemaFields: {},
 			authorizeRequest: () => undefined,
-			assertSessionRedemption: () => {},
-			getVerificationContext: () => undefined,
+			assertStandaloneUse: () => {},
 		} satisfies DeviceAuthorizationGrant;
 		const { auth } = await getTestInstance({
 			plugins: [deviceAuthorization({ grant })],
@@ -263,8 +360,7 @@ describe("grant request validation", () => {
 			requestSchemaFields: {},
 			deviceCodeSchemaFields: {},
 			authorizeRequest,
-			assertSessionRedemption: () => {},
-			getVerificationContext: () => undefined,
+			assertStandaloneUse: () => {},
 		} satisfies DeviceAuthorizationGrant;
 		const { auth } = await getTestInstance({
 			plugins: [deviceAuthorization({ grant, onDeviceAuthRequest })],
@@ -275,52 +371,6 @@ describe("grant request validation", () => {
 		).rejects.toThrow("rejected");
 		expect(authorizeRequest).toHaveBeenCalledOnce();
 		expect(onDeviceAuthRequest).not.toHaveBeenCalled();
-	});
-});
-
-describe("grant verification context", () => {
-	/**
-	 * @see https://github.com/better-auth/better-auth/pull/10746#discussion_r3760240763
-	 */
-	it("does not let grant context overwrite host-owned response fields", async () => {
-		const grant = {
-			requestSchemaFields: {},
-			deviceCodeSchemaFields: {},
-			authorizeRequest: () => undefined,
-			assertSessionRedemption: () => {},
-			getVerificationContext: () => ({
-				user_code: "grant-user-code",
-				status: "grant-status",
-				client_id: "grant-client",
-				scope: "grant-scope",
-				grant_field: "grant-value",
-			}),
-		} satisfies DeviceAuthorizationGrant;
-		const { auth, signInWithTestUser } = await getTestInstance({
-			plugins: [
-				deviceAuthorization({ grant, validateClient: async () => true }),
-			],
-		});
-		const { headers } = await signInWithTestUser();
-		const { user_code } = await auth.api.deviceCode({
-			body: {
-				client_id: "client",
-				scope: "read",
-			},
-		});
-
-		const response = await auth.api.deviceVerify({
-			query: { user_code },
-			headers,
-		});
-
-		expect(response).toMatchObject({
-			user_code,
-			status: "pending",
-			client_id: "client",
-			scope: "read",
-			grant_field: "grant-value",
-		});
 	});
 });
 
@@ -381,6 +431,15 @@ describe("device authorization flow", async () => {
 			vi.useRealTimers();
 		});
 
+		const pollDeviceToken = (deviceCode: string) =>
+			auth.api.deviceToken({
+				body: {
+					grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+					device_code: deviceCode,
+					client_id: "test-client",
+				},
+			});
+
 		it("should return authorization_pending when not approved", async () => {
 			const { device_code } = await auth.api.deviceCode({
 				body: {
@@ -431,6 +490,43 @@ describe("device authorization flow", async () => {
 			});
 
 			vi.useRealTimers();
+		});
+
+		it("returns expired_token, not slow_down, for an expired code polled too soon", async () => {
+			vi.useFakeTimers();
+			const { device_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await vi.advanceTimersByTimeAsync(299_500);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
+
+			await vi.advanceTimersByTimeAsync(1000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "expired_token" },
+			});
+		});
+
+		it("keeps the original interval after slow_down", async () => {
+			vi.useFakeTimers();
+			const { device_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
+
+			await vi.advanceTimersByTimeAsync(1000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "slow_down" },
+			});
+
+			// The rejected poll neither restarts the wait nor lengthens it.
+			await vi.advanceTimersByTimeAsync(1000);
+			await expect(pollDeviceToken(device_code)).rejects.toMatchObject({
+				body: { error: "authorization_pending" },
+			});
 		});
 
 		it("should return error for invalid device code", async () => {
@@ -897,6 +993,74 @@ describe("device authorization flow", async () => {
 					error_description: "Device code already processed",
 				},
 			});
+		});
+	});
+
+	describe("concurrent approval decisions", () => {
+		it("keeps a denial that lands between the approval's read and write", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+
+			const { adapter } = await auth.$context;
+			const findOne = adapter.findOne.bind(adapter);
+			let denied = false;
+			const spy = vi.spyOn(adapter, "findOne").mockImplementation((async (
+				input: Parameters<typeof findOne>[0],
+			) => {
+				const row = await findOne(input);
+				if (!denied && input.model === "deviceCode") {
+					denied = true;
+					await auth.api.deviceDeny({ body: { userCode: user_code }, headers });
+				}
+				return row;
+			}) as typeof adapter.findOne);
+			try {
+				await expect(
+					auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+				).rejects.toMatchObject({
+					body: { error_description: "Device code already processed" },
+				});
+			} finally {
+				spy.mockRestore();
+			}
+
+			const stored = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(stored?.status).toBe("denied");
+		});
+
+		it("rejects a decision on a code that expires before the write", async () => {
+			const { headers } = await signInWithTestUser();
+			const { device_code, user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			await auth.api.deviceVerify({ query: { user_code }, headers });
+			const deviceCodeRecord = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+
+			// At `expiresAt` the pending check still passes but the write does not.
+			vi.useFakeTimers({ toFake: ["Date"] });
+			vi.setSystemTime(new Date(deviceCodeRecord!.expiresAt));
+			try {
+				await expect(
+					auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+				).rejects.toMatchObject({ body: { error: "expired_token" } });
+			} finally {
+				vi.useRealTimers();
+			}
+
+			const stored = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "deviceCode", value: device_code }],
+			});
+			expect(stored?.status).toBe("pending");
 		});
 	});
 
@@ -1879,57 +2043,57 @@ describe("device authorization with custom options", async () => {
 				generateUserCode: () => "u".repeat(192),
 			},
 		},
-	])("should reject an oversized custom $label code", async ({
-		label,
-		options,
-	}) => {
-		const { auth } = await getTestInstance({
-			plugins: [deviceAuthorization(options)],
-		});
+	])(
+		"should reject an oversized custom $label code",
+		async ({ label, options }) => {
+			const { auth } = await getTestInstance({
+				plugins: [deviceAuthorization(options)],
+			});
 
-		await expect(
-			auth.api.deviceCode({
+			await expect(
+				auth.api.deviceCode({
+					body: {
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
 				body: {
-					client_id: "test-client",
+					error: "invalid_request",
+					error_description: `Generated ${label} code must be at most 191 characters`,
 				},
-			}),
-		).rejects.toMatchObject({
-			body: {
-				error: "invalid_request",
-				error_description: `Generated ${label} code must be at most 191 characters`,
-			},
-		});
-	});
+			});
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10025
 	 */
-	it.each([
-		"device",
-		"user",
-	] as const)("should reject a non-string custom %s code", async (label) => {
-		const options = deviceAuthorizationOptionsSchema.parse(
-			label === "device"
-				? { generateDeviceCode: () => 42 }
-				: { generateUserCode: () => 42 },
-		);
-		const { auth } = await getTestInstance({
-			plugins: [deviceAuthorization(options)],
-		});
+	it.each(["device", "user"] as const)(
+		"should reject a non-string custom %s code",
+		async (label) => {
+			const options = deviceAuthorizationOptionsSchema.parse(
+				label === "device"
+					? { generateDeviceCode: () => 42 }
+					: { generateUserCode: () => 42 },
+			);
+			const { auth } = await getTestInstance({
+				plugins: [deviceAuthorization(options)],
+			});
 
-		await expect(
-			auth.api.deviceCode({
+			await expect(
+				auth.api.deviceCode({
+					body: {
+						client_id: "test-client",
+					},
+				}),
+			).rejects.toMatchObject({
 				body: {
-					client_id: "test-client",
+					error: "invalid_request",
+					error_description: `Generated ${label} code must be a string`,
 				},
-			}),
-		).rejects.toMatchObject({
-			body: {
-				error: "invalid_request",
-				error_description: `Generated ${label} code must be a string`,
-			},
-		});
-	});
+			});
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/10025

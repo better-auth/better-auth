@@ -2,6 +2,7 @@ import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
+import type { OAuthClientRegistrationMetadata } from "../register";
 import type { schema } from "../schema";
 import type { Awaitable } from "./helpers";
 import type {
@@ -28,12 +29,69 @@ export type {
 	TokenType,
 } from "./oauth";
 export type { ClientRegistrationRequest } from "./zod";
+export type { OAuthClientRegistrationMetadata };
 
 export type StoreTokenType =
 	| "access_token"
 	| "refresh_token"
 	| "authorization_code"
 	| (string & {});
+
+/**
+ * The authentication context the provider asserts in ID tokens
+ * (OIDC Core 1.0 §2).
+ */
+export interface OAuthAuthenticationContext {
+	/**
+	 * Authentication Context Class Reference the session satisfies. Must be one
+	 * of `acrValuesSupported`. Defaults to `"0"`.
+	 */
+	acr?: string;
+	/**
+	 * Authentication Methods References used for the session, such as
+	 * `["pwd", "otp"]` (RFC 8176).
+	 */
+	amr?: string[];
+}
+
+export interface OAuthAuthenticationContextOptions<
+	Scopes extends readonly Scope[] = InternallySupportedScopes[],
+> {
+	/**
+	 * ACR values this provider can assert, advertised as
+	 * `acr_values_supported` in discovery. Include `"0"` when `resolve` can
+	 * return no `acr`.
+	 */
+	acrValuesSupported: string[];
+	/**
+	 * Returns the `acr` and `amr` the current session establishes. Called when
+	 * the user approves an authorization request or an interaction request, such
+	 * as a device code or a CIBA request, on the provider's pages. Return only
+	 * what the session actually proved; do not raise `acr` to match
+	 * `requestedAcrValues`.
+	 *
+	 * An essential `acr` request (`claims.id_token.acr.essential`) that the
+	 * returned `acr` does not satisfy fails with `access_denied`. A voluntary
+	 * request (`acr_values` or a non-essential `acr` claim) never fails.
+	 *
+	 * Not called for requests without the `openid` scope, which issue no ID
+	 * token.
+	 */
+	resolve: (info: {
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		client: SchemaClient<Scopes>;
+		/** Scopes being approved */
+		scopes: string[];
+		/** Headers of the request approving the authorization */
+		headers: Headers;
+		/**
+		 * ACR values the client requested, from `claims.id_token.acr` and
+		 * `acr_values`, in order of preference.
+		 */
+		requestedAcrValues: string[];
+	}) => Awaitable<OAuthAuthenticationContext | undefined>;
+}
 
 type InternallySupportedScopes =
 	| "openid"
@@ -169,6 +227,10 @@ export interface OAuthTokenIssueParams {
 	nonce?: string;
 	refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	authTime?: Date;
+	/** The `acr` ID token claim. Defaults to `"0"`. */
+	acr?: string;
+	/** The `amr` ID token claim. */
+	amr?: string[];
 	verificationValue?: VerificationValue;
 	resources?: string[];
 	/** Full original authorized resources for the grant, used to seed refresh tokens. */
@@ -210,6 +272,14 @@ export interface OAuthTokenIssueParams {
 	 * is stamped after, and cannot be overridden by, contributed claims.
 	 */
 	confirmation?: Confirmation;
+	/**
+	 * Latest time the access token may expire. The authorization server issues
+	 * the earlier of this and its configured lifetime, so a grant derived from
+	 * another token (for example RFC 8693 token exchange) cannot outlive it.
+	 * If it is not in the future, issuance fails with `invalid_request`. Refresh
+	 * and ID tokens are not capped, so such a grant should not issue them.
+	 */
+	maxExpiresAt?: Date;
 }
 
 export interface OAuthTokenResponse {
@@ -265,6 +335,21 @@ export interface OAuthProviderApi {
 	 * calling it.
 	 */
 	issueTokens: (params: OAuthTokenIssueParams) => Awaitable<OAuthTokenResponse>;
+	/**
+	 * Resolves the sender-constraint the tokens for this request will carry: the
+	 * `confirmation` the client proved at authentication, or else the DPoP proof
+	 * on this request, verified and required by the same rules `issueTokens`
+	 * applies. A grant that consumes a one-time credential (a device code, a CIBA
+	 * request) calls this before the claim and passes the result to
+	 * `issueTokens` as `confirmation`, so a rejected proof leaves the credential
+	 * for a retry with a valid one.
+	 */
+	resolveConfirmation: (params: {
+		client: SchemaClient<Scope[]>;
+		scopes: string[];
+		resources?: string[];
+		confirmation?: Confirmation;
+	}) => Promise<Confirmation | undefined>;
 	/**
 	 * Computes the stored lookup key for a token value (the same hash the
 	 * provider persists), so a caller can find or revoke a previously issued
@@ -413,7 +498,7 @@ export interface OAuthUserInfoExtensionInput {
  * `extendOAuthProvider(ctx, extension)` (or the `oauthProvider({ extensions })`
  * option).
  *
- * All five kinds live on one object so a single protocol plugin (for example
+ * All seven kinds live on one object so a single protocol plugin (for example
  * RFC 8693 token exchange, which adds a grant, advertises metadata, and emits
  * claims) registers atomically and the host validates the combined surface in
  * one place. Every field is independently optional, so a single-concern plugin
@@ -421,10 +506,11 @@ export interface OAuthUserInfoExtensionInput {
  * just the one it needs. This is the shape every future OAuth RFC plugin copies.
  *
  * Two contribution disciplines:
- * - Dispatched kinds (`grants`, `clientAuthentication`) must be disjoint across
- *   extensions: registering a grant type, auth method, or assertion type that
- *   another extension already registered is rejected at setup, since the second
- *   would otherwise be silently unreachable.
+ * - Dispatched kinds (`grants`, `clientAuthentication`, `interactionRequests`)
+ *   must be disjoint across extensions: registering a grant type, auth method,
+ *   assertion type, or interaction parameter that another extension already
+ *   registered is rejected at setup, since the second would otherwise be
+ *   silently unreachable.
  * - Additive kinds (`metadata`, `claims`) never override authorization-server
  *   core; a key already owned by the provider is kept, and a key two extensions
  *   both contribute resolves to the first-registered extension.
@@ -480,6 +566,121 @@ export interface OAuthProviderExtension {
 	 * registry, an attestation header) contributes it here.
 	 */
 	clientDiscovery?: ClientDiscovery | ClientDiscovery[];
+	/**
+	 * Client registration metadata the extension defines, such as CIBA's
+	 * `backchannel_token_delivery_mode`. Extension fields live in the client's
+	 * `metadata`.
+	 */
+	clientMetadata?: {
+		/**
+		 * Top-level registration fields the extension defines. Dynamic client
+		 * registration (RFC 7591 §2) and client metadata documents (CIMD) both
+		 * ignore unrecognized fields; they keep these and store them in the
+		 * client's `metadata`, where admin-created clients put them too. Core
+		 * and server-owned client fields cannot be claimed.
+		 */
+		fields?: string[];
+		/**
+		 * Validates the extension's fields when a client is registered through
+		 * dynamic registration or a client metadata document, or created or
+		 * updated by an admin. Throw an `APIError` with `invalid_client_metadata`
+		 * to reject the client.
+		 */
+		validate?: (input: OAuthClientMetadataExtensionInput) => Awaitable<void>;
+	};
+	/**
+	 * Requests other than an authorization request that users approve through
+	 * the `/oauth2/authorize` sign-in, account selection, post-login, and
+	 * consent pages, keyed by the query parameter that identifies one, such as
+	 * `user_code`. Every interaction page resumes them through
+	 * `/oauth2/authorize`.
+	 */
+	interactionRequests?: Record<string, OAuthInteractionRequestHandler>;
+}
+
+/**
+ * Parameters signed into each interaction page. An authorization request
+ * carries its `redirect_uri`; other interaction requests have none and add
+ * their own identifying parameter, such as `user_code`.
+ */
+export type OAuthInteractionQuery = Omit<
+	OAuthAuthorizationQuery,
+	"redirect_uri"
+> & {
+	redirect_uri?: string | undefined;
+};
+
+/**
+ * A request the user reviews through the `/oauth2/authorize` sign-in,
+ * account selection, signup, post-login, and consent pages.
+ */
+export interface OAuthInteractionRequest {
+	/** Signed into each interaction page; carries `prompt` and `max_age`. */
+	query: OAuthInteractionQuery;
+	/** The provider sends the user to the error page when this client is disabled. */
+	client: SchemaClient<Scope[]>;
+	/**
+	 * Show the consent page even when consent is stored or the client skips
+	 * it, and approve only in the request where the user accepts on that page.
+	 */
+	requireConsent?: boolean | undefined;
+	/**
+	 * Records the approval once every interaction is complete and returns the
+	 * URL to send the user to.
+	 */
+	approve: (approval: {
+		query: OAuthInteractionQuery;
+		userId: string;
+		sessionId: string;
+		authTime: number;
+		acr?: string;
+		amr?: string[];
+		referenceId?: string;
+	}) => Promise<string>;
+}
+
+/** Loads and denies one kind of {@link OAuthInteractionRequest}. */
+export interface OAuthInteractionRequestHandler {
+	/**
+	 * Loads the request identified by `value`. On a direct `/oauth2/authorize`
+	 * request only `value` comes from the caller; when resuming after an
+	 * interaction page, `signedQuery` is the query this server signed into it.
+	 * Throw an `APIError` when the request can no longer be approved.
+	 */
+	load: (input: {
+		ctx: GenericEndpointContext;
+		opts: OAuthOptions<Scope[]>;
+		value: string;
+		signedQuery?: OAuthInteractionQuery | undefined;
+	}) => Promise<OAuthInteractionRequest>;
+	/**
+	 * Records a denial from the consent page and returns the URL to send the
+	 * user to.
+	 */
+	deny: (input: {
+		ctx: GenericEndpointContext;
+		value: string;
+		userId: string;
+	}) => Promise<string>;
+	/**
+	 * Where to send the user when the request cannot be loaded, approved, or
+	 * denied, such as a page where they can correct it. The provider appends
+	 * `error` and `error_description`. Defaults to the provider error page.
+	 */
+	errorPage?: (input: { ctx: GenericEndpointContext; value: string }) => string;
+}
+
+export interface OAuthClientMetadataExtensionInput {
+	/**
+	 * The client's core registration metadata after provider defaults. Read
+	 * extension fields from `metadata`, not from here.
+	 */
+	client: Omit<OAuthClientRegistrationMetadata, "metadata">;
+	/**
+	 * The client's `metadata` as it will be stored, with reserved client field
+	 * names removed. Extension fields are read from here.
+	 */
+	metadata: Record<string, unknown>;
 }
 
 /**
@@ -495,6 +696,19 @@ export interface InitialAccessTokenAuthorization {
 	 * client is stored with neither a `user_id` nor a `reference_id`).
 	 */
 	referenceId?: string;
+	/**
+	 * Scope ceiling for the `client_credentials` grant, such as the machine
+	 * scopes an administrator approved when the token was issued. Return only
+	 * scopes that approval covered: the token is the only proof of it.
+	 *
+	 * The client must register the `client_credentials` grant with a
+	 * confidential authentication method, and every scope must be one the
+	 * provider offers and not a user-delegated scope such as `openid`.
+	 * Otherwise registration fails.
+	 *
+	 * @default []
+	 */
+	clientCredentialsScopes?: string[];
 }
 
 export interface OAuthOptions<
@@ -558,9 +772,10 @@ export interface OAuthOptions<
 	 *
 	 * Custom acceptance relaxes the exact matching required by RFC 9700 §2.1.
 	 * Accept only callback hosts you control. For pairwise subject identifiers,
-	 * custom-validated URIs use the sector of the client's first registered URI.
+	 * custom-validated URIs use the sector derived from the client's registered
+	 * redirect URIs, not their own host.
 	 *
-	 * @see https://www.better-auth.com/docs/plugins/oauth-provider#custom-redirect-uri-validation
+	 * @see https://www.better-auth.com/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation
 	 *
 	 * @param redirectUri - The redirect_uri from the authorization request
 	 * @param registeredUris - Registered redirect URIs for the client
@@ -755,6 +970,21 @@ export interface OAuthOptions<
 	 */
 	assertionMaxLifetime?: number;
 	/**
+	 * Lets a confidential `private_key_jwt` client replace its own inline `jwks`
+	 * at `POST /oauth2/client/rotate-keys`, authenticated by a client assertion
+	 * signed with one of its current keys. No user session is involved.
+	 *
+	 * Clients that publish their keys at a `jwks_uri` rotate them there, so they
+	 * cannot use this endpoint.
+	 *
+	 * Each rotation assertion must be single-use, so the provider refuses to
+	 * start with this enabled on the memory adapter or with
+	 * `advanced.database.generateId: "serial"`, neither of which enforces it.
+	 *
+	 * @default false
+	 */
+	allowClientKeyRotation?: boolean;
+	/**
 	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
 	 */
@@ -872,14 +1102,16 @@ export interface OAuthOptions<
 	 * field.
 	 *
 	 * - `"web"`: the OIDC Registration §2 default. Omitted `application_type` is
-	 *   treated as `web`, so custom-scheme redirect URIs are rejected.
+	 *   treated as `web`, so custom-scheme and loopback redirect URIs are
+	 *   rejected.
 	 * - `"native"`: omitted `application_type` is treated as `native`.
 	 * - `"infer"`: omitted `application_type` is treated as `native` when any
-	 *   `redirect_uris` entry uses a non-http(s) scheme; otherwise `web`. Every
-	 *   redirect URI is then validated against the native rules. Lets native MCP
-	 *   clients that omit `application_type` (for example Cursor, which also
-	 *   registers https and loopback callbacks) register without loosening
-	 *   web-client redirect policy.
+	 *   `redirect_uris` entry uses a non-http(s) scheme or is `http` on
+	 *   `localhost`, `127.0.0.1`, or `[::1]`; otherwise `web`. Every redirect URI
+	 *   of an inferred native client is then validated against the native rules.
+	 *   Lets native MCP clients that omit `application_type` (for example Cursor,
+	 *   or older Claude Code releases with an `http://127.0.0.1` callback)
+	 *   register without loosening web-client redirect policy.
 	 *
 	 * An `application_type` the client actually sends is never overridden.
 	 * Applies only to dynamic client registration; managed clients and Client ID
@@ -1031,6 +1263,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
 		}) => Awaitable<boolean | string>;
 	};
 	/**
@@ -1060,6 +1294,8 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
 		}) => Awaitable<boolean>;
 	};
 	/**
@@ -1071,7 +1307,8 @@ export interface OAuthOptions<
 		 */
 		page: string;
 		/**
-		 * A value to tie to the consent reference_id.
+		 * A value to tie to the consent reference_id. Consent is stored
+		 * per reference; `undefined` or `""` uses consent given without one.
 		 *
 		 * Note that YOU must fail in this function if the requested
 		 * scope doesn't have a reference id and it should.
@@ -1080,6 +1317,13 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
+			/**
+			 * Set only when the user accepts. `referenceId` is the `reference_id`
+			 * they chose: check they may consent for it before returning it.
+			 */
+			consent?: { referenceId?: string };
 		}) => Awaitable<string | undefined>;
 		/**
 		 * After login and before consent, request the user to
@@ -1087,7 +1331,8 @@ export interface OAuthOptions<
 		 * For example, allow selection of an organization or team.
 		 *
 		 * Upon selection of a specific account, use `/oauth2/continue`
-		 * with `postLogin: true` to continue the login flow.
+		 * with `postLogin: true` to continue the login flow. The continue
+		 * request runs `shouldRedirect` again with `isContinuation: true`.
 		 *
 		 * @returns
 		 * - `true`: account is not selected and needs selection
@@ -1098,6 +1343,14 @@ export interface OAuthOptions<
 			user: User & Record<string, unknown>;
 			session: Session & Record<string, unknown>;
 			scopes: Scopes;
+			/** A copy of the validated authorization request, including client-added parameters. */
+			query: URLSearchParams;
+			/**
+			 * `true` when the user returns from `page` through `/oauth2/continue`.
+			 * The client chooses to send that request, so it does not prove a
+			 * selection was made: validate the session before returning `false`.
+			 */
+			isContinuation: boolean;
 		}) => Awaitable<boolean>;
 	};
 	/**
@@ -1198,6 +1451,15 @@ export interface OAuthOptions<
 		 */
 		requestedClaims: string[];
 	}) => Awaitable<Record<string, any>>;
+	/**
+	 * Asserts the `acr` and `amr` ID token claims for each authorization
+	 * request or interaction request, such as a device code or a CIBA
+	 * request, that the user approves on the provider's pages.
+	 *
+	 * Without this option, ID tokens issued after an approval on the
+	 * provider's pages carry `acr: "0"` (OIDC level 0) and no `amr`.
+	 */
+	authenticationContext?: OAuthAuthenticationContextOptions<Scopes>;
 	/**
 	 * Custom claims attached to OIDC id tokens.
 	 *
@@ -1394,6 +1656,7 @@ export interface OAuthOptions<
 	 *   introspect: { window: 60, max: 100 },
 	 *   revoke: { window: 60, max: 30 },
 	 *   register: { window: 60, max: 5 },
+	 *   rotateClientKeys: { window: 60, max: 5 },
 	 *   userinfo: { window: 60, max: 60 },
 	 * }
 	 * ```
@@ -1424,6 +1687,11 @@ export interface OAuthOptions<
 		 * @default { window: 60, max: 5 }
 		 */
 		register?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/client/rotate-keys endpoint
+		 * @default { window: 60, max: 5 }
+		 */
+		rotateClientKeys?: { window: number; max: number } | false;
 		/**
 		 * Rate limit for /oauth2/userinfo endpoint
 		 * @default { window: 60, max: 60 }
@@ -1729,6 +1997,8 @@ export interface VerificationValue {
 	resource?: string[];
 	referenceId?: string;
 	authTime?: number;
+	acr?: string;
+	amr?: string[];
 }
 
 /**
@@ -1885,6 +2155,12 @@ export interface SchemaClient<
 	enableEndSession?: boolean;
 	/** Subject identifier type: "public" (default) or "pairwise" */
 	subjectType?: "public" | "pairwise";
+	/**
+	 * Pairwise sector, set by the server when the client is created. `null`
+	 * for clients created before sectors were stored; those keep the sector
+	 * derived from their first redirect URI host.
+	 */
+	sectorIdentifier?: string | null;
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
 	referenceId?: string;
 	/**
@@ -2007,6 +2283,10 @@ export interface OAuthRefreshToken<
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
 	 */
 	authTime?: Date;
+	/** The `acr` asserted at authorization, carried forward on rotation. */
+	acr?: string;
+	/** The `amr` asserted at authorization, carried forward on rotation. */
+	amr?: string[];
 	/**
 	 * Scopes granted for this refresh token.
 	 *

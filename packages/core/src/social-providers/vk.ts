@@ -12,7 +12,7 @@ export interface VkProfile {
 		first_name: string;
 		last_name: string;
 		email?: string | undefined;
-		phone?: number | undefined;
+		phone?: string | undefined;
 		avatar?: string | undefined;
 		sex?: number | undefined;
 		verified?: boolean | undefined;

@@ -92,7 +92,7 @@ export interface KakaoProfile {
 	/** Custom user properties */
 	properties?: Record<string, any> | undefined;
 	/** Kakao account info */
-	kakao_account: KakaoAccount;
+	kakao_account?: KakaoAccount;
 	/** Partner info */
 	for_partner?: Partner | undefined;
 }
@@ -107,7 +107,13 @@ export const kakao = (options: KakaoOptions) => {
 		id: "kakao",
 		name: "Kakao",
 		accountSubject: ({ profile }) => profile.id,
-		createAuthorizationURL({ state, scopes, redirectURI, additionalParams }) {
+		createAuthorizationURL({
+			state,
+			scopes,
+			redirectURI,
+			loginHint,
+			additionalParams,
+		}) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["account_email", "profile_image", "profile_nickname"];
@@ -118,8 +124,10 @@ export const kakao = (options: KakaoOptions) => {
 				options,
 				authorizationEndpoint: "https://kauth.kakao.com/oauth/authorize",
 				scopes: _scopes,
+				scopeJoiner: ",",
 				state,
 				redirectURI,
+				loginHint,
 				additionalParams,
 			});
 		},

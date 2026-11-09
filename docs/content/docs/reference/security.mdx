@@ -71,6 +71,19 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 5. **No Mutations on GET Requests (with additional safeguards)**
    `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
 
+6. **Your own routes that call `auth.api`**
+   These checks run only for requests that reach `auth.handler`. A direct `auth.api` call skips them, even when you pass the browser's headers. It also skips the `trustedOrigins` check on `callbackURL`, `errorCallbackURL`, `newUserCallbackURL`, and `redirectTo`, so validate any of those your route takes from the request. If your own route changes state for a cookie-authenticated browser request, reject it unless its `Origin` is trusted:
+
+   ```ts
+   const origin = request.headers.get("origin");
+   const context = await auth.$context;
+   if (!origin || !context.isTrustedOrigin(origin)) {
+     return new Response(null, { status: 403 });
+   }
+   ```
+
+   `isTrustedOrigin` checks the origins resolved at startup. If your `trustedOrigins` function adds origins based on the request, include those in the check, or forward the request to `auth.handler` when the endpoint has an HTTP route.
+
 ### Disabling Security Checks
 
 Better Auth provides two separate options to disable security checks. These options control different aspects of security:
@@ -151,43 +164,12 @@ Better Auth includes built-in rate limiting to safeguard against brute-force att
 
 ## IP Address Headers
 
-Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the IP address from the standard `X-Forwarded-For` header. However, you can configure a specific trusted header to ensure accurate IP address detection and prevent IP spoofing attacks.
+Better Auth uses client IP addresses for rate limiting and security monitoring. By default, it reads the address from the `X-Forwarded-For` header. Clients can set this header themselves. Per-client limits only work in one of these setups:
 
-You can configure the IP address header in your Better Auth configuration:
+* Your proxy or server code sets the address in a header on every request and replaces any value the client sent.
+* Your proxies append to `X-Forwarded-For`, and you list them in `trustedProxies`.
 
-```typescript
-{
-  advanced: {
-    ipAddress: {
-      ipAddressHeaders: ['cf-connecting-ip'] // or any other custom header
-    }
-  }
-}
-```
-
-This ensures that Better Auth only accepts IP addresses from your trusted proxy's header, making it more difficult for attackers to bypass rate limiting or other IP-based security measures by spoofing headers.
-
-Behind a proxy chain, list your proxies in `trustedProxies` so Better Auth
-resolves the real client instead of the spoofable leftmost `X-Forwarded-For`
-token:
-
-```typescript
-{
-  advanced: {
-    ipAddress: {
-      // your proxies' addresses, not a broad private range that also covers clients
-      trustedProxies: ['192.0.2.10', '10.0.0.0/24']
-    }
-  }
-}
-```
-
-<Callout type="info">
-  **Important**
-
-  * When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
-  * In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
-</Callout>
+[Connecting IP Address](/docs/concepts/rate-limit#connecting-ip-address) explains how to configure each setup.
 
 ## Trusted Proxy Headers
 

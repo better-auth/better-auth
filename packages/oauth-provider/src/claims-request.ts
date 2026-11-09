@@ -90,6 +90,24 @@ export function canSatisfyEssentialAcrRequest(
 	return valueMatches && valuesMatch;
 }
 
+/**
+ * Lists the ACR values requested through `claims.id_token.acr` and the
+ * space-separated `acr_values` parameter, without duplicates.
+ */
+export function getRequestedAcrValues(
+	claims: unknown,
+	acrValues: string | undefined,
+) {
+	const acrRequest = parseOidcClaimsRequestObject(claims)?.id_token?.acr;
+	return Array.from(
+		new Set([
+			...(acrRequest?.value !== undefined ? [acrRequest.value] : []),
+			...(acrRequest?.values ?? []),
+			...(acrValues?.split(" ").filter(Boolean) ?? []),
+		]),
+	);
+}
+
 export function filterClaimsRequestUserInfoClaims(
 	value: unknown,
 	allowedUserInfoClaims: string[],

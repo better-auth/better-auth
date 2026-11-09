@@ -7,21 +7,21 @@ import {
 } from "../oauth2";
 import { createPlaceholderEmail } from "../utils/email";
 
-export interface RobloxProfile extends Record<string, any> {
+export interface RobloxProfile extends Record<string, unknown> {
 	/** the user's id */
 	sub: string;
 	/** the user's username */
-	preferred_username: string;
+	preferred_username?: string | undefined;
 	/** the user's display name, will return the same value as the preferred_username if not set */
-	nickname: string;
+	nickname?: string | undefined;
 	/** the user's display name, again, will return the same value as the preferred_username if not set */
-	name: string;
+	name?: string | undefined;
 	/** the account creation date as a unix timestamp in seconds */
-	created_at: number;
+	created_at?: number | undefined;
 	/** the user's profile URL */
-	profile: string;
+	profile?: string | undefined;
 	/** the user's avatar URL */
-	picture: string;
+	picture?: string | null | undefined;
 }
 
 export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
@@ -101,7 +101,7 @@ export const roblox = (options: RobloxOptions) => {
 			return {
 				user: {
 					name: profile.nickname || profile.preferred_username || "",
-					image: profile.picture,
+					image: profile.picture ?? undefined,
 					email: createPlaceholderEmail({
 						identifier: profile.sub,
 						namespace: "roblox",
