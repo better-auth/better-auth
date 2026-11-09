@@ -154,6 +154,10 @@ export async function refreshAccessToken({
 	if (error) {
 		throw error;
 	}
+	// Some providers, such as GitHub, refuse a refresh with a 200 status and an OAuth error body.
+	if ("error" in data) {
+		throw data;
+	}
 	const tokens: OAuth2Tokens = {
 		accessToken: data.access_token,
 		refreshToken: data.refresh_token,
