@@ -3240,6 +3240,80 @@ describe("oauth token - config", async () => {
 		expect(tokens.error?.status).toBeUndefined();
 		expect(tokens.data?.access_token).toBeDefined();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12227
+	 */
+	it("rejects a client secret without the configured prefix like any wrong secret", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes,
+					clientPrivileges: () => true,
+					prefix: {
+						clientSecret: "hello_cs_",
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const basicClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_basic",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:profile"],
+			},
+		});
+		const postClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: ["client_credentials"],
+				client_credentials_scopes: ["read:profile"],
+			},
+		});
+		const tokenUrl = `${authServerBaseUrl}/api/auth/oauth2/token`;
+
+		const basic = await auth.handler(
+			new Request(tokenUrl, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					authorization: `Basic ${Buffer.from(`${basicClient.client_id}:wrong-secret`).toString("base64")}`,
+				},
+				body: new URLSearchParams({ grant_type: "client_credentials" }),
+			}),
+		);
+		const post = await auth.handler(
+			new Request(tokenUrl, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: postClient.client_id,
+					client_secret: "wrong-secret",
+				}),
+			}),
+		);
+
+		await expect(basic.json()).resolves.toMatchObject({
+			error: "invalid_client",
+		});
+		expect(basic.status).toBe(401);
+		expect(basic.headers.get("WWW-Authenticate")).toBe("Basic");
+		await expect(post.json()).resolves.toMatchObject({
+			error: "invalid_client",
+		});
+		expect(post.status).toBe(400);
+		expect(post.headers.has("WWW-Authenticate")).toBe(false);
+	});
 });
 
 describe("oauth token - client secret validation", async () => {

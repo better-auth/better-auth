@@ -402,14 +402,10 @@ async function verifyStoredClientSecret(
 		opts.storeClientSecret ?? (opts.disableJwtPlugin ? "encrypted" : "hashed");
 
 	if (clientSecret && opts.prefix?.clientSecret) {
-		if (clientSecret.startsWith(opts.prefix?.clientSecret)) {
-			clientSecret = clientSecret.replace(opts.prefix.clientSecret, "");
-		} else {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "invalid client_secret",
-				error: "invalid_client",
-			});
+		if (!clientSecret.startsWith(opts.prefix.clientSecret)) {
+			return false;
 		}
+		clientSecret = clientSecret.replace(opts.prefix.clientSecret, "");
 	}
 
 	if (storageMethod === "hashed") {
