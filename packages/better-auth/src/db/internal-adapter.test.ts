@@ -460,11 +460,13 @@ describe("internal adapter test", async () => {
 			.spyOn(authContext.adapter, "findMany")
 			.mockRejectedValueOnce(new Error("Database connection lost"));
 
-		await expect(
-			internalAdapter.deleteVerificationByIdentifier("any-identifier"),
-		).rejects.toThrow("Database connection lost");
-
-		findManySpy.mockRestore();
+		try {
+			await expect(
+				internalAdapter.deleteVerificationByIdentifier("any-identifier"),
+			).rejects.toThrow("Database connection lost");
+		} finally {
+			findManySpy.mockRestore();
+		}
 	});
 
 	describe("verification token storage", () => {

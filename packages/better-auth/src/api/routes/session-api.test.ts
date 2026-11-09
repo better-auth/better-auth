@@ -792,6 +792,13 @@ describe("session storage", async () => {
 			},
 		});
 		expect(res.data?.status).toBe(false);
+
+		const user1SessionAfter = await client.getSession({
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+		expect(user1SessionAfter.data?.session?.token).toBe(user1Token);
 	});
 
 	it("should return status false when session deletion does not remove the session", async () => {

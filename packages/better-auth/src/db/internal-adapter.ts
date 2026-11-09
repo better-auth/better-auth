@@ -1376,17 +1376,21 @@ export const createInternalAdapter = (
 			}
 
 			if (!options.verification?.disableCleanup) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "expiresAt",
-							value: new Date(),
-							operator: "lt",
-						},
-					],
-					"verification",
-					undefined,
-				);
+				try {
+					await deleteManyWithHooks(
+						[
+							{
+								field: "expiresAt",
+								value: new Date(),
+								operator: "lt",
+							},
+						],
+						"verification",
+						undefined,
+					);
+				} catch (error) {
+					logger.error("Failed to clean up expired verifications", error);
+				}
 			}
 
 			return (verification[0] as Verification) || null;
