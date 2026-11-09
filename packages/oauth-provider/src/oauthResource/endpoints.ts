@@ -61,6 +61,8 @@ function buildResourceRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
+		// FIXME(#11725): Prisma list columns reject null and read a stored
+		// NULL back as [], so "no restriction" cannot round-trip there.
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
@@ -124,6 +126,7 @@ export async function listResourcesEndpoint(
 ) {
 	const session = await getSessionFromCtx(ctx);
 	await assertResourcePrivileges(ctx, session, opts, "list");
+	// TODO(#11725): include configured resources that have no row yet.
 	const rows = await ctx.context.adapter.findMany<OAuthResource>({
 		model: resourceModel(opts),
 	});

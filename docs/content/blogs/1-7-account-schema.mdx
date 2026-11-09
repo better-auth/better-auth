@@ -42,7 +42,7 @@ Pause authentication and background writes during the cutover, then restart ever
 
 ## What if several company logins shared an account?
 
-If several single sign-on (SSO) connections shared one account, column cleanup alone may leave a connection unable to sign in. Review how each connection reaches the existing user before upgrading. The [SSO user resolver](/docs/plugins/sso) can preserve that link using a trusted identity; do not link accounts by email alone.
+If several single sign-on (SSO) connections shared one account, column cleanup alone may leave a connection unable to sign in. Review how each connection reaches the existing user before upgrading. The [SSO user resolver](/docs/plugins/sso/provisioning#resolve-sso-users) can preserve that link using a trusted identity; do not link accounts by email alone.
 
 ## How do I know the cleanup worked?
 

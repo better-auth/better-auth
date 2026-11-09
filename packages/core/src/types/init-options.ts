@@ -299,14 +299,17 @@ export type BetterAuthAdvancedOptions = {
 	ipAddress?:
 		| {
 				/**
-				 * List of headers to use for ip address
+				 * Headers to read the client IP address from, in order. Any client can
+				 * send these headers, so list only ones your proxy or server code sets,
+				 * replacing any client value. A header with more than one address is
+				 * skipped unless `trustedProxies` lists the proxies that appended them.
 				 *
 				 * Ip address is used for rate limiting and session tracking
 				 *
-				 * @example ["x-client-ip", "x-forwarded-for", "cf-connecting-ip"]
+				 * @example ["cf-connecting-ip"]
 				 *
-				 * @default
-				 * @link https://github.com/better-auth/better-auth/blob/main/packages/core/src/utils/ip.ts
+				 * @default ["x-forwarded-for"]
+				 * @link https://www.better-auth.com/docs/concepts/rate-limit#connecting-ip-address
 				 */
 				ipAddressHeaders?: string[];
 				/**
@@ -1101,7 +1104,9 @@ export type BetterAuthOptions = {
 				 * Set this to true to store the session in the database
 				 * as well.
 				 *
-				 * Reads are always done from the secondary storage.
+				 * When enabled, session token lookups fall back to the database
+				 * for missing secondary-storage entries, unless
+				 * `preserveSessionInDatabase` is enabled.
 				 *
 				 * @default false
 				 */

@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import Crypto from "node:crypto";
 
 type Success<T> = {
@@ -27,22 +26,3 @@ export async function tryCatch<T, E = Error>(
 export const generateSecretHash = () => {
 	return Crypto.randomBytes(32).toString("hex");
 };
-
-export const spawnCommand = (cmd: string, cwd: string = process.cwd()) =>
-	new Promise<void>((resolve, reject) => {
-		const child = spawn(cmd, {
-			cwd,
-			stdio: "inherit",
-			shell: true,
-		});
-		child.on("close", (code, signal) => {
-			if (code !== 0 && code !== null) {
-				reject(new Error(`Exited with code ${code}`));
-			} else if (signal) {
-				reject(new Error(`Killed with signal ${signal}`));
-			} else {
-				resolve();
-			}
-		});
-		child.on("error", reject);
-	});

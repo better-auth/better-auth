@@ -136,7 +136,7 @@ export interface ApiKeyConfigurationOptions {
 	keyExpiration?:
 		| {
 				/**
-				 * The default expires time in milliseconds.
+				 * The default expiration time in seconds.
 				 *
 				 * If `null`, then there will be no expiration time.
 				 *

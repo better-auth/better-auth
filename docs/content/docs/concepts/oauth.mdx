@@ -8,6 +8,10 @@ Better Auth comes with built-in support for OAuth 2.0 and OpenID Connect. This a
 
 If your desired provider isn't directly supported, you can use the [Generic OAuth Plugin](/docs/plugins/generic-oauth) for custom integrations.
 
+<Callout>
+  This page covers signing users in with another provider. To connect each organization to its own OIDC or SAML identity provider, use [SSO](/docs/plugins/sso). To let other apps sign in with your app, use the [OAuth Provider](/docs/plugins/oauth-provider) plugin.
+</Callout>
+
 ## Configuring Social Providers
 
 To enable a social provider, you need to provide `clientId` and `clientSecret` for the provider.
@@ -546,7 +550,7 @@ Disables the use of the ID token for sign-in. By default, it's enabled for some 
 A custom function to verify the ID token. Receives the token, an optional nonce, and the request endpoint context so you can branch on headers or other request data.
 
 <Callout type="warn">
-  Providing `verifyIdToken` **replaces** the provider's built-in verification (signature, issuer, audience, and expiry). Your callback must perform those checks itself. Client-supplied headers such as `x-platform` are attacker-controlled — use them only to select which audience (or other claim) to verify against, not as proof of identity on their own.
+  Providing `verifyIdToken` **replaces** the provider's built-in verification (signature, issuer, audience, and the `exp`, `nbf`, and `iat` time checks, which allow 30 seconds of clock skew). Your callback must perform those checks itself, including any clock tolerance. Client-supplied headers such as `x-platform` are attacker-controlled — use them only to select which audience (or other claim) to verify against, not as proof of identity on their own.
 </Callout>
 
 ```ts title="auth.ts"
@@ -573,6 +577,7 @@ export const auth = betterAuth({
             issuer: "https://appleid.apple.com",
             audience,
             maxTokenAge: "1h",
+            clockTolerance: 30,
           });
           if (nonce && payload.nonce !== nonce) {
             return false;
