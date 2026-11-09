@@ -1,0 +1,367 @@
+---
+icon: pluginsOAuthProviderClients
+sidebarTitle: "Clients"
+title: Clients and registration
+description: Register, manage, and authenticate OAuth clients, by hand or dynamically.
+---
+
+An OAuth client is an app that signs users in with your provider or calls your APIs. You can create clients yourself, let signed-in users create them, or let clients register themselves.
+
+## Client types
+
+Two properties of a client are independent:
+
+* **Public or confidential** ([RFC 6749 §2.1](https://datatracker.ietf.org/doc/html/rfc6749#section-2.1)). Set `token_endpoint_auth_method` to `"none"` for a public client. For a confidential client, use `client_secret_basic`, `client_secret_post`, or [`private_key_jwt`](#private-key-jwt).
+* **`application_type`** ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata)). `web` (the default) or `native`. It controls only which [redirect URIs](#redirect-uri-forms) the client may register.
+
+A native client may be confidential, and a web client may be public. A secret shipped inside a mobile, desktop, or single-page app can be extracted, so register such an app as a public client ([RFC 8252 §8.5](https://datatracker.ietf.org/doc/html/rfc8252#section-8.5)). Use a confidential client only when the secret stays on a server you run.
+
+## Manage clients
+
+To create a client owned by the signed-in user, or by the organization that [`clientReference`](#organizations) returns, send the [RFC 7591 §2](https://datatracker.ietf.org/doc/html/rfc7591#section-2) client metadata.
+
+<APIMethod path="/oauth2/create-client" method="POST" requireSession>
+  ```ts
+  type createOAuthClient = {
+    /**
+     * Redirect URIs for the authorization code flow.
+     */
+    redirect_uris?: string[] = ["https://client.example.com/callback"]
+    /**
+     * Display name shown on the consent screen.
+     */
+    client_name?: string = "My Client"
+    /**
+     * How the client authenticates at the token endpoint. Use `"none"` for a public client.
+     */
+    token_endpoint_auth_method?: "none" | "client_secret_basic" | "client_secret_post" | "private_key_jwt" = "client_secret_basic"
+    /**
+     * Controls redirect URI validation.
+     */
+    application_type?: "web" | "native" = "web"
+    /**
+     * Space-separated scopes the client may request.
+     */
+    scope?: string = "openid profile email"
+  }
+  ```
+</APIMethod>
+
+A client that uses `client_secret_basic` or `client_secret_post` gets its `client_secret` only in this response, so store it now. Public and `private_key_jwt` clients get only a `client_id`.
+
+Most of the other client endpoints take a `client_id`. Each requires a session, and the table notes the exceptions:
+
+| Server method                  | Path                             | Method  | Purpose                                                    |
+| ------------------------------ | -------------------------------- | ------- | ---------------------------------------------------------- |
+| `getOAuthClient`               | `/oauth2/get-client`             | `GET`   | Read a client the user or organization owns.               |
+| `getOAuthClientPublic`         | `/oauth2/public-client`          | `GET`   | Read the public fields to show on the consent page.        |
+| `getOAuthClientPublicPrelogin` | `/oauth2/public-client-prelogin` | `POST`  | The same, on the login page. No session needed. See below. |
+| `getOAuthClients`              | `/oauth2/get-clients`            | `GET`   | List the clients the user or organization owns.            |
+| `updateOAuthClient`            | `/oauth2/update-client`          | `POST`  | Update with `{ client_id, update }`.                       |
+| `adminUpdateOAuthClient`       | `/admin/oauth2/update-client`    | `PATCH` | Server only. Also updates restricted fields.               |
+| `rotateClientSecret`           | `/oauth2/client/rotate-secret`   | `POST`  | Issue a new secret. The old one stops working at once.     |
+| `deleteOAuthClient`            | `/oauth2/delete-client`          | `POST`  | Delete the client.                                         |
+
+You cannot change `token_endpoint_auth_method` after creation, and an update cannot set the secret. Client secrets do not expire, so to retire one, rotate it with `rotateClientSecret`.
+
+To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, but that query is not bound to the client whose fields it reads. Anyone can get one by starting an authorization request. Enabling the option therefore makes the public fields of every enabled client, including `contacts`, readable without an account.
+
+### Restricted fields
+
+Only the server-only `adminCreateOAuthClient` and `adminUpdateOAuthClient` methods can set these fields:
+
+* `skip_consent`: skip the consent screen. Use it for [trusted clients](#trusted-clients).
+* `enable_end_session`: allow the client to [end the user's session](/docs/plugins/oauth-provider/openid-connect#rp-initiated-logout).
+* `require_pkce`: create only. Set `false` to let a confidential client skip [PKCE](/docs/plugins/oauth-provider/tokens#pkce). This removes the protection against intercepted and injected authorization codes. Keep the default, `true`.
+* `client_credentials_scopes`: see [Client credentials scopes](#client-credentials-scopes).
+* `resources`: create only. Links the client to [resources](/docs/plugins/oauth-provider/tokens#resources). When `resourcePrivileges` is set, it must approve the `link` action for each one.
+* `disabled`: update only. Pauses the client.
+* `metadata`: data attached to the client. The public endpoints do not return it, but the client's owner can read it, and so can members of an [owning organization](#an-organization-owns-the-client). Do not store secrets here.
+
+Both methods:
+
+* need a signed-in user's session, and you pass its headers
+* run [`clientPrivileges`](#client-crud-privileges)
+* do not check that the user is an administrator
+
+So call them only from server code that only administrators can reach. When a browser calls that code with its session cookie, [check the request's `Origin`](/docs/reference/security#csrf-protection) first. `adminUpdateOAuthClient` also requires the user to own the client, with one exception described in [Client CRUD privileges](#client-crud-privileges).
+
+The admin update takes the changes under `update`:
+
+```ts title="admin-update-oauth.ts"
+await auth.api.adminUpdateOAuthClient({
+  headers: request.headers,
+  body: {
+    client_id: "client-id",
+    update: {
+      skip_consent: true, // [!code highlight]
+      enable_end_session: true, // [!code highlight]
+    },
+  },
+});
+```
+
+To pause a client without deleting it, set `disabled: true`, and set `false` to resume. A disabled client cannot obtain new tokens, and introspection reports its existing tokens as inactive. A JWT access token stays valid until it expires. If your resource server verifies JWTs locally and needs an immediate cut-off, it must check the client itself.
+
+### Client credentials scopes
+
+A client cannot use the `client_credentials` grant until you allow it, and its `scope` does not apply to that grant. To allow it:
+
+1. Define [`clientPrivileges`](#client-crud-privileges) so that it approves the `configure-client-credentials-scopes` action.
+2. Set a non-empty `client_credentials_scopes` with `adminCreateOAuthClient` or `adminUpdateOAuthClient`. The client must be confidential and list `client_credentials` in `grant_types`. Each scope must be in `scopes`, and cannot be `openid`, `profile`, `email`, or `offline_access`.
+
+A token request can ask for any of these scopes. When it omits `scope`, it gets all of them. Dynamic registration, CIMD, and `createOAuthClient` can declare the grant but cannot set this list.
+
+## Dynamic client registration
+
+To let clients register themselves, set `allowDynamicClientRegistration`. Better Auth then accepts registrations at `POST /oauth2/register` ([RFC 7591 §3](https://datatracker.ietf.org/doc/html/rfc7591#section-3)). By default, the caller needs a session and the `create` privilege.
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true, // [!code highlight]
+})
+```
+
+To also let clients register without signing in, set `allowUnauthenticatedClientRegistration: true` next to `allowDynamicClientRegistration`. Anyone on the internet can then register a client:
+
+* The registrant chooses the client's name, logo, and redirect URIs.
+* The client has [no owner](#an-organization-owns-the-client), so nobody can manage it through the client endpoints.
+* The client cannot use `client_credentials`.
+
+Prefer CIMD or initial access tokens. If you enable open registration, keep [rate limiting](/docs/concepts/rate-limit) on.
+
+To register from the client app, call `authClient.oauth2.register({ client_name, redirect_uris })`. The response holds the new `client_id`. A client that uses `client_secret_basic` or `client_secret_post` also gets its `client_secret`. Only this response carries it, so store it now.
+
+<Callout type="info">
+  For public clients that are not registered in advance, such as MCP clients, prefer [Client ID Metadata Documents](/docs/plugins/cimd). The client hosts its metadata at an HTTPS URL, and that URL is its `client_id`.
+</Callout>
+
+To let software register without a user session, define `validateInitialAccessToken`. It receives `initialAccessToken` (the token from `Authorization: Bearer <token>`), the request `headers`, and the requested `clientMetadata`. Return `false` to reject the request with 401 `invalid_token`, or an object to accept it. The object's optional `referenceId` sets the owner. Without it, the client is [unowned](#an-organization-owns-the-client). While the callback is undefined, a Bearer token sent to `/oauth2/register` is rejected.
+
+Keep in mind:
+
+* Compare the token in constant time.
+* Treat `clientMetadata` as untrusted: it is self-asserted and not yet fully validated.
+* You issue and revoke these tokens in your app ([RFC 7591 §3](https://datatracker.ietf.org/doc/html/rfc7591#section-3)).
+* With the [Bearer](/docs/plugins/bearer) plugin, a Bearer value that resolves to a session counts as that session, not as an initial access token.
+
+The registration options:
+
+| Option                                     | Default  | Effect                                                                                                                                                                                                                                                                        |
+| ------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clientRegistrationDefaultScopes`          | `scopes` | Scopes every registered client may request.                                                                                                                                                                                                                                   |
+| `clientRegistrationAllowedScopes`          | none     | Extra scopes added to the defaults.                                                                                                                                                                                                                                           |
+| `clientRegistrationClientSecretExpiration` | never    | The `client_secret_expires_at` value returned to dynamically registered clients that receive a secret. A string such as `"30d"` is a duration from registration. A number (Unix seconds) or a `Date` is a fixed time. Better Auth does not reject the secret after that time. |
+| `clientRegistrationRequirePKCE`            | `true`   | Set `false` to let registered confidential clients skip PKCE, which removes the protection against intercepted and injected codes. Public clients **always** need PKCE.                                                                                                       |
+| `clientRegistrationDefaultApplicationType` | `"web"`  | `application_type` for a registration that omits it: `"web"`, `"native"`, or `"infer"` (native when any redirect URI is a custom scheme or `http` loopback).                                                                                                                  |
+
+Dynamic and CIMD registrations store the whole set of default and allowed scopes on every client. A `scope` in the registration request is only checked against that set, not stored. The default is `scopes`, which is every scope your server defines. When you enable open registration, set `clientRegistrationDefaultScopes` to the smallest set those clients need.
+
+Registration keeps only the requested `grant_types` the server supports and returns what it registered ([RFC 7591 §3.2.1](https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.1)). `createOAuthClient` and `adminCreateOAuthClient` reject an unsupported grant instead. A registration with no supported grant fails with `invalid_client_metadata`. To fix it, the registrant requests a grant listed in the provider's `grant_types_supported` metadata, or you add the grant to `grantTypes`. `sector_identifier_uri` is not supported.
+
+### Resources for registered clients
+
+By default, a registration cannot request [resources](/docs/plugins/oauth-provider/tokens#resources). To let registered clients request them, use these options:
+
+* `clientRegistrationDefaultResources` links every new client to these resources, including CIMD and admin-created clients, without a `resourcePrivileges` check.
+* `clientRegistrationAllowedResources` lists extra resources a registration may request.
+
+Every value must also be in `resources`. A requested resource outside both lists, or one that is missing or disabled, fails with `invalid_target`. Its `error_description` names the resource and says which of these applies. The response lists the linked `resources`.
+
+```ts title="auth.ts"
+oauthProvider({
+  resources: ["https://api.example.com/default", "https://api.example.com/optional"],
+  clientRegistrationDefaultResources: ["https://api.example.com/default"], // [!code highlight]
+  clientRegistrationAllowedResources: ["https://api.example.com/optional"], // [!code highlight]
+})
+```
+
+### Redirect URI forms
+
+`application_type` decides which redirect URIs a client may register ([OIDC Registration §2](https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata), [RFC 8252 §7](https://datatracker.ietf.org/doc/html/rfc8252#section-7)):
+
+| Form                                                                                                           | Example                            | `web` | `native` |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ----- | -------- |
+| HTTPS on a non-loopback host                                                                                   | `https://app.example.com/callback` | Yes   | Yes      |
+| HTTP loopback, any port ([RFC 8252 §7.3](https://datatracker.ietf.org/doc/html/rfc8252#section-7.3))           | `http://127.0.0.1:8787/callback`   | No    | Yes      |
+| Reverse-domain private-use scheme ([RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1)) | `com.example.app:/callback`        | No    | Yes      |
+| Custom scheme with a host and a path                                                                           | `myapp://example.app/callback`     | No    | Yes      |
+
+An HTTP loopback URI must use exactly `localhost`, `127.0.0.1`, or `[::1]`, so spellings such as `127.1` are rejected. HTTPS on a loopback address and HTTP on any other host are also rejected. Better Auth also rejects fragments, credentials, malformed URIs, and reserved schemes such as `javascript:` and `file:`.
+
+<Callout type="warn">
+  [RFC 8252 §8.4](https://datatracker.ietf.org/doc/html/rfc8252#section-8.4) says to reject private-use schemes without a period, but Better Auth accepts them for native app compatibility. Another app can claim such a scheme and receive the code, so keep PKCE on for these clients.
+</Callout>
+
+## Custom redirect URI validation
+
+A requested redirect URI must match a registered one exactly. Exact matching keeps an attacker from redirecting the authorization code to a URI the client did not register. The only exception is the port of a native client's loopback URI. For example, a registered `http://127.0.0.1:8787/callback` also matches `http://127.0.0.1:51234/callback`, but `http://localhost:51234/callback` does not.
+
+To change which URIs are accepted, set `validateRedirectUri`. It receives the requested URI, the client's registered URIs, and `defaultResult` from the built-in match. It returns `true` to accept the URI. Its result replaces the built-in match, so return `defaultResult` for URIs you do not handle:
+
+```ts title="auth.ts"
+oauthProvider({
+  validateRedirectUri: (uri, registeredUris, defaultResult) => {
+    if (defaultResult) return true;
+    if (!registeredUris.includes("https://app.example.com/api/auth/callback")) return false;
+    try {
+      const url = new URL(uri);
+      return url.protocol === "https:" && url.port === "" && url.search === "" &&
+        url.hostname.endsWith(".preview.example.com") &&
+        url.pathname === "/api/auth/callback";
+    } catch {
+      return false;
+    }
+  },
+})
+```
+
+Before the callback runs, Better Auth rejects only malformed URIs, credentials, fragments, dangerous schemes such as `javascript:`, and HTTP on hosts other than loopback. The [redirect URI form](#redirect-uri-forms) rules do not apply to URIs the callback accepts. The callback applies to every client. Returning `false` or throwing rejects the URI and sends early authorization errors to the server error page instead of the client.
+
+<Callout type="warn">
+  Accepting extra URIs relaxes the exact matching of [RFC 9700 §2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1). Accept only hosts you control that untrusted people cannot deploy to, and pin the scheme, host suffix, port, path, and query. If untrusted clients can register arbitrary URIs, a match in `registeredUris` does not prove which client it is.
+</Callout>
+
+With [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), every accepted host shares the sector of the client's first registered URI, and so the same `sub`.
+
+## Private key JWT
+
+With `private_key_jwt`, the client authenticates with a JWT signed by its own key instead of a secret ([RFC 7523 §3](https://datatracker.ietf.org/doc/html/rfc7523#section-3), [OIDC Core §9](https://openid.net/specs/openid-connect-core-1_0.html#ClientAuthentication)). To use it, register the client's public keys as `jwks` or `jwks_uri`, not both:
+
+```ts title="admin-create-oauth.ts"
+await auth.api.adminCreateOAuthClient({
+  headers: request.headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    token_endpoint_auth_method: "private_key_jwt",
+    jwks: { keys: [{ kty: "EC", crv: "P-256", kid: "key-1", x: "...", y: "..." }] },
+  },
+});
+```
+
+Prefer inline `jwks` for clients whose host you do not control.
+
+* `jwks` must be a JWK Set object with a non-empty `keys` array of public signing keys. EC keys use P-256, P-384, or P-521, and OKP keys use Ed25519.
+* `jwks_uri` must be an HTTPS URL on a public host. Its origin must be in [`trustedOrigins`](/docs/reference/options#trustedorigins), unless it matches the origin of a CIMD `client_id`. `trustedOrigins` applies to the whole app. That origin is then also trusted for redirects and requests.
+
+The client sends `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer` and the signed `client_assertion` instead of a secret. The assertion is signed with `RS256`, `RS384`, `RS512`, `PS256`, `PS384`, `PS512`, `ES256`, `ES384`, `ES512`, or `EdDSA`, and must contain:
+
+| Claim | Requirement                                                                   |
+| ----- | ----------------------------------------------------------------------------- |
+| `iss` | The `client_id`                                                               |
+| `sub` | The `client_id`                                                               |
+| `aud` | The URL of the endpoint that receives the assertion, or the provider's issuer |
+| `exp` | Required. At most `assertionMaxLifetime` (default 300 seconds) from now       |
+| `jti` | Required. A unique value for each assertion                                   |
+| `iat` | Optional. When present, not older than `assertionMaxLifetime`                 |
+
+### Rotating client keys
+
+To let a client with inline `jwks` replace them without a user session, set `allowClientKeyRotation: true`. The client then calls `POST /oauth2/client/rotate-keys`. The request body holds `client_assertion`, `client_assertion_type`, and the complete new `jwks`. The assertion must be signed by a current key, and its `aud` must be the rotation endpoint URL.
+
+Any key left out of the new set stops working at once. To roll a key without downtime, first send the old and new keys, then send only the new one. A request that loses a race fails with 409, or 401 if its key was already removed.
+
+<Callout type="info">
+  The provider refuses to start with this option on the memory adapter or with `advanced.database.generateId: "serial"`, because neither enforces single-use assertions.
+</Callout>
+
+## Trusted clients
+
+To skip database lookups for first-party apps whose redirect URIs you control, list their client IDs in `cachedTrustedClients`. To also skip the consent screen, set `skip_consent` on each client.
+
+<Callout type="warn">
+  A `skip_consent` client gets authorization codes for any signed-in user without asking them, so whoever controls its redirect URIs controls those codes. The client's owner can still change `redirect_uris` through `updateOAuthClient`. With `clientReference`, that owner is an organization, and any member of it can make the change. Set `skip_consent` only on clients in `cachedTrustedClients`, which the client endpoints cannot change, or deny `update` for those clients in [`clientPrivileges`](#client-crud-privileges). Do not set it on a public native client. Any app on the device can start the flow and receive the redirect, and PKCE does not help when the attacker starts the flow.
+</Callout>
+
+* Each server keeps the listed clients in memory until it restarts.
+* The client endpoints, including the admin methods, cannot change them.
+* To disable one or change its redirect URIs, edit its database row and restart every instance.
+
+```ts title="auth.ts"
+oauthProvider({
+  cachedTrustedClients: new Set(["internal-dashboard", "mobile-app"]), // [!code highlight]
+})
+```
+
+## Client CRUD privileges
+
+To limit which client actions a signed-in user may take, define `clientPrivileges`. Without it, every signed-in user may take every action except `configure-client-credentials-scopes`. When it is set, return `true` to allow an action and `false` or `undefined` to deny it. A denied action fails with 401.
+
+<Callout type="warn">
+  The default lets any signed-in user create OAuth clients, through `createOAuthClient` or through dynamic registration with a session. If your app allows open sign-up, anyone can then create a client with a name, logo, and redirect URIs they choose and show it on your consent page. A client created without `scope` may request every scope the server defines. Define `clientPrivileges` so that only trusted users can `create`.
+</Callout>
+
+It receives `action` (`create`, `read`, `update`, `delete`, `list`, `rotate`, or `configure-client-credentials-scopes`), `user`, `session`, `headers`, and, for an existing client, `clientId`. `clientId` comes from the request. It does not prove that the client exists or who owns it.
+
+Ownership is checked after this callback, so returning `true` does not grant access to another owner's client. There is one exception. An `adminUpdateOAuthClient` call that changes only `client_credentials_scopes` can change another owner's client when the callback approves both `update` and `configure-client-credentials-scopes`.
+
+```ts title="auth.ts"
+oauthProvider({
+  clientPrivileges: async ({ headers, session }) => {
+    if (!session?.activeOrganizationId) return false;
+    const member = await auth.api.getActiveMember({ headers });
+    return member?.role === "owner";
+  },
+})
+```
+
+## Organizations
+
+To make an organization own new clients instead of the user, set `clientReference`. It receives the signed-in `user` and `session`. It returns the owner's ID, or `undefined` to make the user the owner. A client's owner is set at creation and never changes. This example returns the active [organization](/docs/plugins/organization):
+
+```ts title="auth.ts"
+oauthProvider({
+  clientReference: ({ session }) =>
+    (session?.activeOrganizationId as string | undefined) ?? undefined,
+})
+```
+
+The active organization can outlive membership. `clientPrivileges` runs first and receives the request headers, so check membership there, as in the example above.
+
+An organization can relate to a client in two ways:
+
+* **It uses the client.** Many organizations share one unowned client, such as a third-party app or a CIMD client. Each consent records the organization it was given for.
+* **It owns the client.** Its members manage the client through the endpoints above, including its redirect URIs. Give ownership only to an organization that controls the client.
+
+### An organization uses the client
+
+To record consent per organization, return the organization from `postLogin.consentReferenceId`, as in [Post-login screen](/docs/plugins/oauth-provider/sign-in-flow#post-login-screen). Then `customAccessTokenClaims` receives it as `referenceId`, but the ID token and UserInfo callbacks do not:
+
+```ts title="auth.ts"
+oauthProvider({
+  // postLogin: see Post-login screen
+  customAccessTokenClaims: ({ referenceId }) => ({ "https://example.com/org": referenceId }),
+})
+```
+
+Deleting a consent removes only that organization's consent and does not revoke issued tokens. To add organization claims per client, see [Client-specific access token claims](/docs/plugins/oauth-provider/tokens#client-specific-access-token-claims).
+
+### An organization owns the client
+
+A member who creates a client, or registers one with a session, makes it owned by the organization `clientReference` returns. For software that registers itself, have an organization admin issue an initial access token in your app and return the organization from `validateInitialAccessToken`:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowDynamicClientRegistration: true,
+  validateInitialAccessToken: async ({ initialAccessToken }) => {
+    const token = await findRegistrationToken(initialAccessToken); // your lookup
+    return token ? { referenceId: token.organizationId } : false;
+  },
+})
+```
+
+A client has no owner in these cases:
+
+* It came from open registration or a [CIMD](/docs/plugins/cimd) document.
+* It registered with an initial access token whose validation returned no `referenceId`.
+* It has a `referenceId`, but `clientReference` is not configured.
+
+The client endpoints treat such a client as nobody's:
+
+* Listing never returns it.
+* Reading, updating, disabling, deleting, or rotating its secret returns 401.
+* Only the `client_credentials_scopes` admin update in [Client CRUD privileges](#client-crud-privileges) can change it.
+
+Manage it in the database instead.
+
+Software that each organization runs as its own client should register with an initial access token instead.

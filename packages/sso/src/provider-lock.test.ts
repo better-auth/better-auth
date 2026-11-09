@@ -50,4 +50,40 @@ describe("SSO provider account-link locking", () => {
 		expect(before).not.toHaveBeenCalled();
 		expect(after).not.toHaveBeenCalled();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11471
+	 */
+	it("rejects a sign-in whose SAML signing certificates changed before the lock", async () => {
+		const samlConfig = (cert: string) => ({
+			issuer: "https://sp.example.com",
+			entryPoint: "https://idp.example.com/sso",
+			cert,
+			callbackUrl: "https://sp.example.com/dashboard",
+			idpMetadata: { entityID: "https://idp.example.com" },
+			spMetadata: {},
+		});
+		const provider = {
+			id: "provider-row-1",
+			providerId: "workforce",
+			issuer: "https://idp.example.com",
+			userId: "owner",
+		};
+		const update = vi.fn(async () => ({
+			...provider,
+			samlConfig: JSON.stringify(samlConfig("rotated-signing-certificate")),
+		}));
+		const context = {
+			adapter: { update } as unknown as AuthContext["adapter"],
+		} as AuthContext;
+
+		await expect(
+			lockSSOProviderForAccountLink(
+				{ context },
+				{ ...provider, samlConfig: samlConfig("original-signing-certificate") },
+			),
+		).rejects.toThrow(
+			"SSO provider changed while account linking was in progress",
+		);
+	});
 });

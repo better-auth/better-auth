@@ -24,6 +24,7 @@ const resourceBodySchema = z.object({
 	refreshTokenTtl: z.number().int().positive().nullable().optional(),
 	signingAlgorithm: z.enum(JWS_ALGORITHMS).nullable().optional(),
 	signingKeyId: z.string().nullable().optional(),
+	// FIXME(#11725): reject [] and point callers to `disabled` or `null`.
 	allowedScopes: z.array(z.string()).nullable().optional(),
 	customClaims: z.record(z.string(), z.unknown()).nullable().optional(),
 	dpopBoundAccessTokensRequired: z.boolean().optional(),

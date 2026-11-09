@@ -53,7 +53,7 @@ describe("bearer", async () => {
 		expect(session?.session).toBeDefined();
 	});
 
-	it("should work with ", async () => {
+	it("should work with an unsigned token", async () => {
 		const session = await client.getSession({
 			fetchOptions: {
 				headers: {

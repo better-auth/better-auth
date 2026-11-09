@@ -37,37 +37,36 @@ describe("getInstalledPackageVersion", () => {
 			resolution: "an import-only entry point",
 			version: "7.8.9",
 		},
-	])("resolves $packageName through $resolution", async ({
-		exports,
-		packageName,
-		version,
-	}) => {
-		const workspaceRoot = await fs.mkdtemp(
-			path.join(os.tmpdir(), "better-auth-installed-version-"),
-		);
-		temporaryDirectories.push(workspaceRoot);
-		const projectDirectory = path.join(workspaceRoot, "apps", "web");
-		const packageDirectory = path.join(
-			workspaceRoot,
-			"node_modules",
-			...packageName.split("/"),
-		);
-		await fs.mkdir(projectDirectory, { recursive: true });
-		await fs.mkdir(packageDirectory, { recursive: true });
-		await fs.writeFile(
-			path.join(packageDirectory, "package.json"),
-			JSON.stringify({
-				name: packageName,
-				version,
-				exports,
-			}),
-		);
-		await fs.writeFile(path.join(packageDirectory, "index.js"), "");
+	])(
+		"resolves $packageName through $resolution",
+		async ({ exports, packageName, version }) => {
+			const workspaceRoot = await fs.mkdtemp(
+				path.join(os.tmpdir(), "better-auth-installed-version-"),
+			);
+			temporaryDirectories.push(workspaceRoot);
+			const projectDirectory = path.join(workspaceRoot, "apps", "web");
+			const packageDirectory = path.join(
+				workspaceRoot,
+				"node_modules",
+				...packageName.split("/"),
+			);
+			await fs.mkdir(projectDirectory, { recursive: true });
+			await fs.mkdir(packageDirectory, { recursive: true });
+			await fs.writeFile(
+				path.join(packageDirectory, "package.json"),
+				JSON.stringify({
+					name: packageName,
+					version,
+					exports,
+				}),
+			);
+			await fs.writeFile(path.join(packageDirectory, "index.js"), "");
 
-		expect(getInstalledPackageVersion(packageName, projectDirectory)).toBe(
-			version,
-		);
-	});
+			expect(getInstalledPackageVersion(packageName, projectDirectory)).toBe(
+				version,
+			);
+		},
+	);
 
 	test("returns null when the package is not installed", async () => {
 		const projectDirectory = await fs.mkdtemp(

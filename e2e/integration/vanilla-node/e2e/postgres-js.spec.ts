@@ -5,7 +5,7 @@ import { nextCookies } from "better-auth/next-js";
 import { PostgresJSDialect } from "kysely-postgres-js";
 import postgres from "postgres";
 
-test.describe("postgres-js", async () => {
+test.describe("postgres-js", () => {
 	test("run migration", async () => {
 		const sql = postgres(
 			process.env.DATABASE_URL ||

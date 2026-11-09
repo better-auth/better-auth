@@ -1848,6 +1848,18 @@ export const getNormalTestSuiteTests = (
 				expect(Number(users[0]!.id)).not.toBeNaN();
 			}
 		},
+		"findMany - should find many models with sortBy id": async () => {
+			await insertRandom("user", 3);
+			const asc = await adapter.findMany<User>({
+				model: "user",
+				sortBy: { field: "id", direction: "asc" },
+			});
+			const desc = await adapter.findMany<User>({
+				model: "user",
+				sortBy: { field: "id", direction: "desc" },
+			});
+			expect(desc.map((x) => x.id)).toEqual(asc.map((x) => x.id).reverse());
+		},
 		"findMany - should find many models with limit": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const result = await adapter.findMany<User>({

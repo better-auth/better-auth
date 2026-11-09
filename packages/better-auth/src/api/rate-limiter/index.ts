@@ -125,7 +125,7 @@ function createDatabaseStorageWrapper(
 			where: [{ field: "key", value: key }],
 		});
 		const data = res[0];
-		if (typeof data?.lastRequest === "bigint") {
+		if (data) {
 			data.lastRequest = Number(data.lastRequest);
 		}
 		return data;
