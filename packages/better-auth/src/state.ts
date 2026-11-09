@@ -24,6 +24,7 @@ const stateDataSchema = z.looseObject({
 		.object({
 			email: z.string(),
 			userId: z.coerce.string(),
+			encryptedSessionToken: z.string().optional(),
 		})
 		.optional(),
 	requestSignUp: z.boolean().optional(),
@@ -42,7 +43,9 @@ const stateDataSchema = z.looseObject({
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
-/** Verification key for database-backed OAuth and SAML relay state. */
+/**
+ * Verification key for database-backed OAuth and SAML relay state.
+ */
 export const getAuthStateVerificationIdentifier = (state: string) =>
 	`auth-state:${state}`;
 
@@ -136,8 +139,7 @@ export async function generateGenericState(
 		stateCookie.attributes,
 	);
 
-	const expiresAt = new Date();
-	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
+	const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
 	const verification = await c.context.internalAdapter.createVerificationValue({
 		value: JSON.stringify({

@@ -1,9 +1,18 @@
 import { logger } from "@better-auth/core/env";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
 import { magicLink, oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	onTestFinished,
+	test,
+	vi,
+} from "vitest";
 import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { expo } from "../src";
 import { expoClient, normalizeCookieName, storageAdapter } from "../src/client";
@@ -1795,5 +1804,242 @@ describe("expo authorization proxy", async () => {
 			"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=abc";
 		const res = await proxy(target);
 		expect(res.headers.get("location")).toBe(target);
+	});
+
+	it.for([
+		"https://accounts.google.com/o/oauth2/v2/auth?client_id=x",
+		"https://accounts.google.com/o/oauth2/v2/auth?client_id=x&state=",
+	])(
+		"rejects a provider authorizationURL without state before setting the oauth_state cookie: %s",
+		async (authorizationURL) => {
+			const res = await auth.handler(
+				new Request(
+					`https://app.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+						authorizationURL,
+					)}&oauthState=planted`,
+				),
+			);
+			expect(res.status).toBe(400);
+			expect(res.headers.get("location")).toBeNull();
+			expect(res.headers.get("set-cookie")).toBeNull();
+		},
+	);
+
+	it("rejects an unconfigured authorization origin without setting cookies", async () => {
+		const res = await proxy("https://unconfigured.example/authorize?state=abc");
+		expect(res.status).toBe(400);
+		expect(res.headers.get("location")).toBeNull();
+		expect(res.headers.get("set-cookie")).toBeNull();
+	});
+
+	test.for([false, true])(
+		"rejects provider URL generation failures with asynchronous=%s",
+		async (asynchronous) => {
+			const { auth } = await getTestInstance({
+				baseURL: "https://app.example",
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+				plugins: [
+					expo(),
+					{
+						id: "unavailable-authorization-provider",
+						init(ctx) {
+							return {
+								context: {
+									socialProviders: ctx.socialProviders.map((provider) => ({
+										...provider,
+										createAuthorizationURL: asynchronous
+											? async () => {
+													throw new Error("Authorization URL unavailable");
+												}
+											: () => {
+													throw new Error("Authorization URL unavailable");
+												},
+									})),
+								},
+							};
+						},
+					},
+				],
+			});
+			const res = await auth.handler(
+				new Request(
+					"https://app.example/api/auth/expo-authorization-proxy?authorizationURL=https%3A%2F%2Faccounts.google.com%2Fauthorize%3Fstate%3Dabc",
+				),
+			);
+			expect(res.status).toBe(400);
+			expect(res.headers.get("location")).toBeNull();
+			expect(res.headers.get("set-cookie")).toBeNull();
+		},
+	);
+
+	it("rejects a trusted origin that is not a provider authorization endpoint", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "https://app.example",
+			trustedOrigins: ["https://web.app.example"],
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+			plugins: [expo()],
+		});
+		const res = await auth.handler(
+			new Request(
+				`https://app.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+					"https://web.app.example/api/auth/callback/google?state=abc",
+				)}`,
+			),
+		);
+		expect(res.status).toBe(400);
+		expect(res.headers.get("location")).toBeNull();
+		expect(res.headers.get("set-cookie")).toBeNull();
+	});
+
+	describe("authorization endpoints issued at sign-in", () => {
+		const issuing = (path: string, authorizationURL: string) => ({
+			id: `issue${path.replaceAll("/", "-")}`,
+			endpoints: {
+				issue: createAuthEndpoint(path, { method: "POST" }, async (ctx) =>
+					ctx.json({ url: authorizationURL, redirect: true }),
+				),
+			},
+		});
+		const createIssuer = async (path: string, authorizationURL: string) => {
+			const { auth } = await getTestInstance({
+				baseURL: "https://app.example",
+				trustedOrigins: ["https://idp.example", "https://web.app.example"],
+				plugins: [expo(), issuing(path, authorizationURL)],
+			});
+			await auth.handler(
+				new Request(`https://app.example/api/auth${path}`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: "{}",
+				}),
+			);
+			return (target: string) =>
+				auth.handler(
+					new Request(
+						`https://app.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+							target,
+						)}`,
+					),
+				);
+		};
+
+		it("redirects to the authorization endpoint an SSO sign-in issued", async () => {
+			const issued = "https://idp.example/authorize?state=sso-state";
+			const proxyFor = await createIssuer("/sign-in/sso", issued);
+			const res = await proxyFor(issued);
+			expect(res.status).toBe(302);
+			expect(res.headers.get("location")).toBe(issued);
+		});
+
+		it("does not accept an SSO origin for a state it was not issued with", async () => {
+			const proxyFor = await createIssuer(
+				"/sign-in/sso",
+				"https://idp.example/authorize?state=sso-state",
+			);
+			const res = await proxyFor(
+				"https://idp.example/authorize?state=other-state",
+			);
+			expect(res.status).toBe(400);
+			expect(res.headers.get("set-cookie")).toBeNull();
+		});
+
+		it("does not accept an SSO origin that is not trusted", async () => {
+			const issued = "https://unlisted-idp.example/authorize?state=sso-state";
+			const proxyFor = await createIssuer("/sign-in/sso", issued);
+			const res = await proxyFor(issued);
+			expect(res.status).toBe(400);
+			expect(res.headers.get("location")).toBeNull();
+			expect(res.headers.get("set-cookie")).toBeNull();
+		});
+
+		it("does not accept a URL another sign-in route returned", async () => {
+			const returned = "https://web.app.example/welcome?state=email-state";
+			const proxyFor = await createIssuer("/sign-in/email-link", returned);
+			const res = await proxyFor(returned);
+			expect(res.status).toBe(400);
+			expect(res.headers.get("set-cookie")).toBeNull();
+		});
+	});
+
+	const signIn = () =>
+		auth.api.signInSocial({
+			body: {
+				provider: "google",
+				callbackURL: "/",
+				disableRedirect: true,
+			},
+		});
+
+	it("sets the signed state cookie for a state the server issued", async () => {
+		const { url } = await signIn();
+		const state = new URL(url!).searchParams.get("state");
+		const res = await proxy(url!);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(url);
+		expect(res.headers.get("set-cookie")).toContain(
+			`better-auth.state=${state}.`,
+		);
+	});
+
+	it("does not sign a state the server did not issue", async () => {
+		const res = await proxy(
+			"https://accounts.google.com/o/oauth2/v2/auth?state=Zx9fA1bC2dE3fG4hI5jK6lM7nO8pQ9rS",
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("set-cookie")).toBeNull();
+	});
+
+	it("does not sign an expired state", async () => {
+		const { url } = await signIn();
+		onTestFinished(() => {
+			vi.useRealTimers();
+		});
+		vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+		const res = await proxy(url!);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("set-cookie")).toBeNull();
+	});
+
+	it("redirects without a state cookie when oauth-proxy rewrites the state", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "https://preview.example",
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+			plugins: [
+				expo(),
+				oAuthProxy({
+					productionURL: "https://prod.example",
+					currentURL: "https://preview.example",
+				}),
+			],
+		});
+		const { url } = await auth.api.signInSocial({
+			body: {
+				provider: "google",
+				callbackURL: "/",
+				disableRedirect: true,
+			},
+		});
+		const res = await auth.handler(
+			new Request(
+				`https://preview.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+					url!,
+				)}`,
+			),
+		);
+		expect(res.status).toBe(302);
+		expect(res.headers.get("location")).toBe(url);
+		expect(res.headers.get("set-cookie")).toBeNull();
 	});
 });
