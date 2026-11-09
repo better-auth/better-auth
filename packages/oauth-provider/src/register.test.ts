@@ -1722,12 +1722,35 @@ describe("oauth register - application_type", async () => {
 			metadata: { custom: "value" },
 		});
 		expect(stored.applicationType).toBe("native");
-		expect(stored.metadata).toBe(JSON.stringify({ custom: "value" }));
+		expect(stored.metadata).toEqual({ custom: "value" });
 
 		const wire = schemaToOAuth(stored);
 		expect(wire.application_type).toBe("native");
 		expect(Reflect.get(wire, "custom")).toBe("value");
 		expect(wire).not.toHaveProperty("applicationType");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12019
+	 */
+	it("stores client metadata as an object for the json column", () => {
+		const stored = oauthToSchema({
+			client_id: "metadata-client",
+			redirect_uris: ["https://app.example.com/callback"],
+			metadata: { foo: "bar" },
+		});
+		expect(stored.metadata).toEqual({ foo: "bar" });
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12019
+	 */
+	it("reads client metadata stored as a JSON string", () => {
+		const wire = schemaToOAuth({
+			clientId: "legacy-metadata-client",
+			metadata: JSON.stringify({ foo: "bar" }),
+		});
+		expect(Reflect.get(wire, "foo")).toBe("bar");
 	});
 
 	it("keeps reserved client fields out of opaque metadata responses", () => {
@@ -1780,7 +1803,7 @@ describe("oauth register - application_type", async () => {
 				...reservedMetadata,
 			},
 		});
-		expect(JSON.parse(stored.metadata ?? "{}")).toEqual({
+		expect(stored.metadata).toEqual({
 			custom: "preserved",
 		});
 
