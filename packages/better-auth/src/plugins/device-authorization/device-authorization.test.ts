@@ -1748,6 +1748,46 @@ describe("device authorization with custom options", async () => {
 		expect(response.user_code).toBe("USERCODE2");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12314
+	 */
+	it("should retry unique constraint errors wrapped in a cause during issuance", async () => {
+		const deviceCodes = ["device-code-1", "device-code-2"];
+		const userCodes = ["USERCODE1", "USERCODE2"];
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					generateDeviceCode: () => deviceCodes.shift()!,
+					generateUserCode: () => userCodes.shift()!,
+				}),
+			],
+		});
+
+		const adapter = (await auth.$context).adapter;
+		const create = adapter.create.bind(adapter);
+		let failedDeviceCodeCreate = false;
+		vi.spyOn(adapter, "create").mockImplementation(async (input) => {
+			if (input.model === "deviceCode" && !failedDeviceCodeCreate) {
+				failedDeviceCodeCreate = true;
+				throw new Error('Failed query: insert into "device_code"', {
+					cause: Object.assign(
+						new Error(
+							'duplicate key value violates unique constraint "device_code_user_code_unique"',
+						),
+						{ code: "23505" },
+					),
+				});
+			}
+			return create(input);
+		});
+		const response = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+
+		expect(response.device_code).toBe("device-code-2");
+		expect(response.user_code).toBe("USERCODE2");
+	});
+
 	it("should return a controlled server error when generators cannot produce unique codes", async () => {
 		const generateDeviceCode = vi.fn(() => "device-code");
 		const generateUserCode = vi.fn(() => "USERCODE");
