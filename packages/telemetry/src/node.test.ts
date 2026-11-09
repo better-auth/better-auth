@@ -5,17 +5,25 @@ import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { createTelemetry } from "./node";
 
 describe("node telemetry", () => {
-	it("detects a package installed in a parent node_modules", async () => {
+	it("detects a hoisted package whose exports hide package.json", async () => {
 		const root = fs.mkdtempSync(path.join(os.tmpdir(), "telemetry-"));
 		onTestFinished(() => fs.rmSync(root, { recursive: true }));
 		const pg = path.join(root, "node_modules", "pg");
 		fs.mkdirSync(pg, { recursive: true });
 		fs.writeFileSync(
 			path.join(pg, "package.json"),
-			JSON.stringify({ name: "pg", version: "8.0.0" }),
+			JSON.stringify({
+				name: "pg",
+				version: "8.0.0",
+				exports: { ".": "./index.js" },
+			}),
 		);
 		const app = path.join(root, "apps", "web");
 		fs.mkdirSync(app, { recursive: true });
+		fs.writeFileSync(
+			path.join(app, "package.json"),
+			JSON.stringify({ name: "web", dependencies: {} }),
+		);
 		const cwd = vi.spyOn(process, "cwd").mockReturnValue(app);
 		onTestFinished(() => cwd.mockRestore());
 
