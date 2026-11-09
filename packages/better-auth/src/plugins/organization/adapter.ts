@@ -340,6 +340,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					],
 				}),
 			]);
+			// An empty `in` list is a syntax error on Postgres and MSSQL.
+			if (members[0].length === 0) {
+				return {
+					members: [],
+					total: members[1],
+				};
+			}
 			// Prisma/Drizzle default findMany to ~100 when limit is omitted.
 			// Bound by the members result so every joined user row is fetched.
 			const users = await adapter.findMany<User>({
