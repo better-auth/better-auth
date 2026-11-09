@@ -1,4 +1,3 @@
-import { safeJSONParse } from "@better-auth/core/utils/json";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthDeviceAuthorization } from "./device-code";
@@ -17,25 +16,31 @@ export const oauthProviderClient = () => {
 				description: "Adds the current page query to oauth requests",
 				hooks: {
 					async onRequest(ctx) {
-						const headers = ctx.headers;
-						const body =
-							typeof ctx.body === "string"
-								? headers.get("content-type") ===
-									"application/x-www-form-urlencoded"
-									? Object.fromEntries(new URLSearchParams(ctx.body))
-									: safeJSONParse<Record<string, unknown>>(ctx.body ?? "{}")
-								: ctx.body;
-						if (body?.oauth_query) return;
+						if (ctx.method === "GET" || ctx.method === "DELETE") return;
+						if (typeof window === "undefined") return;
+						const oauthQuery = buildSignedOAuthQuery(window.location?.search);
+						if (!oauthQuery) return;
+						// Reading FormData, Blob or stream bodies would consume them.
+						if (ctx.body && typeof ctx.body !== "string") return;
 						if (
-							typeof window !== "undefined" &&
-							window?.location?.search &&
-							!(ctx.method === "GET" || ctx.method === "DELETE")
+							ctx.headers.get("content-type") ===
+							"application/x-www-form-urlencoded"
 						) {
-							ctx.body = JSON.stringify({
-								...body,
-								oauth_query: buildSignedOAuthQuery(window.location.search),
-							});
+							const params = new URLSearchParams(ctx.body);
+							if (params.get("oauth_query")) return;
+							params.set("oauth_query", oauthQuery);
+							ctx.body = params.toString();
+							return;
 						}
+						// Plain JSON parse so ISO strings are not revived into Dates.
+						const body = await new Response(ctx.body ?? "{}")
+							.json()
+							.catch(() => null);
+						if (!body || body.oauth_query) return;
+						ctx.body = JSON.stringify({
+							...body,
+							oauth_query: oauthQuery,
+						});
 					},
 				},
 			},
