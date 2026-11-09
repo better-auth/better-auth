@@ -1534,3 +1534,27 @@ describe("invitation ids", () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10509
+ */
+describe("get invitation", async () => {
+	const { client, signInWithTestUser } = await getTestInstance(
+		{ plugins: [organization()] },
+		{ clientOptions: { plugins: [organizationClient()] } },
+	);
+
+	it("returns the INVITATION_NOT_FOUND code for a missing invitation", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const result = await client.organization.getInvitation({
+			query: { id: "missing-invitation-id" },
+			fetchOptions: { headers },
+		});
+
+		expect(result.error).toMatchObject({
+			status: 400,
+			code: "INVITATION_NOT_FOUND",
+		});
+	});
+});
