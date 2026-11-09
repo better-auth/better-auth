@@ -747,6 +747,9 @@ export const revokeSession = createAuthEndpoint(
 				});
 			}
 		}
+		if (token === ctx.context.session.session.token) {
+			deleteSessionCookie(ctx);
+		}
 		return ctx.json({
 			status: true,
 		});
@@ -804,6 +807,7 @@ export const revokeSessions = createAuthEndpoint(
 				code: "INTERNAL_SERVER_ERROR",
 			});
 		}
+		deleteSessionCookie(ctx);
 		return ctx.json({
 			status: true,
 		});

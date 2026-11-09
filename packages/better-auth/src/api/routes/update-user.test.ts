@@ -866,6 +866,48 @@ describe("delete user", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12132
+	 */
+	it("stops serving the cached session after deleting with a token", async () => {
+		let token = "";
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+			user: {
+				deleteUser: {
+					enabled: true,
+					async sendDeleteAccountVerification(data) {
+						token = data.token;
+					},
+				},
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		await client.deleteUser({ fetchOptions: { headers } });
+
+		await client.deleteUser({
+			token,
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const session = await client.getSession({ fetchOptions: { headers } });
+		expect(session.data).toBeNull();
+	});
+
 	// The delete-account token is single-use: two concurrent callbacks with
 	// the same token must delete the account exactly once. Whichever request
 	// consumes the verification row first wins; the loser sees an invalid
