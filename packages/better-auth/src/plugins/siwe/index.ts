@@ -340,46 +340,65 @@ export const siwe = (options: SIWEPluginOptions) => {
 							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
-							try {
-								user = await runWithTransaction(
-									ctx.context.adapter,
-									async () => {
-										const createdUser =
-											await ctx.context.internalAdapter.createUser(
-												{
-													name: name ?? walletAddress,
-													email: userEmail,
-													image: avatar ?? "",
-												},
-												{ method: "siwe" },
-											);
-										const adapter = await getCurrentAdapter(
-											ctx.context.adapter,
-										);
-
-										// Create wallet address record
-										await adapter.create({
-											model: "walletAddress",
-											data: {
-												userId: createdUser.id,
-												address: walletAddress,
-												chainId,
-												isPrimary: true, // First address is primary
-												createdAt: new Date(),
+							const createSIWEUser = (email: string) =>
+								runWithTransaction(ctx.context.adapter, async () => {
+									const createdUser =
+										await ctx.context.internalAdapter.createUser(
+											{
+												name: name ?? walletAddress,
+												email,
+												image: avatar ?? "",
 											},
-										});
+											{ method: "siwe" },
+										);
+									const adapter = await getCurrentAdapter(ctx.context.adapter);
 
-										// Create account record for wallet authentication
-										await ctx.context.internalAdapter.createAccount({
+									// Create wallet address record
+									await adapter.create({
+										model: "walletAddress",
+										data: {
 											userId: createdUser.id,
-											providerId: "siwe",
-											accountId: `${walletAddress}:${chainId}`,
+											address: walletAddress,
+											chainId,
+											isPrimary: true, // First address is primary
 											createdAt: new Date(),
-											updatedAt: new Date(),
-										});
-										return createdUser;
-									},
-								);
+										},
+									});
+
+									// Create account record for wallet authentication
+									await ctx.context.internalAdapter.createAccount({
+										userId: createdUser.id,
+										providerId: "siwe",
+										accountId: `${walletAddress}:${chainId}`,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+									});
+									return createdUser;
+								});
+
+							try {
+								user = await createSIWEUser(userEmail);
+							} catch (error) {
+								if (userEmail !== normalizedEmail || !normalizedEmail) {
+									throw error;
+								}
+								const claimedUser =
+									await ctx.context.internalAdapter.findUserByEmail(
+										normalizedEmail,
+									);
+								// A registered wallet means this sign-up already committed.
+								const registeredWallet = await ctx.context.adapter.findOne({
+									model: "walletAddress",
+									where: [
+										{ field: "address", operator: "eq", value: walletAddress },
+										{ field: "chainId", operator: "eq", value: chainId },
+									],
+								});
+								if (!claimedUser || registeredWallet) {
+									throw error;
+								}
+								userEmail = walletEmail;
+								user = await createSIWEUser(userEmail);
 							} finally {
 								if (emailClaimIdentifier) {
 									await ctx.context.internalAdapter

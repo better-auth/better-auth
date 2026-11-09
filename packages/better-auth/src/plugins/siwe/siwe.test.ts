@@ -720,7 +720,7 @@ describe("siwe", async () => {
 		expect(usersWithEmail).toHaveLength(1);
 	});
 
-	it("should fail without side effects when another sign-up takes the claimed email mid-request", async () => {
+	it("should fall back to the wallet email when another sign-up takes the claimed email mid-request", async () => {
 		const claimedEmail = "siwe@example.com";
 		const { client, auth, db } = await getTestInstance(
 			{
@@ -768,26 +768,64 @@ describe("siwe", async () => {
 		);
 
 		await client.siwe.nonce();
-		const raced = await client.siwe.verify({
+		const { data, error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
 			email: claimedEmail,
 		});
-		expect(raced.error?.status).toBe(401);
-		expect(await db.findMany({ model: "user" })).toHaveLength(1);
 
-		await client.siwe.nonce();
-		const retried = await client.siwe.verify({
-			message: siweMessage(),
-			signature: "valid_signature",
-			email: claimedEmail,
-		});
-		expect(retried.data?.success).toBe(true);
+		expect(error).toBeNull();
+		expect(data?.success).toBe(true);
+		expect(await db.findMany({ model: "user" })).toHaveLength(2);
 		const usersWithEmail = await db.findMany({
 			model: "user",
 			where: [{ field: "email", value: claimedEmail }],
 		});
 		expect(usersWithEmail).toHaveLength(1);
+	});
+
+	it("should not retry with the wallet email after the SIWE user was created", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				databaseHooks: {
+					account: {
+						create: {
+							async after() {
+								throw new Error("rejected by account hook");
+							},
+						},
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce();
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			email: "siwe@example.com",
+		});
+
+		expect(error?.status).toBe(401);
+		expect(await db.findMany({ model: "user" })).toHaveLength(1);
 	});
 
 	it("should treat a case-variant of an existing email as the same email", async () => {
