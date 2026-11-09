@@ -648,7 +648,7 @@ describe("session", async () => {
 
 describe("session storage", async () => {
 	const store = new Map<string, string>();
-	const { client, signInWithTestUser } = await getTestInstance({
+	const { client, signInWithTestUser, sessionSetter } = await getTestInstance({
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
@@ -744,6 +744,77 @@ describe("session storage", async () => {
 			});
 			const revokedSession = await client.getSession();
 			expect(revokedSession.data).toBeNull();
+		});
+	});
+
+	it("should return status false when revoking a non-existent session", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.revokeSession({
+				token: "non-existent-session-token",
+			});
+			expect(res.data?.status).toBe(false);
+		});
+	});
+
+	it("should return status false when revoking another user's session", async () => {
+		const headers1 = new Headers();
+		const headers2 = new Headers();
+		await client.signUp.email({
+			email: "user1-revoke@test.com",
+			password: "password123!",
+			name: "User 1",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers1),
+			},
+		});
+		await client.signUp.email({
+			email: "user2-revoke@test.com",
+			password: "password123!",
+			name: "User 2",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		const user1Session = await client.getSession({
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+		const user1Token = user1Session.data?.session?.token;
+		expect(user1Token).toBeDefined();
+
+		const res = await client.revokeSession({
+			token: user1Token!,
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(res.data?.status).toBe(false);
+	});
+
+	it("should return status false when session deletion does not remove the session", async () => {
+		const { client: hookClient, signInWithTestUser: hookSignIn } =
+			await getTestInstance({
+				databaseHooks: {
+					session: {
+						delete: {
+							before: () => false,
+						},
+					},
+				},
+			});
+		const { runWithUser } = await hookSignIn();
+		await runWithUser(async () => {
+			const session = await hookClient.getSession();
+			expect(session.data).not.toBeNull();
+			const res = await hookClient.revokeSession({
+				token: session.data?.session?.token || "",
+			});
+			expect(res.data?.status).toBe(false);
+			const sessionAfter = await hookClient.getSession();
+			expect(sessionAfter.data).not.toBeNull();
 		});
 	});
 });

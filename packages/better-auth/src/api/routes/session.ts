@@ -731,22 +731,35 @@ export const revokeSession = createAuthEndpoint(
 		const token = ctx.body.token;
 		const session = await ctx.context.internalAdapter.findSession(token);
 
-		if (session?.session.userId === ctx.context.session.user.id) {
-			try {
-				await ctx.context.internalAdapter.deleteSession(token);
-			} catch (error) {
-				ctx.context.logger.error(
-					error && typeof error === "object" && "name" in error
-						? (error.name as string)
-						: "",
-					error,
-				);
-				throw APIError.from("INTERNAL_SERVER_ERROR", {
-					message: "Internal Server Error",
-					code: "INTERNAL_SERVER_ERROR",
-				});
-			}
+		if (!session || session.session.userId !== ctx.context.session.user.id) {
+			return ctx.json({
+				status: false,
+			});
 		}
+
+		try {
+			await ctx.context.internalAdapter.deleteSession(token);
+		} catch (error) {
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
+			throw APIError.from("INTERNAL_SERVER_ERROR", {
+				message: "Internal Server Error",
+				code: "INTERNAL_SERVER_ERROR",
+			});
+		}
+
+		const postDeleteSession =
+			await ctx.context.internalAdapter.findSession(token);
+		if (postDeleteSession) {
+			return ctx.json({
+				status: false,
+			});
+		}
+
 		return ctx.json({
 			status: true,
 		});

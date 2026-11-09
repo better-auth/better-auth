@@ -455,6 +455,18 @@ describe("internal adapter test", async () => {
 		deleteSpy.mockRestore();
 	});
 
+	it("propagates findMany errors in deleteWithHooks instead of swallowing them", async () => {
+		const findManySpy = vi
+			.spyOn(authContext.adapter, "findMany")
+			.mockRejectedValueOnce(new Error("Database connection lost"));
+
+		await expect(
+			internalAdapter.deleteVerificationByIdentifier("any-identifier"),
+		).rejects.toThrow("Database connection lost");
+
+		findManySpy.mockRestore();
+	});
+
 	describe("verification token storage", () => {
 		it("should hash identifier when storeIdentifier is 'hashed'", async () => {
 			const hashedOpts = {

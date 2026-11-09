@@ -1480,7 +1480,26 @@ export const revokeUserSession = (opts: AdminOptions) =>
 				);
 			}
 
+			const targetSession = await ctx.context.internalAdapter.findSession(
+				ctx.body.sessionToken,
+			);
+			if (!targetSession) {
+				return ctx.json({
+					success: false,
+				});
+			}
+
 			await ctx.context.internalAdapter.deleteSession(ctx.body.sessionToken);
+
+			const remainingSession = await ctx.context.internalAdapter.findSession(
+				ctx.body.sessionToken,
+			);
+			if (remainingSession) {
+				return ctx.json({
+					success: false,
+				});
+			}
+
 			return ctx.json({
 				success: true,
 			});

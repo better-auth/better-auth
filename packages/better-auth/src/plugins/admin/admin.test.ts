@@ -1287,6 +1287,14 @@ describe("Admin plugin", async () => {
 		expect(sessions2.data?.sessions.length).toBe(2);
 	});
 
+	it("should return success false when revoking a non-existent session token", async () => {
+		const res = await client.admin.revokeUserSession(
+			{ sessionToken: "non-existent-session-token" },
+			{ headers: adminHeaders },
+		);
+		expect(res.data?.success).toBe(false);
+	});
+
 	it("should not allow non-admin to revoke user sessions", async () => {
 		const res = await client.admin.revokeUserSessions(
 			{ userId: newUser?.id || "" },

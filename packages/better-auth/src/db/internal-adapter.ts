@@ -935,12 +935,11 @@ export const createInternalAdapter = (
 					return;
 				}
 				if (ctx.options.session?.preserveSessionInDatabase) {
-					await endPreservedSessions([{ field: "token", value: token }]);
-					return;
+					return await endPreservedSessions([{ field: "token", value: token }]);
 				}
 			}
 
-			await deleteWithHooks(
+			return await deleteWithHooks(
 				[{ field: "token", value: token }],
 				"session",
 				undefined,
