@@ -827,9 +827,9 @@ describe("delete user", async () => {
 			},
 		});
 
-		// All sessions should be gone now
+		// Only the revocation cutoff remains after deleting all sessions.
 		expect(store.get(`active-sessions-${userId}`)).toBeUndefined();
-		expect(store.size).toBe(0);
+		expect([...store.keys()]).toEqual([`revoked-sessions-before-${userId}`]);
 	});
 
 	it("should delete with verification flow and password", async () => {
@@ -1364,5 +1364,167 @@ describe("password length on verify-only fields", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+describe("change-email token binding", async () => {
+	const tokensByNewEmail = new Map<string, string>();
+	const { client, auth, sessionSetter } = await getTestInstance({
+		emailVerification: {
+			async sendVerificationEmail({ user, token }) {
+				tokensByNewEmail.set(user.email, token);
+			},
+		},
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	let counter = 0;
+	async function signUp(email: string) {
+		const headers = new Headers();
+		const res = await client.signUp.email({
+			name: "user",
+			email,
+			password: "password123",
+			fetchOptions: { onSuccess: sessionSetter(headers) },
+		});
+		if (!res.data) throw new Error(`sign up failed for ${email}`);
+		return {
+			headers,
+			userId: res.data.user.id,
+		};
+	}
+
+	async function requestChange(headers: Headers, newEmail: string) {
+		tokensByNewEmail.delete(newEmail);
+		const res = await client.changeEmail({
+			newEmail,
+			fetchOptions: { headers },
+		});
+		expect(res.data?.status).toBe(true);
+		const token = tokensByNewEmail.get(newEmail);
+		if (!token) throw new Error(`no token captured for ${newEmail}`);
+		return token;
+	}
+
+	async function emailOf(userId: string) {
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.findUserById(userId);
+		return user?.email;
+	}
+
+	it("does not let a stale token act on a later owner of the old address", async () => {
+		const suffix = ++counter;
+		const originalEmail = `original-${suffix}@example.com`;
+		const firstNewEmail = `first-new-${suffix}@example.com`;
+		const secondNewEmail = `second-new-${suffix}@example.com`;
+
+		const originalOwner = await signUp(originalEmail);
+		const tokenToFirstAddress = await requestChange(
+			originalOwner.headers,
+			firstNewEmail,
+		);
+		const tokenToSecondAddress = await requestChange(
+			originalOwner.headers,
+			secondNewEmail,
+		);
+
+		const appliedChange = await client.verifyEmail({
+			query: { token: tokenToSecondAddress },
+		});
+		expect(appliedChange.data?.status).toBe(true);
+		expect(await emailOf(originalOwner.userId)).toBe(secondNewEmail);
+
+		const currentOwner = await signUp(originalEmail);
+
+		const responseHeaders = new Headers();
+		const res = await client.verifyEmail({
+			query: { token: tokenToFirstAddress },
+			fetchOptions: { onSuccess: sessionSetter(responseHeaders) },
+		});
+		expect({
+			error: res.error,
+			data: res.data,
+		}).toMatchObject({
+			error: { status: 401 },
+			data: null,
+		});
+		expect(responseHeaders.get("cookie")).toBeFalsy();
+		expect(await emailOf(currentOwner.userId)).toBe(originalEmail);
+		expect(await emailOf(originalOwner.userId)).toBe(secondNewEmail);
+	});
+
+	it("rejects a change-email token once the account's email has changed", async () => {
+		const suffix = ++counter;
+		const start = `start-${suffix}@example.com`;
+		const first = `first-${suffix}@example.com`;
+		const second = `second-${suffix}@example.com`;
+
+		const user = await signUp(start);
+		const tokenToFirst = await requestChange(user.headers, first);
+		const tokenToSecond = await requestChange(user.headers, second);
+
+		const ok = await client.verifyEmail({ query: { token: tokenToSecond } });
+		expect(ok.data?.status).toBe(true);
+		expect(await emailOf(user.userId)).toBe(second);
+
+		const stale = await client.verifyEmail({ query: { token: tokenToFirst } });
+		expect(stale.error?.status).toBe(401);
+		expect(await emailOf(user.userId)).toBe(second);
+	});
+
+	it("rejects a change-email token on second use", async () => {
+		const suffix = ++counter;
+		const user = await signUp(`once-${suffix}@example.com`);
+		const token = await requestChange(
+			user.headers,
+			`once-new-${suffix}@example.com`,
+		);
+
+		const firstUse = await client.verifyEmail({ query: { token } });
+		expect(firstUse.data?.status).toBe(true);
+
+		const secondUse = await client.verifyEmail({ query: { token } });
+		expect(secondUse.error?.status).toBe(401);
+	});
+
+	it("completes a legitimate change without an active session but does not sign in", async () => {
+		const suffix = ++counter;
+		const newEmail = `legit-new-${suffix}@example.com`;
+		const user = await signUp(`legit-${suffix}@example.com`);
+		const token = await requestChange(user.headers, newEmail);
+
+		const fresh = new Headers();
+		const res = await client.verifyEmail({
+			query: { token },
+			fetchOptions: { onSuccess: sessionSetter(fresh) },
+		});
+		expect(res.data?.status).toBe(true);
+		expect(await emailOf(user.userId)).toBe(newEmail);
+
+		const session = await client.getSession({
+			fetchOptions: { headers: fresh },
+		});
+		expect(session.data).toBeNull();
+	});
+
+	it("rejects a change-email token redeemed by a different signed-in user", async () => {
+		const suffix = ++counter;
+		const user = await signUp(`owner-${suffix}@example.com`);
+		const other = await signUp(`other-${suffix}@example.com`);
+		const token = await requestChange(
+			user.headers,
+			`owner-new-${suffix}@example.com`,
+		);
+
+		const res = await client.verifyEmail({
+			query: { token },
+			fetchOptions: { headers: other.headers },
+		});
+		expect(res.error?.status).toBe(401);
+		expect(await emailOf(user.userId)).toBe(`owner-${suffix}@example.com`);
 	});
 });

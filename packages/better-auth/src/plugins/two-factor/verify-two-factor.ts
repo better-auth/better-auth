@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
-import { getSessionFromCtx } from "../../api";
+import { getAuthoritativeSessionFromCtx } from "../../api";
+import { isSessionOutsideStore } from "../../api/state/session-source";
 import { expireCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
@@ -24,7 +25,14 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
 	};
 
-	const session = await getSessionFromCtx(ctx);
+	// Sessions built outside the store have no row to re-read. The API key is
+	// verified on every request instead.
+	const requestSession = ctx.context.session;
+	const session =
+		requestSession &&
+		(await isSessionOutsideStore(requestSession.session.token))
+			? requestSession
+			: await getAuthoritativeSessionFromCtx(ctx);
 	if (!session) {
 		const twoFactorCookie = ctx.context.createAuthCookie(
 			TWO_FACTOR_COOKIE_NAME,

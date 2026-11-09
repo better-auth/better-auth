@@ -280,7 +280,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			const { user, session } = ctx.context.session;
-			const customerType = ctx.body.customerType || "user";
+			const customerType = ctx.context.customerType;
 			const referenceId = ctx.context.referenceId;
 
 			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
@@ -1933,7 +1933,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 		},
 		async (ctx) => {
 			const { user } = ctx.context.session;
-			const customerType = ctx.body.customerType || "user";
+			const customerType = ctx.context.customerType;
 			const referenceId = ctx.context.referenceId;
 
 			let customerId: string | undefined;
