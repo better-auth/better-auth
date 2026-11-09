@@ -663,7 +663,7 @@ describe("private_key_jwt authentication", async () => {
 
 		expect(result.error).toMatchObject({
 			error: "invalid_client",
-			error_description: "client not found",
+			error_description: "client authentication failed",
 		});
 	});
 

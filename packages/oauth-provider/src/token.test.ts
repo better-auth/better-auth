@@ -997,7 +997,7 @@ describe("oauth token - refresh_token", async () => {
 			expect(response.error?.status).toBe(400);
 			expect(response.error).toMatchObject({
 				error: "invalid_client",
-				error_description: "client not found",
+				error_description: "client authentication failed",
 			});
 		});
 
@@ -2473,7 +2473,7 @@ describe("oauth token - client_credentials", async () => {
 
 		expect(response.error).toMatchObject({
 			error: "invalid_client",
-			error_description: "client not found",
+			error_description: "client authentication failed",
 		});
 	});
 
@@ -3353,7 +3353,7 @@ describe("oauth token - client secret validation", async () => {
 		expect(responseStatus).toBe(400);
 		expect(tokenResponse.error).toMatchObject({
 			error: "invalid_client",
-			error_description: "invalid client_secret",
+			error_description: "client authentication failed",
 		});
 	});
 
