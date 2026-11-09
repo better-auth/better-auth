@@ -34,15 +34,17 @@ class WindowOnlineManager implements OnlineManager {
 			return () => {};
 		}
 
+		// Cleanup can run after a test environment has removed this global.
+		const target = window;
 		const onOnline = () => this.setOnline(true);
 		const onOffline = () => this.setOnline(false);
 
-		window.addEventListener("online", onOnline, false);
-		window.addEventListener("offline", onOffline, false);
+		target.addEventListener("online", onOnline, false);
+		target.addEventListener("offline", onOffline, false);
 
 		return () => {
-			window.removeEventListener("online", onOnline, false);
-			window.removeEventListener("offline", onOffline, false);
+			target.removeEventListener("online", onOnline, false);
+			target.removeEventListener("offline", onOffline, false);
 		};
 	}
 }
