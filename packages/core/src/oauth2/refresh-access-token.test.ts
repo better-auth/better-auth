@@ -112,6 +112,29 @@ describe("refreshAccessToken", () => {
 		expect(tokens.scopes).toEqual(["openid", "email"]);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12361
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+	 */
+	it("rejects a successful status without an access token", async () => {
+		const errorBody = {
+			error: "bad_refresh_token",
+			error_description: "The refresh token passed is incorrect or expired.",
+		};
+		mockedBetterFetch.mockResolvedValueOnce({
+			data: errorBody,
+			error: null,
+		});
+
+		await expect(
+			refreshAccessToken({
+				refreshToken: "spent-refresh-token",
+				options: { clientId: "test-client", clientSecret: "test-secret" },
+				tokenEndpoint: "https://example.com/token",
+			}),
+		).rejects.toEqual(errorBody);
+	});
+
 	it("passes resource indicators through refresh token requests", async () => {
 		mockedBetterFetch.mockResolvedValueOnce({
 			data: {

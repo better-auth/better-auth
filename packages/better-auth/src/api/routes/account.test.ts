@@ -548,6 +548,64 @@ describe("account", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12361
+	 */
+	it("should reject when the provider refuses a refresh with a 200 status", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			socialProviders: {
+				github: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+		});
+		const ctx = await auth.$context;
+		const { user } = await signInWithTestUser();
+		const account = await ctx.internalAdapter.createAccount({
+			userId: user.id,
+			providerId: "github",
+			accountId: "github-refresh-refused",
+			accessToken: "expired-access-token",
+			refreshToken: "spent-refresh-token",
+			accessTokenExpiresAt: new Date(Date.now() - 60_000),
+		});
+		server.use(
+			http.post("https://github.com/login/oauth/access_token", () =>
+				HttpResponse.json({
+					error: "bad_refresh_token",
+					error_description:
+						"The refresh token passed is incorrect or expired.",
+				}),
+			),
+		);
+
+		await expect(
+			auth.api.getAccessToken({
+				body: {
+					accountId: account.id,
+					userId: user.id,
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				code: "FAILED_TO_GET_ACCESS_TOKEN",
+			},
+		});
+		await expect(
+			auth.api.refreshToken({
+				body: {
+					accountId: account.id,
+					userId: user.id,
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
+			},
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8345
 	 */
 	it("should get account info using the local account ID", async () => {
