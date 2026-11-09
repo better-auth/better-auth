@@ -1320,7 +1320,6 @@ describe("Admin plugin", async () => {
 			},
 		});
 		const {
-			auth: pAuth,
 			signInWithTestUser: pSignIn,
 			customFetchImpl: pFetch,
 			db: pDb,
