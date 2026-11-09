@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { GenericEndpointContext, SecondaryStorage } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
 	runWithEndpointContext,
@@ -752,7 +752,7 @@ describe("session", async () => {
 
 describe("session storage", async () => {
 	const store = new Map<string, string>();
-	const { client, signInWithTestUser } = await getTestInstance({
+	const { client, signInWithTestUser, sessionSetter } = await getTestInstance({
 		secondaryStorage: {
 			set(key, value, ttl) {
 				store.set(key, value);
@@ -848,6 +848,228 @@ describe("session storage", async () => {
 			});
 			const revokedSession = await client.getSession();
 			expect(revokedSession.data).toBeNull();
+		});
+	});
+
+	it("should return status false when revoking a non-existent session", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.revokeSession({
+				token: "non-existent-session-token",
+			});
+			expect(res.data?.status).toBe(false);
+		});
+	});
+
+	it("should return status false when revoking another user's session", async () => {
+		const headers1 = new Headers();
+		const headers2 = new Headers();
+		await client.signUp.email({
+			email: "user1-revoke@test.com",
+			password: "password123!",
+			name: "User 1",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers1),
+			},
+		});
+		await client.signUp.email({
+			email: "user2-revoke@test.com",
+			password: "password123!",
+			name: "User 2",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		const user1Session = await client.getSession({
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+		const user1Token = user1Session.data?.session?.token;
+		expect(user1Token).toBeDefined();
+
+		const res = await client.revokeSession({
+			token: user1Token!,
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(res.data?.status).toBe(false);
+
+		const user1SessionAfter = await client.getSession({
+			fetchOptions: {
+				headers: headers1,
+			},
+		});
+		expect(user1SessionAfter.data?.session?.token).toBe(user1Token);
+	});
+
+	it("should return status false when session deletion does not remove the session", async () => {
+		const { client: hookClient, signInWithTestUser: hookSignIn } =
+			await getTestInstance({
+				databaseHooks: {
+					session: {
+						delete: {
+							before: () => false,
+						},
+					},
+				},
+			});
+		const { runWithUser } = await hookSignIn();
+		await runWithUser(async () => {
+			const session = await hookClient.getSession();
+			expect(session.data).not.toBeNull();
+			const res = await hookClient.revokeSession({
+				token: session.data?.session?.token || "",
+			});
+			expect(res.data?.status).toBe(false);
+			const sessionAfter = await hookClient.getSession();
+			expect(sessionAfter.data).not.toBeNull();
+		});
+	});
+
+	it("should return status false when hook vetoes revocation with secondaryStorage and preserveSessionInDatabase", async () => {
+		const secondaryStore = new Map<string, string>();
+		const createTestSecondaryStorage = (
+			store: Map<string, string>,
+		): SecondaryStorage => ({
+			get: async (key: string) => store.get(key) || null,
+			set: async (key: string, value: string) => {
+				store.set(key, value);
+			},
+			delete: async (key: string) => {
+				store.delete(key);
+			},
+			getAndDelete: async (key: string) => {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment: async (key: string) => {
+				const current = Number(store.get(key) ?? 0);
+				const count = Number.isFinite(current) ? current + 1 : 1;
+				store.set(key, String(count));
+				return count;
+			},
+		});
+		const { client: preserveClient, signInWithTestUser: preserveSignIn, db } =
+			await getTestInstance({
+				secondaryStorage: createTestSecondaryStorage(secondaryStore),
+				session: {
+					storeSessionInDatabase: true,
+					preserveSessionInDatabase: true,
+				},
+				databaseHooks: {
+					session: {
+						delete: {
+							before: () => false,
+						},
+					},
+				},
+			});
+
+		const { runWithUser } = await preserveSignIn();
+		await runWithUser(async () => {
+			const session = await preserveClient.getSession();
+			expect(session.data).not.toBeNull();
+			const token = session.data?.session?.token || "";
+
+			const res = await preserveClient.revokeSession({
+				token,
+			});
+			expect(res.data?.status).toBe(false);
+
+			const dbSession = await db.findOne<{ id: string; expiresAt: Date }>({
+				model: "session",
+				where: [{ field: "token", value: token }],
+			});
+			expect(dbSession).not.toBeNull();
+			expect(new Date(dbSession!.expiresAt).getTime()).toBeGreaterThan(Date.now());
+		});
+	});
+
+	it("should succeed on retry if database row was already deleted before cache cleanup", async () => {
+		const secondaryStore = new Map<string, string>();
+		const createTestSecondaryStorage = (
+			store: Map<string, string>,
+		): SecondaryStorage => ({
+			get: async (key: string) => store.get(key) || null,
+			set: async (key: string, value: string) => {
+				store.set(key, value);
+			},
+			delete: async (key: string) => {
+				store.delete(key);
+			},
+			getAndDelete: async (key: string) => {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment: async (key: string) => {
+				const current = Number(store.get(key) ?? 0);
+				const count = Number.isFinite(current) ? current + 1 : 1;
+				store.set(key, String(count));
+				return count;
+			},
+		});
+		const { client: retryClient, signInWithTestUser: retrySignIn, db } =
+			await getTestInstance({
+				secondaryStorage: createTestSecondaryStorage(secondaryStore),
+				session: {
+					storeSessionInDatabase: true,
+				},
+			});
+
+		const { runWithUser } = await retrySignIn();
+		await runWithUser(async () => {
+			const session = await retryClient.getSession();
+			expect(session.data).not.toBeNull();
+			const token = session.data?.session?.token || "";
+
+			// Manually remove database row first to simulate a retry after a previous partial failure
+			await db.delete({
+				model: "session",
+				where: [{ field: "token", value: token }],
+			});
+
+			const res = await retryClient.revokeSession({
+				token,
+			});
+			expect(res.data?.status).toBe(true);
+
+			const sessionAfter = await retryClient.getSession();
+			expect(sessionAfter.data).toBeNull();
+		});
+	});
+
+	it("should delete session row normally when preserveSessionInDatabase is set without secondaryStorage", async () => {
+		const { client: noSecClient, signInWithTestUser: noSecSignIn, db } =
+			await getTestInstance({
+				session: {
+					preserveSessionInDatabase: true,
+				},
+			});
+
+		const { runWithUser } = await noSecSignIn();
+		await runWithUser(async () => {
+			const session = await noSecClient.getSession();
+			expect(session.data).not.toBeNull();
+			const token = session.data?.session?.token || "";
+
+			const res = await noSecClient.revokeSession({
+				token,
+			});
+			expect(res.data?.status).toBe(true);
+
+			const sessionAfter = await noSecClient.getSession();
+			expect(sessionAfter.data).toBeNull();
+
+			const dbSession = await db.findOne({
+				model: "session",
+				where: [{ field: "token", value: token }],
+			});
+			expect(dbSession).toBeNull();
 		});
 	});
 });

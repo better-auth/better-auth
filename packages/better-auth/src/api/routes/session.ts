@@ -6,6 +6,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 
 import * as z from "zod";
@@ -731,22 +732,59 @@ export const revokeSession = createAuthEndpoint(
 		const token = ctx.body.token;
 		const session = await ctx.context.internalAdapter.findSession(token);
 
-		if (session?.session.userId === ctx.context.session.user.id) {
-			try {
+		if (!session || session.session.userId !== ctx.context.session.user.id) {
+			return ctx.json({
+				status: false,
+			});
+		}
+
+		let deletedSessionResult: any;
+		try {
+			deletedSessionResult =
 				await ctx.context.internalAdapter.deleteSession(token);
-			} catch (error) {
-				ctx.context.logger.error(
-					error && typeof error === "object" && "name" in error
-						? (error.name as string)
-						: "",
-					error,
-				);
-				throw APIError.from("INTERNAL_SERVER_ERROR", {
-					message: "Internal Server Error",
-					code: "INTERNAL_SERVER_ERROR",
+		} catch (error) {
+			ctx.context.logger.error(
+				error && typeof error === "object" && "name" in error
+					? (error.name as string)
+					: "",
+				error,
+			);
+			throw APIError.from("INTERNAL_SERVER_ERROR", {
+				message: "Internal Server Error",
+				code: "INTERNAL_SERVER_ERROR",
+			});
+		}
+
+		if (deletedSessionResult === null) {
+			return ctx.json({
+				status: false,
+			});
+		}
+
+		const postDeleteSession =
+			await ctx.context.internalAdapter.findSession(token);
+		if (postDeleteSession) {
+			return ctx.json({
+				status: false,
+			});
+		}
+
+		if (ctx.context.options.session?.preserveSessionInDatabase) {
+			const currentAdapter = await getCurrentAdapter(ctx.context.adapter);
+			const livePreservedSession = await currentAdapter.findOne<Session>({
+				model: "session",
+				where: [
+					{ field: "token", value: token },
+					{ field: "expiresAt", value: new Date(), operator: "gt" },
+				],
+			});
+			if (livePreservedSession) {
+				return ctx.json({
+					status: false,
 				});
 			}
 		}
+
 		return ctx.json({
 			status: true,
 		});

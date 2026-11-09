@@ -936,6 +936,19 @@ export const createInternalAdapter = (
 		},
 		deleteSession: async (token: string) => {
 			if (secondaryStorage) {
+				if (options.session?.storeSessionInDatabase) {
+					const deleteRes = ctx.options.session?.preserveSessionInDatabase
+						? await endPreservedSessions([{ field: "token", value: token }])
+						: await deleteWithHooks(
+								[{ field: "token", value: token }],
+								"session",
+								undefined,
+							);
+					if (deleteRes === null) {
+						return null;
+					}
+				}
+
 				// remove the session from the active sessions list
 				const data = await secondaryStorage.get(token);
 				if (data) {
@@ -968,17 +981,10 @@ export const createInternalAdapter = (
 				}
 
 				await secondaryStorage.delete(token);
-
-				if (!options.session?.storeSessionInDatabase) {
-					return;
-				}
-				if (ctx.options.session?.preserveSessionInDatabase) {
-					await endPreservedSessions([{ field: "token", value: token }]);
-					return;
-				}
+				return;
 			}
 
-			await deleteWithHooks(
+			return await deleteWithHooks(
 				[{ field: "token", value: token }],
 				"session",
 				undefined,
@@ -1426,17 +1432,21 @@ export const createInternalAdapter = (
 			}
 
 			if (!options.verification?.disableCleanup) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "expiresAt",
-							value: new Date(),
-							operator: "lt",
-						},
-					],
-					"verification",
-					undefined,
-				);
+				try {
+					await deleteManyWithHooks(
+						[
+							{
+								field: "expiresAt",
+								value: new Date(),
+								operator: "lt",
+							},
+						],
+						"verification",
+						undefined,
+					);
+				} catch (error) {
+					logger.error("Failed to clean up expired verifications", error);
+				}
 			}
 
 			return (verification[0] as Verification) || null;
