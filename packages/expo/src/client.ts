@@ -5,6 +5,7 @@ import type {
 } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { BetterFetchError } from "@better-fetch/fetch";
 import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -431,7 +432,19 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
 							const cookie = url.searchParams.get("cookie");
-							if (!cookie) return;
+							if (!cookie) {
+								// errorCallbackURL redirects land here with ?error= and no
+								// cookie. Surface the code so signIn.social / linkSocial
+								// reject instead of resolving as a silent success (#12349).
+								const error = url.searchParams.get("error");
+								if (error) {
+									throw new BetterFetchError(400, error, {
+										code: error,
+										message: error,
+									});
+								}
+								return;
+							}
 							const update = await storage.updateItemAsync(
 								cookieName,
 								(currentValue) =>

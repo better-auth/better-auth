@@ -876,6 +876,26 @@ describe("expo", async () => {
 		);
 	});
 
+	it("should reject when the auth session returns an errorCallbackURL error", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///oauth-error?error=access_denied",
+		});
+
+		await expect(
+			client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+				errorCallbackURL: "/oauth-error",
+			}),
+		).rejects.toMatchObject({
+			status: 400,
+			statusText: "access_denied",
+			error: { code: "access_denied" },
+		});
+	});
+
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
 		await client.signIn.social({
 			provider: "google",
