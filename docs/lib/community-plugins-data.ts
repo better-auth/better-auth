@@ -551,4 +551,15 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/tianhuil.png",
 		},
 	},
+	{
+		name: "@mailkite/better-auth-inbox",
+		url: "https://github.com/mailkite/mailkite-better-auth-inbox",
+		description:
+			"Give your app a real mailbox. Receive inbound email as signature-verified webhooks, then list, read, thread and reply through session-scoped endpoints — scoped per user or per organization.",
+		author: {
+			name: "MailKite",
+			github: "mailkite",
+			avatar: "https://github.com/mailkite.png",
+		},
+	},
 ];
