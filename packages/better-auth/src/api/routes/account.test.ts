@@ -19,8 +19,14 @@ import {
 } from "vitest";
 import { betterAuth } from "../../auth/minimal";
 import { parseSetCookieHeader } from "../../cookies";
-import { signJWT, symmetricDecodeJWT, symmetricEncodeJWT } from "../../crypto";
+import {
+	signJWT,
+	symmetricDecodeJWT,
+	symmetricDecrypt,
+	symmetricEncodeJWT,
+} from "../../crypto";
 import { genericOAuth } from "../../plugins/generic-oauth";
+import type { StateData } from "../../state";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -113,6 +119,269 @@ describe("account", async () => {
 			const accounts = await client.listAccounts();
 			expect(accounts.data?.length).toBe(1);
 		});
+	});
+
+	it("does not link a provider when the initiating session was revoked during the redirect", async () => {
+		const { headers } = await signInWithTestUser();
+		const current = await client.getSession({ fetchOptions: { headers } });
+		const userId = current.data!.user.id;
+		const before = await ctx.internalAdapter.findAccounts(userId);
+		let stateCookie = "";
+		const link = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+			},
+			{
+				headers,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					stateCookie = `better-auth.state=${cookies.get("better-auth.state")?.value}`;
+				},
+			},
+		);
+		const state = new URL(link.data!.url!).searchParams.get("state")!;
+		const storedState = await ctx.internalAdapter.findVerificationValue(
+			`auth-state:${state}`,
+		);
+		expect(storedState?.value).not.toContain(current.data!.session.token);
+		const stateData = JSON.parse(storedState!.value) as StateData;
+		expect(stateData.link?.encryptedSessionToken).toBeDefined();
+		await expect(
+			symmetricDecrypt({
+				key: ctx.secretConfig,
+				data: stateData.link!.encryptedSessionToken!,
+			}),
+		).rejects.toThrow();
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+		email = "new-provider@example.com";
+
+		await client.$fetch("/callback/google", {
+			method: "GET",
+			query: { state, code: "test" },
+			headers: { cookie: stateCookie },
+		});
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after).toHaveLength(before.length);
+	});
+
+	it("links a provider when the state carries no initiating session token", async () => {
+		const { headers } = await signInWithTestUser();
+		const current = await client.getSession({ fetchOptions: { headers } });
+		const userId = current.data!.user.id;
+		const before = await ctx.internalAdapter.findAccounts(userId);
+		let stateCookie = "";
+		const link = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+			},
+			{
+				headers,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					stateCookie = `better-auth.state=${cookies.get("better-auth.state")?.value}`;
+				},
+			},
+		);
+		const state = new URL(link.data!.url!).searchParams.get("state")!;
+		const storedState = await ctx.internalAdapter.findVerificationValue(
+			`auth-state:${state}`,
+		);
+		const stateData = JSON.parse(storedState!.value) as StateData;
+		assert(stateData.link);
+		// A redirect started before the token was recorded.
+		const { encryptedSessionToken: _, ...legacyLink } = stateData.link;
+		await ctx.internalAdapter.updateVerificationByIdentifier(
+			`auth-state:${state}`,
+			{
+				value: JSON.stringify({
+					...stateData,
+					link: legacyLink,
+				}),
+			},
+		);
+		email = "no-session-token@example.com";
+
+		await client.$fetch("/callback/google", {
+			method: "GET",
+			query: { state, code: "test" },
+			headers: { cookie: stateCookie },
+		});
+		const after = await ctx.internalAdapter.findAccounts(userId);
+		expect(after).toHaveLength(before.length + 1);
+	});
+
+	it("rejects social-link initiation from a revoked cached session", async () => {
+		const {
+			auth: cachedAuth,
+			client: cachedClient,
+			testUser,
+			cookieSetter,
+		} = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test" },
+			},
+		});
+		const headers = new Headers();
+		await cachedClient.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await cachedClient.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const cachedCtx = await cachedAuth.$context;
+		await cachedCtx.internalAdapter.deleteSession(current.data!.session.token);
+
+		const result = await cachedClient.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+			},
+			{ headers },
+		);
+		expect(result.error?.status).toBe(401);
+	});
+
+	async function linkWithIdToken(revokeSource: boolean) {
+		const {
+			auth: directAuth,
+			client: directClient,
+			signInWithTestUser: signIn,
+			cookieSetter,
+		} = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async () => true,
+				},
+			},
+			account: { accountLinking: { allowDifferentEmails: true } },
+		});
+		const directCtx = await directAuth.$context;
+		const provider = directCtx.socialProviders.find((p) => p.id === "google");
+		assert(provider);
+		vi.spyOn(provider, "getUserInfo").mockResolvedValue({
+			user: {
+				name: "Provider User",
+				email: "provider-user@example.com",
+				emailVerified: true,
+			},
+			data: { sub: "direct-link-provider-user" },
+		});
+		const { headers } = await signIn();
+		const current = await directClient.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		if (revokeSource) {
+			await directCtx.internalAdapter.deleteSession(
+				current.data!.session.token,
+			);
+		}
+		const result = await directClient.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+				idToken: { token: "valid-id-token" },
+			},
+			{ headers },
+		);
+		const accounts = await directCtx.internalAdapter.findAccounts(
+			current.data!.user.id,
+		);
+		return { result, accounts };
+	}
+
+	it("links an ID token with a live session", async () => {
+		const { result, accounts } = await linkWithIdToken(false);
+
+		expect(result.error).toBeNull();
+		expect(accounts).toHaveLength(2);
+	});
+
+	it("refuses to link an ID token from a revoked cached session", async () => {
+		const { result, accounts } = await linkWithIdToken(true);
+
+		expect(result.error?.status).toBe(401);
+		expect(accounts).toHaveLength(1);
+	});
+
+	it("links a provider after the OAuth link-token key rotates", async () => {
+		const oldSecret = "old-link-secret-at-least-32-characters";
+		const newSecret = "new-link-secret-at-least-32-characters";
+		const {
+			auth: rotatedAuth,
+			client: rotatedClient,
+			signInWithTestUser: signInRotatedUser,
+		} = await getTestInstance({
+			secrets: [{ version: 1, value: oldSecret }],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+					verifyIdToken: async () => true,
+				},
+			},
+			account: { accountLinking: { allowDifferentEmails: true } },
+		});
+		const { headers } = await signInRotatedUser();
+		const current = await rotatedClient.getSession({
+			fetchOptions: { headers },
+		});
+		const rotatedCtx = await rotatedAuth.$context;
+		const before = await rotatedCtx.internalAdapter.findAccounts(
+			current.data!.user.id,
+		);
+		let stateCookie = "";
+		const link = await rotatedClient.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/callback",
+			},
+			{
+				headers,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					stateCookie = `better-auth.state=${cookies.get("better-auth.state")?.value}`;
+				},
+			},
+		);
+		const state = new URL(link.data!.url!).searchParams.get("state")!;
+		const storedState = await rotatedCtx.internalAdapter.findVerificationValue(
+			`auth-state:${state}`,
+		);
+		const stateData = JSON.parse(storedState!.value) as StateData;
+		expect(stateData.link?.encryptedSessionToken).toMatch(/^\$ba\$1\$/);
+		if (typeof rotatedCtx.secretConfig === "string") {
+			throw new Error("Expected a versioned secret configuration");
+		}
+		rotatedCtx.secretConfig.keys.set(2, newSecret);
+		rotatedCtx.secretConfig.currentVersion = 2;
+		email = "rotated-provider@example.com";
+
+		await rotatedClient.$fetch("/callback/google", {
+			method: "GET",
+			query: { state, code: "test" },
+			headers: { cookie: stateCookie },
+		});
+		const after = await rotatedCtx.internalAdapter.findAccounts(
+			current.data!.user.id,
+		);
+		expect(after).toHaveLength(before.length + 1);
 	});
 
 	it("should link first account", async () => {

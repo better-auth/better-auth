@@ -1,0 +1,165 @@
+---
+icon: pluginsOAuthProviderOpenIDConnect
+sidebarTitle: "OpenID Connect"
+title: OpenID Connect and logout
+description: Configure discovery, ID token and UserInfo claims, subject identifiers, and logout.
+---
+
+Your OAuth provider is also an [OpenID Connect](https://openid.net/specs/openid-connect-core-1_0.html) provider. A client that requests the `openid` scope receives an ID token, can call UserInfo, and can take part in logout.
+
+## Discovery metadata
+
+Better Auth serves [OpenID Provider metadata](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig) at `{issuer}/.well-known/openid-configuration` and [authorization server metadata](https://datatracker.ietf.org/doc/html/rfc8414#section-3) at `{issuer}/.well-known/oauth-authorization-server`. If your framework does not forward these routes to `auth.handler`, see [Expose the well-known metadata](/docs/plugins/oauth-provider#expose-the-well-known-metadata).
+
+The OpenID configuration returns 404 when you set `scopes` without `openid`. To serve it, add `openid` to `scopes`.
+
+To publish fewer scopes, or more claims, than the server supports, set `advertisedMetadata`:
+
+```ts title="auth.ts"
+oauthProvider({
+  scopes: ["openid", "profile", "email", "offline_access", "read:post"],
+  advertisedMetadata: { // [!code highlight]
+    scopes_supported: ["openid", "profile", "read:post"], // [!code highlight]
+    claims_supported: [ // [!code highlight]
+      "sub", "iss", "aud", "exp", "iat", "sid", "scope", "azp", // [!code highlight]
+      "name", "picture", "given_name", "family_name", // [!code highlight]
+      "locale", "https://example.com/org", // [!code highlight]
+    ], // [!code highlight]
+  }, // [!code highlight]
+})
+```
+
+Every value in `scopes_supported` must also be in `scopes`, or the plugin fails at startup. `claims_supported` replaces the default list (`sub`, `iss`, `aud`, `exp`, `iat`, `sid`, `scope`, `azp`, plus the `profile` and `email` claims when those scopes are configured), so repeat the defaults you still want. List every claim your custom claim functions add, so clients know to expect it. Clients can request through `claims.userinfo` only the names in this list.
+
+## ID token claims
+
+To add claims to the [ID token](https://openid.net/specs/openid-connect-core-1_0.html#IDToken), set `customIdTokenClaims`. It receives the `user`, the granted `scopes`, and the client's `metadata`. It returns an object of claims to add:
+
+```ts title="auth.ts"
+oauthProvider({
+  customIdTokenClaims: ({ user, scopes, metadata }) => ({ // [!code highlight]
+    "https://example.com/org": user.organizationId, // [!code highlight]
+  }), // [!code highlight]
+})
+```
+
+* In the authorization code flow, `profile` and `email` claims go to UserInfo, not the ID token. Add them in `customIdTokenClaims` if a client needs them in the ID token.
+* Better Auth owns the protocol claims (`iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`). Custom values for these names are dropped with a warning log.
+* Use URI-namespaced names for application claims, as [OIDC Core §5.1.2](https://openid.net/specs/openid-connect-core-1_0.html#AdditionalClaims) recommends.
+* To stop issuance, for example when the user has left the organization, throw from the function.
+
+When an extension also contributes claims, see [Claim precedence](/docs/plugins/oauth-provider/reference#claim-precedence).
+
+Better Auth advertises `acr_values_supported: ["0"]` and **always** issues `acr: "0"`, meaning the authentication did not meet ISO/IEC 29115 level 1 ([OIDC Core §2](https://openid.net/specs/openid-connect-core-1_0.html#IDToken)). Custom ACR policies are not supported. A request for other `acr_values` still succeeds, but an essential `claims.id_token.acr` request that does not allow `"0"` fails.
+
+With `disableJwtPlugin: true`, ID tokens are signed with `HS256` using the client secret, so public clients get no ID token. See [Without the JWT plugin](/docs/plugins/oauth-provider/tokens#without-the-jwt-plugin).
+
+## UserInfo
+
+`/oauth2/userinfo` accepts GET and POST and returns claims for an access token whose scopes include `openid`. A token without `openid` gets 400 `invalid_scope`. An expired or revoked token, or one whose session has ended, gets 401 `invalid_token` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)).
+
+```ts
+const response = await fetch("https://auth.example.com/api/auth/oauth2/userinfo", {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+```
+
+Claims follow the granted [scopes](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims):
+
+| Scope     | Claims                                         |
+| --------- | ---------------------------------------------- |
+| `openid`  | `sub`                                          |
+| `profile` | `name`, `picture`, `given_name`, `family_name` |
+| `email`   | `email`, `email_verified`                      |
+
+Claims requested through the [`claims.userinfo` parameter](https://openid.net/specs/openid-connect-core-1_0.html#IndividualClaimsRequests) are added when they appear in `claims_supported` and a value exists. Missing values are omitted, not returned as `null`. This per-claim selection works only with opaque access tokens. With a JWT access token, UserInfo returns only the claims its scopes cover.
+
+To add claims to the [UserInfo response](https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse), set `customUserInfoClaims`. It receives the `user`, the access token's `scopes`, the access token payload as `jwt`, and `requestedClaims`. `requestedClaims` lists the claim names requested through `claims.userinfo`. It returns an object of claims to add:
+
+```ts title="auth.ts"
+oauthProvider({
+  customUserInfoClaims: ({ user, scopes, requestedClaims, jwt }) => ({ // [!code highlight]
+    locale: "en-GB", // [!code highlight]
+    ...(requestedClaims.includes("website") ? { website: user.website } : {}), // [!code highlight]
+  }), // [!code highlight]
+})
+```
+
+A returned claim replaces the standard claim of the same name, except `sub`.
+
+## Pairwise subject identifiers
+
+Clients that receive the same `sub` for a user can link that user's activity across those clients. By default, `sub` is the user ID, which is the same for every client (the `public` [subject type](https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes)). To let clients receive a `sub` that other clients cannot correlate, set `pairwiseSecret`:
+
+```ts title="auth.ts"
+oauthProvider({
+  pairwiseSecret: process.env.PAIRWISE_SECRET, // at least 32 characters // [!code highlight]
+})
+```
+
+Discovery then lists `"public"` and `"pairwise"` in `subject_types_supported`. A client opts in with `subject_type: "pairwise"` through dynamic registration or `adminCreateOAuthClient`. `createOAuthClient` ignores the field.
+
+Better Auth computes the value with HMAC-SHA256 over the host of the client's first redirect URI and the user ID ([OIDC Core §8.1](https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg)). Clients that share a redirect host share the same `sub`.
+
+* Pairwise `sub` appears in the ID token, UserInfo, and introspection. Introspection returns the `sub` of the client the token was issued to.
+* JWT access tokens keep the real user ID as `sub`, so resource servers can look users up. A client can decode its own JWT access tokens, so a pairwise client that requests a `resource` learns the real user ID. To keep the user ID from a pairwise client, have it request opaque tokens by omitting `resource`.
+
+<Callout type="warn">
+  `pairwiseSecret` must be at least 32 characters. Changing it changes every pairwise `sub` and breaks existing client accounts. Treat it as permanent.
+</Callout>
+
+`sector_identifier_uri` is not supported. All `redirect_uris` of a pairwise client must therefore share one host. Pairwise clients also cannot use custom-scheme redirect URIs with a host, such as `app://rp.example.com/callback`. Any app can claim a custom scheme, and that app would receive the same `sub` as a pairwise web client that redirects to `rp.example.com`. Registration fails with `invalid_client_metadata` in either case.
+
+## RP-initiated logout
+
+To let a client end the user's session, register it with `enable_end_session: true`. The `/oauth2/end-session` endpoint then implements [RP-Initiated Logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RPLogout) for it:
+
+```ts title="auth.ts"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    enable_end_session: true, // [!code highlight]
+  },
+});
+```
+
+* It accepts GET query parameters or a form-encoded POST body.
+* A valid `id_token_hint` for the current browser session ends it immediately. Without one, or with a hint for a different session, the user must confirm first. In a browser, Better Auth serves the confirmation page.
+* Better Auth [redirects after logout](https://openid.net/specs/openid-connect-rpinitiated-1_0.html#RedirectionAfterLogout) only when `post_logout_redirect_uri` exactly matches a registered URI, and adds `state` only to that redirect. For example, `https://app.example.com/logout/` does not match a registered `https://app.example.com/logout`. Without a matching URI, a browser shows a logged-out page from Better Auth.
+
+Enable this only for clients you trust. The client, or anyone holding an ID token it received, can end that token's session without confirmation, for these reasons:
+
+* With a valid `id_token_hint`, the request does not need the user's browser.
+* An expired ID token is still accepted as a hint.
+
+Ending the session also triggers back-channel logout for every client that holds tokens for it.
+
+## Back-channel logout
+
+To notify a client when a user's session ends, register a `backchannel_logout_uri` for it. The session can end in several ways, for example through sign-out, end-session, or admin revocation. Better Auth then sends a signed [Logout Token](https://openid.net/specs/openid-connect-backchannel-1_0.html#LogoutToken) to each client that registered a URI and holds tokens for that session:
+
+```ts title="auth.ts"
+await auth.api.adminCreateOAuthClient({
+  headers,
+  body: {
+    redirect_uris: ["https://app.example.com/callback"],
+    backchannel_logout_uri: "https://app.example.com/logout/backchannel", // [!code highlight]
+    backchannel_logout_session_required: true,
+  },
+});
+```
+
+* Recipients are found through the opaque access tokens and refresh tokens stored for the session. A client that holds only a JWT access token for it, such as after a `resource` request without `offline_access`, is not notified.
+* Logout Tokens carry `typ: logout+jwt`, always include `sid`, and live for 120 seconds. The JWT plugin signs them, so a client verifies them with your JWKS. Each [request](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCRequest) has a 5 second timeout and is not retried.
+* Better Auth also revokes the session's access tokens and its refresh tokens without `offline_access`. Refresh tokens with `offline_access` survive, as [§2.7](https://openid.net/specs/openid-connect-backchannel-1_0.html#BCActions) allows.
+* `backchannel_logout_uri` must be a public `https` URL with no credentials or fragment. Loopback, private, and metadata hosts are rejected with `invalid_client_metadata`. The check does not resolve DNS, so a public name that resolves to a private address passes. If untrusted parties can register clients on your server, block outbound requests from the auth server to private networks.
+* Clients registered through [CIMD](/docs/plugins/cimd) cannot use back-channel logout.
+
+<Callout type="warn">
+  Back-channel logout requires the [JWT plugin](/docs/plugins/jwt), which signs Logout Tokens. With `disableJwtPlugin: true`, registering a `backchannel_logout_uri` fails and discovery advertises `backchannel_logout_supported: false`.
+</Callout>
+
+<Callout type="info">
+  Delivery runs through `advanced.backgroundTasks.handler` when one is set, so a slow client cannot delay sign-out. Without a handler it runs before the sign-out response returns, so set one if you deploy to serverless runtimes.
+</Callout>

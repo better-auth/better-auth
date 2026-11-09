@@ -668,9 +668,13 @@ export const mongodbAdapter = (
 					}
 
 					if (sortBy) {
+						const sortField = getFieldName({
+							field: sortBy.field,
+							model: modelKey,
+						});
 						pipeline.push({
 							$sort: {
-								[getFieldName({ field: sortBy.field, model: modelKey })]:
+								[sortField === "id" ? "_id" : sortField]:
 									sortBy.direction === "desc" ? -1 : 1,
 							},
 						});

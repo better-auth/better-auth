@@ -104,13 +104,20 @@ export const fetchClientMetadataResource: ClientMetadataResourceFetch = async (
 						: (Readable.toWeb(
 								response,
 							) as unknown as ReadableStream<Uint8Array>);
-				resolve(
-					new Response(body, {
-						headers: responseHeaders(response.headers),
-						status,
-						statusText: response.statusMessage,
-					}),
-				);
+				// Response throws on an out-of-range status or invalid reason phrase,
+				// and a throw from this listener would escape the promise.
+				try {
+					resolve(
+						new Response(body, {
+							headers: responseHeaders(response.headers),
+							status,
+							statusText: response.statusMessage,
+						}),
+					);
+				} catch (error) {
+					response.destroy();
+					reject(error);
+				}
 			},
 		);
 		request.once("error", reject);

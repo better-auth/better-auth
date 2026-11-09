@@ -344,7 +344,7 @@ describe("private_key_jwt authentication", async () => {
 				clientId,
 				audienceA,
 			),
-		).resolves.toEqual({ clientId });
+		).resolves.toMatchObject({ clientId });
 		await expect(
 			verifyClientAssertion(
 				providerB.ctx,
@@ -359,7 +359,7 @@ describe("private_key_jwt authentication", async () => {
 				clientId,
 				audienceB,
 			),
-		).resolves.toEqual({ clientId });
+		).resolves.toMatchObject({ clientId });
 
 		expect(transportA).toHaveBeenCalledTimes(1);
 		expect(transportB).toHaveBeenCalledTimes(1);
@@ -531,7 +531,7 @@ describe("private_key_jwt authentication", async () => {
 					clientId,
 					audience,
 				),
-			).resolves.toEqual({ clientId });
+			).resolves.toMatchObject({ clientId });
 			expect(transport).toHaveBeenCalledTimes(2);
 		},
 	);
@@ -643,6 +643,28 @@ describe("private_key_jwt authentication", async () => {
 
 		expect(result.error?.status).toBeGreaterThanOrEqual(400);
 		expect(result.error?.status).toBeLessThan(500);
+	});
+
+	/**
+	 * @see https://github.com/croffasia/itsaplan/issues/564
+	 */
+	it("reports an assertion for an unknown client as a client that was not found", async () => {
+		const result = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				client_id: "no-such-client",
+				client_assertion_type:
+					"urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+				client_assertion: await signAssertion({ clientId: "no-such-client" }),
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+
+		expect(result.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "client not found",
+		});
 	});
 
 	it("should reject expired assertion", async () => {
