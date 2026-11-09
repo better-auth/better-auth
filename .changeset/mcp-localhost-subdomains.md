@@ -2,4 +2,4 @@
 "@better-auth/mcp": patch
 ---
 
-`mcp()` no longer throws at startup for a plain-HTTP `resource` on a `.localhost` subdomain such as `http://my-branch.api.localhost/mcp`.
+Fixed MCP rejecting plain-HTTP `resource` URLs on `.localhost` subdomains as non-HTTPS.

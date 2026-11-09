@@ -291,9 +291,13 @@ describe("mcp plugin", async () => {
 			).toThrow("MCP resource");
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/11337
+		 */
 		it.each([
 			"https://api.example.com/mcp",
 			"http://localhost:3000/mcp",
+			"http://my-branch.api.localhost/mcp",
 			"http://127.0.0.1:3000/mcp",
 			"http://127.42.0.1/mcp",
 			"http://[::1]:3000/mcp",
@@ -303,19 +307,6 @@ describe("mcp plugin", async () => {
 					loginPage: "/login",
 					consentPage: "/consent",
 					resource,
-				}),
-			).not.toThrow();
-		});
-
-		/**
-		 * @see https://github.com/better-auth/better-auth/issues/11337
-		 */
-		it("accepts an HTTP resource on a .localhost subdomain", () => {
-			expect(() =>
-				mcp({
-					loginPage: "/login",
-					consentPage: "/consent",
-					resource: "http://my-branch.api.localhost/mcp",
 				}),
 			).not.toThrow();
 		});
