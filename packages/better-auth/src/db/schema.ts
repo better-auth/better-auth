@@ -297,18 +297,26 @@ export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	if (!newSchema) {
 		return schema;
 	}
+	// Plugins pass a shared module-level schema, so overrides go on copies
+	// to keep them local to this plugin instance.
+	const merged = { ...schema };
 	for (const table in newSchema) {
-		const newModelName = newSchema[table]?.modelName;
-		if (newModelName) {
-			schema[table]!.modelName = newModelName;
+		const base = schema[table];
+		const override = newSchema[table];
+		if (!base || !override) {
+			continue;
 		}
-		for (const field in schema[table]!.fields) {
-			const newField = newSchema[table]?.fields?.[field];
-			if (!newField) {
-				continue;
-			}
-			schema[table]!.fields[field]!.fieldName = newField;
-		}
+		const fields = Object.fromEntries(
+			Object.entries(base.fields).map(([key, field]) => {
+				const fieldName = override.fields?.[key];
+				return [key, fieldName ? { ...field, fieldName } : field];
+			}),
+		);
+		merged[table] = {
+			...base,
+			...(override.modelName ? { modelName: override.modelName } : {}),
+			fields,
+		};
 	}
-	return schema;
+	return merged;
 }
