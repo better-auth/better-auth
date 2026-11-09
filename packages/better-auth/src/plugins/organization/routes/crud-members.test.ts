@@ -289,6 +289,44 @@ describe("listMembers", async () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/10508
+ */
+describe("listMembers on postgres", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [organization()],
+		},
+		{
+			testWith: "postgres",
+		},
+	);
+	const { headers } = await signInWithTestUser();
+
+	it("returns an empty page when the filter matches nobody", async () => {
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "empty-filter",
+				slug: "empty-filter",
+			},
+			headers,
+		});
+		await expect(
+			auth.api.listMembers({
+				query: {
+					organizationId: org.id,
+					filterField: "role",
+					filterValue: "admin",
+				},
+				headers,
+			}),
+		).resolves.toMatchObject({
+			members: [],
+			total: 0,
+		});
+	});
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/9407
  */
 describe("listMembers with >100 members", async () => {
@@ -424,7 +462,7 @@ describe("updateMemberRole", async () => {
 		expect(updatedMember.data?.role).toBe("admin");
 	});
 
-	it("should not update the member role if the member updating is not a member	", async () => {
+	it("should not update the member role if the member updating is not a member", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const client = createAuthClient({
 			plugins: [organizationClient()],

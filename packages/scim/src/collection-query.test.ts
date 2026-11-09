@@ -82,14 +82,17 @@ describe("collection pagination", () => {
 		["startIndex", "next", "invalid-start-index"],
 		["count", Number.POSITIVE_INFINITY, "invalid-count"],
 		["count", "2e2", "invalid-count"],
-	] as const)("returns a typed failure for invalid %s values", (parameter, value, code) => {
-		const result = parseSCIMCollectionQuery("User", { [parameter]: value });
+	] as const)(
+		"returns a typed failure for invalid %s values",
+		(parameter, value, code) => {
+			const result = parseSCIMCollectionQuery("User", { [parameter]: value });
 
-		expect(result).toMatchObject({
-			ok: false,
-			error: { code, parameter, scimType: "invalidValue" },
-		});
-	});
+			expect(result).toMatchObject({
+				ok: false,
+				error: { code, parameter, scimType: "invalidValue" },
+			});
+		},
+	);
 });
 
 describe("collection filters", () => {
@@ -98,35 +101,41 @@ describe("collection filters", () => {
 		["UsErNaMe", "userName"],
 		["EXTERNALID", "externalId"],
 		["Emails.Value", "emails.value"],
-	] as const)("canonicalizes the User %s attribute", (rawAttribute, attribute) => {
-		const result = parseSCIMCollectionQuery("User", {
-			filter: `${rawAttribute} EQ "value"`,
-		});
+	] as const)(
+		"canonicalizes the User %s attribute",
+		(rawAttribute, attribute) => {
+			const result = parseSCIMCollectionQuery("User", {
+				filter: `${rawAttribute} EQ "value"`,
+			});
 
-		expect(result).toMatchObject({
-			ok: true,
-			value: {
-				filters: [{ attribute, operator: "eq", value: "value" }],
-			},
-		});
-	});
+			expect(result).toMatchObject({
+				ok: true,
+				value: {
+					filters: [{ attribute, operator: "eq", value: "value" }],
+				},
+			});
+		},
+	);
 
 	it.each([
 		["ID", "id"],
 		["DisplayName", "displayName"],
 		["EXTERNALID", "externalId"],
-	] as const)("canonicalizes the Group %s attribute", (rawAttribute, attribute) => {
-		const result = parseSCIMCollectionQuery("Group", {
-			filter: `${rawAttribute} eq "value"`,
-		});
+	] as const)(
+		"canonicalizes the Group %s attribute",
+		(rawAttribute, attribute) => {
+			const result = parseSCIMCollectionQuery("Group", {
+				filter: `${rawAttribute} eq "value"`,
+			});
 
-		expect(result).toMatchObject({
-			ok: true,
-			value: {
-				filters: [{ attribute, operator: "eq", value: "value" }],
-			},
-		});
-	});
+			expect(result).toMatchObject({
+				ok: true,
+				value: {
+					filters: [{ attribute, operator: "eq", value: "value" }],
+				},
+			});
+		},
+	);
 
 	it("decodes quoted and escaped JSON string values", () => {
 		const result = parseSCIMCollectionQuery("User", {
@@ -154,14 +163,17 @@ describe("collection filters", () => {
 		],
 		['displayName eq "Research and Development"', "Research and Development"],
 		['displayName eq "Platform - \\"Admins\\""', 'Platform - "Admins"'],
-	] as const)("finds the top-level equality operator in %s", (filter, value) => {
-		expect(parseSCIMCollectionQuery("Group", { filter })).toMatchObject({
-			ok: true,
-			value: {
-				filters: [{ attribute: "displayName", operator: "eq", value }],
-			},
-		});
-	});
+	] as const)(
+		"finds the top-level equality operator in %s",
+		(filter, value) => {
+			expect(parseSCIMCollectionQuery("Group", { filter })).toMatchObject({
+				ok: true,
+				value: {
+					filters: [{ attribute: "displayName", operator: "eq", value }],
+				},
+			});
+		},
+	);
 
 	it("preserves top-level conjunctions when a quoted value contains and", () => {
 		expect(
@@ -202,37 +214,43 @@ describe("collection filters", () => {
 		["User", 'userName eq "ada" trailing', "invalid-filter-value"],
 		["User", "userName eq 7", "invalid-filter-value"],
 		["Group", 'displayName eq "one" ne "two"', "invalid-filter-value"],
-	] as const)("returns %s filter failures without throwing", (resourceType, filter, code) => {
-		const result =
-			resourceType === "User"
-				? parseSCIMCollectionQuery("User", { filter })
-				: parseSCIMCollectionQuery("Group", { filter });
+	] as const)(
+		"returns %s filter failures without throwing",
+		(resourceType, filter, code) => {
+			const result =
+				resourceType === "User"
+					? parseSCIMCollectionQuery("User", { filter })
+					: parseSCIMCollectionQuery("Group", { filter });
 
-		expect(result).toMatchObject({
-			ok: false,
-			error: { code, parameter: "filter", scimType: "invalidFilter" },
-		});
-	});
+			expect(result).toMatchObject({
+				ok: false,
+				error: { code, parameter: "filter", scimType: "invalidFilter" },
+			});
+		},
+	);
 
 	it.each([
 		["Group", 'displayName eq "unterminated'],
 		["Group", 'displayName] eq "Admins"'],
 		["User", 'emails[type eq "work".value eq "ada@example.com"'],
-	] as const)("returns invalid filter syntax for malformed %s quote or bracket state", (resourceType, filter) => {
-		const result =
-			resourceType === "User"
-				? parseSCIMCollectionQuery("User", { filter })
-				: parseSCIMCollectionQuery("Group", { filter });
+	] as const)(
+		"returns invalid filter syntax for malformed %s quote or bracket state",
+		(resourceType, filter) => {
+			const result =
+				resourceType === "User"
+					? parseSCIMCollectionQuery("User", { filter })
+					: parseSCIMCollectionQuery("Group", { filter });
 
-		expect(result).toMatchObject({
-			ok: false,
-			error: {
-				code: "invalid-filter-syntax",
-				parameter: "filter",
-				scimType: "invalidFilter",
-			},
-		});
-	});
+			expect(result).toMatchObject({
+				ok: false,
+				error: {
+					code: "invalid-filter-syntax",
+					parameter: "filter",
+					scimType: "invalidFilter",
+				},
+			});
+		},
+	);
 
 	it("allows SCIM whitespace around the supported work-email value path", () => {
 		const result = parseSCIMCollectionQuery("User", {

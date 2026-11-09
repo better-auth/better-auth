@@ -1,19 +1,22 @@
 import type { JWK } from "jose";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { CompactEncrypt, exportJWK, generateKeyPair, SignJWT } from "jose";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { validateToken } from "./validate-authorization-code";
+import { jwksCache, verifyJwsAccessToken } from "./verify";
 
 describe("validateToken", () => {
-	const originalFetch = globalThis.fetch;
-	const mockedFetch = vi.fn() as unknown as typeof fetch &
-		ReturnType<typeof vi.fn>;
+	const jwksEndpoint = "https://example.com/.well-known/jwks";
+	const mockedFetch = vi.fn<typeof fetch>();
 
-	beforeAll(() => {
-		globalThis.fetch = mockedFetch;
+	beforeEach(() => {
+		mockedFetch.mockReset();
+		jwksCache.clear();
+		vi.stubGlobal("fetch", mockedFetch);
 	});
 
-	afterAll(() => {
-		globalThis.fetch = originalFetch;
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
 	});
 
 	async function createTestJWKS(alg: string, crv?: string) {
@@ -251,5 +254,95 @@ describe("validateToken", () => {
 		expect(result).toBeDefined();
 		expect(result.payload.aud).toBe("test-client");
 		expect(result.payload.iss).toBe("https://example.com");
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+	 */
+	describe("verification policy", () => {
+		it("rejects encrypted tokens before requesting signing keys", async () => {
+			const token = await new CompactEncrypt(new TextEncoder().encode("{}"))
+				.setProtectedHeader({ alg: "dir", enc: "A256GCM" })
+				.encrypt(new Uint8Array(32).fill(1));
+			mockJWKSResponse();
+
+			await expect(validateToken(token, jwksEndpoint)).rejects.toMatchObject({
+				code: "ERR_JWS_INVALID",
+			});
+			expect(mockedFetch).not.toHaveBeenCalled();
+		});
+
+		it("allows clock skew only when requested", async () => {
+			vi.useFakeTimers({ toFake: ["Date"] });
+			try {
+				const { publicJWK, privateKey, kid } = await createTestJWKS("RS256");
+				const token = await createSignedToken(privateKey, "RS256", kid, {
+					nbf: Math.floor(Date.now() / 1000) + 5,
+				});
+				mockJWKSResponse(publicJWK);
+
+				await expect(
+					validateToken(token, jwksEndpoint, { clockTolerance: 30 }),
+				).resolves.toMatchObject({ payload: { sub: "user-123" } });
+				await expect(validateToken(token, jwksEndpoint)).rejects.toMatchObject({
+					code: "ERR_JWT_CLAIM_VALIDATION_FAILED",
+					claim: "nbf",
+				});
+			} finally {
+				vi.useRealTimers();
+			}
+		});
+
+		it("rejects a valid signature using an algorithm outside the allowlist", async () => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS("ES256");
+			const token = await createSignedToken(privateKey, "ES256", kid);
+			mockJWKSResponse(publicJWK);
+
+			await expect(
+				validateToken(token, jwksEndpoint, { algorithms: ["RS256"] }),
+			).rejects.toMatchObject({ code: "ERR_JOSE_ALG_NOT_ALLOWED" });
+		});
+
+		it("rejects a signed token missing a required claim", async () => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS("RS256");
+			const token = new SignJWT({ sub: "user-123" }).setProtectedHeader({
+				alg: "RS256",
+				kid,
+			});
+			mockJWKSResponse(publicJWK);
+
+			await expect(
+				validateToken(await token.sign(privateKey), jwksEndpoint, {
+					requiredClaims: ["exp"],
+				}),
+			).rejects.toMatchObject({
+				code: "ERR_JWT_CLAIM_VALIDATION_FAILED",
+				claim: "exp",
+			});
+		});
+	});
+
+	/**
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#RotateSigKeys
+	 */
+	describe("signing key cache", () => {
+		it("shares cached keys with access token verification", async () => {
+			const { publicJWK, privateKey, kid } = await createTestJWKS("RS256");
+			const token = await createSignedToken(privateKey, "RS256", kid);
+			mockedFetch.mockImplementation(async () =>
+				Response.json({ keys: [publicJWK] }),
+			);
+
+			await validateToken(token, jwksEndpoint);
+			await verifyJwsAccessToken(token, {
+				jwksFetch: jwksEndpoint,
+				verifyOptions: {
+					issuer: "https://example.com",
+					audience: "test-client",
+				},
+			});
+
+			expect(mockedFetch).toHaveBeenCalledTimes(1);
+		});
 	});
 });
