@@ -105,19 +105,19 @@ describe("createMcpProtectedRequestHandler", () => {
 		).rejects.toBe(denial);
 	});
 
-	it.each([
-		"UNAUTHORIZED",
-		"FORBIDDEN",
-	] as const)("propagates a handler-thrown %s API error unchanged", async (status) => {
-		const denial = new APIError(status, { message: "handler denial" });
-		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-3" });
+	it.each(["UNAUTHORIZED", "FORBIDDEN"] as const)(
+		"propagates a handler-thrown %s API error unchanged",
+		async (status) => {
+			const denial = new APIError(status, { message: "handler denial" });
+			verifyAccessTokenRequest.mockResolvedValue({ sub: "user-3" });
 
-		await expect(
-			createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
-				throw denial;
-			})(request()),
-		).rejects.toBe(denial);
-	});
+			await expect(
+				createMcpProtectedRequestHandler(protectedRequestOptions, async () => {
+					throw denial;
+				})(request()),
+			).rejects.toBe(denial);
+		},
+	);
 
 	it("propagates a primitive handler failure unchanged", async () => {
 		verifyAccessTokenRequest.mockResolvedValue({ sub: "user-4" });
@@ -177,9 +177,13 @@ describe("createMcpProtectedRequestHandler", () => {
 		).toThrow("MCP resource");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11337
+	 */
 	it.each([
 		"https://api.example.com/mcp",
 		"http://localhost:3000/mcp",
+		"http://my-branch.api.localhost/mcp",
 		"http://127.0.0.1:3000/mcp",
 		"http://127.42.0.1/mcp",
 		"http://[::1]:3000/mcp",

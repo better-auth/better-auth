@@ -11,7 +11,7 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
-import { parseRoles } from "../organization";
+import { parseRoleList, parseRoles } from "../roles";
 import type {
 	InferMember,
 	InferOrganizationRolesFromOption,
@@ -21,8 +21,7 @@ import type { OrganizationOptions } from "../types";
 
 const baseMemberSchema = z.object({
 	userId: z.coerce.string().meta({
-		description:
-			'The user Id which represents the user to be added as a member. If `null` is provided, then it\'s expected to provide session headers. Eg: "user-id"',
+		description: 'The ID of the user to add as a member. Eg: "user-id"',
 	}),
 	role: z.union([z.string(), z.array(z.string())]).meta({
 		description:
@@ -365,16 +364,11 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				);
 			}
-			const roles = toBeRemovedMember.role.split(",");
+			const roles = parseRoleList(toBeRemovedMember.role);
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const isOwner = roles.includes(creatorRole);
 			if (isOwner) {
-				if (
-					!member.role
-						.split(",")
-						.map((r) => r.trim())
-						.includes(creatorRole)
-				) {
+				if (!parseRoleList(member.role).includes(creatorRole)) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
@@ -383,10 +377,9 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				const { members } = await adapter.listMembers({
 					organizationId: organizationId,
 				});
-				const owners = members.filter((member) => {
-					const roles = member.role.split(",");
-					return roles.includes(creatorRole);
-				});
+				const owners = members.filter((member) =>
+					parseRoleList(member.role).includes(creatorRole),
+				);
 				if (owners.length <= 1) {
 					throw APIError.from(
 						"BAD_REQUEST",
@@ -570,12 +563,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 			}
 
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			const roleToSet: string[] = (
-				Array.isArray(ctx.body.role) ? ctx.body.role : [ctx.body.role]
-			)
-				.flatMap((role) => role.split(","))
-				.map((role) => role.trim())
-				.filter(Boolean);
+			const roleToSet = parseRoleList(ctx.body.role);
 
 			if (roleToSet.length === 0) {
 				throw APIError.fromStatus("BAD_REQUEST");
@@ -617,8 +605,8 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 
-			const updatingMemberRoles = member.role.split(",");
-			const toBeUpdatedMemberRoles = toBeUpdatedMember.role.split(",");
+			const updatingMemberRoles = parseRoleList(member.role);
+			const toBeUpdatedMemberRoles = parseRoleList(toBeUpdatedMember.role);
 
 			const isUpdatingCreator = toBeUpdatedMemberRoles.includes(creatorRole);
 			const updaterIsCreator = updatingMemberRoles.includes(creatorRole);
@@ -647,10 +635,9 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 						},
 					],
 				});
-				const owners = members.filter((member: Member) => {
-					const roles = member.role.split(",");
-					return roles.includes(creatorRole);
-				});
+				const owners = members.filter((member: Member) =>
+					parseRoleList(member.role).includes(creatorRole),
+				);
 				if (owners.length <= 1 && !isSettingCreatorRole) {
 					throw APIError.from(
 						"BAD_REQUEST",
@@ -892,7 +879,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 				);
 			}
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
-			const isOwnerLeaving = member.role.split(",").includes(creatorRole);
+			const isOwnerLeaving = parseRoleList(member.role).includes(creatorRole);
 			if (isOwnerLeaving) {
 				const members = await ctx.context.adapter.findMany<Member>({
 					model: "member",
@@ -904,7 +891,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 					],
 				});
 				const owners = members.filter((member) =>
-					member.role.split(",").includes(creatorRole),
+					parseRoleList(member.role).includes(creatorRole),
 				);
 				if (owners.length <= 1) {
 					throw APIError.from(

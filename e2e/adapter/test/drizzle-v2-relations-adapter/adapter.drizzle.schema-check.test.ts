@@ -73,39 +73,39 @@ describe("relations-v2 schema validation", () => {
 		});
 	});
 
-	it.each([
-		"relations",
-		"schema",
-	] as const)("accepts a complete %s configuration", async (source) => {
-		const client = new Database(":memory:");
-		try {
-			const expected = getExpectedSchema({});
-			function tableFor(name: string) {
-				const columns: Record<string, ReturnType<typeof text>> = {};
-				for (const field of Object.keys(expected[name]!.fields)) {
-					columns[field] = text(field);
+	it.each(["relations", "schema"] as const)(
+		"accepts a complete %s configuration",
+		async (source) => {
+			const client = new Database(":memory:");
+			try {
+				const expected = getExpectedSchema({});
+				function tableFor(name: string) {
+					const columns: Record<string, ReturnType<typeof text>> = {};
+					for (const field of Object.keys(expected[name]!.fields)) {
+						columns[field] = text(field);
+					}
+					return sqliteTable(name, { ...columns, id: text("id").primaryKey() });
 				}
-				return sqliteTable(name, { ...columns, id: text("id").primaryKey() });
+				const schema = {
+					user: tableFor("user"),
+					session: tableFor("session"),
+					account: tableFor("account"),
+					verification: tableFor("verification"),
+				};
+				const db =
+					source === "relations"
+						? drizzle({ client, relations: defineRelations(schema) })
+						: drizzle({ client, schema });
+				const check = schemaCheckFor(
+					drizzleAdapter(db, { provider: "sqlite" })({}),
+				);
+				expect(check).toBeTypeOf("function");
+				await expect(check!()).resolves.toBeUndefined();
+			} finally {
+				client.close();
 			}
-			const schema = {
-				user: tableFor("user"),
-				session: tableFor("session"),
-				account: tableFor("account"),
-				verification: tableFor("verification"),
-			};
-			const db =
-				source === "relations"
-					? drizzle({ client, relations: defineRelations(schema) })
-					: drizzle({ client, schema });
-			const check = schemaCheckFor(
-				drizzleAdapter(db, { provider: "sqlite" })({}),
-			);
-			expect(check).toBeTypeOf("function");
-			await expect(check!()).resolves.toBeUndefined();
-		} finally {
-			client.close();
-		}
-	});
+		},
+	);
 
 	it("uses relation tables before fullSchema and preserves renamed model keys", async ({
 		onTestFinished,

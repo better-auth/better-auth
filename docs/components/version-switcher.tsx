@@ -49,6 +49,7 @@ function useDismissablePopover(
 
 function getVersionTitle(version: DocsVersion) {
 	if (version.id === "latest") return "Latest Version";
+	if (version.id === "beta") return "Beta Version";
 	return `Version ${version.id}`;
 }
 

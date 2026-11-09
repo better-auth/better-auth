@@ -19,6 +19,7 @@ import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
+import { phoneNumber } from "../phone-number";
 import { admin } from "./admin";
 import { ADMIN_ERROR_CODES, adminClient } from "./client";
 import type { UserWithRole } from "./types";
@@ -727,6 +728,37 @@ describe("Admin plugin", async () => {
 			password: "test",
 		});
 		expect(signIn.error?.status).toBe(403);
+	});
+
+	it("should not create a session for a banned user outside an endpoint context", async () => {
+		const created = await client.admin.createUser(
+			{
+				name: "Out Of Context User",
+				email: "out-of-context@email.com",
+				password: "test",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const userId = created.data?.user.id || "";
+		await client.admin.banUser(
+			{
+				userId,
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		const ctx = await auth.$context;
+		await expect(
+			ctx.internalAdapter.createSession(userId),
+		).rejects.toMatchObject({
+			body: {
+				code: "BANNED_USER",
+			},
+		});
 	});
 
 	it("should allow to unban user", async () => {
@@ -1533,6 +1565,26 @@ describe("Admin plugin", async () => {
 		expect(res.error?.code).toBe("PASSWORD_CANNOT_BE_UPDATED_VIA_UPDATE_USER");
 	});
 
+	it("should not allow updating the user id through update-user", async () => {
+		const res = await client.admin.updateUser(
+			{
+				userId: testNonAdminUser.id,
+				data: {
+					id: "new-user-id",
+				},
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("USER_ID_CANNOT_BE_UPDATED");
+
+		const ctx = await auth.$context;
+		const user = await ctx.internalAdapter.findUserById(testNonAdminUser.id);
+		expect(user?.id).toBe(testNonAdminUser.id);
+	});
+
 	it("should revoke sessions when banning a user via update-user", async () => {
 		const targetHeaders = new Headers();
 		const { data: target } = await client.signUp.email(
@@ -1982,6 +2034,38 @@ describe("access control", async () => {
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL");
 	});
+
+	it.for([{ phoneNumber: "+15550000001" }, { phoneNumberVerified: true }])(
+		"should require user:set-phone to update %o via update-user",
+		async (data) => {
+			const supportHeaders = new Headers();
+			await client.signUp.email(
+				{
+					email: `support-phone-${Object.keys(data)[0]}@test.com`,
+					password: "password",
+					name: "Support",
+				},
+				{
+					onSuccess: cookieSetter(supportHeaders),
+				},
+			);
+			const { user: adminUser } = await signInWithTestUser();
+
+			const res = await client.admin.updateUser(
+				{
+					userId: adminUser.id,
+					data,
+				},
+				{
+					headers: supportHeaders,
+				},
+			);
+			expect(res.error?.status).toBe(403);
+			expect(res.error?.code).toBe(
+				"YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PHONE_NUMBER",
+			);
+		},
+	);
 
 	it("should validate on the client", async () => {
 		const canCreateOrder = client.admin.checkRolePermission({
@@ -2760,5 +2844,61 @@ describe("admin create-user password length", async () => {
 		});
 
 		expect(hash).not.toHaveBeenCalled();
+	});
+});
+
+describe("admin update-user phone number with default roles", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				admin(),
+				phoneNumber({
+					async sendOTP() {},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name !== "Admin") return;
+							return {
+								data: {
+									...user,
+									role: "admin",
+								},
+							};
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+
+	it("lets the default admin role change another user's phone number", async () => {
+		const { headers } = await signInWithTestUser();
+		const target = await auth.api.signUpEmail({
+			body: {
+				email: "phone-target@test.com",
+				password: "password",
+				name: "Target",
+			},
+		});
+
+		const updated = await auth.api.adminUpdateUser({
+			body: {
+				userId: target.user.id,
+				data: {
+					phoneNumber: "+15550000003",
+				},
+			},
+			headers,
+		});
+
+		expect(updated).toMatchObject({ phoneNumber: "+15550000003" });
 	});
 });

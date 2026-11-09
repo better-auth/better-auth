@@ -78,14 +78,14 @@ export const referenceMiddleware = (
 			if (!isAuthorized) {
 				throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 			}
-			return { referenceId };
+			return { referenceId, customerType };
 		}
 
 		const referenceId = explicitReferenceId || ctxSession.user.id;
 
 		// User subscriptions - pass for own id or no explicit referenceId
 		if (!explicitReferenceId || explicitReferenceId === ctxSession.user.id) {
-			return { referenceId };
+			return { referenceId, customerType: "user" as CustomerType };
 		}
 
 		if (!subscriptionOptions.authorizeReference) {
@@ -109,5 +109,5 @@ export const referenceMiddleware = (
 		if (!isAuthorized) {
 			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 		}
-		return { referenceId };
+		return { referenceId, customerType: "user" as CustomerType };
 	});

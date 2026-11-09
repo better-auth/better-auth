@@ -271,32 +271,32 @@ describe("CIMD HTTP metadata cache", () => {
 			cacheControl: "max-age=invalid",
 			clientId: "https://cache-tests.example/invalid-private-cache.json",
 		},
-	])("immediately revalidates an ambiguous freshness policy: $name", async ({
-		cacheControl,
-		clientId,
-	}) => {
-		let requestCount = 0;
-		responders.set(clientId, async (_input, init) => {
-			requestCount += 1;
-			if (requestCount === 1) {
-				return jsonMetadataResponse(clientId, {
-					"cache-control": cacheControl,
-					etag: '"ambiguous-v1"',
+	])(
+		"immediately revalidates an ambiguous freshness policy: $name",
+		async ({ cacheControl, clientId }) => {
+			let requestCount = 0;
+			responders.set(clientId, async (_input, init) => {
+				requestCount += 1;
+				if (requestCount === 1) {
+					return jsonMetadataResponse(clientId, {
+						"cache-control": cacheControl,
+						etag: '"ambiguous-v1"',
+					});
+				}
+				expect(new Headers(init?.headers).get("if-none-match")).toBe(
+					'"ambiguous-v1"',
+				);
+				return new Response(null, {
+					status: 304,
+					headers: { "cache-control": "s-maxage=60" },
 				});
-			}
-			expect(new Headers(init?.headers).get("if-none-match")).toBe(
-				'"ambiguous-v1"',
-			);
-			return new Response(null, {
-				status: 304,
-				headers: { "cache-control": "s-maxage=60" },
 			});
-		});
 
-		await authorize(clientId);
-		await authorize(clientId);
-		expect(metadataFetch).toHaveBeenCalledTimes(2);
-	});
+			await authorize(clientId);
+			await authorize(clientId);
+			expect(metadataFetch).toHaveBeenCalledTimes(2);
+		},
+	);
 
 	it("conditionally revalidates no-cache entries with ETag and accepts 304", async () => {
 		const clientId = "https://cache-tests.example/etag-cache.json";
@@ -378,22 +378,22 @@ describe("CIMD HTTP metadata cache", () => {
 		name: string;
 		clientId: string;
 		headers: Record<string, string>;
-	}[])("does not cache a response with $name", async ({
-		clientId,
-		headers,
-	}) => {
-		const responseHeaders: Record<string, string> = {
-			"cache-control": headers["cache-control"],
-		};
-		if (headers.vary) responseHeaders.vary = headers.vary;
-		responders.set(clientId, async () =>
-			jsonMetadataResponse(clientId, responseHeaders),
-		);
+	}[])(
+		"does not cache a response with $name",
+		async ({ clientId, headers }) => {
+			const responseHeaders: Record<string, string> = {
+				"cache-control": headers["cache-control"],
+			};
+			if (headers.vary) responseHeaders.vary = headers.vary;
+			responders.set(clientId, async () =>
+				jsonMetadataResponse(clientId, responseHeaders),
+			);
 
-		await authorize(clientId);
-		await authorize(clientId);
-		expect(metadataFetch).toHaveBeenCalledTimes(2);
-	});
+			await authorize(clientId);
+			await authorize(clientId);
+			expect(metadataFetch).toHaveBeenCalledTimes(2);
+		},
+	);
 
 	it("evicts the least-recently-used entry at the configured bound", async () => {
 		const clientIds = [

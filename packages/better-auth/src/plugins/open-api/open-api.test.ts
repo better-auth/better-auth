@@ -213,6 +213,18 @@ const queryConstraintsPlugin = {
 			},
 			async () => ({ success: true }),
 		),
+		optionalQuery: createAuthEndpoint(
+			"/test/optional-query",
+			{
+				method: "GET",
+				query: z.optional(
+					z.object({
+						referenceId: z.string().optional(),
+					}),
+				),
+			},
+			async () => ({ success: true }),
+		),
 	},
 } satisfies BetterAuthPlugin;
 
@@ -1063,6 +1075,21 @@ describe("open-api", async () => {
 			minLength: 6,
 			type: "string",
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10750
+	 */
+	it("should document parameters of an optional query object", async () => {
+		const schema = await authWithQueryConstraints.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+
+		expect(paths["/test/optional-query"]?.get?.parameters).toContainEqual(
+			expect.objectContaining({
+				name: "referenceId",
+				in: "query",
+			}),
+		);
 	});
 
 	it("should not evaluate request body default factories", async () => {
