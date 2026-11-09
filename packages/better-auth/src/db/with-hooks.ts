@@ -295,7 +295,7 @@ export function getWithHooks(
 
 		const customDeleted = customDeleteFn
 			? await customDeleteFn.fn(where)
-			: null;
+			: undefined;
 
 		const shouldRunAdapterDelete =
 			!customDeleteFn || customDeleteFn.executeMainFn;

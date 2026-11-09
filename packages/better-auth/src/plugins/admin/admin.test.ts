@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthPlugin, SecondaryStorage } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -1297,6 +1297,28 @@ describe("Admin plugin", async () => {
 
 	it("should return success false when session deletion is vetoed by hook under preserveSessionInDatabase", async () => {
 		const secondaryStore = new Map<string, string>();
+		const createTestSecondaryStorage = (
+			store: Map<string, string>,
+		): SecondaryStorage => ({
+			get: async (key: string) => store.get(key) || null,
+			set: async (key: string, value: string) => {
+				store.set(key, value);
+			},
+			delete: async (key: string) => {
+				store.delete(key);
+			},
+			getAndDelete: async (key: string) => {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment: async (key: string) => {
+				const current = Number(store.get(key) ?? 0);
+				const count = Number.isFinite(current) ? current + 1 : 1;
+				store.set(key, String(count));
+				return count;
+			},
+		});
 		const {
 			auth: pAuth,
 			signInWithTestUser: pSignIn,
@@ -1304,15 +1326,7 @@ describe("Admin plugin", async () => {
 			db: pDb,
 		} = await getTestInstance(
 			{
-				secondaryStorage: {
-					get: async (key: string) => secondaryStore.get(key) || null,
-					set: async (key: string, value: string) => {
-						secondaryStore.set(key, value);
-					},
-					delete: async (key: string) => {
-						secondaryStore.delete(key);
-					},
-				},
+				secondaryStorage: createTestSecondaryStorage(secondaryStore),
 				session: {
 					storeSessionInDatabase: true,
 					preserveSessionInDatabase: true,

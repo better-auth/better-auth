@@ -946,10 +946,6 @@ export const createInternalAdapter = (
 				return;
 			}
 
-			if (ctx.options.session?.preserveSessionInDatabase) {
-				return await endPreservedSessions([{ field: "token", value: token }]);
-			}
-
 			return await deleteWithHooks(
 				[{ field: "token", value: token }],
 				"session",

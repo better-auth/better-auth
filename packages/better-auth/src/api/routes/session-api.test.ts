@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { GenericEndpointContext, SecondaryStorage } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import {
 	runWithEndpointContext,
@@ -827,17 +827,31 @@ describe("session storage", async () => {
 
 	it("should return status false when hook vetoes revocation with secondaryStorage and preserveSessionInDatabase", async () => {
 		const secondaryStore = new Map<string, string>();
+		const createTestSecondaryStorage = (
+			store: Map<string, string>,
+		): SecondaryStorage => ({
+			get: async (key: string) => store.get(key) || null,
+			set: async (key: string, value: string) => {
+				store.set(key, value);
+			},
+			delete: async (key: string) => {
+				store.delete(key);
+			},
+			getAndDelete: async (key: string) => {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment: async (key: string) => {
+				const current = Number(store.get(key) ?? 0);
+				const count = Number.isFinite(current) ? current + 1 : 1;
+				store.set(key, String(count));
+				return count;
+			},
+		});
 		const { client: preserveClient, signInWithTestUser: preserveSignIn, db } =
 			await getTestInstance({
-				secondaryStorage: {
-					get: async (key: string) => secondaryStore.get(key) || null,
-					set: async (key: string, value: string) => {
-						secondaryStore.set(key, value);
-					},
-					delete: async (key: string) => {
-						secondaryStore.delete(key);
-					},
-				},
+				secondaryStorage: createTestSecondaryStorage(secondaryStore),
 				session: {
 					storeSessionInDatabase: true,
 					preserveSessionInDatabase: true,
@@ -868,6 +882,90 @@ describe("session storage", async () => {
 			});
 			expect(dbSession).not.toBeNull();
 			expect(new Date(dbSession!.expiresAt).getTime()).toBeGreaterThan(Date.now());
+		});
+	});
+
+	it("should succeed on retry if database row was already deleted before cache cleanup", async () => {
+		const secondaryStore = new Map<string, string>();
+		const createTestSecondaryStorage = (
+			store: Map<string, string>,
+		): SecondaryStorage => ({
+			get: async (key: string) => store.get(key) || null,
+			set: async (key: string, value: string) => {
+				store.set(key, value);
+			},
+			delete: async (key: string) => {
+				store.delete(key);
+			},
+			getAndDelete: async (key: string) => {
+				const value = store.get(key) || null;
+				store.delete(key);
+				return value;
+			},
+			increment: async (key: string) => {
+				const current = Number(store.get(key) ?? 0);
+				const count = Number.isFinite(current) ? current + 1 : 1;
+				store.set(key, String(count));
+				return count;
+			},
+		});
+		const { client: retryClient, signInWithTestUser: retrySignIn, db } =
+			await getTestInstance({
+				secondaryStorage: createTestSecondaryStorage(secondaryStore),
+				session: {
+					storeSessionInDatabase: true,
+				},
+			});
+
+		const { runWithUser } = await retrySignIn();
+		await runWithUser(async () => {
+			const session = await retryClient.getSession();
+			expect(session.data).not.toBeNull();
+			const token = session.data?.session?.token || "";
+
+			// Manually remove database row first to simulate a retry after a previous partial failure
+			await db.delete({
+				model: "session",
+				where: [{ field: "token", value: token }],
+			});
+
+			const res = await retryClient.revokeSession({
+				token,
+			});
+			expect(res.data?.status).toBe(true);
+
+			const sessionAfter = await retryClient.getSession();
+			expect(sessionAfter.data).toBeNull();
+		});
+	});
+
+	it("should delete session row normally when preserveSessionInDatabase is set without secondaryStorage", async () => {
+		const { client: noSecClient, signInWithTestUser: noSecSignIn, db } =
+			await getTestInstance({
+				session: {
+					preserveSessionInDatabase: true,
+				},
+			});
+
+		const { runWithUser } = await noSecSignIn();
+		await runWithUser(async () => {
+			const session = await noSecClient.getSession();
+			expect(session.data).not.toBeNull();
+			const token = session.data?.session?.token || "";
+
+			const res = await noSecClient.revokeSession({
+				token,
+			});
+			expect(res.data?.status).toBe(true);
+
+			const sessionAfter = await noSecClient.getSession();
+			expect(sessionAfter.data).toBeNull();
+
+			const dbSession = await db.findOne({
+				model: "session",
+				where: [{ field: "token", value: token }],
+			});
+			expect(dbSession).toBeNull();
 		});
 	});
 });
