@@ -2850,7 +2850,7 @@ describe("admin create-user password length", async () => {
 /**
  * @see https://github.com/better-auth/better-auth/issues/11706
  */
-describe("admin create-user password hashing", async () => {
+describe("admin create-user failures", async () => {
 	const { auth } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,
@@ -2862,6 +2862,17 @@ describe("admin create-user password hashing", async () => {
 					return `hashed:${password}`;
 				},
 				verify: async ({ hash, password }) => hash === `hashed:${password}`,
+			},
+		},
+		databaseHooks: {
+			account: {
+				create: {
+					before: async (account) => {
+						if (account.password === "hashed:rejected-account") {
+							throw new Error("rejected by account hook");
+						}
+					},
+				},
 			},
 		},
 		plugins: [admin()],
@@ -2881,6 +2892,35 @@ describe("admin create-user password hashing", async () => {
 				},
 			}),
 		).rejects.toThrow("rejected by hasher");
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					...body,
+					password: "accepted-password",
+				},
+			}),
+		).resolves.toMatchObject({
+			user: {
+				email: body.email,
+			},
+		});
+	});
+
+	it("should not leave a user behind when creating the credential account fails", async () => {
+		const body = {
+			email: "link-fails@test.com",
+			name: "Link Fails",
+		};
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					...body,
+					password: "rejected-account",
+				},
+			}),
+		).rejects.toThrow("rejected by account hook");
 
 		await expect(
 			auth.api.createUser({
