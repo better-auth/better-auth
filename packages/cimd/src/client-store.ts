@@ -168,7 +168,8 @@ export async function fetchClientMetadataDocument(
 		try {
 			response = await cimdOptions.fetchClientMetadataResource(clientIdUrl, {
 				headers: requestHeaders,
-				redirect: "error",
+				// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
+				redirect: "manual",
 				signal: controller.signal,
 			});
 		} catch {

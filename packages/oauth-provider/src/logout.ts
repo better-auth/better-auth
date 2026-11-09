@@ -307,7 +307,8 @@ async function deliverBackchannelLogoutTokens(
 					},
 					body: new URLSearchParams({ logout_token: token }),
 					signal: AbortSignal.timeout(BACKCHANNEL_DISPATCH_TIMEOUT_MS),
-					redirect: "error",
+					// Not "error": Workers rejects it. The status check refuses 3xx and opaque redirects.
+					redirect: "manual",
 				});
 				// Spec §2.8: RP MUST return 200; many frameworks normalize empty 200
 				// bodies to 204, which is commonly accepted.

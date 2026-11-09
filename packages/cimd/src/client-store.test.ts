@@ -81,6 +81,30 @@ describe("fetchClientMetadataDocument", () => {
 		expect(vi.getTimerCount()).toBe(0);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11328
+	 */
+	it("fetches through a transport without redirect: error", async () => {
+		const result = fetchClientMetadataDocument(
+			{} as unknown as GenericEndpointContext,
+			CLIENT_ID_URL,
+			{
+				// Cloudflare Workers only accepts "follow" and "manual".
+				fetchClientMetadataResource: async (_input, init) => {
+					if (init?.redirect === "error") {
+						throw new TypeError("Invalid redirect value");
+					}
+					return Response.json({
+						client_id: CLIENT_ID_URL,
+						redirect_uris: ["https://hanging-body-client.example.com/callback"],
+					});
+				},
+			},
+		);
+
+		await expect(result).resolves.toMatchObject({ status: "modified" });
+	});
+
 	it("preserves the metadata size-limit APIError", async () => {
 		vi.useFakeTimers();
 		const result = fetchClientMetadataDocument(
