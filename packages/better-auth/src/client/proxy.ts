@@ -9,30 +9,6 @@ import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
 import type { ProxyRequest } from "./path-to-object";
 
-function getMethod(
-	path: string,
-	knownPathMethods: Record<string, "POST" | "GET">,
-	args:
-		| {
-				fetchOptions?: ClientFetchOption | undefined;
-				query?: Record<string, any> | undefined;
-		  }
-		| undefined,
-) {
-	const method = knownPathMethods[path];
-	const { fetchOptions, query: _query, ...body } = args || {};
-	if (method) {
-		return method;
-	}
-	if (fetchOptions?.method) {
-		return fetchOptions.method;
-	}
-	if (body && Object.keys(body).length > 0) {
-		return "POST";
-	}
-	return "GET";
-}
-
 export function createDynamicPathProxy<T extends Record<string, any>>(
 	routes: T,
 	client: BetterFetch,
@@ -76,7 +52,10 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					...fetchOptions,
 					...argFetchOptions,
 				} as ClientFetchOption;
-				const method = getMethod(routePath, knownPathMethods, arg);
+				const method =
+					knownPathMethods[routePath] ||
+					options.method ||
+					(Object.keys(body).length > 0 ? "POST" : "GET");
 				return await client(routePath, {
 					...options,
 					body:

@@ -177,4 +177,36 @@ describe("createDynamicPathProxy", () => {
 		await proxy.organization.setActive();
 		await vi.waitFor(() => expect(updates).toHaveBeenCalledTimes(3));
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11727
+	 */
+	it("sends the method passed in second-argument fetch options", async () => {
+		const { $fetch, pluginPathMethods, pluginsAtoms, atomListeners } =
+			getClientConfig({
+				baseURL: "http://localhost:3000",
+				fetchOptions: {
+					customFetchImpl: async (_, init) =>
+						Response.json({ method: init?.method }),
+				},
+			});
+		const proxy = createDynamicPathProxy(
+			{} as {
+				probe: (
+					body: { value?: string },
+					options: { method: string },
+				) => Promise<{ data: unknown }>;
+			},
+			$fetch,
+			pluginPathMethods,
+			pluginsAtoms,
+			atomListeners,
+		);
+
+		const post = await proxy.probe({}, { method: "POST" });
+		const get = await proxy.probe({ value: "example" }, { method: "GET" });
+
+		expect(post.data).toEqual({ method: "POST" });
+		expect(get.data).toEqual({ method: "GET" });
+	});
 });
