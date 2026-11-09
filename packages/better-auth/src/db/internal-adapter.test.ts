@@ -11,6 +11,7 @@ import {
 	beforeAll,
 	describe,
 	expect,
+	expectTypeOf,
 	it,
 	onTestFinished,
 	vi,
@@ -2596,5 +2597,46 @@ describe("internal adapter test", async () => {
 			expect(first).toBe(true);
 			expect(second).toBe(true);
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12343
+ */
+describe("listSessions with additional session fields", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		session: {
+			additionalFields: {
+				deviceName: {
+					type: "string",
+					required: false,
+					defaultValue: "laptop",
+				},
+			},
+		},
+	});
+
+	it("returns the additional fields and types them through the generic", async () => {
+		const { user } = await signInWithTestUser();
+		const { internalAdapter } = await auth.$context;
+
+		const sessions = await internalAdapter.listSessions<{
+			deviceName?: string | null;
+		}>(user.id);
+		expect(sessions.length).toBeGreaterThan(0);
+		expect(sessions.every((s) => s.deviceName === "laptop")).toBe(true);
+		expectTypeOf(sessions[0]!.deviceName).toEqualTypeOf<
+			string | null | undefined
+		>();
+		expectTypeOf(sessions[0]!.token).toEqualTypeOf<string>();
+	});
+
+	it("allows reading additional fields without a type argument", async () => {
+		const { user } = await signInWithTestUser();
+		const { internalAdapter } = await auth.$context;
+
+		const sessions = await internalAdapter.listSessions(user.id);
+		expect(sessions[0]?.deviceName).toBe("laptop");
+		expectTypeOf(sessions[0]!.userId).toEqualTypeOf<string>();
 	});
 });
