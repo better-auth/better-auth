@@ -36,12 +36,24 @@ it("build client without zod runtime", async () => {
 	);
 });
 
-it("build minimal without unexpected imports", async () => {
-	const { outputFiles } = await bundle("minimal");
-	assert.ok(
-		!outputFiles[0]!.text.includes("class Kysely"),
-		"Built output should not contain 'kysely' imports",
-	);
+// The metafile also lists tree-shaken inputs, so count only bytes kept in the output.
+async function bundledKyselyBytes(entry: string) {
+	const { metafile } = await bundle(entry);
+	return Object.values(metafile.outputs)
+		.flatMap((output) => Object.entries(output.inputs))
+		.filter(([path]) => /\/kysely(-adapter)?\//.test(path))
+		.reduce((sum, [, input]) => sum + input.bytesInOutput, 0);
+}
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12312
+ */
+it("build minimal with Drizzle and Expo without Kysely", async () => {
+	assert.strictEqual(await bundledKyselyBytes("minimal"), 0);
+});
+
+it("detects Kysely in the full build", async () => {
+	assert.ok((await bundledKyselyBytes("full")) > 0);
 });
 
 /**

@@ -952,12 +952,18 @@ importers:
 
   e2e/smoke/test/fixtures/esbuild:
     dependencies:
+      '@better-auth/expo':
+        specifier: workspace:*
+        version: link:../../../../../packages/expo
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../../packages/kysely-adapter
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@cloudflare/workers-types@4.20260226.1)(@electric-sql/pglite@0.4.1)(@opentelemetry/api@1.9.1)(@prisma/client@7.8.0(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(@upstash/redis@1.38.0)(better-sqlite3@12.11.1)(bun-types@1.3.14)(kysely@0.28.17)(mysql2@3.24.2(@types/node@25.9.4))(pg@8.22.0)(postgres@3.4.8)(prisma@7.8.0(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(better-sqlite3@12.11.1)(magicast@0.5.5)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3))
     devDependencies:
       esbuild:
         specifier: ^0.28.1
