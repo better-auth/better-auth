@@ -675,6 +675,24 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				}
 			}
 
+			// A phone number is a sign-in method, so changing it needs `user:set-phone`.
+			if (hasDataKey("phoneNumber") || hasDataKey("phoneNumberVerified")) {
+				const canSetPhone = hasPermission({
+					userId: ctx.context.session.user.id,
+					role: ctx.context.session.user.role,
+					options: opts,
+					permissions: {
+						user: ["set-phone"],
+					},
+				});
+				if (!canSetPhone) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PHONE_NUMBER,
+					);
+				}
+			}
+
 			const isUserExist = await ctx.context.internalAdapter.findUserById(
 				ctx.body.userId,
 			);
