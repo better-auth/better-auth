@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@better-fetch/fetch': 1.3.2
+  '@better-fetch/fetch': 1.3.3
   path-to-regexp@>=8: ^8.4.0
   fast-uri@<=3.1.3: '>=3.1.4 <4'
   hono: '>=4.12.27 <5'
@@ -31,7 +31,7 @@ importers:
         version: link:../../packages/electron
       '@better-auth/infra':
         specifier: ^0.3.5
-        version: 0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.5.4)
+        version: 0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.6.6)
       '@better-auth/kysely-adapter':
         specifier: link:../../packages/kysely-adapter
         version: link:../../packages/kysely-adapter
@@ -234,8 +234,8 @@ importers:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       stripe:
-        specifier: 22.0.1
-        version: 22.0.1(@types/node@25.9.4)
+        specifier: 23.0.0
+        version: 23.0.0(@types/node@25.9.4)
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
@@ -246,8 +246,8 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       zod:
-        specifier: ^4.5.4
-        version: 4.5.4
+        specifier: ^4.6.6
+        version: 4.6.6
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4.2.1
@@ -315,8 +315,8 @@ packages:
   '@better-auth/utils@0.4.2':
     resolution: {integrity: sha512-AUxrvu+HaaODsUyzDxFgwd/8RZ1yZaYo42LXKSrU2oGgR38pS1ij8nqQKNgtTWoYGpNevNXtCfgTy6loHveW9A==}
 
-  '@better-fetch/fetch@1.3.2':
-    resolution: {integrity: sha512-Gs7n99b5tqUC6cQAPbV0uED3IraHB6xQbHLQ/C3l7ZFafHScOx9pQ+DYmP5blbLFShVWLqxNUlI9wi4xU/X+ow==}
+  '@better-fetch/fetch@1.3.3':
+    resolution: {integrity: sha512-U6SlDt/GUWtK2JAxS/NhdoYTEim+EL1G5byz2TUj83KjLZBUpYzb5SmX0aXaCnbGkAjFKnV/o/0+cyXMbEcqqg==}
 
   '@date-fns/tz@1.4.1':
     resolution: {integrity: sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==}
@@ -2305,11 +2305,11 @@ packages:
   standardwebhooks@1.0.0:
     resolution: {integrity: sha512-BbHGOQK9olHPMvQNHWul6MYlrRTAOKn03rOe4A8O3CLWhNf4YHBqq2HJKKC+sfqpxiBY52pNeesD6jIiLDz8jg==}
 
-  stripe@22.0.1:
-    resolution: {integrity: sha512-Yw764pZ6s8Xu4CtUZdD5uWOkw6gc9xzO9OKylCuj1gMhMDLbyGbDtaPNNSFE4mB6njYSHESYIVbF1iIzUfAl2g==}
-    engines: {node: '>=18'}
+  stripe@23.0.0:
+    resolution: {integrity: sha512-MDE2A5ZVVluYURORaZEVghSmnLJc3w6aHAlZSxDQMsOjOb3V0O6ro/CiaeFlJS4N7uIVmsg98ocRsPmUK6YfyA==}
+    engines: {node: '>=20'}
     peerDependencies:
-      '@types/node': '>=18'
+      '@types/node': '>=20'
     peerDependenciesMeta:
       '@types/node':
         optional: true
@@ -2418,23 +2418,23 @@ packages:
       utf-8-validate:
         optional: true
 
-  zod@4.5.4:
-    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
+  zod@4.6.6:
+    resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
 snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
 
-  '@better-auth/infra@0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.5.4)':
+  '@better-auth/infra@0.3.6(@better-auth/core@..+packages+core)(better-auth@..+packages+better-auth)(zod@4.6.6)':
     dependencies:
       '@better-auth/core': link:../../packages/core
       '@better-auth/utils': 0.4.2
-      '@better-fetch/fetch': 1.3.2
+      '@better-fetch/fetch': 1.3.3
       better-auth: link:../../packages/better-auth
-      better-call: 1.3.7(zod@4.5.4)
+      better-call: 1.3.7(zod@4.6.6)
       jose: 6.2.2
       libphonenumber-js: 1.13.8
-      zod: 4.5.4
+      zod: 4.6.6
 
   '@better-auth/utils@0.4.0':
     dependencies:
@@ -2444,7 +2444,7 @@ snapshots:
     dependencies:
       '@noble/hashes': 2.2.0
 
-  '@better-fetch/fetch@1.3.2': {}
+  '@better-fetch/fetch@1.3.3': {}
 
   '@date-fns/tz@1.4.1': {}
 
@@ -2667,12 +2667,12 @@ snapshots:
 
   '@modelcontextprotocol/core@2.3.1':
     dependencies:
-      zod: 4.5.4
+      zod: 4.6.6
 
   '@modelcontextprotocol/server@2.3.1':
     dependencies:
       '@modelcontextprotocol/core': 2.3.1
-      zod: 4.5.4
+      zod: 4.6.6
 
   '@neon-rs/load@0.0.4': {}
 
@@ -3705,14 +3705,14 @@ snapshots:
 
   baseline-browser-mapping@2.11.1: {}
 
-  better-call@1.3.7(zod@4.5.4):
+  better-call@1.3.7(zod@4.6.6):
     dependencies:
       '@better-auth/utils': 0.4.0
-      '@better-fetch/fetch': 1.3.2
+      '@better-fetch/fetch': 1.3.3
       rou3: 0.7.12
       set-cookie-parser: 3.1.2
     optionalDependencies:
-      zod: 4.5.4
+      zod: 4.6.6
 
   caniuse-lite@1.0.30001806: {}
 
@@ -4271,7 +4271,7 @@ snapshots:
       '@stablelib/base64': 1.0.1
       fast-sha256: 1.3.0
 
-  stripe@22.0.1(@types/node@25.9.4):
+  stripe@23.0.0(@types/node@25.9.4):
     optionalDependencies:
       '@types/node': 25.9.4
 
@@ -4360,4 +4360,4 @@ snapshots:
 
   ws@8.21.0: {}
 
-  zod@4.5.4: {}
+  zod@4.6.6: {}

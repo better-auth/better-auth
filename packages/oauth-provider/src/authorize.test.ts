@@ -1167,6 +1167,46 @@ describe("oauth authorize - authenticated", async () => {
 		);
 		expect(callbackRedirectUrl).not.toContain("/consent");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11481
+	 */
+	it("accepts consent through auth.api with headers only", async () => {
+		if (!oauthClientNeedsConsent?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClientNeedsConsent.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "server-consent");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const consentUrl = new URL(consentRedirectUrl, authServerBaseUrl);
+		expect(consentUrl.pathname).toBe("/consent");
+
+		await expect(
+			auth.api.oauth2Consent({
+				headers: new Headers(headers),
+				body: {
+					accept: true,
+					oauth_query: consentUrl.searchParams.toString(),
+				},
+			}),
+		).resolves.toMatchObject({
+			redirect: true,
+			url: expect.stringContaining(`${redirectUri}?code=`),
+		});
+	});
 });
 
 describe("oauth authorize - consented resources", async () => {
