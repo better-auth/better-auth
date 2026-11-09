@@ -295,6 +295,33 @@ describe("oauth authorize - unauthenticated", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/croffasia/itsaplan/issues/564
+	 */
+	it("reports an unknown client_id as a client that was not found", async () => {
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.search = new URLSearchParams({
+			response_type: "code",
+			client_id: "no-such-client",
+			redirect_uri: redirectUri,
+			code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+			code_challenge_method: "S256",
+		}).toString();
+
+		let location = "";
+		await unauthenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		const errorUrl = new URL(location, authServerBaseUrl);
+		expect(errorUrl.origin).toBe(authServerBaseUrl);
+		expect(errorUrl.searchParams.get("error")).toBe("invalid_client");
+		expect(errorUrl.searchParams.get("error_description")).toBe(
+			"client not found",
+		);
+	});
+
 	it("should replace incoming sig when signing the login redirect", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
@@ -1139,6 +1166,46 @@ describe("oauth authorize - authenticated", async () => {
 			`iss=${encodeURIComponent(authServerBaseUrl)}`,
 		);
 		expect(callbackRedirectUrl).not.toContain("/consent");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11481
+	 */
+	it("accepts consent through auth.api with headers only", async () => {
+		if (!oauthClientNeedsConsent?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", oauthClientNeedsConsent.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "server-consent");
+		authUrl.searchParams.set("code_challenge", generateRandomString(43));
+		authUrl.searchParams.set("code_challenge_method", "S256");
+
+		let consentRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				consentRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const consentUrl = new URL(consentRedirectUrl, authServerBaseUrl);
+		expect(consentUrl.pathname).toBe("/consent");
+
+		await expect(
+			auth.api.oauth2Consent({
+				headers: new Headers(headers),
+				body: {
+					accept: true,
+					oauth_query: consentUrl.searchParams.toString(),
+				},
+			}),
+		).resolves.toMatchObject({
+			redirect: true,
+			url: expect.stringContaining(`${redirectUri}?code=`),
+		});
 	});
 });
 

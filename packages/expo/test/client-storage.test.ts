@@ -113,30 +113,30 @@ it("should keep Unicode chunks within the storage byte limit", () => {
 	expect(storage.getItem("better-auth_cookie")).toBe(value);
 });
 
-it.each([
-	"setItem",
-	"setItemAsync",
-] as const)("should stop %s when a multibyte value requires chunks and the base read fails", async (method) => {
-	const setItem = vi.fn();
-	const setItemAsync = vi.fn(async () => {});
-	const storage = storageAdapter({
-		getItem: () => {
-			throw new Error("read unavailable");
-		},
-		setItem,
-		getItemAsync: async () => {
-			throw new Error("read unavailable");
-		},
-		setItemAsync,
-	});
-	const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+it.each(["setItem", "setItemAsync"] as const)(
+	"should stop %s when a multibyte value requires chunks and the base read fails",
+	async (method) => {
+		const setItem = vi.fn();
+		const setItemAsync = vi.fn(async () => {});
+		const storage = storageAdapter({
+			getItem: () => {
+				throw new Error("read unavailable");
+			},
+			setItem,
+			getItemAsync: async () => {
+				throw new Error("read unavailable");
+			},
+			setItemAsync,
+		});
+		const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 
-	await storage[method]("better-auth_cookie", "한".repeat(700));
+		await storage[method]("better-auth_cookie", "한".repeat(700));
 
-	expect(setItem).not.toHaveBeenCalled();
-	expect(setItemAsync).not.toHaveBeenCalled();
-	expect(error).toHaveBeenCalledOnce();
-});
+		expect(setItem).not.toHaveBeenCalled();
+		expect(setItemAsync).not.toHaveBeenCalled();
+		expect(error).toHaveBeenCalledOnce();
+	},
+);
 
 it("should store a value within the limit under the base key unchanged", () => {
 	const map = new Map<string, string>();
@@ -277,37 +277,38 @@ describe("chunked storage consistency", () => {
 		{ failedWrite: 3 },
 		{ failedWrite: 4 },
 		{ failedWrite: 5 },
-	])("should preserve the previous value when async write $failedWrite fails", async ({
-		failedWrite,
-	}) => {
-		const map = new Map<string, string>();
-		let writeIndex = 0;
-		let failing = false;
-		const storage = storageAdapter({
-			getItem: (name) => map.get(name) ?? null,
-			setItem: (name, value) => map.set(name, value),
-			getItemAsync: async (name) => map.get(name) ?? null,
-			setItemAsync: async (name, value) => {
-				if (failing && ++writeIndex === failedWrite) {
-					throw new Error("interrupted");
-				}
-				map.set(name, value);
-			},
-		});
-		await storage.setItemAsync("better-auth_cookie", "a".repeat(3_000));
-		const previousValue = "b".repeat(5_000);
-		await storage.setItemAsync("better-auth_cookie", previousValue);
-		writeIndex = 0;
-		failing = true;
-		const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+	])(
+		"should preserve the previous value when async write $failedWrite fails",
+		async ({ failedWrite }) => {
+			const map = new Map<string, string>();
+			let writeIndex = 0;
+			let failing = false;
+			const storage = storageAdapter({
+				getItem: (name) => map.get(name) ?? null,
+				setItem: (name, value) => map.set(name, value),
+				getItemAsync: async (name) => map.get(name) ?? null,
+				setItemAsync: async (name, value) => {
+					if (failing && ++writeIndex === failedWrite) {
+						throw new Error("interrupted");
+					}
+					map.set(name, value);
+				},
+			});
+			await storage.setItemAsync("better-auth_cookie", "a".repeat(3_000));
+			const previousValue = "b".repeat(5_000);
+			await storage.setItemAsync("better-auth_cookie", previousValue);
+			writeIndex = 0;
+			failing = true;
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
 
-		await storage.setItemAsync("better-auth_cookie", "c".repeat(5_000));
+			await storage.setItemAsync("better-auth_cookie", "c".repeat(5_000));
 
-		expect(error).toHaveBeenCalledTimes(1);
-		await expect(storage.getItemAsync("better-auth_cookie")).resolves.toBe(
-			previousValue,
-		);
-	});
+			expect(error).toHaveBeenCalledTimes(1);
+			await expect(storage.getItemAsync("better-auth_cookie")).resolves.toBe(
+				previousValue,
+			);
+		},
+	);
 
 	it("should disable fallback while its slot is being overwritten", async () => {
 		const map = new Map<string, string>();
@@ -697,27 +698,25 @@ describe("obsolete storage chunks", () => {
 				chunkKeys: [`${key}.1.0`, `${key}.1.1`, `${key}.0.0`, `${key}.0.1`],
 				value: "{}",
 			},
-		])("clears obsolete bytes after $name", async ({
-			marker,
-			initialValue,
-			chunkKeys,
-			value,
-		}) => {
-			const map = new Map<string, string>([[key, marker]]);
-			for (const [index, chunkKey] of chunkKeys.entries()) {
-				const start = (index % 2) * 1_800;
-				map.set(chunkKey, previousValue.slice(start, start + 1_800));
-			}
-			const storage = storageAdapter(createBackingStorage(map));
+		])(
+			"clears obsolete bytes after $name",
+			async ({ marker, initialValue, chunkKeys, value }) => {
+				const map = new Map<string, string>([[key, marker]]);
+				for (const [index, chunkKey] of chunkKeys.entries()) {
+					const start = (index % 2) * 1_800;
+					map.set(chunkKey, previousValue.slice(start, start + 1_800));
+				}
+				const storage = storageAdapter(createBackingStorage(map));
 
-			expect(storage.getItem(key)).toBe(initialValue);
-			await storage[method](key, value);
-			expect(storage.getItem(key)).toBe(value);
-			await vi.runAllTimersAsync();
-			expect(chunkKeys.map((chunkKey) => map.get(chunkKey) ?? "")).toEqual(
-				chunkKeys.map(() => ""),
-			);
-		});
+				expect(storage.getItem(key)).toBe(initialValue);
+				await storage[method](key, value);
+				expect(storage.getItem(key)).toBe(value);
+				await vi.runAllTimersAsync();
+				expect(chunkKeys.map((chunkKey) => map.get(chunkKey) ?? "")).toEqual(
+					chunkKeys.map(() => ""),
+				);
+			},
+		);
 
 		it("clears a reused slot's tail while preserving recovery", async () => {
 			const map = new Map<string, string>();
@@ -880,40 +879,39 @@ describe("obsolete storage chunks", () => {
 	it.each([
 		{ failure: "write", expected: previousValue, errors: 1 },
 		{ failure: "read", expected: "b".repeat(3_000), errors: 0 },
-	])("keeps a complete async read after a synchronous $failure failure", async ({
-		failure,
-		expected,
-		errors,
-	}) => {
-		const map = new Map<string, string>([
-			[key, "\u0001ba-chunks:2:1:2"],
-			[`${key}.0.0`, previousValue.slice(0, 1_800)],
-			[`${key}.0.1`, previousValue.slice(1_800)],
-		]);
-		const backing = createBackingStorage(map);
-		backing.getItem = (name) => {
-			if (failure === "read" && name === `${key}.0.0`)
-				throw new Error("read failed");
-			return map.get(name) ?? null;
-		};
-		backing.setItem = (name, value) => {
-			if (failure === "write" && name === `${key}.0.1`)
-				throw new Error("write failed");
-			map.set(name, value);
-		};
-		const { reading, resume } = pauseNextStorageRead(backing, `${key}.0.0`);
-		const storage = storageAdapter(backing);
-		const error = vi.spyOn(logger, "error").mockImplementation(() => {});
-		const read = storage.getItemAsync(key);
-		await reading;
-		try {
-			storage.setItem(key, "b".repeat(3_000));
-		} finally {
-			resume();
-		}
-		await expect(read).resolves.toBe(expected);
-		expect(error).toHaveBeenCalledTimes(errors);
-	});
+	])(
+		"keeps a complete async read after a synchronous $failure failure",
+		async ({ failure, expected, errors }) => {
+			const map = new Map<string, string>([
+				[key, "\u0001ba-chunks:2:1:2"],
+				[`${key}.0.0`, previousValue.slice(0, 1_800)],
+				[`${key}.0.1`, previousValue.slice(1_800)],
+			]);
+			const backing = createBackingStorage(map);
+			backing.getItem = (name) => {
+				if (failure === "read" && name === `${key}.0.0`)
+					throw new Error("read failed");
+				return map.get(name) ?? null;
+			};
+			backing.setItem = (name, value) => {
+				if (failure === "write" && name === `${key}.0.1`)
+					throw new Error("write failed");
+				map.set(name, value);
+			};
+			const { reading, resume } = pauseNextStorageRead(backing, `${key}.0.0`);
+			const storage = storageAdapter(backing);
+			const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+			const read = storage.getItemAsync(key);
+			await reading;
+			try {
+				storage.setItem(key, "b".repeat(3_000));
+			} finally {
+				resume();
+			}
+			await expect(read).resolves.toBe(expected);
+			expect(error).toHaveBeenCalledTimes(errors);
+		},
+	);
 
 	it("continues queued writes after a read fails", async () => {
 		const map = new Map<string, string>();

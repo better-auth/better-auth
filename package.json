@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.3",
-    "@biomejs/biome": "2.5.0",
+    "@biomejs/biome": "2.5.15",
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
     "@types/bun": "^1.3.14",
