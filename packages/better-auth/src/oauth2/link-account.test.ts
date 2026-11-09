@@ -1708,6 +1708,75 @@ describe("oauth2 - sign-up account creation rollback", async () => {
 	});
 });
 
+describe("oauth2 - sign-up aborted by user.create.before", async () => {
+	const log = vi.fn();
+	const { client, cookieSetter } = await getTestInstance(
+		{
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			databaseHooks: {
+				user: {
+					create: {
+						before: async () => false,
+					},
+				},
+			},
+			logger: {
+				level: "error",
+				log,
+			},
+		},
+		{ disableTestUser: true },
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11880
+	 */
+	it("redirects with FAILED_TO_CREATE_USER without logging an error", async () => {
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					sub: "google_hook_abort",
+					email: "oauth-hook-abort@example.com",
+					email_verified: true,
+					name: "Hook Abort User",
+				} as GoogleProfile;
+				return HttpResponse.json({
+					access_token: "test_token",
+					id_token: await signJWT(profile, DEFAULT_SECRET),
+				});
+			}),
+		);
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test_code",
+			},
+			method: "GET",
+			headers,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=FAILED_TO_CREATE_USER");
+		expect(log).not.toHaveBeenCalled();
+	});
+});
+
 /**
  * @see https://github.com/better-auth/better-auth/issues/8906
  *
