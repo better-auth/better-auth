@@ -1288,17 +1288,17 @@ describe("oauth-provider extensions", async () => {
 		);
 		// No grantType bound (the accessor was obtained for non-issuing
 		// capabilities): issuing must fail loudly rather than mislabel the grant.
-		let thrown: unknown;
-		try {
+		expect(() =>
 			api.issueTokens({
 				client: { clientId: "x" } as SchemaClient<Scope[]>,
 				scopes: [],
-			});
-		} catch (error) {
-			thrown = error;
-		}
-		expect(thrown).toMatchObject({
-			body: { error_description: expect.stringContaining("grant type") },
-		});
+			}),
+		).toThrow(
+			expect.objectContaining({
+				body: expect.objectContaining({
+					error_description: expect.stringContaining("grant type"),
+				}),
+			}),
+		);
 	});
 });

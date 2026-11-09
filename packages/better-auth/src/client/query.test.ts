@@ -129,45 +129,44 @@ describe("useAuthQuery - error handling", () => {
 			refreshedResponse: () => Response.json({ id: "current" }),
 			expectedData: { id: "current" },
 		},
-	])("keeps the latest result when an earlier $earlier request finishes last", async ({
-		initialOutcome,
-		refreshedResponse,
-		expectedData,
-	}) => {
-		const initialRequest = Promise.withResolvers<Response>();
-		const fetchImpl = vi
-			.fn(async () => refreshedResponse())
-			.mockImplementationOnce(() => initialRequest.promise);
-		const $fetch = createFetch({
-			baseURL: "http://localhost:3000",
-			customFetchImpl: fetchImpl,
-		});
+	])(
+		"keeps the latest result when an earlier $earlier request finishes last",
+		async ({ initialOutcome, refreshedResponse, expectedData }) => {
+			const initialRequest = Promise.withResolvers<Response>();
+			const fetchImpl = vi
+				.fn(async () => refreshedResponse())
+				.mockImplementationOnce(() => initialRequest.promise);
+			const $fetch = createFetch({
+				baseURL: "http://localhost:3000",
+				customFetchImpl: fetchImpl,
+			});
 
-		const $signal = atom(false);
-		const query = useAuthQuery<{ id: string }>($signal, "/test", $fetch, {
-			method: "GET",
-		});
-		const unsubscribe = query.listen(() => {});
-		await vi.advanceTimersByTimeAsync(0);
-		expect(fetchImpl).toHaveBeenCalledOnce();
+			const $signal = atom(false);
+			const query = useAuthQuery<{ id: string }>($signal, "/test", $fetch, {
+				method: "GET",
+			});
+			const unsubscribe = query.listen(() => {});
+			await vi.advanceTimersByTimeAsync(0);
+			expect(fetchImpl).toHaveBeenCalledOnce();
 
-		$signal.set(true);
-		await vi.advanceTimersByTimeAsync(0);
-		expect(fetchImpl).toHaveBeenCalledTimes(2);
-		expect(query.get().data).toEqual(expectedData);
-		const latestState = query.get();
+			$signal.set(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(fetchImpl).toHaveBeenCalledTimes(2);
+			expect(query.get().data).toEqual(expectedData);
+			const latestState = query.get();
 
-		const outcome = initialOutcome();
-		if (outcome instanceof Error) {
-			initialRequest.reject(outcome);
-		} else {
-			initialRequest.resolve(outcome);
-		}
-		await vi.advanceTimersByTimeAsync(0);
+			const outcome = initialOutcome();
+			if (outcome instanceof Error) {
+				initialRequest.reject(outcome);
+			} else {
+				initialRequest.resolve(outcome);
+			}
+			await vi.advanceTimersByTimeAsync(0);
 
-		expect(query.get()).toEqual(latestState);
-		unsubscribe();
-	});
+			expect(query.get()).toEqual(latestState);
+			unsubscribe();
+		},
+	);
 
 	it("runs fetch callbacks for superseded requests", async () => {
 		const initialRequest = Promise.withResolvers<Response>();

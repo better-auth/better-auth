@@ -9,6 +9,7 @@ import type {
 	OAuthResourceInput,
 	Scope,
 } from "./types";
+import { ResourceUriSchema } from "./types/zod";
 
 /**
  * Source-of-truth list of asymmetric JWS algorithms supported by the JWT
@@ -93,20 +94,11 @@ async function checkIdentifier(
 		}
 		return { ok: true };
 	}
-	// Strict default: must parse as absolute URI, must not have a fragment.
-	let url: URL;
-	try {
-		url = new URL(identifier);
-	} catch {
+	const parsed = ResourceUriSchema.safeParse(identifier);
+	if (!parsed.success) {
 		return {
 			ok: false,
-			reason: `resource identifier ${identifier} must be an absolute URI (RFC 8707 §2)`,
-		};
-	}
-	if (url.hash) {
-		return {
-			ok: false,
-			reason: `resource identifier ${identifier} must not contain a URI fragment (RFC 8707 §2)`,
+			reason: `resource identifier ${identifier} is invalid: ${parsed.error.issues[0]?.message ?? "not an absolute URI"}`,
 		};
 	}
 	return { ok: true };
@@ -419,6 +411,7 @@ export async function resolveResourcePolicy(
 	//     "any requested scope is acceptable here").
 	let effectiveScopes: string[] = [...params.requestedScopes];
 	for (const row of resolved) {
+		// FIXME(#11725): treat a stored [] as unset once [] is rejected on input.
 		if (row.allowedScopes === null || row.allowedScopes === undefined) {
 			continue;
 		}
@@ -677,10 +670,10 @@ export function invalidateResourceCache(identifier?: string): void {
  * Looks up an {@link OAuthResource} by `identifier`, consulting the in-process
  * cache when the identifier is in {@link OAuthOptions.cachedResources}.
  *
- * Triggers the lazy seed via {@link seedResourcesOnce} on first call — this
- * is the safety net for deployments where migrations run after plugin init
- * (so seeding at init couldn't see the table yet). The seed is idempotent
- * and coalesced, so the cost is paid only once per process.
+ * Triggers the lazy seed via {@link seedResourcesOnce} on first call — the
+ * retry path when the startup seed failed (database unreachable, or
+ * migrations run after plugin init). The seed is idempotent and coalesced,
+ * so the cost is paid only once per process.
  *
  * Returns a defensive copy so callers can't mutate cached state.
  *
@@ -691,7 +684,7 @@ export async function getResource(
 	opts: OAuthOptions<Scope[]>,
 	identifier: string,
 ): Promise<OAuthResource | null> {
-	// Lazy-seed safety net for the migration-ordering case.
+	// TODO(#11725): merge the configured entry here instead of seeding rows.
 	await seedResourcesOnce(ctx.context, opts);
 
 	if (opts.cachedResources?.has(identifier)) {
@@ -749,6 +742,8 @@ function buildSeedRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
+		// FIXME(#11725): same null limit as buildResourceRow in
+		// oauthResource/endpoints.ts.
 		allowedScopes: input.allowedScopes ?? null,
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
@@ -802,17 +797,49 @@ function buildSeedUpdate(
 	return update;
 }
 
+// TODO(#11725): remove with startup seeding, together with
+// logStartupSeedFailure and the seed state below.
 /**
  * Pattern matched against adapter errors to detect the "table not yet
- * created" case — i.e. migrations haven't been run. When matched, the
- * caller treats the seed as deferred (will retry on first resource access).
+ * created" case — i.e. migrations or `auth generate` haven't run. Only
+ * used to keep the expected startup seed failure quiet.
  *
  * Covers SQLite ("no such table"), Postgres ("relation X does not exist"),
- * and MySQL ("Table X does not exist" / contracted form).
+ * MySQL ("Table X does not exist" / contracted form), and the Drizzle and
+ * Prisma adapters' missing-model errors.
  */
 // cspell:ignore-next-line doesn
 const MISSING_TABLE_PATTERN =
-	/no such table|relation.*does not exist|table.*does(?: not|n[''']?t) exist/i;
+	/no such table|relation.*does not exist|table.*does(?: not|n'?t) exist|model.*(?:does not exist|was not found in the schema)/i;
+
+/**
+ * Logs a failed startup seed. Missing tables are expected before migrations
+ * and stay quiet; anything else is an error worth seeing.
+ *
+ * @internal
+ */
+export function logStartupSeedFailure(ctx: AuthContext, error: unknown): void {
+	// Drizzle keeps the driver message on `cause`; its own message is the SQL.
+	// The depth bound guards against a `cause` cycle.
+	let missingTable = false;
+	let current: unknown = error;
+	for (let depth = 0; current && !missingTable && depth < 5; depth++) {
+		missingTable = MISSING_TABLE_PATTERN.test(
+			current instanceof Error ? current.message : String(current),
+		);
+		current = current instanceof Error ? current.cause : undefined;
+	}
+	if (missingTable) {
+		ctx.logger.debug(
+			"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
+		);
+		return;
+	}
+	ctx.logger.error(
+		"oauth-provider: could not seed `resources` at startup; retrying on first resource access.",
+		error,
+	);
+}
 
 interface SeedState {
 	completed: boolean;
@@ -820,19 +847,29 @@ interface SeedState {
 }
 
 /**
- * Per-adapter state for the lazy-seed path. A module-level boolean would let
- * one Better Auth instance suppress seeding for every later instance in the same
- * process. Endpoint `AuthContext` objects are not guaranteed to be stable across
- * requests, so keying by the adapter keeps one seed state per backing store.
+ * Lazy-seed state per adapter and plugin options. A module-level boolean would
+ * let one Better Auth instance suppress seeding for every later instance in the
+ * same process. Endpoint `AuthContext` objects are not guaranteed to be stable
+ * across requests, so the adapter identifies the backing store, and the options
+ * object separates instances that share an adapter but configure different
+ * `resources`.
  */
-let seedStates = new WeakMap<object, SeedState>();
+let seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
 
-function getSeedState(ctx: AuthContext): SeedState {
-	const key = ctx.adapter as object;
-	const existing = seedStates.get(key);
+function getSeedState(
+	ctx: AuthContext,
+	opts: OAuthOptions<Scope[]>,
+): SeedState {
+	const adapterKey = ctx.adapter as object;
+	let byOptions = seedStates.get(adapterKey);
+	if (!byOptions) {
+		byOptions = new WeakMap<object, SeedState>();
+		seedStates.set(adapterKey, byOptions);
+	}
+	const existing = byOptions.get(opts);
 	if (existing) return existing;
 	const created: SeedState = { completed: false, promise: null };
-	seedStates.set(key, created);
+	byOptions.set(opts, created);
 	return created;
 }
 
@@ -843,7 +880,7 @@ function getSeedState(ctx: AuthContext): SeedState {
  * @internal
  */
 export function resetSeedStateForTests(): void {
-	seedStates = new WeakMap<object, SeedState>();
+	seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
 }
 
 /**
@@ -863,13 +900,11 @@ export function resetSeedStateForTests(): void {
  *
  * Race-safety: the `identifier` column carries a UNIQUE constraint, so two
  * processes booting simultaneously can each attempt the insert — one wins,
- * the other catches the constraint error and treats it as a no-op.
+ * the other re-reads the row and treats the failed insert as a no-op.
  *
- * Migration ordering: at plugin `init` time, tables may not exist yet
- * (Better Auth's test harness, and many deployment setups, run migrations
- * after auth construction). Seeding tolerates "no such table" errors and
- * defers — the lazy {@link seedResourcesOnce} path picks up the work on
- * the first resource access.
+ * Throws on storage errors, including a missing table. Callers go through
+ * {@link seedResourcesOnce}, which resets so the next resource access
+ * retries (e.g. after migrations run).
  *
  * Idempotent: safe to call multiple times.
  *
@@ -915,22 +950,11 @@ export async function seedResources(
 			const { signingAlgorithm: _, ...rest } = input;
 			input = rest as typeof input;
 		}
-		let existing: OAuthResource | null;
-		try {
-			existing = await ctx.adapter.findOne<OAuthResource>({
-				model: modelName,
-				where: [{ field: "identifier", value: input.identifier }],
-			});
-		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			if (MISSING_TABLE_PATTERN.test(message)) {
-				logger.debug(
-					"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
-				);
-				return;
-			}
-			throw err;
-		}
+		const where = [{ field: "identifier", value: input.identifier }];
+		const existing = await ctx.adapter.findOne<OAuthResource>({
+			model: modelName,
+			where,
+		});
 		const now = new Date();
 
 		if (!existing) {
@@ -939,47 +963,35 @@ export async function seedResources(
 					model: modelName,
 					data: buildSeedRow(input, now),
 				});
+				continue;
 			} catch (err) {
-				const message = err instanceof Error ? err.message : String(err);
-				// Race with a concurrent boot — another process inserted between
-				// our findOne and create. The UNIQUE constraint protects us; treat
-				// the conflict as a no-op so init doesn't fail.
-				if (/unique|duplicate|UNIQUE/i.test(message)) {
-					logger.debug(
-						`oauth-provider: resource ${input.identifier} already inserted by a concurrent process — skipping.`,
-					);
-					continue;
-				}
-				if (MISSING_TABLE_PATTERN.test(message)) {
-					logger.debug(
-						"oauth-provider: oauthResource table not yet created; deferring resource seed to first access.",
-					);
-					return;
-				}
-				throw err;
+				// A concurrent boot inserted the row between our findOne and create.
+				// Re-reading is adapter-agnostic; error shapes differ per driver.
+				// Without a row to show, the insert error is the one to report.
+				const raced = await ctx.adapter
+					.findOne<OAuthResource>({ model: modelName, where })
+					.catch(() => null);
+				if (!raced) throw err;
 			}
-			continue;
 		}
 
+		// Reached for existing rows, and for a row a concurrent boot inserted,
+		// so `merge` and `overwrite` still apply this config.
 		if (mode === "insertOnly") continue;
 
 		await ctx.adapter.update({
 			model: modelName,
-			where: [{ field: "identifier", value: input.identifier }],
+			where,
 			update: buildSeedUpdate(input, mode, now),
 		});
 	}
 }
 
 /**
- * Idempotent, coalesced wrapper around {@link seedResources} for the
- * lazy-seed path. Safe to call from every resource lookup — the first call
- * runs the seed, concurrent calls await the same promise, and subsequent
- * calls become no-ops.
- *
- * The endpoint context shape (`{ context: AuthContext }`) is what
- * `getResource` receives, so this is a convenience overload that unwraps
- * for callers.
+ * Idempotent, coalesced wrapper around {@link seedResources}, called from
+ * plugin `init` and from every resource lookup. The first call runs the
+ * seed, concurrent calls await the same promise, and calls after a success
+ * are no-ops. A failure resets the state so the next call retries.
  *
  * @internal
  */
@@ -989,7 +1001,7 @@ export async function seedResourcesOnce(
 ): Promise<void> {
 	// Explicit boolean / null comparisons keep Biome's `noMisusedPromises`
 	// rule happy — these are flag variables, not Promise checks.
-	const state = getSeedState(ctx);
+	const state = getSeedState(ctx, opts);
 	if (state.completed === true) return;
 	if (state.promise !== null) return state.promise;
 	state.promise = seedResources(ctx, opts)

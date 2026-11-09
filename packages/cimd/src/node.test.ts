@@ -22,6 +22,7 @@ interface MockResponseOptions {
 	headers?: Record<string, string>;
 	lookupOptions?: { all?: boolean };
 	status?: number;
+	statusMessage?: string;
 }
 
 function mockHttpsResponse(options: MockResponseOptions = {}) {
@@ -71,8 +72,9 @@ function mockHttpsResponse(options: MockResponseOptions = {}) {
 							"content-type": "application/json",
 						};
 						response.statusCode = options.status ?? 200;
-						response.statusMessage = "OK";
-						onResponse(response);
+						response.statusMessage = options.statusMessage ?? "OK";
+						// Node emits the response event after the request executor returns.
+						setImmediate(() => onResponse(response));
 					},
 				);
 			};
@@ -256,5 +258,28 @@ describe("Node CIMD metadata transport", () => {
 			servername?: string;
 		};
 		expect(options.servername).toBeUndefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11422
+	 */
+	describe("status lines Response cannot represent", () => {
+		it("rejects a status outside the Fetch range", async () => {
+			mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+			mockHttpsResponse({ status: 700 });
+
+			await expect(
+				fetchClientMetadataResource("https://client.example.com/client.json"),
+			).rejects.toThrow(RangeError);
+		});
+
+		it("rejects a reason phrase with control characters", async () => {
+			mocks.lookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+			mockHttpsResponse({ statusMessage: "\x7fx" });
+
+			await expect(
+				fetchClientMetadataResource("https://client.example.com/client.json"),
+			).rejects.toThrow(TypeError);
+		});
 	});
 });

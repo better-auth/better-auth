@@ -5,6 +5,9 @@
   "name": "cloudflare",
   "upload_source_maps": true,
   "compatibility_flags": ["nodejs_compat"],
+  "alias": {
+    "kysely": "kysely-029"
+  },
   "d1_databases": [
     {
       "binding": "DB",

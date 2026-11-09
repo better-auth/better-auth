@@ -130,12 +130,15 @@ export const runWithTransaction = async <
 			// connection a single-connection store would need for the lookup.
 			const pendingSchemaCheck = runtimeSchemaCheckFor(adapter)?.();
 			if (pendingSchemaCheck) await pendingSchemaCheck;
-			const pendingHooks: Array<() => Promise<void>> = [];
+			let pendingHooks: Array<() => Promise<void>> = [];
 			let result: Awaited<R>;
 			let error: unknown;
 			let hasError = false;
 			try {
 				result = await adapter.transaction(async (trx) => {
+					// An adapter may run this callback again after a transient abort.
+					// Only the hooks of the attempt that commits may run.
+					pendingHooks = [];
 					return als.run(
 						{
 							adapter: trx as unknown as StoredAdapter,
