@@ -340,6 +340,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
+							let userCreated = false;
 							const createSIWEUser = (email: string) =>
 								runWithTransaction(ctx.context.adapter, async () => {
 									const user = await ctx.context.internalAdapter.createUser(
@@ -350,6 +351,7 @@ export const siwe = (options: SIWEPluginOptions) => {
 										},
 										{ method: "siwe" },
 									);
+									userCreated = true;
 									const adapter = await getCurrentAdapter(ctx.context.adapter);
 
 									// Create wallet address record
@@ -378,7 +380,11 @@ export const siwe = (options: SIWEPluginOptions) => {
 							try {
 								user = await createSIWEUser(userEmail);
 							} catch (error) {
-								if (userEmail !== normalizedEmail || !normalizedEmail) {
+								if (
+									userCreated ||
+									userEmail !== normalizedEmail ||
+									!normalizedEmail
+								) {
 									throw error;
 								}
 								const claimedUser =

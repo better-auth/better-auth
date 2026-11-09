@@ -671,6 +671,49 @@ describe("siwe", async () => {
 		expect(await db.findMany({ model: "walletAddress" })).toEqual([]);
 	});
 
+	it("should not retry with the wallet email after the SIWE user was created", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				databaseHooks: {
+					account: {
+						create: {
+							async after() {
+								throw new Error("rejected by account hook");
+							},
+						},
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce();
+		await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			email: "siwe@example.com",
+		});
+
+		expect(await db.findMany({ model: "user" })).toHaveLength(1);
+	});
+
 	it("should not bind a caller-supplied email that already belongs to another account", async () => {
 		const { client, testUser, db, sessionSetter } = await getTestInstance(
 			{
