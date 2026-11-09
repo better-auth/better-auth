@@ -628,6 +628,49 @@ describe("siwe", async () => {
 		expect(error?.message).toBe("SIWE sign-up is not allowed");
 	});
 
+	it("should not leave a user behind when creating the SIWE account fails", async () => {
+		const { client, db } = await getTestInstance(
+			{
+				databaseHooks: {
+					account: {
+						create: {
+							async before() {
+								throw new Error("rejected by account hook");
+							},
+						},
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce();
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+		});
+
+		expect(error?.status).toBe(401);
+		expect(await db.findMany({ model: "user" })).toEqual([]);
+		expect(await db.findMany({ model: "walletAddress" })).toEqual([]);
+	});
+
 	it("should not bind a caller-supplied email that already belongs to another account", async () => {
 		const { client, testUser, db, sessionSetter } = await getTestInstance(
 			{
