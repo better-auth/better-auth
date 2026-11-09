@@ -25,6 +25,7 @@ import { introspectEndpoint } from "./introspect";
 import type { BackchannelLogoutPlan } from "./logout";
 import {
 	applyBackchannelLogoutPlan,
+	endsAllUserGrants,
 	prepareBackchannelLogoutPlan,
 	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
@@ -588,6 +589,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										{
 											sessionId: session.id,
 											userId: session.userId,
+											revokeAllUserGrants: endsAllUserGrants(hookCtx.path),
 										},
 									);
 									if (!plan) return;

@@ -103,10 +103,18 @@ describe("oauth back-channel logout", async () => {
 	const state = "123";
 	const scopes = ["openid", "email", "profile", "offline_access"];
 	let shouldVetoSessionDeletion = false;
+	let resetPasswordToken = "";
 
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
 		baseURL: baseUrl,
 		database: memoryAdapter(database),
+		emailAndPassword: {
+			enabled: true,
+			revokeSessionsOnPasswordReset: true,
+			async sendResetPassword({ token }) {
+				resetPasswordToken = token;
+			},
+		},
 		databaseHooks: {
 			session: {
 				delete: {
@@ -589,6 +597,93 @@ describe("oauth back-channel logout", async () => {
 			} else {
 				expect(t.revoked).toBeInstanceOf(Date);
 			}
+		}
+	});
+
+	async function refreshTokenGrant(
+		oauthClient: Awaited<ReturnType<typeof registerClient>>,
+		refreshToken: string,
+	) {
+		return client.$fetch<{ access_token: string }>("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "refresh_token",
+				refresh_token: refreshToken,
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret!,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+	}
+
+	async function expectAllClientTokensRevoked(clientId: string) {
+		const { accessTokens, refreshTokens } =
+			await readClientTokenRevocation(clientId);
+		expect(accessTokens.length).toBeGreaterThan(0);
+		expect(refreshTokens.length).toBeGreaterThan(0);
+		for (const t of accessTokens) expect(t.revoked).toBeInstanceOf(Date);
+		for (const t of refreshTokens) expect(t.revoked).toBeInstanceOf(Date);
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("revokes offline_access grants when the user revokes all sessions", async () => {
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: undefined,
+		});
+		// A grant issued under an earlier session keeps its offline_access
+		// refresh token through a normal sign-out, unbound from any session.
+		const earlier = await issueTokens({ client: oauthClient });
+		await client.signOut({ fetchOptions: { headers } });
+		headers = (await signInWithTestUser()).headers;
+		const current = await issueTokens({ client: oauthClient });
+		expect(earlier.refresh_token).toBeDefined();
+		expect(current.refresh_token).toBeDefined();
+
+		await auth.api.revokeSessions({ headers });
+
+		await expectAllClientTokensRevoked(oauthClient.client_id);
+		for (const token of [earlier.refresh_token!, current.refresh_token!]) {
+			const response = await refreshTokenGrant(oauthClient, token);
+			expect(response.error?.status).toBe(400);
+			expect(response.data).toBeNull();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("revokes offline_access grants when a password reset revokes sessions", async () => {
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: undefined,
+		});
+		const tokens = await issueTokens({ client: oauthClient });
+		expect(tokens.refresh_token).toBeDefined();
+
+		const resetPassword = async (newPassword: string) => {
+			resetPasswordToken = "";
+			await auth.api.requestPasswordReset({
+				body: { email: "test@test.com", redirectTo: "/reset" },
+			});
+			expect(resetPasswordToken).not.toBe("");
+			await auth.api.resetPassword({
+				body: { token: resetPasswordToken, newPassword },
+			});
+		};
+
+		await resetPassword("new-password-12276");
+		try {
+			await expectAllClientTokensRevoked(oauthClient.client_id);
+			const response = await refreshTokenGrant(
+				oauthClient,
+				tokens.refresh_token!,
+			);
+			expect(response.error?.status).toBe(400);
+			expect(response.data).toBeNull();
+		} finally {
+			// Restore the test user's password for the sign-in in `beforeEach`.
+			await resetPassword("test123456");
 		}
 	});
 

@@ -60,6 +60,35 @@ export interface BackchannelLogoutPlan {
 	refreshTokenIds: string[];
 	sessionId: string;
 	targets: BackchannelLogoutTarget[];
+	/**
+	 * Set when the session ends through an endpoint that ends every grant for
+	 * the user (see {@link endsAllUserGrants}). Every unrevoked access and
+	 * refresh token of this user is then revoked, including `offline_access`
+	 * refresh tokens and tokens no longer bound to a session.
+	 */
+	revokeAllGrantsOfUserId?: string;
+}
+
+/**
+ * Endpoints that end every session of a user because their credentials may be
+ * compromised (password reset) or because they asked to sign out everywhere.
+ * `offline_access` keeps long-lived API access alive through a normal logout
+ * (OIDC Back-Channel Logout 1.0 §2.7), but whoever holds a refresh token must
+ * not keep access through these.
+ *
+ * Password reset endpoints only end sessions when
+ * `emailAndPassword.revokeSessionsOnPasswordReset` is enabled, so the sweep
+ * follows that option.
+ */
+const END_ALL_USER_GRANTS_PATHS = new Set([
+	"/reset-password",
+	"/email-otp/reset-password",
+	"/phone-number/reset-password",
+	"/revoke-sessions",
+]);
+
+export function endsAllUserGrants(path: string | undefined): boolean {
+	return path !== undefined && END_ALL_USER_GRANTS_PATHS.has(path);
 }
 
 /**
@@ -116,6 +145,10 @@ async function signLogoutToken(
  * revoked; `offline_access` refresh tokens survive so long-lived API access can
  * outlive the browser session.
  *
+ * When `revokeAllUserGrants` is set, every grant of the user is revoked
+ * instead, including `offline_access` refresh tokens (see
+ * {@link endsAllUserGrants}).
+ *
  * Token revocation runs regardless of the JWT plugin (refresh-token revocation
  * has no dependency on signing). Only Logout Token delivery needs the JWT
  * plugin, so a plan may contain token identifiers with no delivery targets.
@@ -126,9 +159,9 @@ async function signLogoutToken(
 async function prepareBackchannelLogoutPlan(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	input: { sessionId: string; userId: string },
+	input: { sessionId: string; userId: string; revokeAllUserGrants?: boolean },
 ): Promise<BackchannelLogoutPlan | null> {
-	const { sessionId, userId } = input;
+	const { sessionId, userId, revokeAllUserGrants } = input;
 	if (!userId) return null;
 
 	const logger = ctx.context.logger;
@@ -150,7 +183,19 @@ async function prepareBackchannelLogoutPlan(
 		const affectedClientIds = new Set<string>();
 		for (const t of accessTokens) affectedClientIds.add(t.clientId);
 		for (const t of refreshTokens) affectedClientIds.add(t.clientId);
-		if (affectedClientIds.size === 0) return null;
+		if (affectedClientIds.size === 0) {
+			// Tokens can outlive the session that issued them, so a user-wide
+			// sweep still has work to do when this session holds none.
+			return revokeAllUserGrants
+				? {
+						accessTokenIds: [],
+						refreshTokenIds: [],
+						sessionId,
+						targets: [],
+						revokeAllGrantsOfUserId: userId,
+					}
+				: null;
+		}
 
 		const clients = await adapter.findMany<SchemaClient<Scope[]>>({
 			model: "oauthClient",
@@ -204,6 +249,7 @@ async function prepareBackchannelLogoutPlan(
 			refreshTokenIds: refreshToRevokeIds,
 			sessionId,
 			targets,
+			...(revokeAllUserGrants ? { revokeAllGrantsOfUserId: userId } : {}),
 		};
 	} catch (error) {
 		logger.error("back-channel logout planning failed", error);
@@ -221,6 +267,7 @@ async function applyBackchannelLogoutPlan(
 	plan: BackchannelLogoutPlan,
 ): Promise<void> {
 	const revokedAt = new Date();
+	const sweepUserId = plan.revokeAllGrantsOfUserId;
 	const adapter = await getCurrentAdapter(ctx.context.adapter);
 	const revocations = await Promise.allSettled([
 		plan.accessTokenIds.length > 0
@@ -237,6 +284,18 @@ async function applyBackchannelLogoutPlan(
 					update: { revoked: revokedAt },
 				})
 			: Promise.resolve(),
+		...(sweepUserId
+			? (["oauthAccessToken", "oauthRefreshToken"] as const).map((model) =>
+					adapter.updateMany({
+						model,
+						where: [
+							{ field: "userId", value: sweepUserId },
+							{ field: "revoked", operator: "eq", value: null },
+						],
+						update: { revoked: revokedAt },
+					}),
+				)
+			: []),
 	]);
 	// Session liveness remains authoritative, but operators still need a signal
 	// if the stored revocation backstop drifts from the committed session state.
