@@ -677,6 +677,76 @@ describe("siwe", async () => {
 		expect(usersWithEmail).toHaveLength(1);
 	});
 
+	it("should fail without side effects when another sign-up takes the claimed email mid-request", async () => {
+		const claimedEmail = "siwe@example.com";
+		const { client, auth, db } = await getTestInstance(
+			{
+				plugins: [
+					siwe({
+						domain,
+						anonymous: false,
+						async getNonce() {
+							return "A1b2C3d4E5f6G7h8J";
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+						// Runs between the email check and the insert, so another
+						// sign-up can take the email in this window.
+						async ensLookup() {
+							const { adapter } = await auth.$context;
+							const racer = await adapter.findOne({
+								model: "user",
+								where: [{ field: "email", value: claimedEmail }],
+							});
+							if (!racer) {
+								await adapter.create({
+									model: "user",
+									data: {
+										email: claimedEmail,
+										name: "racer",
+										emailVerified: false,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+									},
+								});
+							}
+							return { name: "", avatar: "" };
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce();
+		const raced = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			email: claimedEmail,
+		});
+		expect(raced.error?.status).toBe(401);
+		expect(await db.findMany({ model: "user" })).toHaveLength(1);
+
+		await client.siwe.nonce();
+		const retried = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+			email: claimedEmail,
+		});
+		expect(retried.data?.success).toBe(true);
+		const usersWithEmail = await db.findMany({
+			model: "user",
+			where: [{ field: "email", value: claimedEmail }],
+		});
+		expect(usersWithEmail).toHaveLength(1);
+	});
+
 	it("should treat a case-variant of an existing email as the same email", async () => {
 		const otherWallet = "0x000000000000000000000000000000000000bEEF";
 		const { client, sessionSetter } = await getTestInstance(

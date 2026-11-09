@@ -336,31 +336,15 @@ export const siwe = (options: SIWEPluginOptions) => {
 							}
 							const { name, avatar } =
 								(await options.ensLookup?.({ walletAddress })) ?? {};
-							const createSIWEUser = (email: string) =>
-								ctx.context.internalAdapter.createUser(
+							try {
+								user = await ctx.context.internalAdapter.createUser(
 									{
 										name: name ?? walletAddress,
-										email,
+										email: userEmail,
 										image: avatar ?? "",
 									},
 									{ method: "siwe" },
 								);
-
-							try {
-								user = await createSIWEUser(userEmail);
-							} catch (error) {
-								if (userEmail !== normalizedEmail || !normalizedEmail) {
-									throw error;
-								}
-								const claimedUser =
-									await ctx.context.internalAdapter.findUserByEmail(
-										normalizedEmail,
-									);
-								if (!claimedUser) {
-									throw error;
-								}
-								userEmail = walletEmail;
-								user = await createSIWEUser(userEmail);
 							} finally {
 								if (emailClaimIdentifier) {
 									await ctx.context.internalAdapter
