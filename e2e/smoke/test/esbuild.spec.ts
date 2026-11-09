@@ -1,36 +1,31 @@
 import assert from "node:assert";
-import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { it } from "node:test";
 import { fileURLToPath } from "node:url";
+import type { BuildOptions } from "esbuild";
+import { build } from "esbuild";
 
-const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
+const esbuildDir = fileURLToPath(
+	new URL("./fixtures/esbuild", import.meta.url),
+);
+
+function bundle(entry: string, options?: BuildOptions) {
+	return build({
+		...options,
+		absWorkingDir: esbuildDir,
+		entryPoints: [`src/${entry}.ts`],
+		bundle: true,
+		write: false,
+		metafile: true,
+		logLevel: "silent",
+	});
+}
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/6213
  */
 it("build client without zod runtime", async () => {
-	const esbuildDir = join(fixturesDir, "esbuild");
-	const buildProcess = spawn(
-		"npx",
-		["esbuild", "src/client.ts", "--bundle", "--outfile=dist/client.js"],
-		{
-			cwd: esbuildDir,
-			stdio: "pipe",
-		},
-	);
-	await new Promise<void>((resolve, reject) => {
-		buildProcess.on("close", (code) => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(new Error(`esbuild client build failed with code ${code}`));
-			}
-		});
-	});
-	const outputFile = join(esbuildDir, "dist", "client.js");
-	const outputContent = await readFile(outputFile, "utf-8");
+	const { outputFiles } = await bundle("client");
+	const outputContent = outputFiles[0]!.text;
 	assert.ok(
 		!outputContent.includes("ZodString"),
 		"Client bundle should not contain Zod runtime code (ZodString)",
@@ -42,28 +37,9 @@ it("build client without zod runtime", async () => {
 });
 
 it("build minimal without unexpected imports", async () => {
-	const esbuildDir = join(fixturesDir, "esbuild");
-	const buildProcess = spawn(
-		"npx",
-		["esbuild", "src/minimal.ts", "--bundle", "--outfile=dist/minimal.js"],
-		{
-			cwd: esbuildDir,
-			stdio: "pipe",
-		},
-	);
-	await new Promise<void>((resolve, reject) => {
-		buildProcess.on("close", (code) => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(new Error(`Vite build failed with code ${code}`));
-			}
-		});
-	});
-	const outputFile = join(esbuildDir, "dist", "minimal.js");
-	const outputContent = await readFile(outputFile, "utf-8");
+	const { outputFiles } = await bundle("minimal");
 	assert.ok(
-		!outputContent.includes("class Kysely"),
+		!outputFiles[0]!.text.includes("class Kysely"),
 		"Built output should not contain 'kysely' imports",
 	);
 });
@@ -72,36 +48,9 @@ it("build minimal without unexpected imports", async () => {
  * @see https://github.com/better-auth/better-auth/issues/10865
  */
 it("build organization plugin without unused zod locales", async () => {
-	const esbuildDir = join(fixturesDir, "esbuild");
-	const buildProcess = spawn(
-		"pnpm",
-		[
-			"exec",
-			"esbuild",
-			"src/organization.ts",
-			"--bundle",
-			"--outfile=dist/organization.js",
-		],
-		{
-			cwd: esbuildDir,
-			stdio: ["ignore", "inherit", "inherit"],
-		},
-	);
-	await new Promise<void>((resolve, reject) => {
-		buildProcess.once("error", reject);
-		buildProcess.once("close", (code) => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(
-					new Error(`esbuild organization build failed with code ${code}`),
-				);
-			}
-		});
-	});
-	const outputFile = join(esbuildDir, "dist", "organization.js");
-	const outputContent = await readFile(outputFile, "utf-8");
-	const locales = outputContent.match(/zod\/v4\/locales\/[\w-]+\.js/g) ?? [];
+	const { outputFiles } = await bundle("organization");
+	const locales =
+		outputFiles[0]!.text.match(/zod\/v4\/locales\/[\w-]+\.js/g) ?? [];
 	const unusedLocales = locales.filter(
 		(locale) =>
 			locale !== "zod/v4/locales/en.js" && locale !== "zod/v4/locales/index.js",
@@ -117,32 +66,10 @@ it("build organization plugin without unused zod locales", async () => {
  * @see https://github.com/better-auth/better-auth/issues/10366
  */
 it("bundles the Kysely adapter with Kysely 0.29", async () => {
-	const esbuildDir = join(fixturesDir, "esbuild");
-	const buildProcess = spawn(
-		"pnpm",
-		[
-			"exec",
-			"esbuild",
-			"src/kysely-adapter.ts",
-			"--bundle",
-			"--platform=node",
-			"--alias:kysely=kysely-029",
-			"--outfile=dist/kysely-adapter.js",
-		],
-		{
-			cwd: esbuildDir,
-			stdio: "pipe",
+	await bundle("kysely-adapter", {
+		platform: "node",
+		alias: {
+			kysely: "kysely-029",
 		},
-	);
-	await new Promise<void>((resolve, reject) => {
-		buildProcess.on("close", (code) => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(
-					new Error(`esbuild Kysely adapter build failed with code ${code}`),
-				);
-			}
-		});
 	});
 });

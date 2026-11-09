@@ -909,6 +909,9 @@ importers:
       '@types/babel__core':
         specifier: ^7.20.5
         version: 7.20.5
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
       ioredis:
         specifier: ^5.11.1
         version: 5.11.1
