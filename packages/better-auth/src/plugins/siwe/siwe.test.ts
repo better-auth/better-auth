@@ -705,12 +705,13 @@ describe("siwe", async () => {
 		);
 
 		await client.siwe.nonce();
-		await client.siwe.verify({
+		const { error } = await client.siwe.verify({
 			message: siweMessage(),
 			signature: "valid_signature",
 			email: "siwe@example.com",
 		});
 
+		expect(error?.status).toBe(401);
 		expect(await db.findMany({ model: "user" })).toHaveLength(1);
 	});
 
