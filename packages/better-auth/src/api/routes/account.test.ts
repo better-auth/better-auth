@@ -569,13 +569,19 @@ describe("account", async () => {
 			refreshToken: "spent-refresh-token",
 			accessTokenExpiresAt: new Date(Date.now() - 60_000),
 		});
+		const refreshedWith: (string | null)[] = [];
 		server.use(
-			http.post("https://github.com/login/oauth/access_token", () =>
-				HttpResponse.json({
-					error: "bad_refresh_token",
-					error_description:
-						"The refresh token passed is incorrect or expired.",
-				}),
+			http.post(
+				"https://github.com/login/oauth/access_token",
+				async ({ request }) => {
+					const params = new URLSearchParams(await request.text());
+					refreshedWith.push(params.get("refresh_token"));
+					return HttpResponse.json({
+						error: "bad_refresh_token",
+						error_description:
+							"The refresh token passed is incorrect or expired.",
+					});
+				},
 			),
 		);
 
@@ -603,6 +609,10 @@ describe("account", async () => {
 				code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
 			},
 		});
+		expect(refreshedWith).toEqual([
+			"spent-refresh-token",
+			"spent-refresh-token",
+		]);
 	});
 
 	/**

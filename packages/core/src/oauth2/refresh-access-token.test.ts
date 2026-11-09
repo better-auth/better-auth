@@ -115,14 +115,25 @@ describe("refreshAccessToken", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12361
 	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#appendix-A.12
 	 */
-	it("rejects a successful status without an access token", async () => {
-		const errorBody = {
-			error: "bad_refresh_token",
-			error_description: "The refresh token passed is incorrect or expired.",
-		};
+	it.each([
+		{
+			name: "an OAuth error body",
+			body: {
+				error: "bad_refresh_token",
+				error_description: "The refresh token passed is incorrect or expired.",
+			},
+		},
+		{
+			name: "an empty access token",
+			body: {
+				access_token: "",
+			},
+		},
+	])("rejects a successful status with $name", async ({ body }) => {
 		mockedBetterFetch.mockResolvedValueOnce({
-			data: errorBody,
+			data: body,
 			error: null,
 		});
 
@@ -132,7 +143,7 @@ describe("refreshAccessToken", () => {
 				options: { clientId: "test-client", clientSecret: "test-secret" },
 				tokenEndpoint: "https://example.com/token",
 			}),
-		).rejects.toEqual(errorBody);
+		).rejects.toEqual(body);
 	});
 
 	it("passes resource indicators through refresh token requests", async () => {
