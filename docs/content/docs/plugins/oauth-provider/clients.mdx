@@ -68,7 +68,7 @@ You cannot change `token_endpoint_auth_method` after creation, and an update can
 
 An update takes the fields from the create request, except `jwks`, `jwks_uri`, and `subject_type`. It ignores those fields, and any other field it does not accept, without returning an error. Only `adminUpdateOAuthClient` can change `dpop_bound_access_tokens`. To let a client replace its own inline `jwks`, see [Rotating client keys](#rotating-client-keys). Omitted fields keep their current values, with one exception: an update that removes `client_credentials` from `grant_types` also clears `client_credentials_scopes`. Adding the grant back does not restore them, so set them again with `adminUpdateOAuthClient`.
 
-To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, but that query is not bound to the client whose fields it reads. Anyone can get one by starting an authorization request. Enabling the option therefore makes the public fields of every enabled client, including `contacts`, readable without an account.
+To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, and `client_id` must match the client in that query; a request for any other client gets a `401`. Anyone can get a signed query by starting an authorization request, so a client's public fields, including `contacts`, are readable without an account by anyone who knows its `client_id` and a registered redirect URI.
 
 ### Restricted fields
 
