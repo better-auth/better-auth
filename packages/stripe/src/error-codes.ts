@@ -6,6 +6,8 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
 	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
 	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
+	CHECKOUT_ALREADY_COMPLETED:
+		"The checkout for this subscription was already completed",
 	REFERENCE_ID_NOT_ALLOWED: "Reference id is not allowed",
 	CUSTOMER_NOT_FOUND: "Stripe customer not found for this user",
 	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",
