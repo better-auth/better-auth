@@ -583,26 +583,18 @@ export async function invalidateRefreshFamily(
 	clientId: string,
 	userId: string,
 ) {
-	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
-		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
-	});
-	const deleteLinkedAccessTokens = async () => {
-		if (!refreshTokens.length) return;
-		await ctx.context.adapter.deleteMany({
+	// Every access token linked to this family's refresh rows carries the same
+	// client and user, so the delete needs no list of refresh IDs, which
+	// `findMany` would cap at `defaultFindManyLimit`.
+	const deleteLinkedAccessTokens = () =>
+		ctx.context.adapter.deleteMany({
 			model: "oauthAccessToken",
 			where: [
-				{
-					field: "refreshId",
-					operator: "in",
-					value: refreshTokens.map((r) => r.id),
-				},
+				{ field: "clientId", value: clientId },
+				{ field: "userId", value: userId },
+				{ field: "refreshId", operator: "ne", value: null },
 			],
 		});
-	};
 	await deleteLinkedAccessTokens();
 	await ctx.context.adapter.deleteMany({
 		model: "oauthRefreshToken",

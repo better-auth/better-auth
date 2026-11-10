@@ -5563,20 +5563,18 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 		user: [],
 		verification: [],
 	};
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		baseURL: authServerBaseUrl,
-		database: memoryAdapter(database),
-		plugins: [
-			jwt({ jwt: { issuer: authServerBaseUrl } }),
-			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
-		],
-	});
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			database: memoryAdapter(database),
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
 	const { headers } = await signInWithTestUser();
-	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
-		baseURL: authServerBaseUrl,
-		fetchOptions: { customFetchImpl, headers },
-	});
 	const oauthClient = await auth.api.adminCreateOAuthClient({
 		headers,
 		body: {
@@ -5611,6 +5609,7 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 		});
 		let location = "";
 		await client.$fetch(url.toString(), {
+			headers,
 			onError(context) {
 				location = context.response.headers.get("Location") || "";
 			},
@@ -5710,6 +5709,50 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 		} finally {
 			insert.restore();
 		}
+	});
+
+	it("revokes every access token in a family larger than the findMany limit", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const context = await auth.$context;
+		const [family] = database.oauthRefreshToken as {
+			clientId: string;
+			userId: string;
+		}[];
+		for (let i = 0; i < 101; i++) {
+			const sibling = await context.adapter.create<{ id: string }>({
+				model: "oauthRefreshToken",
+				data: {
+					token: `sibling-refresh-${i}`,
+					clientId: family!.clientId,
+					userId: family!.userId,
+					scopes: ["openid", "offline_access"],
+					createdAt: new Date(),
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			});
+			await context.adapter.create({
+				model: "oauthAccessToken",
+				data: {
+					token: `sibling-access-${i}`,
+					clientId: family!.clientId,
+					userId: family!.userId,
+					refreshId: sibling.id,
+					scopes: ["openid"],
+					createdAt: new Date(),
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			});
+		}
+
+		const rotated = await refresh(parentToken);
+		expect(rotated.error).toBeNull();
+		const reused = await refresh(parentToken);
+
+		expect(reused.error).toMatchObject({ error: "invalid_grant" });
+		expect(database.oauthRefreshToken).toHaveLength(0);
+		expect(database.oauthAccessToken).toHaveLength(0);
 	});
 
 	it("removes an access token stored between the revocation's deletes", async () => {
