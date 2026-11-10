@@ -8,12 +8,18 @@ import {
 	parseAccessTokenAuthorization,
 } from "better-auth/oauth2";
 import type { User } from "better-auth/types";
-import { getDpopProofJwt, getEndpointUrl } from "./dpop";
+import {
+	getDpopNonceOptions,
+	getDpopProofJwt,
+	getEndpointUrl,
+	setDpopNonceHeader,
+} from "./dpop";
 import {
 	collectExtensionUserInfoClaims,
 	hasUserInfoClaimExtension,
 } from "./extensions";
 import { requireActiveAccessTokenWithClaims } from "./introspect";
+import { buildDpopChallengeValue } from "./resource-challenge";
 import { STANDARD_CLAIMS } from "./standard-claims";
 import type { OAuthOptions, Scope } from "./types";
 import { getClient, resolveSubjectIdentifier } from "./utils";
@@ -137,6 +143,7 @@ export async function userInfoEndpoint(
 		});
 	}
 
+	const nonce = getDpopNonceOptions(ctx, opts);
 	try {
 		await enforceDpopBinding({
 			payload: jwt,
@@ -147,15 +154,36 @@ export async function userInfoEndpoint(
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
 			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			nonce,
 		});
 	} catch (error) {
 		if (isDpopBindingError(error)) {
+			if (error.code === "use_dpop_nonce" && nonce) {
+				// RFC 9449 §9: a protected resource answers with a `DPoP`
+				// challenge and the nonce to retry with.
+				throw new APIError(
+					"UNAUTHORIZED",
+					{ error_description: error.message, error: error.code },
+					{
+						...(await setDpopNonceHeader(ctx, nonce, { challenge: true })),
+						"WWW-Authenticate": buildDpopChallengeValue(
+							error.code,
+							error.message,
+							opts.dpop?.signingAlgorithms,
+						),
+					},
+				);
+			}
 			throw new APIError("UNAUTHORIZED", {
 				error_description: error.message,
 				error: error.code,
 			});
 		}
 		throw error;
+	}
+	// RFC 9449 §8.2: hand the client its next nonce with the response.
+	if (nonce && getDpopJktFromPayload(jwt)) {
+		await setDpopNonceHeader(ctx, nonce);
 	}
 
 	const scopes = (jwt.scope as string | undefined)?.split(" ");

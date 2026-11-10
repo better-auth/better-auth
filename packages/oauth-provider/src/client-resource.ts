@@ -66,6 +66,41 @@ export const oauthProviderResourceClient = <
 		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
 	};
 	const authServerBasePath = auth?.options.basePath;
+	/**
+	 * Fills a missing nonce secret and lifetime from the auth instance: the
+	 * secret the OAuth provider derives its nonces from and the provider's
+	 * `dpop.nonce.expiresIn`. A resource on the provider's origin then accepts
+	 * the nonce the client already holds for exactly as long as the provider
+	 * does.
+	 */
+	const resolveDpopOptions = async (
+		dpop: ResourceDpopAuthOptions | undefined,
+	): Promise<VerifyAccessTokenRequestOptions["dpop"]> => {
+		if (!dpop?.nonce?.required) {
+			const { nonce: _nonce, ...rest } = dpop ?? {};
+			return dpop ? rest : undefined;
+		}
+		const secret =
+			dpop.nonce.secret ??
+			(auth
+				? ((await auth.$context) as { secret?: string }).secret
+				: undefined);
+		if (!secret) {
+			throw Error("please define opts.dpop.nonce.secret");
+		}
+		const expiresIn =
+			dpop.nonce.expiresIn ??
+			(await getOauthProviderPlugin())?.options?.dpop?.nonce?.expiresIn;
+		if (
+			expiresIn !== undefined &&
+			(!Number.isSafeInteger(expiresIn) || expiresIn <= 0)
+		) {
+			throw Error(
+				"dpop.nonce.expiresIn must be a positive integer number of seconds",
+			);
+		}
+		return { ...dpop, nonce: { ...dpop.nonce, secret, expiresIn } };
+	};
 	const resolveVerifyAccessTokenOptions = async (
 		opts:
 			| (VerifyAccessTokenAuthOpts & {
@@ -187,7 +222,7 @@ export const oauthProviderResourceClient = <
 						isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 						jwksUrl?: string;
 						remoteVerify?: VerifyAccessTokenRemote;
-						dpop?: VerifyAccessTokenRequestOptions["dpop"];
+						dpop?: ResourceDpopAuthOptions;
 						/** Maps non-url (ie urn, client) resources to resource_metadata */
 						resourceMetadataMappings?: Record<string, string>;
 					},
@@ -196,7 +231,7 @@ export const oauthProviderResourceClient = <
 					try {
 						return await verifyAccessTokenRequest(
 							toResourceRequestInput(request),
-							verifyOptions,
+							{ ...verifyOptions, dpop: await resolveDpopOptions(opts?.dpop) },
 						);
 					} catch (error) {
 						const challenge = createResourceServerChallenge(
@@ -342,8 +377,24 @@ type VerifyAccessTokenAuthOpts = {
 	/** Maps non-url (ie urn, client) resources to resource_metadata */
 	resourceMetadataMappings?: Record<string, string>;
 };
+type ResourceDpopOptions = NonNullable<VerifyAccessTokenRequestOptions["dpop"]>;
+/**
+ * DPoP settings for a resource client created with the auth instance: the
+ * nonce secret and lifetime default to the auth instance's.
+ */
+type ResourceDpopAuthOptions = Omit<ResourceDpopOptions, "nonce"> & {
+	nonce?: Omit<NonNullable<ResourceDpopOptions["nonce"]>, "secret"> & {
+		/** Defaults to the auth instance's secret. */
+		secret?: string;
+		/**
+		 * Seconds a nonce is accepted after it is issued. Defaults to the OAuth
+		 * provider's `dpop.nonce.expiresIn`, then to `300`.
+		 */
+		expiresIn?: number;
+	};
+};
 type VerifyAccessTokenRequestAuthOpts = VerifyAccessTokenAuthOpts & {
-	dpop?: VerifyAccessTokenRequestOptions["dpop"];
+	dpop?: ResourceDpopAuthOptions;
 };
 type VerifyAccessTokenNoAuthOpts =
 	| {

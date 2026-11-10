@@ -245,6 +245,44 @@ oauthProvider({
 
 To verify DPoP-bound tokens in your API, see [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
 
+### Server-provided nonces
+
+A DPoP proof carries the time it was created, `iat`, but the client chooses that time. A client that holds the key can sign proofs for future use and copy them to a machine that lacks the key ([RFC 9449 §11.2](https://datatracker.ietf.org/doc/html/rfc9449#section-11.2)). A server-provided nonce stops this. Each proof must carry a recent value that only the server can create.
+
+To require nonces, set `dpop.nonce.required`:
+
+```ts title="auth.ts"
+oauthProvider({
+  dpop: {
+    nonce: {
+      required: true,
+      expiresIn: 300, // 5 minutes, in seconds (the default)
+    },
+  },
+})
+```
+
+The token endpoint and the UserInfo endpoint then require a nonce in every DPoP proof:
+
+1. The client sends a proof without a nonce, or with an expired one.
+2. The endpoint rejects it with `use_dpop_nonce` and sends a fresh nonce in the `DPoP-Nonce` response header. The token endpoint answers with a 400 ([§8](https://datatracker.ietf.org/doc/html/rfc9449#section-8)). The UserInfo endpoint answers with a 401 and a `WWW-Authenticate: DPoP error="use_dpop_nonce"` challenge ([§9](https://datatracker.ietf.org/doc/html/rfc9449#section-9)).
+3. The client signs a new proof that includes the nonce, and retries.
+
+The token endpoint checks the nonce before it redeems an authorization code, device code, or refresh token. The retry can therefore still redeem the same code. The endpoint measures nonce freshness at the time the request arrived. A nonce that expires while the grant runs does not fail the request.
+
+Every successful DPoP response carries the next nonce in `DPoP-Nonce` ([§8.2](https://datatracker.ietf.org/doc/html/rfc9449#section-8.2)). A client that keeps the latest value rarely needs a retry. Responses that carry a nonce have these headers:
+
+* `Cache-Control: no-store`, so that a cache cannot hand out an expired nonce.
+* `DPoP-Nonce` in `Access-Control-Expose-Headers`, so that browser clients can read it. The UserInfo challenge also lists `WWW-Authenticate`, which a browser client needs to see that it must retry.
+
+Requests without a `DPoP` proof are unaffected.
+
+Nonces are not stored. Each nonce holds its issue time and a signature keyed from your auth `secret`. Any instance with the same secret accepts a nonce another instance issued. Rotating the secret invalidates outstanding nonces, and each client recovers with one retry. Discovery metadata does not change, because RFC 9449 defines no metadata for nonces. A client learns that nonces are required from the first `use_dpop_nonce` response.
+
+<Callout>
+  The [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html#section-4) requires DPoP, and requires wallets to handle `DPoP-Nonce` from the authorization server and the credential issuer. To serve nonces from your own endpoints, such as a credential issuer's Nonce Endpoint or an API on the same origin, see [Require DPoP nonces](/docs/plugins/oauth-provider/resource-server#require-dpop-nonces).
+</Callout>
+
 ## Custom claims
 
 To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, and the client's `metadata`. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, throw from the callback.

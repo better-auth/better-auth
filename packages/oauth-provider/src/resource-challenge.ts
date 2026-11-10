@@ -1,11 +1,13 @@
-import { isAPIError } from "better-auth/api";
+import { isAPIError, NO_STORE_HEADERS } from "better-auth/api";
 import {
+	DPOP_NONCE_HEADER,
 	DPOP_SIGNING_ALGORITHMS,
 	isInsufficientScopeError,
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
+import { withExposedHeaders } from "./dpop";
 
-const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof"]);
+const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof", "use_dpop_nonce"]);
 const OAUTH_SCOPE_TOKEN_PATTERN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
 const ERROR_DESCRIPTION_PATTERN = /^[\x20-\x21\x23-\x5b\x5d-\x7e]+$/;
 
@@ -62,19 +64,48 @@ function isDpopChallengeError(error: APIError) {
 	);
 }
 
-function buildDpopChallenge(
+/** Builds an RFC 9449 §7.1 `WWW-Authenticate: DPoP` challenge value. */
+export function buildDpopChallengeValue(
+	errorCode: string,
+	description: unknown,
+	algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS,
+) {
+	return [
+		`DPoP error="${quoteAuthParam(errorCode)}"`,
+		`error_description="${validateErrorDescription(description)}"`,
+		`algs="${quoteAuthParam(algorithms.join(" "))}"`,
+	].join(", ");
+}
+
+function buildDpopChallengeHeaders(
 	error: APIError,
 	opts?: {
 		dpopSigningAlgorithms?: readonly string[];
 	},
-) {
+): Record<string, string> {
 	const { errorCode, description } = extractDpopError(error);
-	const algorithms = opts?.dpopSigningAlgorithms ?? DPOP_SIGNING_ALGORITHMS;
-	return [
-		`DPoP error="${quoteAuthParam(errorCode ?? "invalid_dpop_proof")}"`,
-		`error_description="${validateErrorDescription(description)}"`,
-		`algs="${quoteAuthParam(algorithms.join(" "))}"`,
-	].join(", ");
+	const headers: Record<string, string> = {
+		"WWW-Authenticate": buildDpopChallengeValue(
+			errorCode ?? "invalid_dpop_proof",
+			description,
+			opts?.dpopSigningAlgorithms,
+		),
+	};
+	// RFC 9449 §9: a `use_dpop_nonce` challenge carries the nonce to retry with
+	// in its own `DPoP-Nonce` header. The response must not be cached (§8.2),
+	// and a browser client can act on it only when it can read both headers.
+	const errorHeaders = new Headers(error.headers);
+	const nonce = errorHeaders.get(DPOP_NONCE_HEADER);
+	if (nonce) {
+		Object.assign(headers, NO_STORE_HEADERS);
+		headers[DPOP_NONCE_HEADER] = nonce;
+		headers["Access-Control-Expose-Headers"] = withExposedHeaders(
+			errorHeaders.get("access-control-expose-headers"),
+			DPOP_NONCE_HEADER,
+			"WWW-Authenticate",
+		);
+	}
+	return headers;
 }
 
 function extractInsufficientScope(error: APIError): {
@@ -135,13 +166,19 @@ function buildBearerChallenge(
 /**
  * Create an OAuth resource-server challenge for a failed access-token request.
  *
+ * Bearer challenges carry the RFC 9728 `resource_metadata` pointer; DPoP
+ * challenges carry `algs` and no `resource_metadata`.
+ *
  * Missing/invalid bearer credentials are reported with RFC 6750 plus the RFC
  * 9728 `resource_metadata` pointer. Insufficient-scope failures (built with
  * `createInsufficientScopeError`) are reported with RFC 6750 §3.1's
  * `insufficient_scope` challenge on a 403 naming the scopes the token lacks, so
  * clients can step up their authorization. DPoP-bound-token failures are
  * reported with RFC 9449's `DPoP` challenge so clients know which proof
- * algorithms to use. Non-URL resources (for example a `urn:` or a client id)
+ * algorithms to use; a `use_dpop_nonce` failure keeps its `DPoP-Nonce` header
+ * so the client can retry with the nonce (RFC 9449 §9), adds `Cache-Control:
+ * no-store`, and adds `DPoP-Nonce` and `WWW-Authenticate` to the error's
+ * `Access-Control-Expose-Headers`. Non-URL resources (for example a `urn:` or a client id)
  * resolve their metadata URL through `resourceMetadataMappings`.
  *
  * Every other error returns `undefined`, including a plain `FORBIDDEN`: a
@@ -172,7 +209,7 @@ export function createResourceServerChallenge(
 			return new APIError(
 				"UNAUTHORIZED",
 				{ message: error.message },
-				{ "WWW-Authenticate": buildDpopChallenge(error, opts) },
+				buildDpopChallengeHeaders(error, opts),
 			);
 		}
 		return new APIError(

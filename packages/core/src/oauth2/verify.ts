@@ -13,9 +13,11 @@ import {
 	UnsecuredJWT,
 } from "jose";
 import { logger } from "../env";
-import type { DpopReplayStore } from "./dpop";
+import type { DpopNonceOptions, DpopReplayStore } from "./dpop";
 import {
+	createDpopNonce,
 	createInMemoryDpopReplayStore,
+	DPOP_NONCE_HEADER,
 	enforceDpopBinding,
 	getDpopJktFromPayload,
 	isDpopBindingError,
@@ -296,6 +298,31 @@ export interface VerifyAccessTokenRequestOptions
 		 */
 		replayStore?: DpopReplayStore;
 		signingAlgorithms?: readonly string[];
+		/**
+		 * Require server-provided nonces in DPoP proofs (RFC 9449 §9).
+		 *
+		 * A DPoP request whose proof has no nonce, or an expired one, or one
+		 * minted under another secret, fails with a `401` `use_dpop_nonce` error.
+		 * The error carries a fresh nonce in its `DPoP-Nonce` header, with
+		 * `Cache-Control: no-store`. Pass the error to
+		 * `createResourceServerChallenge` to answer with the matching
+		 * `WWW-Authenticate: DPoP` challenge. Bearer requests are unaffected.
+		 *
+		 * Send the next nonce on successful DPoP responses with
+		 * `createDpopNonce({ secret })`. An API that should accept the
+		 * authorization server's nonces, such as one on the same origin, uses the
+		 * authorization server's secret.
+		 */
+		nonce?: DpopNonceOptions & {
+			/**
+			 * Whether DPoP proofs must carry a nonce. `false`, like omitting
+			 * `nonce`, turns nonces off: the API neither checks nor issues them.
+			 * There is no mode that issues nonces without requiring them, because
+			 * a server that has handed out a nonce must not accept proofs without
+			 * one (RFC 9449 §11.3).
+			 */
+			required: boolean;
+		};
 	};
 }
 
@@ -649,7 +676,8 @@ export function isInsufficientScopeError(error: unknown): error is APIError {
 
 function throwDpopUnauthorized(
 	message: string,
-	error?: "invalid_dpop_proof" | "invalid_token",
+	error?: "invalid_dpop_proof" | "invalid_token" | "use_dpop_nonce",
+	headers?: Record<string, string>,
 ): never {
 	throw new APIError(
 		"UNAUTHORIZED",
@@ -660,6 +688,7 @@ function throwDpopUnauthorized(
 					error_description: message,
 				}
 			: { message },
+		headers,
 	);
 }
 
@@ -719,6 +748,7 @@ export async function verifyAccessTokenRequest(
 	}
 
 	const payload = await verifyAccessTokenPayload(authorization.token, opts);
+	const nonce = opts.dpop?.nonce?.required ? opts.dpop.nonce : undefined;
 
 	try {
 		await enforceDpopBinding({
@@ -730,10 +760,25 @@ export async function verifyAccessTokenRequest(
 			replayStore: opts.dpop?.replayStore ?? defaultDpopReplayStore,
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
+			nonce,
 		});
 	} catch (error) {
 		if (isDpopBindingError(error)) {
-			throwDpopUnauthorized(error.message, error.code);
+			throwDpopUnauthorized(
+				error.message,
+				error.code,
+				error.code === "use_dpop_nonce" && nonce
+					? {
+							// RFC 9449 §8.2: a response that carries a nonce must not be
+							// cached, or a cache could hand out the nonce after it expires.
+							"Cache-Control": "no-store",
+							[DPOP_NONCE_HEADER]: await createDpopNonce({
+								secret: nonce.secret,
+							}),
+							"Access-Control-Expose-Headers": DPOP_NONCE_HEADER,
+						}
+					: undefined,
+			);
 		}
 		throw error;
 	}

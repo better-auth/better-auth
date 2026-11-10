@@ -1,10 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { assertDpopProofNonce } from "@better-auth/core/oauth2/internal";
 import { APIError } from "better-auth/api";
 import {
 	generateRandomString,
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "better-auth/crypto";
+import type { DpopNonceOptions } from "better-auth/oauth2";
 import {
 	createDpopReplayStore,
 	generateCodeChallenge,
@@ -22,7 +24,13 @@ import {
 } from "./authentication-context";
 import { resolveAccessTokenClaims } from "./claims";
 import { getRequestedUserInfoClaims } from "./claims-request";
-import { getDpopProofJwt, getEndpointUrl } from "./dpop";
+import {
+	getDpopNonceOptions,
+	getDpopProofJwt,
+	getDpopRequestTime,
+	getEndpointUrl,
+	setDpopNonceHeader,
+} from "./dpop";
 import {
 	collectExtensionIdTokenClaims,
 	getExtensionGrantHandler,
@@ -107,6 +115,8 @@ export async function tokenEndpoint(
 			error: "unsupported_grant_type",
 		});
 	}
+
+	await challengeMissingDpopNonce(ctx, opts);
 
 	switch (grantType) {
 		case "authorization_code":
@@ -776,6 +786,47 @@ function throwInvalidDpopProof(errorDescription: string): never {
 	});
 }
 
+/**
+ * RFC 9449 §8: answers a token request whose DPoP proof lacks a current nonce
+ * with `use_dpop_nonce` and the nonce to retry with.
+ */
+async function throwUseDpopNonce(
+	ctx: GenericEndpointContext,
+	nonce: DpopNonceOptions,
+	errorDescription: string,
+): Promise<never> {
+	throw new APIError(
+		"BAD_REQUEST",
+		{ error: "use_dpop_nonce", error_description: errorDescription },
+		await setDpopNonceHeader(ctx, nonce),
+	);
+}
+
+/**
+ * Issues the nonce challenge before any grant runs. Grants consume their
+ * authorization code, device code, or refresh token before the DPoP proof is
+ * fully verified, so challenging there would leave the client's retry with
+ * nothing to redeem. The proof is still verified, nonce included, at issuance,
+ * against the same request time, so a nonce that passes here cannot expire
+ * before then.
+ */
+async function challengeMissingDpopNonce(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+) {
+	const nonce = getDpopNonceOptions(ctx, opts);
+	const proofJwt = getDpopProofJwt(ctx);
+	if (!nonce || !proofJwt) return;
+	try {
+		await assertDpopProofNonce(proofJwt, nonce, getDpopRequestTime(ctx));
+	} catch (error) {
+		if (isDpopProofError(error)) {
+			await throwUseDpopNonce(ctx, nonce, error.message);
+		}
+		throw error;
+	}
+}
+
 function clientRequiresDpopBoundAccessTokens(client: SchemaClient<Scope[]>) {
 	const metadata = (parseClientMetadata(client.metadata) ?? {}) as Record<
 		string,
@@ -850,8 +901,10 @@ async function resolveDpopTokenBinding(
 		return undefined;
 	}
 
+	const nonce = getDpopNonceOptions(ctx, opts);
+	let proof: Awaited<ReturnType<typeof verifyDpopProof>>;
 	try {
-		const proof = await verifyDpopProof({
+		proof = await verifyDpopProof({
 			proofJwt: dpopProofJwt,
 			method: "POST",
 			// The endpoint serving this request: the token endpoint, or a plugin's
@@ -861,14 +914,23 @@ async function resolveDpopTokenBinding(
 			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
 			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			nonce,
+			// The time the request arrived, which the token endpoint's nonce check
+			// also used, not the time the grant reaches issuance.
+			nowSeconds: getDpopRequestTime(ctx),
 		});
-		return { jkt: proof.jkt };
 	} catch (error) {
 		if (isDpopProofError(error)) {
+			if (error.code === "use_dpop_nonce" && nonce) {
+				await throwUseDpopNonce(ctx, nonce, error.message);
+			}
 			throwInvalidDpopProof(error.message);
 		}
 		throw error;
 	}
+	// RFC 9449 §8.2: hand the client its next nonce with the response.
+	if (nonce) await setDpopNonceHeader(ctx, nonce);
+	return { jkt: proof.jkt };
 }
 
 type RefreshTokenRotationReplayRequest = {

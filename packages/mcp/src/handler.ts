@@ -1,11 +1,15 @@
 import type { Awaitable } from "@better-auth/core";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
+import { withExposedHeaders } from "@better-auth/oauth-provider/internal";
 import type {
 	DpopReplayStore,
 	VerifyAccessTokenRequestOptions,
 } from "better-auth/oauth2";
 import {
+	createDpopNonce,
+	DPOP_NONCE_HEADER,
+	getDpopJktFromPayload,
 	isInsufficientScopeError,
 	requestToResourceInput,
 	verifyAccessTokenRequest,
@@ -49,6 +53,15 @@ export interface McpProtectedRequestHandlerOptions {
 		proofMaxAgeSeconds?: number;
 		signingAlgorithms?: readonly string[];
 		replayStore?: DpopReplayStore;
+		/**
+		 * Require server-provided nonces in DPoP proofs (RFC 9449 §9). A proof
+		 * without a current nonce gets a `401` `use_dpop_nonce` challenge with a
+		 * fresh `DPoP-Nonce`, and successful DPoP responses carry the next one.
+		 * Responses that carry a nonce are marked `Cache-Control: no-store`. Use
+		 * the authorization server's secret to accept the nonces it issues, such
+		 * as when the MCP server shares its origin.
+		 */
+		nonce?: NonNullable<VerifyAccessTokenRequestOptions["dpop"]>["nonce"];
 	};
 }
 
@@ -87,6 +100,33 @@ export function validateMcpResource(resource: unknown): string {
 		);
 	}
 	return resource;
+}
+
+/**
+ * Returns `response` with the next DPoP nonce (RFC 9449 §8.2). The response
+ * gets `Cache-Control: no-store`, overriding the handler's policy, because a
+ * cached copy would hand clients the nonce after it expires. The headers are copied
+ * because a handler's `Response` may have immutable headers.
+ */
+async function withNextDpopNonce(
+	response: Response,
+	secret: string,
+): Promise<Response> {
+	const headers = new Headers(response.headers);
+	headers.set("Cache-Control", "no-store");
+	headers.set(DPOP_NONCE_HEADER, await createDpopNonce({ secret }));
+	headers.set(
+		"Access-Control-Expose-Headers",
+		withExposedHeaders(
+			headers.get("access-control-expose-headers"),
+			DPOP_NONCE_HEADER,
+		),
+	);
+	return new Response(response.body, {
+		status: response.status,
+		statusText: response.statusText,
+		headers,
+	});
 }
 
 function toChallengeResponse(
@@ -150,13 +190,18 @@ export const createMcpProtectedRequestHandler = (
 		} catch (error) {
 			return toChallengeResponse(error, resource, resolvedChallengeOptions);
 		}
+		let response: Response;
 		try {
-			return await handler(request, accessTokenClaims);
+			response = await handler(request, accessTokenClaims);
 		} catch (error) {
 			if (isInsufficientScopeError(error)) {
 				return toChallengeResponse(error, resource, resolvedChallengeOptions);
 			}
 			throw error;
 		}
+		const nonce = options.dpop?.nonce;
+		return nonce?.required && getDpopJktFromPayload(accessTokenClaims)
+			? withNextDpopNonce(response, nonce.secret)
+			: response;
 	};
 };

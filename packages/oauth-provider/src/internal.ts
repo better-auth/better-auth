@@ -12,6 +12,7 @@ export {
 	validatePublicClientJwks,
 } from "./client-jwks";
 export { isForbiddenCimdClientMetadataField } from "./client-metadata";
+export { withExposedHeaders } from "./dpop";
 export { getExtensionClientMetadataFields } from "./extensions";
 export { createOAuthEndpoint } from "./oauth-endpoint";
 export {

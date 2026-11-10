@@ -108,6 +108,75 @@ const replayStore = createDpopReplayStore((await auth.$context).internalAdapter)
 // verifyAccessTokenRequest(input, { jwksUrl, verifyOptions, dpop: { replayStore } })
 ```
 
+## Require DPoP nonces
+
+Your API can require a server-provided nonce in each DPoP proof, as the provider's endpoints can with [`dpop.nonce`](/docs/plugins/oauth-provider/tokens#server-provided-nonces). The nonce stops a client from using proofs it signed ahead of time ([RFC 9449 §9](https://datatracker.ietf.org/doc/html/rfc9449#section-9)).
+
+Pass `dpop.nonce` to `verifyAccessTokenRequest`, and choose its `secret` by where your API runs:
+
+* **On the auth server's origin:** use the auth `secret` and the provider's `dpop.nonce.expiresIn`. Clients keep one nonce per origin. With the same secret and lifetime, the nonce from a token response also works at your API.
+* **On its own origin:** use a separate secret. Share that secret across every instance of the API.
+
+A DPoP request without a current nonce fails with a 401 `use_dpop_nonce` error. The error carries a fresh nonce in its `DPoP-Nonce` header. `createResourceServerChallenge` turns the error into the `WWW-Authenticate: DPoP` challenge the client expects. The challenge keeps the nonce in its own `DPoP-Nonce` header, sets `Cache-Control: no-store`, and adds `DPoP-Nonce` and `WWW-Authenticate` to `Access-Control-Expose-Headers`.
+
+To send the next nonce on a successful response, call `createDpopNonce` with the same secret. Mark that response `Cache-Control: no-store`. Otherwise a cache can hand out an old nonce ([§8.2](https://datatracker.ietf.org/doc/html/rfc9449#section-8.2)). For browser clients, also add `DPoP-Nonce` to its `Access-Control-Expose-Headers`.
+
+`createResourceServerChallenge` returns one of two challenge schemes:
+
+* **Bearer challenges** answer a missing or invalid token with a 401 and a token without a required scope with a 403 `insufficient_scope`. They carry `resource_metadata`, the URL of your API's protected resource metadata ([RFC 9728 §5.1](https://datatracker.ietf.org/doc/html/rfc9728#section-5.1)).
+* **DPoP challenges** answer a failed DPoP proof, including `use_dpop_nonce`, with a 401. They carry `algs`, the proof algorithms your API accepts ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)), and no `resource_metadata`.
+
+```ts title="api/posts.ts"
+import { createResourceServerChallenge } from "@better-auth/oauth-provider";
+import { isAPIError } from "better-auth/api";
+import {
+  createDpopNonce,
+  requestToResourceInput,
+  verifyAccessTokenRequest,
+} from "better-auth/oauth2";
+
+const nonceSecret = process.env.API_DPOP_NONCE_SECRET!;
+const audience = "https://api.example.com";
+
+export const GET = async (req: Request) => {
+  try {
+    const payload = await verifyAccessTokenRequest(requestToResourceInput(req), {
+      jwksUrl: "https://auth.example.com/api/auth/jwks",
+      verifyOptions: {
+        issuer: "https://auth.example.com/api/auth",
+        audience,
+        typ: "at+jwt",
+        requiredClaims: ["azp"],
+      },
+      dpop: { nonce: { required: true, secret: nonceSecret } },
+    });
+    return Response.json(
+      { sub: payload.sub },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+          "DPoP-Nonce": await createDpopNonce({ secret: nonceSecret }),
+        },
+      },
+    );
+  } catch (error) {
+    const challenge = createResourceServerChallenge(error, audience);
+    if (challenge) {
+      return Response.json(challenge.body, {
+        status: challenge.statusCode,
+        headers: challenge.headers,
+      });
+    }
+    if (!isAPIError(error)) throw error;
+    return Response.json(error.body, { status: error.statusCode });
+  }
+};
+```
+
+A nonce stays valid for `expiresIn` seconds, 300 by default. It is not bound to one client: any client can use it until it expires. The replay store still rejects each reused proof.
+
+The [resource client](#verify-access-tokens) created with your auth instance takes `dpop: { nonce: { required: true } }`. It uses the auth `secret` and the provider's `dpop.nonce.expiresIn` by default. [`requireMcpAuth`](/docs/plugins/mcp) does the same, and adds the next nonce to the responses of DPoP requests.
+
 ## JWT or opaque tokens
 
 Your provider issues a JWT access token when the request names a `resource` and the JWT plugin is enabled. If either is missing, it issues an opaque token.
