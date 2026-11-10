@@ -1,5 +1,11 @@
 # @better-auth/expo
 
+## 1.7.19
+
+### Patch Changes
+
+- [#12368](https://github.com/better-auth/better-auth/pull/12368) [`339414f`](https://github.com/better-auth/better-auth/commit/339414f9b9af88f96de089eac17f0e130d98809d) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy no longer logs a provider configuration error on every OAuth sign-in when a social provider is set up for ID token sign-in only, such as Apple without a client secret.
+
 ## 1.7.18
 
 ## 1.7.17
