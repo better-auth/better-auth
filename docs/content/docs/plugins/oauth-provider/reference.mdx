@@ -33,7 +33,7 @@ A step between login and consent, such as choosing an organization. See [Post-lo
 
 `allowPublicClientPrelogin` <span className="opacity-70">`boolean`</span>
 
-Lets `/oauth2/public-client-prelogin` answer before sign-in when the request carries a valid signed `oauth_query`. The signed query does not limit which `client_id` is read, so every enabled client's public fields, including `contacts`, become readable without an account. Defaults to `false`.
+Lets `/oauth2/public-client-prelogin` answer before sign-in when the request carries a valid signed `oauth_query`. The requested `client_id` must match the client in the signed query. Defaults to `false`.
 
 <Accordions>
   <Accordion title="signup options">
@@ -114,6 +114,10 @@ Grants the token endpoint accepts. `refresh_token` requires `authorization_code`
 `validateRedirectUri` <span className="opacity-70">`(uri, registeredUris, defaultResult) => Awaitable<boolean>`</span>
 
 Replaces exact redirect URI matching. See [Custom redirect URI validation](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).
+
+`allowInsecureRedirectUri` <span className="opacity-70">`(url: URL) => boolean`</span>
+
+Accepts `http` redirect and post-logout redirect URIs that the default policy rejects. See [HTTP redirect URIs](/docs/plugins/oauth-provider/clients#http-redirect-uris).
 
 `cachedTrustedClients` <span className="opacity-70">`Set<string>`</span>
 

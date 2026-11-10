@@ -119,7 +119,7 @@ Device approvals and CIBA requests carry no `redirect_uri`. For a client an admi
 
 The response is `{ redirect: true, url }`. By default, the auth client sends the browser to `url`. If you call the endpoint another way, send the browser to `url` yourself.
 
-With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. When the user denies a device approval, the user returns to the device verification page instead. When the user denies a CIBA request, the user goes to `resultPage`. Both URLs carry `status=denied`. To remove consent, see [Manage consents](#manage-consents).
+With `accept: false`, the user returns to the client with `access_denied`, and any consent given earlier stays unchanged. This redirect happens only while the client is enabled and the `redirect_uri` is still valid for it. If the client was disabled or deleted, the `redirect_uri` was removed from its registration, or your redirect policy no longer accepts it, the `url` points to the server error page instead. When the user denies a device approval, the user returns to the device verification page instead of the client. When the user denies a CIBA request, the user goes to `resultPage`. Both URLs carry `status=denied`. To remove consent, see [Manage consents](#manage-consents).
 
 ## Sign-up account screen
 

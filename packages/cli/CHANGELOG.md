@@ -72,6 +72,15 @@
   - @better-auth/core@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.20
+
+### Patch Changes
+
+- Updated dependencies [[`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997)]:
+  - @better-auth/core@1.7.20
+  - better-auth@1.7.20
+  - @better-auth/telemetry@1.7.20
+
 ## 1.7.19
 
 ### Patch Changes

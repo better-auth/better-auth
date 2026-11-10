@@ -115,6 +115,22 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.20
+
+### Patch Changes
+
+- [#11904](https://github.com/better-auth/better-auth/pull/11904) [`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth provider deployments served over plain HTTP on a private network, such as a LAN address, a VPN, or a private DNS name, can now accept `http` redirect URIs through the new `allowInsecureRedirectUri` option. Return `true` from it for origins you control. The same option lets web clients use `localhost` callbacks during development. Without the option, redirect URI validation is unchanged.
+
+  If your issuer (`baseURL`, or `jwt.issuer` when set) uses `http` on a non-loopback host, discovery and the `iss` authorization response parameter now report it as configured instead of rewriting it to `https`. They now match the issuer in issued tokens, so OpenID Connect sign-ins no longer fail on the mismatch. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+
+  When an authorization request uses a registered `http` redirect URI that the HTTPS policy rejects, the error now appears on the server error page instead of being redirected to that URI.
+
+  Client registration and updates now reject post-logout redirect URIs that contain credentials, such as `https://user:pass@example.com/logged-out`, matching the existing rule for redirect URIs.
+
+- [#12237](https://github.com/better-auth/better-auth/pull/12237) [`dc07ae4`](https://github.com/better-auth/better-auth/commit/dc07ae4565205d27589cb285052455ede56ce3f7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `allowPublicClientPrelogin` enabled, `POST /oauth2/public-client-prelogin` now returns a client only when its `client_id` matches the one in the signed `oauth_query`. Before, any valid signed query returned the public fields of any client. A request for a different client now gets a `401` with `invalid_client`. The built-in client plugin and sign-in pages that pass the `client_id` from the current authorization request are unaffected.
+
+- [#12234](https://github.com/better-auth/better-auth/pull/12234) [`1a368a1`](https://github.com/better-auth/better-auth/commit/1a368a15350814822126ca5e4db05772784c9ed8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource servers that pass `auth` to `oauthProviderResourceClient(auth)` and rely on its defaults now accept the access tokens the OAuth provider issues when `baseURL` is only an origin, such as `https://example.com`. Previously the default issuer left out the auth path (`/api/auth` by default), and when `basePath` was not set the default JWKS and introspection URLs left it out too, so valid tokens failed verification unless `issuer` and `jwksUrl` were passed explicitly. The default audience and protected resource metadata now use the same base URL. Explicitly passed options and the JWT plugin's `jwt.issuer` and `jwks.remoteUrl` still take precedence.
+
 ## 1.7.19
 
 ### Patch Changes

@@ -29,6 +29,7 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
 import { baseURL, mcpResource, organizationClaim } from "./demo-url.ts";
+import { deviceClients } from "./device-clients.ts";
 import {
 	createSCIMDemoPlugin,
 	isSCIMDemoEmployeePortalEnabled,
@@ -401,6 +402,7 @@ const authOptions = {
 		}),
 		...scimDemoPlugins,
 		deviceAuthorization({
+			validateClient: (clientId) => deviceClients.has(clientId),
 			expiresIn: "3min",
 			interval: "5s",
 		}),

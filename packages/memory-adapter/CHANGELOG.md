@@ -21,6 +21,12 @@
 - Updated dependencies []:
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.20
+
+### Patch Changes
+
+- [#11806](https://github.com/better-auth/better-auth/pull/11806) [`e9b43d7`](https://github.com/better-auth/better-auth/commit/e9b43d7149cec0b52e8194b1341e582d0ea19bba) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `ne null` where clauses no longer match records where the field was never set, matching how `eq null` already treats those records and how the other adapters behave.
+
 ## 1.7.19
 
 ## 1.7.18

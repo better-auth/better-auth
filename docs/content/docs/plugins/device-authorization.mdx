@@ -540,19 +540,23 @@ With `oauthDeviceAuthorization()`, both endpoints refuse OAuth device codes. App
 
 The server returns `client_id` and `scope` only to the signed-in user who owns the code. The page enables Approve and Deny only when the lookup returns `client_id` for a pending code.
 
-The page labels the client ID as the device sent it. Without `validateClient`, `deviceAuthorization()` alone accepts any client ID. With `oauthDeviceAuthorization()`, the standalone flow accepts only client IDs that `validateClient` accepts. See [Client Validation](#client-validation).
+This page meets the [approval UI requirements](#production-security-requirements). `client_id` is the identifier the device sent, not a verified name. Show a name from your own client registry instead, and accept only registered IDs in [`validateClient`](#client-validation). Without `validateClient`, `deviceAuthorization()` alone accepts any client ID. With `oauthDeviceAuthorization()`, the standalone flow accepts only client IDs that `validateClient` accepts. See [Client Validation](#client-validation).
 
 ```tsx title="app/device/approve/page.tsx"
+// Client IDs you accept in `validateClient`, mapped to names your users recognize.
+const knownClients = new Map([["acme-cli", "Acme CLI"]]);
+
+type DeviceRequest = {
+  user_code: string;
+  client_id?: string;
+  scope?: string;
+};
+
 export default function DeviceApprovalPage() {
   const { user } = useAuth(); // Must be authenticated
-  const searchParams = useSearchParams();
-  const userCode = searchParams.get("user_code");
+  const userCode = useSearchParams().get("user_code") ?? "";
+  const [request, setRequest] = useState<DeviceRequest | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [request, setRequest] = useState<{
-    client_id?: string;
-    scope?: string;
-  } | null>(null);
-
   const [lookupError, setLookupError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -580,7 +584,10 @@ export default function DeviceApprovalPage() {
       active = false;
     };
   }, [user, userCode]);
-  
+
+  // Ignore details that belong to an earlier code.
+  const details = request?.user_code === userCode ? request : null;
+
   const handleApprove = async () => {
     if (!userCode) return;
     setIsProcessing(true);
@@ -598,7 +605,7 @@ export default function DeviceApprovalPage() {
       setIsProcessing(false);
     }
   };
-  
+
   const handleDeny = async () => {
     if (!userCode) return;
     setIsProcessing(true);
@@ -618,31 +625,31 @@ export default function DeviceApprovalPage() {
   };
 
   if (!user) {
-    // Redirect to login if not authenticated
-    const verificationPath = `/device?user_code=${encodeURIComponent(userCode || "")}`;
+    const verificationPath = `/device?user_code=${encodeURIComponent(userCode)}`;
     window.location.href = `/login?redirect=${encodeURIComponent(verificationPath)}`;
     return null;
   }
-  
+
   return (
     <div>
       <h2>Device Authorization Request</h2>
       {lookupError && <p role="alert">{lookupError}</p>}
-      {request && (
+      {details?.client_id && (
         <>
-          <p>Client ID, as the device sent it: {request.client_id}</p>
-          <p>Scopes: {request.scope || "None"}</p>
+          <p>
+            Client: {knownClients.get(details.client_id) ??
+              `Unrecognized client (${details.client_id})`}
+          </p>
+          <p>Scopes: {details.scope || "None"}</p>
         </>
       )}
       <p>Code: {userCode}</p>
-      
-      <button
-        onClick={handleApprove}
-        disabled={isProcessing || !request?.client_id}
-      >
+      <p>Approve only if this code is showing right now on a device you have.</p>
+
+      <button onClick={handleApprove} disabled={isProcessing || !details}>
         Approve
       </button>
-      <button onClick={handleDeny} disabled={isProcessing || !request?.client_id}>
+      <button onClick={handleDeny} disabled={isProcessing || !details}>
         Deny
       </button>
     </div>
