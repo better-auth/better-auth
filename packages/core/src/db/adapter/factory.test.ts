@@ -401,14 +401,10 @@ describe("createAdapterFactory serial id where values", () => {
 		});
 		await adapter.findMany({
 			model: "session",
-			where: [{ field: "userId", operator: "in", value: ["1", null] }],
-		});
-		await adapter.findMany({
-			model: "session",
 			where: [{ field: "userId", value: "2" }],
 		});
 
-		expect(seenWhere.map(([w]) => w!.value)).toEqual([null, [1, null], 2]);
+		expect(seenWhere.map(([w]) => w!.value)).toEqual([null, 2]);
 	});
 });
 

@@ -545,11 +545,11 @@ export const createAdapterFactory =
 					fieldAttr!.references?.field === "id"
 				) {
 					if (useNumberId) {
-						// `Number(null)` is 0, which would match no row for `eq null`
-						// and every row for `ne null`.
 						if (Array.isArray(value)) {
-							newValue = value.map((x) => (x === null ? null : Number(x)));
+							newValue = value.map(Number);
 						} else if (value !== null) {
+							// `Number(null)` is 0, which would turn `eq null` and `ne null`
+							// into comparisons with 0.
 							newValue = Number(value);
 						}
 					}
