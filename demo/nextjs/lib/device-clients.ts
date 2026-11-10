@@ -4,4 +4,5 @@
  */
 export const deviceClients = new Map<string, string>([
 	["demo-cli", "Better Auth demo CLI"],
+	["better-auth-cli", "Better Auth CLI"],
 ]);
