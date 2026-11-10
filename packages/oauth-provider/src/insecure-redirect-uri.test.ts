@@ -16,6 +16,7 @@ const allowLanOrigin = (url: URL) => url.origin === lanOrigin;
 async function setupProvider(input: {
 	baseURL?: string;
 	allowInsecureRedirectUri?: OAuthOptions<Scope[]>["allowInsecureRedirectUri"];
+	validateRedirectUri?: OAuthOptions<Scope[]>["validateRedirectUri"];
 }) {
 	const baseURL = input.baseURL ?? "http://localhost:3000";
 	const { auth, client, signInWithTestUser } = await getTestInstance(
@@ -26,6 +27,7 @@ async function setupProvider(input: {
 					loginPage: "/login",
 					consentPage: "/consent",
 					allowInsecureRedirectUri: input.allowInsecureRedirectUri,
+					validateRedirectUri: input.validateRedirectUri,
 				}),
 				jwt(),
 			],
@@ -38,13 +40,14 @@ async function setupProvider(input: {
 		redirect_uris: string[];
 		application_type?: "web" | "native";
 		post_logout_redirect_uris?: string[];
+		skip_consent?: boolean;
 	}) {
 		return auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
 				...body,
 				token_endpoint_auth_method: "none",
-				skip_consent: true,
+				skip_consent: body.skip_consent ?? true,
 				enable_end_session: true,
 			},
 		});
@@ -152,10 +155,31 @@ async function setupProvider(input: {
 		});
 	}
 
+	async function disableClient(clientId: string) {
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+			update: { disabled: true },
+		});
+	}
+
+	function denyConsent(consentLocation: URL) {
+		return auth.api.oauth2Consent({
+			headers: new Headers(headers),
+			body: {
+				accept: false,
+				oauth_query: consentLocation.searchParams.toString(),
+			},
+		});
+	}
+
 	return {
 		auth,
 		baseURL,
 		createClient,
+		disableClient,
+		denyConsent,
 		authorize,
 		exchangeCode,
 		endSession,
@@ -444,5 +468,130 @@ describe("http issuer on a private network", () => {
 		expect(discovery.issuer).toBe(expectedIssuer);
 		expect(location.searchParams.get("iss")).toBe(expectedIssuer);
 		expect(decodeJwt(token.body.id_token!).iss).toBe(expectedIssuer);
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+ * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.11.2
+ */
+describe("consent denial redirect trust", () => {
+	async function startConsent(
+		provider: Awaited<ReturnType<typeof setupProvider>>,
+		redirectUris: string[],
+	) {
+		const client = await provider.createClient({
+			redirect_uris: redirectUris,
+			skip_consent: false,
+		});
+		const { location } = await provider.authorize(
+			client.client_id,
+			redirectUris[0]!,
+		);
+		expect(location.pathname).toBe("/consent");
+		return { client, consentLocation: location };
+	}
+
+	function expectServerErrorPage(
+		provider: { baseURL: string },
+		result: { redirect: boolean; url: string },
+	) {
+		const url = new URL(result.url);
+		expect(result.redirect).toBe(true);
+		expect(url.origin).toBe(provider.baseURL);
+		expect(url.pathname).toBe("/api/auth/error");
+		expect(url.searchParams.get("error")).toBe("access_denied");
+	}
+
+	it("redirects the denial to the registered redirect URI", async () => {
+		const provider = await setupProvider({});
+		const { consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		const result = await provider.denyConsent(consentLocation);
+		const url = new URL(result.url);
+
+		expect(result.redirect).toBe(true);
+		expect(url.origin + url.pathname).toBe("https://rp.example.com/callback");
+		expect(url.searchParams.get("error")).toBe("access_denied");
+		expect(url.searchParams.get("state")).toBe("state");
+		expect(url.searchParams.get("iss")).toBe(`${provider.baseURL}/api/auth`);
+	});
+
+	it("shows the server error page once allowInsecureRedirectUri no longer allows the http redirect URI", async () => {
+		let lanAllowed = true;
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => lanAllowed && allowLanOrigin(url),
+		});
+		const { consentLocation } = await startConsent(provider, [lanRedirect]);
+
+		lanAllowed = false;
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
+	});
+
+	it("still redirects the denial to an http redirect URI the policy allows", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: allowLanOrigin,
+		});
+		const { consentLocation } = await startConsent(provider, [lanRedirect]);
+
+		const result = await provider.denyConsent(consentLocation);
+		const url = new URL(result.url);
+
+		expect(url.origin + url.pathname).toBe(lanRedirect);
+		expect(url.searchParams.get("error")).toBe("access_denied");
+	});
+
+	it("shows the server error page once validateRedirectUri rejects the redirect URI", async () => {
+		let validatorAccepts = true;
+		const provider = await setupProvider({
+			validateRedirectUri: (_uri, _registered, defaultResult) =>
+				validatorAccepts && defaultResult,
+		});
+		const { consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		validatorAccepts = false;
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
+	});
+
+	it("shows the server error page once the client is disabled", async () => {
+		const provider = await setupProvider({});
+		const { client, consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		await provider.disableClient(client.client_id);
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
+	});
+
+	it("shows the server error page once the redirect URI is removed from the client", async () => {
+		const provider = await setupProvider({});
+		const { client, consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		await provider.replaceRegisteredUris(client.client_id, {
+			redirectUris: ["https://rp.example.com/other"],
+		});
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
 	});
 });
