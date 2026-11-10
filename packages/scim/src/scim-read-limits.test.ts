@@ -77,12 +77,14 @@ function createFixture({
 		}[],
 		scimGroup: [] as {
 			id: string;
+			connectionId?: string;
 			displayName: string;
 			displayNameKey: string;
 			updatedAt: Date;
 		}[],
 		scimGroupMember: [] as {
 			id: string;
+			connectionId?: string;
 			groupId: string;
 			scimUserId: string;
 			membershipKey: string;
@@ -500,14 +502,36 @@ describe("SCIM Group writes and role mapping when the database caps bound variab
 				connectionId: `seeded-connection-${index}`,
 			});
 		}
+		const [group] = data.scimGroup;
+		const [membership] = data.scimGroupMember;
+		if (!group || !membership) throw new Error("Group not created");
+		data.scimGroup.push({
+			...group,
+			id: "seeded-group",
+			connectionId: "seeded-connection-999",
+			displayName: `${ADMIN_GROUP} seeded`,
+			displayNameKey: "seeded-group-key",
+		});
+		data.scimGroupMember.push({
+			...membership,
+			id: "seeded-membership",
+			connectionId: "seeded-connection-999",
+			groupId: "seeded-group",
+			scimUserId: "seeded-scim-user-999",
+			membershipKey: "seeded-membership-key",
+		});
+		const adminGrantCount = () =>
+			data.scimProjectionGrant.filter((grant) => grant.role === "admin").length;
 
 		await createGroup(`${ADMIN_GROUP} last`, [userId]);
 		expect(adminGrantCountOf(userId)).toBe(2);
+		expect(adminGrantCount()).toBe(3);
 
 		await setActive(userId, false);
 		expect(adminGrantCountOf(userId)).toBe(0);
 
 		await setActive(userId, true);
 		expect(adminGrantCountOf(userId)).toBe(2);
+		expect(adminGrantCount()).toBe(3);
 	});
 });
