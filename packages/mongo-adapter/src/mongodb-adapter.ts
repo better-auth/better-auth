@@ -164,7 +164,8 @@ export const mongodbAdapter = (
 	const indexSetupByDefinition = new Map<string, Promise<string>>();
 	const startedFieldIndexes = new Set<string>();
 	const warnedFieldIndexes = new Set<string>();
-	let fieldIndexRetryPending = false;
+	/** Keys of field index builds that failed temporarily. */
+	const pendingFieldIndexRetries = new Set<string>();
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator = options.advanced?.database?.generateId;
@@ -308,7 +309,7 @@ export const mongodbAdapter = (
 					) {
 						// Temporary (network, failover), so the next operation tries again.
 						startedFieldIndexes.delete(index.key);
-						fieldIndexRetryPending = true;
+						pendingFieldIndexRetries.add(index.key);
 						if (!warnedFieldIndexes.has(index.key)) {
 							warnedFieldIndexes.add(index.key);
 							logger.warn(
@@ -384,9 +385,11 @@ export const mongodbAdapter = (
 			for (const index of fieldIndexes) ensureFieldIndex(index);
 			/** Restarts builds that failed temporarily, on the next operation. */
 			const retryFieldIndexSetup = () => {
-				if (session || !fieldIndexRetryPending) return;
-				fieldIndexRetryPending = false;
-				for (const index of fieldIndexes) ensureFieldIndex(index);
+				if (session || pendingFieldIndexRetries.size === 0) return;
+				for (const index of fieldIndexes) {
+					if (pendingFieldIndexRetries.delete(index.key))
+						ensureFieldIndex(index);
+				}
 			};
 
 			const ensureModelIndexes = async (model: string, modelKey: string) => {

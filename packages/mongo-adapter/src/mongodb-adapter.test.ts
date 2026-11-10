@@ -1181,6 +1181,23 @@ describe("field-level indexes", () => {
 		expect(errorLog).not.toHaveBeenCalled();
 	});
 
+	it("keeps a pending retry when another adapter from the same factory runs", async () => {
+		vi.spyOn(logger, "warn").mockImplementation(() => {});
+		const { db, createIndex } = createMockDb(
+			failEmailIndex(() => new MongoNetworkError("connection reset"), 1),
+		);
+		const factory = mongodbAdapter(db, { transaction: false });
+		const first = factory({ user: { modelName: "first_user" } });
+		const second = factory({ user: { modelName: "second_user" } });
+		await settle();
+
+		await second.count({ model: "user" });
+		await first.count({ model: "user" });
+		await settle();
+
+		expect(indexCalls(createIndex, "first_user_email_uidx")).toHaveLength(2);
+	});
+
 	it("logs a client-side error once and does not retry it", async () => {
 		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const { db, createIndex } = createMockDb(async () => {
