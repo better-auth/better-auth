@@ -897,6 +897,21 @@ describe("expo", async () => {
 	});
 
 	it("should reject errorCallbackURL errors even when a cleanup cookie is present", async () => {
+		storage.set(
+			"better-auth_cookie",
+			JSON.stringify({
+				"better-auth.oauth_state": {
+					value: "pending-oauth-state",
+					expires: new Date(Date.now() + 60_000).toISOString(),
+				},
+			}),
+		);
+		expect(
+			JSON.parse(storage.get("better-auth_cookie") || "")[
+				"better-auth.oauth_state"
+			],
+		).toBeDefined();
+
 		const expoWebBrowser = await import("expo-web-browser");
 		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
 			type: "success",
@@ -915,6 +930,28 @@ describe("expo", async () => {
 			statusText: "access_denied",
 			error: { code: "access_denied" },
 		});
+
+		const storedCookieAfter = storage.get("better-auth_cookie");
+		expect(storedCookieAfter).toBeDefined();
+		expect(
+			JSON.parse(storedCookieAfter || "")["better-auth.oauth_state"],
+		).toBeUndefined();
+	});
+
+	it("should not treat success callbackURL query error as an OAuth failure", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///dashboard?error=notice&cookie=better-auth.session_token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjYxMzQwZj",
+		});
+
+		await expect(
+			client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard?error=notice",
+				errorCallbackURL: "/oauth-error",
+			}),
+		).resolves.toBeDefined();
 	});
 
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
