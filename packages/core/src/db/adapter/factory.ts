@@ -545,9 +545,11 @@ export const createAdapterFactory =
 					fieldAttr!.references?.field === "id"
 				) {
 					if (useNumberId) {
+						// `Number(null)` is 0, which would match no row for `eq null`
+						// and every row for `ne null`.
 						if (Array.isArray(value)) {
-							newValue = value.map(Number);
-						} else {
+							newValue = value.map((x) => (x === null ? null : Number(x)));
+						} else if (value !== null) {
 							newValue = Number(value);
 						}
 					}
