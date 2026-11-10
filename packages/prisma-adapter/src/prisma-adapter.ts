@@ -234,6 +234,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return false;
 					}
 
+					// A unique column can hold many nulls, so `null` selects no single row.
+					if (condition.value === null) {
+						return false;
+					}
+
 					if (condition.field === "id") {
 						return true;
 					}

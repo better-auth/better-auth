@@ -353,6 +353,40 @@ describe("prisma-adapter", () => {
 		);
 	});
 
+	/**
+	 * A unique field compared with `null` can match many rows, so it does not
+	 * select a single row for Prisma's `update`.
+	 *
+	 * @see https://www.prisma.io/docs/orm/reference/prisma-client-reference#update
+	 */
+	it.each(["sqlite", "mongodb"] as const)(
+		"falls back to updateMany when a unique field is compared with null on %s",
+		async (provider) => {
+			const update = vi.fn();
+			const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+			const findFirst = vi.fn().mockResolvedValue({ id: "user-id" });
+			const adapter = prismaAdapter(
+				{ $transaction: vi.fn(), user: { update, updateMany, findFirst } },
+				{ provider },
+			)({
+				user: {
+					additionalFields: {
+						username: { type: "string", unique: true, required: false },
+					},
+				},
+			});
+
+			await adapter.update({
+				model: "user",
+				where: [{ field: "username", value: null }],
+				update: { name: "Updated" },
+			});
+
+			expect(update).not.toHaveBeenCalled();
+			expect(updateMany).toHaveBeenCalledOnce();
+		},
+	);
+
 	it("should use update (not updateMany) for insensitive mode on unsupported providers", async () => {
 		const update = vi.fn().mockResolvedValue({
 			id: "user-id",
