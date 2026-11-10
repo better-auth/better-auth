@@ -1,5 +1,15 @@
 # @better-auth/oauth-provider
 
+## 1.7.19
+
+### Patch Changes
+
+- [#12328](https://github.com/better-auth/better-auth/pull/12328) [`76f9d55`](https://github.com/better-auth/better-auth/commit/76f9d554b371c3c7874ccfa54af97a4d4f3db82b) Thanks [@bytaesu](https://github.com/bytaesu)! - Client `metadata` is now written to the `json` column as an object instead of a JSON string, so Postgres `jsonb` operators such as `->` and `@>` work on it with adapters that pass JSON through natively (Drizzle `pg`). Rows written as strings by earlier versions are still read.
+
+- [#12327](https://github.com/better-auth/better-auth/pull/12327) [`b0f795a`](https://github.com/better-auth/better-auth/commit/b0f795a0bbb934b35a7f2601a8853f5a48fbe7ca) Thanks [@bytaesu](https://github.com/bytaesu)! - A client secret without the configured `prefix.clientSecret` is now rejected like any other wrong secret: `client_secret_basic` gets 401 with a `WWW-Authenticate: Basic` challenge and `client_secret_post` gets 400.
+
+- [#12325](https://github.com/better-auth/better-auth/pull/12325) [`6080a5e`](https://github.com/better-auth/better-auth/commit/6080a5e542db35016bf8309bc89b033db823f0b3) Thanks [@bytaesu](https://github.com/bytaesu)! - Calling `auth.api.oauth2Consent({ headers, body })` from a server route no longer fails with `request not found`.
+
 ## 1.7.18
 
 ## 1.7.17
