@@ -554,6 +554,32 @@ describe("device authorization flow", async () => {
 		 * React Strict Mode runs an approval page's lookup effect twice, so one
 		 * user can send two lookups for an unclaimed code at once.
 		 */
+		it("rejects a lookup whose code is deleted while it claims the code", async () => {
+			const { headers } = await signInWithTestUser();
+			const { user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			const context = await auth.$context;
+			const spy = vi
+				.spyOn(context.adapter, "incrementOne")
+				.mockImplementationOnce(async () => {
+					await context.adapter.deleteMany({
+						model: "deviceCode",
+						where: [{ field: "userCode", value: user_code }],
+					});
+					return null;
+				});
+			try {
+				await expect(
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+				).rejects.toMatchObject({
+					body: { error: "invalid_request" },
+				});
+			} finally {
+				spy.mockRestore();
+			}
+		});
+
 		it("returns the request details to both concurrent lookups by the claiming user", async () => {
 			const { headers } = await signInWithTestUser();
 			const { user_code } = await auth.api.deviceCode({

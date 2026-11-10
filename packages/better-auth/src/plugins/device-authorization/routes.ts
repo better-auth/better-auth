@@ -892,8 +892,15 @@ export const deviceVerify = <
 						model: "deviceCode",
 						where: [{ field: "id", value: deviceCodeRecord.id }],
 					});
-					deviceCodeRecord.userId = current?.userId;
-					if (current) deviceCodeRecord.status = current.status;
+					if (!current) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_request",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+						});
+					}
+					deviceCodeRecord.userId = current.userId;
+					deviceCodeRecord.status = current.status;
 				}
 			}
 
