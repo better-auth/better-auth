@@ -227,7 +227,7 @@ export function getIssuer(
  * Error page url if redirect_uri has not been verified yet
  * Generates Url for custom error page
  */
-function getErrorURL(
+export function getErrorURL(
 	ctx: GenericEndpointContext,
 	error: OAuthErrorCode,
 	description: string,
@@ -354,7 +354,7 @@ function isSafeCustomRedirectUri(uri: string): boolean {
  * callers can fall back to the server error page (avoiding open-redirect
  * risk on validation failures).
  */
-async function resolveTrustedRedirectUri(
+export async function resolveTrustedRedirectUri(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	clientId: string | undefined,
