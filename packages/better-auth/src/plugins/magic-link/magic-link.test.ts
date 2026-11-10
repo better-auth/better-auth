@@ -1,3 +1,6 @@
+import type { DBTransactionAdapter } from "@better-auth/core/db/adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
+import { hex } from "@better-auth/utils/hex";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -998,5 +1001,73 @@ describe("magic link callback URL encoding", async () => {
 			returnTo: "https://example.com/resume?state=abc&step=2",
 			error: "INVALID_TOKEN",
 		});
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12071
+ */
+describe("magic link with ObjectId primary keys", () => {
+	const objectId = () => hex.encode(crypto.getRandomValues(new Uint8Array(12)));
+	// Stands in for Prisma on MongoDB with `@default(auto()) @db.ObjectId`:
+	// the database assigns missing ids and rejects any id that is not 24 hex.
+	const rejectNonObjectIds = <T extends DBTransactionAdapter>(
+		adapter: T,
+	): T => ({
+		...adapter,
+		create: (args) => {
+			const id = args.data.id ?? objectId();
+			if (!/^[0-9a-f]{24}$/.test(String(id))) {
+				throw new Error(`Malformed ObjectID: ${id}`);
+			}
+			return adapter.create({
+				...args,
+				data: { ...args.data, id },
+				forceAllowId: true,
+			});
+		},
+	});
+
+	it.each([
+		["database-generated ids", false],
+		["a custom ObjectId generator", () => objectId()],
+	] as const)("signs in an unverified user with %s", async (_, generateId) => {
+		let token = "";
+		const { auth } = await getTestInstance({
+			database: (options) => {
+				const adapter = memoryAdapter({
+					user: [],
+					session: [],
+					account: [],
+					verification: [],
+				})(options);
+				return {
+					...rejectNonObjectIds(adapter),
+					options: { ...adapter.options!, provider: "mongodb" },
+					transaction: (callback) =>
+						adapter.transaction((trx) => callback(rejectNonObjectIds(trx))),
+				};
+			},
+			advanced: { database: { generateId } },
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						token = data.token;
+					},
+				}),
+			],
+		});
+		const email = "objectid-unverified@test.com";
+		await auth.api.signUpEmail({
+			body: { email, name: "Unverified", password: "password123" },
+		});
+		await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
+
+		const result = await auth.api.magicLinkVerify({
+			query: { token },
+			headers: new Headers(),
+		});
+
+		expect(result.user.emailVerified).toBe(true);
 	});
 });

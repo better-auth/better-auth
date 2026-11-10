@@ -1,5 +1,12 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import type { DBTransactionAdapter } from "@better-auth/core/db/adapter";
 import { CLIENT_ASSERTION_TYPE } from "@better-auth/core/oauth2";
+import type { MemoryDB } from "@better-auth/memory-adapter";
+import { memoryAdapter } from "@better-auth/memory-adapter";
+import { hex } from "@better-auth/utils/hex";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL } from "better-auth/oauth2";
@@ -9,6 +16,7 @@ import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
+import { schema } from "./schema";
 import type {
 	ClientMetadataResourceFetch,
 	OAuthOptions,
@@ -836,12 +844,14 @@ describe("private_key_jwt authentication", async () => {
 			consentPage: "/consent",
 		} satisfies OAuthOptions<Scope[]>;
 		const consumeWith = async (
-			generateId: "uuid" | "serial",
+			generateId: "uuid" | "serial" | false,
 			jti: string,
 			attempts: number,
+			database?: BetterAuthOptions["database"],
 		) => {
 			const instance = await getTestInstance({
 				baseURL: authServerBaseUrl,
+				...(database && { database }),
 				advanced: { database: { generateId } },
 				plugins: [jwt(), oauthProvider(idStrategyOptions)],
 			});
@@ -880,6 +890,58 @@ describe("private_key_jwt authentication", async () => {
 
 		it("keeps accepting assertions when ids are database-generated numbers", async () => {
 			const [result] = await consumeWith("serial", crypto.randomUUID(), 1);
+
+			expect(result?.status).toBe("fulfilled");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12071
+		 */
+		it("accepts assertions on Prisma with MongoDB ObjectId ids", async () => {
+			// Stands in for `@default(auto()) @db.ObjectId`: the database assigns
+			// missing ids and rejects any id that is not 24 hex.
+			const rejectNonObjectIds = <T extends DBTransactionAdapter>(
+				adapter: T,
+			): T => ({
+				...adapter,
+				create: (args) => {
+					const id =
+						args.data.id ??
+						hex.encode(crypto.getRandomValues(new Uint8Array(12)));
+					if (!/^[0-9a-f]{24}$/.test(String(id))) {
+						throw new Error(`Malformed ObjectID: ${id}`);
+					}
+					return adapter.create({
+						...args,
+						data: { ...args.data, id },
+						forceAllowId: true,
+					});
+				},
+			});
+			const tables: MemoryDB = Object.fromEntries(
+				[
+					"user",
+					"session",
+					"account",
+					"verification",
+					"jwks",
+					...Object.keys(schema),
+				].map((model) => [model, []]),
+			);
+			const [result] = await consumeWith(
+				false,
+				crypto.randomUUID(),
+				1,
+				(options) => {
+					const adapter = memoryAdapter(tables)(options);
+					return {
+						...rejectNonObjectIds(adapter),
+						options: { ...adapter.options!, provider: "mongodb" },
+						transaction: (callback) =>
+							adapter.transaction((trx) => callback(rejectNonObjectIds(trx))),
+					};
+				},
+			);
 
 			expect(result?.status).toBe("fulfilled");
 		});

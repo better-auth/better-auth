@@ -1,7 +1,4 @@
-export {
-	encodeDeterministicId,
-	usesObjectIdKeys,
-} from "./adapter/get-id-field";
+export { encodeDeterministicId } from "./adapter/get-id-field";
 export {
 	type BoundedDatabaseIndexDialect,
 	type DBTableIndexSource,

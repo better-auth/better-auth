@@ -2,11 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
 import type { BetterAuthDBSchema } from "../type";
-import {
-	encodeDeterministicId,
-	initGetIdField,
-	usesObjectIdKeys,
-} from "./get-id-field";
+import { encodeDeterministicId, initGetIdField } from "./get-id-field";
 
 const minimalSchema: BetterAuthDBSchema = {
 	user: {
@@ -248,51 +244,31 @@ describe("encodeDeterministicId", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12071
 	 */
-	it("encodes ObjectId hex when an ObjectId adapter generates ids", () => {
-		const options = {
-			advanced: { database: { generateId: false } },
-		} as const;
-		const target = { model: "verification", objectIdKeys: true };
-		expect(encodeDeterministicId(digest(1), options, target)).toBe(
-			"1f262d343b424950575e656c",
-		);
-		expect(
+	describe("on Prisma with MongoDB", () => {
+		const encode = (generateId: unknown, provider = "mongodb") =>
 			encodeDeterministicId(
 				digest(1),
-				{
-					advanced: {
-						database: {
-							generateId: ({ model }) =>
-								model === "verification" ? false : "custom",
-						},
-					},
-				},
-				target,
-			),
-		).toBe("1f262d343b424950575e656c");
-	});
+				{ advanced: { database: { generateId } } } as BetterAuthOptions,
+				{ adapter: { options: { provider } }, model: "verification" },
+			);
 
-	it("keeps base64url ids for text-id adapters when the database generates ids", () => {
-		const options = {
-			advanced: { database: { generateId: false } },
-		} as const;
-		expect(encodeDeterministicId(digest(1), options)).toBe(
-			encodeDeterministicId(digest(1), {}),
-		);
-		expect(
-			encodeDeterministicId(digest(1), options, {
-				model: "verification",
-				objectIdKeys: false,
-			}),
-		).toBe(encodeDeterministicId(digest(1), {}));
-	});
+		it.each([
+			["database-generated ids", false],
+			["an ObjectId generator", () => "65f1c0ffee0000000000beef"],
+			["a generator that leaves the model to the database", () => false],
+		])("encodes ObjectId hex with %s", (_, generateId) => {
+			expect(encode(generateId)).toBe("1f262d343b424950575e656c");
+		});
 
-	it("detects ObjectId keys from the adapter provider", () => {
-		expect(usesObjectIdKeys({ options: { provider: "mongodb" } })).toBe(true);
-		expect(usesObjectIdKeys({ options: { provider: "postgresql" } })).toBe(
-			false,
-		);
-		expect(usesObjectIdKeys({})).toBe(false);
+		it.each([
+			["default ids", undefined, "mongodb"],
+			["a string id generator", () => "cuid-style-id", "mongodb"],
+			["database-generated ids on PostgreSQL", false, "postgresql"],
+		])("keeps the base64url id with %s", (_, generateId, provider) => {
+			expect(encode(generateId, provider)).toBe(
+				encodeDeterministicId(digest(1), {}),
+			);
+		});
 	});
 
 	it("formats a uuid when ids are uuids", () => {
