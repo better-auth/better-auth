@@ -285,7 +285,16 @@ tokenEndpointAuth: {
 },
 ```
 
-Better Auth builds the standard grant parameters, while `customizeRequest` adds the client authentication required by the provider.
+Better Auth builds the standard grant parameters, while `customizeRequest` adds the client authentication required by the provider. It can also set headers, including an `Authorization` header in the provider's own scheme:
+
+```ts
+tokenEndpointAuth: {
+  method: "custom",
+  customizeRequest({ headers }) {
+    headers.authorization = `Provider ${providerCredential}`;
+  },
+},
+```
 
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
@@ -391,7 +400,7 @@ genericOAuth({
 
 **discoveryHeaders**: (Optional) Custom headers to include in the discovery request. Useful for providers that require special headers.
 
-**authorizationHeaders**: (Optional) Custom headers to include in requests to the token endpoint, both the authorization code exchange and token refresh. A custom `getToken` replaces the default code exchange, so it must add these headers itself. Useful for providers that require special headers.
+**authorizationHeaders**: (Optional) Custom headers to include in requests to the token endpoint, both the authorization code exchange and token refresh. A custom `getToken` replaces the default code exchange, so it must add these headers itself. Useful for providers that require special headers. `Authorization` is not allowed, in any letter case, because client authentication sets it; initialization fails with an error naming the provider. For a provider that expects its own `Authorization` scheme, set the header from `tokenEndpointAuth` with `method: "custom"` instead.
 
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
 

@@ -55,6 +55,27 @@ export interface TokenEndpointClientOptions {
 	clientSecret?: string | undefined;
 }
 
+/**
+ * Copies caller headers onto a token request with lowercase names.
+ *
+ * Client authentication owns `authorization`, so a caller value is rejected
+ * instead of being sent alongside, or silently replaced by, the configured method.
+ */
+export function setCallerTokenRequestHeaders(
+	target: Record<string, string>,
+	headers: Record<string, string> | undefined,
+) {
+	for (const [key, value] of Object.entries(headers ?? {})) {
+		const name = key.toLowerCase();
+		if (name === "authorization") {
+			throw new Error(
+				'Token request headers cannot set "Authorization". Use tokenEndpointAuth: { method: "custom", customizeRequest } to send a provider-specific Authorization header.',
+			);
+		}
+		target[name] = value;
+	}
+}
+
 export interface ApplyTokenEndpointAuthInput
 	extends TokenEndpointRequestContext {
 	tokenEndpointAuth?: TokenEndpointAuth | undefined;

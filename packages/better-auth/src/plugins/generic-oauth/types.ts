@@ -255,6 +255,10 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * Custom headers to include in token endpoint requests: the authorization
 	 * code exchange and token refresh.
 	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
+	 *
+	 * `Authorization` is not allowed in any letter case, and initialization fails
+	 * if it is present. Set it from `tokenEndpointAuth` with `method: "custom"`
+	 * and `customizeRequest` instead.
 	 */
 	authorizationHeaders?: Record<string, string> | undefined;
 	/**

@@ -7,7 +7,10 @@ import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
-import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+import {
+	applyTokenEndpointAuth,
+	setCallerTokenRequestHeaders,
+} from "./token-endpoint-auth";
 import { verifyJwsToken } from "./verify";
 
 interface AuthorizationCodeRequestInput {
@@ -92,10 +95,7 @@ function buildAuthorizationCodeRequest({
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
-	// Lowercase keys so client authentication, written lowercase, replaces any caller value.
-	for (const [key, value] of Object.entries(headers ?? {})) {
-		requestHeaders[key.toLowerCase()] = value;
-	}
+	setCallerTokenRequestHeaders(requestHeaders, headers);
 
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);

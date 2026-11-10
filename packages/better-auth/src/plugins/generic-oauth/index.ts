@@ -236,6 +236,16 @@ export const genericOAuth = <const ID extends string>(
 	): Promise<OAuthProvider[]> => {
 		const genericProviders: OAuthProvider[] = [];
 		for (const c of configs) {
+			if (
+				Object.keys(c.authorizationHeaders ?? {}).some(
+					(name) => name.toLowerCase() === "authorization",
+				)
+			) {
+				throw new Error(
+					`Provider "${c.providerId}": authorizationHeaders cannot set "Authorization". Use tokenEndpointAuth: { method: "custom", customizeRequest } instead.`,
+				);
+			}
+
 			let authorizationUrl = c.authorizationUrl;
 			let tokenUrl = c.tokenUrl;
 			let userInfoUrl = c.userInfoUrl;
