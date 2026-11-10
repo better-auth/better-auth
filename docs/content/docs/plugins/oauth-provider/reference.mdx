@@ -111,6 +111,10 @@ Grants the token endpoint accepts. `refresh_token` requires `authorization_code`
 
 Replaces exact redirect URI matching. See [Custom redirect URI validation](/docs/plugins/oauth-provider/clients#custom-redirect-uri-validation).
 
+`allowInsecureRedirectUri` <span className="opacity-70">`(url: URL) => boolean`</span>
+
+Accepts `http` redirect and post-logout redirect URIs that the default policy rejects. See [HTTP redirect URIs](/docs/plugins/oauth-provider/clients#http-redirect-uris).
+
 `cachedTrustedClients` <span className="opacity-70">`Set<string>`</span>
 
 Client IDs to cache. Cached clients cannot be changed through the CRUD endpoints. See [Trusted clients](/docs/plugins/oauth-provider/clients#trusted-clients).

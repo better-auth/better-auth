@@ -206,6 +206,13 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return operator;
 				}
 			}
+			// Only postgresql and mongodb honor Prisma's `mode`, and only on strings.
+			const isInsensitiveForPrisma = (w: Where) =>
+				w.mode === "insensitive" &&
+				(config.provider === "postgresql" || config.provider === "mongodb") &&
+				(typeof w.value === "string" ||
+					(Array.isArray(w.value) &&
+						w.value.every((v) => typeof v === "string")));
 			const hasRootUniqueWhereCondition = (
 				model: string,
 				where?: Where[] | undefined,
@@ -223,16 +230,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return false;
 					}
 
-					if (condition.mode === "insensitive") {
-						const providerSupportsMode =
-							config.provider === "postgresql" || config.provider === "mongodb";
-						const isStringValue =
-							typeof condition.value === "string" ||
-							(Array.isArray(condition.value) &&
-								condition.value.every((v) => typeof v === "string"));
-						if (providerSupportsMode && isStringValue) {
-							return false;
-						}
+					if (isInsensitiveForPrisma(condition)) {
+						return false;
 					}
 
 					if (condition.field === "id") {
@@ -277,17 +276,8 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					isNullableField(w.field);
 				const buildSingleCondition = (w: Where) => {
 					const fieldName = getFieldName({ model, field: w.field });
-					const mode = w.mode ?? "sensitive";
-					const isInsensitive =
-						mode === "insensitive" &&
-						(typeof w.value === "string" ||
-							(Array.isArray(w.value) &&
-								w.value.every((v) => typeof v === "string")));
-					const providerSupportsMode =
-						config.provider === "postgresql" || config.provider === "mongodb";
-					const prismaMode =
-						isInsensitive && providerSupportsMode ? "insensitive" : undefined;
-					const modeFilter = prismaMode ? { mode: prismaMode } : {};
+					const isInsensitive = isInsensitiveForPrisma(w);
+					const modeFilter = isInsensitive ? { mode: "insensitive" } : {};
 					// Prisma's MongoDB connector builds `$regexMatch` patterns from these values unescaped.
 					// Range operators compare string order instead.
 					const usesRegex =
@@ -295,7 +285,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						(w.operator === "contains" ||
 							w.operator === "starts_with" ||
 							w.operator === "ends_with" ||
-							(prismaMode !== undefined &&
+							(isInsensitive &&
 								(!w.operator ||
 									w.operator === "eq" ||
 									w.operator === "ne" ||
@@ -372,9 +362,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					);
 					const or = where.filter((w) => w.connector === "OR");
 
-					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND)
+					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND).
+					// A flat value is a case-sensitive match, so insensitive eq stays in AND.
 					const isSimple = (w: Where) =>
-						(w.operator === "eq" || !w.operator) && !isMongoNullMatch(w);
+						(w.operator === "eq" || !w.operator) &&
+						!isInsensitiveForPrisma(w) &&
+						!isMongoNullMatch(w);
 					const andSimple = and.filter(isSimple);
 					const andComplex = and.filter((w) => !isSimple(w));
 
@@ -795,7 +788,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// transaction and update by id. Either way the original guard stays in
 					// the where, so a racer that invalidated it (e.g. remaining dropped to
 					// 0) yields P2025 and we report no mutation.
-					const hasIdField = where?.some((w) => w.field === "id");
+					// Only a case-sensitive AND eq on id can stay a flat key for update().
+					const hasIdField = where?.some(
+						(w) =>
+							w.field === "id" &&
+							(w.operator === "eq" || !w.operator) &&
+							w.connector !== "OR" &&
+							!isInsensitiveForPrisma(w),
+					);
 					if (hasIdField) {
 						const whereClause = convertWhereClause({
 							model: modelKey,
