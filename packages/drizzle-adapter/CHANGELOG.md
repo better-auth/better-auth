@@ -1,5 +1,7 @@
 # @better-auth/drizzle-adapter
 
+## 1.7.20
+
 ## 1.7.19
 
 ## 1.7.18
