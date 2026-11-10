@@ -1600,9 +1600,7 @@ export function oauthToSchema(
 		inputMetadata ?? {},
 	);
 	const metadata =
-		metadataObj && Object.keys(metadataObj).length
-			? JSON.stringify(metadataObj)
-			: undefined;
+		metadataObj && Object.keys(metadataObj).length ? metadataObj : undefined;
 
 	return {
 		// Important Fields

@@ -111,6 +111,7 @@ export function formatReleaseBody(
 		list.push(entry);
 		grouped.set(entry.packageName, list);
 		if (entry.author !== "unknown") contributors.add(entry.author);
+		for (const login of entry.commitAuthors) contributors.add(login);
 	}
 
 	const packageOrder = [...grouped.keys()].sort((a, b) => {

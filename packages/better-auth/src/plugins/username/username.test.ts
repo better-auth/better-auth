@@ -1,3 +1,4 @@
+import { UnsecuredJWT } from "jose";
 import { assert, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
@@ -1248,5 +1249,48 @@ describe("username sign-in password length", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+describe("username social sign-up", async () => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [username()],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async () => true,
+					mapProfileToUser: () => ({
+						username: "social_user",
+					}),
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should create a user whose username is mapped from the profile", async () => {
+		const idToken = new UnsecuredJWT({
+			sub: "google-sub",
+			email: "social-user@test.com",
+			email_verified: true,
+			name: "Social User",
+		}).encode();
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.data).toMatchObject({
+			user: {
+				email: "social-user@test.com",
+			},
+		});
 	});
 });

@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
+import prompts from "prompts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Spinner } from "yocto-spinner";
 import { upgradeAction } from "../src/commands/upgrade";
 import { detectPackageManager } from "../src/utils/check-package-managers";
 import { getPackageInfo } from "../src/utils/get-package-info";
 import { installDependencies } from "../src/utils/install-dependencies";
+
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
 
 vi.mock(import("../src/version"), () => ({
 	cliVersion: "1.7.0-rc.4",
@@ -120,6 +124,18 @@ describe("upgradeAction", () => {
 			cwd: process.cwd(),
 			type: "prod",
 		});
+	});
+
+	it("exits 130 without installing when the upgrade is declined", async () => {
+		const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+			throw new Error("exit");
+		});
+		prompts.inject([false]);
+
+		await expect(upgradeAction({ cwd: process.cwd() })).rejects.toThrow("exit");
+
+		expect(exit).toHaveBeenCalledWith(130);
+		expect(mockInstallDependencies).not.toHaveBeenCalled();
 	});
 
 	it("does not downgrade packages newer than the running CLI", async () => {

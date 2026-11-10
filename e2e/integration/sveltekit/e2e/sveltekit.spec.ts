@@ -1,35 +1,38 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { terminate } from "@better-auth-test/test-utils/playwright";
+import { launch } from "@better-auth-test/test-utils/playwright";
+import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 
-let server: ChildProcessWithoutNullStreams;
+/**
+ * `load` fires before the client hydrates, and a click before hydration races
+ * the form navigation with SvelteKit's startup `replaceState`.
+ *
+ * @see https://github.com/sveltejs/kit/blob/2ec690e0c7ccebdb2fcf1838da35ffbacbf950d8/packages/kit/test/utils.js#L113-L145
+ */
+async function goto(page: Page, url: string) {
+	await page.goto(url);
+	await page.locator("body.started").waitFor();
+}
+
+const app = launch(root);
 let baseURL: string;
 
 test.beforeAll(async () => {
-	server = spawn("pnpm", ["run", "dev"], {
-		detached: process.platform !== "win32",
-		cwd: root,
-		stdio: "pipe",
-		env: { ...process.env, NO_COLOR: "1" },
-	});
-	server.stderr.on("data", (data) => console.error(data.toString()));
-	baseURL = await new Promise<string>((resolve, reject) => {
-		server.stdout.on("data", (data) => {
-			const match = data.toString().match(/http:\/\/localhost:\d+/);
-			if (match) resolve(match[0]);
-		});
-		server.on("exit", (code) =>
-			reject(new Error(`vite dev exited with code ${code}`)),
-		);
-	});
+	baseURL = await app.start(["run", "dev"]);
 });
 
-test.afterAll(async () => {
-	if (server) await terminate(server);
+// Runs even when `beforeAll` times out, unlike `afterEach`.
+test.afterAll(async ({}, testInfo) => {
+	try {
+		await app.stop();
+	} finally {
+		await testInfo.attach("vite-dev.log", {
+			body: app.output(),
+			contentType: "text/plain",
+		});
+	}
 });
 
 /**
@@ -38,7 +41,7 @@ test.afterAll(async () => {
 test("signs up through a SvelteKit 3 form action and reads the session", async ({
 	page,
 }) => {
-	await page.goto(baseURL);
+	await goto(page, baseURL);
 	await page.getByLabel("Name").fill("Kit User");
 	await page.getByLabel("Email").fill("kit@example.com");
 	await page.getByLabel("Password").fill("password123");
@@ -54,7 +57,7 @@ test("signs up through a SvelteKit 3 form action and reads the session", async (
 	).toBeDefined();
 
 	// `getSession` in `hooks.server.ts` reads it on the next request.
-	await page.goto(baseURL);
+	await goto(page, baseURL);
 	await expect(
 		page.getByRole("heading", { name: "Signed in as Kit User" }),
 	).toBeVisible();

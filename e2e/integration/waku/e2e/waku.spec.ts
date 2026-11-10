@@ -1,8 +1,5 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { fileURLToPath } from "node:url";
-import { terminate } from "@better-auth-test/test-utils/playwright";
+import { launch } from "@better-auth-test/test-utils/playwright";
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 
@@ -14,24 +11,22 @@ const servers = {
 	start: { build: true, command: ["run", "start", "--host", "localhost"] },
 } as const;
 
-function spawnScript(args: readonly string[]) {
-	return spawn("pnpm", args, {
-		detached: process.platform !== "win32",
-		cwd: root,
-		stdio: "pipe",
-		env: { ...process.env, NO_COLOR: "1" },
-	});
+async function waitForHydration(page: Page) {
+	await expect(page.locator("[data-hydrated]")).toBeAttached();
 }
 
-async function build() {
-	const child = spawnScript(["run", "build"]);
-	let output = "";
-	child.stdout.on("data", (data) => (output += data.toString()));
-	child.stderr.on("data", (data) => (output += data.toString()));
-	const [code] = await once(child, "close");
-	if (code !== 0) {
-		throw new Error(`waku build exited with code ${code}\n${output}`);
-	}
+async function submitAction(page: Page, button: string) {
+	// Before hydration the form would post natively and redirect in a new request.
+	await waitForHydration(page);
+	const [response] = await Promise.all([
+		page.waitForResponse(
+			(response) =>
+				new URL(response.url()).pathname.startsWith("/RSC/F/") &&
+				response.request().method() === "POST",
+		),
+		page.getByRole("button", { name: button }).click(),
+	]);
+	expect(response.ok()).toBe(true);
 }
 
 async function signUp(
@@ -44,15 +39,7 @@ async function signUp(
 	await page.getByLabel("Name").fill(name);
 	await page.getByLabel("Email").fill(email);
 	await page.getByLabel("Password").fill("password123");
-	const [response] = await Promise.all([
-		page.waitForResponse(
-			(response) =>
-				new URL(response.url()).origin === new URL(baseURL).origin &&
-				response.request().method() === "POST",
-		),
-		page.getByRole("button", { name: "Sign up" }).click(),
-	]);
-	expect(response.ok()).toBe(true);
+	await submitAction(page, "Sign up");
 }
 
 async function getCookie(page: Page, name: string) {
@@ -68,28 +55,26 @@ for (const [mode, server] of Object.entries(servers)) {
 		// Share a server while keeping failures and retries independent.
 		test.describe.configure({ mode: "default" });
 
-		let child: ChildProcessWithoutNullStreams;
+		const app = launch(root);
 		let baseURL: string;
 
 		test.beforeAll(async () => {
 			test.setTimeout(120_000);
 			// Static renders run during the build, outside any request.
-			if (server.build) await build();
-			child = spawnScript(server.command);
-			child.stderr.on("data", (data) => console.error(data.toString()));
-			baseURL = await new Promise<string>((resolve, reject) => {
-				child.stdout.on("data", (data) => {
-					const match = data.toString().match(/http:\/\/localhost:\d+/);
-					if (match) resolve(match[0]);
-				});
-				child.on("exit", (code) =>
-					reject(new Error(`waku ${mode} exited with code ${code}`)),
-				);
-			});
+			if (server.build) await app.run(["run", "build"]);
+			baseURL = await app.start(server.command);
 		});
 
-		test.afterAll(async () => {
-			if (child) await terminate(child);
+		// Runs even when `beforeAll` times out, unlike `afterEach`.
+		test.afterAll(async ({}, testInfo) => {
+			try {
+				await app.stop();
+			} finally {
+				await testInfo.attach(`waku-${mode}.log`, {
+					body: app.output(),
+					contentType: "text/plain",
+				});
+			}
 		});
 
 		test("forwards session cookies set inside a server action", async ({
@@ -108,6 +93,75 @@ for (const [mode, server] of Object.entries(servers)) {
 
 			await page.goto(baseURL);
 			await expect(page.getByText("Signed in as Action User")).toBeVisible();
+		});
+
+		/**
+		 * @see https://waku.gg/guides/authentication#reading-a-queued-cookie-in-the-same-request
+		 */
+		test("renders the redirect after a server-action sign-up with the new session", async ({
+			page,
+		}) => {
+			await signUp(page, baseURL, "Redirect User", "redirect@example.com");
+
+			await expect(page).toHaveURL(new URL("/dashboard", baseURL).href);
+			await expect(page.getByText("Signed in as Redirect User")).toBeVisible();
+		});
+
+		/**
+		 * @see https://waku.gg/guides/authentication#reading-a-queued-cookie-in-the-same-request
+		 */
+		test("renders the redirect after a server-action sign-out without the session", async ({
+			page,
+		}) => {
+			await signUp(
+				page,
+				baseURL,
+				"Action Sign Out User",
+				"action-signout@example.com",
+			);
+			await page.goto(new URL("/dashboard", baseURL).href);
+			await expect(
+				page.getByText("Signed in as Action Sign Out User"),
+			).toBeVisible();
+
+			await submitAction(page, "Sign out");
+
+			await expect(page.getByText("Signed out", { exact: true })).toBeVisible();
+			expect(
+				await getCookie(page, "better-auth.session_token"),
+			).toBeUndefined();
+		});
+
+		test("clears session cookies on API sign-out when the cookie cache is missing", async ({
+			page,
+		}) => {
+			await signUp(page, baseURL, "Sign Out User", "signout@example.com");
+			await page.goto(baseURL);
+			await expect(page.getByText("Signed in as Sign Out User")).toBeVisible();
+			expect(await getCookie(page, "better-auth.session_token")).toBeDefined();
+			expect(await getCookie(page, "better-auth.session_data")).toBeDefined();
+
+			await page.context().clearCookies({ name: "better-auth.session_data" });
+			const response = await page.evaluate(async () => {
+				const response = await fetch("/api/auth/sign-out", {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: "{}",
+				});
+				const body: unknown = await response.json();
+				return { status: response.status, body };
+			});
+			expect(response).toMatchObject({ status: 200, body: { success: true } });
+			expect(
+				await getCookie(page, "better-auth.session_token"),
+			).toBeUndefined();
+			expect(await getCookie(page, "better-auth.session_data")).toBeUndefined();
+
+			const session = await page.request.get(`${baseURL}/api/auth/get-session`);
+			expect(session.ok()).toBe(true);
+			expect(await session.json()).toBeNull();
+			await page.goto(baseURL);
+			await expect(page.getByText("Signed out", { exact: true })).toBeVisible();
 		});
 
 		test("reissues a missing cookie cache during client-side navigation", async ({

@@ -63,6 +63,23 @@
   - @better-auth/core@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.19
+
+### Patch Changes
+
+- [#12305](https://github.com/better-auth/better-auth/pull/12305) [`de6ef28`](https://github.com/better-auth/better-auth/commit/de6ef28b86c002c3a3683861d803daf482ec603f) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed CLI errors that printed a stack trace instead of the cause. Config and database errors now show their message, a mistyped `--config` path says the file doesn't exist, and `auth mcp` and `auth ai` no longer report success after a failed step.
+
+- [#12275](https://github.com/better-auth/better-auth/pull/12275) [`56a849b`](https://github.com/better-auth/better-auth/commit/56a849bb7c9aee7c786616cb2a143d71d1d66673) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed the CLI exiting with code 0 after a canceled or failed run, so scripts no longer continue as if it succeeded. Canceling a prompt or pressing Ctrl+C now exits with 130, and failures such as a missing configuration file or a failed `auth mcp` setup exit with 1.
+
+- [#12286](https://github.com/better-auth/better-auth/pull/12286) [`9a5b6ac`](https://github.com/better-auth/better-auth/commit/9a5b6acda7bbe22324d32709b5b8fac2c01b7eda) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed CLI commands hanging or exiting with code 0 at a prompt in CI or without a terminal. They now exit with code 2 and name what they need instead, such as `--yes`. Prompts now appear on stderr, so redirecting stdout no longer hides them.
+
+- [#12287](https://github.com/better-auth/better-auth/pull/12287) [`6a32d8e`](https://github.com/better-auth/better-auth/commit/6a32d8e69604825269151b763e8bf6e840273446) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed CLI notices mixing into the output of `auth info` and `auth secret`. `auth info --json --copy` now prints valid JSON, and `auth secret` prints only the `BETTER_AUTH_SECRET` line on stdout. Messages from `auth login` and `auth logout` now go to stderr, and `auth info` shows its tips only in an interactive terminal.
+
+- Updated dependencies [[`a10121d`](https://github.com/better-auth/better-auth/commit/a10121d33cfccc525c79777319288d220940164b), [`c41f8ff`](https://github.com/better-auth/better-auth/commit/c41f8ff08755c4b493a82b89d5f4555a4998c122), [`e786566`](https://github.com/better-auth/better-auth/commit/e786566dc553b3e21a9bdec0e7c4777dfb51bacf), [`ac778b7`](https://github.com/better-auth/better-auth/commit/ac778b70e9c35ce3fb13014fe7122f8faa1cd178), [`5eb69d8`](https://github.com/better-auth/better-auth/commit/5eb69d8371aac809c81b16b08f82f05a448c5583), [`8412a5f`](https://github.com/better-auth/better-auth/commit/8412a5f43b724648b3faaa452bec0a6ba8e01765), [`4b0327b`](https://github.com/better-auth/better-auth/commit/4b0327bfa363395fdba24bd51bdf18668e62657d), [`2d5ef64`](https://github.com/better-auth/better-auth/commit/2d5ef64daee607af5ff2175262dc387a767f7e35), [`5f0a0fc`](https://github.com/better-auth/better-auth/commit/5f0a0fcef3b15ea4a657a08a46b71df96ada77cc), [`89e74b8`](https://github.com/better-auth/better-auth/commit/89e74b81e554e2a4edc5bf925adad59dfdace734), [`525bd7a`](https://github.com/better-auth/better-auth/commit/525bd7a7d866012c88f0fff2c488d352a6eb8f2e), [`34ee100`](https://github.com/better-auth/better-auth/commit/34ee1008d8269d32b875e2743b9805090863f2f4), [`23a60a3`](https://github.com/better-auth/better-auth/commit/23a60a31f42ab9f78f3db976d232df37f8414e9d), [`29e45f8`](https://github.com/better-auth/better-auth/commit/29e45f84d5946a002330b56dc07600a156984a2c)]:
+  - better-auth@1.7.19
+  - @better-auth/core@1.7.19
+  - @better-auth/telemetry@1.7.19
+
 ## 1.7.18
 
 ### Patch Changes
