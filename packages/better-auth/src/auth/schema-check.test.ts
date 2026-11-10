@@ -128,52 +128,53 @@ describe.each([
 	it.each([
 		{ name: "clean", findings: [] },
 		{ name: "mismatch", findings: issuerDrift },
-	])("validates API and HTTP requests while startup validation is still pending: $name", async ({
-		findings,
-	}) => {
-		let finish = (_findings: SchemaFinding[]) => {};
-		const pending = new Promise<SchemaFinding[]>((resolve) => {
-			finish = resolve;
-		});
-		const find = vi
-			.fn<() => Promise<SchemaFinding[]>>()
-			.mockReturnValueOnce(pending)
-			.mockResolvedValue(findings);
-		const { auth } = createAuth(find);
-		await auth.$context;
-		expect(find).toHaveBeenCalledOnce();
+	])(
+		"validates API and HTTP requests while startup validation is still pending: $name",
+		async ({ findings }) => {
+			let finish = (_findings: SchemaFinding[]) => {};
+			const pending = new Promise<SchemaFinding[]>((resolve) => {
+				finish = resolve;
+			});
+			const find = vi
+				.fn<() => Promise<SchemaFinding[]>>()
+				.mockReturnValueOnce(pending)
+				.mockResolvedValue(findings);
+			const { auth } = createAuth(find);
+			await auth.$context;
+			expect(find).toHaveBeenCalledOnce();
 
-		const outcomes = await Promise.allSettled([
-			auth.api.getSession({ headers: new Headers() }),
-			auth
-				.handler(new Request("https://auth.example.com/api/auth/get-session"))
-				.then(async (response) => ({
-					status: response.status,
-					body: await response.json(),
-				})),
-		]);
-		if (findings.length) {
-			expect(outcomes).toEqual([
-				{ status: "rejected", reason: expect.any(SchemaMismatchError) },
-				{ status: "rejected", reason: expect.any(SchemaMismatchError) },
+			const outcomes = await Promise.allSettled([
+				auth.api.getSession({ headers: new Headers() }),
+				auth
+					.handler(new Request("https://auth.example.com/api/auth/get-session"))
+					.then(async (response) => ({
+						status: response.status,
+						body: await response.json(),
+					})),
 			]);
-		} else {
-			expect(outcomes).toEqual([
-				{ status: "fulfilled", value: null },
-				{ status: "fulfilled", value: { status: 200, body: null } },
-			]);
-		}
-		const lookupCount = find.mock.calls.length;
-		expect(lookupCount).toBeGreaterThan(1);
-		finish([]);
-		const cached = auth.api.getSession({ headers: new Headers() });
-		if (findings.length) {
-			await expect(cached).rejects.toThrow(SchemaMismatchError);
-		} else {
-			await expect(cached).resolves.toBeNull();
-		}
-		expect(find).toHaveBeenCalledTimes(lookupCount);
-	});
+			if (findings.length) {
+				expect(outcomes).toEqual([
+					{ status: "rejected", reason: expect.any(SchemaMismatchError) },
+					{ status: "rejected", reason: expect.any(SchemaMismatchError) },
+				]);
+			} else {
+				expect(outcomes).toEqual([
+					{ status: "fulfilled", value: null },
+					{ status: "fulfilled", value: { status: 200, body: null } },
+				]);
+			}
+			const lookupCount = find.mock.calls.length;
+			expect(lookupCount).toBeGreaterThan(1);
+			finish([]);
+			const cached = auth.api.getSession({ headers: new Headers() });
+			if (findings.length) {
+				await expect(cached).rejects.toThrow(SchemaMismatchError);
+			} else {
+				await expect(cached).resolves.toBeNull();
+			}
+			expect(find).toHaveBeenCalledTimes(lookupCount);
+		},
+	);
 
 	it("validates before a plugin can handle an HTTP request", async () => {
 		const onRequest = vi.fn(async () => ({
