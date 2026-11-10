@@ -18,33 +18,51 @@ export default function Page() {
 	const [isApprovePending, startApproveTransition] = useTransition();
 	const [isDenyPending, startDenyTransition] = useTransition();
 	const [error, setError] = useState<string | null>(null);
-	const [request, setRequest] = useState<{
+	const [lookupFailure, setLookupFailure] = useState<
+		"rejected" | "unreachable" | null
+	>(null);
+	const [lookupAttempt, setLookupAttempt] = useState(0);
+	const [lookup, setLookup] = useState<{
+		userCode: string;
 		client_id: string;
 		scope?: string;
 	} | null>(null);
+	// Details from a previous code must not label or enable this one.
+	const request = lookup?.userCode === userCode ? lookup : null;
 
 	useEffect(() => {
-		setRequest(null);
+		setLookup(null);
 		setError(null);
+		setLookupFailure(null);
 		if (!session || !userCode) return;
 		let active = true;
-		void authClient
+		authClient
 			.device({ query: { user_code: userCode } })
 			.then(({ data, error }) => {
 				if (!active) return;
-				if (!data?.client_id) {
+				if (!data?.client_id || data.status !== "pending") {
+					setLookupFailure("rejected");
 					setError(
 						error?.error_description ||
-							"This code is invalid, expired, or was claimed by another session.",
+							"This code is invalid, expired, already used, or was claimed by another session.",
 					);
 					return;
 				}
-				setRequest({ client_id: data.client_id, scope: data.scope });
+				setLookup({ userCode, client_id: data.client_id, scope: data.scope });
+			})
+			.catch(() => {
+				if (!active) return;
+				setLookupFailure("unreachable");
+				setError(
+					"Could not load this request. Check your connection and try again.",
+				);
 			});
 		return () => {
 			active = false;
 		};
-	}, [session, userCode]);
+	}, [session, userCode, lookupAttempt]);
+
+	const loadingText = lookupFailure ? "Unavailable" : "Loading...";
 
 	const handleApprove = () => {
 		if (!userCode) return;
@@ -114,13 +132,13 @@ export default function Page() {
 									</p>
 								</>
 							) : (
-								<p>Loading...</p>
+								<p>{loadingText}</p>
 							)}
 						</div>
 
 						<div className="rounded-lg bg-muted p-4">
 							<p className="text-sm font-medium">Requested scopes</p>
-							<p>{request ? request.scope || "None" : "Loading..."}</p>
+							<p>{request ? request.scope || "None" : loadingText}</p>
 						</div>
 
 						<p className="text-sm text-muted-foreground">
@@ -137,6 +155,16 @@ export default function Page() {
 							<Alert variant="destructive">
 								<AlertDescription>{error}</AlertDescription>
 							</Alert>
+						)}
+
+						{lookupFailure === "unreachable" && (
+							<Button
+								variant="outline"
+								className="w-full"
+								onClick={() => setLookupAttempt((attempt) => attempt + 1)}
+							>
+								Try again
+							</Button>
 						)}
 
 						<div className="flex gap-3">
