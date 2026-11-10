@@ -92,10 +92,7 @@ function isClientSecretTokenEndpointAuth(
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
 
-type PendingDiscovery = Map<
-	string,
-	{ config: GenericOAuthConfig; attempt?: Promise<void> | undefined }
->;
+type PendingDiscovery = Map<string, { config: GenericOAuthConfig }>;
 
 /**
  * Providers skipped because startup discovery failed. Init stores them on each auth
@@ -559,25 +556,19 @@ export const genericOAuth = <const ID extends string>(
 		return genericProviders;
 	};
 
-	// Concurrent requests share one retry, and a failed retry stays pending.
-	const retryDiscovery = (ctx: AuthContext, providerId: string) => {
+	// Each request runs its own retry: on Workers, a pending fetch started by a request
+	// that has ended never settles. The first success installs the provider.
+	const retryDiscovery = async (ctx: AuthContext, providerId: string) => {
 		const pendingDiscovery = getPendingDiscovery(ctx);
 		const pending = pendingDiscovery?.get(providerId);
 		if (!pending) return;
-		pending.attempt ??= buildProviders(
+		const [provider] = await buildProviders(
 			[pending.config],
 			ctx,
 			DISCOVERY_RETRY_TIMEOUT_MS,
-		)
-			.then(([provider]) => {
-				if (!provider) return;
-				pendingDiscovery?.delete(providerId);
-				ctx.socialProviders.unshift(provider);
-			})
-			.finally(() => {
-				pending.attempt = undefined;
-			});
-		return pending.attempt;
+		);
+		if (!provider || !pendingDiscovery?.delete(providerId)) return;
+		ctx.socialProviders.unshift(provider);
 	};
 	// shortcut: account routes that look the provider up from a stored account recover
 	// only after a request names it; resolve the account here if that becomes a need.

@@ -672,8 +672,8 @@ export function invalidateResourceCache(identifier?: string): void {
  *
  * Triggers the lazy seed via {@link seedResourcesOnce} on first call — the
  * retry path when the startup seed failed (database unreachable, or
- * migrations run after plugin init). The seed is idempotent and coalesced,
- * so the cost is paid only once per process.
+ * migrations run after plugin init). The seed is idempotent, so once one
+ * call completes, later calls skip it.
  *
  * Returns a defensive copy so callers can't mutate cached state.
  *
@@ -843,7 +843,6 @@ export function logStartupSeedFailure(ctx: AuthContext, error: unknown): void {
 
 interface SeedState {
 	completed: boolean;
-	promise: Promise<void> | null;
 }
 
 /**
@@ -868,7 +867,7 @@ function getSeedState(
 	}
 	const existing = byOptions.get(opts);
 	if (existing) return existing;
-	const created: SeedState = { completed: false, promise: null };
+	const created: SeedState = { completed: false };
 	byOptions.set(opts, created);
 	return created;
 }
@@ -903,8 +902,8 @@ export function resetSeedStateForTests(): void {
  * the other re-reads the row and treats the failed insert as a no-op.
  *
  * Throws on storage errors, including a missing table. Callers go through
- * {@link seedResourcesOnce}, which resets so the next resource access
- * retries (e.g. after migrations run).
+ * {@link seedResourcesOnce}, which stays incomplete after a failure so the
+ * next resource access retries (e.g. after migrations run).
  *
  * Idempotent: safe to call multiple times.
  *
@@ -988,10 +987,11 @@ export async function seedResources(
 }
 
 /**
- * Idempotent, coalesced wrapper around {@link seedResources}, called from
- * plugin `init` and from every resource lookup. The first call runs the
- * seed, concurrent calls await the same promise, and calls after a success
- * are no-ops. A failure resets the state so the next call retries.
+ * Idempotent wrapper around {@link seedResources}, called from plugin `init`
+ * and from every resource lookup. Each call runs its own seed until one
+ * completes, because on Workers a pending seed started by a request that has
+ * ended never settles. The seed tolerates a row a concurrent call inserted.
+ * A failure leaves the state incomplete, so the next call retries.
  *
  * @internal
  */
@@ -999,22 +999,10 @@ export async function seedResourcesOnce(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<void> {
-	// Explicit boolean / null comparisons keep Biome's `noMisusedPromises`
-	// rule happy — these are flag variables, not Promise checks.
 	const state = getSeedState(ctx, opts);
-	if (state.completed === true) return;
-	if (state.promise !== null) return state.promise;
-	state.promise = seedResources(ctx, opts)
-		.then(() => {
-			state.completed = true;
-		})
-		.catch((err) => {
-			// Reset so a later call can retry — transient errors shouldn't
-			// permanently disable seeding for the process.
-			state.promise = null;
-			throw err;
-		});
-	return state.promise;
+	if (state.completed) return;
+	await seedResources(ctx, opts);
+	state.completed = true;
 }
 
 /**
