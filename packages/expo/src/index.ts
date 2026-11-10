@@ -1,7 +1,13 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { expoAuthorizationProxy } from "./routes";
+import * as z from "zod";
+import { expoAuthorizationProxy, getIssuedOriginIdentifier } from "./routes";
 import { PACKAGE_VERSION } from "./version";
+
+const issuedAuthorizationSchema = z.object({
+	url: z.string(),
+	redirect: z.literal(true),
+});
 
 export interface ExpoOptions {
 	/**
@@ -60,6 +66,37 @@ export const expo = (options?: ExpoOptions | undefined) => {
 		},
 		hooks: {
 			after: [
+				{
+					// SSO providers live in the database, so the proxy cannot list their
+					// endpoints. Other sign-in routes can return caller-chosen URLs.
+					matcher(context) {
+						return context.path === "/sign-in/sso";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const issued = issuedAuthorizationSchema.safeParse(
+							ctx.context.returned,
+						);
+						if (!issued.success || !URL.canParse(issued.data.url)) {
+							return;
+						}
+						const url = new URL(issued.data.url);
+						const state = url.searchParams.get("state");
+						if (url.protocol !== "https:" || !state) {
+							return;
+						}
+						// Users can register SSO providers with any endpoint, so only the
+						// operator's trusted origins may become proxy targets.
+						if (!ctx.context.isTrustedOrigin(url.href)) {
+							return;
+						}
+						await ctx.context.internalAdapter.createVerificationValue({
+							identifier: getIssuedOriginIdentifier(state),
+							value: url.origin,
+							// Matches the lifetime of the OAuth state record.
+							expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+						});
+					}),
+				},
 				{
 					matcher(context) {
 						return !!(

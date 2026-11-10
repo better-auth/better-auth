@@ -11,6 +11,7 @@ import {
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
 import { APIError } from "better-call";
+import { errors as joseErrors } from "jose";
 import {
 	getClientDiscoveries,
 	getExtensionClientAuthenticationStrategy,
@@ -110,6 +111,26 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 	}
 	return plugin;
 };
+
+const joseInfrastructureErrorCodes = new Set([
+	joseErrors.JWKSTimeout.code,
+	joseErrors.JWKSInvalid.code,
+	joseErrors.JWKSMultipleMatchingKeys.code,
+]);
+
+/**
+ * Whether a JWT verification error comes from the token itself (malformed,
+ * bad signature, unsupported alg, unknown kid, failed claim checks), as
+ * opposed to a key set failure that should still surface as a server error.
+ *
+ * @internal
+ */
+export function isInvalidJwtError(error: unknown) {
+	return (
+		error instanceof joseErrors.JOSEError &&
+		!joseInfrastructureErrorCodes.has(error.code)
+	);
+}
 
 /**
  * Normalizes timestamp-like values returned by adapters.
@@ -381,14 +402,10 @@ async function verifyStoredClientSecret(
 		opts.storeClientSecret ?? (opts.disableJwtPlugin ? "encrypted" : "hashed");
 
 	if (clientSecret && opts.prefix?.clientSecret) {
-		if (clientSecret.startsWith(opts.prefix?.clientSecret)) {
-			clientSecret = clientSecret.replace(opts.prefix.clientSecret, "");
-		} else {
-			throw new APIError("UNAUTHORIZED", {
-				error_description: "invalid client_secret",
-				error: "invalid_client",
-			});
+		if (!clientSecret.startsWith(opts.prefix.clientSecret)) {
+			return false;
 		}
+		clientSecret = clientSecret.replace(opts.prefix.clientSecret, "");
 	}
 
 	if (storageMethod === "hashed") {
@@ -1082,29 +1099,17 @@ export async function findConsent(
 	userId: string,
 	referenceId: string | undefined,
 ): Promise<OAuthConsent<Scope[]> | null> {
-	const where = [
-		{ field: "clientId", value: clientId },
-		{ field: "userId", value: userId },
-	];
-	if (referenceId) {
-		return ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
+	const findByReference = (value: string | null) =>
+		ctx.context.adapter.findOne<OAuthConsent<Scope[]>>({
 			model: "oauthConsent",
-			where: [...where, { field: "referenceId", value: referenceId }],
+			where: [
+				{ field: "clientId", value: clientId },
+				{ field: "userId", value: userId },
+				{ field: "referenceId", value },
+			],
 		});
-	}
-	// Matched in code: Prisma on MongoDB leaves an omitted referenceId unset, and `eq null` skips unset fields.
-	const pageSize = 100;
-	for (let offset = 0; ; offset += pageSize) {
-		const consents = await ctx.context.adapter.findMany<OAuthConsent<Scope[]>>({
-			model: "oauthConsent",
-			where,
-			limit: pageSize,
-			offset,
-			sortBy: { field: "id", direction: "asc" },
-		});
-		const consent = consents.find((row) => !row.referenceId);
-		if (consent || consents.length < pageSize) return consent ?? null;
-	}
+	if (referenceId) return findByReference(referenceId);
+	return (await findByReference(null)) ?? findByReference("");
 }
 
 /**

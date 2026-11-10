@@ -29,6 +29,7 @@ export const releaseEntrySchema = z.strictObject({
 	changesetDescription: changesetDescriptionSchema,
 	prNumber: z.int().positive().nullable(),
 	author: z.string().min(1),
+	commitAuthors: z.array(z.string().min(1)),
 	domain: z.string().min(1),
 	packageName: z.string().min(1),
 	changeType: z.enum(["breaking", "feat", "fix"]),
@@ -71,7 +72,7 @@ const releaseRewriteSchema = z.strictObject({
 		.max(500)
 		.regex(/^[^\r\n]+$/)
 		.nullable()
-		.describe("A migration action for breaking changes, otherwise null"),
+		.describe("An action users must take, otherwise null"),
 });
 
 export const releaseRewritesSchema = z.strictObject({
