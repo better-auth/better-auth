@@ -67,7 +67,7 @@ The defaults come from your auth server's resolved base URL. That URL includes `
 * `jwksUrl` defaults to `jwks.remoteUrl` when the JWT plugin sets it. Otherwise, it defaults to the base URL followed by `jwks.jwksPath`, which is `/jwks` by default.
 * `audience` defaults to the base URL. See the warning below.
 
-With a dynamic `baseURL`, the base URL is known only per request, so there are no defaults. Pass `issuer`, `jwksUrl`, and `audience` explicitly.
+With a dynamic `baseURL`, the base URL is known only per request, so nothing defaults to it. `jwt.issuer` and `jwks.remoteUrl` still apply when the JWT plugin sets them. Pass `audience`, and any of `issuer` and `jwksUrl` the JWT plugin does not set, explicitly.
 
 <Callout type="warn">
   Do not rely on the default audience. It is the auth server's URL, not your API's identifier, and it is also the default `aud` of [JWT plugin](/docs/plugins/jwt#oauth-provider-mode) session JWTs. With the defaults, a signed-in user's session JWT can pass as an access token. Set `audience` to your API's resource identifier, and add `typ: "at+jwt"` and `requiredClaims: ["azp"]`.

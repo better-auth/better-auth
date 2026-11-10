@@ -279,7 +279,7 @@ Better Auth validates the `frontchannel_logout_uri` at registration and on every
 
 * It must be an absolute `http` or `https` URL with no fragment and no credentials.
 * An `http` URL must be on a loopback host. [`allowInsecureRedirectUri`](/docs/plugins/oauth-provider/clients#http-redirect-uris) does not apply to it.
-* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback or private-network redirect URI is accepted, because the browser loads it, not the server.
+* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback redirect URI, or an `https` redirect URI on a private network, is accepted, because the browser loads it, not the server.
 * It does not require the [JWT plugin](/docs/plugins/jwt), because nothing is signed.
 
 A URI that fails validation is rejected with `invalid_client_metadata`.
