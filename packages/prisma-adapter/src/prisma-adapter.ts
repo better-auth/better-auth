@@ -264,6 +264,16 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					| "deleteMany";
 			}) => {
 				if (!where || !where.length) return {};
+				const isNullableField = (field: string) =>
+					getFieldAttributes({ model, field })?.required !== true;
+				// Prisma on MongoDB matches `null` only against stored nulls, but
+				// optional fields left out on create are unset, so `eq null` must
+				// also match `isSet: false`.
+				const isMongoNullMatch = (w: Where) =>
+					config.provider === "mongodb" &&
+					w.value === null &&
+					(w.operator === "eq" || !w.operator) &&
+					isNullableField(w.field);
 				const buildSingleCondition = (w: Where) => {
 					const fieldName = getFieldName({ model, field: w.field });
 					const modeFilter = isInsensitiveForPrisma(w)
@@ -272,12 +282,14 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
 					if (w.operator === "ne" && w.value === null) {
-						const fieldAttributes = getFieldAttributes({
-							model,
-							field: w.field,
-						});
-						const isNullable = fieldAttributes?.required !== true;
-						return isNullable ? { [fieldName]: { not: null } } : {};
+						return isNullableField(w.field)
+							? { [fieldName]: { not: null } }
+							: {};
+					}
+					if (isMongoNullMatch(w)) {
+						return {
+							OR: [{ [fieldName]: null }, { [fieldName]: { isSet: false } }],
+						};
 					}
 					if (
 						(w.operator === "in" || w.operator === "not_in") &&
@@ -325,7 +337,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND).
 					// A flat value is a case-sensitive match, so insensitive eq stays in AND.
 					const isSimple = (w: Where) =>
-						(w.operator === "eq" || !w.operator) && !isInsensitiveForPrisma(w);
+						(w.operator === "eq" || !w.operator) &&
+						!isInsensitiveForPrisma(w) &&
+						!isMongoNullMatch(w);
 					const andSimple = and.filter(isSimple);
 					const andComplex = and.filter((w) => !isSimple(w));
 

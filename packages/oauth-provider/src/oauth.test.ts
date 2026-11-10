@@ -5,6 +5,7 @@ import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
 import { multiSession } from "better-auth/plugins/multi-session";
+import { openAPI } from "better-auth/plugins/open-api";
 import type { Organization } from "better-auth/plugins/organization";
 import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
@@ -202,6 +203,45 @@ describe("oauth - init", () => {
 			}),
 		).rejects.toThrowError("Invalid URL");
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10880
+ */
+describe("oauth - OpenAPI response schemas", () => {
+	it.for(["/oauth2/consent", "/oauth2/continue"])(
+		"documents the redirect response for POST %s",
+		async (path, { expect }) => {
+			const { auth } = await getTestInstance(
+				{
+					plugins: [
+						jwt(),
+						oauthProvider({
+							loginPage: "/login",
+							consentPage: "/consent",
+						}),
+						openAPI(),
+					],
+				},
+				{ disableTestUser: true },
+			);
+			const document = await auth.api.generateOpenAPISchema();
+			const schema =
+				document.paths[path]?.post?.responses?.["200"]?.content?.[
+					"application/json"
+				]?.schema;
+
+			expect(schema).toMatchObject({
+				type: "object",
+				properties: {
+					redirect: { type: "boolean", enum: [true] },
+					url: { type: "string", format: "uri-reference" },
+				},
+				required: expect.arrayContaining(["redirect", "url"]),
+			});
+			expect(schema).not.toHaveProperty("properties.redirect_uri");
+		},
+	);
 });
 
 describe("oauth", async () => {

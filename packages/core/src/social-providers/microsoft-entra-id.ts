@@ -15,6 +15,8 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
+import { parseProviderEmailVerified } from "../oauth2/utils";
 
 /**
  * Microsoft's fixed tenant id for personal (consumer) Microsoft accounts. Every
@@ -321,7 +323,7 @@ export const microsoft = (options: MicrosoftOptions) => {
 			// We can also check verified_primary_email/verified_secondary_email arrays as fallback.
 			const emailVerified =
 				user.email_verified !== undefined
-					? user.email_verified
+					? parseProviderEmailVerified(user.email_verified)
 					: user.email &&
 							(user.verified_primary_email?.includes(user.email) ||
 								user.verified_secondary_email?.includes(user.email))
@@ -368,7 +370,7 @@ export const getMicrosoftPublicKey = async (
 	tenant: string,
 	authority: string,
 ) => {
-	const { data } = await betterFetch<{
+	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
 			kid: string;
 			alg?: string;

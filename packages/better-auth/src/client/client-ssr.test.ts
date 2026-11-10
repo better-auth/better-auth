@@ -1,6 +1,10 @@
 // @vitest-environment node
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { createAuthClient as createVueClient } from "./vue";
+
+afterEach(() => {
+	vi.unstubAllEnvs();
+});
 
 it("should call '/api/auth' for vue client", async () => {
 	const customFetchImpl = vi.fn(async (url: string | Request | URL) => {
@@ -21,6 +25,43 @@ it("should call '/api/auth' for vue client", async () => {
 	});
 	await client.getSession();
 	expect(customFetchImpl).toBeCalled();
+});
+
+it.for([
+	{ name: "VERCEL_URL", value: "my-app.vercel.app" },
+	{ name: "NEXTAUTH_URL", value: "https://example.com" },
+	{ name: "NEXT_PUBLIC_AUTH_URL", value: "https://example.com/api/auth" },
+])(
+	"keeps the vue session fetch relative when $name is set",
+	({ name, value }) => {
+		vi.stubEnv(name, value);
+		const pendingFetch = new Promise<never>(() => undefined);
+		const useFetch = vi.fn(() => pendingFetch);
+		const client = createVueClient();
+
+		void client.useSession(useFetch);
+
+		expect(useFetch).toHaveBeenCalledWith(
+			"/api/auth/get-session",
+			expect.anything(),
+		);
+	},
+);
+
+it.for([
+	{ basePath: "/auth", url: "/auth/get-session" },
+	{ basePath: "/", url: "/get-session" },
+	{ basePath: "auth/", url: "/auth/get-session" },
+])("keeps the vue session fetch on basePath $basePath", ({ basePath, url }) => {
+	const pendingFetch = new Promise<never>(() => undefined);
+	const useFetch = vi.fn(() => pendingFetch);
+	const client = createVueClient({
+		basePath,
+	});
+
+	void client.useSession(useFetch);
+
+	expect(useFetch).toHaveBeenCalledWith(url, expect.anything());
 });
 
 /**

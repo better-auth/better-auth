@@ -1,4 +1,3 @@
-import { betterFetch } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
@@ -10,7 +9,8 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
-import { ID_TOKEN_CLOCK_TOLERANCE_SECONDS } from "../oauth2/verify-id-token";
+import { fetchRefusingRedirects } from "../oauth2/reject-redirects";
+import { getIdTokenVerifyOptions } from "../oauth2/verify-id-token";
 
 export interface GoogleProfile {
 	aud: string;
@@ -108,13 +108,16 @@ export const verifyGoogleIdToken = async ({
 		const publicKeys = await getGooglePublicKeys(kid);
 		for (const publicKey of publicKeys) {
 			try {
-				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-					algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
-					issuer: ["https://accounts.google.com", "accounts.google.com"],
-					audience,
-					maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
-					clockTolerance: ID_TOKEN_CLOCK_TOLERANCE_SECONDS,
-				});
+				const { payload: jwtClaims } = await jwtVerify(
+					token,
+					publicKey,
+					getIdTokenVerifyOptions({
+						issuer: ["https://accounts.google.com", "accounts.google.com"],
+						audience,
+						algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
+						maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
+					}),
+				);
 
 				if (nonce && jwtClaims.nonce !== nonce) {
 					return null;
@@ -225,6 +228,7 @@ export const google = (options: GoogleOptions) => {
 			jwks: (header) => getGooglePublicKey(header.kid!),
 			issuer: ["https://accounts.google.com", "accounts.google.com"],
 			audience: options.clientId,
+			algorithms: GOOGLE_ID_TOKEN_ALGORITHMS,
 			maxTokenAge: GOOGLE_ID_TOKEN_MAX_AGE,
 			// Google's `hd` authorization parameter is only a UI hint and can be
 			// removed or changed by the user. When a hosted domain is configured,
@@ -279,7 +283,7 @@ export const getGooglePublicKey = async (kid: string) => {
 };
 
 const getGooglePublicKeys = async (kid?: string) => {
-	const { data } = await betterFetch<{
+	const { data } = await fetchRefusingRedirects<{
 		keys: Array<{
 			kid: string;
 			alg?: string;

@@ -10,7 +10,7 @@ export function getRSS() {
 		id: `${baseUrl}blog`,
 		link: `${baseUrl}blog`,
 		language: "en",
-		image: `${baseUrl}release-og/blogs.png`,
+		image: `${baseUrl}og.png`,
 		favicon: `${baseUrl}favicon/favicon-32x32.png`,
 		copyright: `All rights reserved ${new Date().getFullYear()}, Better Auth Inc.`,
 	});

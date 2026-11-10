@@ -1,3 +1,4 @@
+import { UnsecuredJWT } from "jose";
 import { assert, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
@@ -723,6 +724,120 @@ describe("post normalization flow", async () => {
 	});
 });
 
+describe("username validation order", async () => {
+	// Shortens input so length limits differ between raw and normalized values.
+	const usernameNormalization = (username: string) =>
+		username.split(" ").join("").toLowerCase();
+
+	const createAuth = async (
+		validationOrder: "pre-normalization" | "post-normalization",
+	) => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				username({
+					validationOrder: {
+						username: validationOrder,
+					},
+					usernameNormalization,
+				}),
+			],
+		});
+		return auth;
+	};
+
+	const accepted = [
+		{ validationOrder: "post-normalization", username: "Test User" },
+		{ validationOrder: "pre-normalization", username: "TestUser" },
+	] as const;
+
+	const rejected = [
+		{
+			validationOrder: "post-normalization",
+			username: "a b",
+			code: "USERNAME_TOO_SHORT",
+		},
+		{
+			validationOrder: "pre-normalization",
+			username: "Test User",
+			code: "INVALID_USERNAME",
+		},
+	] as const;
+
+	it.for(accepted)(
+		"should sign in with $username under $validationOrder",
+		async ({ validationOrder, username }) => {
+			const auth = await createAuth(validationOrder);
+			await auth.api.signUpEmail({
+				body: {
+					email: "test-user@email.com",
+					username: "TestUser",
+					password: "test-password",
+					name: "test-name",
+				},
+			});
+			await expect(
+				auth.api.signInUsername({
+					body: {
+						username,
+						password: "test-password",
+					},
+				}),
+			).resolves.toMatchObject({
+				user: { username: "testuser" },
+			});
+		},
+	);
+
+	it.for(rejected)(
+		"should reject sign-in with $username under $validationOrder",
+		async ({ validationOrder, username, code }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.signInUsername({
+					body: {
+						username,
+						password: "test-password",
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "UNPROCESSABLE_ENTITY",
+				body: { code },
+			});
+		},
+	);
+
+	it.for(accepted)(
+		"should report $username as available under $validationOrder",
+		async ({ validationOrder, username }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.isUsernameAvailable({
+					body: {
+						username,
+					},
+				}),
+			).resolves.toEqual({ available: true });
+		},
+	);
+
+	it.for(rejected)(
+		"should reject availability of $username under $validationOrder",
+		async ({ validationOrder, username, code }) => {
+			const auth = await createAuth(validationOrder);
+			await expect(
+				auth.api.isUsernameAvailable({
+					body: {
+						username,
+					},
+				}),
+			).rejects.toMatchObject({
+				status: "UNPROCESSABLE_ENTITY",
+				body: { code },
+			});
+		},
+	);
+});
+
 describe("username email verification flow (no info leak)", async () => {
 	const { client } = await getTestInstance(
 		{
@@ -1134,5 +1249,48 @@ describe("username sign-in password length", async () => {
 
 		expect(hash).not.toHaveBeenCalled();
 		expect(verify).not.toHaveBeenCalled();
+	});
+});
+
+describe("username social sign-up", async () => {
+	const { client } = await getTestInstance(
+		{
+			plugins: [username()],
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					verifyIdToken: async () => true,
+					mapProfileToUser: () => ({
+						username: "social_user",
+					}),
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should create a user whose username is mapped from the profile", async () => {
+		const idToken = new UnsecuredJWT({
+			sub: "google-sub",
+			email: "social-user@test.com",
+			email_verified: true,
+			name: "Social User",
+		}).encode();
+
+		const res = await client.signIn.social({
+			provider: "google",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.data).toMatchObject({
+			user: {
+				email: "social-user@test.com",
+			},
+		});
 	});
 });
