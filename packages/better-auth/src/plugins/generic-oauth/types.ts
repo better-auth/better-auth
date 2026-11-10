@@ -252,7 +252,8 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	discoveryHeaders?: Record<string, string> | undefined;
 	/**
-	 * Custom headers to include in the authorization request.
+	 * Custom headers to include in token endpoint requests: the authorization
+	 * code exchange and token refresh.
 	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
 	 */
 	authorizationHeaders?: Record<string, string> | undefined;
