@@ -15,6 +15,21 @@ const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 const demoDirectory = resolve(process.cwd(), "../../demo/nextjs");
 
+// `next dev` compiles each route on its first request, which can outlast the
+// 5 s `expect` windows in employee sign-in, so startup requests these first.
+const EMPLOYEE_SIGN_IN_ROUTES = [
+	"/api/scim-demo/idp/.well-known/openid-configuration",
+	"/api/scim-demo/idp/authorize",
+	"/scim-demo/idp/authorize",
+	"/api/scim-demo/idp/token",
+	"/api/scim-demo/idp/jwks",
+];
+
+// Playwright's request client ignores the server's `Keep-Alive: timeout` and
+// can reuse a connection just as the dev server closes it. The server resets
+// that request without reading it, so one retry is safe.
+const CONNECTION_RESET_RETRIES = 1;
+
 interface NextDemoRuntime {
 	baseURL: string;
 	databasePath: string;
@@ -70,6 +85,24 @@ function createNextDemoRuntime() {
 		return child;
 	}
 
+	async function compileRoutes(baseURL: string, deadline: number) {
+		await Promise.all(
+			EMPLOYEE_SIGN_IN_ROUTES.map(async (path) => {
+				try {
+					const response = await fetch(`${baseURL}${path}`, {
+						signal: AbortSignal.timeout(Math.max(deadline - Date.now(), 0)),
+					});
+					// Pages stream, so the render finishes only with the body.
+					await response.arrayBuffer();
+				} catch (error) {
+					throw new Error(`Next.js demo did not compile ${path}:\n${output}`, {
+						cause: error,
+					});
+				}
+			}),
+		);
+	}
+
 	return {
 		output: () => output,
 		start: async (): Promise<NextDemoRuntime> => {
@@ -123,13 +156,18 @@ function createNextDemoRuntime() {
 				if (demoProcess.exitCode !== null || demoProcess.signalCode !== null) {
 					throw new Error(`Next.js demo exited before startup:\n${output}`);
 				}
+				let ready = false;
 				try {
 					const response = await fetch(`${baseURL}/sign-in`, {
 						signal: AbortSignal.timeout(1_000),
 					});
-					if (response.ok) return { baseURL, databasePath };
+					ready = response.ok;
 				} catch {
 					// The development server has not bound its port yet.
+				}
+				if (ready) {
+					await compileRoutes(baseURL, deadline);
+					return { baseURL, databasePath };
 				}
 				await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
 			}
@@ -159,6 +197,7 @@ async function signUp(
 				...input,
 				password: "correct-horse-battery-staple",
 			},
+			maxRetries: CONNECTION_RESET_RETRIES,
 		},
 	);
 	expect(response.ok(), await response.text()).toBe(true);
@@ -177,6 +216,7 @@ async function createOrganization(
 				name,
 				slug: `${name.toLowerCase().replaceAll(" ", "-")}-${Date.now()}`,
 			},
+			maxRetries: CONNECTION_RESET_RETRIES,
 		},
 	);
 	const body: unknown = await response.json();
@@ -236,6 +276,7 @@ async function scimRequest(
 			authorization: `Bearer ${token}`,
 			"content-type": "application/scim+json",
 		},
+		maxRetries: CONNECTION_RESET_RETRIES,
 		...(input.data === undefined ? {} : { data: input.data }),
 	});
 }
@@ -409,6 +450,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		try {
 			const unauthenticated = await anonymousContext.request.get(
 				managementURL(runtime.baseURL, organizationId),
+				{ maxRetries: CONNECTION_RESET_RETRIES },
 			);
 			expect(unauthenticated.status()).toBe(401);
 		} finally {
@@ -419,6 +461,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 			{
 				headers: { origin: "https://attacker.invalid" },
 				data: { organizationId },
+				maxRetries: CONNECTION_RESET_RETRIES,
 			},
 		);
 		expect(crossOriginMutation.status()).toBe(403);
@@ -638,6 +681,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 				{
 					headers: { origin: runtime.baseURL },
 					data: { organizationId: tenantBOrganizationId },
+					maxRetries: CONNECTION_RESET_RETRIES,
 				},
 			);
 			expect(tenantBCreate.status()).toBe(201);
@@ -654,6 +698,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 				(
 					await page.request.get(
 						managementURL(runtime.baseURL, tenantBOrganizationId),
+						{ maxRetries: CONNECTION_RESET_RETRIES },
 					)
 				).status(),
 			).toBe(403);
@@ -701,6 +746,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		).toBe(true);
 		const finalManagementResponse = await page.request.get(
 			managementURL(runtime.baseURL, organizationId),
+			{ maxRetries: CONNECTION_RESET_RETRIES },
 		);
 		expect(finalManagementResponse.status()).toBe(200);
 		const finalManagementBody: unknown = await finalManagementResponse.json();
@@ -908,6 +954,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 					organizationId,
 					scimUserId: maya.id,
 				},
+				maxRetries: CONNECTION_RESET_RETRIES,
 			},
 		);
 		expect(
