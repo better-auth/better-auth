@@ -18,12 +18,14 @@ export function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
  * that is the `baseURL` origin plus the origin the credential reports when
  * `trustedOrigins` lists it exactly, which keeps a frontend on another origin
  * working. A wildcard entry does not count, since it also admits sibling hosts
- * that can produce assertions for the same `rpID`. Without a configured `baseURL` only the request URL is used, never
- * `x-forwarded-host`, which the client can set. When a wildcard allowed host
- * covers the `rpID`, the request picks the `baseURL` host, so only a reported
- * origin listed exactly in `trustedOrigins` counts.
+ * that can produce assertions for the same `rpID`. When a wildcard allowed host
+ * covers the `rpID`, the request picks the `baseURL` host, so only the reported
+ * origin counts, and only when the resolved trusted origins list it exactly.
+ * Without a configured `baseURL` only the request URL is used, never
+ * `x-forwarded-host`, which the client can set.
  *
- * @returns the expected origins, or `null` when no server-side origin is configured
+ * @returns the expected origins, empty when the reported origin is not
+ * trusted, or `null` when no server-side origin is configured
  *
  * @see https://www.w3.org/TR/webauthn-3/#sctn-validating-origin
  */
@@ -43,7 +45,6 @@ export function getExpectedOrigins(
 		"passkeyWildcardCoversRpID" in ctx.context &&
 		ctx.context.passkeyWildcardCoversRpID
 	) {
-		// An empty list reaches the verifier, which rejects it as a client error.
 		return reported && ctx.context.trustedOrigins.includes(reported)
 			? [reported]
 			: [];

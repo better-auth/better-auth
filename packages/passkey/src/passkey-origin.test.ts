@@ -3,6 +3,7 @@ import { getTestInstance } from "better-auth/test";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Passkey } from ".";
 import { passkey } from ".";
+import { wildcardHostCoversRpID } from "./utils";
 
 const serverMocks = vi.hoisted(() => ({
 	verifyRegistrationResponse: vi.fn(),
@@ -70,10 +71,10 @@ async function prepareAuthentication<O extends Partial<BetterAuthOptions>>(
 	headers: Headers,
 	origin = RP_ORIGIN,
 ) {
-	const { auth, customFetchImpl } = instance;
+	const { auth, customFetchImpl, cookieSetter } = instance;
 	const ctx = await auth.$context;
-	// The seeded test user exists without a session request, which a host
-	// outside `allowedHosts` could not make.
+	// Read the seeded user directly: signing in from a host outside
+	// `allowedHosts` would fail.
 	const found = await ctx.internalAdapter.findUserByEmail(
 		instance.testUser.email,
 	);
@@ -97,7 +98,7 @@ async function prepareAuthentication<O extends Partial<BetterAuthOptions>>(
 		`${origin}/api/auth/passkey/generate-authenticate-options`,
 		{ headers },
 	);
-	headers.set("cookie", res.headers.get("set-cookie")!.split(";")[0]!);
+	cookieSetter(headers)({ response: res });
 	serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
 		verified: true,
 		authenticationInfo: { newCounter: 1 },
@@ -380,60 +381,21 @@ describe("passkey expected origin", () => {
 		expect(call.expectedOrigin).toEqual([SIBLING_ORIGIN]);
 	});
 
-	it.for(["*.localhost:3000", "app-?.localhost:3000"])(
-		"starts without origin when the wildcard allowed host %s covers the configured rpID",
-		async (allowedHost) => {
-			await expect(
-				getTestInstance({
-					plugins: [
-						passkey({
-							rpID: "localhost",
-						}),
-					],
-					baseURL: {
-						allowedHosts: [allowedHost],
-						protocol: "http",
-					},
-				}),
-			).resolves.toBeDefined();
+	it.for([
+		{ allowedHosts: ["*.localhost:3000"], rpID: "localhost", covers: true },
+		{ allowedHosts: ["app-?.localhost:3000"], rpID: "localhost", covers: true },
+		{
+			allowedHosts: ["example.com", "*.vercel.app"],
+			rpID: "example.com",
+			covers: false,
+		},
+		{ allowedHosts: ["*.localhost:3000"], rpID: undefined, covers: false },
+	])(
+		"treats allowedHosts $allowedHosts as covering rpID $rpID: $covers",
+		({ allowedHosts, rpID, covers }) => {
+			expect(wildcardHostCoversRpID({ rpID }, { allowedHosts })).toBe(covers);
 		},
 	);
-
-	it("control: allows a wildcard allowed host with an explicit origin or a per-host rpID", async () => {
-		const baseURL = {
-			allowedHosts: ["*.localhost:3000", "*.vercel.app"],
-			protocol: "http" as const,
-		};
-		await expect(
-			getTestInstance({
-				plugins: [
-					passkey({
-						rpID: "localhost",
-						origin: RP_ORIGIN,
-					}),
-				],
-				baseURL,
-			}),
-		).resolves.toBeDefined();
-		await expect(
-			getTestInstance({
-				plugins: [passkey()],
-				baseURL,
-			}),
-		).resolves.toBeDefined();
-		await expect(
-			getTestInstance({
-				plugins: [
-					passkey({
-						rpID: "example.com",
-					}),
-				],
-				baseURL: {
-					allowedHosts: ["example.com", "*.vercel.app"],
-				},
-			}),
-		).resolves.toBeDefined();
-	});
 });
 
 /**
@@ -539,7 +501,7 @@ describe("passkey origin under a wildcard allowed host", () => {
 		await prepareAuthentication(instance, headers);
 		headers.set("origin", origin);
 		headers.set("content-type", "application/json");
-		await instance.customFetchImpl(
+		const res = await instance.customFetchImpl(
 			`${origin}/api/auth/passkey/verify-authentication`,
 			{
 				method: "POST",
@@ -555,96 +517,27 @@ describe("passkey origin under a wildcard allowed host", () => {
 				}),
 			},
 		);
-		return serverMocks.verifyAuthenticationResponse.mock.calls[0]?.[0];
+		return {
+			status: res.status,
+			call: serverMocks.verifyAuthenticationResponse.mock.calls[0]?.[0],
+		};
 	};
 
 	it("accepts a tenant origin that a trustedOrigins function vouches for", async () => {
 		const instance = await createTenantInstance();
-		const call = await verifyAuthenticationFrom(instance, TENANT_ORIGIN);
+		const { status, call } = await verifyAuthenticationFrom(
+			instance,
+			TENANT_ORIGIN,
+		);
+		expect(status).toBe(200);
 		expect(call.expectedOrigin).toEqual([TENANT_ORIGIN]);
 	});
 
-	it("does not accept a sibling origin that only the wildcard admits", async () => {
+	it("rejects a sibling origin that only the wildcard admits", async () => {
 		const instance = await createTenantInstance();
-		const call = await verifyAuthenticationFrom(instance, SIBLING_ORIGIN);
-		expect(call.expectedOrigin).toEqual([]);
-	});
-
-	it("rejects an unvouched origin as a client error when no exact origin is configured", async () => {
-		const instance = await getTestInstance({
-			plugins: [passkey({ rpID: "localhost" })],
-			baseURL: {
-				allowedHosts: ["*.localhost:3000"],
-				fallback: undefined,
-				protocol: "http",
-			},
-		});
-		const headers = new Headers({ origin: SIBLING_ORIGIN });
-		await prepareAuthentication(instance, headers, SIBLING_ORIGIN);
-		serverMocks.verifyAuthenticationResponse.mockReset();
-		serverMocks.verifyAuthenticationResponse.mockRejectedValueOnce(
-			new Error("Unexpected authentication response origin"),
-		);
-		headers.set("content-type", "application/json");
-		const res = await instance.customFetchImpl(
-			`${SIBLING_ORIGIN}/api/auth/passkey/verify-authentication`,
-			{
-				method: "POST",
-				headers,
-				body: JSON.stringify({ response: mockAuthenticationResponse }),
-			},
-		);
-		expect(
-			serverMocks.verifyAuthenticationResponse.mock.calls[0]![0].expectedOrigin,
-		).toEqual([]);
-		expect(res.status).toBe(400);
-	});
-
-	// The routes pass `[]` for an unvouched origin and rely on the verifier to
-	// reject it, so pin that against the real verifiers.
-	it("relies on the real verifiers rejecting an empty expected origin list", async () => {
-		const actual = await vi.importActual<
-			typeof import("@simplewebauthn/server")
-		>("@simplewebauthn/server");
-		const responseFor = (type: string) => ({
-			id: "credential-id",
-			rawId: "credential-id",
-			type: "public-key" as const,
-			clientExtensionResults: {},
-			response: {
-				clientDataJSON: Buffer.from(
-					JSON.stringify({
-						type,
-						challenge: "challenge",
-						origin: SIBLING_ORIGIN,
-					}),
-				).toString("base64url"),
-				authenticatorData: "",
-				attestationObject: "",
-				signature: "",
-			},
-		});
-		await expect(
-			actual.verifyAuthenticationResponse({
-				response: responseFor("webauthn.get"),
-				expectedChallenge: "challenge",
-				expectedOrigin: [],
-				expectedRPID: "localhost",
-				credential: {
-					id: "credential-id",
-					publicKey: new Uint8Array(),
-					counter: 0,
-				},
-			}),
-		).rejects.toThrow("Unexpected authentication response origin");
-		await expect(
-			actual.verifyRegistrationResponse({
-				response: responseFor("webauthn.create"),
-				expectedChallenge: "challenge",
-				expectedOrigin: [],
-				expectedRPID: "localhost",
-			}),
-		).rejects.toThrow("Unexpected registration response origin");
+		const { status } = await verifyAuthenticationFrom(instance, SIBLING_ORIGIN);
+		expect(status).toBe(400);
+		expect(serverMocks.verifyAuthenticationResponse).not.toHaveBeenCalled();
 	});
 
 	it("accepts a vouched tenant origin for registration", async () => {

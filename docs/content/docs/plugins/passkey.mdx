@@ -468,9 +468,15 @@ passkey({
 });
 ```
 
-When `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it, the default changes. Every host under that wildcard can create passkey responses for the shared `rpID`, and the client picks the host it sends. So the plugin ignores the request host and accepts only the origins listed exactly in `trustedOrigins`. A wildcard entry in `trustedOrigins` does not count.
+When `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it, the default changes. Every host under that wildcard can create passkey responses for the shared `rpID`, and the client picks the host it sends. So the plugin ignores the request host. It accepts the origin the passkey reports only when that exact origin is trusted:
 
-For tenants that you create at runtime, pass a function as `trustedOrigins` and return the origin only for hosts that your app knows:
+* an exact entry in `baseURL.allowedHosts`, such as `example.com`
+* the `baseURL.fallback` origin
+* an origin listed exactly in `trustedOrigins`
+
+A wildcard entry in either list does not count.
+
+For tenants that you create at runtime, pass a function as `trustedOrigins` and return the origin only for tenants that your app knows:
 
 ```ts title="auth.ts"
 betterAuth({
@@ -485,7 +491,9 @@ betterAuth({
 });
 ```
 
-An origin that `trustedOrigins` returns is trusted beyond passkeys, for example for CSRF checks and redirect URLs. Return only hosts that your app serves, never an origin copied from the request without a lookup.
+An origin that `trustedOrigins` returns is trusted beyond passkeys, for example for CSRF checks and redirect URLs. Return only origins that your app serves, never an origin copied from the request without a lookup. Compare the full origin, including scheme and port, not only the hostname.
+
+Better Auth calls this function on every request, so cache the lookup. If you call the passkey verify endpoints through `auth.api`, pass the browser request's headers, including `Host` and `Origin`. Otherwise `request` is undefined, and the tenant origin is not trusted.
 
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
 
