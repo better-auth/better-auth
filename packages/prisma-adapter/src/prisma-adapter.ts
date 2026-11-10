@@ -369,10 +369,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND).
 					// A flat value is a case-sensitive match, so insensitive eq stays in AND.
+					// `WhereUniqueInput` rejects `null` for a unique field.
 					const isSimple = (w: Where) =>
 						(w.operator === "eq" || !w.operator) &&
-						!isInsensitiveForPrisma(w) &&
-						!isMongoNullMatch(w);
+						w.value !== null &&
+						!isInsensitiveForPrisma(w);
 					const andSimple = and.filter(isSimple);
 					const andComplex = and.filter((w) => !isSimple(w));
 
@@ -600,6 +601,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where,
 							action: "updateMany",
 						});
+						// The update can change a filtered field, so read the row back by ID.
+						const matched = await db[model]!.findFirst({
+							where: whereClause,
+						});
 						const result = await db[model]!.updateMany({
 							where: whereClause,
 							data: update,
@@ -607,9 +612,9 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						if (!result?.count) {
 							return null;
 						}
-
+						const idField = getFieldName({ model: modelKey, field: "id" });
 						return await db[model]!.findFirst({
-							where: whereClause,
+							where: matched ? { [idField]: matched[idField] } : whereClause,
 						});
 					}
 					const whereClause = convertWhereClause({

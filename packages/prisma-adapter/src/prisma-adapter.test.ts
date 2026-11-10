@@ -359,14 +359,13 @@ describe("prisma-adapter", () => {
 	 *
 	 * @see https://www.prisma.io/docs/orm/reference/prisma-client-reference#update
 	 */
-	it.each(["sqlite", "mongodb"] as const)(
-		"falls back to updateMany when a unique field is compared with null on %s",
-		async (provider) => {
-			const update = vi.fn();
-			const updateMany = vi.fn().mockResolvedValue({ count: 1 });
-			const findFirst = vi.fn().mockResolvedValue({ id: "user-id" });
-			const adapter = prismaAdapter(
-				{ $transaction: vi.fn(), user: { update, updateMany, findFirst } },
+	describe("a unique field compared with null", () => {
+		const createAdapter = (
+			provider: "sqlite" | "mongodb",
+			user: Record<string, unknown>,
+		) =>
+			prismaAdapter(
+				{ $transaction: vi.fn(), user },
 				{ provider },
 			)({
 				user: {
@@ -375,17 +374,68 @@ describe("prisma-adapter", () => {
 					},
 				},
 			});
+		const isNull = {
+			sqlite: { username: { equals: null } },
+			mongodb: { OR: [{ username: null }, { username: { isSet: false } }] },
+		};
 
-			await adapter.update({
-				model: "user",
-				where: [{ field: "username", value: null }],
-				update: { name: "Updated" },
-			});
+		it.each(["sqlite", "mongodb"] as const)(
+			"falls back to updateMany on %s",
+			async (provider) => {
+				const update = vi.fn();
+				const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+				const findFirst = vi
+					.fn()
+					.mockResolvedValueOnce({ id: "user-id" })
+					.mockResolvedValueOnce({ id: "user-id", username: "alice" });
+				const adapter = createAdapter(provider, {
+					update,
+					updateMany,
+					findFirst,
+				});
 
-			expect(update).not.toHaveBeenCalled();
-			expect(updateMany).toHaveBeenCalledOnce();
-		},
-	);
+				const result = await adapter.update({
+					model: "user",
+					where: [{ field: "username", value: null }],
+					update: { username: "alice" },
+				});
+
+				expect(update).not.toHaveBeenCalled();
+				expect(updateMany).toHaveBeenCalledWith({
+					where: isNull[provider],
+					data: expect.objectContaining({ username: "alice" }),
+				});
+				// The update changed the filtered field, so the row is read back by ID.
+				expect(findFirst).toHaveBeenLastCalledWith({
+					where: { id: "user-id" },
+				});
+				expect(result).toEqual({ id: "user-id", username: "alice" });
+			},
+		);
+
+		it.each(["sqlite", "mongodb"] as const)(
+			"keeps the null comparison out of the unique selector on %s",
+			async (provider) => {
+				const update = vi.fn().mockResolvedValue({ id: "user-id" });
+				const adapter = createAdapter(provider, { update });
+
+				await adapter.update({
+					model: "user",
+					where: [
+						{ field: "id", value: "user-id" },
+						{ field: "username", value: null },
+					],
+					update: { name: "Updated" },
+				});
+
+				expect(update).toHaveBeenCalledWith(
+					expect.objectContaining({
+						where: { id: "user-id", AND: [isNull[provider]] },
+					}),
+				);
+			},
+		);
+	});
 
 	it("should use update (not updateMany) for insensitive mode on unsupported providers", async () => {
 		const update = vi.fn().mockResolvedValue({
