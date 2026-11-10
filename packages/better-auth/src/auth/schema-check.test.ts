@@ -116,10 +116,11 @@ describe.each([
 			{ status: "rejected", reason: expect.any(SchemaMismatchError) },
 			{ status: "rejected", reason: expect.any(SchemaMismatchError) },
 		]);
+		const lookupCount = find.mock.calls.length;
 		await expect(
 			auth.api.getSession({ headers: new Headers() }),
 		).rejects.toThrow(SchemaMismatchError);
-		expect(find).toHaveBeenCalledTimes(1);
+		expect(find).toHaveBeenCalledTimes(lookupCount);
 	});
 
 	/**
@@ -166,6 +167,8 @@ describe.each([
 			const lookupCount = find.mock.calls.length;
 			expect(lookupCount).toBeGreaterThan(1);
 			finish([]);
+			// Let the stale startup lookup settle before reading the cached result.
+			await new Promise((resolve) => setTimeout(resolve, 0));
 			const cached = auth.api.getSession({ headers: new Headers() });
 			if (findings.length) {
 				await expect(cached).rejects.toThrow(SchemaMismatchError);

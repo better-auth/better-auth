@@ -92,7 +92,12 @@ export default {
 			};
 			auth = betterAuth(authOptions);
 			const initialized = await auth.$context;
-			while (queriesStarted === 0) await scheduler.wait(0);
+			for (let waited = 0; queriesStarted === 0; waited += 10) {
+				if (waited >= 5_000) {
+					return new Response("Schema lookup did not start", { status: 500 });
+				}
+				await scheduler.wait(10);
+			}
 			if (url.searchParams.get("waitUntil") === "true") {
 				const check = initialized.checkSchema?.();
 				if (check) context.waitUntil(check);
