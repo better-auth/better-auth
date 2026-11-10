@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { OAUTH_CALLBACK_ERROR_CODES } from "./errors";
 
 /**
  * @see https://github.com/better-auth/better-auth/issues/9215
@@ -53,10 +54,10 @@ afterEach(() => {
 
 describe("parseState error mapping", () => {
 	it.each([
-		["state_not_found", "state_not_found"],
-		["state_invalid", "state_invalid"],
-		["state_mismatch", "state_mismatch"],
-		["state_security_mismatch", "state_mismatch"],
+		["state_not_found", OAUTH_CALLBACK_ERROR_CODES.STATE_NOT_FOUND],
+		["state_invalid", OAUTH_CALLBACK_ERROR_CODES.STATE_INVALID],
+		["state_mismatch", OAUTH_CALLBACK_ERROR_CODES.STATE_MISMATCH],
+		["state_security_mismatch", OAUTH_CALLBACK_ERROR_CODES.STATE_MISMATCH],
 	])("maps StateError %s to error=%s", async (code, expected) => {
 		const { StateError } = await import("../state");
 		errorToThrow = new StateError(code, { code: code as any });
