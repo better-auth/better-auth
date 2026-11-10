@@ -600,6 +600,53 @@ describe("passkey origin under a wildcard allowed host", () => {
 		expect(res.status).toBe(400);
 	});
 
+	// The routes pass `[]` for an unvouched origin and rely on the verifier to
+	// reject it, so pin that against the real verifiers.
+	it("relies on the real verifiers rejecting an empty expected origin list", async () => {
+		const actual = await vi.importActual<
+			typeof import("@simplewebauthn/server")
+		>("@simplewebauthn/server");
+		const responseFor = (type: string) => ({
+			id: "credential-id",
+			rawId: "credential-id",
+			type: "public-key" as const,
+			clientExtensionResults: {},
+			response: {
+				clientDataJSON: Buffer.from(
+					JSON.stringify({
+						type,
+						challenge: "challenge",
+						origin: SIBLING_ORIGIN,
+					}),
+				).toString("base64url"),
+				authenticatorData: "",
+				attestationObject: "",
+				signature: "",
+			},
+		});
+		await expect(
+			actual.verifyAuthenticationResponse({
+				response: responseFor("webauthn.get"),
+				expectedChallenge: "challenge",
+				expectedOrigin: [],
+				expectedRPID: "localhost",
+				credential: {
+					id: "credential-id",
+					publicKey: new Uint8Array(),
+					counter: 0,
+				},
+			}),
+		).rejects.toThrow("Unexpected authentication response origin");
+		await expect(
+			actual.verifyRegistrationResponse({
+				response: responseFor("webauthn.create"),
+				expectedChallenge: "challenge",
+				expectedOrigin: [],
+				expectedRPID: "localhost",
+			}),
+		).rejects.toThrow("Unexpected registration response origin");
+	});
+
 	it("accepts a vouched tenant origin for registration", async () => {
 		const instance = await createTenantInstance();
 		const { headers } = await instance.signInWithTestUser();

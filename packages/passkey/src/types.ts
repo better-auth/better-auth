@@ -116,8 +116,8 @@ export interface PasskeyOptions {
 	 *
 	 * @default the origin of `baseURL`, plus a frontend origin listed exactly in
 	 * `trustedOrigins`. When `rpID` is set and a wildcard in
-	 * `baseURL.allowedHosts` covers it, only the origins listed exactly in
-	 * `trustedOrigins`.
+	 * `baseURL.allowedHosts` covers it, the default is only the origin the
+	 * credential reports, and only when `trustedOrigins` lists it exactly.
 	 */
 	origin?: (string | string[] | null) | undefined;
 	/**
