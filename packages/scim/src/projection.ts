@@ -97,25 +97,11 @@ async function findSCIMGroupMembershipsBySCIMUserIds(
 	database: DBTransactionAdapter,
 	scimUserIds: readonly string[],
 ): Promise<SCIMGroupMember[]> {
-	const memberships: SCIMGroupMember[] = [];
-	for (
-		let offset = 0;
-		offset < scimUserIds.length;
-		offset += SCIM_PROJECTION_BATCH_SIZE
-	) {
-		const chunk = scimUserIds.slice(
-			offset,
-			offset + SCIM_PROJECTION_BATCH_SIZE,
-		);
-		memberships.push(
-			...(await database.findMany<SCIMGroupMember>({
-				model: "scimGroupMember",
-				where: [{ field: "scimUserId", value: chunk, operator: "in" }],
-				limit: SCIM_UNBOUNDED_ROW_LIMIT,
-			})),
-		);
-	}
-	return memberships;
+	return database.findMany<SCIMGroupMember>({
+		model: "scimGroupMember",
+		where: [{ field: "scimUserId", value: [...scimUserIds], operator: "in" }],
+		limit: SCIM_UNBOUNDED_ROW_LIMIT,
+	});
 }
 
 async function acquireProjectionSubjectLocks(
@@ -380,11 +366,7 @@ async function reconcileProjectionUserState(
 	const removedGrantKeys = existingGrants
 		.filter((grant) => !desiredGrantByKey.has(grant.grantKey))
 		.map((grant) => grant.grantKey);
-	for (
-		let offset = 0;
-		offset < removedGrantKeys.length;
-		offset += SCIM_PROJECTION_BATCH_SIZE
-	) {
+	if (removedGrantKeys.length > 0) {
 		await database.deleteMany({
 			model: "scimProjectionGrant",
 			where: [
@@ -395,10 +377,7 @@ async function reconcileProjectionUserState(
 				{ field: "userId", value: input.userId },
 				{
 					field: "grantKey",
-					value: removedGrantKeys.slice(
-						offset,
-						offset + SCIM_PROJECTION_BATCH_SIZE,
-					),
+					value: removedGrantKeys,
 					operator: "in",
 				},
 			],

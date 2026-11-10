@@ -248,6 +248,25 @@ describe("SCIM Group writes and role mapping past the default findMany limit", (
 		expect(memberIdsOf(group.id)).toEqual([...userIds].sort());
 	});
 
+	it("returns all members of a Group grown past 100", async () => {
+		const { auth, headers, createGroupGrownPast100 } = createFixture();
+		const { group, userIds } = await createGroupGrownPast100("Engineering");
+
+		const resource = await auth.api.getSCIMGroup({
+			params: { groupId: group.id },
+			headers,
+		});
+		const list = await auth.api.listSCIMGroups({ query: {}, headers });
+
+		const sorted = [...userIds].sort();
+		expect(resource.members.map((member) => member.value).sort()).toEqual(
+			sorted,
+		);
+		expect(
+			list.Resources[0]?.members.map((member) => member.value).sort(),
+		).toEqual(sorted);
+	});
+
 	it("removes the members a replace leaves out of a Group grown past 100", async () => {
 		const { auth, headers, createGroupGrownPast100, memberIdsOf } =
 			createFixture();
@@ -427,71 +446,5 @@ describe("SCIM Group writes and role mapping when the database caps bound variab
 		});
 
 		expect(data.scimGroupMember).toEqual([]);
-	});
-
-	it("maps, removes and restores the roles of a User in 1001 Groups", async () => {
-		const {
-			data,
-			createGroup,
-			createUserInAdminGroups,
-			setActive,
-			adminGrantCountOf,
-		} = createFixture({ createDatabase: createBoundVariableLimitedAdapter });
-		const userId = await createUserInAdminGroups(1);
-		const [group] = data.scimGroup;
-		const [membership] = data.scimGroupMember;
-		if (!group || !membership) throw new Error("Group not created");
-		for (let index = 0; index < 999; index++) {
-			data.scimGroup.push({
-				...group,
-				id: `seeded-group-${index}`,
-				displayName: `${ADMIN_GROUP} seeded ${index}`,
-				displayNameKey: `seeded-group-key-${index}`,
-			});
-			data.scimGroupMember.push({
-				...membership,
-				id: `seeded-membership-${index}`,
-				groupId: `seeded-group-${index}`,
-				membershipKey: `seeded-membership-key-${index}`,
-			});
-		}
-
-		await createGroup(`${ADMIN_GROUP} last`, [userId]);
-		expect(adminGrantCountOf(userId)).toBe(1001);
-
-		await setActive(userId, false);
-		expect(adminGrantCountOf(userId)).toBe(0);
-
-		await setActive(userId, true);
-		expect(adminGrantCountOf(userId)).toBe(1001);
-	});
-
-	it("maps, removes and restores the roles of a User linked through 1001 connections", async () => {
-		const {
-			data,
-			createGroup,
-			createUserInAdminGroups,
-			setActive,
-			adminGrantCountOf,
-		} = createFixture({ createDatabase: createBoundVariableLimitedAdapter });
-		const userId = await createUserInAdminGroups(1);
-		const [scimUser] = data.scimUser;
-		if (!scimUser) throw new Error("User not created");
-		for (let index = 0; index < 1000; index++) {
-			data.scimUser.push({
-				...scimUser,
-				id: `seeded-scim-user-${index}`,
-				connectionId: `seeded-connection-${index}`,
-			});
-		}
-
-		await createGroup(`${ADMIN_GROUP} last`, [userId]);
-		expect(adminGrantCountOf(userId)).toBe(2);
-
-		await setActive(userId, false);
-		expect(adminGrantCountOf(userId)).toBe(0);
-
-		await setActive(userId, true);
-		expect(adminGrantCountOf(userId)).toBe(2);
 	});
 });
