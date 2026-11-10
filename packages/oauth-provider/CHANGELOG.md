@@ -1,5 +1,7 @@
 # @better-auth/oauth-provider
 
+## 1.8.0-beta.7
+
 ## 1.8.0-beta.6
 
 ### Minor Changes

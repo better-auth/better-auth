@@ -57,6 +57,7 @@
     "gitlab-profile-types",
     "gumroad-profile-data",
     "huggingface-profile-types",
+    "include-v1-7-19-fixes",
     "initial-access-token-client-credentials-scopes",
     "kakao-profile-types",
     "kick-profile-types",
