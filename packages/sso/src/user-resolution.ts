@@ -7,12 +7,53 @@ import type {
 import { APIError } from "better-auth/api";
 import type { handleOAuthUserInfo } from "better-auth/oauth2";
 import type {
+	SSOMappedUser,
 	SSOOptions,
+	SSOProfileMappingInput,
 	SSOUserResolution,
 	SSOUserResolutionInput,
 } from "./types";
 
 const SSO_AUTHENTICATION_FAILURE = Symbol("SSO_AUTHENTICATION_FAILURE");
+
+/**
+ * Applies `mapProfileToUser` to the profile read from the provider. Only the
+ * documented user fields are taken from the callback's result.
+ */
+export async function mapSSOProfile(
+	options: SSOOptions | undefined,
+	input: SSOProfileMappingInput,
+	logger: ResolutionLogger,
+): Promise<SSOProfileMappingInput["providerUser"]> {
+	if (!options?.mapProfileToUser) {
+		return input.providerUser;
+	}
+	let mappedUser: SSOMappedUser;
+	try {
+		// A clone keeps the verified identity and provider data authoritative.
+		mappedUser = await options.mapProfileToUser(structuredClone(input));
+	} catch {
+		logFailure(logger, "SSO profile mapping failed");
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			code: "SSO_PROFILE_MAPPING_FAILED",
+			message: "Unable to map the SSO profile",
+		});
+	}
+	const { email, emailVerified, name, image } = mappedUser;
+	const providerUser = input.providerUser;
+	const mappedEmail =
+		email === null ? undefined : (email ?? providerUser.email);
+	return {
+		email: mappedEmail,
+		// The provider's verification covers only the address it sent.
+		emailVerified:
+			emailVerified ??
+			(providerUser.emailVerified &&
+				mappedEmail?.toLowerCase() === providerUser.email?.toLowerCase()),
+		name: name ?? providerUser.name,
+		image: image ?? providerUser.image,
+	};
+}
 
 type SSOAuthenticationResult = Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 type SSOAuthenticationFailure = Error & {

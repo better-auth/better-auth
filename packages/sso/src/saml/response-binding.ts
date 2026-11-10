@@ -297,6 +297,14 @@ function validateAudienceRestrictions(
 	}
 }
 
+/** Returns the `Format` of the assertion's Subject NameID, when it sets one. */
+export function getSAMLNameIDFormat(samlContent: string): string | undefined {
+	const parsed = parseSAMLContent(samlContent);
+	const assertion = getAssertionNode(parsed, getResponseNode(parsed));
+	const format = firstNode(firstNode(assertion.Subject)?.NameID)?.["@_Format"];
+	return typeof format === "string" ? format : undefined;
+}
+
 function getBearerSubjectConfirmationData(assertion: XmlNode): XmlNode[] {
 	const subject = firstNode(assertion.Subject);
 	const confirmations = toNodeArray(subject?.SubjectConfirmation);

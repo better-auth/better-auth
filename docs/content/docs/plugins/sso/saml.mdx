@@ -153,7 +153,7 @@ To choose which SAML attributes fill the user's profile, set `mapping`:
 
 | Field         | Default attribute                                                                              |
 | ------------- | ---------------------------------------------------------------------------------------------- |
-| `email`       | `email`, then the `NameID`                                                                     |
+| `email`       | `email`, then the `NameID` when its `Format` is `emailAddress`                                 |
 | `name`        | `displayName`, read only when neither `firstName` nor `lastName` is present; else the `NameID` |
 | `firstName`   | `givenName`, joined with `lastName` to build `name`                                            |
 | `lastName`    | `surname`, joined with `firstName` to build `name`                                             |
