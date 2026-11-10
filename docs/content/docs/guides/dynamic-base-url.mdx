@@ -149,6 +149,8 @@ Dynamic base URL uses an allowlist model:
 3. Unknown hosts throw unless you provide `fallback`
 4. `allowedHosts` are automatically added to [`trustedOrigins`](/docs/reference/options#trustedorigins) (localhost entries get both `http` and `https`)
 
+When a wildcard entry covers your passkey `rpID`, the passkey plugin accepts only exact origins. See the [passkey `origin` option](/docs/plugins/passkey#options).
+
 This keeps multi-domain support explicit instead of trusting arbitrary headers or platform-specific behavior.
 
 ## Reference

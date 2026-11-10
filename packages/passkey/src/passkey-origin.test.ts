@@ -68,10 +68,16 @@ const mockRegistrationVerification = {
 async function prepareAuthentication<O extends Partial<BetterAuthOptions>>(
 	instance: Awaited<ReturnType<typeof getTestInstance<O, {}>>>,
 	headers: Headers,
+	origin = RP_ORIGIN,
 ) {
-	const { auth, client, cookieSetter, signInWithTestUser } = instance;
-	const { user } = await signInWithTestUser();
+	const { auth, customFetchImpl } = instance;
 	const ctx = await auth.$context;
+	// The seeded test user exists without a session request, which a host
+	// outside `allowedHosts` could not make.
+	const found = await ctx.internalAdapter.findUserByEmail(
+		instance.testUser.email,
+	);
+	const user = found!.user;
 	await ctx.adapter.create({
 		model: "passkey",
 		data: {
@@ -87,11 +93,11 @@ async function prepareAuthentication<O extends Partial<BetterAuthOptions>>(
 			aaguid: "mockAAGUID",
 		} satisfies Omit<Passkey, "id">,
 	});
-	await client.$fetch("/passkey/generate-authenticate-options", {
-		method: "GET",
-		headers,
-		onResponse: cookieSetter(headers),
-	});
+	const res = await customFetchImpl(
+		`${origin}/api/auth/passkey/generate-authenticate-options`,
+		{ headers },
+	);
+	headers.set("cookie", res.headers.get("set-cookie")!.split(";")[0]!);
 	serverMocks.verifyAuthenticationResponse.mockResolvedValueOnce({
 		verified: true,
 		authenticationInfo: { newCounter: 1 },
@@ -375,7 +381,7 @@ describe("passkey expected origin", () => {
 	});
 
 	it.for(["*.localhost:3000", "app-?.localhost:3000"])(
-		"requires origin when the wildcard allowed host %s covers the configured rpID",
+		"starts without origin when the wildcard allowed host %s covers the configured rpID",
 		async (allowedHost) => {
 			await expect(
 				getTestInstance({
@@ -389,7 +395,7 @@ describe("passkey expected origin", () => {
 						protocol: "http",
 					},
 				}),
-			).rejects.toThrow("Passkey `origin` must be set");
+			).resolves.toBeDefined();
 		},
 	);
 
@@ -502,4 +508,129 @@ describe("passkey shared across auth instances", () => {
 			).toEqual([RP_ORIGIN]);
 		},
 	);
+});
+
+/**
+ * Under a wildcard allowed host that covers the `rpID`, any sibling host can
+ * produce assertions for it, so only origins listed exactly in
+ * `trustedOrigins` count, never the host the request names.
+ *
+ * @see https://github.com/better-auth/better-auth/issues/12213
+ */
+describe("passkey origin under a wildcard allowed host", () => {
+	const TENANT_ORIGIN = "http://tenant.localhost:3000";
+	const createTenantInstance = () =>
+		getTestInstance({
+			plugins: [passkey({ rpID: "localhost" })],
+			baseURL: {
+				allowedHosts: ["localhost:3000", "*.localhost:3000"],
+				protocol: "http",
+			},
+			// The app vouches for tenant hosts it knows, per request.
+			trustedOrigins: async (request) =>
+				request?.headers.get("origin") === TENANT_ORIGIN ? [TENANT_ORIGIN] : [],
+		});
+
+	const verifyAuthenticationFrom = async (
+		instance: Awaited<ReturnType<typeof createTenantInstance>>,
+		origin: string,
+	) => {
+		const headers = new Headers();
+		await prepareAuthentication(instance, headers);
+		headers.set("origin", origin);
+		headers.set("content-type", "application/json");
+		await instance.customFetchImpl(
+			`${origin}/api/auth/passkey/verify-authentication`,
+			{
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					response: {
+						...mockAuthenticationResponse,
+						response: {
+							...mockAuthenticationResponse.response,
+							clientDataJSON: encodeClientData(origin),
+						},
+					},
+				}),
+			},
+		);
+		return serverMocks.verifyAuthenticationResponse.mock.calls[0]?.[0];
+	};
+
+	it("accepts a tenant origin that a trustedOrigins function vouches for", async () => {
+		const instance = await createTenantInstance();
+		const call = await verifyAuthenticationFrom(instance, TENANT_ORIGIN);
+		expect(call.expectedOrigin).toEqual([TENANT_ORIGIN]);
+	});
+
+	it("does not accept a sibling origin that only the wildcard admits", async () => {
+		const instance = await createTenantInstance();
+		const call = await verifyAuthenticationFrom(instance, SIBLING_ORIGIN);
+		expect(call.expectedOrigin).toEqual([]);
+	});
+
+	it("rejects an unvouched origin as a client error when no exact origin is configured", async () => {
+		const instance = await getTestInstance({
+			plugins: [passkey({ rpID: "localhost" })],
+			baseURL: {
+				allowedHosts: ["*.localhost:3000"],
+				fallback: undefined,
+				protocol: "http",
+			},
+		});
+		const headers = new Headers({ origin: SIBLING_ORIGIN });
+		await prepareAuthentication(instance, headers, SIBLING_ORIGIN);
+		serverMocks.verifyAuthenticationResponse.mockReset();
+		serverMocks.verifyAuthenticationResponse.mockRejectedValueOnce(
+			new Error("Unexpected authentication response origin"),
+		);
+		headers.set("content-type", "application/json");
+		const res = await instance.customFetchImpl(
+			`${SIBLING_ORIGIN}/api/auth/passkey/verify-authentication`,
+			{
+				method: "POST",
+				headers,
+				body: JSON.stringify({ response: mockAuthenticationResponse }),
+			},
+		);
+		expect(
+			serverMocks.verifyAuthenticationResponse.mock.calls[0]![0].expectedOrigin,
+		).toEqual([]);
+		expect(res.status).toBe(400);
+	});
+
+	it("accepts a vouched tenant origin for registration", async () => {
+		const instance = await createTenantInstance();
+		const { headers } = await instance.signInWithTestUser();
+		await instance.client.$fetch("/passkey/generate-register-options", {
+			method: "GET",
+			headers,
+			onResponse: instance.cookieSetter(headers),
+		});
+		serverMocks.verifyRegistrationResponse.mockResolvedValueOnce(
+			mockRegistrationVerification,
+		);
+		headers.set("origin", TENANT_ORIGIN);
+		headers.set("content-type", "application/json");
+		const res = await instance.customFetchImpl(
+			`${TENANT_ORIGIN}/api/auth/passkey/verify-registration`,
+			{
+				method: "POST",
+				headers,
+				body: JSON.stringify({
+					response: {
+						...mockRegistrationResponse,
+						response: {
+							...mockRegistrationResponse.response,
+							clientDataJSON: encodeClientData(TENANT_ORIGIN),
+						},
+					},
+				}),
+			},
+		);
+		expect(res.status).toBe(200);
+		const call = serverMocks.verifyRegistrationResponse.mock.calls[0]![0];
+		expect(call.expectedOrigin).toEqual([TENANT_ORIGIN]);
+	});
 });

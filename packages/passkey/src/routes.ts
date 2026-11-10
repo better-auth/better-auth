@@ -654,7 +654,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				ctx,
 				resp?.response?.clientDataJSON,
 			);
-			if (expectedOrigin.length === 0) {
+			if (!expectedOrigin) {
 				throw expectedOriginUnavailable(ctx);
 			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
@@ -918,7 +918,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				ctx,
 				resp?.response?.clientDataJSON,
 			);
-			if (expectedOrigin.length === 0) {
+			if (!expectedOrigin) {
 				throw expectedOriginUnavailable(ctx);
 			}
 			const webAuthnCookie = ctx.context.createAuthCookie(
