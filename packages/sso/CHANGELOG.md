@@ -1,5 +1,13 @@
 # @better-auth/sso
 
+## 1.7.20
+
+### Patch Changes
+
+- [#12309](https://github.com/better-auth/better-auth/pull/12309) [`8654ff2`](https://github.com/better-auth/better-auth/commit/8654ff2f105bddd80dc04fe6cd28e8bf0c4b7a5d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(sso): apply the default SAML clock skew to samlify's assertion window check
+
+  The documented 5-minute `saml.clockSkew` default was only applied by the plugin's own timestamp step. samlify checked the assertion's `NotBefore` and `NotOnOrAfter` first with no tolerance unless `clockSkew` was set explicitly, so assertions that were up to five minutes past their validity window, or up to five minutes early, were rejected. The default now reaches samlify as well.
+
 ## 1.7.19
 
 ## 1.7.18
