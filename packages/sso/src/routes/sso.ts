@@ -1670,6 +1670,7 @@ async function handleOIDCCallback(
 				image: userInfo.image,
 			},
 			providerClaims: rawProfile ?? {},
+			verifiedIdTokenClaims: verifiedIdToken?.payload ?? {},
 		},
 		ctx.context.logger,
 	).catch((e) => {
@@ -1686,7 +1687,6 @@ async function handleOIDCCallback(
 		return redirectOIDCError("invalid_provider", "missing_user_info");
 	}
 	const userInfoEmail = mappedUser.email;
-	const userInfoId = userInfo.id;
 	const providerUserAttributes = Object.fromEntries(
 		Object.entries(userInfo).filter(([key]) => key !== "id"),
 	);
@@ -1697,6 +1697,7 @@ async function handleOIDCCallback(
 		image: mappedUser.image,
 		emailVerified: mappedUser.emailVerified,
 	};
+	const mappedUserInfo = { ...providerUser, id: accountKey.accountId };
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
@@ -1757,19 +1758,12 @@ async function handleOIDCCallback(
 					});
 				}
 				const authentication = await handleOAuthUserInfo(ctx, {
-					userInfo: {
-						...providerUser,
-						email: providerUser.email,
-						name: providerUser.name,
-						id: userInfoId,
-						image: providerUser.image,
-						emailVerified: providerUser.emailVerified,
-					},
+					userInfo: mappedUserInfo,
 					account: {
 						idToken: tokenResponse.idToken,
 						accessToken: tokenResponse.accessToken,
 						refreshToken: tokenResponse.refreshToken,
-						accountId: userInfoId,
+						accountId: accountKey.accountId,
 						providerId: provider.providerId,
 						accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
@@ -1832,7 +1826,7 @@ async function handleOIDCCallback(
 	) {
 		await options.provisionUser({
 			user,
-			userInfo: { ...userInfo, ...providerUser },
+			userInfo: mappedUserInfo,
 			token: tokenResponse,
 			provider,
 		});
@@ -1843,10 +1837,10 @@ async function handleOIDCCallback(
 		profile: {
 			providerType: "oidc",
 			providerId: provider.providerId,
-			accountId: userInfoId,
+			accountId: accountKey.accountId,
 			email: userInfoEmail,
 			emailVerified: providerUser.emailVerified,
-			rawAttributes: { ...userInfo, ...providerUser },
+			rawAttributes: mappedUserInfo,
 		},
 		provider,
 		token: tokenResponse,

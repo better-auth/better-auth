@@ -6,6 +6,7 @@ import {
 } from "node:crypto";
 import type { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { betterFetch } from "@better-fetch/fetch";
 import type { Account, DBTransactionAdapter, User } from "better-auth";
@@ -45,6 +46,7 @@ import { findSAMLProvider } from "./routes/helpers";
 import { getSafeRedirectUrl } from "./routes/saml-pipeline";
 import { saml } from "./samlify";
 import type {
+	SSOMappedUser,
 	SSOOptions,
 	SSOProfileMappingInput,
 	SSOUserResolutionInput,
@@ -2595,6 +2597,23 @@ describe("SAML SSO", async () => {
 			expect(ssoUsers).toEqual([]);
 		});
 
+		it.each([
+			"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+			"urn:oasis:names:tc:SAML:2.0:nameid-format:emailAddress",
+		])(
+			"does not use an email-valued NameID with Format %s as the email",
+			async (format) => {
+				const { location, ssoUsers } = await signInWithNameID(
+					{},
+					"nameid-user@example.com",
+					format,
+				);
+
+				expect(location).toContain("error=missing_user_info");
+				expect(ssoUsers).toEqual([]);
+			},
+		);
+
 		it("uses an emailAddress-format NameID as the email", async () => {
 			const { location, ssoUsers } = await signInWithNameID(
 				{},
@@ -2653,6 +2672,24 @@ describe("SAML SSO", async () => {
 			);
 
 			expect(location).toContain("error=SSO_PROFILE_MAPPING_FAILED");
+			expect(location).not.toContain("directory");
+			expect(ssoUsers).toEqual([]);
+		});
+
+		it("redirects with an error when mapProfileToUser returns an invalid email", async () => {
+			const { location, ssoUsers } = await signInWithNameID(
+				{
+					// A multi-valued attribute passed through as the email.
+					mapProfileToUser: () =>
+						({
+							email: ["a@example.com", "b@example.com"],
+						}) as unknown as SSOMappedUser,
+				},
+				"nameid-user@example.com",
+				SAML_EMAIL_NAME_ID_FORMAT,
+			);
+
+			expect(location).toContain("error=SSO_PROFILE_MAPPING_FAILED");
 			expect(ssoUsers).toEqual([]);
 		});
 
@@ -2680,7 +2717,10 @@ describe("SAML SSO", async () => {
 						return {
 							email:
 								input.providerUser.email ??
-								`${input.accountKey.accountId}@${input.providerId}.placeholder.invalid`,
+								createPlaceholderEmail({
+									identifier: input.accountKey.accountId,
+									namespace: input.providerId,
+								}),
 						};
 					},
 				},

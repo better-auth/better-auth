@@ -710,6 +710,7 @@ export async function processSAMLResponse(
 		image: mappedUser.image,
 		emailVerified: mappedUser.emailVerified,
 	};
+	const mappedUserInfo = { ...providerUser, id: accountKey.accountId };
 
 	// 16. Session creation
 	// SSO provider ids are user-controlled and share the social-provider account
@@ -779,10 +780,7 @@ export async function processSAMLResponse(
 					});
 				}
 				const authentication = await handleOAuthUserInfo(ctx, {
-					userInfo: {
-						...providerUser,
-						id: accountKey.accountId,
-					},
+					userInfo: mappedUserInfo,
 					account: {
 						providerId,
 						accountId: accountKey.accountId,
@@ -852,7 +850,7 @@ export async function processSAMLResponse(
 	) {
 		await options.provisionUser({
 			user: user as User & Record<string, any>,
-			userInfo: { ...userInfo, ...providerUser },
+			userInfo: mappedUserInfo,
 			provider,
 		});
 	}

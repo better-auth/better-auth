@@ -59,6 +59,7 @@ To sign in users from a provider that sends no email, return one from `mapProfil
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { sso } from "@better-auth/sso";
 
 export const auth = betterAuth({
@@ -67,16 +68,25 @@ export const auth = betterAuth({
             mapProfileToUser: ({ providerId, accountKey, providerUser }) => ({
                 email:
                     providerUser.email ??
-                    `${accountKey.accountId}@${providerId}.placeholder.invalid`,
+                    createPlaceholderEmail({
+                        identifier: accountKey.accountId,
+                        namespace: providerId,
+                    }),
             }),
         }),
     ],
 });
 ```
 
-The callback receives `protocol`, `providerId`, `accountKey`, and `providerUser`, plus `providerClaims` for OIDC or `providerAttributes`, `nameID`, and `nameIDFormat` for SAML. It can return `email`, `name`, `image`, and `emailVerified`. Return `email: null` to discard the email the provider sent. A returned email that differs from the provider's is unverified unless you also return `emailVerified`. The account identity always stays the verified `sub` claim or `NameID`. `provisionUser` receives the mapped values in `userInfo`. If the callback throws, sign-in redirects with `SSO_PROFILE_MAPPING_FAILED`.
+The callback receives `protocol`, `providerId`, `accountKey`, and `providerUser`, plus `providerClaims` and `verifiedIdTokenClaims` for OIDC or `providerAttributes`, `nameID`, and `nameIDFormat` for SAML. `providerUser.emailVerified` is `false` unless the deprecated `trustEmailVerified` option is on.
 
-The example assumes the provider ID is a valid domain label (letters, digits, and hyphens) and the subject is valid in an email address. Encode either one before building a placeholder when it is not.
+It can return `email`, `name`, and `image`. A field you omit keeps the provider's value, and other keys are ignored: set additional user fields with `mapping.extraFields` or in `provisionUser`. Return `email: null` to discard the email the provider sent. A returned email that differs from the provider's is always stored unverified. The account identity always stays the verified `sub` claim or `NameID`.
+
+The mapped values replace the provider's in `providerUser` for `resolveUser`, in `userInfo` for `provisionUser`, and in `userInfo` for an OIDC `getRole`. The provider's own values stay in `providerClaims` or `providerAttributes`. If the callback throws, or returns something other than an object or an `email`, `name`, or `image` of the wrong type, sign-in redirects with `SSO_PROFILE_MAPPING_FAILED`.
+
+`createPlaceholderEmail` throws when the result is not a valid email address, and sign-in then fails with `SSO_PROFILE_MAPPING_FAILED`. The example assumes the provider ID is a valid domain label (letters, digits, and hyphens) and the subject is valid in an email address. Encode either one first when it is not, for example as hex. Emails are compared case-insensitively, so also encode subjects that differ only by letter case.
+
+With [`overrideUserInfo`](#update-profiles-on-sign-in), the returned email replaces the stored one on every sign-in. If the provider stops sending the email, a placeholder then overwrites the user's real address.
 
 <Callout type="warn">
   The returned email decides which existing user a new account links to, as [How SSO users are matched](#how-sso-users-are-matched) describes. Return only addresses the provider vouches for, or a placeholder on the reserved `.invalid` domain, which never matches a verified domain. Placeholder emails cannot receive mail; see [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
@@ -138,7 +148,7 @@ Your resolver receives `input` and `context`. `input.protocol` is `"oidc"` or `"
 
 * `accountKey.issuer`: the ID token's `iss` for OIDC, or the IdP entity ID for SAML.
 * `accountKey.accountId`: the ID token's `sub` for OIDC, or the signed `NameID` for SAML. `NameID` matching is case-sensitive.
-* `providerUser`: the normalized profile.
+* `providerUser`: the normalized profile, after [`mapProfileToUser`](#providers-without-an-email) when it is set.
 * `verifiedIdTokenClaims` (OIDC only): the full verified ID token payload.
 * `providerClaims` (OIDC only): the UserInfo claims, or the ID token claims when there is no UserInfo endpoint.
 * `providerAttributes` (SAML only): the verified assertion attributes. Multi-valued attributes stay arrays.

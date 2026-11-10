@@ -11,6 +11,10 @@ Pass these options to `sso()`. All of them are optional.
 
 ### Users and accounts
 
+`mapProfileToUser` <span className="opacity-70">`(input) => Awaitable<SSOMappedUser>`</span>
+
+Sets the `email`, `name`, and `image` from the provider profile on every OIDC and SAML sign-in, before the user is looked up. Use it for providers that send no email. A returned email that differs from the provider's is stored unverified. See [Providers without an email](/docs/plugins/sso/provisioning#providers-without-an-email).
+
 `resolveUser` <span className="opacity-70">`(input, context) => Awaitable<SSOUserResolution>`</span>
 
 Maps a verified provider identity to a user on every SSO sign-in. Return `continue`, `link`, or `reject`. Runs in a database transaction, so the adapter needs native transaction support. See [Resolve SSO users](/docs/plugins/sso/provisioning#resolve-sso-users).
@@ -461,7 +465,7 @@ Attribute names to read. See [Attribute mapping](/docs/plugins/sso/saml#attribut
   <Accordion title="samlConfig.mapping">
     `email` <span className="opacity-70">`string`</span>
 
-    Attribute for the email. Defaults to `email`, then the NameID.
+    Attribute for the email. Defaults to `email`, then the NameID when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`.
 
     `name` <span className="opacity-70">`string`</span>
 

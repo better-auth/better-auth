@@ -28,18 +28,19 @@ export async function mapSSOProfile(
 	if (!options?.mapProfileToUser) {
 		return input.providerUser;
 	}
-	let mappedUser: SSOMappedUser;
+	let mappedUser: unknown;
 	try {
 		// A clone keeps the verified identity and provider data authoritative.
 		mappedUser = await options.mapProfileToUser(structuredClone(input));
 	} catch {
 		logFailure(logger, "SSO profile mapping failed");
-		throw new APIError("INTERNAL_SERVER_ERROR", {
-			code: "SSO_PROFILE_MAPPING_FAILED",
-			message: "Unable to map the SSO profile",
-		});
+		throw profileMappingFailure();
 	}
-	const { email, emailVerified, name, image } = mappedUser;
+	if (!isSSOMappedUser(mappedUser)) {
+		logFailure(logger, "SSO profile mapper returned an invalid profile");
+		throw profileMappingFailure();
+	}
+	const { email, name, image } = mappedUser;
 	const providerUser = input.providerUser;
 	const mappedEmail =
 		email === null ? undefined : (email ?? providerUser.email);
@@ -47,12 +48,31 @@ export async function mapSSOProfile(
 		email: mappedEmail,
 		// The provider's verification covers only the address it sent.
 		emailVerified:
-			emailVerified ??
-			(providerUser.emailVerified &&
-				mappedEmail?.toLowerCase() === providerUser.email?.toLowerCase()),
+			providerUser.emailVerified &&
+			mappedEmail?.toLowerCase() === providerUser.email?.toLowerCase(),
 		name: name ?? providerUser.name,
 		image: image ?? providerUser.image,
 	};
+}
+
+function isOptionalString(value: unknown): boolean {
+	return value === undefined || typeof value === "string";
+}
+
+function isSSOMappedUser(value: unknown): value is SSOMappedUser {
+	return (
+		isRecord(value) &&
+		(value.email === null || isOptionalString(value.email)) &&
+		isOptionalString(value.name) &&
+		isOptionalString(value.image)
+	);
+}
+
+function profileMappingFailure(): APIError {
+	return new APIError("INTERNAL_SERVER_ERROR", {
+		code: "SSO_PROFILE_MAPPING_FAILED",
+		message: "Unable to map the SSO profile",
+	});
 }
 
 type SSOAuthenticationResult = Awaited<ReturnType<typeof handleOAuthUserInfo>>;

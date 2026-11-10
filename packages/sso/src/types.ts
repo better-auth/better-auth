@@ -301,7 +301,12 @@ export type SSOUserResolution =
 	  }
 	| { action: "reject"; code: string; message?: string | undefined };
 
-/** Normalized provider attributes available to an SSO user resolver. */
+/**
+ * Normalized provider attributes available to an SSO user resolver. When
+ * `mapProfileToUser` is set, `email`, `name`, and `image` hold its result,
+ * and `emailVerified` is `false` if it changed the email. The provider's own
+ * values remain in `providerClaims` or `providerAttributes`.
+ */
 export type SSOProviderUserProfile = {
 	email: string;
 	emailVerified: boolean;
@@ -370,6 +375,7 @@ interface BaseSSOProfileMappingInput {
 	 */
 	providerUser: {
 		email?: string | undefined;
+		/** Always `false` unless `trustEmailVerified` is enabled. */
 		emailVerified: boolean;
 		name?: string | undefined;
 		image?: string | undefined;
@@ -381,6 +387,8 @@ export interface SSOOIDCProfileMappingInput extends BaseSSOProfileMappingInput {
 	protocol: "oidc";
 	/** Raw claims from UserInfo, or the verified ID Token when UserInfo is absent. */
 	providerClaims: Record<string, unknown>;
+	/** Claims from the cryptographically verified ID Token, when one was issued. */
+	verifiedIdTokenClaims: Record<string, unknown>;
 }
 
 /** SAML profile data available to `mapProfileToUser`. */
@@ -402,17 +410,20 @@ export type SSOProfileMappingInput =
 	| SSOOIDCProfileMappingInput
 	| SSOSAMLProfileMappingInput;
 
-/** User fields an application can set from `mapProfileToUser`. */
+/**
+ * User fields an application can set from `mapProfileToUser`. Omitted or
+ * `undefined` fields keep the provider's value. Other keys are ignored; set
+ * additional user fields with the provider's `mapping.extraFields` or with
+ * `provisionUser`.
+ */
 export interface SSOMappedUser {
 	/** The account subject comes from the verified `sub` claim or NameID. */
 	id?: never;
-	/** Return `null` to discard the email the provider sent. */
-	email?: string | null | undefined;
 	/**
-	 * Defaults to the provider's verification when the email is unchanged, and
-	 * to `false` when this callback returns a different email.
+	 * Return `null` to discard the email the provider sent. An email that
+	 * differs from the provider's is stored unverified.
 	 */
-	emailVerified?: boolean | undefined;
+	email?: string | null | undefined;
 	name?: string | undefined;
 	image?: string | undefined;
 }
@@ -460,13 +471,14 @@ export interface SSOOptions {
 	 * neither the provider nor this callback yields one. A SAML NameID is used
 	 * as the email only when its `Format` is
 	 * `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. If the callback
-	 * throws, sign-in redirects with `SSO_PROFILE_MAPPING_FAILED`.
+	 * throws or returns an invalid result, sign-in redirects with
+	 * `SSO_PROFILE_MAPPING_FAILED`.
 	 *
 	 * The returned email is used to find, link, and create the user, and to
-	 * decide whether the provider's verified domain trusts it. Return only
-	 * addresses the provider vouches for, or a placeholder on the reserved
-	 * `.invalid` domain, such as
-	 * `${accountKey.accountId}@${providerId}.placeholder.invalid`.
+	 * decide whether the provider's verified domain trusts it. An email that
+	 * differs from the provider's is stored unverified. Return only addresses
+	 * the provider vouches for, or a placeholder built with
+	 * `createPlaceholderEmail` from `@better-auth/core/utils/email`.
 	 */
 	mapProfileToUser?:
 		| ((input: SSOProfileMappingInput) => Awaitable<SSOMappedUser>)
@@ -477,7 +489,8 @@ export interface SSOOptions {
 	 * For OIDC, `accountKey` is derived from the validated ID Token. For SAML,
 	 * it contains the verified IdP entity ID and signed NameID. Profile fields,
 	 * raw OIDC claims, and SAML assertion attributes are protocol-accepted
-	 * provider data and may require application-level validation.
+	 * provider data and may require application-level validation. When
+	 * `mapProfileToUser` is set, `providerUser` holds the mapped profile.
 	 *
 	 * The callback runs on every SSO sign-in inside the same native database
 	 * transaction as account finalization and session creation.
