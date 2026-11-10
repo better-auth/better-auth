@@ -432,27 +432,27 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
 							const cookie = url.searchParams.get("cookie");
-							if (!cookie) {
-								// errorCallbackURL redirects land here with ?error= and no
-								// cookie. Surface the code so signIn.social / linkSocial
-								// reject instead of resolving as a silent success (#12349).
-								const error = url.searchParams.get("error");
-								if (error) {
-									throw new BetterFetchError(400, error, {
-										code: error,
-										message: error,
-									});
+							// errorCallbackURL redirects can include both `error` and a
+							// state-cookie cleanup Set-Cookie. Prefer the error so
+							// signIn.social / linkSocial do not resolve as success (#12349).
+							const error = url.searchParams.get("error");
+							if (cookie) {
+								const update = await storage.updateItemAsync(
+									cookieName,
+									(currentValue) =>
+										getSetCookie(cookie, currentValue ?? undefined),
+								);
+								if (update && !error) {
+									store?.notify("$sessionSignal");
 								}
-								return;
 							}
-							const update = await storage.updateItemAsync(
-								cookieName,
-								(currentValue) =>
-									getSetCookie(cookie, currentValue ?? undefined),
-							);
-							if (update) {
-								store?.notify("$sessionSignal");
+							if (error) {
+								throw new BetterFetchError(400, error, {
+									code: error,
+									message: error,
+								});
 							}
+							if (!cookie) return;
 						}
 					},
 				},

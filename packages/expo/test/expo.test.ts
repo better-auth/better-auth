@@ -896,6 +896,27 @@ describe("expo", async () => {
 		});
 	});
 
+	it("should reject errorCallbackURL errors even when a cleanup cookie is present", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			// State-cookie cleanup Set-Cookie is copied into the return URL alongside error.
+			url: "better-auth:///oauth-error?error=access_denied&cookie=better-auth.oauth_state=;Max-Age=0",
+		});
+
+		await expect(
+			client.signIn.social({
+				provider: "google",
+				callbackURL: "/dashboard",
+				errorCallbackURL: "/oauth-error",
+			}),
+		).rejects.toMatchObject({
+			status: 400,
+			statusText: "access_denied",
+			error: { code: "access_denied" },
+		});
+	});
+
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
 		await client.signIn.social({
 			provider: "google",
