@@ -92,7 +92,10 @@ describe("prisma-adapter", () => {
 		expect(updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: {
-					identifier: { equals: "magic-link-token" },
+					AND: [
+						{ identifier: { equals: "magic-link-token" } },
+						{ id: "verification-id" },
+					],
 				},
 				data: expect.objectContaining({
 					value: "updated-value",
@@ -245,7 +248,10 @@ describe("prisma-adapter", () => {
 		expect(updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: {
-					email: { equals: "test@example.com", mode: "insensitive" },
+					AND: [
+						{ email: { equals: "test@example.com", mode: "insensitive" } },
+						{ id: "user-id" },
+					],
 				},
 				data: expect.objectContaining({
 					name: "Updated",
@@ -401,8 +407,9 @@ describe("prisma-adapter", () => {
 				});
 
 				expect(update).not.toHaveBeenCalled();
+				// Only the row read first is written, still guarded by the filter.
 				expect(updateMany).toHaveBeenCalledWith({
-					where: isNull[provider],
+					where: { AND: [isNull[provider], { id: "user-id" }] },
 					data: expect.objectContaining({ username: "alice" }),
 				});
 				// The update changed the filtered field, so the row is read back by ID.
@@ -412,6 +419,46 @@ describe("prisma-adapter", () => {
 				expect(result).toEqual({ id: "user-id", username: "alice" });
 			},
 		);
+
+		it("reads the row back by its new ID when the update changes it", async () => {
+			const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+			const findFirst = vi
+				.fn()
+				.mockResolvedValueOnce({ id: "old-id" })
+				.mockResolvedValueOnce({ id: "new-id" });
+			const adapter = createAdapter("sqlite", {
+				update: vi.fn(),
+				updateMany,
+				findFirst,
+			});
+
+			const result = await adapter.update({
+				model: "user",
+				where: [{ field: "username", value: null }],
+				update: { id: "new-id" },
+			});
+
+			expect(findFirst).toHaveBeenLastCalledWith({ where: { id: "new-id" } });
+			expect(result).toEqual({ id: "new-id" });
+		});
+
+		it("returns null without writing when no row matches", async () => {
+			const updateMany = vi.fn();
+			const adapter = createAdapter("sqlite", {
+				update: vi.fn(),
+				updateMany,
+				findFirst: vi.fn().mockResolvedValue(null),
+			});
+
+			await expect(
+				adapter.update({
+					model: "user",
+					where: [{ field: "username", value: null }],
+					update: { name: "Updated" },
+				}),
+			).resolves.toBeNull();
+			expect(updateMany).not.toHaveBeenCalled();
+		});
 
 		it.each(["sqlite", "mongodb"] as const)(
 			"keeps the null comparison out of the unique selector on %s",

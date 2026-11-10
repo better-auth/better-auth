@@ -601,20 +601,29 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where,
 							action: "updateMany",
 						});
-						// The update can change a filtered field, so read the row back by ID.
+						// `update` targets one row. Write only the row found here, still
+						// guarded by the filter, and read it back by ID, because the
+						// update can change a filtered field.
 						const matched = await db[model]!.findFirst({
 							where: whereClause,
 						});
+						if (!matched) {
+							return null;
+						}
+						const idField = getFieldName({ model: modelKey, field: "id" });
 						const result = await db[model]!.updateMany({
-							where: whereClause,
+							where: { AND: [whereClause, { [idField]: matched[idField] }] },
 							data: update,
 						});
 						if (!result?.count) {
 							return null;
 						}
-						const idField = getFieldName({ model: modelKey, field: "id" });
 						return await db[model]!.findFirst({
-							where: matched ? { [idField]: matched[idField] } : whereClause,
+							where: {
+								[idField]:
+									(update as Record<string, unknown>)[idField] ??
+									matched[idField],
+							},
 						});
 					}
 					const whereClause = convertWhereClause({
