@@ -236,6 +236,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		pathMethods: {
 			"/organization/get-full-organization": "GET",
 			"/organization/list-user-teams": "GET",
+			"/organization/transfer-ownership/callback": "GET",
+			"/organization/transfer-ownership/preview": "GET",
 		},
 		atomListeners: [
 			{
@@ -271,7 +273,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				matcher(path) {
 					return (
 						path.includes("/organization/update-member-role") ||
-						path.startsWith("/organization/set-active")
+						path.startsWith("/organization/set-active") ||
+						path === "/organization/transfer-ownership" ||
+						path === "/organization/transfer-ownership/callback" ||
+						path === "/organization/transfer-ownership/confirm"
 					);
 				},
 				signal: "$activeMemberSignal",
@@ -280,7 +285,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				matcher(path) {
 					return (
 						path.includes("/organization/update-member-role") ||
-						path.startsWith("/organization/set-active")
+						path.startsWith("/organization/set-active") ||
+						path === "/organization/transfer-ownership" ||
+						path === "/organization/transfer-ownership/callback" ||
+						path === "/organization/transfer-ownership/confirm"
 					);
 				},
 				signal: "$activeMemberRoleSignal",
