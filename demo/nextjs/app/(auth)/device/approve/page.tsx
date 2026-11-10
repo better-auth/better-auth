@@ -10,6 +10,9 @@ import { useSessionQuery } from "@/data/user/session-query";
 import { authClient } from "@/lib/auth-client";
 import { deviceClients } from "@/lib/device-clients";
 
+const LOOKUP_UNAVAILABLE =
+	"Could not load this request. Try again in a moment.";
+
 export default function Page() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
@@ -40,6 +43,15 @@ export default function Page() {
 			.device({ query: { user_code: userCode } })
 			.then(({ data, error }) => {
 				if (!active) return;
+				// Server errors and rate limits are worth retrying; a rejected code is not.
+				if (
+					error &&
+					(!error.status || error.status === 429 || error.status >= 500)
+				) {
+					setLookupFailure("unreachable");
+					setError(LOOKUP_UNAVAILABLE);
+					return;
+				}
 				if (!data?.client_id || data.status !== "pending") {
 					setLookupFailure("rejected");
 					setError(
@@ -53,9 +65,7 @@ export default function Page() {
 			.catch(() => {
 				if (!active) return;
 				setLookupFailure("unreachable");
-				setError(
-					"Could not load this request. Check your connection and try again.",
-				);
+				setError(LOOKUP_UNAVAILABLE);
 			});
 		return () => {
 			active = false;
