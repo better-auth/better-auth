@@ -105,8 +105,11 @@ function buildRefreshAccessTokenRequest({
 	const headers: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
-		...extraHeaders,
 	};
+	// Lowercase keys so client authentication, written lowercase, replaces any caller value.
+	for (const [key, value] of Object.entries(extraHeaders ?? {})) {
+		headers[key.toLowerCase()] = value;
+	}
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);

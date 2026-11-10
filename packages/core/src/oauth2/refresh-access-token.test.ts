@@ -223,11 +223,14 @@ describe("refreshAccessTokenRequest", () => {
 			refreshToken: "old-refresh-token",
 			options: { clientId: "test-client", clientSecret: "test-secret" },
 			authentication: "basic",
-			headers: { "x-custom-header": "test-value", authorization: "spoofed" },
+			headers: { "X-Custom-Header": "test-value", Authorization: "spoofed" },
 		});
 
 		expect(headers["x-custom-header"]).toBe("test-value");
 		expect(headers.authorization).toMatch(/^Basic /);
+		expect(new Headers(headers).get("authorization")).toBe(
+			headers.authorization,
+		);
 	});
 });
 

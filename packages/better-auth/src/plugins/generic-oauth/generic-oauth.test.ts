@@ -1552,6 +1552,9 @@ describe("oauth2", async () => {
 		expect(receivedHeaders["x-custom-header"]).toBe("test-value");
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-6
+	 */
 	it("should pass authorization headers on token refresh", async () => {
 		const refreshHeaders: Record<string, unknown>[] = [];
 		const captureRefresh = (
@@ -1571,7 +1574,7 @@ describe("oauth2", async () => {
 		});
 
 		try {
-			const { customFetchImpl } = await getTestInstance({
+			const { client, customFetchImpl } = await getTestInstance({
 				plugins: [
 					genericOAuth({
 						config: [
@@ -1586,10 +1589,6 @@ describe("oauth2", async () => {
 						],
 					}),
 				],
-			});
-			const client = createAuthClient({
-				baseURL: "http://localhost:3000",
-				fetchOptions: { customFetchImpl },
 			});
 
 			const headers = new Headers();
