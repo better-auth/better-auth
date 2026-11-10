@@ -13,6 +13,8 @@ Better Auth serves [OpenID Provider metadata](https://openid.net/specs/openid-co
 
 The OpenID configuration returns 404 when you set `scopes` without `openid`. To serve it, add `openid` to `scopes`.
 
+The issuer keeps the scheme of your `baseURL`, or of `jwt.issuer` when you set it, so discovery, the authorization response `iss` parameter, and issued tokens report the same value. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+
 To publish fewer scopes, or more claims, than the server supports, set `advertisedMetadata`:
 
 ```ts title="auth.ts"
