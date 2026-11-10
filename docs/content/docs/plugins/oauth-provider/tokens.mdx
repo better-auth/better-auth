@@ -268,7 +268,14 @@ The token endpoint and the UserInfo endpoint then require a nonce in every DPoP 
 2. The endpoint rejects it with `use_dpop_nonce` and sends a fresh nonce in the `DPoP-Nonce` response header. The token endpoint answers with a 400 ([§8](https://datatracker.ietf.org/doc/html/rfc9449#section-8)). The UserInfo endpoint answers with a 401 and a `WWW-Authenticate: DPoP error="use_dpop_nonce"` challenge ([§9](https://datatracker.ietf.org/doc/html/rfc9449#section-9)).
 3. The client signs a new proof that includes the nonce, and retries.
 
-The token endpoint checks the nonce before it redeems an authorization code, device code, or refresh token. The retry can still redeem the same code. Freshness is measured at the time the request arrives, so a nonce that expires while the grant runs does not fail the request. Every successful DPoP response carries the next nonce in `DPoP-Nonce` ([§8.2](https://datatracker.ietf.org/doc/html/rfc9449#section-8.2)), so a client that keeps the latest value rarely needs a retry. Each response that sets `DPoP-Nonce` is marked `Cache-Control: no-store`, so a cache cannot hand out an expired nonce. It also lists `DPoP-Nonce` in `Access-Control-Expose-Headers`, so browser clients can read it. The UserInfo challenge lists `WWW-Authenticate` there too, because a browser client needs it to see that it must retry. Requests without a `DPoP` proof are unaffected.
+The token endpoint checks the nonce before it redeems an authorization code, device code, or refresh token. The retry can therefore still redeem the same code. The endpoint measures nonce freshness at the time the request arrived. A nonce that expires while the grant runs does not fail the request.
+
+Every successful DPoP response carries the next nonce in `DPoP-Nonce` ([§8.2](https://datatracker.ietf.org/doc/html/rfc9449#section-8.2)). A client that keeps the latest value rarely needs a retry. Responses that carry a nonce have these headers:
+
+* `Cache-Control: no-store`, so that a cache cannot hand out an expired nonce.
+* `DPoP-Nonce` in `Access-Control-Expose-Headers`, so that browser clients can read it. The UserInfo challenge also lists `WWW-Authenticate`, which a browser client needs to see that it must retry.
+
+Requests without a `DPoP` proof are unaffected.
 
 Nonces are not stored. Each nonce holds its issue time and a signature keyed from your auth `secret`. Any instance with the same secret accepts a nonce another instance issued. Rotating the secret invalidates outstanding nonces, and each client recovers with one retry. Discovery metadata does not change, because RFC 9449 defines no metadata for nonces. A client learns that nonces are required from the first `use_dpop_nonce` response.
 
