@@ -7,10 +7,64 @@ import { safeJSONParse } from "@better-auth/core/utils/json";
 import { isoBase64URL } from "@simplewebauthn/server/helpers";
 import type { PasskeyOptions } from "./types";
 
-export function getRpID(options: PasskeyOptions, baseURL?: string | undefined) {
-	return (
-		options.rpID || (baseURL ? new URL(baseURL).hostname : "localhost") // default rpID
+function getDefaultRpID(ctx: GenericEndpointContext) {
+	const baseURL = ctx.context.options.baseURL;
+	return typeof baseURL === "string" ? new URL(baseURL).hostname : "localhost";
+}
+
+export async function resolveRpID(
+	options: PasskeyOptions,
+	ctx: GenericEndpointContext,
+): Promise<string> {
+	const rpID =
+		typeof options.rpID === "function"
+			? await options.rpID({ ctx })
+			: options.rpID || getDefaultRpID(ctx);
+	if (!rpID) {
+		throw new BetterAuthError("passkey: rpID resolved to an empty value");
+	}
+	if (typeof options.rpID === "function") {
+		// Core rewrites options.baseURL per request; validate against the
+		// original allowed hosts captured on this auth instance at init.
+		const baseURL =
+			"passkeyBaseURL" in ctx.context
+				? (ctx.context.passkeyBaseURL as BetterAuthOptions["baseURL"])
+				: ctx.context.options.baseURL;
+		assertOriginForWildcardHosts({ ...options, rpID }, baseURL);
+	}
+	return rpID;
+}
+
+/**
+ * The RP ID(s) accepted when verifying a ceremony response. Defaults to the
+ * RP ID sent in the options (`issuedRPID`, stored with the challenge), which
+ * is also passed to an `expectedRPID` function. An empty value is rejected
+ * rather than passed on, because `@simplewebauthn/server` skips the RP ID
+ * check when it is falsy.
+ */
+export async function resolveExpectedRPID(
+	options: PasskeyOptions,
+	ctx: GenericEndpointContext,
+	issuedRPID: string | undefined,
+): Promise<string | string[]> {
+	// Challenges stored before the RP ID was recorded fall back to resolving it.
+	const getIssuedRPID = async () => issuedRPID || resolveRpID(options, ctx);
+	if (options.expectedRPID === undefined) {
+		return getIssuedRPID();
+	}
+	const expected =
+		typeof options.expectedRPID === "function"
+			? await options.expectedRPID({ ctx, rpID: await getIssuedRPID() })
+			: options.expectedRPID;
+	const list = (Array.isArray(expected) ? expected : [expected]).filter(
+		Boolean,
 	);
+	if (!list.length) {
+		throw new BetterAuthError(
+			"passkey: expectedRPID resolved to an empty value",
+		);
+	}
+	return list;
 }
 
 /**
@@ -75,7 +129,8 @@ export function assertOriginForWildcardHosts(
 	options: PasskeyOptions,
 	baseURL: BetterAuthOptions["baseURL"],
 ) {
-	const rpID = options.rpID;
+	// A resolver needs a request and is checked after resolveRpID runs.
+	const rpID = typeof options.rpID === "string" ? options.rpID : undefined;
 	if (options.origin || !rpID || typeof baseURL !== "object") {
 		return;
 	}

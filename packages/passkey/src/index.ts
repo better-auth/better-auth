@@ -50,6 +50,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			return {
 				context: {
 					passkeyBaseURLFromRequest: !ctx.options.baseURL,
+					passkeyBaseURL: ctx.options.baseURL,
 				},
 			};
 		},

@@ -393,6 +393,63 @@ describe("passkey expected origin", () => {
 		},
 	);
 
+	/**
+	 * @see https://www.w3.org/TR/webauthn-3/#sctn-validating-origin
+	 */
+	it.for(["registration", "authentication"] as const)(
+		"requires origin when a dynamic rpID shares a wildcard allowed host at %s",
+		async (ceremony) => {
+			const resolveRpID = vi.fn(async () => "localhost");
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [passkey({ rpID: resolveRpID })],
+				baseURL: {
+					allowedHosts: ["localhost:3000", "*.localhost:3000"],
+					protocol: "http",
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			headers.set("host", "localhost:3000");
+			const generateOptions =
+				ceremony === "registration"
+					? auth.api.generatePasskeyRegistrationOptions({ headers })
+					: auth.api.generatePasskeyAuthenticationOptions({ headers });
+
+			await expect(generateOptions).rejects.toThrow(
+				"Passkey `origin` must be set",
+			);
+			expect(resolveRpID).toHaveBeenCalledTimes(1);
+		},
+	);
+
+	it.for([
+		{ rpID: "localhost", origin: RP_ORIGIN },
+		{ rpID: "example.com", origin: undefined },
+	])(
+		"allows a dynamic rpID $rpID with origin $origin under wildcard allowed hosts",
+		async ({ rpID, origin }) => {
+			const resolveRpID = vi.fn(async () => rpID);
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [passkey({ rpID: resolveRpID, origin })],
+				baseURL: {
+					allowedHosts: ["localhost:3000", "*.localhost:3000", "example.com"],
+					protocol: "http",
+				},
+			});
+			const { headers } = await signInWithTestUser();
+			headers.set("host", "localhost:3000");
+
+			const registration = await auth.api.generatePasskeyRegistrationOptions({
+				headers,
+			});
+			const authentication =
+				await auth.api.generatePasskeyAuthenticationOptions({ headers });
+
+			expect(registration.rp.id).toBe(rpID);
+			expect(authentication.rpId).toBe(rpID);
+			expect(resolveRpID).toHaveBeenCalledTimes(2);
+		},
+	);
+
 	it("control: allows a wildcard allowed host with an explicit origin or a per-host rpID", async () => {
 		const baseURL = {
 			allowedHosts: ["*.localhost:3000", "*.vercel.app"],
