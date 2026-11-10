@@ -13,7 +13,7 @@ import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { parseJSON } from "../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
-import type { Session, User } from "../../types";
+import type { User } from "../../types";
 import { getDate } from "../../utils/date";
 import type {
 	InferInvitation,
@@ -613,7 +613,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					activeOrganizationId: organizationId,
 				},
 			);
-			return session as Session;
+			return session;
 		},
 		findOrganizationById: async (
 			organizationId: string,
@@ -985,7 +985,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					activeTeamId: teamId,
 				},
 			);
-			return session as Session;
+			return session;
 		},
 
 		listTeamMembers: async (data: { teamId: string }) => {
