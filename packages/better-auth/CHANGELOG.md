@@ -1,5 +1,20 @@
 # better-auth
 
+## 1.8.0-beta.7
+
+### Patch Changes
+
+- [#12374](https://github.com/better-auth/better-auth/pull/12374) [`fb31a1d`](https://github.com/better-auth/better-auth/commit/fb31a1d1196f6e80fe1d8061886a89e10d2f6116) Thanks [@bytaesu](https://github.com/bytaesu)! - Includes all fixes up to v1.7.19.
+
+- Updated dependencies []:
+  - @better-auth/core@1.8.0-beta.7
+  - @better-auth/drizzle-adapter@1.8.0-beta.7
+  - @better-auth/kysely-adapter@1.8.0-beta.7
+  - @better-auth/memory-adapter@1.8.0-beta.7
+  - @better-auth/mongo-adapter@1.8.0-beta.7
+  - @better-auth/prisma-adapter@1.8.0-beta.7
+  - @better-auth/telemetry@1.8.0-beta.7
+
 ## 1.8.0-beta.6
 
 ### Patch Changes
