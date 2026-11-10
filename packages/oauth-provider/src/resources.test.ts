@@ -56,6 +56,19 @@ describe("collectResourceInputs", () => {
 	it("returns empty array when no resource config is provided", () => {
 		expect(collectResourceInputs({})).toEqual([]);
 	});
+
+	it("preserves null allowedScopes on object-form resources", () => {
+		const inputs = collectResourceInputs({
+			resources: [
+				{ identifier: "https://a", allowedScopes: null },
+				{ identifier: "https://b", allowedScopes: [" read ", "write"] },
+			],
+		});
+		expect(inputs).toEqual([
+			{ identifier: "https://a", allowedScopes: null },
+			{ identifier: "https://b", allowedScopes: [" read ", "write"] },
+		]);
+	});
 });
 
 /**
@@ -129,7 +142,7 @@ describe("seedResources (integration via plugin init)", () => {
 			policyVersion: 1,
 			accessTokenTtl: null,
 			signingAlgorithm: null,
-			allowedScopes: null,
+			allowedScopes: [],
 		});
 	});
 
@@ -153,6 +166,19 @@ describe("seedResources (integration via plugin init)", () => {
 			allowedScopes: ["admin:read", "admin:write"],
 			signingAlgorithm: "EdDSA",
 		});
+	});
+
+	it("stores scope entries verbatim when seeding configured resources", async () => {
+		const { auth } = await bootWithResourcesOption({
+			resources: [
+				{
+					identifier: "https://api.example.com/padded",
+					allowedScopes: ["  read  ", "write "],
+				},
+			],
+		});
+		const row = await readResource(auth, "https://api.example.com/padded");
+		expect(row?.allowedScopes).toEqual(["  read  ", "write "]);
 	});
 
 	it("logs the enforcePerClientResources resolution at init", async () => {
@@ -228,6 +254,34 @@ describe("seedResources (integration via plugin init)", () => {
 		});
 	});
 
+	it("merge mode updates allowedScopes to [] when re-seeded with allowedScopes: null", async () => {
+		const identifier = "https://api.example.com/merge-null-scopes";
+
+		const first = await bootWithResourcesOption({
+			resources: [
+				{
+					identifier,
+					name: "Original",
+					allowedScopes: ["read"],
+				},
+			],
+		});
+		const firstCtx = await first.auth.$context;
+
+		await seedResources(
+			firstCtx as unknown as AuthContext,
+			{
+				loginPage: "/login",
+				consentPage: "/consent",
+				resources: [{ identifier, allowedScopes: null }],
+				resourceSeedMode: "merge",
+			} as OAuthOptions<Scope[]>,
+		);
+
+		const row = await readResource(first.auth, identifier);
+		expect(row?.allowedScopes).toEqual([]);
+	});
+
 	it("overwrite mode replaces every field on existing rows", async () => {
 		const identifier = "https://api.example.com/overwrite";
 
@@ -257,7 +311,7 @@ describe("seedResources (integration via plugin init)", () => {
 		expect(row).toMatchObject({
 			name: identifier, // overwrite uses identifier as default name
 			accessTokenTtl: 120,
-			allowedScopes: null, // cleared
+			allowedScopes: [], // cleared
 		});
 	});
 });

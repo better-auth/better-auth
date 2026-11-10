@@ -47,9 +47,26 @@ function decodePathParam(value: string): string {
 // {@link assertIdentifierValid} in `../resources.ts`.
 
 /**
+ * Serializes a resource row for admin responses. Storage keeps `[]` as the
+ * "no restriction" sentinel (storable across adapters), but the wire
+ * contract uses `null`: a stored `[]` and legacy `null` rows both serialize
+ * as `null`, which the admin schemas accept back. Non-empty allowlists pass
+ * through untouched.
+ *
+ * @internal
+ */
+function toWireResource(row: OAuthResource): OAuthResource {
+	return {
+		...row,
+		allowedScopes: row.allowedScopes?.length ? row.allowedScopes : null,
+	};
+}
+
+/**
  * Builds the create-payload from a normalized input. Fills in defaults
  * for the fields seedResources uses so the admin-CRUD and seed paths
- * write identical rows.
+ * write identical rows. `allowedScopes` defaults to `[]` for "no restriction"
+ * so list columns on adapters like Prisma on PostgreSQL can persist it.
  *
  * @internal
  */
@@ -61,9 +78,7 @@ function buildResourceRow(input: OAuthResourceInput, now: Date) {
 		refreshTokenTtl: input.refreshTokenTtl ?? null,
 		signingAlgorithm: input.signingAlgorithm ?? null,
 		signingKeyId: input.signingKeyId ?? null,
-		// FIXME(#11725): Prisma list columns reject null and read a stored
-		// NULL back as [], so "no restriction" cannot round-trip there.
-		allowedScopes: input.allowedScopes ?? null,
+		allowedScopes: input.allowedScopes ?? [],
 		customClaims: input.customClaims ?? null,
 		dpopBoundAccessTokensRequired: input.dpopBoundAccessTokensRequired ?? false,
 		disabled: input.disabled ?? false,
@@ -117,7 +132,7 @@ export async function createResourceEndpoint(
 		});
 	}
 	invalidateResourceCache(created.identifier);
-	return ctx.json(created, { status: 201 });
+	return ctx.json(toWireResource(created), { status: 201 });
 }
 
 export async function listResourcesEndpoint(
@@ -130,7 +145,7 @@ export async function listResourcesEndpoint(
 	const rows = await ctx.context.adapter.findMany<OAuthResource>({
 		model: resourceModel(opts),
 	});
-	return ctx.json(rows ?? []);
+	return ctx.json((rows ?? []).map(toWireResource));
 }
 
 export async function getResourceByIdentifierEndpoint(
@@ -150,7 +165,7 @@ export async function getResourceByIdentifierEndpoint(
 			error_description: `resource ${identifier} not found`,
 		});
 	}
-	return ctx.json(row);
+	return ctx.json(toWireResource(row));
 }
 
 export async function updateResourceEndpoint(
@@ -191,9 +206,14 @@ export async function updateResourceEndpoint(
 		"metadata",
 	];
 	for (const key of allowed) {
-		if (Object.prototype.hasOwnProperty.call(ctx.body, key)) {
-			update[key] = ctx.body[key];
+		if (!Object.hasOwn(ctx.body, key)) continue;
+		if (key === "allowedScopes") {
+			if (ctx.body.allowedScopes === undefined) continue;
+			update[key] =
+				ctx.body.allowedScopes === null ? [] : ctx.body.allowedScopes;
+			continue;
 		}
+		update[key] = ctx.body[key];
 	}
 
 	await ctx.context.adapter.update<OAuthResource>({
@@ -217,7 +237,7 @@ export async function updateResourceEndpoint(
 			error_description: `resource ${identifier} not found`,
 		});
 	}
-	return ctx.json(refreshed);
+	return ctx.json(toWireResource(refreshed));
 }
 
 export async function deleteResourceEndpoint(
