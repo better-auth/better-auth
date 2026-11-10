@@ -265,6 +265,59 @@ describe("prisma-adapter", () => {
 		});
 	});
 
+	it("escapes regex characters in values the MongoDB connector matches as regex", async () => {
+		const findMany = vi.fn().mockResolvedValue([]);
+		const createAdapter = (provider: "mongodb" | "postgresql") =>
+			prismaAdapter({ $transaction: vi.fn(), user: { findMany } } as never, {
+				provider,
+			})({} as BetterAuthOptions);
+		const where = [
+			{ field: "name", value: ".*", operator: "contains" as const },
+			{ field: "name", value: "a.c", operator: "starts_with" as const },
+			{ field: "name", value: "(x)", operator: "ends_with" as const },
+			{ field: "email", value: "a.c@x.io", mode: "insensitive" as const },
+			{
+				field: "email",
+				value: ["a+b@x.io"],
+				operator: "in" as const,
+				mode: "insensitive" as const,
+			},
+			{ field: "email", value: "a.c@x.io" },
+			{
+				field: "name",
+				value: "a.c",
+				operator: "gte" as const,
+				mode: "insensitive" as const,
+			},
+		];
+
+		await createAdapter("mongodb").findMany({ model: "user", where });
+		expect(findMany.mock.calls[0]![0].where).toEqual({
+			AND: [
+				{ name: { contains: "\\.\\*" } },
+				{ name: { startsWith: "a\\.c" } },
+				{ name: { endsWith: "\\(x\\)" } },
+				{ email: { equals: "a\\.c@x\\.io", mode: "insensitive" } },
+				{ email: { in: ["a\\+b@x\\.io"], mode: "insensitive" } },
+				{ email: { equals: "a.c@x.io" } },
+				{ name: { gte: "a.c", mode: "insensitive" } },
+			],
+		});
+
+		await createAdapter("postgresql").findMany({ model: "user", where });
+		expect(findMany.mock.calls[1]![0].where).toEqual({
+			AND: [
+				{ name: { contains: ".*" } },
+				{ name: { startsWith: "a.c" } },
+				{ name: { endsWith: "(x)" } },
+				{ email: { equals: "a.c@x.io", mode: "insensitive" } },
+				{ email: { in: ["a+b@x.io"], mode: "insensitive" } },
+				{ email: { equals: "a.c@x.io" } },
+				{ name: { gte: "a.c", mode: "insensitive" } },
+			],
+		});
+	});
+
 	/**
 	 * @see https://www.prisma.io/docs/orm/overview/databases/mongodb#filtering-for-null-and-missing-fields
 	 */
@@ -614,6 +667,10 @@ describe("prisma-adapter", () => {
 				},
 			} as BetterAuthOptions);
 
+			// The MongoDB connector matches insensitive equality as a regex.
+			const identifier =
+				provider === "mongodb" ? "mixed@example\\.com" : "mixed@example.com";
+
 			await adapter.incrementOne({
 				model: "verification",
 				where: [
@@ -628,7 +685,7 @@ describe("prisma-adapter", () => {
 
 			expect(txClient.verification.findFirst).toHaveBeenCalledWith({
 				where: {
-					identifier: { equals: "mixed@example.com", mode: "insensitive" },
+					identifier: { equals: identifier, mode: "insensitive" },
 				},
 			});
 			expect(update).toHaveBeenCalledWith({
@@ -636,7 +693,7 @@ describe("prisma-adapter", () => {
 					id: "row-1",
 					AND: [
 						{
-							identifier: { equals: "mixed@example.com", mode: "insensitive" },
+							identifier: { equals: identifier, mode: "insensitive" },
 						},
 					],
 				},

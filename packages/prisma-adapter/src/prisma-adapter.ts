@@ -276,9 +276,25 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					isNullableField(w.field);
 				const buildSingleCondition = (w: Where) => {
 					const fieldName = getFieldName({ model, field: w.field });
-					const modeFilter = isInsensitiveForPrisma(w)
-						? { mode: "insensitive" }
-						: {};
+					const isInsensitive = isInsensitiveForPrisma(w);
+					const modeFilter = isInsensitive ? { mode: "insensitive" } : {};
+					// Prisma's MongoDB connector builds `$regexMatch` patterns from these values unescaped.
+					// Range operators compare string order instead.
+					const usesRegex =
+						config.provider === "mongodb" &&
+						(w.operator === "contains" ||
+							w.operator === "starts_with" ||
+							w.operator === "ends_with" ||
+							(isInsensitive &&
+								(!w.operator ||
+									w.operator === "eq" ||
+									w.operator === "ne" ||
+									w.operator === "in" ||
+									w.operator === "not_in")));
+					const toPrismaValue = (v: unknown) =>
+						usesRegex && typeof v === "string"
+							? v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+							: v;
 
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
 					if (w.operator === "ne" && w.value === null) {
@@ -309,20 +325,32 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							}
 						}
 						const prismaOp = operatorToPrismaOperator(w.operator);
-						return { [fieldName]: { [prismaOp]: filtered, ...modeFilter } };
+						return {
+							[fieldName]: {
+								[prismaOp]: filtered.map(toPrismaValue),
+								...modeFilter,
+							},
+						};
 					}
 					if (w.operator === "eq" || !w.operator) {
-						return { [fieldName]: { equals: w.value, ...modeFilter } };
+						return {
+							[fieldName]: { equals: toPrismaValue(w.value), ...modeFilter },
+						};
 					}
 
 					if (w.operator === "ne") {
 						return {
-							[fieldName]: { not: { equals: w.value }, ...modeFilter },
+							[fieldName]: {
+								not: { equals: toPrismaValue(w.value) },
+								...modeFilter,
+							},
 						};
 					}
 
 					const prismaOp = operatorToPrismaOperator(w.operator);
-					return { [fieldName]: { [prismaOp]: w.value, ...modeFilter } };
+					return {
+						[fieldName]: { [prismaOp]: toPrismaValue(w.value), ...modeFilter },
+					};
 				};
 
 				// Special handling for update actions: extract AND conditions with eq operator to root level
