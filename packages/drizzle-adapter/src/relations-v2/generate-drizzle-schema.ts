@@ -331,6 +331,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 											columnName: fieldName,
 											dialect: "mysql",
 											fields,
+											generateId: options.advanced?.database?.generateId,
 											indexes: resolvedTableIndexes,
 										})
 									: undefined,

@@ -1,6 +1,7 @@
 export { encodeDeterministicId } from "./adapter/get-id-field";
 export {
 	type BoundedDatabaseIndexDialect,
+	type DatabaseIdStrategy,
 	type DBTableIndexSource,
 	getDatabaseFieldIndexName,
 	getDatabaseIndexName,
@@ -9,6 +10,7 @@ export {
 	type ResolvedDBTableIndex,
 	resolveDatabaseSchemaIndexes,
 	resolveDatabaseTableIndexes,
+	withImplicitIdField,
 } from "./database-index";
 export { getAuthTablesWithResolvedIndexes } from "./get-tables";
 export {
