@@ -20,6 +20,12 @@ import * as clientStorage from "../src/client-storage";
 
 vi.mock("expo-web-browser", async () => {
 	return {
+		WebBrowserResultType: {
+			CANCEL: "cancel",
+			DISMISS: "dismiss",
+			OPENED: "opened",
+			LOCKED: "locked",
+		},
 		openAuthSessionAsync: vi.fn(async (...args) => {
 			fn(...args);
 			return {
@@ -874,6 +880,72 @@ describe("expo", async () => {
 		expect(parsedCookieAfter["better-auth.session_token"]?.value).toBe(
 			parsedCookieBefore["better-auth.session_token"]?.value,
 		);
+	});
+
+	it("should preserve error and error_description on social sign-in when callback URL carries error params", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///dashboard?error=access_denied&error_description=User%20denied%20access",
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect((res.data as any)?.error).toBe("access_denied");
+		expect((res.data as any)?.error_description).toBe("User denied access");
+	});
+
+	it("should extract error and error_description from hash fragment when present", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///dashboard#error=state_mismatch&error_description=State%20failed",
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect((res.data as any)?.error).toBe("state_mismatch");
+		expect((res.data as any)?.error_description).toBe("State failed");
+	});
+
+	it("should preserve error and error_description for linkSocial as well", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///dashboard?error=account_already_linked&error_description=Account%20already%20linked",
+		});
+
+		const res = await client.linkSocial({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect((res.data as any)?.error).toBe("account_already_linked");
+		expect((res.data as any)?.error_description).toBe("Account already linked");
+	});
+
+	it("should not set error when auth session is cancelled by user", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: expoWebBrowser.WebBrowserResultType.CANCEL,
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect((res.data as any)?.error).toBeUndefined();
 	});
 
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {

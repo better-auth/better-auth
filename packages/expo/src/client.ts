@@ -430,6 +430,26 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
+							let error = url.searchParams.get("error");
+							let errorDescription =
+								url.searchParams.get("error_description") ||
+								url.searchParams.get("errorDescription");
+							if (!error && url.hash) {
+								const hashParams = new URLSearchParams(
+									url.hash.replace(/^#/, ""),
+								);
+								error = hashParams.get("error");
+								errorDescription =
+									hashParams.get("error_description") ||
+									hashParams.get("errorDescription");
+							}
+							if (error) {
+								context.data.error = error;
+								if (errorDescription) {
+									context.data.error_description = errorDescription;
+								}
+								return;
+							}
 							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
 							const update = await storage.updateItemAsync(
