@@ -49,7 +49,10 @@ import {
 } from "./projection";
 import { createSCIMError } from "./scim-error";
 import { SCIM_MEDIA_TYPE } from "./scim-metadata";
-import { supportsNativeSCIMTransactions } from "./transaction";
+import {
+	SCIM_NATIVE_TRANSACTION_MESSAGE,
+	supportsNativeSCIMTransactions,
+} from "./transaction";
 import { canonicalizeSCIMUserPatchValue } from "./user-patch";
 import {
 	createSCIMUser,
@@ -266,7 +269,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 		init(ctx) {
 			if (supportsNativeSCIMTransactions(ctx.adapter)) return;
 			ctx.logger.error(
-				"The scim plugin requires a database adapter with native transaction support. SCIM routes will return 501.",
+				`${SCIM_NATIVE_TRANSACTION_MESSAGE} SCIM routes and SCIM connection changes will return 501.`,
 			);
 		},
 		async onRequest(request, ctx) {
@@ -276,7 +279,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 				return {
 					response: createSCIMErrorResponse(
 						"NOT_IMPLEMENTED",
-						"The scim plugin requires a database adapter with native transaction support.",
+						SCIM_NATIVE_TRANSACTION_MESSAGE,
 					),
 				};
 			}
@@ -452,8 +455,7 @@ function createSCIMPlugin(options: SCIMOptions) {
 					handler: createAuthMiddleware(async (ctx) => {
 						if (supportsNativeSCIMTransactions(ctx.context.adapter)) return;
 						throw createSCIMError("NOT_IMPLEMENTED", {
-							detail:
-								"The scim plugin requires a database adapter with native transaction support.",
+							detail: SCIM_NATIVE_TRANSACTION_MESSAGE,
 						});
 					}),
 				},
@@ -968,5 +970,5 @@ export type {
 	SCIMManagedCredentialStatus,
 } from "./managed-connections";
 export { SCIM_MANAGED_CREATION_REQUEST_ID_CONFLICT } from "./managed-connections";
-export { supportsNativeSCIMTransactions } from "./transaction";
+export { SCIM_REQUIRES_NATIVE_TRANSACTIONS } from "./transaction";
 export { acquireActiveSCIMUserLink };

@@ -896,6 +896,9 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../../packages/kysely-adapter
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../../../../packages/scim
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso
