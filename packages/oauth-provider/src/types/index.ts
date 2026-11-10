@@ -1898,8 +1898,11 @@ export interface SchemaClient<
 	referenceId?: string;
 	/**
 	 * Additional metadata about the client.
+	 *
+	 * Written as an object. Rows stored by earlier versions may hold a JSON
+	 * string, which is still read.
 	 */
-	metadata?: string; // in JSON format
+	metadata?: Record<string, unknown> | string;
 }
 
 export interface OAuthOpaqueAccessToken<

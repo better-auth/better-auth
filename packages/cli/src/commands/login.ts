@@ -12,6 +12,10 @@ import yoctoSpinner from "yocto-spinner";
 
 const DEMO_URL = "https://demo.better-auth.com";
 const TOKEN_FILE = path.join(os.homedir(), ".better-auth", "token.json");
+// Login reports progress, not a result, so all of its output stays off stdout.
+const stderr = {
+	output: process.stderr,
+};
 
 async function loginAction(options: { serverUrl: string; clientId: string }) {
 	const authClient = createAuthClient({
@@ -19,7 +23,7 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 		plugins: [deviceAuthorizationClient()],
 	});
 
-	intro(chalk.bold("Better Auth CLI Login (Demo)"));
+	intro(chalk.bold("Better Auth CLI Login (Demo)"), stderr);
 	const { data: code, error } = await authClient.device.code({
 		client_id: options.clientId,
 		scope: "openid profile email",
@@ -27,12 +31,14 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 	if (!code) {
 		log.error(
 			`Failed to request device authorization: ${error.error_description ?? error.statusText}`,
+			stderr,
 		);
 		process.exit(1);
 	}
 
 	log.info(
 		`Visit ${chalk.underline(code.verification_uri)} and enter ${chalk.bold(code.user_code)}`,
+		stderr,
 	);
 	// CI has no browser to open, so the printed URL is enough there.
 	if (!process.env.CI) {
@@ -58,7 +64,7 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 		}
 		spinner.stop();
 		if (!token) {
-			log.error(error.error_description ?? error.statusText);
+			log.error(error.error_description ?? error.statusText, stderr);
 			process.exit(1);
 		}
 
@@ -74,12 +80,12 @@ async function loginAction(options: { serverUrl: string; clientId: string }) {
 			{ mode: 0o600 },
 		);
 		await fs.chmod(TOKEN_FILE, 0o600);
-		outro(chalk.green("Demo login successful!"));
+		outro(chalk.green("Demo login successful!"), stderr);
 		return;
 	}
 
 	spinner.stop();
-	log.error("The device code has expired. Please try again.");
+	log.error("The device code has expired. Please try again.", stderr);
 	process.exit(1);
 }
 
@@ -100,7 +106,7 @@ async function logoutAction() {
 		.catch(() => null);
 	await fs.rm(TOKEN_FILE, { force: true });
 	if (!stored) {
-		log.info("Not logged in");
+		log.info("Not logged in", stderr);
 		return;
 	}
 
@@ -123,10 +129,12 @@ async function logoutAction() {
 	if (!result?.data) {
 		log.warn(
 			"Removed the local token, but could not revoke the session on the server",
+			stderr,
 		);
+		process.exitCode = 1;
 		return;
 	}
-	log.success("Logged out");
+	log.success("Logged out", stderr);
 }
 
 export const logout = new Command("logout")

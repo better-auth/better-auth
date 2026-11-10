@@ -1877,6 +1877,93 @@ describe("expo authorization proxy", async () => {
 		},
 	);
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12307
+	 */
+	describe("provider configured for ID token sign-in only", () => {
+		const cases = [
+			{
+				name: "apple",
+				socialProviders: {
+					apple: {
+						clientId: "com.example.app",
+						appBundleIdentifier: "com.example.app",
+					},
+					google: { clientId: "test", clientSecret: "test" },
+				},
+				authorizationURL:
+					"https://accounts.google.com/o/oauth2/v2/auth?state=x",
+				unavailableURL: "https://appleid.apple.com/auth/authorize?state=x",
+			},
+			{
+				name: "google",
+				socialProviders: {
+					google: { clientId: "test" },
+					github: { clientId: "test", clientSecret: "test" },
+				},
+				authorizationURL: "https://github.com/login/oauth/authorize?state=x",
+				unavailableURL: "https://accounts.google.com/o/oauth2/v2/auth?state=x",
+			},
+		];
+
+		const createProxy = async ({ socialProviders }: (typeof cases)[number]) => {
+			const { auth } = await getTestInstance(
+				{
+					baseURL: "https://app.example",
+					socialProviders,
+					plugins: [expo()],
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+			return (authorizationURL: string) =>
+				auth.handler(
+					new Request(
+						`https://app.example/api/auth/expo-authorization-proxy?authorizationURL=${encodeURIComponent(
+							authorizationURL,
+						)}`,
+					),
+				);
+		};
+
+		it.for(cases)(
+			"does not log on every proxy request: $name",
+			async (testCase) => {
+				const proxy = await createProxy(testCase);
+				const error = vi.spyOn(logger, "error").mockImplementation(() => {});
+
+				const responses = await Promise.all([
+					proxy(testCase.authorizationURL),
+					proxy(testCase.authorizationURL),
+					proxy(testCase.authorizationURL),
+				]);
+				responses.push(await proxy(testCase.authorizationURL));
+				responses.push(await proxy(testCase.authorizationURL));
+
+				for (const res of responses) {
+					expect(res.headers.get("location")).toBe(testCase.authorizationURL);
+				}
+				expect(error.mock.calls.length).toBeLessThanOrEqual(1);
+			},
+		);
+
+		it.for(cases)(
+			"keeps rejecting the provider that cannot build an authorization URL: $name",
+			async (testCase) => {
+				const proxy = await createProxy(testCase);
+				vi.spyOn(logger, "error").mockImplementation(() => {});
+
+				for (let i = 0; i < 2; i++) {
+					const res = await proxy(testCase.unavailableURL);
+					expect(res.status).toBe(400);
+					expect(res.headers.get("location")).toBeNull();
+					expect(res.headers.get("set-cookie")).toBeNull();
+				}
+			},
+		);
+	});
+
 	it("rejects a trusted origin that is not a provider authorization endpoint", async () => {
 		const { auth } = await getTestInstance({
 			baseURL: "https://app.example",

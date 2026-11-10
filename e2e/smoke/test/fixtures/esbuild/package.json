@@ -5,8 +5,10 @@
     "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
+    "@better-auth/expo": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
-    "better-auth": "workspace:*"
+    "better-auth": "workspace:*",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",

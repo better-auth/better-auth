@@ -1,9 +1,17 @@
+import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import prompts from "prompts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ai } from "../src/commands/ai";
+
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
+vi.mock(import("node:child_process"), () => ({
+	execSync: vi.fn(),
+}));
 
 describe("ai: MCP config write", () => {
 	let dir: string;
@@ -16,6 +24,7 @@ describe("ai: MCP config write", () => {
 
 	afterEach(() => {
 		fs.rmSync(dir, { recursive: true, force: true });
+		process.exitCode = undefined;
 	});
 
 	async function runCursorProjectFlow() {
@@ -43,6 +52,10 @@ describe("ai: MCP config write", () => {
 		await ai.parseAsync(["node", "ai"]);
 	}
 
+	function logged() {
+		return vi.mocked(console.log).mock.calls.flat().join("\n");
+	}
+
 	function writeCursorConfig(content: string) {
 		fs.mkdirSync(path.join(dir, ".cursor"), { recursive: true });
 		const configPath = path.join(dir, ".cursor", "mcp.json");
@@ -60,6 +73,49 @@ describe("ai: MCP config write", () => {
 			"other-server",
 			"agent-auth",
 		]);
+	});
+
+	it("exits 1 without claiming success when the config cannot be written", async () => {
+		writeCursorConfig("null\n");
+		await runCursorProjectFlow();
+		expect(process.exitCode).toBe(1);
+		expect(logged()).toContain("Setup incomplete.");
+		expect(logged()).not.toContain("Done!");
+	});
+
+	it("exits 1 when the skill cannot be installed", async () => {
+		vi.mocked(execSync).mockImplementation(() => {
+			throw new Error("npx failed");
+		});
+		prompts.inject([
+			"client",
+			"mcp",
+			"cursor",
+			"project",
+			"https://agent-auth.directory",
+			true,
+			true,
+		]);
+		await ai.parseAsync(["node", "ai"]);
+		expect(process.exitCode).toBe(1);
+	});
+
+	it("exits 130 when a later prompt is canceled", async () => {
+		const exit = vi.spyOn(process, "exit").mockImplementation(() => {
+			throw new Error("exit");
+		});
+		prompts.inject([
+			"client",
+			"mcp",
+			"cursor",
+			"project",
+			new Error("canceled"),
+		]);
+
+		await expect(ai.parseAsync(["node", "ai"])).rejects.toThrow("exit");
+
+		expect(exit).toHaveBeenCalledWith(130);
+		expect(fs.existsSync(path.join(dir, ".cursor", "mcp.json"))).toBe(false);
 	});
 
 	it("leaves a config with a trailing comma unchanged", async () => {
