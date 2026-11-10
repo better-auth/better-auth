@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
@@ -24,7 +25,7 @@ import {
 	jwtVerify,
 	SignJWT,
 } from "jose";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import { confirmationTokenType, getOAuthProviderApi } from "./token";
@@ -5534,5 +5535,211 @@ describe("confirmationTokenType", () => {
 		}
 		expect(confirmationTokenType({ jkt: "thumbprint" })).toBe("DPoP");
 		expect(confirmationTokenType(undefined)).toBe("Bearer");
+	});
+});
+
+/**
+ * The memory and MongoDB adapters do not enforce the `refreshId` foreign key,
+ * so an access token insert that lands after a concurrent revocation succeeds.
+ * Revocation must still leave no access token behind.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+ * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+ */
+describe("oauth token - in-flight issuance without foreign keys", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "http://localhost:5000/api/auth/callback/test";
+	const database: Record<string, Record<string, unknown>[]> = {
+		account: [],
+		jwks: [],
+		oauthAccessToken: [],
+		oauthClient: [],
+		oauthClientAssertion: [],
+		oauthClientResource: [],
+		oauthConsent: [],
+		oauthRefreshToken: [],
+		oauthResource: [],
+		session: [],
+		user: [],
+		verification: [],
+	};
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		database: memoryAdapter(database),
+		plugins: [
+			jwt({ jwt: { issuer: authServerBaseUrl } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: { customFetchImpl, headers },
+	});
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: ["authorization_code", "refresh_token"],
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			skip_consent: true,
+		},
+	});
+	const clientOptions = {
+		clientId: oauthClient.client_id,
+		clientSecret: oauthClient.client_secret!,
+		redirectURI: redirectUri,
+	};
+
+	beforeEach(() => {
+		database.oauthAccessToken = [];
+		database.oauthRefreshToken = [];
+	});
+
+	async function authorize() {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: "test",
+			options: clientOptions,
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+		let location = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(location).searchParams.get("code")!;
+		return { code, codeVerifier };
+	}
+
+	async function redeem(code: string, codeVerifier: string) {
+		const { body, headers } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	async function refresh(refreshToken: string) {
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	/** Pauses the first adapter call that `matches` until `release` runs. */
+	async function holdNext<M extends "create" | "deleteMany">(
+		method: M,
+		matches: (model: string) => boolean,
+	) {
+		const context = await auth.$context;
+		const original = context.adapter[method].bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		const spy = vi.spyOn(context.adapter, method);
+		spy.mockImplementation((async (...args: Parameters<typeof original>) => {
+			if (matches(args[0].model)) {
+				spy.mockRestore();
+				reached.resolve();
+				await released.promise;
+			}
+			return (original as (...a: typeof args) => unknown)(...args);
+		}) as never);
+		return {
+			reached: reached.promise,
+			release: released.resolve,
+			restore: () => {
+				released.resolve();
+				spy.mockRestore();
+			},
+		};
+	}
+
+	it("fails an in-flight redemption and keeps no access token when a replay revokes it", async () => {
+		const { code, codeVerifier } = await authorize();
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		try {
+			const redeeming = redeem(code, codeVerifier);
+			await insert.reached;
+			const replay = await redeem(code, codeVerifier);
+			insert.release();
+			const redeemed = await redeeming;
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(redeemed.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+			expect(database.oauthRefreshToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+		}
+	});
+
+	it("fails an in-flight rotation and keeps no access token when reuse revokes its family", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		try {
+			const rotating = refresh(parentToken);
+			await insert.reached;
+			const reused = await refresh(parentToken);
+			insert.release();
+			const rotated = await rotating;
+
+			expect(reused.error).toMatchObject({ error: "invalid_grant" });
+			expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+		}
+	});
+
+	it("removes an access token stored between the revocation's deletes", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		const familyDelete = await holdNext(
+			"deleteMany",
+			(m) => m === "oauthRefreshToken",
+		);
+		try {
+			const rotating = refresh(parentToken);
+			await insert.reached;
+			// Reuse deletes the family's access tokens, then waits before
+			// deleting its refresh tokens.
+			const reusing = refresh(parentToken);
+			await familyDelete.reached;
+			insert.release();
+			const rotated = await rotating;
+			familyDelete.release();
+			const reused = await reusing;
+
+			expect(rotated.error).toBeNull();
+			expect(reused.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+			expect(database.oauthRefreshToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+			familyDelete.restore();
+		}
 	});
 });
