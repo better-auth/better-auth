@@ -550,6 +550,46 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
+		/**
+		 * React Strict Mode runs an approval page's lookup effect twice, so one
+		 * user can send two lookups for an unclaimed code at once.
+		 */
+		it("returns the request details to both concurrent lookups by the claiming user", async () => {
+			const { headers } = await signInWithTestUser();
+			const { user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client", scope: "read" },
+			});
+			const context = await auth.$context;
+			const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+			const bothReading = Promise.withResolvers<void>();
+			let calls = 0;
+			const spy = vi
+				.spyOn(context.adapter, "incrementOne")
+				.mockImplementation(async (...args) => {
+					// Both lookups read the unclaimed code before either claims it.
+					if (++calls === 2) bothReading.resolve();
+					await bothReading.promise;
+					return incrementOne(...args);
+				});
+			try {
+				const lookups = await Promise.all([
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+				]);
+
+				expect(calls).toBe(2);
+				for (const lookup of lookups) {
+					expect(lookup).toMatchObject({
+						status: "pending",
+						client_id: "test-client",
+						scope: "read",
+					});
+				}
+			} finally {
+				spy.mockRestore();
+			}
+		});
+
 		it("accepts lowercase user codes for verification, approval, and denial", async () => {
 			const { headers } = await signInWithTestUser();
 			const createLowercaseUserCode = async () => {

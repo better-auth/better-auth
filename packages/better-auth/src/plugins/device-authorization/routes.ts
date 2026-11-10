@@ -885,6 +885,15 @@ export const deviceVerify = <
 					});
 				if (claimedDeviceCodeRecord) {
 					deviceCodeRecord.userId = session.user.id;
+				} else {
+					// A concurrent lookup claimed the code first, possibly for this
+					// same user, so the stored owner decides who may review it.
+					const current = await ctx.context.adapter.findOne<DeviceCode>({
+						model: "deviceCode",
+						where: [{ field: "id", value: deviceCodeRecord.id }],
+					});
+					deviceCodeRecord.userId = current?.userId;
+					if (current) deviceCodeRecord.status = current.status;
 				}
 			}
 
