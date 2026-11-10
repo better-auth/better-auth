@@ -34,7 +34,7 @@ export default function Page() {
 				if (!active) return;
 				if (!data?.client_id) {
 					setError(
-						error?.message ||
+						error?.error_description ||
 							"This code is invalid, expired, or was claimed by another session.",
 					);
 					return;
