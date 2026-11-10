@@ -159,4 +159,62 @@ describe("admin + username plugin interaction", async () => {
 
 		expect(res.error?.code).toBe(USERNAME_ERROR_CODES.USERNAME_TOO_SHORT.code);
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11958
+	 */
+	describe("admin updateUser", () => {
+		it("should accept the target user's unchanged username", async () => {
+			const created = await auth.api.createUser({
+				body: {
+					email: "target-unchanged@example.com",
+					password: "some-secure-password",
+					name: "Target Unchanged",
+					data: { username: "target_unchanged" },
+				},
+			});
+
+			const res = await client.admin.updateUser(
+				{
+					userId: created.user.id,
+					data: { username: "target_unchanged", name: "Renamed" },
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+
+			expect(res.error).toBeNull();
+			expect(res.data?.name).toBe("Renamed");
+		});
+
+		it("should reject the acting admin's username for another user", async () => {
+			await auth.api.updateUser({
+				body: { username: "acting_admin" },
+				headers: adminHeaders,
+			});
+			const created = await auth.api.createUser({
+				body: {
+					email: "target-taken@example.com",
+					password: "some-secure-password",
+					name: "Target Taken",
+					data: { username: "target_taken" },
+				},
+			});
+
+			const res = await client.admin.updateUser(
+				{
+					userId: created.user.id,
+					data: { username: "acting_admin" },
+				},
+				{
+					headers: adminHeaders,
+				},
+			);
+
+			expect(res.error?.code).toBe(
+				USERNAME_ERROR_CODES.USERNAME_IS_ALREADY_TAKEN.code,
+			);
+		});
+	});
 });
