@@ -586,6 +586,7 @@ export const genericOAuth = <const ID extends string>(
 						tokenEndpointAuth,
 						tokenEndpoint: tokenUrl,
 						extraParams: resolvedRefreshParams,
+						headers: c.authorizationHeaders,
 					});
 					return applyDefaultAccessTokenExpiry(tokens, c.accessTokenExpiresIn);
 				},
