@@ -887,8 +887,10 @@ function areStringArraysEqual(
 	const listA = a ?? [];
 	const listB = b ?? [];
 	if (listA.length !== listB.length) return false;
-	for (let i = 0; i < listA.length; i++) {
-		if (listA[i] !== listB[i]) return false;
+	const sortedA = [...listA].sort();
+	const sortedB = [...listB].sort();
+	for (let i = 0; i < sortedA.length; i++) {
+		if (sortedA[i] !== sortedB[i]) return false;
 	}
 	return true;
 }
@@ -1169,6 +1171,23 @@ async function persistOAuthClientRegistration(
 			let created = false;
 			let updated = false;
 			if (existingClient) {
+				const currentClient = await adapter.findOne<SchemaClient<Scope[]>>({
+					model: clientModel,
+					where: [
+						{ field: "clientId", value: clientId },
+						{
+							field: "clientDiscoveryId",
+							value: clientDiscoveryId,
+						},
+					],
+				});
+				if (!currentClient) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_client",
+						error_description: "client no longer exists",
+					});
+				}
+
 				// Server-owned fields (disabled, consent and logout settings, the
 				// ceiling) can change while this refresh fetches metadata, so the
 				// refresh never writes them.
@@ -1180,7 +1199,7 @@ async function persistOAuthClientRegistration(
 					...refreshed
 				} = schema;
 				const metadataChanged = hasClientMetadataChanged(
-					existingClient,
+					currentClient,
 					refreshed,
 				);
 				if (metadataChanged) {
@@ -1195,7 +1214,7 @@ async function persistOAuthClientRegistration(
 						],
 						update: {
 							...refreshed,
-							createdAt: existingClient.createdAt,
+							createdAt: currentClient.createdAt,
 							updatedAt: new Date(iat * 1000),
 						},
 					});
@@ -1208,7 +1227,7 @@ async function persistOAuthClientRegistration(
 					storedClient = updatedClient;
 					updated = true;
 				} else {
-					storedClient = existingClient;
+					storedClient = currentClient;
 				}
 			} else {
 				try {

@@ -30,7 +30,7 @@ export interface CimdClientRefreshedEvent {
 	 * Whether the client's metadata document changed compared to the stored record.
 	 * False when revalidation confirmed identical metadata and skipped database writes.
 	 */
-	modified?: boolean;
+	modified: boolean;
 }
 
 export interface CimdMetadataFetchPolicy {

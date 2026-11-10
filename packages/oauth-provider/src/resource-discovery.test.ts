@@ -799,7 +799,28 @@ describe("canonical client metadata document registration", () => {
 		});
 		if (!operatorClient) throw new Error("client missing");
 
-		const updateSpy = vi.spyOn(instance.ctx.adapter, "update");
+		let updateCalls = 0;
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				return originalTransaction(async (trx) => {
+					const origTrxUpdate = trx.update.bind(trx);
+					trx.update = (async (...args: Parameters<typeof origTrxUpdate>) => {
+						updateCalls++;
+						return origTrxUpdate(...args);
+					}) as typeof trx.update;
+					return callback(trx);
+				});
+			},
+		);
+		vi.spyOn(instance.ctx.adapter, "update").mockImplementation((async (
+			...args: Parameters<typeof instance.ctx.adapter.update>
+		) => {
+			updateCalls++;
+			return instance.ctx.adapter.update(...args);
+		}) as typeof instance.ctx.adapter.update);
 
 		const revalidated = await registerClientMetadataDocument(
 			endpointContext,
@@ -814,10 +835,131 @@ describe("canonical client metadata document registration", () => {
 
 		expect(revalidated.created).toBe(false);
 		expect(revalidated.updated).toBe(false);
-		expect(updateSpy).not.toHaveBeenCalled();
+		expect(updateCalls).toBe(0);
 		expect(revalidated.client.updatedAt).toEqual(originalUpdatedAt);
 		expect(revalidated.client.disabled).toBe(true);
 		expect(revalidated.client.skipConsent).toBe(true);
+		const freshClient = await instance.ctx.adapter.findOne<
+			SchemaClient<Scope[]>
+		>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(freshClient?.updatedAt).toEqual(originalUpdatedAt);
+	});
+
+	it("skips client row update when array metadata order differs but elements match", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/array-reorder.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Reorder Test Client",
+					redirect_uris: [
+						"https://client.example.com/callback-1",
+						"https://client.example.com/callback-2",
+					],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+		expect(created.created).toBe(true);
+		const originalUpdatedAt = created.client.updatedAt;
+
+		let updateCalls = 0;
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				return originalTransaction(async (trx) => {
+					const origTrxUpdate = trx.update.bind(trx);
+					trx.update = (async (...args: Parameters<typeof origTrxUpdate>) => {
+						updateCalls++;
+						return origTrxUpdate(...args);
+					}) as typeof trx.update;
+					return callback(trx);
+				});
+			},
+		);
+
+		const revalidated = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				existingClient: created.client,
+				metadata: {
+					client_id: clientId,
+					client_name: "Reorder Test Client",
+					redirect_uris: [
+						"https://client.example.com/callback-2",
+						"https://client.example.com/callback-1",
+					],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+
+		expect(revalidated.created).toBe(false);
+		expect(revalidated.updated).toBe(false);
+		expect(updateCalls).toBe(0);
+		expect(revalidated.client.updatedAt).toEqual(originalUpdatedAt);
+	});
+
+	it("rejects unchanged revalidation with invalid_client if client no longer exists in transaction", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/deleted-in-tx.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Deleted Client",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			},
+		);
+
+		await instance.ctx.adapter.delete({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+
+		await expect(
+			registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				existingClient: created.client,
+				metadata: {
+					client_id: clientId,
+					client_name: "Deleted Client",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "client no longer exists",
+			},
+		});
 	});
 
 	it("still creates missing default resource links when client metadata is unchanged", async () => {
@@ -855,7 +997,28 @@ describe("canonical client metadata document registration", () => {
 			resourceTwo,
 		];
 
-		const updateSpy = vi.spyOn(instance.ctx.adapter, "update");
+		let updateCalls = 0;
+		const originalTransaction = instance.ctx.adapter.transaction.bind(
+			instance.ctx.adapter,
+		);
+		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+			async (callback) => {
+				return originalTransaction(async (trx) => {
+					const origTrxUpdate = trx.update.bind(trx);
+					trx.update = (async (...args: Parameters<typeof origTrxUpdate>) => {
+						updateCalls++;
+						return origTrxUpdate(...args);
+					}) as typeof trx.update;
+					return callback(trx);
+				});
+			},
+		);
+		vi.spyOn(instance.ctx.adapter, "update").mockImplementation((async (
+			...args: Parameters<typeof instance.ctx.adapter.update>
+		) => {
+			updateCalls++;
+			return instance.ctx.adapter.update(...args);
+		}) as typeof instance.ctx.adapter.update);
 
 		const revalidated = await registerClientMetadataDocument(
 			endpointContext,
@@ -871,14 +1034,14 @@ describe("canonical client metadata document registration", () => {
 		expect(revalidated.created).toBe(false);
 		expect(revalidated.updated).toBe(false);
 		// Client row was NOT updated
-		expect(updateSpy).not.toHaveBeenCalled();
+		expect(updateCalls).toBe(0);
 		// But new resource link WAS created
 		expect(revalidated.resources).toEqual([resourceOne, resourceTwo]);
 		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
 			model: "oauthClientResource",
 			where: [{ field: "clientId", value: clientId }],
 		});
-		expect(links.map((l) => l.resourceId).sort()).toEqual(
+		expect(links.map((link) => link.resourceId).sort()).toEqual(
 			[resourceOne, resourceTwo].sort(),
 		);
 	});
