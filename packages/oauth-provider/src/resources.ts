@@ -912,6 +912,7 @@ export function resetSeedStateForTests(): void {
 export async function seedResources(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
+	isComplete?: () => boolean,
 ): Promise<void> {
 	const inputs = collectResourceInputs(opts);
 	if (inputs.length === 0) return;
@@ -977,6 +978,8 @@ export async function seedResources(
 		// Reached for existing rows, and for a row a concurrent boot inserted,
 		// so `merge` and `overwrite` still apply this config.
 		if (mode === "insertOnly") continue;
+		// A concurrent seed already finished; a late write could undo a later edit.
+		if (isComplete?.()) return;
 
 		await ctx.adapter.update({
 			model: modelName,
@@ -1001,7 +1004,7 @@ export async function seedResourcesOnce(
 ): Promise<void> {
 	const state = getSeedState(ctx, opts);
 	if (state.completed) return;
-	await seedResources(ctx, opts);
+	await seedResources(ctx, opts, () => state.completed);
 	state.completed = true;
 }
 

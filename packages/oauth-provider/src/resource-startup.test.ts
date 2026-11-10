@@ -200,6 +200,32 @@ describe("resource seeding at startup", () => {
 		expect(database.oauthResource).toHaveLength(1);
 	});
 
+	it("a seed that finishes after another does not undo a later edit", async () => {
+		const fault = {
+			current: (() => {
+				throw new TypeError("fetch failed");
+			}) as ResourceFault | null,
+		};
+		const { register, database } = await bootWithResourceFault(fault, {
+			resources: [{ identifier: resource, name: "From config" }],
+			resourceSeedMode: "merge",
+		});
+
+		const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+		fault.current = (operation) => {
+			if (operation !== "findOne") return;
+			fault.current = null;
+			return gate;
+		};
+		const first = register();
+		await register();
+		database.oauthResource[0]!.name = "Edited by admin";
+
+		release();
+		await first;
+		expect(database.oauthResource).toMatchObject([{ name: "Edited by admin" }]);
+	});
+
 	it("applies merge mode to a row a concurrent instance inserted", async () => {
 		const fault = {
 			current: (async (operation, adapter) => {

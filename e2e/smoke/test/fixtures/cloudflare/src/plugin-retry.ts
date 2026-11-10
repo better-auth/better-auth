@@ -106,12 +106,13 @@ export default {
 			await runMigrations();
 			return new Response(null, { status: 204 });
 		}
-		const operation =
-			operations[url.searchParams.get("op") as keyof typeof operations];
-		if (!operation) return new Response("Unknown op", { status: 404 });
+		const op = url.searchParams.get("op");
+		if (op !== "discovery" && op !== "seed") {
+			return new Response("Unknown op", { status: 404 });
+		}
+		const operation = operations[op];
 		if (url.pathname === "/start") {
 			// Respond once the stall server holds this retry's I/O, so this request ends first.
-			const op = url.searchParams.get("op");
 			holdSeed = op === "seed";
 			void operation().catch(() => {});
 			await fetch(`${stallURL}/held?path=/${op}`);
