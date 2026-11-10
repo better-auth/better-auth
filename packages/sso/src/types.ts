@@ -305,7 +305,8 @@ export type SSOUserResolution =
  * Normalized provider attributes available to an SSO user resolver. When
  * `mapProfileToUser` is set, `email`, `name`, and `image` hold its result,
  * and `emailVerified` is `false` if it changed the email. The provider's own
- * values remain in `providerClaims` or `providerAttributes`.
+ * values remain in `providerClaims`, `verifiedIdTokenClaims`, or
+ * `providerAttributes`.
  */
 export type SSOProviderUserProfile = {
 	email: string;

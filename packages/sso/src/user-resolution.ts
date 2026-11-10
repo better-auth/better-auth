@@ -31,7 +31,14 @@ export async function mapSSOProfile(
 	let mappedUser: unknown;
 	try {
 		// A clone keeps the verified identity and provider data authoritative.
-		mappedUser = await options.mapProfileToUser(structuredClone(input));
+		const result: unknown = await options.mapProfileToUser(
+			structuredClone(input),
+		);
+		if (isRecord(result)) {
+			// Read each field once, so the checks below see the values used.
+			const { email, name, image } = result;
+			mappedUser = { email, name, image };
+		}
 	} catch {
 		logFailure(logger, "SSO profile mapping failed");
 		throw profileMappingFailure();

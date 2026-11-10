@@ -2682,6 +2682,8 @@ describe("OIDC providers without an email claim", async () => {
 				plugins: [
 					sso({
 						trustEmailVerified: true,
+						// Each test registers its own provider for the same test user.
+						providersLimit: 20,
 						mapProfileToUser: (input) => mapper(input),
 						provisionUser: async ({ userInfo }) => {
 							provisionedUserInfo = userInfo;
@@ -2924,6 +2926,14 @@ describe("OIDC providers without an email claim", async () => {
 	it.each([
 		["undefined", undefined],
 		["an array email", { email: ["a@invalid-result-oidc.example.com"] }],
+		[
+			"a throwing email getter",
+			{
+				get email(): string {
+					throw new Error("getter failed");
+				},
+			},
+		],
 	])(
 		"redirects with a stable error when mapProfileToUser returns %s",
 		async (label, result) => {
