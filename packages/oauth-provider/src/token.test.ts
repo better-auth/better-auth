@@ -478,6 +478,8 @@ describe("oauth token - authorization_code", async () => {
 	 * A replay that arrives while the first redemption is still issuing tokens
 	 * revokes them (RFC 6749 §4.1.2), including the refresh token already
 	 * stored, so the first redemption must fail with `invalid_grant`.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
 	 */
 	it("fails an in-flight redemption with invalid_grant when a replay revokes its tokens", async () => {
 		const { url: authUrl, codeVerifier } = await createAuthUrl({
@@ -1744,6 +1746,8 @@ describe("oauth token - refresh_token", async () => {
 		 * A request that reads the parent after the other's CAS presents a reused
 		 * token, so it revokes the family (RFC 9700 §4.14.2), including the new
 		 * refresh token the winner is still issuing.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
 		 */
 		it("fails an in-flight rotation with invalid_grant when reuse revokes its family", async () => {
 			const parentToken = await issueParentRefreshToken();

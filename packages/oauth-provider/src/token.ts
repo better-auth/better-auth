@@ -526,6 +526,10 @@ async function createOpaqueAccessToken(
 				where: [{ field: "id", value: refreshId }],
 			}))
 		) {
+			ctx.context.logger.warn(
+				"access token not stored: its refresh token was revoked during issuance",
+				error,
+			);
 			throw new APIError("BAD_REQUEST", {
 				error_description: "grant revoked during token issuance",
 				error: "invalid_grant",
