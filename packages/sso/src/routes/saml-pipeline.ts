@@ -852,7 +852,7 @@ export async function processSAMLResponse(
 	) {
 		await options.provisionUser({
 			user: user as User & Record<string, any>,
-			userInfo,
+			userInfo: { ...userInfo, ...providerUser },
 			provider,
 		});
 	}

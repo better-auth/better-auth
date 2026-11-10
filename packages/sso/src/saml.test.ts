@@ -2669,8 +2669,12 @@ describe("SAML SSO", async () => {
 
 		it("creates the user with the email returned by mapProfileToUser", async () => {
 			let mappingInput: SSOProfileMappingInput | undefined;
+			let provisionedUserInfo: Record<string, unknown> | undefined;
 			const { location, ssoUsers } = await signInWithNameID(
 				{
+					provisionUser: async ({ userInfo }) => {
+						provisionedUserInfo = userInfo;
+					},
 					mapProfileToUser(input) {
 						mappingInput = input;
 						return {
@@ -2699,6 +2703,9 @@ describe("SAML SSO", async () => {
 					emailVerified: false,
 				}),
 			]);
+			expect(provisionedUserInfo?.email).toBe(
+				"a1b2c3d4-opaque@nameid-provider.placeholder.invalid",
+			);
 		});
 	});
 

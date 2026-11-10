@@ -1832,7 +1832,7 @@ async function handleOIDCCallback(
 	) {
 		await options.provisionUser({
 			user,
-			userInfo,
+			userInfo: { ...userInfo, ...providerUser },
 			token: tokenResponse,
 			provider,
 		});
@@ -1846,7 +1846,7 @@ async function handleOIDCCallback(
 			accountId: userInfoId,
 			email: userInfoEmail,
 			emailVerified: providerUser.emailVerified,
-			rawAttributes: userInfo,
+			rawAttributes: { ...userInfo, ...providerUser },
 		},
 		provider,
 		token: tokenResponse,

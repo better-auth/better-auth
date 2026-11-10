@@ -74,7 +74,7 @@ export const auth = betterAuth({
 });
 ```
 
-The callback receives `protocol`, `providerId`, `accountKey`, and `providerUser`, plus `providerClaims` for OIDC or `providerAttributes`, `nameID`, and `nameIDFormat` for SAML. It can return `email`, `name`, `image`, and `emailVerified`. Return `email: null` to discard the email the provider sent. A returned email that differs from the provider's is unverified unless you also return `emailVerified`. The account identity always stays the verified `sub` claim or `NameID`. If the callback throws, sign-in redirects with `SSO_PROFILE_MAPPING_FAILED`.
+The callback receives `protocol`, `providerId`, `accountKey`, and `providerUser`, plus `providerClaims` for OIDC or `providerAttributes`, `nameID`, and `nameIDFormat` for SAML. It can return `email`, `name`, `image`, and `emailVerified`. Return `email: null` to discard the email the provider sent. A returned email that differs from the provider's is unverified unless you also return `emailVerified`. The account identity always stays the verified `sub` claim or `NameID`. `provisionUser` receives the mapped values in `userInfo`. If the callback throws, sign-in redirects with `SSO_PROFILE_MAPPING_FAILED`.
 
 The example assumes the provider ID is a valid domain label (letters, digits, and hyphens) and the subject is valid in an email address. Encode either one before building a placeholder when it is not.
 

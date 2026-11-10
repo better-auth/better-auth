@@ -2667,6 +2667,7 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
  */
 describe("OIDC providers without an email claim", async () => {
 	let mapper: NonNullable<SSOOptions["mapProfileToUser"]> = () => ({});
+	let provisionedUserInfo: Record<string, unknown> | undefined;
 	let tokenClaims: Record<string, unknown> = {};
 	const { auth, client, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance(
@@ -2676,6 +2677,9 @@ describe("OIDC providers without an email claim", async () => {
 					sso({
 						trustEmailVerified: true,
 						mapProfileToUser: (input) => mapper(input),
+						provisionUser: async ({ userInfo }) => {
+							provisionedUserInfo = userInfo;
+						},
 					}),
 				],
 			},
@@ -2776,6 +2780,9 @@ describe("OIDC providers without an email claim", async () => {
 			email: "subject-without-email@no-email-oidc.placeholder.invalid",
 			emailVerified: false,
 		});
+		expect(provisionedUserInfo?.email).toBe(
+			"subject-without-email@no-email-oidc.placeholder.invalid",
+		);
 	});
 
 	it("applies the name, image, and emailVerified returned by mapProfileToUser", async () => {
