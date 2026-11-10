@@ -2,6 +2,17 @@ export const signedQueryIssuedAtParam = "ba_iat";
 export const postLoginClearedParam = "ba_pl";
 const signedQueryParameterNameParam = "ba_param";
 
+/**
+ * Rewrites a standard base64 string into the base64url alphabet.
+ *
+ * Signatures travel in the query string, where a `+` turns into a space as soon
+ * as something in front of the auth server url-decodes the query once. The
+ * base64url alphabet has no such characters, so the signature survives.
+ */
+export function toBase64Url(value: string) {
+	return value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 export function canonicalizeOAuthQueryParams(params: URLSearchParams) {
 	const canonicalParams = new URLSearchParams();
 	const entries = [...params.entries()].sort(
