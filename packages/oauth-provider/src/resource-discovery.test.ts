@@ -4,7 +4,10 @@ import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProvider } from "./oauth";
-import { registerClientMetadataDocument } from "./register";
+import {
+	hasClientMetadataChanged,
+	registerClientMetadataDocument,
+} from "./register";
 import {
 	invalidateResourceCache,
 	resetSeedStateForTests,
@@ -739,6 +742,7 @@ describe("canonical client metadata document registration", () => {
 		);
 
 		expect(refreshed.created).toBe(false);
+		expect(refreshed.updated).toBe(true);
 		expect(refreshed.client).toMatchObject({
 			name: "After Refresh",
 			disabled: true,
@@ -750,6 +754,133 @@ describe("canonical client metadata document registration", () => {
 			where: [{ field: "clientId", value: clientId }],
 		});
 		expect(links.map((link) => link.resourceId)).toEqual([resource]);
+	});
+
+	it("skips client-row update and preserves updatedAt when revalidating unchanged metadata", async () => {
+		const instance = await boot();
+		const clientId = "https://client.example.com/unchanged.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const metadata = {
+			client_id: clientId,
+			client_name: "Unchanged Client",
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "none" as const,
+		};
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata,
+			},
+		);
+		expect(created.created).toBe(true);
+		expect(created.updated).toBe(false);
+
+		const originalUpdatedAt = created.client.updatedAt;
+
+		// Preserve operator flags to ensure they are untouched
+		await instance.ctx.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+			update: {
+				disabled: true,
+				skipConsent: true,
+			},
+		});
+		const operatorClient = await instance.ctx.adapter.findOne<
+			SchemaClient<Scope[]>
+		>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		if (!operatorClient) throw new Error("client missing");
+
+		const updateSpy = vi.spyOn(instance.ctx.adapter, "update");
+
+		const revalidated = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				existingClient: operatorClient,
+				metadata,
+			},
+		);
+
+		expect(revalidated.created).toBe(false);
+		expect(revalidated.updated).toBe(false);
+		expect(updateSpy).not.toHaveBeenCalled();
+		expect(revalidated.client.updatedAt).toEqual(originalUpdatedAt);
+		expect(revalidated.client.disabled).toBe(true);
+		expect(revalidated.client.skipConsent).toBe(true);
+	});
+
+	it("still creates missing default resource links when client metadata is unchanged", async () => {
+		const resourceOne = "urn:example:resource:one";
+		const resourceTwo = "urn:example:resource:two";
+		const instance = await boot({
+			resources: [resourceOne, resourceTwo],
+			clientRegistrationDefaultResources: [resourceOne],
+		});
+		const clientId = "https://client.example.com/missing-resource.json";
+		const endpointContext = {
+			context: instance.ctx,
+		} as unknown as GenericEndpointContext;
+		const metadata = {
+			client_id: clientId,
+			client_name: "Resource Test Client",
+			redirect_uris: ["https://client.example.com/callback"],
+			token_endpoint_auth_method: "none" as const,
+		};
+		const created = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata,
+			},
+		);
+		expect(created.created).toBe(true);
+		expect(created.resources).toEqual([resourceOne]);
+
+		// Now reconfigure opts to make resourceTwo a registration default too
+		instance.opts.clientRegistrationDefaultResources = [
+			resourceOne,
+			resourceTwo,
+		];
+
+		const updateSpy = vi.spyOn(instance.ctx.adapter, "update");
+
+		const revalidated = await registerClientMetadataDocument(
+			endpointContext,
+			instance.opts,
+			{
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				existingClient: created.client,
+				metadata,
+			},
+		);
+
+		expect(revalidated.created).toBe(false);
+		expect(revalidated.updated).toBe(false);
+		// Client row was NOT updated
+		expect(updateSpy).not.toHaveBeenCalled();
+		// But new resource link WAS created
+		expect(revalidated.resources).toEqual([resourceOne, resourceTwo]);
+		const links = await instance.ctx.adapter.findMany<OAuthClientResource>({
+			model: "oauthClientResource",
+			where: [{ field: "clientId", value: clientId }],
+		});
+		expect(links.map((l) => l.resourceId).sort()).toEqual(
+			[resourceOne, resourceTwo].sort(),
+		);
 	});
 
 	it("converges a stale fixed-ID creator after a unique-constraint race", async () => {
@@ -1395,5 +1526,130 @@ describe("canonical dynamic client registration", () => {
 		});
 		expect(storedClient).toMatchObject({ clientId: result.client_id });
 		expect(createdModels).toContain(model);
+	});
+});
+
+describe("hasClientMetadataChanged", () => {
+	const baseClient: SchemaClient<Scope[]> = {
+		clientId: "https://example.com/client.json",
+		clientDiscoveryId: "test",
+		name: "Base Client",
+		redirectUris: ["https://example.com/callback"],
+		grantTypes: ["authorization_code"],
+		responseTypes: ["code"],
+		tokenEndpointAuthMethod: "none",
+		applicationType: null,
+		requirePKCE: true,
+		dpopBoundAccessTokens: false,
+		disabled: false,
+		skipConsent: false,
+		enableEndSession: false,
+		clientCredentialsScopes: [],
+	};
+
+	it("returns false for identical metadata", () => {
+		expect(hasClientMetadataChanged(baseClient, { ...baseClient })).toBe(false);
+	});
+
+	it("returns true when scalar string changes", () => {
+		expect(
+			hasClientMetadataChanged(baseClient, {
+				...baseClient,
+				name: "New Name",
+			}),
+		).toBe(true);
+		expect(
+			hasClientMetadataChanged(baseClient, {
+				...baseClient,
+				uri: "https://example.com",
+			}),
+		).toBe(true);
+		expect(
+			hasClientMetadataChanged(baseClient, {
+				...baseClient,
+				softwareId: "soft-1",
+			}),
+		).toBe(true);
+	});
+
+	it("returns true when array changes", () => {
+		expect(
+			hasClientMetadataChanged(baseClient, {
+				...baseClient,
+				redirectUris: ["https://example.com/other-callback"],
+			}),
+		).toBe(true);
+		expect(
+			hasClientMetadataChanged(baseClient, {
+				...baseClient,
+				grantTypes: ["authorization_code", "refresh_token"],
+			}),
+		).toBe(true);
+	});
+
+	it("returns true when boolean changes", () => {
+		expect(
+			hasClientMetadataChanged(baseClient, {
+				...baseClient,
+				dpopBoundAccessTokens: true,
+			}),
+		).toBe(true);
+		expect(
+			hasClientMetadataChanged(baseClient, {
+				...baseClient,
+				requirePKCE: false,
+			}),
+		).toBe(true);
+	});
+
+	it("returns true when jwks changes and false when jwks key ordering differs", () => {
+		const existing = {
+			...baseClient,
+			jwks: JSON.stringify({ keys: [{ kid: "1", kty: "RSA" }] }),
+		};
+		// Same keys, different key order
+		const reordered = {
+			...baseClient,
+			jwks: JSON.stringify({ keys: [{ kty: "RSA", kid: "1" }] }),
+		};
+		expect(hasClientMetadataChanged(existing, reordered)).toBe(false);
+
+		// Different keys
+		const changed = {
+			...baseClient,
+			jwks: JSON.stringify({ keys: [{ kid: "2", kty: "RSA" }] }),
+		};
+		expect(hasClientMetadataChanged(existing, changed)).toBe(true);
+	});
+
+	it("returns true when metadata object changes and false when identical", () => {
+		const existing = {
+			...baseClient,
+			metadata: { logo: "https://logo.png" },
+		};
+		expect(
+			hasClientMetadataChanged(existing, {
+				...baseClient,
+				metadata: { logo: "https://logo.png" },
+			}),
+		).toBe(false);
+		expect(
+			hasClientMetadataChanged(existing, {
+				...baseClient,
+				metadata: { logo: "https://new-logo.png" },
+			}),
+		).toBe(true);
+	});
+
+	it("ignores operator-owned fields changes", () => {
+		expect(
+			hasClientMetadataChanged(baseClient, {
+				...baseClient,
+				disabled: true,
+				skipConsent: true,
+				enableEndSession: true,
+				clientCredentialsScopes: ["read"],
+			}),
+		).toBe(false);
 	});
 });

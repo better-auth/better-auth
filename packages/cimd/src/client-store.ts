@@ -299,6 +299,7 @@ export async function persistMetadataDocumentClient(
 					previousClient,
 					clientMetadataDocument: metadata,
 					context: ctx,
+					modified: result.updated,
 				});
 			}
 		} catch (error) {

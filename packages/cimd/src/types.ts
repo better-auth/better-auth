@@ -26,6 +26,11 @@ export interface CimdClientRefreshedEvent {
 	clientMetadataDocument: OAuthClientMetadata;
 	/** Better Auth endpoint context for the discovery request. */
 	context: GenericEndpointContext;
+	/**
+	 * Whether the client's metadata document changed compared to the stored record.
+	 * False when revalidation confirmed identical metadata and skipped database writes.
+	 */
+	modified?: boolean;
 }
 
 export interface CimdMetadataFetchPolicy {
