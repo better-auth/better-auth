@@ -860,6 +860,22 @@ describe("field-level indexes", () => {
 		new MongoServerError({ errmsg, code });
 	/** Lets the index setup that operations start in the background settle. */
 	const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+	/** Fails the `user.email` index build the first `times` attempts. */
+	const failEmailIndex =
+		(makeError: () => unknown, times = Number.POSITIVE_INFINITY): CreateIndex =>
+		async (keys, options) => {
+			if ("email" in keys && times-- > 0) throw makeError();
+			return options.name;
+		};
+	const createUsers = async (
+		adapter: ReturnType<ReturnType<typeof mongodbAdapter>>,
+		count: number,
+	) => {
+		for (let i = 0; i < count; i++) {
+			await adapter.create({ model: "user", data: user(`${i}@example.com`) });
+			await settle();
+		}
+	};
 
 	it("creates a unique index for each unique field once", async () => {
 		const { db, calls, createIndex } = createMockDb();
@@ -919,14 +935,8 @@ describe("field-level indexes", () => {
 
 	it("does not retry index setup inside a transaction", async () => {
 		vi.spyOn(logger, "warn").mockImplementation(() => {});
-		let emailAttempts = 0;
 		const { db, createIndex, insertOne } = createMockDb(
-			async (keys, options) => {
-				if ("email" in keys && emailAttempts++ === 0) {
-					throw new MongoNetworkError("connection reset");
-				}
-				return options.name;
-			},
+			failEmailIndex(() => new MongoNetworkError("connection reset"), 1),
 		);
 		const client = {
 			startSession: () => ({
@@ -1097,10 +1107,7 @@ describe("field-level indexes", () => {
 			'Index build failed: E11000 duplicate key error dup key: { email: "a@example.com" }',
 		);
 		const { db, createIndex, insertOne } = createMockDb(
-			async (keys, options) => {
-				if ("email" in keys) throw duplicate;
-				return options.name;
-			},
+			failEmailIndex(() => duplicate),
 		);
 		const adapter = mongodbAdapter(db, { transaction: false })({});
 
@@ -1122,10 +1129,7 @@ describe("field-level indexes", () => {
 	it("accepts an equivalent index that exists under another name", async () => {
 		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const { db, createIndex, insertOne } = createMockDb(
-			async (keys, options) => {
-				if ("email" in keys) throw serverError(85);
-				return options.name;
-			},
+			failEmailIndex(() => serverError(85)),
 			[{ key: { email: 1 }, name: "email_1", unique: true }],
 		);
 		const adapter = mongodbAdapter(db, { transaction: false })({});
@@ -1144,10 +1148,7 @@ describe("field-level indexes", () => {
 		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const conflict = serverError(85);
 		const { db, insertOne } = createMockDb(
-			async (keys, options) => {
-				if ("email" in keys) throw conflict;
-				return options.name;
-			},
+			failEmailIndex(() => conflict),
 			[{ key: { email: 1 }, name: "email_1" }],
 		);
 		const adapter = mongodbAdapter(db, { transaction: false })({});
@@ -1166,10 +1167,7 @@ describe("field-level indexes", () => {
 	it("accepts a unique index next to a non-unique one on the same key", async () => {
 		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const { db } = createMockDb(
-			async (keys, options) => {
-				if ("email" in keys) throw serverError(85);
-				return options.name;
-			},
+			failEmailIndex(() => serverError(85)),
 			[
 				{ key: { email: 1 }, name: "email_1" },
 				{ key: { email: 1 }, name: "email_u", unique: true },
@@ -1190,10 +1188,7 @@ describe("field-level indexes", () => {
 		});
 		const adapter = mongodbAdapter(db, { transaction: false })({});
 
-		for (const email of ["a@example.com", "b@example.com", "c@example.com"]) {
-			await adapter.create({ model: "user", data: user(email) });
-			await settle();
-		}
+		await createUsers(adapter, 3);
 
 		expect(indexCalls(createIndex, "user_email_uidx")).toHaveLength(1);
 		expect(errorLog).toHaveBeenCalledWith(
@@ -1210,10 +1205,7 @@ describe("field-level indexes", () => {
 		});
 		const adapter = mongodbAdapter(db, { transaction: false })({});
 
-		for (const email of ["a@example.com", "b@example.com", "c@example.com"]) {
-			await adapter.create({ model: "user", data: user(email) });
-			await settle();
-		}
+		await createUsers(adapter, 3);
 
 		expect(insertOne).toHaveBeenCalledTimes(3);
 		expect(indexCalls(createIndex, "user_email_uidx")).toHaveLength(1);
@@ -1231,19 +1223,12 @@ describe("field-level indexes", () => {
 	])("retries index creation after %s", async (_label, makeError) => {
 		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const warnLog = vi.spyOn(logger, "warn").mockImplementation(() => {});
-		let emailAttempts = 0;
 		const { db, createIndex, insertOne } = createMockDb(
-			async (keys, options) => {
-				if ("email" in keys && emailAttempts++ < 2) throw makeError();
-				return options.name;
-			},
+			failEmailIndex(makeError, 2),
 		);
 		const adapter = mongodbAdapter(db, { transaction: false })({});
 
-		for (const email of ["a@example.com", "b@example.com", "c@example.com"]) {
-			await adapter.create({ model: "user", data: user(email) });
-			await settle();
-		}
+		await createUsers(adapter, 3);
 		await adapter.create({ model: "user", data: user("d@example.com") });
 
 		expect(indexCalls(createIndex, "user_email_uidx")).toHaveLength(3);

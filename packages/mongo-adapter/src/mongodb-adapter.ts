@@ -147,6 +147,8 @@ const UNIQUE_VALUE_FILTERS: Record<string, Document> = {
 };
 
 interface MongoFieldIndex {
+	/** Deduplicates builds across the adapters one `mongodbAdapter` call creates. */
+	key: string;
 	model: string;
 	name: string;
 	column: string;
@@ -162,6 +164,7 @@ export const mongodbAdapter = (
 	const indexSetupByDefinition = new Map<string, Promise<string>>();
 	const startedFieldIndexes = new Set<string>();
 	const warnedFieldIndexes = new Set<string>();
+	let fieldIndexRetryPending = false;
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
 		const generator = options.advanced?.database?.generateId;
@@ -206,53 +209,60 @@ export const mongodbAdapter = (
 			 * from migrations. Fields already covered by a single-field table index
 			 * that enforces at least the same uniqueness are skipped.
 			 */
-			const getFieldIndexes = (modelKey: string) => {
+			const getFieldIndexes = (modelKey: string): MongoFieldIndex[] => {
 				const model = getModelName(modelKey);
 				const table = schema[modelKey];
+				if (!table || table.disableMigrations) return [];
+				const singleFieldTableIndexes = getResolvedModelIndexes(
+					model,
+					modelKey,
+				).filter((index) => index.columns.length === 1);
 				const fieldIndexes: MongoFieldIndex[] = [];
-				if (table && !table.disableMigrations) {
-					const singleFieldTableIndexes = getResolvedModelIndexes(
-						model,
-						modelKey,
-					).filter((index) => index.columns.length === 1);
-					for (const [fieldName, field] of Object.entries(table.fields)) {
-						if (!field.unique && !field.index) continue;
-						if (
-							field.type === "json" ||
-							field.type === "string[]" ||
-							field.type === "number[]"
-						) {
-							continue;
-						}
-						const column = field.fieldName || fieldName;
-						if (column === "id") continue;
-						const unique = field.unique === true;
-						const coveredByTableIndex = singleFieldTableIndexes.some(
-							(index) =>
-								index.columns[0] === column &&
-								(!unique || index.unique === true),
-						);
-						if (coveredByTableIndex) continue;
-						let partialFilterExpression: Document | undefined;
-						if (unique && field.required === false) {
-							// References to `id` store an ObjectId, a UUID, or a string.
-							const valueFilter =
-								field.references?.field === "id"
-									? { $type: ["string", "objectId", "binData"] }
-									: UNIQUE_VALUE_FILTERS[
-											Array.isArray(field.type) ? "string" : field.type
-										];
-							if (valueFilter === undefined) continue;
-							partialFilterExpression = { [column]: valueFilter };
-						}
-						fieldIndexes.push({
+				for (const [fieldName, field] of Object.entries(table.fields)) {
+					if (!field.unique && !field.index) continue;
+					// Same types `resolveDatabaseTableIndexes` refuses to index.
+					if (
+						field.type === "json" ||
+						field.type === "string[]" ||
+						field.type === "number[]"
+					) {
+						continue;
+					}
+					const column = field.fieldName || fieldName;
+					if (column === "id") continue;
+					const unique = field.unique === true;
+					const coveredByTableIndex = singleFieldTableIndexes.some(
+						(index) =>
+							index.columns[0] === column && (!unique || index.unique === true),
+					);
+					if (coveredByTableIndex) continue;
+					let partialFilterExpression: Document | undefined;
+					if (unique && field.required === false) {
+						// References to `id` store an ObjectId, a UUID, or a string.
+						const valueFilter =
+							field.references?.field === "id"
+								? { $type: ["string", "objectId", "binData"] }
+								: UNIQUE_VALUE_FILTERS[
+										Array.isArray(field.type) ? "string" : field.type
+									];
+						if (valueFilter === undefined) continue;
+						partialFilterExpression = { [column]: valueFilter };
+					}
+					const name = getDatabaseFieldIndexName(model, column, unique);
+					fieldIndexes.push({
+						key: JSON.stringify([
 							model,
-							name: getDatabaseFieldIndexName(model, column, unique),
+							name,
 							column,
 							unique,
-							partialFilterExpression,
-						});
-					}
+							partialFilterExpression ?? null,
+						]),
+						model,
+						name,
+						column,
+						unique,
+						partialFilterExpression,
+					});
 				}
 				return fieldIndexes;
 			};
@@ -262,25 +272,33 @@ export const mongodbAdapter = (
 				JSON.stringify(existing.partialFilterExpression ?? null) ===
 					JSON.stringify(index.partialFilterExpression ?? null);
 
+			const describeFailure = (
+				code: unknown,
+				sameKeyIndexes: Document[],
+			): string => {
+				switch (code) {
+					case UNAUTHORIZED:
+						return "the database user is not allowed to create indexes. Grant it the createIndex action or create the index yourself, then restart the application.";
+					case INDEX_OPTIONS_CONFLICT:
+						return `the index ${sameKeyIndexes.map((existing) => `"${existing.name}"`).join(", ")} has the same key and different options. Drop it and restart the application.`;
+					case INDEX_KEY_SPECS_CONFLICT:
+						return "an index with that name and a different definition already exists. Drop or rename it and restart the application.";
+					default:
+						return "of a server error. It is not retried until the application restarts.";
+				}
+			};
+
 			/**
 			 * Creates a field-level index. Failures are logged instead of failing
 			 * an operation, so deployments with existing duplicates, their own
 			 * indexes, or a database user without `createIndex` keep working.
 			 */
 			const ensureFieldIndex = (index: MongoFieldIndex) => {
-				const { model } = index;
-				const definition = JSON.stringify([
-					model,
-					index.name,
-					index.column,
-					index.unique,
-					index.partialFilterExpression ?? null,
-				]);
-				if (startedFieldIndexes.has(definition)) return;
-				startedFieldIndexes.add(definition);
+				if (startedFieldIndexes.has(index.key)) return;
+				startedFieldIndexes.add(index.key);
 
-				const collection = db.collection(model);
-				const target = `"${index.name}" on ${model}.${index.column}`;
+				const collection = db.collection(index.model);
+				const target = `"${index.name}" on ${index.model}.${index.column}`;
 				const handleError = async (error: unknown) => {
 					if (
 						error instanceof MongoNetworkError ||
@@ -289,9 +307,10 @@ export const mongodbAdapter = (
 							TRANSIENT_SERVER_CODES.has(Number(error.code)))
 					) {
 						// Temporary (network, failover), so the next operation tries again.
-						startedFieldIndexes.delete(definition);
-						if (!warnedFieldIndexes.has(definition)) {
-							warnedFieldIndexes.add(definition);
+						startedFieldIndexes.delete(index.key);
+						fieldIndexRetryPending = true;
+						if (!warnedFieldIndexes.has(index.key)) {
+							warnedFieldIndexes.add(index.key);
 							logger.warn(
 								`Could not create the MongoDB index ${target} yet. The next operation tries again.`,
 								error,
@@ -314,15 +333,14 @@ export const mongodbAdapter = (
 						);
 						return;
 					}
+					const indexKey = JSON.stringify({ [index.column]: 1 });
 					const sameKeyIndexes = await collection
 						.listIndexes()
 						.toArray()
 						.then(
 							(indexes) =>
 								indexes.filter(
-									(candidate) =>
-										JSON.stringify(candidate.key) ===
-										JSON.stringify({ [index.column]: 1 }),
+									(candidate) => JSON.stringify(candidate.key) === indexKey,
 								),
 							() => [],
 						);
@@ -332,16 +350,8 @@ export const mongodbAdapter = (
 						)
 					)
 						return;
-					const action =
-						error.code === UNAUTHORIZED
-							? "the database user is not allowed to create indexes. Grant it the createIndex action or create the index yourself, then restart the application."
-							: error.code === INDEX_OPTIONS_CONFLICT
-								? `the index ${sameKeyIndexes.map((existing) => `"${existing.name}"`).join(", ")} has the same key and different options. Drop it and restart the application.`
-								: error.code === INDEX_KEY_SPECS_CONFLICT
-									? "an index with that name and a different definition already exists. Drop or rename it and restart the application."
-									: "of a server error. It is not retried until the application restarts.";
 					logger.error(
-						`Could not create the MongoDB index ${target} (${reason}) because ${action}`,
+						`Could not create the MongoDB index ${target} (${reason}) because ${describeFailure(error.code, sameKeyIndexes)}`,
 					);
 				};
 				void Promise.resolve()
@@ -360,26 +370,24 @@ export const mongodbAdapter = (
 							},
 						),
 					)
-					.then(() => undefined, handleError)
+					.catch(handleError)
 					// Nothing awaits this promise, so it must never reject.
 					.catch(() => undefined);
 			};
 
-			/**
-			 * Starts creating the field indexes of every model without making
-			 * anything wait, so a long or stalled build never delays requests. It
-			 * runs when the adapter is created and again on operations outside a
-			 * transaction, which retries a build that failed temporarily. A build
-			 * waits for open transactions that touched its collection, so it never
-			 * starts inside one.
-			 */
+			// Builds start when the adapter is created, and nothing waits for them.
+			// A build waits for open transactions that touched its collection, so
+			// none starts inside one.
 			const fieldIndexes = session
 				? []
-				: Object.keys(schema).flatMap((modelKey) => getFieldIndexes(modelKey));
-			const startFieldIndexSetup = () => {
+				: Object.keys(schema).flatMap(getFieldIndexes);
+			for (const index of fieldIndexes) ensureFieldIndex(index);
+			/** Restarts builds that failed temporarily, on the next operation. */
+			const retryFieldIndexSetup = () => {
+				if (session || !fieldIndexRetryPending) return;
+				fieldIndexRetryPending = false;
 				for (const index of fieldIndexes) ensureFieldIndex(index);
 			};
-			startFieldIndexSetup();
 
 			const ensureModelIndexes = async (model: string, modelKey: string) => {
 				const indexes = getResolvedModelIndexes(model, modelKey);
@@ -674,14 +682,14 @@ export const mongodbAdapter = (
 
 			return {
 				async create({ model, modelKey = model, data: values }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					await ensureModelIndexes(model, modelKey);
 					const res = await db.collection(model).insertOne(values, { session });
 					const insertedData = { _id: res.insertedId.toString(), ...values };
 					return insertedData as any;
 				},
 				async findOne({ model, modelKey = model, where, select, join }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -798,7 +806,7 @@ export const mongodbAdapter = (
 					sortBy,
 					join,
 				}) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -927,7 +935,7 @@ export const mongodbAdapter = (
 					return res as any;
 				},
 				async count({ model, modelKey = model, where }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					const matchStage = where
 						? { $match: convertWhereClause({ where, modelKey }) }
 						: { $match: {} };
@@ -942,7 +950,7 @@ export const mongodbAdapter = (
 					return res[0]?.total ?? 0;
 				},
 				async update({ model, modelKey = model, where, update: values }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 
@@ -960,7 +968,7 @@ export const mongodbAdapter = (
 					return doc as any;
 				},
 				async updateMany({ model, modelKey = model, where, update: values }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 
@@ -974,12 +982,12 @@ export const mongodbAdapter = (
 					return res.modifiedCount;
 				},
 				async delete({ model, modelKey = model, where }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					const clause = convertWhereClause({ where, modelKey });
 					await db.collection(model).deleteOne(clause, { session });
 				},
 				async deleteMany({ model, modelKey = model, where }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					const clause = convertWhereClause({ where, modelKey });
 					const res = await db
 						.collection(model)
@@ -987,7 +995,7 @@ export const mongodbAdapter = (
 					return res.deletedCount;
 				},
 				async consumeOne({ model, modelKey = model, where }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					const clause = convertWhereClause({ where, modelKey });
 					const doc = await db.collection(model).findOneAndDelete(clause, {
 						session,
@@ -996,7 +1004,7 @@ export const mongodbAdapter = (
 					return ((doc as any)?.value as any) ?? null;
 				},
 				async incrementOne({ model, modelKey = model, where, increment, set }) {
-					startFieldIndexSetup();
+					retryFieldIndexSetup();
 					await ensureModelIndexes(model, modelKey);
 					const clause = convertWhereClause({ where, modelKey });
 					// Only include operators that carry fields. An empty `$inc: {}`
