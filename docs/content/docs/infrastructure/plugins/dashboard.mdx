@@ -29,6 +29,22 @@ export const auth = betterAuth({
 });
 ```
 
+## Compatibility
+
+`@better-auth/infra` requires [Better Auth](/docs/installation) **1.4 or later**. Actively supported `@better-auth/infra` releases start at **0.3**.
+
+| `@better-auth/infra` | Better Auth 1.4 | 1.5 | 1.6 | 1.7 |
+| -------------------- | --------------- | --- | --- | --- |
+| **0.3.x**            | ✓               | ✓   | ✓   | ✓   |
+| **0.4.x**            | ✓               | ✓   | ✓   | ✓   |
+
+Use the latest **0.4.x** release with the latest stable Better Auth **1.7.x**.
+
+<Callout>
+  Managed directory sync (Better Auth 1.7+) requires `@better-auth/infra`
+  **0.4.x**.
+</Callout>
+
 ## Configuration Options
 
 ### DashOptions
@@ -497,122 +513,149 @@ If you're using the organization plugin, these events are also tracked:
 
 The dash plugin registers numerous admin endpoints for the dashboard:
 
+### Config
+
+| Endpoint         | Method | Description                     |
+| ---------------- | ------ | ------------------------------- |
+| `/dash/config`   | GET    | Auth config and plugin insights |
+| `/dash/validate` | GET    | Validate dashboard connectivity |
+
 ### User Management
 
-| Endpoint                   | Method | Description                |
-| -------------------------- | ------ | -------------------------- |
-| `/dash/users`              | GET    | List users with pagination |
-| `/dash/users/online-count` | GET    | Get online users count     |
-| `/dash/user`               | GET    | Get user details           |
-| `/dash/user`               | POST   | Create a new user          |
-| `/dash/user`               | PATCH  | Update user                |
-| `/dash/user`               | DELETE | Delete user                |
-| `/dash/user/ban`           | POST   | Ban user                   |
-| `/dash/user/unban`         | POST   | Unban user                 |
-| `/dash/user/password`      | POST   | Set user password          |
-| `/dash/user/impersonate`   | POST   | Impersonate user           |
+| Endpoint                              | Method | Description                   |
+| ------------------------------------- | ------ | ----------------------------- |
+| `/dash/list-users`                    | GET    | List users with pagination    |
+| `/dash/export-users`                  | GET    | Export users                  |
+| `/dash/user`                          | GET    | Get user details              |
+| `/dash/user-organizations`            | GET    | List organizations for a user |
+| `/dash/create-user`                   | POST   | Create a user                 |
+| `/dash/update-user`                   | POST   | Update user                   |
+| `/dash/delete-user`                   | POST   | Delete user                   |
+| `/dash/delete-many-users`             | POST   | Delete many users             |
+| `/dash/ban-user`                      | POST   | Ban user                      |
+| `/dash/ban-many-users`                | POST   | Ban many users                |
+| `/dash/unban-user`                    | POST   | Unban user                    |
+| `/dash/set-user-role`                 | POST   | Set app-level `user.role`     |
+| `/dash/set-password`                  | POST   | Set user password             |
+| `/dash/unlink-account`                | POST   | Unlink account                |
+| `/dash/impersonate-user`              | GET    | Impersonate user              |
+| `/dash/send-verification-email`       | POST   | Send verification email       |
+| `/dash/send-many-verification-emails` | POST   | Send verification emails bulk |
+| `/dash/send-reset-password-email`     | POST   | Send password reset email     |
 
 ### Session Management
 
-| Endpoint                    | Method | Description              |
-| --------------------------- | ------ | ------------------------ |
-| `/dash/sessions`            | GET    | List all sessions        |
-| `/dash/sessions`            | DELETE | Delete sessions          |
-| `/dash/session/revoke`      | POST   | Revoke single session    |
-| `/dash/sessions/revoke-all` | POST   | Revoke all user sessions |
+| Endpoint                     | Method | Description              |
+| ---------------------------- | ------ | ------------------------ |
+| `/dash/sessions/revoke`      | POST   | Revoke single session    |
+| `/dash/sessions/revoke-all`  | POST   | Revoke all user sessions |
+| `/dash/sessions/revoke-many` | POST   | Revoke many sessions     |
 
 ### Organization Management
 
-| Endpoint                         | Method | Description              |
-| -------------------------------- | ------ | ------------------------ |
-| `/dash/organizations`            | GET    | List organizations       |
-| `/dash/organization`             | GET    | Get organization details |
-| `/dash/organization`             | POST   | Create organization      |
-| `/dash/organization`             | PATCH  | Update organization      |
-| `/dash/organization`             | DELETE | Delete organization      |
-| `/dash/organization/members`     | GET    | List members             |
-| `/dash/organization/member`      | POST   | Add member               |
-| `/dash/organization/member`      | DELETE | Remove member            |
-| `/dash/organization/member/role` | PATCH  | Update member role       |
+| Endpoint                                | Method | Description                         |
+| --------------------------------------- | ------ | ----------------------------------- |
+| `/dash/list-organizations`              | GET    | List organizations                  |
+| `/dash/export-organizations`            | GET    | Export organizations                |
+| `/dash/organization/options`            | GET    | Organization plugin options         |
+| `/dash/organization/:id`                | GET    | Get organization details            |
+| `/dash/organization/create`             | POST   | Create organization                 |
+| `/dash/organization/update`             | POST   | Update organization                 |
+| `/dash/organization/delete`             | POST   | Delete organization                 |
+| `/dash/organization/delete-many`        | POST   | Delete many organizations           |
+| `/dash/organization/:id/members`        | GET    | List members                        |
+| `/dash/organization/add-member`         | POST   | Add member                          |
+| `/dash/organization/remove-member`      | POST   | Remove member                       |
+| `/dash/organization/update-member-role` | POST   | Update member role only             |
+| `/dash/organization/update-member`      | POST   | Update member role and extra fields |
 
 ### Team Management
 
-| Endpoint                         | Method | Description        |
-| -------------------------------- | ------ | ------------------ |
-| `/dash/organization/teams`       | GET    | List teams         |
-| `/dash/organization/team`        | POST   | Create team        |
-| `/dash/organization/team`        | PATCH  | Update team        |
-| `/dash/organization/team`        | DELETE | Delete team        |
-| `/dash/organization/team/member` | POST   | Add team member    |
-| `/dash/organization/team/member` | DELETE | Remove team member |
+| Endpoint                                          | Method | Description        |
+| ------------------------------------------------- | ------ | ------------------ |
+| `/dash/organization/:id/teams`                    | GET    | List teams         |
+| `/dash/organization/create-team`                  | POST   | Create team        |
+| `/dash/organization/update-team`                  | POST   | Update team        |
+| `/dash/organization/delete-team`                  | POST   | Delete team        |
+| `/dash/organization/:orgId/teams/:teamId/members` | GET    | List team members  |
+| `/dash/organization/add-team-member`              | POST   | Add team member    |
+| `/dash/organization/remove-team-member`           | POST   | Remove team member |
 
 ### Invitation Management
 
-| Endpoint                           | Method | Description       |
-| ---------------------------------- | ------ | ----------------- |
-| `/dash/organization/invitations`   | GET    | List invitations  |
-| `/dash/organization/invite`        | POST   | Send invitation   |
-| `/dash/organization/invite/cancel` | POST   | Cancel invitation |
-| `/dash/organization/invite/resend` | POST   | Resend invitation |
+| Endpoint                                 | Method | Description          |
+| ---------------------------------------- | ------ | -------------------- |
+| `/dash/organization/:id/invitations`     | GET    | List invitations     |
+| `/dash/organization/invite-member`       | POST   | Send invitation      |
+| `/dash/organization/cancel-invitation`   | POST   | Cancel invitation    |
+| `/dash/organization/resend-invitation`   | POST   | Resend invitation    |
+| `/dash/organization/check-user-by-email` | POST   | Check user by email  |
+| `/dash/accept-invitation`                | GET    | Accept invitation    |
+| `/dash/complete-invitation`              | POST   | Complete invitation  |
+| `/dash/complete-invitation-handoff`      | GET    | Invitation handoff   |
+| `/dash/complete-invitation-social`       | GET    | Social invitation    |
+| `/dash/check-user-exists`                | POST   | Check if user exists |
 
 ### SSO Management
 
-| Endpoint                                        | Method | Description         |
-| ----------------------------------------------- | ------ | ------------------- |
-| `/dash/organization/sso-providers`              | GET    | List SSO providers  |
-| `/dash/organization/sso-provider`               | POST   | Create SSO provider |
-| `/dash/organization/sso-provider`               | PATCH  | Update SSO provider |
-| `/dash/organization/sso-provider`               | DELETE | Delete SSO provider |
-| `/dash/organization/sso-provider/verify-domain` | POST   | Verify domain       |
+| Endpoint                                                         | Method | Description                       |
+| ---------------------------------------------------------------- | ------ | --------------------------------- |
+| `/dash/sso/connection-count`                                     | GET    | Project-wide SSO connection count |
+| `/dash/organization/:id/sso-providers`                           | GET    | List SSO providers                |
+| `/dash/organization/:id/sso-provider/create`                     | POST   | Create SSO provider               |
+| `/dash/organization/:id/sso-provider/update`                     | POST   | Update SSO provider               |
+| `/dash/organization/:id/sso-provider/delete`                     | POST   | Delete SSO provider               |
+| `/dash/organization/:id/sso-provider/request-verification-token` | POST   | Request domain verification token |
+| `/dash/organization/:id/sso-provider/verify-domain`              | POST   | Verify domain                     |
+| `/dash/organization/:id/sso-provider/mark-domain-verified`       | POST   | Mark domain verified              |
 
 ### Directory Sync
 
-| Endpoint                                                        | Method | Description                                                             |
-| --------------------------------------------------------------- | ------ | ----------------------------------------------------------------------- |
-| `/dash/organization/directories`                                | GET    | List directories                                                        |
-| `/dash/organization/directory`                                  | POST   | Create directory (optional `fieldMappings` when field projection is on) |
-| `/dash/organization/directory`                                  | DELETE | Delete directory                                                        |
-| `/dash/organization/directory/token`                            | POST   | Regenerate token                                                        |
-| `/dash/organization/:id/directory-field-mapping-options`        | GET    | Field-mapping catalog (available fields, SCIM paths, coverage warnings) |
-| `/dash/organization/:id/directories/:providerId/field-mappings` | GET    | Get field mappings and modes for a directory connection                 |
-| `/dash/organization/:id/directories/:providerId/field-mappings` | PUT    | Replace field mappings and modes for a directory connection             |
-
-### Log Drains
-
-| Endpoint                            | Method | Description      |
-| ----------------------------------- | ------ | ---------------- |
-| `/dash/organization/log-drains`     | GET    | List log drains  |
-| `/dash/organization/log-drain`      | POST   | Create log drain |
-| `/dash/organization/log-drain`      | PATCH  | Update log drain |
-| `/dash/organization/log-drain`      | DELETE | Delete log drain |
-| `/dash/organization/log-drain/test` | POST   | Test log drain   |
+| Endpoint                                                                          | Method | Description                             |
+| --------------------------------------------------------------------------------- | ------ | --------------------------------------- |
+| `/dash/directory-sync/connection-count`                                           | GET    | Project-wide directory connection count |
+| `/dash/organization/:id/directories`                                              | GET    | List directories                        |
+| `/dash/organization/directory/create`                                             | POST   | Create legacy directory                 |
+| `/dash/organization/directory/delete`                                             | POST   | Delete legacy directory                 |
+| `/dash/organization/directory/regenerate-token`                                   | POST   | Regenerate legacy SCIM token            |
+| `/dash/organization/:id/directories`                                              | POST   | Create managed directory                |
+| `/dash/organization/:id/directories/:providerId`                                  | GET    | Get managed directory                   |
+| `/dash/organization/:id/directories/:providerId/credentials/rotate`               | POST   | Rotate managed directory credential     |
+| `/dash/organization/:id/directories/:providerId/credentials/:credentialId/revoke` | POST   | Revoke managed directory credential     |
+| `/dash/organization/:id/directories/:providerId/events`                           | GET    | List managed directory events           |
+| `/dash/organization/:id/directories/:providerId/decommission`                     | POST   | Decommission managed directory          |
+| `/dash/organization/:id/directories/:providerId/unpair`                           | POST   | Unpair managed directory from SSO       |
+| `/dash/organization/:id/directory-field-mapping-options`                          | GET    | Field-mapping catalog                   |
+| `/dash/organization/:id/directories/:providerId/field-mappings`                   | GET    | Get field mappings and modes            |
+| `/dash/organization/:id/directories/:providerId/field-mappings`                   | PUT    | Replace field mappings and modes        |
 
 ### Events & Audit Logs
 
-| Endpoint             | Method | Description     |
-| -------------------- | ------ | --------------- |
-| `/events/list`       | GET    | Get user events |
-| `/events/audit-logs` | GET    | Get audit logs  |
-| `/events/types`      | GET    | Get event types |
+| Endpoint                 | Method | Description                                |
+| ------------------------ | ------ | ------------------------------------------ |
+| `/events/list`           | GET    | Current user's events                      |
+| `/events/audit-logs`     | GET    | Current user's audit logs (`getAuditLogs`) |
+| `/events/all-audit-logs` | GET    | Org-admin audit logs (`getAllAuditLogs`)   |
+| `/events/types`          | GET    | List known event types                     |
 
 ### Analytics
 
-| Endpoint          | Method | Description         |
-| ----------------- | ------ | ------------------- |
-| `/dash/stats`     | GET    | Get user statistics |
-| `/dash/graph`     | GET    | Get graph data      |
-| `/dash/retention` | GET    | Get retention data  |
-| `/dash/map`       | GET    | Get geographic data |
+| Endpoint                    | Method | Description         |
+| --------------------------- | ------ | ------------------- |
+| `/dash/user-stats`          | GET    | Get user statistics |
+| `/dash/user-graph-data`     | GET    | Get graph data      |
+| `/dash/user-retention-data` | GET    | Get retention data  |
 
 ### Two-Factor Management
 
-| Endpoint                               | Method | Description          |
-| -------------------------------------- | ------ | -------------------- |
-| `/dash/user/2fa/enable`                | POST   | Enable 2FA for user  |
-| `/dash/user/2fa/disable`               | POST   | Disable 2FA for user |
-| `/dash/user/2fa/totp-uri`              | GET    | Get TOTP URI         |
-| `/dash/user/2fa/backup-codes`          | GET    | View backup codes    |
-| `/dash/user/2fa/backup-codes/generate` | POST   | Generate new codes   |
+| Endpoint                          | Method | Description               |
+| --------------------------------- | ------ | ------------------------- |
+| `/dash/enable-two-factor`         | POST   | Enable 2FA for user       |
+| `/dash/complete-two-factor-setup` | POST   | Complete 2FA setup        |
+| `/dash/disable-two-factor`        | POST   | Disable 2FA for user      |
+| `/dash/view-two-factor-totp-uri`  | POST   | Get TOTP URI              |
+| `/dash/view-backup-codes`         | POST   | View backup codes         |
+| `/dash/generate-backup-codes`     | POST   | Generate new backup codes |
 
 ## Client Integration
 

@@ -52,8 +52,8 @@ import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	clientRegistrationRequestSchema,
+	RedirectUriSyntaxSchema,
 	ResourceUriSchema,
-	SafeUrlSchema,
 } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import {
@@ -84,7 +84,7 @@ export const DEFAULT_OAUTH_SCOPES = [
 const rpInitiatedLogoutRequestSchema = z.object({
 	id_token_hint: z.string().optional(),
 	client_id: z.string().optional(),
-	post_logout_redirect_uri: SafeUrlSchema.optional(),
+	post_logout_redirect_uri: RedirectUriSyntaxSchema.optional(),
 	state: z.string().optional(),
 });
 
@@ -929,7 +929,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							client_assertion_type: z.string().optional(),
 							code: z.string().optional(),
 							code_verifier: z.string().optional(),
-							redirect_uri: SafeUrlSchema.optional(),
+							redirect_uri: RedirectUriSyntaxSchema.optional(),
 							refresh_token: z.string().optional(),
 							resource: z
 								.union([ResourceUriSchema, z.array(ResourceUriSchema).min(1)])

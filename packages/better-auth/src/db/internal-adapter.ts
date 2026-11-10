@@ -157,6 +157,28 @@ export const createInternalAdapter = (
 			: [];
 	}
 
+	async function setActiveSessionReferences(
+		userId: string,
+		sessionReferences: readonly ActiveSessionReference[],
+		now: number,
+	) {
+		if (!secondaryStorage) return;
+		const sorted = [...sessionReferences].sort(
+			(a, b) => a.expiresAt - b.expiresAt,
+		);
+		// Secondary storage reads a zero ttl as no expiry, so drop the list instead.
+		const ttl = getTTLSeconds(sorted.at(-1)?.expiresAt ?? 0, now);
+		if (ttl > 0) {
+			await secondaryStorage.set(
+				`active-sessions-${userId}`,
+				JSON.stringify(sorted),
+				ttl,
+			);
+			return;
+		}
+		await secondaryStorage.delete(`active-sessions-${userId}`);
+	}
+
 	// The session index is a read-modify-write list, so concurrent writers can
 	// drop a token from it. Bulk revocation also records a cutoff, and sessions
 	// created before it count as revoked even when the index missed them.
@@ -209,24 +231,12 @@ export const createInternalAdapter = (
 			await secondaryStorage.delete(token);
 		}
 
-		const activeSessionsKey = `active-sessions-${userId}`;
 		const currentSessionReferences = await getActiveSessionReferences(userId);
 		const now = Date.now();
 		const remainingSessionReferences = currentSessionReferences.filter(
 			(session) => session.expiresAt > now && !deletedTokens.has(session.token),
 		);
-		remainingSessionReferences.sort((a, b) => a.expiresAt - b.expiresAt);
-		const furthestExpiration = remainingSessionReferences.at(-1)?.expiresAt;
-
-		if (furthestExpiration) {
-			await secondaryStorage.set(
-				activeSessionsKey,
-				JSON.stringify(remainingSessionReferences),
-				getTTLSeconds(furthestExpiration, now),
-			);
-			return;
-		}
-		await secondaryStorage.delete(activeSessionsKey);
+		await setActiveSessionReferences(userId, remainingSessionReferences, now);
 	}
 
 	async function queueCachedUserSessionDeletion(
@@ -608,20 +618,11 @@ export const createInternalAdapter = (
 					);
 				}
 
-				const sorted = [
-					...list,
-					{ token: data.token, expiresAt: data.expiresAt.getTime() },
-				].sort((a, b) => a.expiresAt - b.expiresAt);
-				const furthestSessionExp =
-					sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
-				const furthestSessionTTL = getTTLSeconds(furthestSessionExp, now);
-				if (furthestSessionTTL > 0) {
-					await secondaryStorage.set(
-						`active-sessions-${userId}`,
-						JSON.stringify(sorted),
-						furthestSessionTTL,
-					);
-				}
+				await setActiveSessionReferences(
+					userId,
+					[...list, { token: data.token, expiresAt: data.expiresAt.getTime() }],
+					now,
+				);
 
 				const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 					model: "user",
@@ -918,20 +919,11 @@ export const createInternalAdapter = (
 										)
 										.concat([{ token: sessionToken, expiresAt: expiresMs }]);
 
-									const sorted = filtered.sort(
-										(a, b) => a.expiresAt - b.expiresAt,
+									await setActiveSessionReferences(
+										updatedSession.userId,
+										filtered,
+										now,
 									);
-									const furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-									if (furthestSessionExp && furthestSessionExp > now) {
-										await secondaryStorage.set(
-											listKey,
-											JSON.stringify(sorted),
-											getTTLSeconds(furthestSessionExp, now),
-										);
-									} else {
-										await secondaryStorage.delete(listKey);
-									}
 								}
 
 								return updatedSession;
@@ -969,22 +961,7 @@ export const createInternalAdapter = (
 						const filtered = list.filter(
 							(session) => session.expiresAt > now && session.token !== token,
 						);
-						const sorted = filtered.sort((a, b) => a.expiresAt - b.expiresAt);
-						const furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-						if (
-							filtered.length > 0 &&
-							furthestSessionExp &&
-							furthestSessionExp > Date.now()
-						) {
-							await secondaryStorage.set(
-								`active-sessions-${userId}`,
-								JSON.stringify(filtered),
-								getTTLSeconds(furthestSessionExp, now),
-							);
-						} else {
-							await secondaryStorage.delete(`active-sessions-${userId}`);
-						}
+						await setActiveSessionReferences(userId, filtered, now);
 					} else {
 						logger.error("Active sessions list not found in secondary storage");
 					}
