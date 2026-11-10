@@ -100,12 +100,12 @@ export async function authenticate({
 	$fetch,
 	options,
 	token,
-	getWindow,
+	getWebContents,
 	fetchOptions,
 }: ElectronAuthenticateOptions & {
 	$fetch: BetterFetch;
 	options: ElectronClientOptions;
-	getWindow: () => Electron.BrowserWindow | null | undefined;
+	getWebContents?: () => Electron.WebContents | null | undefined;
 }) {
 	if (!isProcessType("browser")) {
 		throw new BetterAuthError(
@@ -150,7 +150,7 @@ export async function authenticate({
 			user = normalizeUserOutput(user, options);
 
 			await fetchOptions?.onSuccess?.(ctx);
-			getWindow()?.webContents.send(
+			getWebContents?.()?.send(
 				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
 				user,
 			);

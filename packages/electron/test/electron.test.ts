@@ -27,6 +27,12 @@ const mockElectron = vi.hoisted(() => {
 		},
 	};
 
+	const WebContentsView = {
+		webContents: {
+			send: vi.fn(),
+		},
+	};
+
 	const electron = {
 		ipcMain: {
 			handle: vi.fn(),
@@ -70,6 +76,7 @@ const mockElectron = vi.hoisted(() => {
 			handle: vi.fn(),
 		},
 		BrowserWindow,
+		WebContentsView,
 	};
 
 	return {
@@ -400,8 +407,9 @@ describe("Electron", () => {
 				$fetch: client.$fetch,
 				options,
 				token: encodeRedirectToken(identifier, "abc"),
-				// @ts-expect-error
-				getWindow: () => mockElectron.BrowserWindow,
+				getWebContents: () =>
+					mockElectron.BrowserWindow
+						.webContents as unknown as Electron.WebContents,
 			}),
 		).resolves.toBeDefined();
 
@@ -477,14 +485,15 @@ describe("Electron", () => {
 				$fetch: client.$fetch,
 				options,
 				token: encodeRedirectToken(identifier, "abc"),
-				// @ts-expect-error
-				getWindow: () => mockElectron.BrowserWindow,
+				getWebContents: () =>
+					mockElectron.BrowserWindow
+						.webContents as unknown as Electron.WebContents,
 				fetchOptions: { throw: true },
 			}).catch((err: any) => {
 				expect(err.error.message).toBe("Invalid or expired token.");
 				throw err;
 			}),
-		).rejects.toThrowError("NOT_FOUND");
+		).rejects.toThrow("NOT_FOUND");
 	});
 
 	it("should reject invalid/non-existent tokens", async ({
@@ -501,8 +510,9 @@ describe("Electron", () => {
 				$fetch: client.$fetch,
 				options,
 				token: encodeRedirectToken("non-existent", "abc"),
-				// @ts-expect-error
-				getWindow: () => mockElectron.BrowserWindow,
+				getWebContents: () =>
+					mockElectron.BrowserWindow
+						.webContents as unknown as Electron.WebContents,
 				fetchOptions: { throw: true },
 			}).catch((err: any) => {
 				expect(err.error.message).toBe("Invalid or expired token.");
@@ -817,7 +827,6 @@ describe("Electron", () => {
 				$fetch: client.$fetch,
 				options,
 				token: "any",
-				getWindow: () => null,
 			}),
 		).rejects.toThrow(BetterAuthError);
 		await expect(
@@ -825,11 +834,8 @@ describe("Electron", () => {
 				$fetch: client.$fetch,
 				options,
 				token: "any",
-				getWindow: () => null,
 			}),
-		).rejects.toThrowError(
-			"`authenticate` can only be called in the main process.",
-		);
+		).rejects.toThrow("`authenticate` can only be called in the main process.");
 	});
 
 	it("authenticate should exchange token and return user", async ({
@@ -879,6 +885,171 @@ describe("Electron", () => {
 			"better-auth:authenticated",
 			expect.objectContaining({ id: user.id }),
 		);
+	});
+
+	describe("getTarget", () => {
+		async function createExchangeToken(email: string) {
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					email,
+					password: "password",
+					name: "Get Target",
+				},
+			});
+
+			const codeVerifier = base64Url.encode(randomBytes(32));
+			const codeChallenge = await s256Challenge(codeVerifier);
+
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", codeVerifier],
+			]);
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge,
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			return { user, token: encodeRedirectToken(identifier, "abc") };
+		}
+
+		it("should send authenticated events to getTarget when set via setupMain", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			client.setupMain({
+				// @ts-expect-error mock window
+				getWindow: () => mockElectron.BrowserWindow,
+				// @ts-expect-error mock view
+				getTarget: () => mockElectron.WebContentsView,
+			});
+
+			const { user, token } = await createExchangeToken(
+				"get-target-auth@test.com",
+			);
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+			mockElectron.WebContentsView.webContents.send.mockClear();
+
+			const result = await client.authenticate({ token });
+
+			expect(result.data?.user?.id).toBe(user.id);
+			expect(
+				mockElectron.WebContentsView.webContents.send,
+			).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.objectContaining({ id: user.id }),
+			);
+			expect(
+				mockElectron.BrowserWindow.webContents.send,
+			).not.toHaveBeenCalled();
+		});
+
+		it("should fall back to getWindow when getTarget is not set", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			client.setupMain({
+				// @ts-expect-error mock window
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			const { user, token } = await createExchangeToken(
+				"get-target-fallback@test.com",
+			);
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+			mockElectron.WebContentsView.webContents.send.mockClear();
+
+			const result = await client.authenticate({ token });
+
+			expect(result.data?.user?.id).toBe(user.id);
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.objectContaining({ id: user.id }),
+			);
+			expect(
+				mockElectron.WebContentsView.webContents.send,
+			).not.toHaveBeenCalled();
+		});
+
+		it("should prefer getTarget over getWindow for user-updated events", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			client.setupMain({
+				// @ts-expect-error mock window
+				getWindow: () => mockElectron.BrowserWindow,
+				// @ts-expect-error mock view
+				getTarget: () => mockElectron.WebContentsView,
+			});
+
+			mockElectron.BrowserWindow.send.mockClear();
+			mockElectron.WebContentsView.webContents.send.mockClear();
+
+			const mockUser = { id: "target-user" };
+			client.$store.atoms.session!.set({
+				data: { user: mockUser },
+			});
+
+			await Promise.resolve();
+
+			expect(
+				mockElectron.WebContentsView.webContents.send,
+			).toHaveBeenCalledWith("better-auth:user-updated", mockUser);
+			expect(mockElectron.BrowserWindow.send).not.toHaveBeenCalled();
+		});
+
+		it("IPC authenticate bridge should send to getTarget", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+			mockElectron.ipcMain.handle.mockClear();
+
+			client.setupMain({
+				bridges: true,
+				// @ts-expect-error mock window
+				getWindow: () => mockElectron.BrowserWindow,
+				// @ts-expect-error mock view
+				getTarget: () => mockElectron.WebContentsView,
+			});
+
+			const authenticateHandler = mockElectron.ipcMain.handle.mock.calls.find(
+				(call) => call[0] === "better-auth:authenticate",
+			)?.[1] as (evt: unknown, data: { token: string }) => Promise<void>;
+
+			expect(authenticateHandler).toBeDefined();
+
+			const { user, token } = await createExchangeToken(
+				"get-target-ipc@test.com",
+			);
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+			mockElectron.WebContentsView.webContents.send.mockClear();
+
+			await authenticateHandler({}, { token });
+
+			expect(
+				mockElectron.WebContentsView.webContents.send,
+			).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.objectContaining({ id: user.id }),
+			);
+			expect(
+				mockElectron.BrowserWindow.webContents.send,
+			).not.toHaveBeenCalled();
+		});
 	});
 
 	it("IPC authenticate bridge should exchange token via invoke", async ({
@@ -1182,8 +1353,9 @@ describe("Electron", () => {
 					$fetch: client.$fetch,
 					options,
 					token: encodeRedirectToken(identifier, "no-match"),
-					// @ts-expect-error
-					getWindow: () => mockElectron.BrowserWindow,
+					getWebContents: () =>
+						mockElectron.BrowserWindow
+							.webContents as unknown as Electron.WebContents,
 				}),
 			).rejects.toThrowError("Code verifier not found.");
 		});
@@ -1224,8 +1396,9 @@ describe("Electron", () => {
 					$fetch: client.$fetch,
 					options,
 					token: encodeRedirectToken(identifier, "abc"),
-					// @ts-expect-error
-					getWindow: () => mockElectron.BrowserWindow,
+					getWebContents: () =>
+						mockElectron.BrowserWindow
+							.webContents as unknown as Electron.WebContents,
 					fetchOptions: { throw: true },
 				}),
 			).rejects.toThrowError("BAD_REQUEST");
@@ -1270,8 +1443,9 @@ describe("Electron", () => {
 					$fetch: client.$fetch,
 					options,
 					token: encodeRedirectToken(identifier, "abc"),
-					// @ts-expect-error
-					getWindow: () => mockElectron.BrowserWindow,
+					getWebContents: () =>
+						mockElectron.BrowserWindow
+							.webContents as unknown as Electron.WebContents,
 					fetchOptions: { throw: true },
 				}).catch((err: any) => {
 					expect(err.error.message).toBe("state mismatch");
@@ -2173,8 +2347,9 @@ describe("Electron", () => {
 					},
 				},
 				token: encodeRedirectToken(identifier, "abc"),
-				// @ts-expect-error
-				getWindow: () => mockElectron.BrowserWindow,
+				getWebContents: () =>
+					mockElectron.BrowserWindow
+						.webContents as unknown as Electron.WebContents,
 			});
 
 			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
@@ -2236,8 +2411,9 @@ describe("Electron", () => {
 					},
 				},
 				token: encodeRedirectToken(identifier, "abc"),
-				// @ts-expect-error
-				getWindow: () => mockElectron.BrowserWindow,
+				getWebContents: () =>
+					mockElectron.BrowserWindow
+						.webContents as unknown as Electron.WebContents,
 			});
 
 			expect(consoleSpy).toHaveBeenCalledWith(
@@ -2421,8 +2597,9 @@ describe("Electron", () => {
 					},
 				},
 				token: encodeRedirectToken(identifier, "abc"),
-				// @ts-expect-error
-				getWindow: () => mockElectron.BrowserWindow,
+				getWebContents: () =>
+					mockElectron.BrowserWindow
+						.webContents as unknown as Electron.WebContents,
 			});
 
 			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
