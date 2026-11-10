@@ -11,7 +11,11 @@ function isLikelyEncrypted(token: string): boolean {
 
 export function decryptOAuthToken(token: string, ctx: AuthContext) {
 	if (!token) return token;
-	if (ctx.options.account?.encryptOAuthTokens) {
+
+	const encryptOAuthTokens = ctx.options.account?.encryptOAuthTokens;
+	if (!encryptOAuthTokens) return token;
+
+	if (encryptOAuthTokens === true) {
 		if (!isLikelyEncrypted(token)) {
 			return token;
 		}
@@ -20,20 +24,27 @@ export function decryptOAuthToken(token: string, ctx: AuthContext) {
 			data: token,
 		});
 	}
-	return token;
+
+	return encryptOAuthTokens.decrypt(token);
 }
 
 export function setTokenUtil(
 	token: string | null | undefined,
 	ctx: AuthContext,
 ) {
-	if (ctx.options.account?.encryptOAuthTokens && token) {
+	if (!token) return token;
+
+	const encryptOAuthTokens = ctx.options.account?.encryptOAuthTokens;
+	if (!encryptOAuthTokens) return token;
+
+	if (encryptOAuthTokens === true) {
 		return symmetricEncrypt({
 			key: ctx.secretConfig,
 			data: token,
 		});
 	}
-	return token;
+
+	return encryptOAuthTokens.encrypt(token);
 }
 
 export function getOAuthCallbackPath(provider: {
