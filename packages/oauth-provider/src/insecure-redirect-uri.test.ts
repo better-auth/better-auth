@@ -16,6 +16,7 @@ const allowLanOrigin = (url: URL) => url.origin === lanOrigin;
 async function setupProvider(input: {
 	baseURL?: string;
 	allowInsecureRedirectUri?: OAuthOptions<Scope[]>["allowInsecureRedirectUri"];
+	validateRedirectUri?: OAuthOptions<Scope[]>["validateRedirectUri"];
 }) {
 	const baseURL = input.baseURL ?? "http://localhost:3000";
 	const { auth, client, signInWithTestUser } = await getTestInstance(
@@ -26,6 +27,7 @@ async function setupProvider(input: {
 					loginPage: "/login",
 					consentPage: "/consent",
 					allowInsecureRedirectUri: input.allowInsecureRedirectUri,
+					validateRedirectUri: input.validateRedirectUri,
 				}),
 				jwt(),
 			],
@@ -543,6 +545,24 @@ describe("consent denial redirect trust", () => {
 
 		expect(url.origin + url.pathname).toBe(lanRedirect);
 		expect(url.searchParams.get("error")).toBe("access_denied");
+	});
+
+	it("shows the server error page once validateRedirectUri rejects the redirect URI", async () => {
+		let validatorAccepts = true;
+		const provider = await setupProvider({
+			validateRedirectUri: (_uri, _registered, defaultResult) =>
+				validatorAccepts && defaultResult,
+		});
+		const { consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		validatorAccepts = false;
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
 	});
 
 	it("shows the server error page once the client is disabled", async () => {
