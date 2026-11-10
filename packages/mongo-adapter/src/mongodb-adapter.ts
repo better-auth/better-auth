@@ -16,7 +16,9 @@ import type { ClientSession, Db, Document, MongoClient } from "mongodb";
 import {
 	MongoError,
 	MongoErrorLabel,
+	MongoNetworkError,
 	MongoServerError,
+	MongoServerSelectionError,
 	ObjectId,
 	UUID,
 } from "mongodb";
@@ -281,8 +283,10 @@ export const mongodbAdapter = (
 				const target = `"${index.name}" on ${model}.${index.column}`;
 				const handleError = async (error: unknown) => {
 					if (
-						!(error instanceof MongoServerError) ||
-						TRANSIENT_SERVER_CODES.has(Number(error.code))
+						error instanceof MongoNetworkError ||
+						error instanceof MongoServerSelectionError ||
+						(error instanceof MongoServerError &&
+							TRANSIENT_SERVER_CODES.has(Number(error.code)))
 					) {
 						// Temporary (network, failover), so the next operation tries again.
 						startedFieldIndexes.delete(definition);
@@ -293,6 +297,12 @@ export const mongodbAdapter = (
 								error,
 							);
 						}
+						return;
+					}
+					if (!(error instanceof MongoServerError)) {
+						logger.error(
+							`Could not create the MongoDB index ${target} (${error instanceof Error ? error.name : "unknown error"}). It is not retried until the application restarts.`,
+						);
 						return;
 					}
 					// The server message can contain the duplicate value (an email or a

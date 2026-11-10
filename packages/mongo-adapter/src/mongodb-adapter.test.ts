@@ -3,6 +3,7 @@ import type { Db } from "mongodb";
 import {
 	MongoClient,
 	MongoErrorLabel,
+	MongoNetworkError,
 	MongoServerError,
 	ObjectId,
 	UUID,
@@ -922,7 +923,7 @@ describe("field-level indexes", () => {
 		const { db, createIndex, insertOne } = createMockDb(
 			async (keys, options) => {
 				if ("email" in keys && emailAttempts++ === 0) {
-					throw new Error("connection reset");
+					throw new MongoNetworkError("connection reset");
 				}
 				return options.name;
 			},
@@ -1182,6 +1183,26 @@ describe("field-level indexes", () => {
 		expect(errorLog).not.toHaveBeenCalled();
 	});
 
+	it("logs a client-side error once and does not retry it", async () => {
+		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
+		const { db, createIndex } = createMockDb(async () => {
+			throw new TypeError("invalid index options");
+		});
+		const adapter = mongodbAdapter(db, { transaction: false })({});
+
+		for (const email of ["a@example.com", "b@example.com", "c@example.com"]) {
+			await adapter.create({ model: "user", data: user(email) });
+			await settle();
+		}
+
+		expect(indexCalls(createIndex, "user_email_uidx")).toHaveLength(1);
+		expect(errorLog).toHaveBeenCalledWith(
+			expect.stringContaining(
+				'"user_email_uidx" on user.email (TypeError). It is not retried',
+			),
+		);
+	});
+
 	it("logs once and does not retry when the database user cannot create indexes", async () => {
 		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
 		const { db, createIndex, insertOne } = createMockDb(async () => {
@@ -1205,7 +1226,7 @@ describe("field-level indexes", () => {
 	});
 
 	it.each([
-		["a network error", () => new Error("connection reset")],
+		["a network error", () => new MongoNetworkError("connection reset")],
 		["a primary step down", () => serverError(189)],
 	])("retries index creation after %s", async (_label, makeError) => {
 		const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});

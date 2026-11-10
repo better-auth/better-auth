@@ -90,7 +90,7 @@ If the adapter cannot create a field index, it logs an error that names the inde
      const duplicates = await db
        .collection("user")
        .aggregate([
-         { $match: { email: { $type: "string" } } },
+         { $match: { email: { $ne: null } } },
          { $group: { _id: "$email", ids: { $push: "$_id" }, count: { $sum: 1 } } },
          { $match: { count: { $gt: 1 } } },
        ])
