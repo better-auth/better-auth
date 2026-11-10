@@ -578,6 +578,7 @@ const deviceTokenErrorSchema = z.object({
 			"expired_token",
 			"access_denied",
 			"invalid_request",
+			"invalid_client",
 			"invalid_grant",
 		])
 		.meta({
@@ -801,6 +802,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 													"expired_token",
 													"access_denied",
 													"invalid_request",
+													"invalid_client",
 													"invalid_grant",
 												],
 											},
@@ -823,7 +825,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				const isValid = await opts.validateClient(client_id);
 				if (!isValid) {
 					throw new APIError("BAD_REQUEST", {
-						error: "invalid_grant",
+						error: "invalid_client",
 						error_description: "Invalid client ID",
 					});
 				}

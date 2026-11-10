@@ -540,4 +540,26 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/danielmerja.png",
 		},
 	},
+	{
+		name: "@mockatoo/connect-better-auth",
+		url: "https://github.com/mockatoo/connectors/tree/main/packages/connectors/better-auth",
+		description:
+			"Hosted mock OAuth provider for development, E2E tests, CI and coding agents. Drop-in mocks of the Google, GitHub, Microsoft, Apple, Discord, LinkedIn, X and Facebook providers, so app code and the real token exchange stay unchanged, with no app registration or real accounts.",
+		author: {
+			name: "Tianhui Michael Li",
+			github: "tianhuil",
+			avatar: "https://github.com/tianhuil.png",
+		},
+	},
+	{
+		name: "@mailkite/better-auth-inbox",
+		url: "https://github.com/mailkite/mailkite-better-auth-inbox",
+		description:
+			"Give your app a real mailbox. Receive inbound email as signature-verified webhooks, then list, read, thread and reply through session-scoped endpoints — scoped per user or per organization.",
+		author: {
+			name: "MailKite",
+			github: "mailkite",
+			avatar: "https://github.com/mailkite.png",
+		},
+	},
 ];

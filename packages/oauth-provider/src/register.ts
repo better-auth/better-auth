@@ -1106,7 +1106,7 @@ async function persistOAuthClientRegistration(
 				// than as read before the document fetch, so admin changes made
 				// meanwhile are kept, and validate the result before saving it.
 				// Without extensions, a refresh leaves metadata alone.
-				let metadata: string | null | undefined;
+				let metadata: Record<string, unknown> | null | undefined;
 				if (hasExtensionClientMetadata(opts)) {
 					const extensionFields = getExtensionClientMetadataFields(opts);
 					const currentClient = await adapter.findOne<SchemaClient<Scope[]>>({
@@ -1122,10 +1122,7 @@ async function persistOAuthClientRegistration(
 					);
 					await validateExtensionClientMetadata(opts, body, merged);
 					if (extensionFields.size > 0) {
-						metadata =
-							merged && Object.keys(merged).length > 0
-								? JSON.stringify(merged)
-								: null;
+						metadata = merged && Object.keys(merged).length > 0 ? merged : null;
 					}
 				}
 				// Server-owned fields (disabled, consent and logout settings, the
@@ -1600,9 +1597,7 @@ export function oauthToSchema(
 		inputMetadata ?? {},
 	);
 	const metadata =
-		metadataObj && Object.keys(metadataObj).length
-			? JSON.stringify(metadataObj)
-			: undefined;
+		metadataObj && Object.keys(metadataObj).length ? metadataObj : undefined;
 
 	return {
 		// Important Fields

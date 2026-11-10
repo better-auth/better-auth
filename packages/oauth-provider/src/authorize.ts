@@ -473,13 +473,13 @@ export async function authorizeEndpoint(
 	opts: OAuthOptions<Scope[]>,
 	settings?: AuthorizeEndpointSettings,
 ): Promise<OAuthRedirectResult> {
-	if (!ctx.request) {
+	const headers = ctx.request?.headers ?? ctx.headers;
+	if (!headers) {
 		throw new APIError("UNAUTHORIZED", {
 			error_description: "request not found",
 			error: "invalid_request",
 		});
 	}
-	const request = ctx.request;
 
 	// Normalize GET query serialization and POST form serialization through one
 	// authorization-request path (OIDC Core §3.1.2.1).
@@ -519,7 +519,7 @@ export async function authorizeEndpoint(
 		} catch (error) {
 			return handleRedirect(ctx, toErrorURL(error));
 		}
-		return runAuthorizationInteraction(ctx, opts, request.headers, settings, {
+		return runAuthorizationInteraction(ctx, opts, headers, settings, {
 			...interactionRequest,
 			approve: (approval) =>
 				interactionRequest.approve(approval).catch(toErrorURL),
@@ -853,7 +853,7 @@ export async function authorizeEndpoint(
 		}
 	}
 
-	return runAuthorizationInteraction(ctx, opts, request.headers, settings, {
+	return runAuthorizationInteraction(ctx, opts, headers, settings, {
 		query,
 		client,
 		approve: (approval) =>

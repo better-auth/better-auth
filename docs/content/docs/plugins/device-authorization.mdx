@@ -247,6 +247,8 @@ The access token is a signed JWT whose `aud` identifies `https://api.example.com
 
 <Callout type="info">
   Both token paths can coexist. First-party device login keeps using `/device/token`. Registered OAuth clients use `/oauth2/token`; `oauthDeviceAuthorization()` prevents their device codes from being redeemed for a Better Auth session token.
+
+  Client IDs not registered with OAuth Provider can use the first-party flow without OAuth client credentials only when `validateClient` explicitly accepts them.
 </Callout>
 
 #### Approve the device
@@ -652,24 +654,19 @@ export default function DeviceApprovalPage() {
 
 ### Client Validation
 
-You can validate client IDs to ensure only authorized applications can use the device flow:
+Use `validateClient` to apply your own validation rules to client IDs in the standalone session flow. For example, check the ID against a list of known clients:
 
-When the OAuth Provider integration is enabled, an unknown OAuth client ID reaches the standalone flow only when `validateClient` explicitly accepts it. Otherwise, the request returns `invalid_client`.
+```ts title="auth.ts"
+import { deviceAuthorization } from "better-auth/plugins";
 
-```ts
+const knownClientIds = new Set(["my-cli", "my-tv-app"]);
+
 deviceAuthorization({
-  validateClient: async (clientId) => {
-    // Check if client is authorized
-    const client = await db.oauth_clients.findOne({ id: clientId });
-    return client && client.allowDeviceFlow;
-  },
-  
-  onDeviceAuthRequest: async (clientId, scope) => {
-    // Log device authorization requests
-    await logDeviceAuthRequest(clientId, scope);
-  },
-})
+  validateClient: (clientId) => knownClientIds.has(clientId),
+});
 ```
+
+The callback runs on both `/device/code` and `/device/token`. Return `true` to accept the client ID or `false` to reject the request with `invalid_client`. If `validateClient` is omitted, the standalone flow skips this custom validation.
 
 ### Custom Code Generation
 
@@ -702,7 +699,7 @@ Device-code issuance makes up to 3 attempts to overcome unique-key collisions. I
 
 ## Error Handling
 
-The device flow defines specific error codes:
+Common errors returned by the standalone device flow:
 
 | Error Code              | Description                                                                   |
 | ----------------------- | ----------------------------------------------------------------------------- |
@@ -710,7 +707,8 @@ The device flow defines specific error codes:
 | `slow_down`             | Polled too soon (add 5 seconds to the interval for this and every later poll) |
 | `expired_token`         | Device code has expired                                                       |
 | `access_denied`         | User denied the authorization                                                 |
-| `invalid_grant`         | Invalid device code or client ID                                              |
+| `invalid_client`        | Client ID is not accepted                                                     |
+| `invalid_grant`         | Device code is invalid or belongs to another client                           |
 
 ## Example: CLI Application
 
@@ -872,7 +870,7 @@ authenticateCLI().catch((err) => {
 
 **generateUserCode**: Custom function to generate user codes. Returns a string or `Promise<string>` with at most 191 characters.
 
-**validateClient**: Function to validate client IDs. Takes a clientId and returns boolean or `Promise<boolean>`.
+**validateClient**: Optional `(clientId: string) => boolean | Promise<boolean>` callback for custom client ID validation in the first-party session flow.
 
 **onDeviceAuthRequest**: Hook called when device authorization is requested. Takes clientId and optional scope.
 

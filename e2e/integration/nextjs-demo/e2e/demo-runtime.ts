@@ -1,16 +1,14 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
-import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import type { APIRequestContext } from "@playwright/test";
 import { expect } from "@playwright/test";
 
-export const demoDirectory = resolve(process.cwd(), "../../demo/nextjs");
-
-export interface DemoProcess {
-	process: ChildProcessWithoutNullStreams;
-	readOutput: () => string;
-}
+const demoDirectory = resolve(process.cwd(), "../../demo/nextjs");
 
 export async function getAvailablePort(): Promise<number> {
 	const server = createServer();
@@ -31,94 +29,66 @@ export async function getAvailablePort(): Promise<number> {
 	return port;
 }
 
-export async function stopProcess(
-	child: ChildProcessWithoutNullStreams | undefined,
-): Promise<void> {
-	if (!child) return;
-	const { terminate } = await import("@better-auth-test/test-utils/playwright");
-	await terminate(child);
-}
+export type DemoRuntime = ReturnType<typeof createDemoRuntime>;
 
-/**
- * Runs a one-shot `node --experimental-strip-types` command in the demo
- * directory and resolves with its stdout. Rejects with all output on a
- * non-zero exit.
- */
-export async function runDemoNodeScript(
-	args: string[],
-	environment: NodeJS.ProcessEnv,
-	label: string,
-): Promise<string> {
-	const child = spawn("node", ["--experimental-strip-types", ...args], {
-		cwd: demoDirectory,
-		env: environment,
-		stdio: "pipe",
-	});
-	let stdout = "";
+// Startup state lives here so `afterAll` can clean up wherever startup stopped.
+export function createDemoRuntime(temporaryDirectoryPrefix: string) {
+	const children = new Set<ChildProcess>();
 	let output = "";
-	child.stdout.on("data", (chunk) => {
-		stdout += chunk.toString();
-		output += chunk.toString();
-	});
-	child.stderr.on("data", (chunk) => {
-		output += chunk.toString();
-	});
-	const exitCode = await new Promise<number | null>((resolveExit, reject) => {
-		child.once("error", reject);
-		// "close" fires after stdout and stderr drain; "exit" can come first.
-		child.once("close", resolveExit);
-	});
-	if (exitCode !== 0) {
-		throw new Error(`${label} failed:\n${output}`);
+	let temporaryDirectory: string | undefined;
+	let stopped = false;
+
+	function spawnLogged(
+		command: string,
+		args: readonly string[],
+		env: NodeJS.ProcessEnv,
+	) {
+		// A timed-out `start` keeps running after `stop`, so it must not spawn.
+		if (stopped) throw new Error("Next.js demo stopped during startup");
+		const child = spawn(command, args, {
+			cwd: demoDirectory,
+			detached: process.platform !== "win32",
+			env,
+			// Nothing writes to stdin, so leave no pipe open for a child to wait on.
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+		children.add(child);
+		// An unhandled spawn error would crash the worker.
+		child.on("error", (error) => (output += `${error}\n`));
+		// A closed child's pid can be reused, so `stop` must not signal it.
+		child.once("close", () => children.delete(child));
+		child.stdout.setEncoding("utf8").on("data", (data) => (output += data));
+		child.stderr.setEncoding("utf8").on("data", (data) => (output += data));
+		return child;
 	}
-	return stdout;
-}
 
-export async function migrateDemoDatabase(
-	environment: NodeJS.ProcessEnv,
-): Promise<void> {
-	await runDemoNodeScript(
-		[
-			"--input-type=module",
-			"--eval",
-			[
-				'import { getMigrations } from "better-auth/db/migration";',
-				'const { auth } = await import("./lib/auth.ts");',
-				"const { runMigrations } = await getMigrations(auth.options);",
-				"await runMigrations();",
-			].join("\n"),
-		],
-		environment,
-		"Next.js demo migration",
-	);
-}
+	/** Runs a one-shot node script in the demo directory and returns its stdout. */
+	async function run(
+		args: readonly string[],
+		env: NodeJS.ProcessEnv,
+		label: string,
+	) {
+		const child = spawnLogged(
+			"node",
+			["--experimental-strip-types", ...args],
+			env,
+		);
+		let stdout = "";
+		child.stdout.on("data", (data) => (stdout += data));
+		const [exitCode] = await once(child, "close");
+		if (exitCode !== 0) throw new Error(`${label} failed:\n${output}`);
+		return stdout;
+	}
 
-/**
- * Spawns a long-running process in the demo directory (detached, so
- * `stopProcess` can terminate the whole tree) and polls `readyURL` until it
- * answers 2xx.
- */
-export async function startDemoProcess(input: {
-	command: string;
-	args: string[];
-	environment: NodeJS.ProcessEnv;
-	readyURL: string;
-	label: string;
-}): Promise<DemoProcess> {
-	let output = "";
-	const child = spawn(input.command, input.args, {
-		cwd: demoDirectory,
-		detached: process.platform !== "win32",
-		env: input.environment,
-		stdio: "pipe",
-	});
-	child.stdout.on("data", (chunk) => {
-		output += chunk.toString();
-	});
-	child.stderr.on("data", (chunk) => {
-		output += chunk.toString();
-	});
-	try {
+	/** Spawns a long-running process and polls `readyURL` until it answers 2xx. */
+	async function start(input: {
+		command: string;
+		args: readonly string[];
+		env: NodeJS.ProcessEnv;
+		readyURL: string;
+		label: string;
+	}) {
+		const child = spawnLogged(input.command, input.args, input.env);
 		const deadline = Date.now() + 60_000;
 		while (Date.now() < deadline) {
 			if (child.exitCode !== null || child.signalCode !== null) {
@@ -128,45 +98,72 @@ export async function startDemoProcess(input: {
 				const response = await fetch(input.readyURL, {
 					signal: AbortSignal.timeout(1_000),
 				});
-				if (response.ok) {
-					return { process: child, readOutput: () => output };
-				}
+				if (response.ok) return;
 			} catch {
 				// The server has not bound its port yet.
 			}
 			await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
 		}
 		throw new Error(`${input.label} did not start:\n${output}`);
-	} catch (error) {
-		await stopProcess(child);
-		throw error;
 	}
-}
 
-export async function startNextDevServer(
-	port: number,
-	environment: NodeJS.ProcessEnv,
-): Promise<DemoProcess> {
-	// `next dev` allows one server per project directory. When another demo spec
-	// holds it (parallel local workers), wait for that spec to stop its server.
-	const deadline = Date.now() + 180_000;
-	for (;;) {
-		try {
-			return await startDemoProcess({
-				command: "pnpm",
-				args: ["dev", "--hostname", "127.0.0.1", "--port", String(port)],
-				environment,
-				readyURL: `http://127.0.0.1:${port}/sign-in`,
-				label: "Next.js demo",
-			});
-		} catch (error) {
-			const busy =
-				error instanceof Error &&
-				error.message.includes("Another next dev server is already running");
-			if (!busy || Date.now() > deadline) throw error;
-			await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
-		}
-	}
+	return {
+		output: () => output,
+		temporaryDirectory: async () =>
+			(temporaryDirectory ??= await mkdtemp(
+				join(tmpdir(), temporaryDirectoryPrefix),
+			)),
+		run,
+		start,
+		migrate: (env: NodeJS.ProcessEnv) =>
+			run(
+				[
+					"--input-type=module",
+					"--eval",
+					[
+						'import { getMigrations } from "better-auth/db/migration";',
+						'const { auth } = await import("./lib/auth.ts");',
+						"const { runMigrations } = await getMigrations(auth.options);",
+						"await runMigrations();",
+					].join("\n"),
+				],
+				env,
+				"Next.js demo migration",
+			),
+		startNextDev: async (port: number, env: NodeJS.ProcessEnv) => {
+			// `next dev` allows one server per project directory. When another demo spec
+			// holds it (parallel local workers), wait for that spec to stop its server.
+			const deadline = Date.now() + 180_000;
+			for (;;) {
+				// The log is shared, so judge each attempt by its own output.
+				const attemptOutputStart = output.length;
+				try {
+					return await start({
+						command: "pnpm",
+						args: ["dev", "--hostname", "127.0.0.1", "--port", String(port)],
+						env,
+						readyURL: `http://127.0.0.1:${port}/sign-in`,
+						label: "Next.js demo",
+					});
+				} catch (error) {
+					const busy = output
+						.slice(attemptOutputStart)
+						.includes("Another next dev server is already running");
+					if (!busy || Date.now() > deadline) throw error;
+					await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
+				}
+			}
+		},
+		stop: async () => {
+			stopped = true;
+			const { terminate } = await import(
+				"@better-auth-test/test-utils/playwright"
+			);
+			await Promise.all([...children].map(terminate));
+			if (!temporaryDirectory) return;
+			await rm(temporaryDirectory, { recursive: true, force: true });
+		},
+	};
 }
 
 /** Creates an organization as the signed-in user and returns its ID. */

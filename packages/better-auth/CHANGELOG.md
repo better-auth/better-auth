@@ -131,6 +131,43 @@
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.19
+
+### Patch Changes
+
+- [#12323](https://github.com/better-auth/better-auth/pull/12323) [`a10121d`](https://github.com/better-auth/better-auth/commit/a10121d33cfccc525c79777319288d220940164b) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed the `active-sessions` list in secondary storage being stored without an expiry when the last remaining session had less than a second left.
+
+- [#12335](https://github.com/better-auth/better-auth/pull/12335) [`c41f8ff`](https://github.com/better-auth/better-auth/commit/c41f8ff08755c4b493a82b89d5f4555a4998c122) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed `/admin/create-user` leaving a user without a credential account when the password was rejected (for example by the Have I Been Pwned plugin), which made retrying with the same email fail with `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`.
+
+- [#12338](https://github.com/better-auth/better-auth/pull/12338) [`e786566`](https://github.com/better-auth/better-auth/commit/e786566dc553b3e21a9bdec0e7c4777dfb51bacf) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed `/admin/create-user` leaving a user without a credential account when creating that account failed, which made retrying with the same email fail with `USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`.
+
+- [#12336](https://github.com/better-auth/better-auth/pull/12336) [`ac778b7`](https://github.com/better-auth/better-auth/commit/ac778b70e9c35ce3fb13014fe7122f8faa1cd178) Thanks [@bytaesu](https://github.com/bytaesu)! - Client actions now send the HTTP method passed in the second-argument fetch options, the same as when it is nested under `fetchOptions`. Passing a lowercase `get` or `HEAD` method no longer fails because a request body was attached.
+
+- [#12246](https://github.com/better-auth/better-auth/pull/12246) [`5eb69d8`](https://github.com/better-auth/better-auth/commit/5eb69d8371aac809c81b16b08f82f05a448c5583) Thanks [@AryaKesharwani](https://github.com/AryaKesharwani)! - `/device/token` now returns `invalid_client` instead of `invalid_grant` when `validateClient` rejects the `client_id`, matching `/device/code` and RFC 6749 section 5.2.
+
+- [#12319](https://github.com/better-auth/better-auth/pull/12319) [`4b0327b`](https://github.com/better-auth/better-auth/commit/4b0327bfa363395fdba24bd51bdf18668e62657d) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin schema overrides (`modelName` and field names) no longer leak into other instances of the same plugin in one process.
+
+- [#12320](https://github.com/better-auth/better-auth/pull/12320) [`2d5ef64`](https://github.com/better-auth/better-auth/commit/2d5ef64daee607af5ff2175262dc387a767f7e35) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix OAuth sign-in failing with `state_mismatch` during the daylight saving time fall-back hour on servers that do not run in UTC. The stored OAuth state is no longer created already expired.
+
+- [#12337](https://github.com/better-auth/better-auth/pull/12337) [`5f0a0fc`](https://github.com/better-auth/better-auth/commit/5f0a0fcef3b15ea4a657a08a46b71df96ada77cc) Thanks [@bytaesu](https://github.com/bytaesu)! - The OpenAPI schema now documents query parameters for endpoints whose query schema is wrapped in `z.optional()`, such as `/get-session` and Stripe's `/subscription/list`.
+
+- [#12332](https://github.com/better-auth/better-auth/pull/12332) [`89e74b8`](https://github.com/better-auth/better-auth/commit/89e74b81e554e2a4edc5bf925adad59dfdace734) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed `organization.getInvitation` returning a missing, expired, or non-pending invitation error without a `code`. It now returns `INVITATION_NOT_FOUND` like the other invitation endpoints.
+
+- [#12318](https://github.com/better-auth/better-auth/pull/12318) [`525bd7a`](https://github.com/better-auth/better-auth/commit/525bd7a7d866012c88f0fff2c488d352a6eb8f2e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `listMembers` failing with a syntax error on PostgreSQL and MSSQL when the filter or offset matches no members.
+
+- [#12366](https://github.com/better-auth/better-auth/pull/12366) [`23a60a3`](https://github.com/better-auth/better-auth/commit/23a60a31f42ab9f78f3db976d232df37f8414e9d) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed SIWE sign-in leaving a user behind when creating its wallet address or account failed, which blocked that wallet from signing in again.
+
+- [#12340](https://github.com/better-auth/better-auth/pull/12340) [`29e45f8`](https://github.com/better-auth/better-auth/commit/29e45f84d5946a002330b56dc07600a156984a2c) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed social sign-up hanging on single-connection databases when the username plugin is enabled and the provider profile maps a username.
+
+- Updated dependencies [[`8412a5f`](https://github.com/better-auth/better-auth/commit/8412a5f43b724648b3faaa452bec0a6ba8e01765), [`34ee100`](https://github.com/better-auth/better-auth/commit/34ee1008d8269d32b875e2743b9805090863f2f4)]:
+  - @better-auth/core@1.7.19
+  - @better-auth/drizzle-adapter@1.7.19
+  - @better-auth/kysely-adapter@1.7.19
+  - @better-auth/memory-adapter@1.7.19
+  - @better-auth/mongo-adapter@1.7.19
+  - @better-auth/prisma-adapter@1.7.19
+  - @better-auth/telemetry@1.7.19
+
 ## 1.7.18
 
 ### Patch Changes

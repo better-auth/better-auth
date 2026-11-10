@@ -286,7 +286,7 @@ describe("client validation", async () => {
 			}),
 		).rejects.toMatchObject({
 			body: {
-				error: "invalid_grant",
+				error: "invalid_client",
 				error_description: "Invalid client ID",
 			},
 		});

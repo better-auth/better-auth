@@ -1,32 +1,28 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { SQLOutputValue } from "node:sqlite";
 import { DatabaseSync } from "node:sqlite";
 import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import type { DemoProcess } from "./demo-runtime";
+import type { DemoRuntime } from "./demo-runtime";
 import {
+	createDemoRuntime,
 	createOrganization,
 	getAvailablePort,
-	migrateDemoDatabase,
-	startNextDevServer,
-	stopProcess,
 } from "./demo-runtime";
 
 const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 
-interface NextDemoRuntime extends DemoProcess {
+interface NextDemoRuntime {
 	baseURL: string;
 	databasePath: string;
-	temporaryDirectory: string;
 }
 
-async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
-	const temporaryDirectory = await mkdtemp(
-		join(tmpdir(), "better-auth-scim-managed-demo-"),
-	);
+async function startNextDemoRuntime(
+	demo: DemoRuntime,
+): Promise<NextDemoRuntime> {
+	const temporaryDirectory = await demo.temporaryDirectory();
 	const port = await getAvailablePort();
 	const baseURL = `http://127.0.0.1:${port}`;
 	const databasePath = join(temporaryDirectory, "demo.sqlite");
@@ -44,14 +40,9 @@ async function startNextDemoRuntime(): Promise<NextDemoRuntime> {
 			"e2e-scim-demo-oidc-client-secret-at-least-thirty-two-characters",
 		SCIM_DEMO_OIDC_SIGNING_PRIVATE_KEY: undefined,
 	};
-	try {
-		await migrateDemoDatabase(environment);
-		const demo = await startNextDevServer(port, environment);
-		return { ...demo, baseURL, databasePath, temporaryDirectory };
-	} catch (error) {
-		await rm(temporaryDirectory, { recursive: true, force: true });
-		throw error;
-	}
+	await demo.migrate(environment);
+	await demo.startNextDev(port, environment);
+	return { baseURL, databasePath };
 }
 
 async function signUp(
@@ -213,18 +204,23 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 	test.describe.configure({ mode: "serial" });
 	test.setTimeout(120_000);
 
+	const demo = createDemoRuntime("better-auth-scim-managed-demo-");
 	let runtime: NextDemoRuntime;
 
 	test.beforeAll(async () => {
-		runtime = await startNextDemoRuntime();
+		// Hooks run on the project timeout, so let the startup deadline fire first.
+		test.setTimeout(120_000);
+		runtime = await startNextDemoRuntime(demo);
 	});
 
-	test.afterAll(async () => {
-		await stopProcess(runtime?.process);
-		if (runtime) {
-			await rm(runtime.temporaryDirectory, {
-				recursive: true,
-				force: true,
+	// Runs even when `beforeAll` times out, unlike `afterEach`.
+	test.afterAll(async ({}, testInfo) => {
+		try {
+			await demo.stop();
+		} finally {
+			await testInfo.attach("next-dev.log", {
+				body: demo.output(),
+				contentType: "text/plain",
 			});
 		}
 	});
@@ -261,7 +257,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		const createResponse = await createResponsePromise;
 		expect(
 			createResponse.status(),
-			`${await createResponse.text()}\n${runtime.readOutput()}`,
+			`${await createResponse.text()}\n${demo.output()}`,
 		).toBe(201);
 		const original = await readIssuedCredential(createResponse);
 		expect(original.token).toMatch(
@@ -720,7 +716,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		const database = new DatabaseSync(runtime.databasePath, {
 			readOnly: true,
 		});
-		let maya: Record<string, unknown> = {};
+		let maya: Record<string, SQLOutputValue> = {};
 		try {
 			const users = database
 				.prepare(

@@ -1,6 +1,4 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
 	APIRequestContext,
@@ -11,15 +9,11 @@ import type {
 import { expect, test } from "@playwright/test";
 import { encodeBasicCredentials } from "better-auth/oauth2";
 import { decodeJwt, decodeProtectedHeader } from "jose";
-import type { DemoProcess } from "./demo-runtime";
+import type { DemoRuntime } from "./demo-runtime";
 import {
+	createDemoRuntime,
 	createOrganization,
 	getAvailablePort,
-	migrateDemoDatabase,
-	runDemoNodeScript,
-	startDemoProcess,
-	startNextDevServer,
-	stopProcess,
 } from "./demo-runtime";
 
 const TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange";
@@ -50,11 +44,9 @@ interface TokenExchangeRuntime {
 	apiURL: string;
 	baseURL: string;
 	callbackURL: string;
-	demo: DemoProcess;
 	exchanger: ClientCredentials;
 	mcpResource: string;
-	temporaryDirectory: string;
-	api: DemoProcess;
+	output: () => string;
 }
 
 interface OAuthResponse {
@@ -178,10 +170,10 @@ function expectOAuthError(
 	expect(typeof response.body.error_description).toBe("string");
 }
 
-async function startTokenExchangeRuntime(): Promise<TokenExchangeRuntime> {
-	const temporaryDirectory = await mkdtemp(
-		join(tmpdir(), "better-auth-token-exchange-demo-"),
-	);
+async function startTokenExchangeRuntime(
+	demo: DemoRuntime,
+): Promise<TokenExchangeRuntime> {
+	const temporaryDirectory = await demo.temporaryDirectory();
 	const [demoPort, apiPort, callbackPort] = await Promise.all([
 		getAvailablePort(),
 		getAvailablePort(),
@@ -199,57 +191,46 @@ async function startTokenExchangeRuntime(): Promise<TokenExchangeRuntime> {
 		TOKEN_EXCHANGE_DEMO_API_URL: apiURL,
 		TOKEN_EXCHANGE_DEMO_ENABLED: "true",
 	};
-	let api: DemoProcess | undefined;
-	let demo: DemoProcess | undefined;
-	try {
-		api = await startDemoProcess({
-			command: "node",
-			args: ["--experimental-strip-types", "scripts/token-exchange-api.ts"],
-			environment: {
-				...environment,
-				PORT: String(apiPort),
-				TOKEN_EXCHANGE_DEMO_ISSUER: baseURL,
-			},
-			readyURL: `${apiURL}/health`,
-			label: "Token exchange downstream API",
-		});
-		await migrateDemoDatabase(environment);
-		const setupOutput = await runDemoNodeScript(
-			["scripts/token-exchange-demo-setup.ts"],
-			environment,
-			"Token exchange demo provisioning",
-		);
-		const lines = setupOutput.trim().split("\n");
-		expect(lines, setupOutput).toHaveLength(1);
-		const credentials: unknown = JSON.parse(lines[0] ?? "");
-		if (!isJSONObject(credentials)) {
-			throw new Error("Provisioning did not print a JSON object");
-		}
-		const exchanger = {
-			client_id: readString(credentials, "client_id"),
-			client_secret: readString(credentials, "client_secret"),
-		};
-		demo = await startNextDevServer(demoPort, {
+	await demo.start({
+		command: "node",
+		args: ["--experimental-strip-types", "scripts/token-exchange-api.ts"],
+		env: {
 			...environment,
-			TOKEN_EXCHANGE_DEMO_CLIENT_ID: exchanger.client_id,
-			TOKEN_EXCHANGE_DEMO_CLIENT_SECRET: exchanger.client_secret,
-		});
-		return {
-			api,
-			apiURL,
-			baseURL,
-			callbackURL: `http://127.0.0.1:${callbackPort}/callback`,
-			demo,
-			exchanger,
-			mcpResource: `${baseURL}/api/mcp`,
-			temporaryDirectory,
-		};
-	} catch (error) {
-		await stopProcess(demo?.process);
-		await stopProcess(api?.process);
-		await rm(temporaryDirectory, { recursive: true, force: true });
-		throw error;
+			PORT: String(apiPort),
+			TOKEN_EXCHANGE_DEMO_ISSUER: baseURL,
+		},
+		readyURL: `${apiURL}/health`,
+		label: "Token exchange downstream API",
+	});
+	await demo.migrate(environment);
+	const setupOutput = await demo.run(
+		["scripts/token-exchange-demo-setup.ts"],
+		environment,
+		"Token exchange demo provisioning",
+	);
+	const lines = setupOutput.trim().split("\n");
+	expect(lines, setupOutput).toHaveLength(1);
+	const credentials: unknown = JSON.parse(lines[0] ?? "");
+	if (!isJSONObject(credentials)) {
+		throw new Error("Provisioning did not print a JSON object");
 	}
+	const exchanger = {
+		client_id: readString(credentials, "client_id"),
+		client_secret: readString(credentials, "client_secret"),
+	};
+	await demo.startNextDev(demoPort, {
+		...environment,
+		TOKEN_EXCHANGE_DEMO_CLIENT_ID: exchanger.client_id,
+		TOKEN_EXCHANGE_DEMO_CLIENT_SECRET: exchanger.client_secret,
+	});
+	return {
+		apiURL,
+		baseURL,
+		callbackURL: `http://127.0.0.1:${callbackPort}/callback`,
+		exchanger,
+		mcpResource: `${baseURL}/api/mcp`,
+		output: demo.output,
+	};
 }
 
 /** Sends one stateless (2026-07-28) MCP `tools/call` to the demo MCP server. */
@@ -283,7 +264,7 @@ async function callMcpTool(
 		},
 	});
 	const raw = await response.text();
-	expect(response.status(), `${raw}\n${runtime.demo.readOutput()}`).toBe(200);
+	expect(response.status(), `${raw}\n${runtime.output()}`).toBe(200);
 	// A streamable HTTP server may answer with SSE; the last data line is the reply.
 	const payload = response
 		.headers()
@@ -381,6 +362,7 @@ test.describe("Next.js token exchange demo (RFC 8693)", () => {
 	test.describe.configure({ mode: "serial" });
 	test.setTimeout(120_000);
 
+	const demo = createDemoRuntime("better-auth-token-exchange-demo-");
 	let runtime: TokenExchangeRuntime;
 	let anonymous: APIRequestContext;
 	let browserContext: BrowserContext;
@@ -452,23 +434,25 @@ test.describe("Next.js token exchange demo (RFC 8693)", () => {
 
 	test.beforeAll(async ({ browser, playwright }) => {
 		test.setTimeout(180_000);
-		runtime = await startTokenExchangeRuntime();
+		runtime = await startTokenExchangeRuntime(demo);
 		anonymous = await playwright.request.newContext();
 		browserContext = await browser.newContext();
 		page = await browserContext.newPage();
 	});
 
-	test.afterAll(async () => {
-		// Servers first and independently: a failed or timed-out test must not
-		// leave the dev server holding the demo's .next lock.
-		await Promise.allSettled([
-			stopProcess(runtime?.demo.process),
-			stopProcess(runtime?.api.process),
-		]);
-		if (runtime) {
-			await rm(runtime.temporaryDirectory, { recursive: true, force: true });
+	// Runs even when `beforeAll` times out, unlike `afterEach`.
+	test.afterAll(async ({}, testInfo) => {
+		try {
+			// Servers first and independently: a failed or timed-out test must not
+			// leave the dev server holding the demo's .next lock.
+			await demo.stop();
+		} finally {
+			await testInfo.attach("next-dev.log", {
+				body: demo.output(),
+				contentType: "text/plain",
+			});
+			await Promise.allSettled([browserContext?.close(), anonymous?.dispose()]);
 		}
-		await Promise.allSettled([browserContext?.close(), anonymous?.dispose()]);
 	});
 
 	test("an MCP client registers with DCR and the user signs in and consents in the browser (RFC 7591, RFC 6749 §4.1, RFC 7636, RFC 8707)", async ({

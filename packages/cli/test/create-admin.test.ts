@@ -7,6 +7,9 @@ import { createAdminAction } from "../src/commands/create-admin";
 import { migrateAction } from "../src/commands/migrate";
 import * as config from "../src/utils/get-config";
 
+// These tests answer prompts as if the run had a terminal.
+vi.mock(import("../src/utils/interactive"));
+
 vi.mock("prompts", () => ({
 	default: vi.fn(),
 }));
@@ -208,8 +211,27 @@ describe("create-admin", () => {
 		).rejects.toThrow(/missing user table/);
 	});
 
+	it("exits 130 when the email prompt is canceled", async () => {
+		await setupAuth();
+		vi.mocked(process.exit).mockClear();
+		const { default: realPrompts } = await vi.importActual<{
+			default: typeof prompts;
+		}>("prompts");
+		realPrompts.inject([new Error("canceled")]);
+		vi.mocked(prompts).mockImplementationOnce(realPrompts);
+
+		await expect(
+			createAdminAction({
+				cwd: process.cwd(),
+				config: "test/auth.ts",
+			}),
+		).rejects.toThrow();
+		expect(process.exit).toHaveBeenNthCalledWith(1, 130);
+	});
+
 	it("asks for confirmation when users already exist", async () => {
 		const auth = await setupAuth();
+		vi.mocked(process.exit).mockClear();
 		vi.mocked(prompts).mockResolvedValueOnce({ confirmed: false });
 
 		await auth.api.signUpEmail({
@@ -220,20 +242,21 @@ describe("create-admin", () => {
 			},
 		});
 
-		await createAdminAction({
-			cwd: process.cwd(),
-			config: "test/auth.ts",
-			email: "admin@example.com",
-			password: "secure-password",
-			name: "Root Admin",
-		});
-
-		expect(prompts).toHaveBeenCalledWith(
-			expect.objectContaining({
-				type: "confirm",
-				name: "confirmed",
+		await expect(
+			createAdminAction({
+				cwd: process.cwd(),
+				config: "test/auth.ts",
+				email: "admin@example.com",
+				password: "secure-password",
+				name: "Root Admin",
 			}),
-		);
+		).rejects.toThrow();
+		expect(process.exit).toHaveBeenNthCalledWith(1, 130);
+
+		expect(vi.mocked(prompts).mock.lastCall?.[0]).toMatchObject({
+			type: "confirm",
+			name: "confirmed",
+		});
 		const count = db.prepare("SELECT COUNT(*) as count FROM user").get() as {
 			count: number;
 		};
