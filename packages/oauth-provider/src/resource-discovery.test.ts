@@ -828,9 +828,9 @@ describe("canonical client metadata document registration", () => {
 					const originalCreate =
 						transactionAdapter.create.bind(transactionAdapter);
 					vi.spyOn(transactionAdapter, "create").mockImplementation(
-						async (input) => {
-							if (input.model === "oauthClient") throw drizzleWrappedError;
-							return originalCreate(input);
+						async (data) => {
+							if (data.model === "oauthClient") throw drizzleWrappedError;
+							return originalCreate(data);
 						},
 					);
 					return callback(transactionAdapter);
@@ -855,12 +855,96 @@ describe("canonical client metadata document registration", () => {
 		expect(converged.client.name).toBe("Concurrent Drizzle Writer");
 	});
 
+	it.each([
+		{ label: "SQL Server duplicate key (2601)", err: { number: 2601 } },
+		{ label: "SQL Server unique constraint (2627)", err: { number: 2627 } },
+		{
+			label: "SQLite extended unique constraint (2067)",
+			err: { errno: 2067 },
+		},
+	])(
+		"converges after a driver-specific unique error ($label)",
+		async ({ err }) => {
+			const instance = await boot();
+			const clientId = `https://client.example.com/unique-code-${err.number ?? err.errno}.json`;
+			const endpointContext = {
+				context: instance.ctx,
+			} as unknown as GenericEndpointContext;
+			await registerClientMetadataDocument(endpointContext, instance.opts, {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				metadata: {
+					client_id: clientId,
+					client_name: "Initial Writer",
+					redirect_uris: ["https://client.example.com/callback"],
+					token_endpoint_auth_method: "none",
+				},
+			});
+
+			const driverWrappedError = Object.assign(
+				new Error("Driver execution failed"),
+				{ cause: Object.assign(new Error("unique violation"), err) },
+			);
+
+			const originalTransaction = instance.ctx.adapter.transaction.bind(
+				instance.ctx.adapter,
+			);
+			vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
+				async (callback) =>
+					originalTransaction(async (transactionAdapter) => {
+						const originalCreate =
+							transactionAdapter.create.bind(transactionAdapter);
+						vi.spyOn(transactionAdapter, "create").mockImplementation(
+							async (data) => {
+								if (data.model === "oauthClient") throw driverWrappedError;
+								return originalCreate(data);
+							},
+						);
+						return callback(transactionAdapter);
+					}),
+			);
+
+			const converged = await registerClientMetadataDocument(
+				endpointContext,
+				instance.opts,
+				{
+					clientId,
+					clientDiscoveryId: "test-client-discovery",
+					metadata: {
+						client_id: clientId,
+						client_name: "Concurrent Writer",
+						redirect_uris: ["https://client.example.com/callback"],
+						token_endpoint_auth_method: "none",
+					},
+				},
+			);
+			expect(converged.created).toBe(false);
+			expect(converged.client.name).toBe("Concurrent Writer");
+		},
+	);
+
 	it("preserves a Drizzle-wrapped non-unique database error without retrying", async () => {
 		const instance = await boot();
 		const clientId = "https://client.example.com/drizzle-non-unique-error.json";
 		const endpointContext = {
 			context: instance.ctx,
 		} as unknown as GenericEndpointContext;
+
+		await instance.ctx.adapter.create({
+			model: "oauthClient",
+			data: {
+				clientId,
+				clientDiscoveryId: "test-client-discovery",
+				name: "Existing Discovery Client",
+				redirectUris: ["https://client.example.com/callback"],
+				tokenEndpointAuthMethod: "none",
+				applicationType: "web",
+				grantTypes: ["authorization_code"],
+				responseTypes: ["code"],
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
 
 		const nonUniqueWrappedError = Object.assign(
 			new Error(
@@ -873,22 +957,26 @@ describe("canonical client metadata document registration", () => {
 			},
 		);
 
+		const findOneSpy = vi.spyOn(instance.ctx.adapter, "findOne");
+		let transactionCount = 0;
 		const originalTransaction = instance.ctx.adapter.transaction.bind(
 			instance.ctx.adapter,
 		);
 		vi.spyOn(instance.ctx.adapter, "transaction").mockImplementation(
-			async (callback) =>
-				originalTransaction(async (transactionAdapter) => {
+			async (callback) => {
+				transactionCount++;
+				return originalTransaction(async (transactionAdapter) => {
 					const originalCreate =
 						transactionAdapter.create.bind(transactionAdapter);
 					vi.spyOn(transactionAdapter, "create").mockImplementation(
-						async (input) => {
-							if (input.model === "oauthClient") throw nonUniqueWrappedError;
-							return originalCreate(input);
+						async (data) => {
+							if (data.model === "oauthClient") throw nonUniqueWrappedError;
+							return originalCreate(data);
 						},
 					);
 					return callback(transactionAdapter);
-				}),
+				});
+			},
 		);
 
 		await expect(
@@ -903,6 +991,9 @@ describe("canonical client metadata document registration", () => {
 				},
 			}),
 		).rejects.toBe(nonUniqueWrappedError);
+
+		expect(findOneSpy).not.toHaveBeenCalled();
+		expect(transactionCount).toBe(1);
 	});
 
 	it("rethrows safely when error.cause has a circular reference", async () => {
@@ -924,9 +1015,9 @@ describe("canonical client metadata document registration", () => {
 					const originalCreate =
 						transactionAdapter.create.bind(transactionAdapter);
 					vi.spyOn(transactionAdapter, "create").mockImplementation(
-						async (input) => {
-							if (input.model === "oauthClient") throw circularError;
-							return originalCreate(input);
+						async (data) => {
+							if (data.model === "oauthClient") throw circularError;
+							return originalCreate(data);
 						},
 					);
 					return callback(transactionAdapter);
@@ -978,9 +1069,9 @@ describe("canonical client metadata document registration", () => {
 					const originalCreate =
 						transactionAdapter.create.bind(transactionAdapter);
 					vi.spyOn(transactionAdapter, "create").mockImplementation(
-						async (input) => {
-							if (input.model === "oauthClient") throw collisionCause;
-							return originalCreate(input);
+						async (data) => {
+							if (data.model === "oauthClient") throw collisionCause;
+							return originalCreate(data);
 						},
 					);
 					return callback(transactionAdapter);

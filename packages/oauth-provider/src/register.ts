@@ -1258,7 +1258,10 @@ function isUniqueConstraintError(
 		[
 			"1062",
 			"11000",
+			"2067",
 			"23505",
+			"2601",
+			"2627",
 			"ER_DUP_ENTRY",
 			"P2002",
 			"SQLITE_CONSTRAINT_UNIQUE",
