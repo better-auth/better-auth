@@ -595,7 +595,7 @@ describe("Admin plugin", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12344
 	 */
-	it("should allow to ban user until an absolute expiration date", async () => {
+	it("should allow Date and offset ISO expiry values for user bans", async () => {
 		const created = await client.admin.createUser(
 			{
 				name: "Absolute Expiry User",
@@ -623,6 +623,29 @@ describe("Admin plugin", async () => {
 			banExpires.getTime(),
 		);
 		expect(res.data?.user.banned).toBe(true);
+
+		const offsetDate = "2030-01-01T12:00:00+02:00";
+		const offsetUser = await client.admin.createUser(
+			{
+				name: "Offset Expiry User",
+				email: "offset-ban-expiry@email.com",
+				password: "test",
+				role: "user",
+			},
+			{ headers: adminHeaders },
+		);
+		const offsetRes = await client.admin.banUser(
+			{
+				userId: offsetUser.data?.user.id || "",
+				banExpires: offsetDate,
+			},
+			{ headers: adminHeaders },
+		);
+
+		expect(offsetRes.error).toBeNull();
+		expect(new Date(String(offsetRes.data?.user?.banExpires)).getTime()).toBe(
+			new Date(offsetDate).getTime(),
+		);
 	});
 
 	/**

@@ -1103,7 +1103,10 @@ const banUserBodySchema = z
 		 * Absolute date and time when the ban expires
 		 */
 		banExpires: z
-			.union([z.date(), z.iso.datetime().transform((date) => new Date(date))])
+			.union([
+				z.date(),
+				z.iso.datetime({ offset: true }).transform((date) => new Date(date)),
+			])
 			.meta({
 				description: "The date and time when the ban expires",
 			})

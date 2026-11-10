@@ -315,14 +315,16 @@ Bans a user, preventing them from signing in and revokes all of their existing s
        */
       banExpiresIn?: number = 60 * 60 * 24 * 7
       /**
-       * The absolute date and time when the ban expires. Must be in the future and cannot be used with `banExpiresIn`.
+       * The absolute date and time when the ban expires. Accepts a `Date` or an ISO 8601 date-time string with a timezone. Must be in the future and cannot be used with `banExpiresIn`.
        */
-      banExpires?: Date
+      banExpires?: Date | string
   }
   ```
 </APIMethod>
 
 Pass `banExpires` when the ban should end at a specific date and time. It is an alternative to `banExpiresIn`; providing both or a date in the past is rejected.
+
+ISO 8601 date-time strings may use `Z` or a UTC offset, such as `2030-01-01T12:00:00+02:00`.
 
 ```ts
 await authClient.admin.banUser({
