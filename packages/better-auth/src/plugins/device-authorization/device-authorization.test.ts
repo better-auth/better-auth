@@ -550,10 +550,6 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
-		/**
-		 * React Strict Mode runs an approval page's lookup effect twice, so one
-		 * user can send two lookups for an unclaimed code at once.
-		 */
 		it("rejects a lookup whose code is deleted while it claims the code", async () => {
 			const { headers } = await signInWithTestUser();
 			const { user_code } = await auth.api.deviceCode({
@@ -580,6 +576,10 @@ describe("device authorization flow", async () => {
 			}
 		});
 
+		/**
+		 * React Strict Mode runs an approval page's lookup effect twice, so one
+		 * user can send two lookups for an unclaimed code at once.
+		 */
 		it("returns the request details to both concurrent lookups by the claiming user", async () => {
 			const { headers } = await signInWithTestUser();
 			const { user_code } = await auth.api.deviceCode({
