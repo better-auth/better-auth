@@ -166,6 +166,9 @@ function buildBearerChallenge(
 /**
  * Create an OAuth resource-server challenge for a failed access-token request.
  *
+ * Bearer challenges carry the RFC 9728 `resource_metadata` pointer; DPoP
+ * challenges carry `algs` and no `resource_metadata`.
+ *
  * Missing/invalid bearer credentials are reported with RFC 6750 plus the RFC
  * 9728 `resource_metadata` pointer. Insufficient-scope failures (built with
  * `createInsufficientScopeError`) are reported with RFC 6750 §3.1's

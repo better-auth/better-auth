@@ -782,6 +782,23 @@ describe("DPoP nonce lifetime shared with the resource client", async () => {
 			verify(await nonceIssuedAgo(context.secret, 30)),
 		).resolves.toMatchObject({ cnf: { jkt: key.jkt } });
 	});
+
+	it.each([0, 1.5])(
+		"rejects a caller-supplied expiresIn of %s before checking the proof",
+		async (expiresIn) => {
+			const { verifyAccessTokenRequest: verifyResourceRequest } =
+				oauthProviderResourceClient(auth).getActions();
+			await expect(
+				verifyResourceRequest(resourceRequest("token", "proof"), {
+					jwksUrl: `${issuer}/api/auth/jwks`,
+					verifyOptions: { audience: jwtResource, issuer },
+					dpop: { nonce: { required: true, expiresIn } },
+				}),
+			).rejects.toThrow(
+				"dpop.nonce.expiresIn must be a positive integer number of seconds",
+			);
+		},
+	);
 });
 
 describe("dpop.nonce configuration", () => {

@@ -91,6 +91,14 @@ export const oauthProviderResourceClient = <
 		const expiresIn =
 			dpop.nonce.expiresIn ??
 			(await getOauthProviderPlugin())?.options?.dpop?.nonce?.expiresIn;
+		if (
+			expiresIn !== undefined &&
+			(!Number.isSafeInteger(expiresIn) || expiresIn <= 0)
+		) {
+			throw Error(
+				"dpop.nonce.expiresIn must be a positive integer number of seconds",
+			);
+		}
 		return { ...dpop, nonce: { ...dpop.nonce, secret, expiresIn } };
 	};
 	const resolveVerifyAccessTokenOptions = async (

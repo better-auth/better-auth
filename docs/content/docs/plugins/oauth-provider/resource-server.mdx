@@ -114,10 +114,10 @@ Your API can require a server-provided nonce in each DPoP proof, as the provider
 
 Pass `dpop.nonce` to `verifyAccessTokenRequest`, and choose its `secret` by where your API runs:
 
-* **On the auth server's origin:** use the auth `secret`. A nonce works wherever the same secret verifies it, and clients keep one nonce per origin. With the auth secret, the nonce from a token response also works at your API.
+* **On the auth server's origin:** use the auth `secret`. A nonce works wherever the same secret verifies it, and clients keep one nonce per origin. With the auth secret and the provider's `dpop.nonce.expiresIn`, the nonce from a token response also works at your API. A standalone `verifyAccessTokenRequest` defaults `expiresIn` to 300 seconds, so pass the provider's value when it differs; the resource client created with your auth instance fills in both.
 * **On its own origin:** use a separate secret. Share that secret across every instance of the API.
 
-A DPoP request without a current nonce fails with a 401 `use_dpop_nonce` error. The error carries a fresh nonce in its `DPoP-Nonce` header. `createResourceServerChallenge` turns the error into the `WWW-Authenticate: DPoP` challenge the client expects. The challenge keeps the nonce in its own `DPoP-Nonce` header, sets `Cache-Control: no-store`, and adds `DPoP-Nonce` and `WWW-Authenticate` to `Access-Control-Expose-Headers`. To send the next nonce on a successful response, call `createDpopNonce` with the same secret.
+A DPoP request without a current nonce fails with a 401 `use_dpop_nonce` error. The error carries a fresh nonce in its `DPoP-Nonce` header. `createResourceServerChallenge` turns the error into the `WWW-Authenticate: DPoP` challenge the client expects. The challenge keeps the nonce in its own `DPoP-Nonce` header, sets `Cache-Control: no-store`, and adds `DPoP-Nonce` and `WWW-Authenticate` to `Access-Control-Expose-Headers`. To send the next nonce on a successful response, call `createDpopNonce` with the same secret and mark that response `Cache-Control: no-store`.
 
 `createResourceServerChallenge` returns one of two challenge schemes:
 
