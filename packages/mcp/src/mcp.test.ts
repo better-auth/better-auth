@@ -18,9 +18,10 @@ import {
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import { createMcpHandler, McpServer } from "@modelcontextprotocol/server";
 import { createAuthClient } from "better-auth/client";
+import { deriveDpopAth } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMcpProtectedRequestHandler, mcp, requireMcpAuth } from "./index";
 
@@ -670,5 +671,144 @@ describe("requireMcpAuth access token profile", async () => {
 
 		expect(response.status).toBe(401);
 		expect(handler).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc9449#section-9
+ */
+describe("requireMcpAuth DPoP nonces", async () => {
+	// Its own origin: verification caches JWKS by URL across test instances.
+	const authorizationServer = "https://nonce-auth.example.test";
+	const baseURL = `${authorizationServer}/api/auth`;
+	const tokenEndpoint = `${baseURL}/oauth2/token`;
+	const instance = await getTestInstance({
+		baseURL: authorizationServer,
+		advanced: { useSecureCookies: false },
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			mcp({
+				loginPage: "/login",
+				consentPage: "/consent",
+				resource: baseURL,
+				scopes: ["mcp:base"],
+				clientPrivileges: () => true,
+				dpop: { nonce: { required: true } },
+			}),
+		],
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	async function createProof(
+		key: CryptoKeyPair,
+		params: {
+			url: string;
+			method: string;
+			nonce?: string | null;
+			ath?: string;
+		},
+	) {
+		return new SignJWT({
+			jti: crypto.randomUUID(),
+			htm: params.method,
+			htu: params.url,
+			iat: Math.floor(Date.now() / 1000),
+			...(params.nonce ? { nonce: params.nonce } : {}),
+			...(params.ath ? { ath: params.ath } : {}),
+		})
+			.setProtectedHeader({
+				typ: "dpop+jwt",
+				alg: "ES256",
+				jwk: await exportJWK(key.publicKey),
+			})
+			.sign(key.privateKey);
+	}
+
+	it("challenges a proof without a nonce and accepts the provider's nonce", async () => {
+		const { headers } = await instance.signInWithTestUser();
+		const client = await instance.auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				grant_types: ["client_credentials"],
+				token_endpoint_auth_method: "client_secret_post",
+				redirect_uris: [REDIRECT_URI],
+				client_credentials_scopes: ["mcp:base"],
+			},
+		});
+		const key = await generateKeyPair("ES256", { extractable: true });
+		const requestToken = async (nonce?: string | null) =>
+			instance.customFetchImpl(tokenEndpoint, {
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					DPoP: await createProof(key, {
+						url: tokenEndpoint,
+						method: "POST",
+						nonce,
+					}),
+				},
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: client.client_id,
+					client_secret: client.client_secret!,
+					scope: "mcp:base",
+					resource: baseURL,
+				}),
+			});
+		const tokenChallenge = await requestToken();
+		expect(tokenChallenge.status).toBe(400);
+		const tokenResponse = await requestToken(
+			tokenChallenge.headers.get("DPoP-Nonce"),
+		);
+		expect(tokenResponse.status).toBe(200);
+		const providerNonce = tokenResponse.headers.get("DPoP-Nonce");
+		const { access_token: accessToken, token_type: tokenType } =
+			await tokenResponse.json();
+		expect(tokenType).toBe("DPoP");
+		vi.stubGlobal("fetch", instance.customFetchImpl);
+		const handler = vi.fn(() => Response.json({ ok: true }));
+		const protectedHandler = requireMcpAuth(instance.auth, handler, {
+			dpop: { nonce: { required: true } },
+		});
+		const callMcp = async (nonce?: string | null) =>
+			protectedHandler(
+				new Request(baseURL, {
+					method: "POST",
+					headers: {
+						Authorization: `DPoP ${accessToken}`,
+						DPoP: await createProof(key, {
+							url: baseURL,
+							method: "POST",
+							nonce,
+							ath: await deriveDpopAth(accessToken),
+						}),
+					},
+				}),
+			);
+
+		const challenge = await callMcp();
+		expect(challenge.status).toBe(401);
+		expect(challenge.headers.get("WWW-Authenticate")).toMatch(
+			/^DPoP error="use_dpop_nonce", /,
+		);
+		expect(challenge.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+		expect(await challenge.json()).toMatchObject({
+			jsonrpc: "2.0",
+			error: { code: -32000 },
+		});
+		expect(handler).not.toHaveBeenCalled();
+
+		// Same origin and secret as the provider, so its nonce is accepted.
+		const response = await callMcp(providerNonce);
+		expect(response.status).toBe(200);
+		expect(handler).toHaveBeenCalledOnce();
+		expect(response.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+		expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+			"DPoP-Nonce",
+		);
+		expect(await response.json()).toEqual({ ok: true });
 	});
 });

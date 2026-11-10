@@ -1738,6 +1738,37 @@ export interface OAuthOptions<
 		 * @default ["EdDSA", "ES256", "ES512", "PS256", "RS256"]
 		 */
 		signingAlgorithms?: JWSAlgorithms[];
+		/**
+		 * Server-provided DPoP nonces (RFC 9449 §8, §9), which stop a client from
+		 * using a proof it created ahead of time (§11.2).
+		 *
+		 * With `required: true`, every DPoP proof sent to the token and UserInfo
+		 * endpoints must carry a nonce this server issued. A proof without one,
+		 * or with an expired one, is answered with `use_dpop_nonce` and a fresh
+		 * nonce in the `DPoP-Nonce` header, and the client retries with it. The
+		 * token endpoint checks the nonce before it consumes an authorization
+		 * code, device code, or refresh token, so the retry still succeeds.
+		 * Successful DPoP responses carry the next nonce. Requests without a
+		 * DPoP proof are unaffected.
+		 *
+		 * Nonces are derived from the auth `secret` and stored nowhere, so they
+		 * work across instances that share the secret. Rotating the secret
+		 * invalidates outstanding nonces; clients recover with one retry.
+		 */
+		nonce?: {
+			/**
+			 * Whether DPoP proofs must carry a server-provided nonce. There is no
+			 * optional mode: once a server hands out a nonce it must not accept
+			 * proofs without one (RFC 9449 §11.3).
+			 */
+			required: boolean;
+			/**
+			 * Seconds a nonce is accepted after it is issued.
+			 *
+			 * @default 300
+			 */
+			expiresIn?: number;
+		};
 	};
 }
 

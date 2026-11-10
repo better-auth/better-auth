@@ -54,6 +54,27 @@ export interface RequireMcpAuthOptions {
 		proofMaxAgeSeconds?: number;
 		signingAlgorithms?: readonly string[];
 		replayStore?: DpopReplayStore;
+		/**
+		 * Require server-provided nonces in DPoP proofs (RFC 9449 §9). A proof
+		 * without a current nonce gets a `401` `use_dpop_nonce` challenge with a
+		 * fresh `DPoP-Nonce`, and successful DPoP responses carry the next one.
+		 *
+		 * Nonces are derived from the auth instance's secret, the same way the
+		 * OAuth provider's `dpop.nonce` derives them, so an MCP server on the
+		 * authorization server's origin accepts the nonce the client already
+		 * holds. Pass `secret` only for an MCP server on its own origin.
+		 */
+		nonce?: {
+			required: boolean;
+			/**
+			 * Seconds a nonce is accepted after it is issued.
+			 *
+			 * @default 300
+			 */
+			expiresIn?: number;
+			/** Defaults to the auth instance's secret. */
+			secret?: string;
+		};
 	};
 }
 
@@ -81,6 +102,7 @@ export const requireMcpAuth = <
 		$context: Promise<{
 			baseURL: string;
 			internalAdapter: DpopReplayReservations;
+			secret?: string;
 		}>;
 	},
 >(
@@ -100,10 +122,17 @@ export const requireMcpAuth = <
 		// the auth context so the verified issuer and audience match what the
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
-		const { baseURL, internalAdapter } = await auth.$context;
+		const { baseURL, internalAdapter, secret } = await auth.$context;
 		if (!baseURL) {
 			throw new Error(
 				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `createMcpProtectedRequestHandler` with explicit verification options.",
+			);
+		}
+		const nonce = opts?.dpop?.nonce;
+		const nonceSecret = nonce?.secret ?? secret;
+		if (nonce?.required && !nonceSecret) {
+			throw new Error(
+				"requireMcpAuth requires dpop.nonce.secret when the auth context has no secret.",
 			);
 		}
 		const issuer = opts?.issuer ?? baseURL;
@@ -127,6 +156,14 @@ export const requireMcpAuth = <
 					// rejected across instances, not just within one process.
 					replayStore:
 						opts?.dpop?.replayStore ?? createDpopReplayStore(internalAdapter),
+					nonce:
+						nonce && nonceSecret
+							? {
+									required: nonce.required,
+									expiresIn: nonce.expiresIn,
+									secret: nonceSecret,
+								}
+							: undefined,
 				},
 			},
 			handler,

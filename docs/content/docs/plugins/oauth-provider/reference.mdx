@@ -243,9 +243,11 @@ Custom refresh token encoding sent to clients.
 
 Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Without the JWT plugin](/docs/plugins/oauth-provider/tokens#without-the-jwt-plugin).
 
-`dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms? }`</span>
+`dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms?, nonce? }`</span>
 
 DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
+
+`nonce` takes `{ required, expiresIn? }`. With `required: true`, DPoP proofs at the token and UserInfo endpoints must carry a nonce the server issued. `expiresIn` is in seconds and defaults to `300`. See [Server-provided nonces](/docs/plugins/oauth-provider/tokens#server-provided-nonces).
 
 `requestUriResolver` <span className="opacity-70">`(input) => Promise<Record<string, string> | null>`</span>
 
@@ -500,6 +502,10 @@ Returned in any of these cases:
 `invalid_dpop_proof` <span className="opacity-70">400</span>
 
 Returned when the DPoP proof is missing or invalid for a DPoP-bound client or resource.
+
+`use_dpop_nonce` <span className="opacity-70">400</span>
+
+Returned when `dpop.nonce.required` is on and the DPoP proof has no nonce, or one that expired or that this server did not issue. The `DPoP-Nonce` response header carries the nonce to retry with. The UserInfo endpoint returns the same error with a 401 and a `WWW-Authenticate: DPoP` challenge.
 
 Token exchange has its own conditions for these errors. See [Token exchange errors](/docs/plugins/oauth-provider/tokens#token-exchange-errors).
 

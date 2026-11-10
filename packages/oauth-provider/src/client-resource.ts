@@ -66,6 +66,28 @@ export const oauthProviderResourceClient = <
 		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
 	};
 	const authServerBasePath = auth?.options.basePath;
+	/**
+	 * Fills a missing nonce secret from the auth instance's secret, the one the
+	 * OAuth provider derives its nonces from, so a resource on the provider's
+	 * origin accepts the nonce the client already holds.
+	 */
+	const resolveDpopOptions = async (
+		dpop: ResourceDpopAuthOptions | undefined,
+	): Promise<VerifyAccessTokenRequestOptions["dpop"]> => {
+		if (!dpop?.nonce?.required) {
+			const { nonce: _nonce, ...rest } = dpop ?? {};
+			return dpop ? rest : undefined;
+		}
+		const secret =
+			dpop.nonce.secret ??
+			(auth
+				? ((await auth.$context) as { secret?: string }).secret
+				: undefined);
+		if (!secret) {
+			throw Error("please define opts.dpop.nonce.secret");
+		}
+		return { ...dpop, nonce: { ...dpop.nonce, secret } };
+	};
 	const resolveVerifyAccessTokenOptions = async (
 		opts:
 			| (VerifyAccessTokenAuthOpts & {
@@ -187,7 +209,7 @@ export const oauthProviderResourceClient = <
 						isScopeSatisfied?: VerifyAccessTokenRequestOptions["isScopeSatisfied"];
 						jwksUrl?: string;
 						remoteVerify?: VerifyAccessTokenRemote;
-						dpop?: VerifyAccessTokenRequestOptions["dpop"];
+						dpop?: ResourceDpopAuthOptions;
 						/** Maps non-url (ie urn, client) resources to resource_metadata */
 						resourceMetadataMappings?: Record<string, string>;
 					},
@@ -196,7 +218,7 @@ export const oauthProviderResourceClient = <
 					try {
 						return await verifyAccessTokenRequest(
 							toResourceRequestInput(request),
-							verifyOptions,
+							{ ...verifyOptions, dpop: await resolveDpopOptions(opts?.dpop) },
 						);
 					} catch (error) {
 						const challenge = createResourceServerChallenge(
@@ -342,8 +364,19 @@ type VerifyAccessTokenAuthOpts = {
 	/** Maps non-url (ie urn, client) resources to resource_metadata */
 	resourceMetadataMappings?: Record<string, string>;
 };
+type ResourceDpopOptions = NonNullable<VerifyAccessTokenRequestOptions["dpop"]>;
+/**
+ * DPoP settings for a resource client created with the auth instance: the
+ * nonce secret defaults to the auth instance's secret.
+ */
+type ResourceDpopAuthOptions = Omit<ResourceDpopOptions, "nonce"> & {
+	nonce?: Omit<NonNullable<ResourceDpopOptions["nonce"]>, "secret"> & {
+		/** Defaults to the auth instance's secret. */
+		secret?: string;
+	};
+};
 type VerifyAccessTokenRequestAuthOpts = VerifyAccessTokenAuthOpts & {
-	dpop?: VerifyAccessTokenRequestOptions["dpop"];
+	dpop?: ResourceDpopAuthOptions;
 };
 type VerifyAccessTokenNoAuthOpts =
 	| {

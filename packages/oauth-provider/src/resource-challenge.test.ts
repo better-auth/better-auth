@@ -174,6 +174,32 @@ describe("resource server challenge", () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-9
+	 */
+	it("keeps the nonce on an RFC 9449 use_dpop_nonce challenge", () => {
+		const challenge = createResourceServerChallenge(
+			new APIError(
+				"UNAUTHORIZED",
+				{
+					message: "DPoP proof must include a server-provided nonce",
+					error: "use_dpop_nonce",
+					error_description: "DPoP proof must include a server-provided nonce",
+				},
+				{ "DPoP-Nonce": "fresh-nonce" },
+			),
+			"https://api.example.com/mcp/tools",
+			{ dpopSigningAlgorithms: ["ES256"] },
+		) as APIError;
+		const headers = new Headers(challenge.headers);
+		expect(challenge.statusCode).toBe(401);
+		expect(headers.get("WWW-Authenticate")).toBe(
+			'DPoP error="use_dpop_nonce", error_description="DPoP proof must include a server-provided nonce", algs="ES256"',
+		);
+		expect(headers.get("DPoP-Nonce")).toBe("fresh-nonce");
+		expect(headers.get("Access-Control-Expose-Headers")).toBe("DPoP-Nonce");
+	});
+
 	it.each(['bad "quote"', "bad\\slash", "café", "bad\r\ninjected"])(
 		"rejects an invalid DPoP error_description: %s",
 		(description) => {

@@ -247,6 +247,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		);
 	}
 
+	const dpopNonceExpiresIn = opts.dpop?.nonce?.expiresIn;
+	if (
+		dpopNonceExpiresIn !== undefined &&
+		(!Number.isSafeInteger(dpopNonceExpiresIn) || dpopNonceExpiresIn <= 0)
+	) {
+		throw new BetterAuthError(
+			"dpop.nonce.expiresIn must be a positive integer number of seconds",
+		);
+	}
+
 	// TODO: device_code grant also allows for refresh tokens
 	if (
 		opts.grantTypes &&
