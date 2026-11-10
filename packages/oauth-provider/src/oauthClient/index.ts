@@ -6,6 +6,7 @@ import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
 import {
 	clientJwksSchema,
+	RedirectUriSyntaxSchema,
 	ResourceUriSchema,
 	SafeUrlSchema,
 } from "../types/zod";
@@ -28,7 +29,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 		{
 			method: "POST",
 			body: z.object({
-				redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+				redirect_uris: z.array(RedirectUriSyntaxSchema).min(1).optional(),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
@@ -39,7 +40,10 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_id: z.string().optional(),
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
-				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+				post_logout_redirect_uris: z
+					.array(RedirectUriSyntaxSchema)
+					.min(1)
+					.optional(),
 				backchannel_logout_uri: SafeUrlSchema.optional(),
 				backchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
@@ -234,7 +238,7 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			method: "POST",
 			use: [sessionMiddleware],
 			body: z.object({
-				redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+				redirect_uris: z.array(RedirectUriSyntaxSchema).min(1).optional(),
 				scope: z.string().optional(),
 				client_name: z.string().optional(),
 				client_uri: z.string().optional(),
@@ -245,7 +249,10 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				software_id: z.string().optional(),
 				software_version: z.string().optional(),
 				software_statement: z.string().optional(),
-				post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+				post_logout_redirect_uris: z
+					.array(RedirectUriSyntaxSchema)
+					.min(1)
+					.optional(),
 				backchannel_logout_uri: SafeUrlSchema.optional(),
 				backchannel_logout_session_required: z.boolean().optional(),
 				token_endpoint_auth_method: tokenEndpointAuthMethodSchema.optional(),
@@ -498,7 +505,7 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			body: z.object({
 				client_id: z.string(),
 				update: z.object({
-					redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+					redirect_uris: z.array(RedirectUriSyntaxSchema).min(1).optional(),
 					scope: z.string().optional(),
 					client_name: z.string().optional(),
 					client_uri: z.string().optional(),
@@ -509,7 +516,10 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_id: z.string().optional(),
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
-					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+					post_logout_redirect_uris: z
+						.array(RedirectUriSyntaxSchema)
+						.min(1)
+						.optional(),
 					backchannel_logout_uri: SafeUrlSchema.optional(),
 					backchannel_logout_session_required: z.boolean().optional(),
 					// token_endpoint_auth_method is immutable because changing the
@@ -553,7 +563,7 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 			body: z.object({
 				client_id: z.string(),
 				update: z.object({
-					redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+					redirect_uris: z.array(RedirectUriSyntaxSchema).min(1).optional(),
 					scope: z.string().optional(),
 					client_name: z.string().optional(),
 					client_uri: z.string().optional(),
@@ -564,7 +574,10 @@ export const updateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					software_id: z.string().optional(),
 					software_version: z.string().optional(),
 					software_statement: z.string().optional(),
-					post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+					post_logout_redirect_uris: z
+						.array(RedirectUriSyntaxSchema)
+						.min(1)
+						.optional(),
 					backchannel_logout_uri: SafeUrlSchema.optional(),
 					backchannel_logout_session_required: z.boolean().optional(),
 					// token_endpoint_auth_method is immutable because changing the

@@ -139,7 +139,7 @@ export async function refreshAccessToken({
 	});
 
 	const { data, error } = await fetchRefusingRedirects<{
-		access_token: string;
+		access_token?: string | undefined;
 		refresh_token?: string | undefined;
 		expires_in?: number | undefined;
 		refresh_token_expires_in?: number | undefined;
@@ -153,6 +153,10 @@ export async function refreshAccessToken({
 	});
 	if (error) {
 		throw error;
+	}
+	// A response without an access token is not a successful one, even with a 200 status.
+	if (typeof data.access_token !== "string" || !data.access_token) {
+		throw data;
 	}
 	const tokens: OAuth2Tokens = {
 		accessToken: data.access_token,

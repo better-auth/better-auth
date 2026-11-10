@@ -7,12 +7,14 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { generateCodeChallenge } from "better-auth/oauth2";
+import { getTestInstance } from "better-auth/test";
 import { beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kElectron } from "../src/authenticate";
 import { electronClient } from "../src/client";
 import { getCookie } from "../src/cookies";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
+import { hashSessionToken } from "../src/routes";
 import { fetchUserImage, normalizeUserOutput } from "../src/user";
 import { encodeRedirectToken, it, testUtils } from "./utils";
 
@@ -176,6 +178,54 @@ describe("Electron", () => {
 		expect(data!.electron_authorization_code).toBeTypeOf("string");
 	});
 
+	it("should return the sign-in result when the transfer cookie holds another signed value", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [electron()],
+		});
+		const { secret } = await auth.$context;
+		const signUp = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					email: "transfer-cookie-replay@test.com",
+					password: "password",
+					name: "Transfer Cookie Replay",
+					rememberMe: false,
+				}),
+			}),
+		);
+		const dontRemember = parseSetCookieHeader(
+			signUp.headers.get("set-cookie") ?? "",
+		).get("better-auth.dont_remember")?.value;
+		expect(dontRemember).toBeDefined();
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: `better-auth.transfer_token=${dontRemember}`,
+				},
+				body: JSON.stringify({
+					email: "transfer-cookie-replay@test.com",
+					password: "password",
+				}),
+			}),
+		);
+		const text = await res.text();
+
+		expect(res.status).toBe(200);
+		expect(Object.keys(JSON.parse(text)).sort()).toEqual([
+			"redirect",
+			"token",
+			"user",
+		]);
+		expect(text).not.toContain(secret);
+	});
+
 	it("/electron/init-oauth-proxy should forward each Set-Cookie from the inner sign-in response as a separate header", async () => {
 		const innerHeaders = new Headers();
 		innerHeaders.append("set-cookie", "first.cookie=one; Path=/; HttpOnly");
@@ -209,7 +259,7 @@ describe("Electron", () => {
 	it("should exchange token", async ({ setProcessType }) => {
 		setProcessType("browser");
 
-		const { user } = await auth.api.signInEmail({
+		const { user, token } = await auth.api.signInEmail({
 			body: {
 				email: "test@test.com",
 				password: "password",
@@ -226,6 +276,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					state: "abc",
 				}),
@@ -263,7 +314,7 @@ describe("Electron", () => {
 	}) => {
 		setProcessType("browser");
 
-		const { user } = await auth.api.signUpEmail({
+		const { user, token } = await auth.api.signUpEmail({
 			body: {
 				email: "concurrent-exchange@test.com",
 				password: "password",
@@ -281,6 +332,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					codeChallengeMethod: "s256",
 					state: "abc",
@@ -314,7 +366,7 @@ describe("Electron", () => {
 	}) => {
 		setProcessType("browser");
 
-		const { user } = await auth.api.signInEmail({
+		const { user, token } = await auth.api.signInEmail({
 			body: {
 				email: "test@test.com",
 				password: "password",
@@ -335,6 +387,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					state: "abc",
 				}),
@@ -388,7 +441,7 @@ describe("Electron", () => {
 
 	it("should reject expired tokens", async ({ setProcessType }) => {
 		setProcessType("browser");
-		const { user } = await auth.api.signInEmail({
+		const { user, token } = await auth.api.signInEmail({
 			body: {
 				email: "test@test.com",
 				password: "password",
@@ -409,6 +462,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					state: "abc",
 				}),
@@ -473,7 +527,177 @@ describe("Electron", () => {
 		);
 	});
 
-	it("should error when user referenced by token does not exist", async ({
+	/**
+	 * Verification rows are readable by hooks and exports.
+	 */
+	it("stores a digest of the issuing session token, not the token", async () => {
+		const { auth, testUser } = await getTestInstance({
+			plugins: [electron()],
+		});
+		const codeVerifier = base64Url.encode(randomBytes(32));
+
+		const signIn = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			query: {
+				client_id: "electron",
+				code_challenge: await s256Challenge(codeVerifier),
+				state: "abc",
+			},
+		});
+
+		const { token, electron_authorization_code: identifier } =
+			signIn as typeof signIn & { electron_authorization_code: string };
+		const ctx = await auth.$context;
+		const row = await ctx.internalAdapter.findVerificationValue(
+			`electron:${identifier}`,
+		);
+		expect(row?.value).not.toContain(token);
+		expect(JSON.parse(row!.value)).toMatchObject({
+			sourceSessionTokenHash: await hashSessionToken(token),
+		});
+
+		const exchange = await auth.handler(
+			new Request("http://localhost:3000/api/auth/electron/token", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					token: identifier,
+					code_verifier: codeVerifier,
+					state: "abc",
+				}),
+			}),
+		);
+		expect(exchange.status).toBe(200);
+	});
+
+	it("should reject a code once the session that issued it is revoked", async () => {
+		const { auth, testUser } = await getTestInstance({
+			plugins: [electron()],
+		});
+
+		const { user, token } = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+		});
+
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = await s256Challenge(codeVerifier);
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		const ctx = await auth.$context;
+		await ctx.adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
+					codeChallenge,
+					state: "abc",
+				}),
+				expiresAt: new Date(Date.now() + 300_000),
+			},
+		});
+		await ctx.internalAdapter.deleteSession(token);
+
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/electron/token", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					token: identifier,
+					code_verifier: codeVerifier,
+					state: "abc",
+				}),
+			}),
+		);
+
+		expect(res.status).toBe(404);
+		expect(res.headers.get("set-cookie")).toBeNull();
+	});
+
+	/**
+	 * Session caches can outlive a user removed from the database.
+	 *
+	 * @see https://www.better-auth.com/docs/concepts/session-management#sessions-in-secondary-storage
+	 */
+	it("rejects a source session whose user no longer exists", async () => {
+		const storage = new Map<string, string>();
+		const { auth, testUser } = await getTestInstance({
+			plugins: [electron()],
+			secondaryStorage: {
+				async get(key) {
+					return storage.get(key) ?? null;
+				},
+				async set(key, value) {
+					storage.set(key, value);
+				},
+				async delete(key) {
+					storage.delete(key);
+				},
+				async getAndDelete(key) {
+					const value = storage.get(key) ?? null;
+					storage.delete(key);
+					return value;
+				},
+			},
+		});
+		const { user, token } = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+		});
+		const codeVerifier = generateRandomString(32);
+		const codeChallenge = await generateCodeChallenge(codeVerifier);
+		const identifier = generateRandomString(32);
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.createVerificationValue({
+			identifier: `electron:${identifier}`,
+			value: JSON.stringify({
+				userId: user.id,
+				sourceSessionTokenHash: await hashSessionToken(token),
+				codeChallenge,
+				state: "abc",
+			}),
+			expiresAt: new Date(Date.now() + 300_000),
+		});
+		await ctx.adapter.delete({
+			model: "user",
+			where: [
+				{
+					field: "id",
+					value: user.id,
+				},
+			],
+		});
+
+		await expect(
+			auth.api.electronToken({
+				body: {
+					token: identifier,
+					code_verifier: codeVerifier,
+					state: "abc",
+				},
+			}),
+		).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+			body: {
+				code: "USER_NOT_FOUND",
+			},
+		});
+	});
+
+	it("should reject a code without a bound source session", async ({
 		setProcessType,
 	}) => {
 		setProcessType("browser");
@@ -481,7 +705,6 @@ describe("Electron", () => {
 		const codeVerifier = base64Url.encode(randomBytes(32));
 		const codeChallenge = await s256Challenge(codeVerifier);
 
-		// Create verification referencing a non-existent user id
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
 			model: "verification",
@@ -516,7 +739,7 @@ describe("Electron", () => {
 				}),
 		).rejects.toThrow(
 			expect.objectContaining({
-				code: auth.$ERROR_CODES.USER_NOT_FOUND.code,
+				code: auth.$ERROR_CODES.INVALID_TOKEN.code,
 			}),
 		);
 	});
@@ -526,7 +749,7 @@ describe("Electron", () => {
 	}) => {
 		setProcessType("browser");
 
-		const { user } = await auth.api.signUpEmail({
+		const { user, token } = await auth.api.signUpEmail({
 			body: {
 				name: "Test User",
 				email: "test-create-session-null@test.com",
@@ -544,6 +767,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					state: "abc",
 				}),
@@ -617,7 +841,7 @@ describe("Electron", () => {
 			getWindow: () => mockElectron.BrowserWindow,
 		});
 
-		const { user } = await auth.api.signInEmail({
+		const { user, token } = await auth.api.signInEmail({
 			body: {
 				email: "test@test.com",
 				password: "password",
@@ -638,6 +862,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					state: "abc",
 				}),
@@ -673,7 +898,7 @@ describe("Electron", () => {
 
 		expect(authenticateHandler).toBeDefined();
 
-		const { user } = await auth.api.signInEmail({
+		const { user, token } = await auth.api.signInEmail({
 			body: {
 				email: "test@test.com",
 				password: "password",
@@ -694,6 +919,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					state: "abc",
 				}),
@@ -716,7 +942,7 @@ describe("Electron", () => {
 	}) => {
 		setProcessType("browser");
 
-		const { user } = await auth.api.signUpEmail({
+		const { user, token } = await auth.api.signUpEmail({
 			body: {
 				name: "Test User",
 				email: "test-delete-verification@test.com",
@@ -734,6 +960,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					state: "abc",
 				}),
@@ -930,7 +1157,7 @@ describe("Electron", () => {
 		it("should require pkce", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signInEmail({
+			const { user, token } = await auth.api.signInEmail({
 				body: {
 					email: "test@test.com",
 					password: "password",
@@ -944,6 +1171,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
 				},
@@ -963,7 +1191,7 @@ describe("Electron", () => {
 		it("should require a state parameter", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signInEmail({
+			const { user, token } = await auth.api.signInEmail({
 				body: {
 					email: "test@test.com",
 					password: "password",
@@ -984,6 +1212,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge,
 					}),
 					expiresAt: new Date(Date.now() + 300 * 1000),
@@ -1007,7 +1236,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signInEmail({
+			const { user, token } = await auth.api.signInEmail({
 				body: {
 					email: "test@test.com",
 					password: "password",
@@ -1028,6 +1257,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge,
 						state: "def",
 					}),
@@ -1055,7 +1285,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signInEmail({
+			const { user, token } = await auth.api.signInEmail({
 				body: { email: "test@test.com", password: "password" },
 			});
 
@@ -1066,6 +1296,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						state: "abc",
 					}),
 					expiresAt: new Date(Date.now() + 300_000),
@@ -1090,7 +1321,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signInEmail({
+			const { user, token } = await auth.api.signInEmail({
 				body: { email: "test@test.com", password: "password" },
 			});
 
@@ -1104,6 +1335,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge: actualChallenge,
 						state: "abc",
 					}),
@@ -1134,7 +1366,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signInEmail({
+			const { user, token } = await auth.api.signInEmail({
 				body: { email: "test@test.com", password: "password" },
 			});
 
@@ -1148,6 +1380,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge: "attacker-challenge",
 						state: "abc",
 					}),
@@ -1311,7 +1544,7 @@ describe("Electron", () => {
 			(globalThis as any)[kElectron] = new Map<string, string>([
 				["abc", codeVerifier],
 			]);
-			const { user } = await auth.api.signInEmail({
+			const { user, token } = await auth.api.signInEmail({
 				body: { email: "test@test.com", password: "password" },
 			});
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
@@ -1321,6 +1554,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge,
 						state: "abc",
 					}),
@@ -1631,7 +1865,7 @@ describe("Electron", () => {
 	it("should not store when encryption fails", async ({ setProcessType }) => {
 		setProcessType("browser");
 
-		const { user } = await auth.api.signUpEmail({
+		const { user, token } = await auth.api.signUpEmail({
 			body: {
 				name: "Sage Storage Test",
 				email: "safe-storage@test.com",
@@ -1649,6 +1883,7 @@ describe("Electron", () => {
 				identifier: `electron:${identifier}`,
 				value: JSON.stringify({
 					userId: user.id,
+					sourceSessionTokenHash: await hashSessionToken(token),
 					codeChallenge,
 					state: "abc",
 				}),
@@ -1701,7 +1936,7 @@ describe("Electron", () => {
 				],
 			});
 
-			const { user } = await auth.api.signUpEmail({
+			const { user, token } = await auth.api.signUpEmail({
 				body: {
 					name: "Memory Storage Test",
 					email: "memory-storage@test.com",
@@ -1719,6 +1954,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge,
 						state: "abc",
 					}),
@@ -1895,7 +2131,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signUpEmail({
+			const { user, token } = await auth.api.signUpEmail({
 				body: {
 					email: "sanitize-strip@test.com",
 					password: "password",
@@ -1917,6 +2153,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge,
 						state: "abc",
 					}),
@@ -1955,7 +2192,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signUpEmail({
+			const { user, token } = await auth.api.signUpEmail({
 				body: {
 					email: "sanitize-throw@test.com",
 					password: "password",
@@ -1977,6 +2214,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge,
 						state: "abc",
 					}),
@@ -2141,7 +2379,7 @@ describe("Electron", () => {
 		it("should apply async sanitizeUser", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const { user } = await auth.api.signUpEmail({
+			const { user, token } = await auth.api.signUpEmail({
 				body: {
 					email: "sanitize-async@test.com",
 					password: "password",
@@ -2163,6 +2401,7 @@ describe("Electron", () => {
 					identifier: `electron:${identifier}`,
 					value: JSON.stringify({
 						userId: user.id,
+						sourceSessionTokenHash: await hashSessionToken(token),
 						codeChallenge,
 						state: "abc",
 					}),

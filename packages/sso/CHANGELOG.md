@@ -1,5 +1,35 @@
 # @better-auth/sso
 
+## 1.7.20
+
+### Patch Changes
+
+- [#12309](https://github.com/better-auth/better-auth/pull/12309) [`8654ff2`](https://github.com/better-auth/better-auth/commit/8654ff2f105bddd80dc04fe6cd28e8bf0c4b7a5d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - fix(sso): apply the default SAML clock skew to samlify's assertion window check
+
+  The documented 5-minute `saml.clockSkew` default was only applied by the plugin's own timestamp step. samlify checked the assertion's `NotBefore` and `NotOnOrAfter` first with no tolerance unless `clockSkew` was set explicitly, so assertions that were up to five minutes past their validity window, or up to five minutes early, were rejected. The default now reaches samlify as well.
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+## 1.7.14
+
+## 1.7.13
+
+## 1.7.12
+
+### Patch Changes
+
+- [#11935](https://github.com/better-auth/better-auth/pull/11935) [`f5ea731`](https://github.com/better-auth/better-auth/commit/f5ea731e6de511e1df793a190274e6bbca37206d) Thanks [@bytaesu](https://github.com/bytaesu)! - OIDC SSO sign-in now rejects ID tokens missing `exp` or `iat` and providers with an empty client ID, matching social sign-in.
+
+## 1.7.11
+
 ## 1.7.10
 
 ## 1.7.9

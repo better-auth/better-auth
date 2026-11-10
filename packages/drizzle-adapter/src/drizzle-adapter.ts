@@ -238,7 +238,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const c = await builder.returning();
 					return c[0];
 				}
-				await builder.execute();
+				// MySQL's `$returningId` ties generated ids to the insert statement.
+				// Updates provide `where` and do not expose `$returningId`.
+				const serialInsert =
+					where === undefined &&
+					options.advanced?.database?.generateId === "serial";
+				const insertResult = serialInsert
+					? await builder.$returningId().execute()
+					: await builder.execute();
 				const table = getSchema(model);
 				const builderVal = builder.config?.values;
 				if (where?.length) {
@@ -281,23 +288,16 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						return res[0] ?? null;
 					}
 
-					// 3. Serial auto-increment: LAST_INSERT_ID() is connection-scoped
-					if (options.advanced?.database?.generateId === "serial" && table.id) {
-						const lastInsertId = await tx
-							.select({ id: sql`LAST_INSERT_ID()` })
+					// 3. Serial auto-increment: use the id returned by this insert.
+					const insertId = serialInsert ? insertResult?.[0]?.id : undefined;
+					if (insertId && table.id) {
+						const res = await tx
+							.select()
 							.from(table)
+							.where(eq(table.id, insertId))
 							.limit(1)
 							.execute();
-						const lastId = lastInsertId[0]?.id;
-						if (lastId) {
-							const res = await tx
-								.select()
-								.from(table)
-								.where(eq(table.id, lastId))
-								.limit(1)
-								.execute();
-							return res[0] ?? null;
-						}
+						return res[0] ?? null;
 					}
 
 					// 4. Unique column lookup via Better Auth schema

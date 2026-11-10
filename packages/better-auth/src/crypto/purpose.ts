@@ -7,7 +7,8 @@ export type EncryptionPurpose =
 	| "oauth-state-cookie"
 	| "oauth-proxy-state"
 	| "oauth-proxy-package"
-	| "oauth-proxy-profile";
+	| "oauth-proxy-profile"
+	| "oauth-link-session-token";
 
 const salt = utf8ToBytes("better-auth:oauth-encryption:v1");
 

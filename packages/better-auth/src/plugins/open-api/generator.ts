@@ -227,11 +227,15 @@ function getParameters(options: EndpointOptions) {
 	if (options.metadata?.openapi?.parameters) {
 		parameters.push(...options.metadata.openapi.parameters);
 	}
+	const query =
+		options.query instanceof z.core.$ZodOptional
+			? options.query._zod.def.innerType
+			: options.query;
 	if (
 		!options.metadata?.openapi?.parameters &&
-		options.query instanceof z.ZodObject
+		query instanceof z.core.$ZodObject
 	) {
-		Object.entries(options.query.shape).forEach(([key, value]) => {
+		Object.entries(query._zod.def.shape).forEach(([key, value]) => {
 			if (value instanceof z.ZodType) {
 				const parameterSchema = toOpenApiSchema(value as z.ZodType<unknown>);
 				parameters.push({
