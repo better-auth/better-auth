@@ -92,7 +92,7 @@ function isClientSecretTokenEndpointAuth(
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
 
-type PendingDiscovery = Map<string, { config: GenericOAuthConfig }>;
+type PendingDiscovery = Map<string, GenericOAuthConfig>;
 
 /**
  * Providers skipped because startup discovery failed. Init stores them on each auth
@@ -563,7 +563,7 @@ export const genericOAuth = <const ID extends string>(
 		const pending = pendingDiscovery?.get(providerId);
 		if (!pending) return;
 		const [provider] = await buildProviders(
-			[pending.config],
+			[pending],
 			ctx,
 			DISCOVERY_RETRY_TIMEOUT_MS,
 		);
@@ -594,7 +594,7 @@ export const genericOAuth = <const ID extends string>(
 			const genericOAuthPendingDiscovery: PendingDiscovery = new Map(
 				options.config
 					.filter((c) => !built.has(c.providerId))
-					.map((c) => [c.providerId, { config: c }]),
+					.map((c) => [c.providerId, c]),
 			);
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));

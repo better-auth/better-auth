@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createTestHarness } from "wrangler";
 
 /** Holds the first request to each path open; answers later ones with a discovery document. */
@@ -56,6 +56,10 @@ beforeAll(async () => {
 		`/setup?stall=${encodeURIComponent(stallURL)}`,
 	);
 	expect(setup.status).toBe(204);
+});
+
+afterEach(({ task }) => {
+	if (task.result?.state === "fail") server.debug();
 });
 
 afterAll(async () => {

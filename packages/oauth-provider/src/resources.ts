@@ -841,35 +841,24 @@ export function logStartupSeedFailure(ctx: AuthContext, error: unknown): void {
 	);
 }
 
-interface SeedState {
-	completed: boolean;
-}
-
 /**
- * Lazy-seed state per adapter and plugin options. A module-level boolean would
+ * Plugin options whose seed completed, per adapter. A module-level boolean would
  * let one Better Auth instance suppress seeding for every later instance in the
  * same process. Endpoint `AuthContext` objects are not guaranteed to be stable
  * across requests, so the adapter identifies the backing store, and the options
  * object separates instances that share an adapter but configure different
  * `resources`.
  */
-let seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
+let seededOptions = new WeakMap<object, WeakSet<object>>();
 
-function getSeedState(
-	ctx: AuthContext,
-	opts: OAuthOptions<Scope[]>,
-): SeedState {
+function getSeededOptions(ctx: AuthContext): WeakSet<object> {
 	const adapterKey = ctx.adapter as object;
-	let byOptions = seedStates.get(adapterKey);
-	if (!byOptions) {
-		byOptions = new WeakMap<object, SeedState>();
-		seedStates.set(adapterKey, byOptions);
+	let seeded = seededOptions.get(adapterKey);
+	if (!seeded) {
+		seeded = new WeakSet<object>();
+		seededOptions.set(adapterKey, seeded);
 	}
-	const existing = byOptions.get(opts);
-	if (existing) return existing;
-	const created: SeedState = { completed: false };
-	byOptions.set(opts, created);
-	return created;
+	return seeded;
 }
 
 /**
@@ -879,7 +868,7 @@ function getSeedState(
  * @internal
  */
 export function resetSeedStateForTests(): void {
-	seedStates = new WeakMap<object, WeakMap<object, SeedState>>();
+	seededOptions = new WeakMap<object, WeakSet<object>>();
 }
 
 /**
@@ -978,7 +967,8 @@ export async function seedResources(
 		// Reached for existing rows, and for a row a concurrent boot inserted,
 		// so `merge` and `overwrite` still apply this config.
 		if (mode === "insertOnly") continue;
-		// A concurrent seed already finished; a late write could undo a later edit.
+		// Skip once another seed in this process has finished, so a late write
+		// does not undo an edit made since then.
 		if (isComplete?.()) return;
 
 		await ctx.adapter.update({
@@ -1002,10 +992,10 @@ export async function seedResourcesOnce(
 	ctx: AuthContext,
 	opts: OAuthOptions<Scope[]>,
 ): Promise<void> {
-	const state = getSeedState(ctx, opts);
-	if (state.completed) return;
-	await seedResources(ctx, opts, () => state.completed);
-	state.completed = true;
+	const seeded = getSeededOptions(ctx);
+	if (seeded.has(opts)) return;
+	await seedResources(ctx, opts, () => seeded.has(opts));
+	seeded.add(opts);
 }
 
 /**
