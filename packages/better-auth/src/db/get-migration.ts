@@ -641,7 +641,7 @@ export async function getMigrations(
 			}
 
 			tableMetadata = (await introspectPostgresTables(db, [schema])).filter(
-				(table) => !table.isView,
+				(table) => !table.isView && !table.isForeign,
 			);
 			logger.debug(
 				`Found ${tableMetadata.length} table(s) in schema '${schema}': ${tableMetadata.map((table) => table.name).join(", ") || "(none)"}`,

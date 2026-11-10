@@ -124,12 +124,13 @@ export async function getMssqlSchema(db: Kysely<unknown>): Promise<string> {
 export async function introspectPostgresTables(
 	db: Kysely<unknown>,
 	schemas: readonly string[],
-): Promise<TableMetadata[]> {
+): Promise<(TableMetadata & { isForeign: boolean })[]> {
 	if (schemas.length === 0) return [];
 	const { rows } = await sql<{
 		schema: string;
 		table: string;
 		isView: boolean;
+		isForeign: boolean;
 		column: string;
 		dataType: string;
 		isNullable: boolean;
@@ -140,6 +141,7 @@ export async function introspectPostgresTables(
 			ns.nspname AS "schema",
 			c.relname AS "table",
 			c.relkind = 'v' AS "isView",
+			c.relkind = 'f' AS "isForeign",
 			a.attname AS "column",
 			typ.typname AS "dataType",
 			NOT a.attnotnull AS "isNullable",
@@ -155,16 +157,23 @@ export async function introspectPostgresTables(
 		WHERE ns.nspname IN (${sql.join(schemas)})
 			AND ns.nspname !~ '^pg_'
 			AND pg_catalog.has_schema_privilege(ns.oid, 'USAGE')
-			AND c.relkind IN ('r', 'v', 'p')
+			AND c.relkind IN ('r', 'v', 'p', 'f')
 			AND a.attnum >= 0
 			AND NOT a.attisdropped
 		ORDER BY ns.nspname, c.relname, a.attnum
 	`.execute(db.withoutPlugins());
-	const tables: TableMetadata[] = [];
-	let current: TableMetadata | undefined;
-	for (const { schema, table, isView, column, ...metadata } of rows) {
+	const tables: (TableMetadata & { isForeign: boolean })[] = [];
+	let current: (typeof tables)[number] | undefined;
+	for (const {
+		schema,
+		table,
+		isView,
+		isForeign,
+		column,
+		...metadata
+	} of rows) {
 		if (current?.schema !== schema || current.name !== table) {
-			current = { name: table, schema, isView, columns: [] };
+			current = { name: table, schema, isView, isForeign, columns: [] };
 			tables.push(current);
 		}
 		current.columns.push({ name: column, ...metadata });

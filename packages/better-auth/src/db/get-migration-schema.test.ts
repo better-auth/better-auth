@@ -215,9 +215,15 @@ describe.runIf(isPostgresAvailable)(
 			expect(sessionTable).toBeDefined();
 		});
 
-		it("ignores other schemas that are dropped while it reads", async () => {
+		it("ignores other schemas that are dropped while it reads", async ({
+			onTestFinished,
+		}) => {
 			const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
 			const dropped = `ba_dropped_${randomUUID().replaceAll("-", "")}`;
+			onTestFinished(async () => {
+				await pool.end();
+				await publicPool.query(`DROP SCHEMA IF EXISTS "${dropped}" CASCADE`);
+			});
 			await publicPool.query(`CREATE SCHEMA "${dropped}"`);
 			await publicPool.query(`CREATE TABLE "${dropped}".session (id serial)`);
 
@@ -231,7 +237,6 @@ describe.runIf(isPostgresAvailable)(
 				expect(toBeCreated.map(({ table }) => table)).toContain("session");
 			} finally {
 				await pool.query("ROLLBACK");
-				await pool.end();
 			}
 		});
 

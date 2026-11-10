@@ -293,12 +293,13 @@ describe("PostgreSQL schema validation", () => {
 		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
 		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
 		const other = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
-		onTestFinished(async () => {
-			await db.destroy();
-			await other.end();
-		});
 		const dropped = `ba_dropped_${randomUUID().replaceAll("-", "")}`;
 		const table = `ba_missing_${randomUUID().replaceAll("-", "")}`;
+		onTestFinished(async () => {
+			await db.destroy();
+			await other.query(`DROP SCHEMA IF EXISTS "${dropped}" CASCADE`);
+			await other.end();
+		});
 		await other.query(`CREATE SCHEMA "${dropped}"`);
 		await other.query(`CREATE TABLE "${dropped}".session (id serial)`);
 
@@ -314,5 +315,27 @@ describe("PostgreSQL schema validation", () => {
 		} finally {
 			await pool.query("ROLLBACK");
 		}
+	});
+
+	it("finds tables stored as foreign tables", async ({ onTestFinished }) => {
+		const pool = new Pool({ connectionString: CONNECTION_STRING, max: 1 });
+		const db = new Kysely({ dialect: new PostgresDialect({ pool }) });
+		const name = `ba_foreign_${randomUUID().replaceAll("-", "")}`;
+		onTestFinished(async () => {
+			await pool.query(`DROP FOREIGN DATA WRAPPER IF EXISTS "${name}" CASCADE`);
+			await db.destroy();
+		});
+		// A wrapper without a handler is enough to declare a foreign table.
+		await pool.query(`CREATE FOREIGN DATA WRAPPER "${name}"`);
+		await pool.query(`CREATE SERVER "${name}" FOREIGN DATA WRAPPER "${name}"`);
+		await pool.query(
+			`CREATE FOREIGN TABLE "${name}" (id text NOT NULL, token text NOT NULL) SERVER "${name}"`,
+		);
+
+		await expect(
+			findSchemaProblems(db, "postgres", {
+				[name]: { fields: { token: { type: "string" } } },
+			}),
+		).resolves.toEqual([]);
 	});
 });
