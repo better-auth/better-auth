@@ -21,7 +21,7 @@ import type {
 	SCIMSubject,
 	SCIMUser,
 } from "./persistence";
-import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
+import { chunkSCIMIds, SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import { createScopedKey } from "./resource-key";
 import { runSCIMApplicationCallback } from "./scim-error";
 
@@ -69,6 +69,40 @@ export function isSCIMProjectionSubjectConflict(
 		error instanceof BetterAuthError &&
 		SCIM_PROJECTION_SUBJECT_CONFLICT in error
 	);
+}
+
+async function findSCIMGroupMemberships(
+	database: DBTransactionAdapter,
+	scimUserIds: readonly string[],
+): Promise<SCIMGroupMember[]> {
+	const memberships: SCIMGroupMember[] = [];
+	for (const chunk of chunkSCIMIds(scimUserIds)) {
+		memberships.push(
+			...(await database.findMany<SCIMGroupMember>({
+				model: "scimGroupMember",
+				where: [{ field: "scimUserId", value: chunk, operator: "in" }],
+				limit: SCIM_UNBOUNDED_ROW_LIMIT,
+			})),
+		);
+	}
+	return memberships;
+}
+
+async function findSCIMGroups(
+	database: DBTransactionAdapter,
+	groupIds: readonly string[],
+): Promise<SCIMGroup[]> {
+	const groups: SCIMGroup[] = [];
+	for (const chunk of chunkSCIMIds(groupIds)) {
+		groups.push(
+			...(await database.findMany<SCIMGroup>({
+				model: "scimGroup",
+				where: [{ field: "id", value: chunk, operator: "in" }],
+				limit: chunk.length,
+			})),
+		);
+	}
+	return groups;
 }
 
 async function acquireProjectionSubjectLocks(
@@ -181,17 +215,10 @@ async function buildDesiredGrants(
 	);
 	const memberships =
 		input.memberships ??
-		(await database.findMany<SCIMGroupMember>({
-			model: "scimGroupMember",
-			where: [
-				{
-					field: "scimUserId",
-					value: input.activeSCIMUsers.map((scimUser) => scimUser.id),
-					operator: "in",
-				},
-			],
-			limit: SCIM_UNBOUNDED_ROW_LIMIT,
-		}));
+		(await findSCIMGroupMemberships(
+			database,
+			input.activeSCIMUsers.map((scimUser) => scimUser.id),
+		));
 	if (memberships.length === 0) return [];
 
 	const groupIds = [
@@ -200,13 +227,10 @@ async function buildDesiredGrants(
 	const groupById =
 		input.groupById ??
 		new Map(
-			(
-				await database.findMany<SCIMGroup>({
-					model: "scimGroup",
-					where: [{ field: "id", value: groupIds, operator: "in" }],
-					limit: groupIds.length,
-				})
-			).map((group) => [group.id, group]),
+			(await findSCIMGroups(database, groupIds)).map((group) => [
+				group.id,
+				group,
+			]),
 		);
 	const desiredGrants = new Map<
 		string,
@@ -343,7 +367,7 @@ async function reconcileProjectionUserState(
 	const removedGrantKeys = existingGrants
 		.filter((grant) => !desiredGrantByKey.has(grant.grantKey))
 		.map((grant) => grant.grantKey);
-	if (removedGrantKeys.length > 0) {
+	for (const chunk of chunkSCIMIds(removedGrantKeys)) {
 		await database.deleteMany({
 			model: "scimProjectionGrant",
 			where: [
@@ -354,7 +378,7 @@ async function reconcileProjectionUserState(
 				{ field: "userId", value: input.userId },
 				{
 					field: "grantKey",
-					value: removedGrantKeys,
+					value: chunk,
 					operator: "in",
 				},
 			],
@@ -470,29 +494,12 @@ async function reconcileSCIMUserBatch(
 		.map((scimUser) => scimUser.id);
 	const memberships =
 		options.projection?.roles && activeSCIMUserIds.length > 0
-			? await input.database.findMany<SCIMGroupMember>({
-					model: "scimGroupMember",
-					where: [
-						{
-							field: "scimUserId",
-							value: activeSCIMUserIds,
-							operator: "in",
-						},
-					],
-					limit: SCIM_UNBOUNDED_ROW_LIMIT,
-				})
+			? await findSCIMGroupMemberships(input.database, activeSCIMUserIds)
 			: [];
 	const groupIds = [
 		...new Set(memberships.map((membership) => membership.groupId)),
 	];
-	const groups =
-		groupIds.length === 0
-			? []
-			: await input.database.findMany<SCIMGroup>({
-					model: "scimGroup",
-					where: [{ field: "id", value: groupIds, operator: "in" }],
-					limit: groupIds.length,
-				});
+	const groups = await findSCIMGroups(input.database, groupIds);
 	const existingGrants = await input.database.findMany<SCIMProjectionGrant>({
 		model: "scimProjectionGrant",
 		where: [

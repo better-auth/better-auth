@@ -33,7 +33,7 @@ import {
 import type { SCIMPatchValueTarget } from "./null-attributes";
 import { expandSCIMPatchNullValues } from "./null-attributes";
 import type { SCIMGroup, SCIMGroupMember, SCIMUser } from "./persistence";
-import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
+import { chunkSCIMIds, SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
 import { createSCIMOrderKey, createScopedKey } from "./resource-key";
@@ -56,21 +56,6 @@ const {
 	schemaId: SCIM_GROUP_SCHEMA,
 } = SCIM_RESOURCE_SCHEMA_REGISTRY.Group;
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
-const SCIM_USER_ID_QUERY_CHUNK_SIZE = 500;
-
-/** Splits ids so each `in` list stays under the bound-variable limit of older SQLite (999). */
-function chunkSCIMUserIds(ids: readonly string[]): string[][] {
-	const chunks: string[][] = [];
-	for (
-		let offset = 0;
-		offset < ids.length;
-		offset += SCIM_USER_ID_QUERY_CHUNK_SIZE
-	) {
-		chunks.push(ids.slice(offset, offset + SCIM_USER_ID_QUERY_CHUNK_SIZE));
-	}
-	return chunks;
-}
-
 function requireGroupAttributeProjection(
 	input: SCIMCollectionQueryInput,
 ): SCIMAttributeProjection {
@@ -544,7 +529,7 @@ async function deleteGroupMemberships(
 	memberships: readonly SCIMGroupMember[],
 ) {
 	const scimUserIds = memberships.map((membership) => membership.scimUserId);
-	for (const chunk of chunkSCIMUserIds(scimUserIds)) {
+	for (const chunk of chunkSCIMIds(scimUserIds)) {
 		await adapter.deleteMany({
 			model: "scimGroupMember",
 			where: [
@@ -580,7 +565,7 @@ async function applyIncrementalGroupMembershipPatch(
 		};
 	}
 	const existingMemberships: SCIMGroupMember[] = [];
-	for (const chunk of chunkSCIMUserIds(targetedUserIds)) {
+	for (const chunk of chunkSCIMIds(targetedUserIds)) {
 		existingMemberships.push(
 			...(await adapter.findMany<SCIMGroupMember>({
 				model: "scimGroupMember",
@@ -784,7 +769,7 @@ async function findSCIMUsersByIds(
 	scimUserIds: readonly string[],
 ): Promise<Map<string, SCIMUser>> {
 	const scimUsers: SCIMUser[] = [];
-	for (const chunk of chunkSCIMUserIds(scimUserIds)) {
+	for (const chunk of chunkSCIMIds(scimUserIds)) {
 		scimUsers.push(
 			...(await adapter.findMany<SCIMUser>({
 				model: "scimUser",
