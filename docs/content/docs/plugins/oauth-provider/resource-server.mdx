@@ -261,7 +261,7 @@ The simplest setup maps each scope to exactly one permission, such as `read:post
 
 ## Protected resource metadata
 
-To advertise which authorization server protects your API, serve an [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728#section-3) document at `/.well-known/oauth-protected-resource`. `serverClient.getProtectedResourceMetadata()` builds it for you. Its default `authorization_servers` entry is the same issuer that the resource client verifies by default. With a dynamic `baseURL`, it has no default entry, so pass `authorization_servers`. The [MCP plugin](/docs/plugins/mcp) serves this document automatically.
+To advertise which authorization server protects your API, serve an [RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728#section-3) document at `/.well-known/oauth-protected-resource`. `serverClient.getProtectedResourceMetadata()` builds it for you. Its default `authorization_servers` entry is the same issuer that the resource client verifies by default. With a dynamic `baseURL` and no `jwt.issuer`, it has no default entry, so pass `authorization_servers`. The [MCP plugin](/docs/plugins/mcp) serves this document automatically.
 
 ```ts title="app/.well-known/oauth-protected-resource/route.ts"
 import { serverClient } from "@/lib/server-client";
