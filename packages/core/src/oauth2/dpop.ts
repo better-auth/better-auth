@@ -348,12 +348,17 @@ async function assertDpopNonce(
  * A proof that cannot be decoded passes, so full verification reports it as
  * `invalid_dpop_proof`.
  *
+ * Pass the same `nowSeconds` to this check and to the later
+ * {@link verifyDpopProof}, so a nonce that passes here cannot expire before
+ * the request finishes.
+ *
  * Throws a {@link DpopProofError} with `use_dpop_nonce` when the nonce is
  * missing, expired, or was not issued with `options.secret`.
  */
 export async function assertDpopProofNonce(
 	proofJwt: string,
 	options: DpopNonceOptions,
+	nowSeconds: number = Math.floor(Date.now() / 1000),
 ): Promise<void> {
 	let payload: JWTPayload;
 	try {
@@ -369,7 +374,7 @@ export async function assertDpopProofNonce(
 	) {
 		return;
 	}
-	await assertDpopNonce(payload, options, Math.floor(Date.now() / 1000));
+	await assertDpopNonce(payload, options, nowSeconds);
 }
 
 export function parseAccessTokenAuthorization(

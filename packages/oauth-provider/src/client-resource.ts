@@ -67,9 +67,11 @@ export const oauthProviderResourceClient = <
 	};
 	const authServerBasePath = auth?.options.basePath;
 	/**
-	 * Fills a missing nonce secret from the auth instance's secret, the one the
-	 * OAuth provider derives its nonces from, so a resource on the provider's
-	 * origin accepts the nonce the client already holds.
+	 * Fills a missing nonce secret and lifetime from the auth instance: the
+	 * secret the OAuth provider derives its nonces from and the provider's
+	 * `dpop.nonce.expiresIn`. A resource on the provider's origin then accepts
+	 * the nonce the client already holds for exactly as long as the provider
+	 * does.
 	 */
 	const resolveDpopOptions = async (
 		dpop: ResourceDpopAuthOptions | undefined,
@@ -86,7 +88,10 @@ export const oauthProviderResourceClient = <
 		if (!secret) {
 			throw Error("please define opts.dpop.nonce.secret");
 		}
-		return { ...dpop, nonce: { ...dpop.nonce, secret } };
+		const expiresIn =
+			dpop.nonce.expiresIn ??
+			(await getOauthProviderPlugin())?.options?.dpop?.nonce?.expiresIn;
+		return { ...dpop, nonce: { ...dpop.nonce, secret, expiresIn } };
 	};
 	const resolveVerifyAccessTokenOptions = async (
 		opts:
@@ -367,12 +372,17 @@ type VerifyAccessTokenAuthOpts = {
 type ResourceDpopOptions = NonNullable<VerifyAccessTokenRequestOptions["dpop"]>;
 /**
  * DPoP settings for a resource client created with the auth instance: the
- * nonce secret defaults to the auth instance's secret.
+ * nonce secret and lifetime default to the auth instance's.
  */
 type ResourceDpopAuthOptions = Omit<ResourceDpopOptions, "nonce"> & {
 	nonce?: Omit<NonNullable<ResourceDpopOptions["nonce"]>, "secret"> & {
 		/** Defaults to the auth instance's secret. */
 		secret?: string;
+		/**
+		 * Seconds a nonce is accepted after it is issued. Defaults to the OAuth
+		 * provider's `dpop.nonce.expiresIn`, then to `300`.
+		 */
+		expiresIn?: number;
 	};
 };
 type VerifyAccessTokenRequestAuthOpts = VerifyAccessTokenAuthOpts & {

@@ -1,6 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "better-auth/api";
-import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
@@ -17,13 +16,249 @@ import type { BetterAuthPlugin } from "better-auth/types";
 import type { APIError } from "better-call";
 import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
 import { oauthProvider } from "./oauth";
 import { createResourceServerChallenge } from "./resource-challenge";
 import { getOAuthProviderApi } from "./token";
-import type { OAuthClient } from "./types/oauth";
+
+const authServerBaseUrl = "http://localhost:3000";
+const rpBaseUrl = "http://localhost:5000";
+const jwtResource = "https://dpop-api.example.com";
+const resourceUrl = `${jwtResource}/data`;
+const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
+const userinfoEndpoint = `${authServerBaseUrl}/api/auth/oauth2/userinfo`;
+const pluginIssueEndpoint = `${authServerBaseUrl}/api/auth/test/dpop-issue`;
+const jwksUrl = `${authServerBaseUrl}/api/auth/jwks`;
+const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
+
+// A plugin endpoint that issues tokens itself, outside the token endpoint and
+// without `metadata.noStore`.
+const pluginIssuer = {
+	id: "test-dpop-nonce-plugin-issuer",
+	endpoints: {
+		testDpopNonceIssue: createAuthEndpoint(
+			"/test/dpop-issue",
+			{ method: "POST" },
+			async (ctx: GenericEndpointContext) => {
+				const provider = getOAuthProviderApi(
+					ctx,
+					ctx.context.getPlugin("oauth-provider")!.options,
+					"client_credentials",
+				);
+				const { client } = await provider.authenticateClient();
+				return ctx.json(await provider.issueTokens({ client, scopes: [] }));
+			},
+		),
+	},
+} satisfies BetterAuthPlugin;
+
+async function createDpopKey() {
+	const { privateKey, publicKey } = await generateKeyPair("ES256", {
+		extractable: true,
+	});
+	const publicJwk = await exportJWK(publicKey);
+	return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
+}
+
+type DpopKey = Awaited<ReturnType<typeof createDpopKey>>;
+
+async function createProof(
+	key: DpopKey,
+	params: {
+		method: string;
+		url: string;
+		nonce?: string | null;
+		accessToken?: string;
+	},
+) {
+	return new SignJWT({
+		jti: generateRandomString(16),
+		htm: params.method,
+		htu: params.url,
+		iat: Math.floor(Date.now() / 1000),
+		...(params.nonce ? { nonce: params.nonce } : {}),
+		...(params.accessToken
+			? { ath: await deriveDpopAth(params.accessToken) }
+			: {}),
+	})
+		.setProtectedHeader({
+			typ: "dpop+jwt",
+			alg: "ES256",
+			jwk: key.publicJwk as JWK,
+		})
+		.sign(key.privateKey);
+}
+
+/** Mints a nonce as if the server issued it `secondsAgo` seconds ago. */
+async function nonceIssuedAgo(secret: string, secondsAgo: number) {
+	const now = Date.now();
+	vi.useFakeTimers({ toFake: ["Date"] });
+	vi.setSystemTime(now - secondsAgo * 1000);
+	try {
+		return await createDpopNonce({ secret });
+	} finally {
+		vi.useRealTimers();
+	}
+}
+
+function resourceRequest(accessToken: string, dpopProof: string) {
+	return new Request(resourceUrl, {
+		headers: { authorization: `DPoP ${accessToken}`, DPoP: dpopProof },
+	});
+}
+
+/** An authorization server that requires DPoP nonces, with flow helpers. */
+async function setupNonceProvider(params: {
+	testWith: "sqlite" | "postgres";
+	expiresIn?: number;
+	/** A separate origin keeps the JWKS cache, keyed by URL, per instance. */
+	baseURL?: string;
+}) {
+	const baseURL = params.baseURL ?? authServerBaseUrl;
+	const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
+	const { auth, client, signInWithTestUser, customFetchImpl } =
+		await getTestInstance(
+			{
+				baseURL,
+				plugins: [
+					pluginIssuer,
+					jwt({ jwt: { issuer: baseURL } }),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						resources: [jwtResource],
+						enforcePerClientResources: false,
+						dpop: {
+							nonce: { required: true, expiresIn: params.expiresIn },
+						},
+					}),
+				],
+			},
+			{
+				testWith: params.testWith,
+				clientOptions: { plugins: [oauthProviderClient()] },
+			},
+		);
+	const context = await auth.$context;
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: ["authorization_code", "refresh_token"],
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			skip_consent: true,
+		},
+	});
+
+	async function authorizeForCode() {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: "test",
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${baseURL}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+		url.searchParams.set("resource", jwtResource);
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(errorContext) {
+				location = errorContext.response.headers.get("Location") ?? "";
+			},
+		});
+		const code = new URL(location).searchParams.get("code");
+		if (!code) throw new Error("authorization did not return a code");
+		return { code, codeVerifier };
+	}
+
+	async function codeRequestBody(code: string, codeVerifier: string) {
+		const { body } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			resource: jwtResource,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		return body;
+	}
+
+	async function postToken(body: URLSearchParams, dpopProof?: string) {
+		const response = await customFetchImpl(tokenEndpoint, {
+			method: "POST",
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				...(dpopProof ? { DPoP: dpopProof } : {}),
+			},
+			body: body.toString(),
+		});
+		return {
+			response,
+			body: (await response.json()) as Record<string, string | undefined>,
+		};
+	}
+
+	/** Issues DPoP-bound tokens, answering the nonce challenge on the way. */
+	async function issueDpopTokens(key: DpopKey) {
+		const { code, codeVerifier } = await authorizeForCode();
+		const body = await codeRequestBody(code, codeVerifier);
+		const challenge = await postToken(
+			body,
+			await createProof(key, { method: "POST", url: tokenEndpoint }),
+		);
+		const nonce = challenge.response.headers.get("DPoP-Nonce");
+		const issued = await postToken(
+			body,
+			await createProof(key, { method: "POST", url: tokenEndpoint, nonce }),
+		);
+		expect(issued.response.status).toBe(200);
+		return {
+			accessToken: issued.body.access_token!,
+			refreshToken: issued.body.refresh_token!,
+			nonce: issued.response.headers.get("DPoP-Nonce")!,
+		};
+	}
+
+	/** Lets resource-server verification fetch the provider's JWKS. */
+	function stubJwksFetch() {
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+			customFetchImpl(input, init),
+		);
+	}
+
+	return {
+		auth,
+		context,
+		headers,
+		customFetchImpl,
+		oauthClient,
+		authorizeForCode,
+		codeRequestBody,
+		postToken,
+		issueDpopTokens,
+		stubJwksFetch,
+	};
+}
+
+afterEach(() => {
+	vi.useRealTimers();
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+});
 
 /**
  * RFC 9449 §8 (authorization server) and §9 (resource server) nonces.
@@ -35,192 +270,19 @@ import type { OAuthClient } from "./types/oauth";
 describe.each(["sqlite", "postgres"] as const)(
 	"DPoP server-provided nonces (%s)",
 	async (testWith) => {
-		const authServerBaseUrl = "http://localhost:3000";
-		const rpBaseUrl = "http://localhost:5000";
-		const jwtResource = "https://dpop-api.example.com";
-		const tokenEndpoint = `${authServerBaseUrl}/api/auth/oauth2/token`;
-		const userinfoEndpoint = `${authServerBaseUrl}/api/auth/oauth2/userinfo`;
-		const jwksUrl = `${authServerBaseUrl}/api/auth/jwks`;
-		const redirectUri = `${rpBaseUrl}/api/auth/callback/test`;
-		const pluginIssueEndpoint = `${authServerBaseUrl}/api/auth/test/dpop-issue`;
-		// A plugin endpoint that issues tokens itself, outside the token endpoint.
-		const pluginIssuer = {
-			id: "test-dpop-nonce-plugin-issuer",
-			endpoints: {
-				testDpopNonceIssue: createAuthEndpoint(
-					"/test/dpop-issue",
-					{ method: "POST" },
-					async (ctx: GenericEndpointContext) => {
-						const provider = getOAuthProviderApi(
-							ctx,
-							ctx.context.getPlugin("oauth-provider")!.options,
-							"client_credentials",
-						);
-						const { client } = await provider.authenticateClient();
-						return ctx.json(await provider.issueTokens({ client, scopes: [] }));
-					},
-				),
-			},
-		} satisfies BetterAuthPlugin;
-
-		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
-			{
-				baseURL: authServerBaseUrl,
-				plugins: [
-					pluginIssuer,
-					jwt({ jwt: { issuer: authServerBaseUrl } }),
-					oauthProvider({
-						loginPage: "/login",
-						consentPage: "/consent",
-						resources: [jwtResource],
-						enforcePerClientResources: false,
-						dpop: { nonce: { required: true } },
-					}),
-				],
-			},
-			{ testWith },
-		);
-		const authSecret = (await auth.$context).secret;
-		const { headers } = await signInWithTestUser();
-		const client = createAuthClient({
-			plugins: [oauthProviderClient()],
-			baseURL: authServerBaseUrl,
-			fetchOptions: { customFetchImpl, headers },
-		});
-		let oauthClient: OAuthClient;
-
-		beforeAll(async () => {
-			oauthClient = await auth.api.adminCreateOAuthClient({
-				headers,
-				body: {
-					token_endpoint_auth_method: "client_secret_post",
-					grant_types: ["authorization_code", "refresh_token"],
-					redirect_uris: [redirectUri],
-					application_type: "native",
-					skip_consent: true,
-				},
-			});
-		});
-
-		afterEach(() => {
-			vi.useRealTimers();
-			vi.unstubAllGlobals();
-		});
-
-		async function createDpopKey() {
-			const { privateKey, publicKey } = await generateKeyPair("ES256", {
-				extractable: true,
-			});
-			const publicJwk = await exportJWK(publicKey);
-			return { privateKey, publicJwk, jkt: await deriveDpopJkt(publicJwk) };
-		}
-
-		type DpopKey = Awaited<ReturnType<typeof createDpopKey>>;
-
-		async function createProof(
-			key: DpopKey,
-			params: {
-				method: string;
-				url: string;
-				nonce?: string | null;
-				accessToken?: string;
-			},
-		) {
-			return new SignJWT({
-				jti: generateRandomString(16),
-				htm: params.method,
-				htu: params.url,
-				iat: Math.floor(Date.now() / 1000),
-				...(params.nonce ? { nonce: params.nonce } : {}),
-				...(params.accessToken
-					? { ath: await deriveDpopAth(params.accessToken) }
-					: {}),
-			})
-				.setProtectedHeader({
-					typ: "dpop+jwt",
-					alg: "ES256",
-					jwk: key.publicJwk as JWK,
-				})
-				.sign(key.privateKey);
-		}
-
-		async function authorizeForCode() {
-			const codeVerifier = generateRandomString(32);
-			const url = await createAuthorizationURL({
-				id: "test",
-				options: {
-					clientId: oauthClient.client_id,
-					clientSecret: oauthClient.client_secret,
-					redirectURI: redirectUri,
-				},
-				redirectURI: "",
-				authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
-				state: "123",
-				scopes: ["openid", "offline_access"],
-				codeVerifier,
-			});
-			url.searchParams.set("resource", jwtResource);
-			let location = "";
-			await client.$fetch(url.toString(), {
-				onError(context) {
-					location = context.response.headers.get("Location") ?? "";
-				},
-			});
-			const code = new URL(location).searchParams.get("code");
-			if (!code) throw new Error("authorization did not return a code");
-			return { code, codeVerifier };
-		}
-
-		async function postToken(body: URLSearchParams, dpopProof?: string) {
-			const response = await customFetchImpl(tokenEndpoint, {
-				method: "POST",
-				headers: {
-					"content-type": "application/x-www-form-urlencoded",
-					...(dpopProof ? { DPoP: dpopProof } : {}),
-				},
-				body: body.toString(),
-			});
-			return {
-				response,
-				body: (await response.json()) as Record<string, string | undefined>,
-			};
-		}
-
-		async function codeRequestBody(code: string, codeVerifier: string) {
-			const { body } = await authorizationCodeRequest({
-				code,
-				codeVerifier,
-				redirectURI: redirectUri,
-				resource: jwtResource,
-				options: {
-					clientId: oauthClient.client_id,
-					clientSecret: oauthClient.client_secret!,
-					redirectURI: redirectUri,
-				},
-			});
-			return body;
-		}
-
-		/** Issues DPoP-bound tokens, answering the nonce challenge on the way. */
-		async function issueDpopTokens(key: DpopKey) {
-			const { code, codeVerifier } = await authorizeForCode();
-			const body = await codeRequestBody(code, codeVerifier);
-			const challenge = await postToken(
-				body,
-				await createProof(key, { method: "POST", url: tokenEndpoint }),
-			);
-			const nonce = challenge.response.headers.get("DPoP-Nonce");
-			const issued = await postToken(
-				body,
-				await createProof(key, { method: "POST", url: tokenEndpoint, nonce }),
-			);
-			expect(issued.response.status).toBe(200);
-			return {
-				accessToken: issued.body.access_token!,
-				refreshToken: issued.body.refresh_token!,
-				nonce: issued.response.headers.get("DPoP-Nonce")!,
-			};
-		}
+		const {
+			auth,
+			context,
+			headers,
+			customFetchImpl,
+			oauthClient,
+			authorizeForCode,
+			codeRequestBody,
+			postToken,
+			issueDpopTokens,
+			stubJwksFetch,
+		} = await setupNonceProvider({ testWith });
+		const authSecret = context.secret;
 
 		describe("token endpoint", () => {
 			it("challenges a proof without a nonce before it redeems the code", async () => {
@@ -245,7 +307,7 @@ describe.each(["sqlite", "postgres"] as const)(
 				);
 				expect(
 					challenge.response.headers.get("Access-Control-Expose-Headers"),
-				).toContain("DPoP-Nonce");
+				).toBe("DPoP-Nonce");
 
 				const issued = await postToken(
 					body,
@@ -265,9 +327,10 @@ describe.each(["sqlite", "postgres"] as const)(
 				expect(issued.response.headers.get("DPoP-Nonce")).toEqual(
 					expect.any(String),
 				);
+				expect(issued.response.headers.get("Cache-Control")).toBe("no-store");
 				expect(
 					issued.response.headers.get("Access-Control-Expose-Headers"),
-				).toContain("DPoP-Nonce");
+				).toBe("DPoP-Nonce");
 			});
 
 			it("challenges a nonce minted under another secret", async () => {
@@ -306,17 +369,13 @@ describe.each(["sqlite", "postgres"] as const)(
 				const key = await createDpopKey();
 				const { code, codeVerifier } = await authorizeForCode();
 				const body = await codeRequestBody(code, codeVerifier);
-				vi.useFakeTimers({ toFake: ["Date"] });
-				vi.setSystemTime(Date.now() - 301_000);
-				const expiredNonce = await createDpopNonce({ secret: authSecret });
-				vi.useRealTimers();
 
 				const challenge = await postToken(
 					body,
 					await createProof(key, {
 						method: "POST",
 						url: tokenEndpoint,
-						nonce: expiredNonce,
+						nonce: await nonceIssuedAgo(authSecret, 301),
 					}),
 				);
 
@@ -327,21 +386,50 @@ describe.each(["sqlite", "postgres"] as const)(
 			it("accepts a nonce issued within its lifetime", async () => {
 				const key = await createDpopKey();
 				const { code, codeVerifier } = await authorizeForCode();
-				vi.useFakeTimers({ toFake: ["Date"] });
-				vi.setSystemTime(Date.now() - 290_000);
-				const agingNonce = await createDpopNonce({ secret: authSecret });
-				vi.useRealTimers();
 
 				const issued = await postToken(
 					await codeRequestBody(code, codeVerifier),
 					await createProof(key, {
 						method: "POST",
 						url: tokenEndpoint,
-						nonce: agingNonce,
+						nonce: await nonceIssuedAgo(authSecret, 290),
 					}),
 				);
 
 				expect(issued.response.status).toBe(200);
+			});
+
+			it("redeems the code when the nonce expires while the grant runs", async () => {
+				const key = await createDpopKey();
+				const { code, codeVerifier } = await authorizeForCode();
+				const body = await codeRequestBody(code, codeVerifier);
+				const nonce = await nonceIssuedAgo(authSecret, 299);
+				const proof = await createProof(key, {
+					method: "POST",
+					url: tokenEndpoint,
+					nonce,
+				});
+				// The nonce has one second left when the request arrives. The clock
+				// moves past its expiry while the grant consumes the code, after the
+				// nonce check and before the proof is verified for issuance.
+				const arrival = Date.now();
+				vi.useFakeTimers({ toFake: ["Date"] });
+				vi.setSystemTime(arrival);
+				const consume = context.internalAdapter.consumeVerificationValue.bind(
+					context.internalAdapter,
+				);
+				vi.spyOn(
+					context.internalAdapter,
+					"consumeVerificationValue",
+				).mockImplementation(async (identifier) => {
+					vi.setSystemTime(arrival + 10_000);
+					return consume(identifier);
+				});
+
+				const issued = await postToken(body, proof);
+
+				expect(issued.response.status).toBe(200);
+				expect(issued.body.token_type).toBe("DPoP");
 			});
 
 			it("issues bearer tokens without a nonce when the request has no proof", async () => {
@@ -460,6 +548,8 @@ describe.each(["sqlite", "postgres"] as const)(
 			);
 			expect(challenge.status).toBe(400);
 			expect(await challenge.json()).toMatchObject({ error: "use_dpop_nonce" });
+			// The endpoint sets no `metadata.noStore`; the nonce sets no-store.
+			expect(challenge.headers.get("Cache-Control")).toBe("no-store");
 
 			const issued = await issue(
 				await createProof(key, {
@@ -471,6 +561,7 @@ describe.each(["sqlite", "postgres"] as const)(
 			expect(issued.status).toBe(200);
 			expect(await issued.json()).toMatchObject({ token_type: "DPoP" });
 			expect(issued.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+			expect(issued.headers.get("Cache-Control")).toBe("no-store");
 		});
 
 		describe("userinfo endpoint", () => {
@@ -499,6 +590,12 @@ describe.each(["sqlite", "postgres"] as const)(
 				);
 				const nonce = challenge.headers.get("DPoP-Nonce");
 				expect(nonce).toEqual(expect.any(String));
+				expect(challenge.headers.get("Cache-Control")).toBe("no-store");
+				// Browsers hide `WWW-Authenticate` too, and the client needs it to
+				// see that it must retry with the nonce.
+				expect(challenge.headers.get("Access-Control-Expose-Headers")).toBe(
+					"DPoP-Nonce, WWW-Authenticate",
+				);
 
 				const userinfo = await getUserInfo(
 					accessToken,
@@ -511,6 +608,9 @@ describe.each(["sqlite", "postgres"] as const)(
 				);
 				expect(userinfo.status).toBe(200);
 				expect(userinfo.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+				expect(userinfo.headers.get("Access-Control-Expose-Headers")).toBe(
+					"DPoP-Nonce",
+				);
 			});
 
 			it("accepts the nonce the token endpoint issued", async () => {
@@ -532,20 +632,6 @@ describe.each(["sqlite", "postgres"] as const)(
 		});
 
 		describe("resource server", () => {
-			const resourceUrl = `${jwtResource}/data`;
-
-			function stubJwksFetch() {
-				vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
-					customFetchImpl(input, init),
-				);
-			}
-
-			function resourceRequest(accessToken: string, dpopProof: string) {
-				return new Request(resourceUrl, {
-					headers: { authorization: `DPoP ${accessToken}`, DPoP: dpopProof },
-				});
-			}
-
 			it("challenges with the resource-server DPoP challenge and accepts the provider's nonce", async () => {
 				stubJwksFetch();
 				const { verifyAccessTokenRequest: verifyResourceRequest } =
@@ -575,11 +661,12 @@ describe.each(["sqlite", "postgres"] as const)(
 					/^DPoP error="use_dpop_nonce", /,
 				);
 				expect(challengeHeaders.get("DPoP-Nonce")).toEqual(expect.any(String));
+				expect(challengeHeaders.get("Cache-Control")).toBe("no-store");
 				expect(challengeHeaders.get("Access-Control-Expose-Headers")).toBe(
-					"DPoP-Nonce",
+					"DPoP-Nonce, WWW-Authenticate",
 				);
 
-				// Same origin, same secret: the nonce from the token response works.
+				// Same secret: the nonce from the token response works.
 				await expect(
 					verifyResourceRequest(
 						resourceRequest(
@@ -649,6 +736,53 @@ describe.each(["sqlite", "postgres"] as const)(
 		});
 	},
 );
+
+describe("DPoP nonce lifetime shared with the resource client", async () => {
+	const issuer = "http://localhost:3001";
+	const { auth, context, issueDpopTokens, stubJwksFetch } =
+		await setupNonceProvider({
+			testWith: "sqlite",
+			expiresIn: 60,
+			baseURL: issuer,
+		});
+
+	it("validates nonces with the provider's expiresIn", async () => {
+		stubJwksFetch();
+		const { verifyAccessTokenRequest: verifyResourceRequest } =
+			oauthProviderResourceClient(auth).getActions();
+		const key = await createDpopKey();
+		const { accessToken } = await issueDpopTokens(key);
+		const verify = async (nonce: string) =>
+			verifyResourceRequest(
+				resourceRequest(
+					accessToken,
+					await createProof(key, {
+						method: "GET",
+						url: resourceUrl,
+						accessToken,
+						nonce,
+					}),
+				),
+				{
+					jwksUrl: `${issuer}/api/auth/jwks`,
+					verifyOptions: { audience: jwtResource, issuer },
+					dpop: { nonce: { required: true } },
+				},
+			);
+
+		// 120 seconds is within the default 300 but past the provider's 60.
+		const error = (await verify(
+			await nonceIssuedAgo(context.secret, 120),
+		).catch((e: unknown) => e)) as APIError;
+		expect(error.statusCode).toBe(401);
+		expect(new Headers(error.headers).get("WWW-Authenticate")).toMatch(
+			/^DPoP error="use_dpop_nonce", error_description="DPoP proof nonce is invalid or expired"/,
+		);
+		await expect(
+			verify(await nonceIssuedAgo(context.secret, 30)),
+		).resolves.toMatchObject({ cnf: { jkt: key.jkt } });
+	});
+});
 
 describe("dpop.nonce configuration", () => {
 	it.each([0, -1, 1.5, Number.NaN])("rejects expiresIn %s", (expiresIn) => {

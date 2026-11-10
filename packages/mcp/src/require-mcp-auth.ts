@@ -60,22 +60,31 @@ export interface RequireMcpAuthOptions {
 		 * fresh `DPoP-Nonce`, and successful DPoP responses carry the next one.
 		 *
 		 * Nonces are derived from the auth instance's secret, the same way the
-		 * OAuth provider's `dpop.nonce` derives them, so an MCP server on the
-		 * authorization server's origin accepts the nonce the client already
-		 * holds. Pass `secret` only for an MCP server on its own origin.
+		 * OAuth provider's `dpop.nonce` derives them, so the MCP server accepts
+		 * the nonces the provider issues. Pass `secret` only to keep the MCP
+		 * server's nonces separate, such as for an MCP server on its own origin.
 		 */
 		nonce?: {
 			required: boolean;
 			/**
-			 * Seconds a nonce is accepted after it is issued.
-			 *
-			 * @default 300
+			 * Seconds a nonce is accepted after it is issued. Defaults to the OAuth
+			 * provider's `dpop.nonce.expiresIn`, then to `300`.
 			 */
 			expiresIn?: number;
 			/** Defaults to the auth instance's secret. */
 			secret?: string;
 		};
 	};
+}
+
+/** The OAuth provider's `dpop.nonce.expiresIn`, which `mcp()` passes through. */
+function getProviderNonceExpiresIn(
+	options: BetterAuthOptions,
+): number | undefined {
+	const provider = options.plugins?.find(
+		(plugin) => plugin.id === "oauth-provider",
+	) as { options?: { dpop?: { nonce?: { expiresIn?: number } } } } | undefined;
+	return provider?.options?.dpop?.nonce?.expiresIn;
 }
 
 /**
@@ -160,7 +169,8 @@ export const requireMcpAuth = <
 						nonce && nonceSecret
 							? {
 									required: nonce.required,
-									expiresIn: nonce.expiresIn,
+									expiresIn:
+										nonce.expiresIn ?? getProviderNonceExpiresIn(auth.options),
 									secret: nonceSecret,
 								}
 							: undefined,

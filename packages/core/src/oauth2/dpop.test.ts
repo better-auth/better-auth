@@ -636,6 +636,17 @@ describe("server-provided DPoP nonces", () => {
 			).rejects.toMatchObject({ code: "use_dpop_nonce" });
 		});
 
+		it("checks the nonce against the request time it is given", async () => {
+			const nonce = await nonceIssuedAt(nowSeconds);
+			const proofJwt = await createProof({ nonce });
+			await expect(
+				assertDpopProofNonce(proofJwt, nonceOptions, nowSeconds + 300),
+			).resolves.toBeUndefined();
+			await expect(
+				assertDpopProofNonce(proofJwt, nonceOptions, nowSeconds + 301),
+			).rejects.toMatchObject({ code: "use_dpop_nonce" });
+		});
+
 		it("passes a current nonce and leaves malformed proofs to full verification", async () => {
 			const current = await createDpopNonce(nonceOptions);
 			await expect(
@@ -706,10 +717,11 @@ describe("server-provided DPoP nonces", () => {
 					error_description: "DPoP proof must include a server-provided nonce",
 				},
 			});
-			const nonce = new Headers(
-				(error as { headers: HeadersInit }).headers,
-			).get("DPoP-Nonce");
+			const headers = new Headers((error as { headers: HeadersInit }).headers);
+			const nonce = headers.get("DPoP-Nonce");
 			expect(nonce).toEqual(expect.any(String));
+			expect(headers.get("Cache-Control")).toBe("no-store");
+			expect(headers.get("Access-Control-Expose-Headers")).toBe("DPoP-Nonce");
 
 			await expect(verify(await proof(nonce))).resolves.toMatchObject({
 				cnf: expect.any(Object),

@@ -166,6 +166,46 @@ describe("requireMcpAuth", () => {
 		);
 	});
 
+	it("takes the nonce secret and lifetime from the auth instance", async () => {
+		verifyAccessTokenRequest.mockResolvedValue({
+			sub: "user-2",
+		} satisfies JWTPayload);
+		const secret = "auth-secret-that-is-long-enough-for-nonces";
+		await requireMcpAuth(
+			{
+				options: {
+					baseURL: "https://app.example.com",
+					plugins: [
+						{
+							id: "oauth-provider",
+							options: { dpop: { nonce: { required: true, expiresIn: 60 } } },
+						},
+					],
+				},
+				$context: Promise.resolve({
+					baseURL: "https://app.example.com/api/auth",
+					internalAdapter: internalAdapterStub,
+					secret,
+				}),
+			},
+			async () => Response.json({ ok: true }),
+			{ dpop: { nonce: { required: true } } },
+		)(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "Bearer access-token" },
+			}),
+		);
+
+		expect(verifyAccessTokenRequest).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				dpop: expect.objectContaining({
+					nonce: { required: true, expiresIn: 60, secret },
+				}),
+			}),
+		);
+	});
+
 	it("advertises a scope hint in the challenge when configured", async () => {
 		verifyAccessTokenRequest.mockRejectedValue(
 			new APIError("UNAUTHORIZED", {

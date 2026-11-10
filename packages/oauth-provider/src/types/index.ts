@@ -1748,8 +1748,9 @@ export interface OAuthOptions<
 		 * nonce in the `DPoP-Nonce` header, and the client retries with it. The
 		 * token endpoint checks the nonce before it consumes an authorization
 		 * code, device code, or refresh token, so the retry still succeeds.
-		 * Successful DPoP responses carry the next nonce. Requests without a
-		 * DPoP proof are unaffected.
+		 * Successful DPoP responses carry the next nonce. Every response that
+		 * carries a nonce is marked `Cache-Control: no-store`. Requests without
+		 * a DPoP proof are unaffected.
 		 *
 		 * Nonces are derived from the auth `secret` and stored nowhere, so they
 		 * work across instances that share the secret. Rotating the secret
@@ -1757,8 +1758,10 @@ export interface OAuthOptions<
 		 */
 		nonce?: {
 			/**
-			 * Whether DPoP proofs must carry a server-provided nonce. There is no
-			 * optional mode: once a server hands out a nonce it must not accept
+			 * Whether DPoP proofs must carry a server-provided nonce. `false`, like
+			 * omitting `nonce`, turns nonces off: the endpoints neither check nor
+			 * issue them. There is no mode that issues nonces without requiring
+			 * them, because a server that has handed out a nonce must not accept
 			 * proofs without one (RFC 9449 §11.3).
 			 */
 			required: boolean;

@@ -769,7 +769,12 @@ describe("requireMcpAuth DPoP nonces", async () => {
 			await tokenResponse.json();
 		expect(tokenType).toBe("DPoP");
 		vi.stubGlobal("fetch", instance.customFetchImpl);
-		const handler = vi.fn(() => Response.json({ ok: true }));
+		const handler = vi.fn(() =>
+			Response.json(
+				{ ok: true },
+				{ headers: { "Cache-Control": "public, max-age=600" } },
+			),
+		);
 		const protectedHandler = requireMcpAuth(instance.auth, handler, {
 			dpop: { nonce: { required: true } },
 		});
@@ -795,17 +800,23 @@ describe("requireMcpAuth DPoP nonces", async () => {
 			/^DPoP error="use_dpop_nonce", /,
 		);
 		expect(challenge.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+		expect(challenge.headers.get("Cache-Control")).toBe("no-store");
+		expect(challenge.headers.get("Access-Control-Expose-Headers")).toBe(
+			"DPoP-Nonce, WWW-Authenticate",
+		);
 		expect(await challenge.json()).toMatchObject({
 			jsonrpc: "2.0",
 			error: { code: -32000 },
 		});
 		expect(handler).not.toHaveBeenCalled();
 
-		// Same origin and secret as the provider, so its nonce is accepted.
+		// The same secret as the provider, so its nonce is accepted.
 		const response = await callMcp(providerNonce);
 		expect(response.status).toBe(200);
 		expect(handler).toHaveBeenCalledOnce();
 		expect(response.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+		// A cached copy would hand clients the nonce after it expires.
+		expect(response.headers.get("Cache-Control")).toBe("no-store");
 		expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
 			"DPoP-Nonce",
 		);

@@ -165,7 +165,7 @@ export async function userInfoEndpoint(
 					"UNAUTHORIZED",
 					{ error_description: error.message, error: error.code },
 					{
-						...(await setDpopNonceHeader(ctx, nonce)),
+						...(await setDpopNonceHeader(ctx, nonce, { challenge: true })),
 						"WWW-Authenticate": buildDpopChallengeValue(
 							error.code,
 							error.message,

@@ -27,6 +27,7 @@ import { getRequestedUserInfoClaims } from "./claims-request";
 import {
 	getDpopNonceOptions,
 	getDpopProofJwt,
+	getDpopRequestTime,
 	getEndpointUrl,
 	setDpopNonceHeader,
 } from "./dpop";
@@ -805,7 +806,9 @@ async function throwUseDpopNonce(
  * Issues the nonce challenge before any grant runs. Grants consume their
  * authorization code, device code, or refresh token before the DPoP proof is
  * fully verified, so challenging there would leave the client's retry with
- * nothing to redeem. The proof is still verified, nonce included, at issuance.
+ * nothing to redeem. The proof is still verified, nonce included, at issuance,
+ * against the same request time, so a nonce that passes here cannot expire
+ * before then.
  */
 async function challengeMissingDpopNonce(
 	ctx: GenericEndpointContext,
@@ -815,7 +818,7 @@ async function challengeMissingDpopNonce(
 	const proofJwt = getDpopProofJwt(ctx);
 	if (!nonce || !proofJwt) return;
 	try {
-		await assertDpopProofNonce(proofJwt, nonce);
+		await assertDpopProofNonce(proofJwt, nonce, getDpopRequestTime(ctx));
 	} catch (error) {
 		if (isDpopProofError(error)) {
 			await throwUseDpopNonce(ctx, nonce, error.message);
@@ -912,6 +915,9 @@ async function resolveDpopTokenBinding(
 			signingAlgorithms: opts.dpop?.signingAlgorithms,
 			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
 			nonce,
+			// The time the request arrived, which the token endpoint's nonce check
+			// also used, not the time the grant reaches issuance.
+			nowSeconds: getDpopRequestTime(ctx),
 		});
 	} catch (error) {
 		if (isDpopProofError(error)) {

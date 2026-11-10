@@ -1,11 +1,11 @@
-import { isAPIError } from "better-auth/api";
+import { isAPIError, NO_STORE_HEADERS } from "better-auth/api";
 import {
 	DPOP_NONCE_HEADER,
 	DPOP_SIGNING_ALGORITHMS,
 	isInsufficientScopeError,
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
-import { withExposedHeader } from "./dpop";
+import { withExposedHeaders } from "./dpop";
 
 const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof", "use_dpop_nonce"]);
 const OAUTH_SCOPE_TOKEN_PATTERN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
@@ -91,13 +91,18 @@ function buildDpopChallengeHeaders(
 			opts?.dpopSigningAlgorithms,
 		),
 	};
-	// RFC 9449 §9: a `use_dpop_nonce` challenge carries the nonce to retry with.
-	const nonce = new Headers(error.headers).get(DPOP_NONCE_HEADER);
+	// RFC 9449 §9: a `use_dpop_nonce` challenge carries the nonce to retry with
+	// in its own `DPoP-Nonce` header. The response must not be cached (§8.2),
+	// and a browser client can act on it only when it can read both headers.
+	const errorHeaders = new Headers(error.headers);
+	const nonce = errorHeaders.get(DPOP_NONCE_HEADER);
 	if (nonce) {
+		Object.assign(headers, NO_STORE_HEADERS);
 		headers[DPOP_NONCE_HEADER] = nonce;
-		headers["Access-Control-Expose-Headers"] = withExposedHeader(
-			undefined,
+		headers["Access-Control-Expose-Headers"] = withExposedHeaders(
+			errorHeaders.get("access-control-expose-headers"),
 			DPOP_NONCE_HEADER,
+			"WWW-Authenticate",
 		);
 	}
 	return headers;
@@ -168,7 +173,9 @@ function buildBearerChallenge(
  * clients can step up their authorization. DPoP-bound-token failures are
  * reported with RFC 9449's `DPoP` challenge so clients know which proof
  * algorithms to use; a `use_dpop_nonce` failure keeps its `DPoP-Nonce` header
- * so the client can retry with the nonce (RFC 9449 §9). Non-URL resources (for example a `urn:` or a client id)
+ * so the client can retry with the nonce (RFC 9449 §9), adds `Cache-Control:
+ * no-store`, and adds `DPoP-Nonce` and `WWW-Authenticate` to the error's
+ * `Access-Control-Expose-Headers`. Non-URL resources (for example a `urn:` or a client id)
  * resolve their metadata URL through `resourceMetadataMappings`.
  *
  * Every other error returns `undefined`, including a plain `FORBIDDEN`: a

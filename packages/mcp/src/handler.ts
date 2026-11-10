@@ -1,7 +1,7 @@
 import type { Awaitable } from "@better-auth/core";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
 import { createResourceServerChallenge } from "@better-auth/oauth-provider";
-import { withExposedHeader } from "@better-auth/oauth-provider/internal";
+import { withExposedHeaders } from "@better-auth/oauth-provider/internal";
 import type {
 	DpopReplayStore,
 	VerifyAccessTokenRequestOptions,
@@ -57,8 +57,9 @@ export interface McpProtectedRequestHandlerOptions {
 		 * Require server-provided nonces in DPoP proofs (RFC 9449 §9). A proof
 		 * without a current nonce gets a `401` `use_dpop_nonce` challenge with a
 		 * fresh `DPoP-Nonce`, and successful DPoP responses carry the next one.
-		 * Use the authorization server's secret when the MCP server shares its
-		 * origin, so a nonce from one is accepted by the other.
+		 * Responses that carry a nonce are marked `Cache-Control: no-store`. Use
+		 * the authorization server's secret to accept the nonces it issues, such
+		 * as when the MCP server shares its origin.
 		 */
 		nonce?: NonNullable<VerifyAccessTokenRequestOptions["dpop"]>["nonce"];
 	};
@@ -102,18 +103,21 @@ export function validateMcpResource(resource: unknown): string {
 }
 
 /**
- * Returns `response` with the next DPoP nonce (RFC 9449 §8.2). The headers are
- * copied because a handler's `Response` may have immutable headers.
+ * Returns `response` with the next DPoP nonce (RFC 9449 §8.2). The response
+ * gets `Cache-Control: no-store`, overriding the handler's policy, because a
+ * cached copy would hand clients the nonce after it expires. The headers are copied
+ * because a handler's `Response` may have immutable headers.
  */
 async function withNextDpopNonce(
 	response: Response,
 	secret: string,
 ): Promise<Response> {
 	const headers = new Headers(response.headers);
+	headers.set("Cache-Control", "no-store");
 	headers.set(DPOP_NONCE_HEADER, await createDpopNonce({ secret }));
 	headers.set(
 		"Access-Control-Expose-Headers",
-		withExposedHeader(
+		withExposedHeaders(
 			headers.get("access-control-expose-headers"),
 			DPOP_NONCE_HEADER,
 		),

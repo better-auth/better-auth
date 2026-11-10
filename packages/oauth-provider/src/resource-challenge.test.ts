@@ -197,7 +197,50 @@ describe("resource server challenge", () => {
 			'DPoP error="use_dpop_nonce", error_description="DPoP proof must include a server-provided nonce", algs="ES256"',
 		);
 		expect(headers.get("DPoP-Nonce")).toBe("fresh-nonce");
-		expect(headers.get("Access-Control-Expose-Headers")).toBe("DPoP-Nonce");
+		expect(headers.get("Cache-Control")).toBe("no-store");
+		// `WWW-Authenticate` is not CORS-safelisted either, and a browser client
+		// needs it to see that it must retry with the nonce.
+		expect(headers.get("Access-Control-Expose-Headers")).toBe(
+			"DPoP-Nonce, WWW-Authenticate",
+		);
+	});
+
+	it("keeps the headers the error already exposes", () => {
+		const challenge = createResourceServerChallenge(
+			new APIError(
+				"UNAUTHORIZED",
+				{
+					message: "DPoP proof nonce is invalid or expired",
+					error: "use_dpop_nonce",
+					error_description: "DPoP proof nonce is invalid or expired",
+				},
+				{
+					"DPoP-Nonce": "fresh-nonce",
+					"Access-Control-Expose-Headers": "X-Request-Id, DPoP-Nonce",
+				},
+			),
+			"https://api.example.com",
+		) as APIError;
+		expect(
+			new Headers(challenge.headers).get("Access-Control-Expose-Headers"),
+		).toBe("X-Request-Id, DPoP-Nonce, WWW-Authenticate");
+	});
+
+	it("leaves a DPoP challenge without a nonce cacheable and unexposed", () => {
+		const headers = new Headers(
+			(
+				createResourceServerChallenge(
+					new APIError("UNAUTHORIZED", {
+						message: "DPoP proof header is required",
+						error: "invalid_dpop_proof",
+						error_description: "DPoP proof header is required",
+					}),
+					"https://api.example.com",
+				) as APIError
+			).headers,
+		);
+		expect(headers.get("Cache-Control")).toBeNull();
+		expect(headers.get("Access-Control-Expose-Headers")).toBeNull();
 	});
 
 	it.each(['bad "quote"', "bad\\slash", "café", "bad\r\ninjected"])(
