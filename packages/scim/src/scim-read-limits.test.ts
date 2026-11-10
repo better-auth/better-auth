@@ -258,13 +258,10 @@ describe("SCIM Group writes and role mapping past the default findMany limit", (
 		});
 		const list = await auth.api.listSCIMGroups({ query: {}, headers });
 
-		const sorted = [...userIds].sort();
-		expect(resource.members.map((member) => member.value).sort()).toEqual(
-			sorted,
-		);
-		expect(
-			list.Resources[0]?.members.map((member) => member.value).sort(),
-		).toEqual(sorted);
+		const memberIds = (members?: { value?: string }[]) =>
+			(members ?? []).map((member) => member.value).sort();
+		expect(memberIds(resource.members)).toEqual([...userIds].sort());
+		expect(memberIds(list.Resources[0]?.members)).toEqual([...userIds].sort());
 	});
 
 	it("removes the members a replace leaves out of a Group grown past 100", async () => {
