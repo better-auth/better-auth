@@ -145,12 +145,14 @@ async function fetchDiscovery(
 		});
 		if (headers && redirect.location) {
 			const next = new URL(redirect.location, target);
-			if (
-				next.origin !== new URL(url).origin ||
-				hop >= MAX_DISCOVERY_REDIRECTS
-			) {
+			if (next.origin !== new URL(url).origin) {
 				throw new Error(
 					`discovery redirected to ${next.origin}; with discoveryHeaders set, only same-origin redirects are followed. Set discoveryUrl to the final URL.`,
+				);
+			}
+			if (hop >= MAX_DISCOVERY_REDIRECTS) {
+				throw new Error(
+					`discovery redirected more than ${MAX_DISCOVERY_REDIRECTS} times. Set discoveryUrl to the final URL.`,
 				);
 			}
 			target = next.href;
