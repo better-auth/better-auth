@@ -29,6 +29,9 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	INVALID_TOKEN: "Invalid token",
 	TOKEN_EXPIRED: "Token expired",
 	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
+	INVALID_ID_TOKEN_NONCE: "Missing, expired, or unknown id_token nonce",
+	ID_TOKEN_NONCE_NOT_ENABLED:
+		"Issued id_token nonces are not enabled for this provider",
 	FAILED_TO_GET_USER_INFO: "Failed to get user info",
 	USER_EMAIL_NOT_FOUND: "User email not found",
 	EMAIL_NOT_VERIFIED: "Email not verified",
