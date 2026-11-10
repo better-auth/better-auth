@@ -40,7 +40,7 @@ To create a client owned by the signed-in user, or by the organization that [`cl
      */
     application_type?: "web" | "native" = "web"
     /**
-     * Space-separated scopes the client may request.
+     * Space-separated scopes the client may request. When omitted, the client may request every scope the server defines.
      */
     scope?: string = "openid profile email"
   }
@@ -270,7 +270,7 @@ Any key left out of the new set stops working at once. To roll a key without dow
 To skip database lookups for first-party apps whose redirect URIs you control, list their client IDs in `cachedTrustedClients`. To also skip the consent screen, set `skip_consent` on each client.
 
 <Callout type="warn">
-  A `skip_consent` client gets authorization codes for any signed-in user without asking them, so whoever controls its redirect URIs controls those codes. The client's owner can still change `redirect_uris` through `updateOAuthClient`. With `clientReference`, that owner is an organization, and any member of it can make the change. Set `skip_consent` only on clients in `cachedTrustedClients`, which the client endpoints cannot change, or deny `update` for those clients in [`clientPrivileges`](#client-crud-privileges). Do not set it on a public native client. Any app on the device can start the flow and receive the redirect, and PKCE does not help when the attacker starts the flow.
+  A `skip_consent` client gets authorization codes for any signed-in user without asking them, unless the authorization request sets `prompt=consent`. Whoever starts the flow chooses `prompt`, so whoever controls the client's redirect URIs controls those codes. The client's owner can still change `redirect_uris` through `updateOAuthClient`. With `clientReference`, that owner is an organization, and any member of it can make the change. Set `skip_consent` only on clients in `cachedTrustedClients`, which the client endpoints cannot change, or deny `update` for those clients in [`clientPrivileges`](#client-crud-privileges). Do not set it on a public native client. Any app on the device can start the flow and receive the redirect, and PKCE does not help when the attacker starts the flow.
 </Callout>
 
 * Each server keeps the listed clients in memory until it restarts.
