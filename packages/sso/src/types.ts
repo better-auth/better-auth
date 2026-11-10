@@ -388,7 +388,7 @@ export interface SSOOIDCProfileMappingInput extends BaseSSOProfileMappingInput {
 	protocol: "oidc";
 	/** Raw claims from UserInfo, or the verified ID Token when UserInfo is absent. */
 	providerClaims: Record<string, unknown>;
-	/** Claims from the cryptographically verified ID Token, when one was issued. */
+	/** Claims from the cryptographically verified ID Token, or `{}` when none was issued. */
 	verifiedIdTokenClaims: Record<string, unknown>;
 }
 
@@ -418,11 +418,12 @@ export type SSOProfileMappingInput =
  * `provisionUser`.
  */
 export interface SSOMappedUser {
-	/** The account subject comes from the verified `sub` claim or NameID. */
+	/** The account subject always comes from the provider's `sub` claim or NameID. */
 	id?: never;
 	/**
-	 * Return `null` to discard the email the provider sent. An email that
-	 * differs from the provider's is stored unverified.
+	 * Return `null` to refuse the email the provider sent. Sign-in then fails
+	 * with `missing_user_info`. An email that differs from the provider's is
+	 * stored unverified.
 	 */
 	email?: string | null | undefined;
 	name?: string | undefined;

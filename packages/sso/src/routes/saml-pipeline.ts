@@ -382,6 +382,16 @@ export async function processSAMLResponse(
 			ctx.context.isTrustedOrigin(url, settings),
 	);
 	params.onErrorRedirectResolved?.(samlErrorRedirectUrl);
+	const redirectOnCodedAPIError = (e: unknown) => {
+		if (isAPIError(e) && e.body?.code) {
+			throw ctx.redirect(
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+					error: e.body.code,
+					...(e.body.message ? { error_description: e.body.message } : {}),
+				}),
+			);
+		}
+	};
 
 	const stateProviderReference = parseSSOProviderReference(
 		relayState?.serverContext?.[SSO_PROVIDER_STATE_KEY],
@@ -689,14 +699,7 @@ export async function processSAMLResponse(
 		},
 		ctx.context.logger,
 	).catch((e) => {
-		if (isAPIError(e) && e.body?.code) {
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
-					error: e.body.code,
-					...(e.body.message ? { error_description: e.body.message } : {}),
-				}),
-			);
-		}
+		redirectOnCodedAPIError(e);
 		throw e;
 	});
 	const email = mappedUser.email?.toLowerCase();
@@ -725,7 +728,6 @@ export async function processSAMLResponse(
 	const callbackUrl = redirectCandidates.some(Boolean)
 		? samlRedirectUrl
 		: ctx.context.baseURL;
-	const errorUrl = samlErrorRedirectUrl;
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
@@ -821,14 +823,8 @@ export async function processSAMLResponse(
 		const failedAuthentication = getFailedSSOAuthenticationResult(e);
 		if (failedAuthentication) {
 			result = failedAuthentication;
-		} else if (isAPIError(e) && e.body?.code) {
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(errorUrl, {
-					error: e.body.code,
-					...(e.body.message ? { error_description: e.body.message } : {}),
-				}),
-			);
 		} else {
+			redirectOnCodedAPIError(e);
 			throw e;
 		}
 	}

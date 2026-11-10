@@ -45,7 +45,7 @@ sso({
 
 ### Update profiles on sign-in
 
-Better Auth sets the user's profile only when it creates the user. To refresh the profile on every sign-in, set `overrideUserInfo: true` on an OIDC provider. Each sign-in then overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values. Enable it only for IdPs that control their users' email addresses.
+Better Auth sets the user's profile only when it creates the user. To refresh the profile on every sign-in, set `overrideUserInfo: true` on an OIDC provider. Each sign-in then overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values, after `mapProfileToUser` when it is set. Enable it only for IdPs that control their users' email addresses.
 
 * A changed email is stored unverified, unless the deprecated `trustEmailVerified` option is on and the IdP reports it verified.
 * Set it per provider in the registration body. To apply it to every provider registered afterwards, set `defaultOverrideUserInfo: true` on the plugin.
@@ -53,7 +53,9 @@ Better Auth sets the user's profile only when it creates the user. To refresh th
 
 ## Providers without an email
 
-Better Auth needs an email to find, link, and create the user. It reads the email from the provider's `mapping`, which defaults to the `email` claim or attribute. For SAML, when that attribute is missing, the `NameID` becomes the email only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. Persistent, transient, and unspecified NameIDs are opaque identifiers and never become the email. When no email is found, sign-in redirects with `missing_user_info`: as `error_description` for OIDC and as `error` for SAML.
+Better Auth needs an email to find, link, and create the user. It reads the email from the provider's `mapping`, which defaults to the `email` claim or attribute. For SAML, when that attribute is missing, Better Auth uses the `NameID` as the email only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. A `NameID` with any other `Format`, or with no `Format`, is not used as the email unless `mapProfileToUser` returns it, even when its value looks like an email address.
+
+When no email is found, sign-in fails. OIDC redirects with `error=invalid_provider&error_description=missing_user_info`, and SAML with `error=missing_user_info`.
 
 To sign in users from a provider that sends no email, return one from `mapProfileToUser`. It runs on every OIDC and SAML sign-in, after `mapping` is applied and before the user is looked up:
 
@@ -78,19 +80,33 @@ export const auth = betterAuth({
 });
 ```
 
+<Callout type="warn">
+  The returned email decides which existing user a new account links to, as [How SSO users are matched](#how-sso-users-are-matched) describes. An unverified email still links to an existing user when the email is in one of the provider's verified domains. Return only addresses the provider vouches for, or a placeholder from `createPlaceholderEmail`. A placeholder is on the reserved `.invalid` domain, which never matches a verified domain.
+</Callout>
+
 The callback receives `protocol`, `providerId`, `accountKey`, and `providerUser`, plus `providerClaims` and `verifiedIdTokenClaims` for OIDC or `providerAttributes`, `nameID`, and `nameIDFormat` for SAML. `providerUser.emailVerified` is `false` unless the deprecated `trustEmailVerified` option is on.
 
-It can return `email`, `name`, and `image`. A field you omit keeps the provider's value, and other keys are ignored: set additional user fields with `mapping.extraFields` or in `provisionUser`. Return `email: null` to discard the email the provider sent. A returned email that differs from the provider's is always stored unverified. The account identity always stays the verified `sub` claim or `NameID`.
+It can return `email`, `name`, and `image`. A field you omit keeps the provider's value. Other keys are ignored. To set additional user fields, use `mapping.extraFields` or `provisionUser`. This sign-in never marks a returned email verified when it differs from the provider's. The account identity always stays the provider's `sub` claim or `NameID`.
 
-The mapped values replace the provider's in `providerUser` for `resolveUser`, in `userInfo` for `provisionUser`, and in `userInfo` for an OIDC `getRole`. The provider's own values stay in `providerClaims` or `providerAttributes`. If the callback throws, or returns something other than an object or an `email`, `name`, or `image` of the wrong type, sign-in redirects with `SSO_PROFILE_MAPPING_FAILED`.
+To refuse the email the provider sent, return `email: null`. Sign-in then fails with `missing_user_info`.
 
-`createPlaceholderEmail` throws when the result is not a valid email address, and sign-in then fails with `SSO_PROFILE_MAPPING_FAILED`. The example assumes the provider ID is a valid domain label (letters, digits, and hyphens) and the subject is valid in an email address. Encode either one first when it is not, for example as hex. Emails are compared case-insensitively, so also encode subjects that differ only by letter case.
+The mapped values replace the provider's in `providerUser` for `resolveUser`, in `userInfo` for `provisionUser`, and in `userInfo` for an OIDC `getRole`. The provider's own values stay in `providerClaims`, `verifiedIdTokenClaims`, or `providerAttributes`.
 
-With [`overrideUserInfo`](#update-profiles-on-sign-in), the returned email replaces the stored one on every sign-in. If the provider stops sending the email, a placeholder then overwrites the user's real address.
+Sign-in redirects with `error=SSO_PROFILE_MAPPING_FAILED` when the callback does any of these:
 
-<Callout type="warn">
-  The returned email decides which existing user a new account links to, as [How SSO users are matched](#how-sso-users-are-matched) describes. Return only addresses the provider vouches for, or a placeholder on the reserved `.invalid` domain, which never matches a verified domain. Placeholder emails cannot receive mail; see [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
-</Callout>
+* Throws.
+* Returns a value that is not an object, such as `undefined` or an array.
+* Sets `email` to something other than a string or `null`.
+* Sets `name` or `image` to something other than a string.
+
+`createPlaceholderEmail` builds `<identifier>@<namespace>.placeholder.invalid` and throws when the result is not a valid email address. Sign-in then fails with `error=SSO_PROFILE_MAPPING_FAILED`. The example works when both of these hold:
+
+* The provider ID contains only letters, digits, and hyphens, and starts with a letter or digit.
+* The subject contains only letters, digits, `_`, `+`, and `-`.
+
+Many SAML persistent `NameID` values are Base64 and contain `/` or `=`. Hex-encode a value that may contain other characters. Emails are compared case-insensitively, so also hex-encode subjects that can differ only by letter case. Placeholder emails cannot receive mail. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
+
+The returned email replaces the stored one when `resolveUser` returns `link` with `profile: "update"`. Without that decision, it replaces the stored one on every sign-in through an OIDC provider with [`overrideUserInfo`](#update-profiles-on-sign-in). If the provider stops sending the email, a placeholder then overwrites the user's real address.
 
 ## Resolve SSO users
 
