@@ -1,8 +1,6 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { terminate } from "@better-auth-test/test-utils/playwright";
-import type { Page } from "@playwright/test";
+import { launch } from "@better-auth-test/test-utils/playwright";
+import type { Page, TestInfo } from "@playwright/test";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 
@@ -15,51 +13,27 @@ export async function runClient<R>(
 }
 
 export function setup() {
-	let clientChild: ChildProcessWithoutNullStreams;
-	const ref: {
-		clientPort: number;
-	} = {
+	let app = launch(root);
+	const ref = {
 		clientPort: -1,
 	};
 	return {
 		ref,
 		start: async () => {
-			clientChild = spawn("pnpm", ["run", "dev"], {
-				detached: process.platform !== "win32",
-				cwd: root,
-				stdio: "pipe",
-				env: {
-					...process.env,
-					NO_COLOR: "1",
-				},
-			});
-			clientChild.stderr.on("data", (data) => {
-				const message = data.toString();
-				console.error(message);
-			});
-			clientChild.stdout.on("data", (data) => {
-				const message = data.toString();
-				console.log(message);
-			});
-
-			await Promise.all([
-				new Promise<void>((resolve) => {
-					clientChild.stdout.on("data", (data) => {
-						const message = data.toString();
-						// find: http://localhost:XXXX/ for vinxi dev server
-						if (message.includes("http://localhost:")) {
-							const match = message.match(/http:\/\/localhost:(\d+)/);
-							if (match) {
-								ref.clientPort = Number(match[1]);
-								resolve();
-							}
-						}
-					});
-				}),
-			]);
+			// Each test starts its own server, so it gets its own log.
+			app = launch(root);
+			const clientURL = await app.start(["run", "dev"]);
+			ref.clientPort = Number(new URL(clientURL).port);
 		},
-		clean: async () => {
-			await terminate(clientChild);
+		clean: async (testInfo: TestInfo) => {
+			try {
+				await app.stop();
+			} finally {
+				await testInfo.attach("vinxi-dev.log", {
+					body: app.output(),
+					contentType: "text/plain",
+				});
+			}
 		},
 	};
 }

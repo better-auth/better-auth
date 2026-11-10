@@ -22,12 +22,12 @@ To get a JWT access token, include a `resource` in the request and enable the JW
 
 To control which scopes your clients may request, set `scopes`. It defaults to `["openid", "profile", "email", "offline_access"]`. Your provider acts as an OpenID provider only when the list includes `openid`.
 
-| Scope            | Grants                                                         |
-| ---------------- | -------------------------------------------------------------- |
-| `openid`         | An ID token and the `sub` claim                                |
-| `profile`        | `name`, `picture`, `given_name`, and `family_name` at UserInfo |
-| `email`          | `email` and `email_verified` at UserInfo                       |
-| `offline_access` | A refresh token                                                |
+| Scope            | Grants                                                                                     |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| `openid`         | An ID token and the `sub` claim                                                            |
+| `profile`        | `name`, `picture`, `given_name`, and `family_name` at UserInfo                             |
+| `email`          | `email` and `email_verified` at UserInfo                                                   |
+| `offline_access` | A refresh token, when the client is registered for `refresh_token` or `authorization_code` |
 
 Standard claims are returned at UserInfo, not in the ID token, as [OIDC Core §5.4](https://openid.net/specs/openid-connect-core-1_0.html#ScopeClaims) describes for flows that issue an access token.
 
@@ -187,6 +187,7 @@ A client gets DPoP-bound tokens ([RFC 9449](https://datatracker.ietf.org/doc/htm
 * It registered with `dpop_bound_access_tokens: true` ([§5.2](https://datatracker.ietf.org/doc/html/rfc9449#section-5.2)).
 * It sends `dpop_jkt` on the authorization request.
 * It requests a resource with `dpopBoundAccessTokensRequired: true`.
+* It sends a `DPoP` proof with the token request.
 
 The token endpoint then requires a DPoP proof ([§5](https://datatracker.ietf.org/doc/html/rfc9449#section-5)) and returns `token_type: "DPoP"`. A refresh needs a proof from the same key. A JWT access token carries the key's thumbprint in `cnf.jkt`. The client calls your API with `Authorization: DPoP <access_token>` and a `DPoP` proof that includes the access token hash, `ath` ([§7](https://datatracker.ietf.org/doc/html/rfc9449#section-7)).
 
@@ -258,7 +259,7 @@ oauthProvider({
 
 * **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
 * **Refresh token**: revoked, and the opaque access tokens it issued are deleted. JWT access tokens it issued stay valid until they expire.
-* **JWT access token**: cannot be revoked, because it is never stored. A valid one returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)).
+* **JWT access token**: cannot be revoked, because it is never stored. A JWT that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)). An expired JWT, or one whose audience names a resource that is not registered, is treated as unknown and returns 200.
 
 To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session. Its lifetime is the only limit.
 

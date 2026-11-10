@@ -1,5 +1,21 @@
 # @better-auth/mcp
 
+## 1.7.19
+
+### Patch Changes
+
+- [#12322](https://github.com/better-auth/better-auth/pull/12322) [`76e6a20`](https://github.com/better-auth/better-auth/commit/76e6a207e912a7719067eed81ad71b8ea26af79e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed MCP rejecting plain-HTTP `resource` URLs on `.localhost` subdomains as non-HTTPS.
+
+- Updated dependencies [[`76f9d55`](https://github.com/better-auth/better-auth/commit/76f9d554b371c3c7874ccfa54af97a4d4f3db82b), [`b0f795a`](https://github.com/better-auth/better-auth/commit/b0f795a0bbb934b35a7f2601a8853f5a48fbe7ca), [`6080a5e`](https://github.com/better-auth/better-auth/commit/6080a5e542db35016bf8309bc89b033db823f0b3)]:
+  - @better-auth/oauth-provider@1.7.19
+
+## 1.7.18
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.18
+
 ## 1.7.17
 
 ### Patch Changes

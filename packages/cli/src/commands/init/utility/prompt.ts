@@ -1,6 +1,12 @@
-import prompts from "prompts";
+import { prompt } from "../../../utils/prompt";
 import type { PluginConfig } from "../configs/temp-plugins.config";
 import type { GetArgumentsFn, GetArgumentsOptions } from "../generate-auth";
+
+// Init has no flags for its setup questions, so it only runs in a terminal.
+export const initPrompt = {
+	action: "run auth init",
+	input: "a terminal",
+};
 
 export const getFlagVariable = (flag: string) => {
 	return flag.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
@@ -112,10 +118,11 @@ export const getArgumentsPrompt = async (
 	let batchAnswers: Record<string, unknown> = {};
 	if (allPromptableArgs.length > 0) {
 		const questions = allPromptableArgs.map(toPromptQuestion);
-		const res = await prompts(questions, {
+		const res = await prompt(questions, {
+			...initPrompt,
 			onCancel: () => {
 				console.log("✋ Operation cancelled.");
-				process.exit(0);
+				process.exit(130);
 			},
 		});
 		batchAnswers = (res ?? {}) as Record<string, unknown>;

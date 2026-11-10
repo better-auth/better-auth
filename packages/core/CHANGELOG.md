@@ -1,5 +1,19 @@
 # @better-auth/core
 
+## 1.7.19
+
+### Patch Changes
+
+- [#12317](https://github.com/better-auth/better-auth/pull/12317) [`8412a5f`](https://github.com/better-auth/better-auth/commit/8412a5f43b724648b3faaa452bec0a6ba8e01765) Thanks [@bytaesu](https://github.com/bytaesu)! - Failed fallback join queries are now reported only through the configured logger, instead of also printing the raw database error (including SQL and bound values) with `console.error`.
+
+- [#12369](https://github.com/better-auth/better-auth/pull/12369) [`34ee100`](https://github.com/better-auth/better-auth/commit/34ee1008d8269d32b875e2743b9805090863f2f4) Thanks [@bytaesu](https://github.com/bytaesu)! - `getAccessToken` and `refreshToken` now fail when a provider refuses a token refresh with a 200 status, as GitHub does, instead of returning the expired access token.
+
+## 1.7.18
+
+### Patch Changes
+
+- [#12249](https://github.com/better-auth/better-auth/pull/12249) [`9342a73`](https://github.com/better-auth/better-auth/commit/9342a73e3635719011828c798e276c0f908792de) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource servers that set `verifyOptions.typ`, such as `"at+jwt"`, together with `remoteVerify` now accept tokens that introspection reports as active. Previously every token was rejected, because the `typ` check ran against the introspection response, which has no JWT header. The local JWT check still enforces `typ`. That check runs only when `jwksUrl` is set and `remoteVerify.force` is not `true`. Otherwise `typ` is not enforced, and the introspection result alone decides. This also fixes MCP servers that set `jwtVerifyOptions.typ` with `remoteVerify`.
+
 ## 1.7.17
 
 ## 1.7.16
