@@ -85,3 +85,4 @@ styl
 vbscript
 unvalidated
 describedby
+workerd

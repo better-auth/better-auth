@@ -235,7 +235,13 @@ export async function extractRepeatedResourceFromForm(
 	}
 	let text: string;
 	try {
-		text = await request.clone().text();
+		// Decode the raw bytes instead of calling `.text()`: workerd only
+		// treats a narrow set of content types as text, so reading an
+		// `application/x-www-form-urlencoded` body with `.text()` logs a
+		// spurious "does not appear to be text" warning on every token
+		// request. Decoding via TextDecoder yields the identical UTF-8
+		// string without the warning.
+		text = new TextDecoder().decode(await request.clone().arrayBuffer());
 	} catch {
 		return undefined;
 	}
