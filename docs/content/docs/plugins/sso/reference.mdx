@@ -239,7 +239,7 @@ Links the provider to an organization. The caller must be a member, and an owner
 
 `overrideUserInfo` <span className="opacity-70">`boolean`</span>
 
-OIDC only. On every sign-in, overwrites the user's name, email, image, and mapped additional fields with the provider's values, after `mapProfileToUser` when it is set. A changed email takes the provider's verified flag, which is `false` unless `trustEmailVerified` is on. Enable it only when the IdP controls its users' email addresses. Defaults to `defaultOverrideUserInfo`.
+OIDC only. On every sign-in, overwrites the user's name, email, image, and mapped additional fields with the provider's values, after `mapProfileToUser` when it is set. A changed email takes the provider's verified flag, which is `false` unless `trustEmailVerified` is on. An email from `mapProfileToUser` that differs from the provider's is always unverified. Enable it only when the IdP controls its users' email addresses. Defaults to `defaultOverrideUserInfo`.
 
 `oidcConfig` <span className="opacity-70">`object`</span>
 

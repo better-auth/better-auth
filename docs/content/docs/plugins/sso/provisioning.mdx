@@ -47,7 +47,7 @@ sso({
 
 Better Auth sets the user's profile only when it creates the user. To refresh the profile on every sign-in, set `overrideUserInfo: true` on an OIDC provider. Each sign-in then overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values, after `mapProfileToUser` when it is set. Enable it only for IdPs that control their users' email addresses.
 
-* A changed email is stored unverified, unless the deprecated `trustEmailVerified` option is on and the IdP reports it verified.
+* A changed email is stored unverified, unless the deprecated `trustEmailVerified` option is on and the IdP reports that same address verified. An email from `mapProfileToUser` that differs from the IdP's is always unverified.
 * Set it per provider in the registration body. To apply it to every provider registered afterwards, set `defaultOverrideUserInfo: true` on the plugin.
 * SAML sign-ins update the profile only when `resolveUser` returns `profile: "update"`.
 
@@ -96,8 +96,8 @@ Sign-in redirects with `error=SSO_PROFILE_MAPPING_FAILED` when the callback does
 
 * Throws.
 * Returns a value that is not an object, such as `undefined` or an array.
-* Sets `email` to something other than a string or `null`.
-* Sets `name` or `image` to something other than a string.
+* Sets `email` to something other than a string, `null`, or `undefined`.
+* Sets `name` or `image` to something other than a string or `undefined`.
 
 `createPlaceholderEmail` builds `<identifier>@<namespace>.placeholder.invalid` and throws when the result is not a valid email address. Sign-in then fails with `error=SSO_PROFILE_MAPPING_FAILED`. The example works when both of these hold:
 
