@@ -157,8 +157,9 @@ export const auth = betterAuth({
   **Notes**
 
   * For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
-  * For custom schemes (like `exp://` or `myapp://`), wildcard patterns match against the full URL including paths. A non-wildcard pattern matches by scheme and authority: a host-less entry such as `myapp://` or `exp://` trusts every host of that scheme, while a host-bearing entry such as `myapp://callback` must match that host exactly (so it is not satisfied by `myapp://callback.attacker.tld`).
+  * For custom schemes (like `exp://` or `myapp://`), a wildcard pattern matches the host and path separately, and a URL with user info never matches. `myapp://*` trusts every host and path of `myapp://`. A scheme wildcard such as `*://example.com` does not match custom schemes. A non-wildcard pattern matches by scheme and authority: a host-less entry such as `myapp://` or `exp://` trusts every host of that scheme, while a host-bearing entry such as `myapp://callback` must match that host exactly (so it is not satisfied by `myapp://callback.attacker.tld`).
   * The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
+  * A wildcard host made only of digits, dots, and wildcards, such as `192.168.*.*`, matches only IPv4 addresses in that range.
 </Callout>
 
 ## `secret`
@@ -617,7 +618,7 @@ import { betterAuth } from "better-auth";
 export const auth = betterAuth({
 	advanced: {
 		ipAddress: {
-			ipAddressHeaders: ["x-client-ip", "x-real-ip"],
+			ipAddressHeaders: ["cf-connecting-ip"],
 			disableIpTracking: false
 		},
 		useSecureCookies: true,
@@ -667,9 +668,9 @@ export const auth = betterAuth({
 ```
 
 * `ipAddress`: IP address configuration for rate limiting and session tracking
-  * `disableIpTracking`: Disable IP address tracking.
-  * `ipAddressHeaders`: Trusted header names to read client IP addresses from.
-  * `trustedProxies`: Reverse-proxy IPs or CIDR ranges. The forwarded chain is walked right to left, trusted hops are skipped, and the first untrusted address is used as the client IP.
+  * `disableIpTracking`: Disable IP address tracking. This also turns off the built-in rate limiter for HTTP requests.
+  * `ipAddressHeaders`: Header names to read the client IP address from. The first header with a valid address is used. Defaults to `["x-forwarded-for"]`. List only headers that your proxy or server code sets on every request. It must replace any value the client sent. If your proxies append to the header instead, list them in `trustedProxies`. See [Connecting IP Address](/docs/concepts/rate-limit#connecting-ip-address).
+  * `trustedProxies`: IP addresses or CIDR ranges of your reverse proxies. Better Auth reads forwarded addresses from right to left. It skips these proxies and uses the first other address as the client IP.
 * `useSecureCookies`: By default, cookies are secure in production environments. Set this to `true` to force the `Secure` cookie attribute in all environments.
 * `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
 * `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
