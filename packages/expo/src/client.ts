@@ -434,23 +434,23 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							let errorDescription =
 								url.searchParams.get("error_description") ||
 								url.searchParams.get("errorDescription");
-							if (!error && url.hash) {
+							if (url.hash) {
 								const hashParams = new URLSearchParams(
 									url.hash.replace(/^#/, ""),
 								);
-								error = hashParams.get("error");
-								errorDescription =
+								error ||= hashParams.get("error");
+								errorDescription ||=
 									hashParams.get("error_description") ||
 									hashParams.get("errorDescription");
 							}
-							if (error) {
+							const cookie = url.searchParams.get("cookie");
+							if (error && !cookie) {
 								context.data.error = error;
 								if (errorDescription) {
 									context.data.error_description = errorDescription;
 								}
 								return;
 							}
-							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
 							const update = await storage.updateItemAsync(
 								cookieName,

@@ -916,7 +916,49 @@ describe("expo", async () => {
 		expect((res.data as any)?.error_description).toBe("State failed");
 	});
 
+	it("should merge error from query and error_description from hash fragment independently", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///dashboard?error=access_denied#error_description=Hash%20description",
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect((res.data as any)?.error).toBe("access_denied");
+		expect((res.data as any)?.error_description).toBe("Hash description");
+	});
+
+	it("should preserve session cookie when both error and cookie are present in callback URL", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+
+		const testCookieValue = "better-auth.test-key=test-val";
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: `better-auth:///dashboard?error=stale_error&cookie=${encodeURIComponent(testCookieValue)}`,
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		const storedCookie = storage.get("better-auth_cookie");
+		expect(storedCookie).toBeDefined();
+		const parsedCookie = JSON.parse(storedCookie || "");
+		expect(parsedCookie["better-auth.test-key"]?.value).toBe("test-val");
+		expect((res.data as any)?.error).toBeUndefined();
+	});
+
 	it("should preserve error and error_description for linkSocial as well", async () => {
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
 		const expoWebBrowser = await import("expo-web-browser");
 
 		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
