@@ -8,7 +8,8 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
-import { generateKeyPair, SignJWT } from "jose";
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type {
@@ -5703,6 +5704,149 @@ describe("oauth2", async () => {
 			},
 		});
 		expect(signUp.token).toEqual(expect.any(String));
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12151
+	 */
+	describe("discoveryHeaders on a header-gated provider", () => {
+		const gate = { "x-gate": "bypass-token" };
+		let privateKey: CryptoKey;
+		let jwks: { keys: JWK[] };
+		let gated: Awaited<ReturnType<typeof startServer>>;
+		let other: Awaited<ReturnType<typeof startServer>>;
+		let jwksUri = "";
+
+		const route = (path: string, origin: string): [number, object | string] => {
+			if (path === "/jwks") return [200, jwks];
+			if (path === "/same-origin-redirect") return [302, "/discovery"];
+			if (path === "/cross-origin-redirect")
+				return [302, `${other.url}/discovery`];
+			return [
+				200,
+				{
+					issuer: origin,
+					authorization_endpoint: `${origin}/authorize`,
+					token_endpoint: `${origin}/token`,
+					jwks_uri: jwksUri,
+					id_token_signing_alg_values_supported: ["RS256"],
+				},
+			];
+		};
+
+		// Records every x-gate value it receives; a gated server rejects requests without it.
+		async function startServer(requireGate: boolean) {
+			const gates: unknown[] = [];
+			const server = createServer((req, res) => {
+				gates.push(req.headers["x-gate"]);
+				if (requireGate && req.headers["x-gate"] !== gate["x-gate"]) {
+					res.statusCode = 401;
+					return res.end();
+				}
+				const [status, body] = route(req.url ?? "", url);
+				res.statusCode = status;
+				if (typeof body === "string") {
+					res.setHeader("location", body);
+					return res.end();
+				}
+				res.setHeader("content-type", "application/json");
+				res.end(JSON.stringify(body));
+			});
+			await new Promise<void>((resolve) => server.listen(0, resolve));
+			const url = `http://localhost:${(server.address() as AddressInfo).port}`;
+			const close = () =>
+				new Promise<void>((resolve, reject) =>
+					server.close((err) => (err ? reject(err) : resolve())),
+				);
+			return { url, close, gates };
+		}
+
+		beforeAll(async () => {
+			const keys = await generateKeyPair("RS256");
+			privateKey = keys.privateKey;
+			const jwk = await exportJWK(keys.publicKey);
+			jwks = { keys: [{ ...jwk, kid: "gated", alg: "RS256" }] };
+			gated = await startServer(true);
+			other = await startServer(false);
+		});
+		afterAll(async () => {
+			await gated.close();
+			await other.close();
+		});
+		afterEach(() => {
+			other.gates.length = 0;
+		});
+
+		async function signInWithIdToken(discoveryPath: string, issuer: string) {
+			const { client, auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "gated",
+									discoveryUrl: `${gated.url}${discoveryPath}`,
+									discoveryHeaders: gate,
+									clientId: "gated-client",
+									clientSecret: "gated-secret",
+								},
+							],
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+			const token = await new SignJWT({
+				email: "gated@test.com",
+				email_verified: true,
+			})
+				.setProtectedHeader({ alg: "RS256", kid: "gated" })
+				.setSubject("gated-user")
+				.setIssuer(issuer)
+				.setAudience("gated-client")
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(privateKey);
+			const res = await client.signIn.social({
+				provider: "gated",
+				idToken: { token },
+			});
+			const providers = (await auth.$context).socialProviders;
+			return { res, registered: providers.some((p) => p.id === "gated") };
+		}
+
+		it("sends discoveryHeaders to a same-origin jwks_uri", async () => {
+			jwksUri = `${gated.url}/jwks`;
+			const { res } = await signInWithIdToken("/discovery", gated.url);
+			expect(res.error).toBeNull();
+			expect(res.data).toMatchObject({ token: expect.any(String) });
+		});
+
+		it("does not send discoveryHeaders to a jwks_uri on another origin", async () => {
+			jwksUri = `${other.url}/jwks`;
+			const { res } = await signInWithIdToken("/discovery", gated.url);
+			expect(res.error).toBeNull();
+			expect(other.gates).toEqual([undefined]);
+		});
+
+		it("follows a same-origin discovery redirect with discoveryHeaders", async () => {
+			jwksUri = `${gated.url}/jwks`;
+			const { res } = await signInWithIdToken(
+				"/same-origin-redirect",
+				gated.url,
+			);
+			expect(res.error).toBeNull();
+		});
+
+		it("refuses a cross-origin discovery redirect instead of sending discoveryHeaders to its target", async () => {
+			jwksUri = `${other.url}/jwks`;
+			const { registered } = await signInWithIdToken(
+				"/cross-origin-redirect",
+				other.url,
+			);
+			expect(registered).toBe(false);
+			expect(other.gates).toEqual([]);
+		});
 	});
 
 	/**

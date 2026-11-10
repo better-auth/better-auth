@@ -91,6 +91,7 @@ function isClientSecretTokenEndpointAuth(
 
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
+const MAX_DISCOVERY_REDIRECTS = 5;
 
 type PendingDiscovery = Map<
 	string,
@@ -124,24 +125,56 @@ async function fetchDiscovery(
 	headers?: Record<string, string>,
 	timeout?: number,
 ): Promise<DiscoveryDocument | null> {
-	const result = await betterFetch<DiscoveryDocument>(url, {
-		method: "GET",
-		headers,
-		// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
-		signal: timeout ? AbortSignal.timeout(timeout) : undefined,
-	});
-	if (result.error || !result.data) {
-		return null;
-	}
-	// Validate the issuer is a syntactically valid URL
-	if (result.data.issuer) {
-		try {
-			new URL(result.data.issuer);
-		} catch {
+	// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
+	const signal = timeout ? AbortSignal.timeout(timeout) : undefined;
+	let target = url;
+	for (let hop = 0; ; hop++) {
+		const redirect: { location?: string | null } = {};
+		const result = await betterFetch<DiscoveryDocument>(target, {
+			method: "GET",
+			headers,
+			// Fetch forwards custom headers across cross-origin redirects, so
+			// redirects are followed here, and only within the configured origin.
+			redirect: headers ? "manual" : undefined,
+			signal,
+			onError: ({ response }) => {
+				if (response.status >= 300 && response.status < 400) {
+					redirect.location = response.headers.get("location");
+				}
+			},
+		});
+		if (headers && redirect.location) {
+			const next = new URL(redirect.location, target);
+			if (
+				next.origin !== new URL(url).origin ||
+				hop >= MAX_DISCOVERY_REDIRECTS
+			) {
+				throw new Error(
+					`discovery redirected to ${next.origin}; with discoveryHeaders set, only same-origin redirects are followed. Set discoveryUrl to the final URL.`,
+				);
+			}
+			target = next.href;
+			continue;
+		}
+		// A browser runtime hides the redirect target behind an opaque status 0.
+		if (headers && result.error?.status === 0) {
+			throw new Error(
+				"discovery redirected; with discoveryHeaders set, set discoveryUrl to the final URL.",
+			);
+		}
+		if (result.error || !result.data) {
 			return null;
 		}
+		// Validate the issuer is a syntactically valid URL
+		if (result.data.issuer) {
+			try {
+				new URL(result.data.issuer);
+			} catch {
+				return null;
+			}
+		}
+		return result.data;
 	}
-	return result.data;
 }
 
 async function fetchUserInfo(
@@ -274,20 +307,15 @@ export const genericOAuth = <const ID extends string>(
 							);
 							continue;
 						}
-						let jwksHeaders: Record<string, string> | undefined;
-						if (c.discoveryHeaders) {
-							try {
-								if (jwksUrl.origin === new URL(c.discoveryUrl).origin) {
-									jwksHeaders = c.discoveryHeaders;
-								}
-							} catch {
-								// Malformed discoveryUrl, do not forward headers
-							}
-						}
+						// The JWKS fetch refuses redirects, so these headers stay on the discovery origin.
+						const jwksHeaders =
+							jwksUrl.origin === new URL(c.discoveryUrl).origin
+								? c.discoveryHeaders
+								: undefined;
 						idTokenConfig = {
 							jwks: createRemoteJWKSet(
 								jwksUrl,
-								jwksHeaders ? { headers: jwksHeaders } : undefined,
+								jwksHeaders && { headers: jwksHeaders },
 							),
 							issuer: discovered.issuer,
 							audience: c.clientId,
