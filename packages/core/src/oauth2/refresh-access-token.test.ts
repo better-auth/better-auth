@@ -5,7 +5,10 @@ vi.mock("@better-fetch/fetch", () => ({
 }));
 
 import { betterFetch } from "@better-fetch/fetch";
-import { refreshAccessToken } from "./refresh-access-token";
+import {
+	refreshAccessToken,
+	refreshAccessTokenRequest,
+} from "./refresh-access-token";
 import { mergeScopes, parseScopeField } from "./utils";
 
 const mockedBetterFetch = vi.mocked(betterFetch);
@@ -211,6 +214,20 @@ describe("refreshAccessToken", () => {
 		expect(body.get("constructor")).toBeNull();
 		expect(body.get("prototype")).toBeNull();
 		expect(body.get("audience")).toBe("https://api.example.com");
+	});
+});
+
+describe("refreshAccessTokenRequest", () => {
+	it("sends caller headers and keeps client authentication on top", async () => {
+		const { headers } = await refreshAccessTokenRequest({
+			refreshToken: "old-refresh-token",
+			options: { clientId: "test-client", clientSecret: "test-secret" },
+			authentication: "basic",
+			headers: { "x-custom-header": "test-value", authorization: "spoofed" },
+		});
+
+		expect(headers["x-custom-header"]).toBe("test-value");
+		expect(headers.authorization).toMatch(/^Basic /);
 	});
 });
 

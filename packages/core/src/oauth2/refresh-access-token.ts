@@ -16,6 +16,11 @@ interface RefreshAccessTokenRequestInput {
 	tokenEndpoint?: string | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
+	/**
+	 * Extra headers to send to the token endpoint. Client authentication
+	 * headers are applied after these and take precedence.
+	 */
+	headers?: Record<string, string> | undefined;
 }
 
 interface RefreshAccessTokenRequestBaseInput {
@@ -23,6 +28,7 @@ interface RefreshAccessTokenRequestBaseInput {
 	options: ProviderOptions;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
+	headers?: Record<string, string> | undefined;
 }
 
 interface RefreshAccessTokenInput extends RefreshAccessTokenRequestInput {
@@ -53,6 +59,7 @@ export async function refreshAccessTokenRequest({
 	tokenEndpoint,
 	extraParams,
 	resource,
+	headers,
 }: RefreshAccessTokenRequestInput) {
 	options = typeof options === "function" ? await options() : options;
 	const request = buildRefreshAccessTokenRequest({
@@ -60,6 +67,7 @@ export async function refreshAccessTokenRequest({
 		options,
 		extraParams,
 		resource,
+		headers,
 	});
 
 	await applyTokenEndpointAuth({
@@ -91,11 +99,13 @@ function buildRefreshAccessTokenRequest({
 	options,
 	extraParams,
 	resource,
+	headers: extraHeaders,
 }: RefreshAccessTokenRequestBaseInput) {
 	const body = new URLSearchParams();
 	const headers: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
+		...extraHeaders,
 	};
 
 	body.set("grant_type", "refresh_token");
@@ -127,6 +137,7 @@ export async function refreshAccessToken({
 	tokenEndpointAuth,
 	extraParams,
 	resource,
+	headers: extraHeaders,
 }: RefreshAccessTokenInput): Promise<OAuth2Tokens> {
 	const { body, headers } = await refreshAccessTokenRequest({
 		refreshToken,
@@ -136,6 +147,7 @@ export async function refreshAccessToken({
 		tokenEndpoint,
 		extraParams,
 		resource,
+		headers: extraHeaders,
 	});
 
 	const { data, error } = await fetchRefusingRedirects<{
