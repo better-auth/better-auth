@@ -19,7 +19,7 @@ jobs:
       github.event.action == 'created' &&
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/changeset') &&
-      github.repository_owner == 'better-auth' &&
+      github.repository == 'better-auth/better-auth' &&
       contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.comment.author_association)
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -137,7 +137,7 @@ jobs:
       contains(github.event.comment.body, '<!-- auto-changeset -->') &&
       contains(github.event.comment.body, '- [x] **Commit this changeset**') &&
       (github.event.comment.user.login == 'better-release[bot]' || github.event.comment.user.login == 'github-actions[bot]') &&
-      github.repository_owner == 'better-auth'
+      github.repository == 'better-auth/better-auth'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

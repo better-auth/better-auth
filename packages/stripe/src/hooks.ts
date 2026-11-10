@@ -1,8 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
-import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import { subscriptionMetadata } from "./metadata";
+import { customerMetadata, subscriptionMetadata } from "./metadata";
 import type { CustomerType, StripeOptions, Subscription } from "./types";
 import {
 	isActiveOrTrialing,
@@ -21,21 +20,56 @@ async function findReferenceByStripeCustomerId(
 	options: StripeOptions,
 	stripeCustomerId: string,
 ): Promise<{ customerType: CustomerType; referenceId: string } | null> {
-	if (options.organization?.enabled) {
-		const org = await ctx.context.adapter.findOne<Organization>({
-			model: "organization",
+	const findCandidates = (model: CustomerType) =>
+		ctx.context.adapter.findMany<Pick<User, "id">>({
+			model,
 			where: [{ field: "stripeCustomerId", value: stripeCustomerId }],
+			limit: 2,
 		});
-		if (org) return { customerType: "organization", referenceId: org.id };
+
+	const orgs = options.organization?.enabled
+		? await findCandidates("organization")
+		: [];
+	const users = await findCandidates("user");
+	if (orgs.length + users.length < 2) {
+		if (orgs[0])
+			return { customerType: "organization", referenceId: orgs[0].id };
+		if (users[0]) return { customerType: "user", referenceId: users[0].id };
+		return null;
 	}
 
-	const user = await ctx.context.adapter.findOne<User>({
-		model: "user",
-		where: [{ field: "stripeCustomerId", value: stripeCustomerId }],
+	// Several records hold this id, so the owner recorded on the Stripe
+	// customer decides.
+	const customer =
+		await options.stripeClient.customers.retrieve(stripeCustomerId);
+	const { customerType, userId, organizationId } = customerMetadata.get(
+		customer.deleted ? null : customer.metadata,
+	);
+	const namesOwner = customerType === "user" || customerType === "organization";
+	const referenceId = customerType === "organization" ? organizationId : userId;
+	if (!namesOwner || !referenceId) {
+		ctx.context.logger.warn(
+			`Stripe webhook warning: Multiple records share stripeCustomerId ${stripeCustomerId} and the customer does not identify its owner`,
+		);
+		return null;
+	}
+	const mismatch = `Stripe webhook warning: The owner recorded on Stripe customer ${stripeCustomerId} does not hold that customer id`;
+	if (customerType === "organization" && !options.organization?.enabled) {
+		ctx.context.logger.warn(mismatch);
+		return null;
+	}
+	const record = await ctx.context.adapter.findOne<Pick<User, "id">>({
+		model: customerType,
+		where: [
+			{ field: "stripeCustomerId", value: stripeCustomerId },
+			{ field: "id", value: referenceId },
+		],
 	});
-	if (user) return { customerType: "user", referenceId: user.id };
-
-	return null;
+	if (!record) {
+		ctx.context.logger.warn(mismatch);
+		return null;
+	}
+	return { customerType, referenceId: record.id };
 }
 
 export async function onCheckoutSessionCompleted(

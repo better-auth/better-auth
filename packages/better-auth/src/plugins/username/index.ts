@@ -3,6 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { getCurrentAdapter } from "@better-auth/core/context";
 import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -259,7 +260,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 											await validateUsername(
 												username,
 												displayUsername,
-												ctx.adapter,
+												await getCurrentAdapter(ctx.adapter),
 											);
 										}
 
@@ -313,7 +314,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 											await validateUsername(
 												username,
 												displayUsername,
-												ctx.adapter,
+												await getCurrentAdapter(ctx.adapter),
 												currentUserId,
 											);
 										}
@@ -496,6 +497,7 @@ const usernameImpl = <IncludeDisplayUsername extends boolean>(
 								user.email,
 								undefined,
 								ctx.context.options.emailVerification?.expiresIn,
+								{ userId: user.id },
 							);
 							const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${encodeURIComponent(
 								ctx.body.callbackURL || "/",

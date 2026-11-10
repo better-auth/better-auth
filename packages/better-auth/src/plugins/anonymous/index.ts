@@ -385,6 +385,13 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						if (!newSession) {
 							return;
 						}
+						if (
+							await ctx.context
+								.getPlugin("two-factor")
+								?.shouldRequireTwoFactor(ctx)
+						) {
+							return;
+						}
 
 						// At this point the user is linking their previous anonymous account with a
 						// new credential (email / social). Invoke the provided callback so that the

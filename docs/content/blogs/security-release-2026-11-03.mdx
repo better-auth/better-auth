@@ -1,6 +1,6 @@
 ---
 title: "Security release on Tuesday, November 3, 2026"
-description: "A security release for Better Auth is scheduled for Tuesday, November 3, 2026."
+description: "Better Auth v1.7.16 and v1.8.0-beta.5 fix 12 security issues. Upgrade to the latest release of your line."
 date: 2026-10-30
 author:
   name: "Taesu Kim"
@@ -10,30 +10,102 @@ tags: ["security", "advisories", "release"]
 
 # Security release on Tuesday, November 3, 2026
 
-We are preparing a security release for Better Auth, scheduled for Tuesday, November 3, 2026.
+Better Auth v1.7.16 and v1.8.0-beta.5 are now available on npm. They fix the issues described in 12 security advisories, published today on [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories). Upgrade to the fixed version of your release line.
 
-The related advisories will be published on [GitHub Security Advisories](https://github.com/better-auth/better-auth/security/advisories) at the same time.
-
-<Callout type="info" title="About this release">
-  This advance notice is part of our coordinated security release process. Our ongoing security reviews include work with frontier AI models made available through OSS security programs, and we release security fixes in batches. We are sharing the date ahead of time to give teams running versions outside the covered release lines time to upgrade before the security release.
+<Callout type="info">
+  If you've deployed your app on Vercel, we've applied WAF protections against all reasonably identifiable issues. Regardless, we recommend updating to the latest version of Better Auth.
 </Callout>
 
 ## Releases
 
-This security release covers 2 release lines.
+* v1.7.x: 1.7.16
+* v1.8.0-beta.x: 1.8.0-beta.5
 
-* v1.7.x
-* v1.8.0-beta.x
+Packages released separately, such as `@better-auth/expo`, `@better-auth/electron`, `@better-auth/passkey`, `@better-auth/stripe` and `@better-auth/kysely-adapter`, ship with the same versions. Update every Better Auth package together.
 
-## How to prepare
+## Advisories
 
-* Stay on the current release of your line, so the security release is a small step.
-* If you pin Better Auth packages, be ready to update to the fixed versions.
-* Watch the [repository's releases on GitHub](https://github.com/better-auth/better-auth/releases) to be notified on Tuesday, November 3, 2026.
+### Critical
 
-## On release day
+#### Expo
 
-On Tuesday, November 3, 2026, the new versions go out on npm and the advisories are published on GitHub. We will update this post with the versions and advisory links.
+* **Authorization proxy can sign values it did not issue**
+  * Advisory: [GHSA-4wq4-2ppv-q3hg](https://github.com/better-auth/better-auth/security/advisories/GHSA-4wq4-2ppv-q3hg)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### High
+
+#### Phone number
+
+* **Phone numbers can be claimed before they are verified**
+  * Advisory: [GHSA-q747-mqgr-4gh7](https://github.com/better-auth/better-auth/security/advisories/GHSA-q747-mqgr-4gh7)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+#### Electron
+
+* **Desktop sign-in can return the server secret and skip two-factor**
+  * Advisory: [GHSA-9p5w-h4pr-fcrc](https://github.com/better-auth/better-auth/security/advisories/GHSA-9p5w-h4pr-fcrc)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Medium
+
+#### Core
+
+* **Email-change links stay valid after the address changes hands**
+  * Advisory: [GHSA-hwq2-v29r-p69r](https://github.com/better-auth/better-auth/security/advisories/GHSA-hwq2-v29r-p69r)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+* **OAuth sign-in can treat an unverified provider email as verified**
+  * Advisory: [GHSA-9hm7-xhfp-cx58](https://github.com/better-auth/better-auth/security/advisories/GHSA-9hm7-xhfp-cx58)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+* **MySQL serial IDs can return another request's record** (`@better-auth/kysely-adapter`)
+  * Advisory: [GHSA-48c2-w96j-mv3m](https://github.com/better-auth/better-auth/security/advisories/GHSA-48c2-w96j-mv3m)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+* **Revoked sessions can stay valid with secondary storage or the cookie cache**
+  * Advisory: [GHSA-fvxx-76fc-893x](https://github.com/better-auth/better-auth/security/advisories/GHSA-fvxx-76fc-893x)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+#### Email OTP
+
+* **Email OTP attempt limit can be raced and codes are loosely bound to addresses**
+  * Advisory: [GHSA-2f9c-7xj7-gh55](https://github.com/better-auth/better-auth/security/advisories/GHSA-2f9c-7xj7-gh55)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+#### Admin
+
+* **Admin roles with user:update can change another user's phone number**
+  * Advisory: [GHSA-g95c-wqvr-8c3j](https://github.com/better-auth/better-auth/security/advisories/GHSA-g95c-wqvr-8c3j)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+#### Organization
+
+* **Organization admins can invite an owner with a padded role name**
+  * Advisory: [GHSA-c85h-5mrr-mgx4](https://github.com/better-auth/better-auth/security/advisories/GHSA-c85h-5mrr-mgx4)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+#### Stripe
+
+* **Billing actions can target another customer's Stripe account**
+  * Advisory: [GHSA-x8j7-xh58-rv6x](https://github.com/better-auth/better-auth/security/advisories/GHSA-x8j7-xh58-rv6x)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+### Low
+
+#### Passkey
+
+* **Passkey verification does not enforce origin or user verification**
+  * Advisory: [GHSA-gv75-j3v8-3crm](https://github.com/better-auth/better-auth/security/advisories/GHSA-gv75-j3v8-3crm)
+  * Fixed in: 1.7.16, 1.8.0-beta.5
+
+Each advisory lists the affected versions and the conditions that decide whether you are affected.
+
+## How to upgrade
+
+* Update `better-auth` and every `@better-auth/*` package to 1.7.16, or to 1.8.0-beta.5 on the beta line.
+* Read the advisories for the plugins you use. Some fixes add a configuration step, such as listing trusted origins.
+
+## Thank you
+
+Thank you to everyone who reported these issues to us privately. Our ongoing security reviews include work with frontier AI models made available through OSS security programs.
 
 ## Contact
 

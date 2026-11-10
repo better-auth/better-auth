@@ -12,6 +12,7 @@ import {
 } from "./routes";
 import { schema } from "./schema";
 import type { Passkey, PasskeyOptions } from "./types";
+import { assertOriginForWildcardHosts } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 declare module "@better-auth/core" {
@@ -43,6 +44,15 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 	return {
 		id: "passkey",
 		version: PACKAGE_VERSION,
+		init(ctx) {
+			assertOriginForWildcardHosts(opts, ctx.options.baseURL);
+			// Kept on this instance's context, since one plugin result can be shared.
+			return {
+				context: {
+					passkeyBaseURLFromRequest: !ctx.options.baseURL,
+				},
+			};
+		},
 		endpoints: {
 			generatePasskeyRegistrationOptions: generatePasskeyRegistrationOptions(
 				opts,

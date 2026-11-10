@@ -275,4 +275,15 @@ export const communityAdapters: CommunityAdapter[] = [
 			avatar: "https://github.com/DevSnap.png",
 		},
 	},
+	{
+		name: "@typesql/better-auth",
+		url: "https://github.com/ismailkarsli/TypeSQL/tree/main/packages/better-auth",
+		database: "TypeSQL",
+		databaseUrl: "https://typesql.karsli.net/",
+		author: {
+			name: "ismailkarsli",
+			url: "https://github.com/ismailkarsli",
+			avatar: "https://github.com/ismailkarsli.png",
+		},
+	},
 ];
