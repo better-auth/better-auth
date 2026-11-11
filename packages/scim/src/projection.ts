@@ -2,8 +2,8 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { BetterAuthError } from "@better-auth/core/error";
 import type { AuthContext, DBAdapter, DBTransactionAdapter } from "better-auth";
-import { BetterAuthError } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
 import type {

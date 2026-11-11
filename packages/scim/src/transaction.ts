@@ -1,5 +1,5 @@
+import { BetterAuthError } from "@better-auth/core/error";
 import type { DBAdapter } from "better-auth";
-import { BetterAuthError } from "better-auth";
 
 /** Rejects adapters whose transaction method is only the sequential fallback. */
 export function assertNativeSCIMTransactions(

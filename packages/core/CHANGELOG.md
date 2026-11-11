@@ -1,5 +1,25 @@
 # @better-auth/core
 
+## 1.7.20
+
+### Patch Changes
+
+- [#11904](https://github.com/better-auth/better-auth/pull/11904) [`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth provider deployments served over plain HTTP on a private network, such as a LAN address, a VPN, or a private DNS name, can now accept `http` redirect URIs through the new `allowInsecureRedirectUri` option. Return `true` from it for origins you control. The same option lets web clients use `localhost` callbacks during development. Without the option, redirect URI validation is unchanged.
+
+  If your issuer (`baseURL`, or `jwt.issuer` when set) uses `http` on a non-loopback host, discovery and the `iss` authorization response parameter now report it as configured instead of rewriting it to `https`. They now match the issuer in issued tokens, so OpenID Connect sign-ins no longer fail on the mismatch. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+
+  When an authorization request uses a registered `http` redirect URI that the HTTPS policy rejects, the error now appears on the server error page instead of being redirected to that URI.
+
+  Client registration and updates now reject post-logout redirect URIs that contain credentials, such as `https://user:pass@example.com/logged-out`, matching the existing rule for redirect URIs.
+
+## 1.7.19
+
+### Patch Changes
+
+- [#12317](https://github.com/better-auth/better-auth/pull/12317) [`8412a5f`](https://github.com/better-auth/better-auth/commit/8412a5f43b724648b3faaa452bec0a6ba8e01765) Thanks [@bytaesu](https://github.com/bytaesu)! - Failed fallback join queries are now reported only through the configured logger, instead of also printing the raw database error (including SQL and bound values) with `console.error`.
+
+- [#12369](https://github.com/better-auth/better-auth/pull/12369) [`34ee100`](https://github.com/better-auth/better-auth/commit/34ee1008d8269d32b875e2743b9805090863f2f4) Thanks [@bytaesu](https://github.com/bytaesu)! - `getAccessToken` and `refreshToken` now fail when a provider refuses a token refresh with a 200 status, as GitHub does, instead of returning the expired access token.
+
 ## 1.7.18
 
 ### Patch Changes

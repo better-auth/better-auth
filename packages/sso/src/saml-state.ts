@@ -1,6 +1,9 @@
 import type { GenericEndpointContext, StateData } from "better-auth";
-import { generateGenericState, parseGenericState } from "better-auth";
-import { APIError } from "better-auth/api";
+import {
+	APIError,
+	generateGenericState,
+	parseGenericState,
+} from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { SSOProviderReference } from "./provider-reference";
 import { SSO_PROVIDER_STATE_KEY } from "./provider-reference";

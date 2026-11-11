@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { HIDE_METADATA } from "@better-auth/core/api";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
-import { getAuthStateVerificationIdentifier, HIDE_METADATA } from "better-auth";
+import { getAuthStateVerificationIdentifier } from "@better-auth/core/utils/state";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
 
@@ -12,24 +13,26 @@ export const getIssuedOriginIdentifier = (state: string) =>
 	`expo-authorization-origin:${state}`;
 
 // An authorization origin depends only on provider configuration, so build it
-// once per provider. Failures are not cached and keep failing closed.
-const providerOrigins = new WeakMap<OAuthProvider, string>();
+// once per provider. Failures are kept too, so a provider that cannot build one
+// stays rejected without reporting its configuration error on every request.
+const providerOrigins = new WeakMap<OAuthProvider, Promise<string | null>>();
 
-async function getProviderAuthorizationOrigin(
+function getProviderAuthorizationOrigin(
 	ctx: GenericEndpointContext,
 	provider: OAuthProvider,
 ) {
 	const cached = providerOrigins.get(provider);
-	if (cached) return cached;
-	const providerURL = await (async () =>
+	if (cached !== undefined) return cached;
+	const origin = (async () =>
 		provider.createAuthorizationURL({
 			state: "state",
 			codeVerifier: "code-verifier",
 			redirectURI: `${ctx.context.baseURL}/callback/${provider.id}`,
-		}))().catch(() => null);
-	if (!providerURL) return null;
-	providerOrigins.set(provider, providerURL.origin);
-	return providerURL.origin;
+		}))()
+		.then((providerURL) => providerURL.origin)
+		.catch(() => null);
+	providerOrigins.set(provider, origin);
+	return origin;
 }
 
 async function isProviderAuthorizationOrigin(
