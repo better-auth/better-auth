@@ -538,7 +538,7 @@ With `oauthDeviceAuthorization()`, both endpoints refuse OAuth device codes. App
 
 #### Example Approval Page
 
-The server returns `client_id` and `scope` only to the signed-in user who owns the code. The page enables Approve and Deny only when the lookup returns `client_id` for a pending code.
+The server returns `client_id` and `scope` only to the signed-in user who owns the code. The page enables Deny only when the lookup returns `client_id` for a pending code. It enables Approve only when that `client_id` is also in your own list of known clients.
 
 This page meets the [approval UI requirements](#production-security-requirements). `client_id` is the identifier the device sent, not a verified name. Show a name from your own client registry instead, and accept only registered IDs in [`validateClient`](#client-validation). Without `validateClient`, `deviceAuthorization()` alone accepts any client ID. With `oauthDeviceAuthorization()`, the standalone flow accepts only client IDs that `validateClient` accepts. See [Client Validation](#client-validation).
 
@@ -590,6 +590,9 @@ export default function DeviceApprovalPage() {
 
   // Ignore details that belong to an earlier code.
   const details = request?.user_code === userCode ? request : null;
+  const clientName = details?.client_id
+    ? knownClients.get(details.client_id)
+    : undefined;
 
   const handleApprove = async () => {
     if (!userCode) return;
@@ -640,8 +643,7 @@ export default function DeviceApprovalPage() {
       {details?.client_id && (
         <>
           <p>
-            Client: {knownClients.get(details.client_id) ??
-              `Unrecognized client (${details.client_id})`}
+            Client: {clientName ?? `Unrecognized client (${details.client_id})`}
           </p>
           <p>Scopes: {details.scope || "None"}</p>
         </>
@@ -649,7 +651,7 @@ export default function DeviceApprovalPage() {
       <p>Code: {userCode}</p>
       <p>Approve only if this code is showing right now on a device you have.</p>
 
-      <button onClick={handleApprove} disabled={isProcessing || !details}>
+      <button onClick={handleApprove} disabled={isProcessing || !clientName}>
         Approve
       </button>
       <button onClick={handleDeny} disabled={isProcessing || !details}>
