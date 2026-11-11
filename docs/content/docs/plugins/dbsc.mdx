@@ -8,7 +8,7 @@ Malware that steals browser cookies can copy a user's session cookie and replay 
 
 ## Browser support
 
-Chrome supports Device Bound Session Credentials on Windows and macOS. In every other browser, and on devices without secure key storage, sessions stay unbound and work exactly as they do without the plugin.
+Chrome supports Device Bound Session Credentials on Windows from Chrome 145 and on macOS from Chrome 147. Google turns the feature on gradually, so some users on those versions do not have it yet. In every other browser, and on devices without secure key storage, sessions stay unbound and work exactly as they do without the plugin.
 
 Chrome only registers keys over HTTPS. Sessions created on a plain `http://localhost` development server are never bound.
 
@@ -105,7 +105,8 @@ When your server forwards a browser request to `auth.api.getSession`, pass the r
 
 Device binding protects against a copied cookie being used after sign-in, on another device. It does not protect against:
 
-* Malware that is already running on the device when the user signs in. It can register its own key. This includes anyone who copies the browser's cookies before the browser registers, which can take up to 5 minutes after a redirect sign-in. The user is then signed out and must sign in again.
+* Malware that is already running on the device when the user signs in. It can register its own key.
+* Someone who copies the browser's cookies before the browser registers its key, which can take up to 5 minutes after a redirect sign-in, and registers a key of their own first. The user's browser is then signed out and must sign in again. A copy that does not register first stops working once the browser registers.
 * Malware or a script running in the user's browser while the user is signed in. It can make requests that the browser signs.
 * A copied bound cookie, for up to `boundCookieMaxAge`, which defaults to 10 minutes.
 
