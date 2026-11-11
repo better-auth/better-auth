@@ -141,17 +141,21 @@ function siteOf(host: string) {
 
 export function toRefreshInitiators(
 	trustedOrigins: string[],
-	authHost: string,
+	authOrigin: string,
 ) {
-	const site = siteOf(authHost);
+	const site = siteOf(new URL(authOrigin).hostname);
 	const hosts = new Set<string>();
 	for (const origin of trustedOrigins) {
+		// The auth origin needs no entry, but an app on another port of the same
+		// host does: host patterns carry no port.
+		if (URL.canParse(origin) && new URL(origin).origin === authOrigin) {
+			continue;
+		}
 		const host = /^(?:[a-z][a-z0-9+.-]*:\/\/)?([^/:?#]+)/i
 			.exec(origin)?.[1]
 			?.toLowerCase();
 		if (
 			host &&
-			host !== authHost &&
 			HOST_PATTERN.test(host) &&
 			siteOf(host.replace(/^\*\./, "")) === site
 		) {

@@ -231,7 +231,7 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 			],
 			allowed_refresh_initiators: toRefreshInitiators(
 				ctx.context.trustedOrigins,
-				new URL(ctx.context.baseURL).hostname,
+				new URL(ctx.context.baseURL).origin,
 			),
 		});
 	}

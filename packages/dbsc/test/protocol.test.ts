@@ -45,9 +45,21 @@ describe("toRefreshInitiators", () => {
 					"https://app-*.example.com",
 					"myapp://",
 				],
-				"api.example.com",
+				"https://api.example.com",
 			),
 		).toEqual(["app.example.com", "*.example.com"]);
+	});
+
+	it("keeps an app on another port of the auth host", () => {
+		expect(
+			toRefreshInitiators(
+				["https://localhost:8443", "https://localhost:3000"],
+				"https://localhost:8443",
+			),
+		).toEqual(["localhost"]);
+		expect(
+			toRefreshInitiators(["https://localhost:8443"], "https://localhost:8443"),
+		).toEqual([]);
 	});
 
 	it("uses the public suffix list to decide what counts as the same site", () => {
@@ -58,13 +70,13 @@ describe("toRefreshInitiators", () => {
 					"https://evil.co.uk",
 					"https://other-app.vercel.app",
 				],
-				"api.example.co.uk",
+				"https://api.example.co.uk",
 			),
 		).toEqual(["app.example.co.uk"]);
 		expect(
 			toRefreshInitiators(
 				["https://other-app.vercel.app"],
-				"my-app.vercel.app",
+				"https://my-app.vercel.app",
 			),
 		).toEqual([]);
 	});
