@@ -142,7 +142,7 @@ export interface InternalAdapter<
 	listSessions<T extends Record<string, any> = Record<string, any>>(
 		userId: string,
 		options?: { onlyActiveSessions?: boolean | undefined } | undefined,
-	): Promise<(T & Session)[]>;
+	): Promise<(Omit<T, keyof Session> & Session)[]>;
 
 	listUsers(
 		limit?: number | undefined,

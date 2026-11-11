@@ -2639,4 +2639,14 @@ describe("listSessions with additional session fields", async () => {
 		expect(sessions[0]?.deviceName).toBe("laptop");
 		expectTypeOf(sessions[0]!.userId).toEqualTypeOf<string>();
 	});
+
+	it("keeps the core session field types when the type argument overlaps them", async () => {
+		const { user } = await signInWithTestUser();
+		const { internalAdapter } = await auth.$context;
+
+		const sessions = await internalAdapter.listSessions<{ token: number }>(
+			user.id,
+		);
+		expectTypeOf(sessions[0]!.token).toEqualTypeOf<string>();
+	});
 });
