@@ -91,11 +91,9 @@ function isClientSecretTokenEndpointAuth(
 
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
+const MAX_DISCOVERY_REDIRECTS = 5;
 
-type PendingDiscovery = Map<
-	string,
-	{ config: GenericOAuthConfig; attempt?: Promise<void> | undefined }
->;
+type PendingDiscovery = Map<string, GenericOAuthConfig>;
 
 /**
  * Providers skipped because startup discovery failed. Init stores them on each auth
@@ -124,24 +122,58 @@ async function fetchDiscovery(
 	headers?: Record<string, string>,
 	timeout?: number,
 ): Promise<DiscoveryDocument | null> {
-	const result = await betterFetch<DiscoveryDocument>(url, {
-		method: "GET",
-		headers,
-		// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
-		signal: timeout ? AbortSignal.timeout(timeout) : undefined,
-	});
-	if (result.error || !result.data) {
-		return null;
-	}
-	// Validate the issuer is a syntactically valid URL
-	if (result.data.issuer) {
-		try {
-			new URL(result.data.issuer);
-		} catch {
+	// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
+	const signal = timeout ? AbortSignal.timeout(timeout) : undefined;
+	let target = url;
+	for (let hop = 0; ; hop++) {
+		const redirect: { location?: string | null } = {};
+		const result = await betterFetch<DiscoveryDocument>(target, {
+			method: "GET",
+			headers,
+			// Fetch forwards custom headers across cross-origin redirects, so
+			// redirects are followed here, and only within the configured origin.
+			redirect: headers ? "manual" : undefined,
+			signal,
+			onError: ({ response }) => {
+				if (response.status >= 300 && response.status < 400) {
+					redirect.location = response.headers.get("location");
+				}
+			},
+		});
+		if (headers && redirect.location) {
+			const next = new URL(redirect.location, target);
+			if (next.origin !== new URL(url).origin) {
+				throw new Error(
+					`discovery redirected to ${next.origin}; with discoveryHeaders set, only same-origin redirects are followed. Set discoveryUrl to the final URL.`,
+				);
+			}
+			if (hop >= MAX_DISCOVERY_REDIRECTS) {
+				throw new Error(
+					`discovery redirected more than ${MAX_DISCOVERY_REDIRECTS} times. Set discoveryUrl to the final URL.`,
+				);
+			}
+			target = next.href;
+			continue;
+		}
+		// A browser runtime hides the redirect target behind an opaque status 0.
+		if (headers && result.error?.status === 0) {
+			throw new Error(
+				"discovery redirected; with discoveryHeaders set, set discoveryUrl to the final URL.",
+			);
+		}
+		if (result.error || !result.data) {
 			return null;
 		}
+		// Validate the issuer is a syntactically valid URL
+		if (result.data.issuer) {
+			try {
+				new URL(result.data.issuer);
+			} catch {
+				return null;
+			}
+		}
+		return result.data;
 	}
-	return result.data;
 }
 
 async function fetchUserInfo(
@@ -284,8 +316,16 @@ export const genericOAuth = <const ID extends string>(
 							);
 							continue;
 						}
+						// The JWKS fetch refuses redirects, so these headers stay on the discovery origin.
+						const jwksHeaders =
+							jwksUrl.origin === new URL(c.discoveryUrl).origin
+								? c.discoveryHeaders
+								: undefined;
 						idTokenConfig = {
-							jwks: createRemoteJWKSet(jwksUrl),
+							jwks: createRemoteJWKSet(
+								jwksUrl,
+								jwksHeaders && { headers: jwksHeaders },
+							),
 							issuer: discovered.issuer,
 							audience: c.clientId,
 							algorithms: isOidc ? signingAlgs : undefined,
@@ -570,25 +610,19 @@ export const genericOAuth = <const ID extends string>(
 		return genericProviders;
 	};
 
-	// Concurrent requests share one retry, and a failed retry stays pending.
-	const retryDiscovery = (ctx: AuthContext, providerId: string) => {
+	// Each request runs its own retry: on Workers, a pending fetch started by a request
+	// that has ended never settles. The first success installs the provider.
+	const retryDiscovery = async (ctx: AuthContext, providerId: string) => {
 		const pendingDiscovery = getPendingDiscovery(ctx);
 		const pending = pendingDiscovery?.get(providerId);
 		if (!pending) return;
-		pending.attempt ??= buildProviders(
-			[pending.config],
+		const [provider] = await buildProviders(
+			[pending],
 			ctx,
 			DISCOVERY_RETRY_TIMEOUT_MS,
-		)
-			.then(([provider]) => {
-				if (!provider) return;
-				pendingDiscovery?.delete(providerId);
-				ctx.socialProviders.unshift(provider);
-			})
-			.finally(() => {
-				pending.attempt = undefined;
-			});
-		return pending.attempt;
+		);
+		if (!provider || !pendingDiscovery?.delete(providerId)) return;
+		ctx.socialProviders.unshift(provider);
 	};
 	// shortcut: account routes that look the provider up from a stored account recover
 	// only after a request names it; resolve the account here if that becomes a need.
@@ -614,7 +648,7 @@ export const genericOAuth = <const ID extends string>(
 			const genericOAuthPendingDiscovery: PendingDiscovery = new Map(
 				options.config
 					.filter((c) => !built.has(c.providerId))
-					.map((c) => [c.providerId, { config: c }]),
+					.map((c) => [c.providerId, c]),
 			);
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));

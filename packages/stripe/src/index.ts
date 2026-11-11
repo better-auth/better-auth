@@ -1,5 +1,5 @@
+import { APIError } from "@better-auth/core/error";
 import type { BetterAuthPlugin, User } from "better-auth";
-import { APIError } from "better-auth";
 import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";

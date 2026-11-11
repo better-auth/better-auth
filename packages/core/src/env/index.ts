@@ -21,3 +21,11 @@ export {
 	shouldPublishLog,
 	TTY_COLORS,
 } from "./logger";
+export {
+	getRuntimeName,
+	isBun,
+	isDeno,
+	isNode,
+	isWorkerd,
+	type RuntimeName,
+} from "./runtime";

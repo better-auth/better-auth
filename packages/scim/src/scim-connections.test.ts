@@ -1,9 +1,9 @@
 import type { User } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { SCIMDeclaredConnectionVerificationResult } from ".";
-import { scim } from ".";
+import { SCIM_REQUIRES_NATIVE_TRANSACTIONS, scim } from ".";
 
 type SCIMUserRow = {
 	id: string;
@@ -729,12 +729,18 @@ describe("SCIM connection provisioning", () => {
 			scimUser: [] as SCIMUserRow[],
 			scimGroupMember: [] as { id: string }[],
 			scimProjectionGrant: [] as { id: string }[],
+			scimManagedConnection: [] as { id: string }[],
 		};
+		const log = vi.fn();
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",
 			database: withoutNativeTransactions(memoryAdapter(data)),
+			logger: { log },
 			plugins: [
 				scim({
+					managedConnections: {
+						credentialHashSecret: "managed-test-secret-at-least-32-characters",
+					},
 					connections: [
 						{
 							id: "workforce",
@@ -751,10 +757,116 @@ describe("SCIM connection provisioning", () => {
 			],
 		});
 
-		await expect(auth.$context).rejects.toThrow("native transaction support");
-		expect(data.scimConnectionBinding).toEqual([]);
-		expect(data.user).toEqual([]);
-		expect(data.scimSubject).toEqual([]);
-		expect(data.scimUser).toEqual([]);
+		await auth.$context;
+		expect(log).toHaveBeenCalledWith(
+			"error",
+			expect.stringContaining("native transaction support"),
+		);
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				headers: { authorization: "Bearer test-scim-token" },
+			}),
+		);
+		expect(response.status).toBe(501);
+		expect(response.headers.get("content-type")).toBe("application/scim+json");
+		await expect(response.json()).resolves.toMatchObject({
+			schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
+			status: "501",
+		});
+		const malformed = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				method: "POST",
+				headers: {
+					authorization: "Bearer test-scim-token",
+					"content-type": "text/plain",
+				},
+				body: "not json",
+			}),
+		);
+		expect(malformed.status).toBe(501);
+		const created = await auth.handler(
+			new Request("http://localhost:3000/api/auth/scim/v2/Users", {
+				method: "POST",
+				headers: {
+					authorization: "Bearer test-scim-token",
+					"content-type": "application/scim+json",
+				},
+				body: JSON.stringify({
+					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					userName: "ada@example.com",
+				}),
+			}),
+		);
+		expect(created.status).toBe(501);
+		await expect(
+			auth.api.createSCIMUser({
+				body: {
+					schemas: ["urn:ietf:params:scim:schemas:core:2.0:User"],
+					userName: "ada@example.com",
+				},
+				headers: { authorization: "Bearer test-scim-token" },
+			}),
+		).rejects.toThrow("native transaction support");
+		await expect(
+			auth.api.listSCIMManagedConnections({
+				body: { provisioningDomainId: "workforce" },
+			}),
+		).resolves.toEqual({ connections: [] });
+		const expiresAt = new Date(Date.now() + 60_000);
+		const connectionId = "ba_scim_connection_missing";
+		const writes = [
+			() =>
+				auth.api.createSCIMManagedConnection({
+					body: {
+						creationRequestId: "creation-request-01",
+						provisioningDomainId: "workforce",
+						actorId: "actor",
+						scopes: ["scim.users.read"],
+						expiresAt,
+					},
+				}),
+			() =>
+				auth.api.rotateSCIMManagedCredential({
+					body: {
+						connectionId,
+						provisioningDomainId: "workforce",
+						actorId: "actor",
+						scopes: ["scim.users.read"],
+						expiresAt,
+					},
+				}),
+			() =>
+				auth.api.revokeSCIMManagedCredential({
+					body: {
+						connectionId,
+						provisioningDomainId: "workforce",
+						credentialId: "ba_scim_credential_missing",
+						actorId: "actor",
+					},
+				}),
+			() =>
+				auth.api.decommissionSCIMManagedConnection({
+					body: {
+						connectionId,
+						provisioningDomainId: "workforce",
+						actorId: "actor",
+					},
+				}),
+			() =>
+				auth.api.decommissionSCIMConnection({
+					body: { connectionId: "workforce" },
+				}),
+			() =>
+				auth.api.reconcileSCIMProjection({
+					body: { provisioningDomainId: "workforce" },
+				}),
+		];
+		for (const write of writes) {
+			await expect(write()).rejects.toMatchObject({
+				statusCode: 501,
+				body: { code: SCIM_REQUIRES_NATIVE_TRANSACTIONS },
+			});
+		}
+		for (const rows of Object.values(data)) expect(rows).toEqual([]);
 	});
 });

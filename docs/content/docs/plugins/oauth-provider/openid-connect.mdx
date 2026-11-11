@@ -13,6 +13,8 @@ Better Auth serves [OpenID Provider metadata](https://openid.net/specs/openid-co
 
 The OpenID configuration returns 404 when you set `scopes` without `openid`. To serve it, add `openid` to `scopes`.
 
+The issuer keeps the scheme of your `baseURL`, or of `jwt.issuer` when you set it, so discovery, the authorization response `iss` parameter, and issued tokens report the same value. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+
 To publish fewer scopes, or more claims, than the server supports, set `advertisedMetadata`:
 
 ```ts title="auth.ts"
@@ -276,7 +278,8 @@ Better Auth loads the URI with `iss` and `sid` query parameters added to any que
 Better Auth validates the `frontchannel_logout_uri` at registration and on every client update:
 
 * It must be an absolute `http` or `https` URL with no fragment and no credentials.
-* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback or private-network redirect URI is accepted, because the browser loads it, not the server.
+* An `http` URL must be on a loopback host. [`allowInsecureRedirectUri`](/docs/plugins/oauth-provider/clients#http-redirect-uris) does not apply to it.
+* Its scheme, host, and port must match one of the client's `redirect_uris`, as the specification requires. A URI that matches a loopback redirect URI, or an `https` redirect URI on a private network, is accepted, because the browser loads it, not the server.
 * It does not require the [JWT plugin](/docs/plugins/jwt), because nothing is signed.
 
 A URI that fails validation is rejected with `invalid_client_metadata`.

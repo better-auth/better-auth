@@ -171,6 +171,65 @@ describe("resource seeding at startup", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10315
+	 */
+	it("a resource lookup does not wait on another request's pending seed", async () => {
+		const fault = {
+			current: (() => {
+				throw new TypeError("fetch failed");
+			}) as ResourceFault | null,
+		};
+		const { register, database } = await bootWithResourceFault(fault);
+
+		// On Cloudflare Workers, I/O started by a request that has ended never
+		// settles; the gate stands in for that request's stuck seed.
+		const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+		fault.current = (operation) => {
+			if (operation !== "findOne") return;
+			fault.current = null;
+			return gate;
+		};
+		const first = register();
+		// Start the second request only once the first one holds the gate.
+		await vi.waitFor(() => expect(fault.current).toBeNull());
+
+		await expect(register()).resolves.toMatchObject({
+			resources: [resource],
+		});
+		release();
+		await expect(first).resolves.toMatchObject({ resources: [resource] });
+		expect(database.oauthResource).toHaveLength(1);
+	});
+
+	it("a seed that finishes after another does not undo a later edit", async () => {
+		const fault = {
+			current: (() => {
+				throw new TypeError("fetch failed");
+			}) as ResourceFault | null,
+		};
+		const { register, database } = await bootWithResourceFault(fault, {
+			resources: [{ identifier: resource, name: "From config" }],
+			resourceSeedMode: "merge",
+		});
+
+		const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+		fault.current = (operation) => {
+			if (operation !== "findOne") return;
+			fault.current = null;
+			return gate;
+		};
+		const first = register();
+		// Start the second request only once the first one holds the gate.
+		await vi.waitFor(() => expect(fault.current).toBeNull());
+		await register();
+		database.oauthResource[0]!.name = "Edited by admin";
+
+		release();
+		await first;
+		expect(database.oauthResource).toMatchObject([{ name: "Edited by admin" }]);
+	});
+
 	it("applies merge mode to a row a concurrent instance inserted", async () => {
 		const fault = {
 			current: (async (operation, adapter) => {

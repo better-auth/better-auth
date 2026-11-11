@@ -48,4 +48,23 @@ describe("authorizationCodeRequest", () => {
 		expect(headers.authorization).toBe("Provider custom-credential");
 		expect(headers["x-custom-header"]).toBe("test-value");
 	});
+
+	it("lets a custom method read and write headers in any casing", async () => {
+		const { headers } = await authorizationCodeRequest({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: { clientId: "test-client" },
+			headers: { "X-Custom-Header": "caller" },
+			tokenEndpointAuth: {
+				method: "custom",
+				customizeRequest: ({ headers }) => {
+					expect(headers["X-Custom-Header"]).toBe("caller");
+					headers.Authorization = "first";
+					headers.authorization = "Custom hook";
+				},
+			},
+		});
+
+		expect(new Headers(headers).get("authorization")).toBe("Custom hook");
+	});
 });
