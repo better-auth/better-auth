@@ -2,8 +2,13 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import * as semver from "semver";
 
 const PLATFORM_ENV = "better-auth.cli.cloudflare-env";
+
+// Remote bindings are on by default from 4.36.0, and the option that turns them
+// off arrived in 4.46.0.
+const MIN_WRANGLER_VERSION = "4.46.0";
 
 // Wrangler's precedence: each name is searched up from the directory first.
 const WRANGLER_CONFIG_FILES = [
@@ -139,8 +144,13 @@ function findWranglerConfig(cwd: string) {
 }
 
 function resolveWrangler(cwd: string) {
+	const require = createRequire(path.join(cwd, "package.json"));
 	try {
-		return createRequire(path.join(cwd, "package.json")).resolve("wrangler");
+		const { version } = require("wrangler/package.json") as { version: string };
+		return {
+			entry: require.resolve("wrangler"),
+			version,
+		};
 	} catch {
 		return null;
 	}
@@ -160,10 +170,16 @@ export async function loadCloudflarePlatformEnv(cwd: string) {
 	if (Reflect.has(globalThis, Symbol.for(PLATFORM_ENV))) return;
 	const configPath = findWranglerConfig(cwd);
 	if (!configPath) return;
-	const wranglerPath = resolveWrangler(cwd);
-	if (!wranglerPath) return;
+	const resolved = resolveWrangler(cwd);
+	if (!resolved) return;
+	if (!semver.satisfies(resolved.version, `>=${MIN_WRANGLER_VERSION}`)) {
+		console.warn(
+			`Wrangler ${resolved.version} can't keep remote bindings off, so \`env\` from \`cloudflare:workers\` stays a stub. Upgrade to Wrangler ${MIN_WRANGLER_VERSION} or later to read local bindings.`,
+		);
+		return;
+	}
 	const wrangler: typeof import("wrangler") = await import(
-		pathToFileURL(wranglerPath).href
+		pathToFileURL(resolved.entry).href
 	);
 	const proxy = await wrangler
 		.getPlatformProxy({

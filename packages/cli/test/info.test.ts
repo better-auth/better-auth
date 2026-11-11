@@ -262,7 +262,11 @@ describe("info command", () => {
 		await fs.mkdir(wranglerDir, { recursive: true });
 		await fs.writeFile(
 			path.join(wranglerDir, "package.json"),
-			JSON.stringify({ name: "wrangler", main: "index.mjs" }),
+			JSON.stringify({
+				name: "wrangler",
+				version: "4.123.0",
+				main: "index.mjs",
+			}),
 		);
 		// Like Wrangler's local runtime, the proxy keeps the process alive, and its
 		// D1 binding is an RPC stub that throws when serialized.

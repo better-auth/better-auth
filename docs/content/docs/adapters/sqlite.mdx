@@ -82,7 +82,7 @@ export const auth = betterAuth({
 });
 ```
 
-With `wrangler` installed in your project and a Wrangler configuration file, the CLI reads `env` from Wrangler's local bindings and compares your config with the local D1 database. Bring the local database up to date, generate the next migration into a new numbered file, then apply it with [Wrangler migrations](https://developers.cloudflare.com/d1/reference/migrations/):
+With `wrangler` 4.46.0 or later installed in your project and a Wrangler configuration file, the CLI reads `env` from Wrangler's local bindings and compares your config with the local D1 database. Bring the local database up to date, generate the next migration into a new numbered file, then apply it with [Wrangler migrations](https://developers.cloudflare.com/d1/reference/migrations/):
 
 ```bash
 npx wrangler d1 migrations apply DB --local
