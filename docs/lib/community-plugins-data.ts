@@ -376,10 +376,9 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "BYO (@byo-oss/*)",
-		url: "https://byo.dev",
-		description:
-			"Product plugins for Better Auth that keep data in your database: notifications (`@byo-oss/notifications`, formerly better-inbox, with in-app, email, web push), support (tickets and a staff inbox) and entitlements (plans, limits and usage per organization).",
+		name: "BYO (byo-oss)",
+		url: "https://github.com/byo-oss",
+		description: "Open-source tooling for better-auth apps",
 		author: {
 			name: "byo-oss",
 			github: "byo-oss",
