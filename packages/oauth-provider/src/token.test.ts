@@ -3222,6 +3222,71 @@ describe("oauth token - config", async () => {
 		}
 	});
 
+	it("formatRefreshToken with an async encrypt - code_authorization, refresh_token", async () => {
+		const refreshTokenPrefix = "hello_rt_";
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				prefix: {
+					refreshToken: refreshTokenPrefix,
+				},
+				formatRefreshToken: {
+					encrypt: async (token) => `enc.${token}`,
+					decrypt: async (value) => ({ token: value.slice("enc.".length) }),
+				},
+			},
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			clientId: oauthClient?.client_id!,
+			clientSecret: oauthClient?.client_secret,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+
+		const tokens = await client.oauth2.token(
+			{
+				code: url.searchParams.get("code")!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const refreshToken = (tokens.data as { refresh_token?: string })
+			?.refresh_token;
+		expect(refreshToken?.startsWith(`${refreshTokenPrefix}enc.`)).toBe(true);
+
+		const refreshedTokens = await client.oauth2.token(
+			{
+				refresh_token: refreshToken,
+				grant_type: "refresh_token",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshedTokens.error).toBeNull();
+		expect(
+			(refreshedTokens.data as { refresh_token?: string })?.refresh_token,
+		).toMatch(new RegExp(`^${refreshTokenPrefix}enc\\.`));
+	});
+
 	it("clientSecretPrefix - client_credentials", async () => {
 		const prefix = "hello_cs_";
 		const testScopes = ["read:profile"];

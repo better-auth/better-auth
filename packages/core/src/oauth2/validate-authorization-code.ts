@@ -91,8 +91,11 @@ function buildAuthorizationCodeRequest({
 	const requestHeaders: Record<string, string> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
-		...headers,
 	};
+	// Lowercase keys so client authentication, written lowercase, replaces any caller value.
+	for (const [key, value] of Object.entries(headers ?? {})) {
+		requestHeaders[key.toLowerCase()] = value;
+	}
 
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
