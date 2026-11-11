@@ -3,7 +3,6 @@ import type {
 	JSONWebKeySet,
 	JWTPayload,
 	JWTVerifyOptions,
-	JWTVerifyResult,
 	ProtectedHeaderParameters,
 } from "jose";
 import {
@@ -238,7 +237,8 @@ export interface VerifyAccessTokenRemote {
 	/**
 	 * Forces remote verification of a token.
 	 * This ensures attached session (if applicable)
-	 * is also still active.
+	 * is also still active. The local JWT check is skipped, so
+	 * `verifyOptions.typ` is not enforced.
 	 */
 	force?: boolean;
 	/**
@@ -258,7 +258,10 @@ export interface VerifyAccessTokenRemote {
 }
 
 export interface VerifyAccessTokenOptions {
-	/** Verify options */
+	/**
+	 * Verify options. Introspection results are checked against these too,
+	 * except `typ`, which only the local JWT check can enforce.
+	 */
 	verifyOptions: JWTVerifyOptions &
 		Required<Pick<JWTVerifyOptions, "audience" | "issuer">>;
 	/** Scopes the token must satisfy. */
@@ -325,6 +328,40 @@ export function requestToResourceInput(request: Request): ResourceRequestInput {
 const defaultDpopReplayStore = createInMemoryDpopReplayStore();
 
 /**
+ * @internal
+ */
+export async function verifyJwsToken<PayloadType = JWTPayload>(
+	token: string,
+	opts: JwksFetchOptions & {
+		verifyOptions: JWTVerifyOptions;
+	},
+) {
+	if (token.split(".").length !== 3) {
+		throw new joseErrors.JWSInvalid("Invalid Compact JWS");
+	}
+	const resolved = await getJwksForVerification(token, opts);
+	let jwks = resolved.jwks;
+	// Retry with a newer cached key set, then await a fetch already in progress.
+	// Allow at most two retries.
+	for (let refreshes = 0; ; refreshes++) {
+		try {
+			return await jwtVerify<PayloadType>(
+				token,
+				createLocalJWKSet(jwks),
+				opts.verifyOptions,
+			);
+		} catch (error) {
+			const refreshed =
+				refreshes < 2 && shouldRefetchCachedJwksWithoutKid(error, resolved)
+					? await resolved.refresh?.(jwks)
+					: undefined;
+			if (!refreshed) throw error;
+			jwks = refreshed;
+		}
+	}
+}
+
+/**
  * Performs local verification of an access token for your APIs.
  *
  * Can also be configured for remote verification.
@@ -338,26 +375,7 @@ export async function verifyJwsAccessToken(
 	},
 ) {
 	try {
-		const resolved = await getJwksForVerification(token, opts);
-		let jwks = resolved.jwks;
-		let jwt: JWTVerifyResult<JWTPayload> | undefined;
-		// Two refreshes at most: a newer cached set, then a fetch still in flight.
-		for (let refreshes = 0; !jwt; refreshes++) {
-			try {
-				jwt = await jwtVerify<JWTPayload>(
-					token,
-					createLocalJWKSet(jwks),
-					opts.verifyOptions,
-				);
-			} catch (error) {
-				const refreshed =
-					refreshes < 2 && shouldRefetchCachedJwksWithoutKid(error, resolved)
-						? await resolved.refresh?.(jwks)
-						: undefined;
-				if (!refreshed) throw error;
-				jwks = refreshed;
-			}
-		}
+		const jwt = await verifyJwsToken(token, opts);
 		// Return the JWT payload in introspection format
 		// https://datatracker.ietf.org/doc/html/rfc7662#section-2.2
 		if (jwt.payload.azp) {
@@ -491,15 +509,16 @@ async function verifyAccessTokenPayload(
 		// token issued for a different resource/client on the same issuer would
 		// also pass. Only drop the audience check when the caller has explicitly
 		// opted in via `remoteVerify.allowMissingAudience`.
+		// `typ` checks the JWT header (RFC 9068 §4). An introspection response is
+		// a claim set with no header, so only the local check can enforce it.
 		try {
 			const unsecuredJwt = new UnsecuredJWT(introspect).encode();
-			const { audience: _audience, ...verifyOptionsNoAudience } =
-				opts.verifyOptions;
+			const { typ: _typ, audience, ...claimOptions } = opts.verifyOptions;
 			const skipAudience =
 				!introspect.aud && opts.remoteVerify.allowMissingAudience === true;
 			const verify = UnsecuredJWT.decode(
 				unsecuredJwt,
-				skipAudience ? verifyOptionsNoAudience : opts.verifyOptions,
+				skipAudience ? claimOptions : { ...claimOptions, audience },
 			);
 			payload = verify.payload;
 		} catch (error) {

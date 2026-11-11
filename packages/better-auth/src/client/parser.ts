@@ -1,12 +1,3 @@
-const PROTO_POLLUTION_PATTERNS = {
-	proto:
-		/"(?:_|\\u0{2}5[Ff]){2}(?:p|\\u0{2}70)(?:r|\\u0{2}72)(?:o|\\u0{2}6[Ff])(?:t|\\u0{2}74)(?:o|\\u0{2}6[Ff])(?:_|\\u0{2}5[Ff]){2}"\s*:/,
-	constructor:
-		/"(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)"\s*:/,
-	protoShort: /"__proto__"\s*:/,
-	constructorShort: /"constructor"\s*:/,
-} as const;
-
 const JSON_SIGNATURE =
 	/^\s*["[{]|^\s*-?\d{1,16}(\.\d{1,17})?([Ee][+-]?\d+)?\s*$/;
 
@@ -107,24 +98,6 @@ function betterJSONParse<T = unknown>(
 		return value as T;
 	}
 
-	const hasProtoPattern = Object.entries(PROTO_POLLUTION_PATTERNS).some(
-		([key, pattern]) => {
-			const matches = pattern.test(trimmed);
-			if (matches && warnings) {
-				console.warn(
-					`[better-json] Detected potential prototype pollution attempt using ${key} pattern`,
-				);
-			}
-			return matches;
-		},
-	);
-
-	if (hasProtoPattern && strict) {
-		throw new Error(
-			"[better-json] Potential prototype pollution attempt detected",
-		);
-	}
-
 	try {
 		const secureReviver = (key: string, value: any) => {
 			if (
@@ -134,6 +107,12 @@ function betterJSONParse<T = unknown>(
 					typeof value === "object" &&
 					"prototype" in value)
 			) {
+				// Decide on parsed keys, not raw text, so a plain `constructor` field passes
+				if (strict) {
+					throw new Error(
+						"[better-json] Potential prototype pollution attempt detected",
+					);
+				}
 				if (warnings) {
 					console.warn(
 						`[better-json] Dropping "${key}" key to prevent prototype pollution`,

@@ -64,22 +64,21 @@ async function handleCursorAction() {
 				? `start "" "${remoteDeeplink}"`
 				: `${openCommand} "${remoteDeeplink}"`;
 		execSync(cmd, { stdio: "inherit" });
-		console.log(chalk.green("\n✓ Better Auth MCP server installed!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically open Cursor for MCP installation.",
 			),
 		);
+		return;
 	}
+	// The deeplink only opens Cursor's install prompt; the user confirms there.
+	console.log(chalk.green("\n✓ Opened Cursor to install the MCP server."));
 
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
-	console.log(
-		chalk.gray("• The MCP server will be added to your Cursor configuration"),
-	);
-	console.log(
-		chalk.gray("• You can now use Better Auth features directly in Cursor"),
-	);
+	console.log(chalk.gray("• Confirm the installation in Cursor"));
+	console.log(chalk.gray("• Then use Better Auth features directly in Cursor"));
 	console.log(
 		chalk.gray(
 			'• Try: "Set up Better Auth with Google login" or "Help me debug my auth"',
@@ -94,20 +93,22 @@ function handleCodexAction() {
 
 	try {
 		execSync(command, { stdio: "inherit" });
-		console.log(chalk.green("\n✓ Codex MCP configured!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically add to Codex. Please run this command manually:",
 			),
 		);
 		console.log(chalk.cyan(command));
+		return;
 	}
+	console.log(chalk.green("\n✓ Codex MCP configured!"));
 
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
 	console.log(
 		chalk.gray(
-			"• Once configured, ChatGPT desktop, Codex CLI, and the IDE extension share this MCP server",
+			"• ChatGPT desktop, Codex CLI, and the IDE extension share this MCP server",
 		),
 	);
 	console.log(chalk.gray("• Run `codex mcp list` to verify the connection"));
@@ -120,22 +121,19 @@ function handleClaudeCodeAction() {
 
 	try {
 		execSync(command, { stdio: "inherit" });
-		console.log(chalk.green("\n✓ Claude Code MCP configured!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically add to Claude Code. Please run this command manually:",
 			),
 		);
 		console.log(chalk.cyan(command));
+		return;
 	}
+	console.log(chalk.green("\n✓ Claude Code MCP configured!"));
 
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
-	console.log(
-		chalk.gray(
-			"• The MCP server will be added to your Claude Code configuration",
-		),
-	);
 	console.log(
 		chalk.gray(
 			"• You can now use Better Auth features directly in Claude Code",
@@ -184,12 +182,14 @@ function handleOpenCodeAction() {
 		);
 		console.log(chalk.green("✓ Better Auth MCP server added successfully!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically write opencode.json. Please add this configuration manually:",
 			),
 		);
 		console.log(chalk.cyan(JSON.stringify(openCodeConfig, null, 2)));
+		return;
 	}
 
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
@@ -226,12 +226,14 @@ function handleManualAction() {
 		console.log(chalk.green(`\n✓ MCP configuration written to ${configPath}`));
 		console.log(chalk.green("✓ Better Auth MCP server added successfully!"));
 	} catch {
+		process.exitCode = 1;
 		console.log(
 			chalk.yellow(
 				"\n⚠ Could not automatically write mcp.json. Please add this configuration manually:",
 			),
 		);
 		console.log(chalk.cyan(JSON.stringify(manualConfig, null, 2)));
+		return;
 	}
 
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
@@ -271,9 +273,9 @@ function showAllOptions() {
 
 export const mcp = new Command("mcp")
 	.description("Add Better Auth MCP server to MCP Clients")
-	.option("--cursor", "Automatically open Cursor with the MCP configuration")
+	.option("--cursor", "Add the MCP server to Cursor")
 	.option("--codex", "Add the MCP server to Codex")
-	.option("--claude-code", "Show Claude Code MCP configuration command")
-	.option("--open-code", "Show Open Code MCP configuration")
-	.option("--manual", "Show manual MCP configuration for mcp.json")
+	.option("--claude-code", "Add the MCP server to Claude Code")
+	.option("--open-code", "Add the MCP server to opencode.json")
+	.option("--manual", "Add the MCP server to mcp.json")
 	.action(mcpAction);

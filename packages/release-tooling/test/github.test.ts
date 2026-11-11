@@ -16,6 +16,7 @@ function jsonResponse(
 function createFetch(): typeof fetch {
 	const request = async (
 		input: Parameters<typeof fetch>[0],
+		init?: Parameters<typeof fetch>[1],
 	): Promise<Response> => {
 		const url = input instanceof Request ? input.url : String(input);
 		if (url.endsWith("/repos/better-auth/better-auth/pulls/42")) {
@@ -71,6 +72,28 @@ function createFetch(): typeof fetch {
 		}
 		if (url.endsWith("/repos/better-auth/better-auth/pulls/500")) {
 			return jsonResponse({ message: "Server Error" }, 500);
+		}
+		if (url.endsWith("/graphql")) {
+			const { variables } = JSON.parse(String(init?.body));
+			if (variables.oid !== "c0ffee") {
+				return jsonResponse({ data: { repository: { object: null } } });
+			}
+			return jsonResponse({
+				data: {
+					repository: {
+						object: {
+							authors: {
+								nodes: [
+									{ user: { login: "octocat" } },
+									{ user: { login: "jane-doe" } },
+									{ user: { login: "cubic-dev-ai[bot]" } },
+									{ user: null },
+								],
+							},
+						},
+					},
+				},
+			});
 		}
 		if (url.endsWith("/repos/better-auth/better-auth/releases/tags/v1.2.3")) {
 			return jsonResponse({ body: "Release body" });
@@ -167,6 +190,21 @@ describe("GitHubReader", () => {
 		await expect(github.getPullRequest(500)).rejects.toMatchObject({
 			status: 500,
 		});
+	});
+
+	it("lists the GitHub accounts of a commit's authors, without bots", async () => {
+		const github = createGitHubReader({
+			repository: parseGitHubRepository("better-auth/better-auth"),
+			token: "test-token",
+			baseUrl: "https://api.github.test",
+			fetch: createFetch(),
+		});
+
+		await expect(github.getCommitAuthors("c0ffee")).resolves.toEqual([
+			"octocat",
+			"jane-doe",
+		]);
+		await expect(github.getCommitAuthors("deadbeef")).resolves.toEqual([]);
 	});
 
 	it("rejects ambiguous repository slugs", () => {

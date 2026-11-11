@@ -29,6 +29,7 @@ describe("LLM routes", () => {
 
 		expect(content).toContain("https://better-auth.com/docs/llms.txt");
 		expect(content).toContain("https://better-auth.com/docs/1.6/llms.txt");
+		expect(content).toContain("https://better-auth.com/docs/beta/llms.txt");
 		expect(content).toContain("https://mcp.better-auth.com/mcp");
 		expect(content).not.toContain("/llms.txt/docs/");
 	});
@@ -61,6 +62,9 @@ describe("LLM routes", () => {
 			"/docs/1.6/plugins/scim.md",
 		);
 		expect(getLegacyMarkdownTarget(["1.6"])).toBe("/docs/1.6/llms.txt");
+		expect(getLegacyMarkdownTarget(["beta", "plugins", "scim"])).toBe(
+			"/docs/beta/plugins/scim.md",
+		);
 		expect(getLegacyMarkdownTarget(["docs", "introduction.txt"])).toBeNull();
 	});
 

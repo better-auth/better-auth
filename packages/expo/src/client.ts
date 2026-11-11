@@ -308,8 +308,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	const rawScheme =
 		opts?.scheme || Constants.expoConfig?.scheme || Constants.platform?.scheme;
 	const scheme = Array.isArray(rawScheme) ? rawScheme[0] : rawScheme;
+	const nativeScheme = isWeb ? undefined : scheme;
 
-	if (!scheme && !isWeb) {
+	if (!nativeScheme && !isWeb) {
 		throw new Error(
 			"Scheme not found in app.json. Please provide a scheme in the options.",
 		);
@@ -443,7 +444,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					},
 				},
 				async init(url, options) {
-					if (isWeb) {
+					if (!nativeScheme) {
 						return {
 							url,
 							options: options as ClientFetchOption,
@@ -455,25 +456,23 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					}
 					options = options || {};
 					options.credentials = "omit";
-					/**
-					 * ID token flow (native sign-in) doesn't need cookie-based auth.
-					 * The ID token itself is cryptographically signed by the provider
-					 * and validated server-side, so no session cookies or origin
-					 * validation is required.
-					 *
-					 * Sending cookie/expo-origin headers for ID token requests triggers
-					 * unnecessary origin checks that fail for custom URL schemes.
-					 */
 					const isIdTokenRequest = options.body?.idToken !== undefined;
 
 					if (isIdTokenRequest) {
-						const storedCookie = pathname.endsWith("/link-social")
+						const isLinkSocial = pathname.endsWith("/link-social");
+						// ID token sign-in validates the provider token directly. Link-social
+						// still needs the current session cookie, so it also needs an origin
+						// header for the server-side CSRF check.
+						const storedCookie = isLinkSocial
 							? await storage.getItemAsync(cookieName)
 							: null;
 						const cookie = getCookie(storedCookie);
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
+							...(isLinkSocial
+								? { "expo-origin": getOrigin(nativeScheme) }
+								: {}),
 							"x-skip-oauth-proxy": "true",
 						};
 					} else {
@@ -482,7 +481,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						options.headers = {
 							...options.headers,
 							...(cookie ? { cookie } : {}),
-							"expo-origin": getOrigin(scheme!),
+							"expo-origin": getOrigin(nativeScheme),
 							"x-skip-oauth-proxy": "true",
 						};
 						if (options.body?.callbackURL) {
