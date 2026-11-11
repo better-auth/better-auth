@@ -544,7 +544,10 @@ This page meets the [approval UI requirements](#production-security-requirements
 
 ```tsx title="app/device/approve/page.tsx"
 // Client IDs you accept in `validateClient`, mapped to names your users recognize.
-const knownClients = new Map([["acme-cli", "Acme CLI"]]);
+const knownClients = new Map([
+  ["my-cli", "My CLI"],
+  ["my-tv-app", "My TV App"],
+]);
 
 type DeviceRequest = {
   user_code: string;

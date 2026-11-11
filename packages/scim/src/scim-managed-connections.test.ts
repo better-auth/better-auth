@@ -211,6 +211,32 @@ describe("SCIM managed connections", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12066
+	 */
+	it("lists more than 100 connections of a provisioning domain", async ({
+		onTestFinished,
+	}) => {
+		const instance = await createManagedInstance(onTestFinished);
+		const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000);
+		for (let index = 0; index < 101; index++) {
+			await instance.auth.api.createSCIMManagedConnection({
+				body: {
+					creationRequestId: createCreationRequestId(),
+					provisioningDomainId: "organization-acme",
+					actorId: "admin-acme",
+					scopes: ALL_SCOPES,
+					expiresAt,
+				},
+			});
+		}
+
+		const listed = await instance.auth.api.listSCIMManagedConnections({
+			body: { provisioningDomainId: "organization-acme" },
+		});
+
+		expect(listed.connections).toHaveLength(101);
+	});
+	/**
 	 * @see https://github.com/better-auth/better-auth/pull/10475
 	 */
 	it("joins an ambient transaction for create, rotate, and revoke", async ({
