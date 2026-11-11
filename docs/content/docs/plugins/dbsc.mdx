@@ -97,6 +97,8 @@ Chrome only registers keys over HTTPS. Sessions created on a plain `http://local
 3. Better Auth stores the public key on the session and sets a bound cookie that expires after `boundCookieMaxAge` seconds, 10 minutes by default.
 4. Before the bound cookie expires, the browser signs a challenge from Better Auth with the private key and sends it to `/dbsc/refresh`. It receives a new bound cookie and the challenge for its next refresh.
 
+Every browser sign-in creates a new session, which is offered registration. This includes signing in again to pass a fresh-session check.
+
 Some sign-ins cannot carry the registration offer to the browser directly: social and SSO sign-ins that end in a redirect, and sign-ins that run on your server, such as a server action. For those, Better Auth sets a short-lived cookie, and the next same-site browser request to Better Auth makes the offer instead, usually the `/get-session` call the client makes after sign-in. If the browser does not register within 5 minutes, the session stays unbound.
 
 A sign-in on your server is offered registration only when you pass the incoming request's headers, as in `auth.api.signInEmail({ body, headers: await headers() })`. Without them, Better Auth cannot tell the call came from a browser, and the session stays unbound.
@@ -120,6 +122,23 @@ Sessions are only treated as signed out, not deleted, so a request that is missi
 
 When your server forwards a browser request to `auth.api.getSession`, pass the request's full `Cookie` header. A request that carries only the session token is rejected for a bound session.
 
+## Checking whether a session is bound
+
+The session's `dbscPublicKey` field tells you whether the session is bound. You can use it to show users which of their sessions are protected. Add the [client plugin](#add-the-client-plugin-optional) to read the field with the right type:
+
+```ts title="session-status.tsx"
+const { data } = authClient.useSession()
+const isBound = data?.session.dbscPublicKey != null
+```
+
+What the field means depends on where you read it:
+
+* On the session of the current request, from `getSession`, `useSession`, or an endpoint that requires a session, a value means the request carried a valid bound cookie.
+* In session lists, such as `listSessions` or the admin plugin's session list, a value means the browser registered a key for that session. Better Auth does not check the bound cookies of the other sessions in the list.
+* `null` is the normal state in browsers without support, and right after sign-in until the browser registers.
+
+Present a bound session as extra protection, and do not label unbound sessions as unsafe. Most users cannot change their browser's support. For the same reason, requiring a bound session for an action locks out every browser without support.
+
 ## Limits
 
 Device binding protects against a copied cookie being used after sign-in, on another device. It does not protect against:
@@ -132,7 +151,8 @@ Device binding protects against a copied cookie being used after sign-in, on ano
 Some parts of Better Auth are not bound:
 
 * `getSessionCookie` and `getCookieCache` only read cookies, for fast checks in middleware. They do not check the binding, so use `auth.api.getSession` for anything that needs a verified session.
-* Credentials created from a session live on their own, such as JWTs from the [JWT plugin](/docs/plugins/jwt), API keys, and OAuth tokens. Keep their lifetimes short.
+* Credentials created from a session, such as JWTs from the [JWT plugin](/docs/plugins/jwt), API keys, and OAuth tokens, are not bound. Once a session is bound, creating one with the session cookie requires the bound cookie. The credential itself then works wherever it is sent. Keep JWT lifetimes short.
+* With the API key plugin's `enableSessionForAPIKeys`, a request that carries an API key gets a session built from the key. The DBSC plugin does not check that session. Anyone who holds the key gets the session on any device, as with any other request made with the key.
 * With `secondaryStorage`, Better Auth rewrites a stored session as a whole. A write to the same session at the moment the browser registers, such as a profile update, can drop the saved key. That session then works as an ordinary session until it ends.
 * Sessions created by [admin impersonation](/docs/plugins/admin) are never bound.
 * Removing the plugin turns bound sessions back into ordinary sessions, which a copied session cookie can use again. Revoke existing sessions when you remove it.
@@ -143,11 +163,55 @@ Some parts of Better Auth are not bound:
 
 **Links from other sites.** When a user follows a link from another site, such as an email, and the bound cookie has expired, Chrome sends that first page request without it. Your server sees no session for that request. The next request the page makes to Better Auth, such as the client's `/get-session` call, renews the cookie. If your server redirects signed-out visitors to a sign-in page, have that page send users who turn out to be signed in back to where they were going.
 
+**OAuth provider.** With the [OAuth provider plugin](/docs/plugins/oauth-provider), client apps on other sites send users to `/oauth2/authorize`. If the bound cookie has expired, Chrome sends that request without it. The user then appears signed out:
+
+* An interactive request shows your login page, and the user signs in again. On that page, do not send users who turn out to be signed in back to `/oauth2/authorize`. A request that asks for a new sign-in, with `prompt=login` or `max_age`, would then loop.
+* A request with `prompt=none` returns `login_required` to the client app. The client app must then start an interactive request.
+
 **Rate limiting.** The plugin allows 120 requests per minute from each client IP to each of `/dbsc/register` and `/dbsc/refresh`. A refresh usually takes one request, or two when the browser was idle longer than `boundCookieMaxAge`. Users behind one shared IP, such as an office network, count against the same limit. If Better Auth cannot read the client IP behind your proxy, every client shares one limit. To count each client separately, set [`advanced.ipAddress.ipAddressHeaders`](/docs/reference/security#ip-address-headers) to the header that your proxy overwrites on every request. When Chrome's refresh is rate limited, it sends the request without the bound cookie, and the user appears signed out for that request.
 
 **Several accounts in one browser.** With the [multi-session plugin](/docs/plugins/multi-session), each signed-in account is bound and refreshed separately. Chrome signs at most 6 times every 9 minutes for one site. With four or more bound accounts in one browser, some requests go out without a bound cookie and those accounts appear signed out until a later refresh succeeds.
 
 **Proxies and CDNs.** The refresh endpoint answers with status `403` and a `Secure-Session-Challenge` header when it needs a signature. Make sure your proxy, CDN, or firewall passes both through unchanged, and forwards the `Secure-Session-Response` and `Sec-Secure-Session-Id` request headers.
+
+**Unbound sessions.** Sessions created before you enabled the plugin stay unbound until they end. So do sessions in browsers without support, and sessions whose browser did not register in time. To limit how long an unbound session lasts, add a check of your own:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import type { BetterAuthPlugin } from "better-auth"
+import { dbsc } from "@better-auth/dbsc"
+
+const maxUnboundAge = 30 * 24 * 60 * 60 * 1000 // 30 days
+
+const limitUnboundSessions = {
+    id: "limit-unbound-sessions",
+    validateSession: ({ session }) =>
+        session.dbscPublicKey != null ||
+        new Date(session.createdAt).getTime() > Date.now() - maxUnboundAge,
+} satisfies BetterAuthPlugin
+
+export const auth = betterAuth({
+    plugins: [dbsc(), limitUnboundSessions],
+})
+```
+
+The check applies to every session that has no key, not only to browsers without support. It also ends sessions that cannot be bound, such as sessions of native and desktop apps and of clients that sign in with a bearer token.
+
+Adding the check has these effects:
+
+* When you add the check, every unbound session older than the limit is signed out at its next request.
+* Users whose sessions cannot be bound then sign in again every 30 days.
+* A sign-in in a supporting browser gets a new chance to register.
+
+Choose a limit that those users can accept.
+
+**Checking your setup.** Before you rely on the plugin in production, test it on an HTTPS staging deployment:
+
+1. Set `boundCookieMaxAge: 300`, and sign in with a version of Chrome that supports Device Bound Session Credentials.
+2. Check that the session's `dbscPublicKey` is set. If it is not, check that a response carried a `Secure-Session-Registration` header: the sign-in response, or for social, SSO, and server-side sign-ins, the next `/get-session` response. If one did, check your access logs for a `/dbsc/register` request. If there is none, this browser did not register, for example because Google has not turned the feature on for it yet.
+3. Keep using the app for more than 5 minutes. Check your server or proxy access logs for `/dbsc/refresh` requests, and check that you stay signed in.
+
+**Finding why users are signed out.** Set `logger: { level: "debug" }` in your auth config. Better Auth then logs each time a bound session arrives without a valid bound cookie, and each time a refresh ends a browser's session.
 
 **Unsupported configurations.** The plugin throws at startup with:
 
