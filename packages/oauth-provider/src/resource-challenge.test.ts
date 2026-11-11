@@ -107,6 +107,10 @@ describe("resource server challenge", () => {
 		expect(header).toBe(
 			`Bearer error="insufficient_scope", scope="files:write", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", error_description="bad 'scope' Set-Cookie: x=y"`,
 		);
+		expect(challenge.body).toMatchObject({
+			error: "insufficient_scope",
+			error_description: 'bad "scope"\r\nSet-Cookie: x=y',
+		});
 	});
 
 	it.each([42, null, "\u00e9\u00e8"])(
