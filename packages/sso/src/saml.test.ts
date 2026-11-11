@@ -6,6 +6,7 @@ import {
 } from "node:crypto";
 import type { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
+import { inflateRawSync } from "node:zlib";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { betterFetch } from "@better-fetch/fetch";
 import type { Account, DBTransactionAdapter, User } from "better-auth";
@@ -6031,7 +6032,7 @@ describe("SAML Single Logout (SLO)", () => {
 			const logoutRequest = idp.createLogoutRequest(
 				sp,
 				saml.Constants.wording.binding.redirect,
-				{ nameID: "test@email.com" },
+				{ logoutNameID: "test@email.com" },
 				"http://localhost:8081/after-logout",
 			) as { context: string };
 
@@ -6627,6 +6628,10 @@ describe("SAML user resolution HTTP", () => {
 		return { response, body: (await response.json()) as ResponseBody };
 	}
 
+	type SAMLConfiguration = NonNullable<
+		NonNullable<SSOOptions["defaultSSO"]>[number]["samlConfig"]
+	>;
+
 	function persistedSAMLConfiguration() {
 		return {
 			issuer: "https://service.example.com/saml",
@@ -6640,15 +6645,13 @@ describe("SAML user resolution HTTP", () => {
 			},
 			identifierFormat:
 				"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
-		} satisfies NonNullable<
-			NonNullable<SSOOptions["defaultSSO"]>[number]["samlConfig"]
-		>;
+		} satisfies SAMLConfiguration;
 	}
 
 	async function createSAMLUserResolutionInstance(
 		options: SSOOptions,
 		authOptions: Record<string, unknown> = {},
-		samlConfiguration = persistedSAMLConfiguration(),
+		samlConfiguration: SAMLConfiguration = persistedSAMLConfiguration(),
 	) {
 		const sqlite = new DatabaseSync(":memory:");
 		const database = new Kysely({
@@ -7730,6 +7733,149 @@ describe("SAML user resolution HTTP", () => {
 		).toBe(false);
 		expect(await instance.db.count({ model: "account", where: [] })).toBe(0);
 		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+	});
+
+	/**
+	 * @see https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf SAML Profiles §4.4 (Single Logout Profile)
+	 */
+	describe("SAML Single Logout without a stored SAML session record", () => {
+		// The IdP metadata XML advertises a Redirect SingleLogoutService.
+		const sloSAMLConfiguration = () => ({
+			...persistedSAMLConfiguration(),
+			idpMetadata: { metadata: idpMetadata },
+		});
+
+		it("identifies the principal by the assertion's NameID, not the user's email", async () => {
+			let selectedUserId = "";
+			const instance = await createSAMLUserResolutionInstance(
+				{
+					saml: { enableSingleLogout: true },
+					resolveUser: () => ({
+						action: "link",
+						userId: selectedUserId,
+						profile: "preserve",
+					}),
+				},
+				{},
+				sloSAMLConfiguration(),
+			);
+			const context = await instance.auth.$context;
+			const directoryUser = await context.adapter.create<User>({
+				model: "user",
+				data: {
+					email: "directory-user@example.com",
+					emailVerified: false,
+					name: "Directory User",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+			selectedUserId = directoryUser.id;
+			// An older link to the same provider must not win over the current one.
+			const staleDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+			await context.adapter.create({
+				model: "account",
+				data: {
+					userId: directoryUser.id,
+					providerId: "workforce-saml",
+					accountId: "stale-name-id",
+					createdAt: staleDate,
+					updatedAt: staleDate,
+				},
+			});
+			const signIn = await completeSAMLSignIn(instance.baseURL);
+			expect(signIn.callback.status).toBe(302);
+
+			// The record is best-effort: its write can fail and it expires.
+			await context.adapter.deleteMany({ model: "verification", where: [] });
+
+			const logout = await fetch(
+				`${instance.baseURL}/api/auth/sso/saml2/logout/workforce-saml`,
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: instance.baseURL,
+						cookie: cookieHeader(signIn.cookies),
+					},
+					body: JSON.stringify({}),
+					redirect: "manual",
+				},
+			);
+
+			expect(logout.status).toBe(302);
+			const samlRequest = new URL(
+				logout.headers.get("location")!,
+			).searchParams.get("SAMLRequest")!;
+			const logoutRequest = inflateRawSync(
+				Buffer.from(samlRequest, "base64"),
+			).toString("utf8");
+			expect(logoutRequest).toMatch(/<saml:NameID[^>]*>test@email\.com</);
+			expect(logoutRequest).not.toContain("directory-user@example.com");
+		});
+
+		it("revokes a session refreshed past its original expiry on IdP-initiated logout", async () => {
+			const instance = await createSAMLUserResolutionInstance(
+				{ saml: { enableSingleLogout: true } },
+				{},
+				sloSAMLConfiguration(),
+			);
+			const signIn = await completeSAMLSignIn(instance.baseURL);
+			expect(signIn.callback.status).toBe(302);
+
+			vi.useFakeTimers({ toFake: ["Date"] });
+			deferredCleanups.push(async () => {
+				vi.useRealTimers();
+			});
+			const hour = 60 * 60 * 1000;
+			// Default session: 7 days, refreshed once it is older than 1 day.
+			vi.setSystemTime(Date.now() + 7 * 24 * hour - hour);
+			const refreshed = await fetch(
+				`${instance.baseURL}/api/auth/get-session`,
+				{
+					headers: { cookie: cookieHeader(signIn.cookies) },
+				},
+			);
+			expect(refreshed.status).toBe(200);
+			expect((await refreshed.json())?.session).toBeTruthy();
+
+			vi.setSystemTime(Date.now() + 2 * hour);
+			// Any verification read deletes expired rows.
+			const context = await instance.auth.$context;
+			await context.internalAdapter.findVerificationValue("unrelated");
+
+			const sloLocation = `${instance.baseURL}/api/auth/sso/saml2/sp/slo/workforce-saml`;
+			const identityProvider = saml.IdentityProvider({
+				metadata: idpMetadata,
+				privateKey: idPk,
+				privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			});
+			const serviceProvider = saml.ServiceProvider({
+				entityID: "http://localhost:8081",
+				singleLogoutService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+						Location: sloLocation,
+					},
+				],
+			});
+			const logoutRequest = identityProvider.createLogoutRequest(
+				serviceProvider,
+				saml.Constants.wording.binding.redirect,
+				{ logoutNameID: "test@email.com" },
+			) as { context: string };
+			const samlRequest = new URL(logoutRequest.context).searchParams.get(
+				"SAMLRequest",
+			)!;
+
+			const slo = await fetch(
+				`${sloLocation}?SAMLRequest=${encodeURIComponent(samlRequest)}`,
+				{ redirect: "manual" },
+			);
+
+			expect(slo.status).toBe(302);
+			expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
+		});
 	});
 });
 
