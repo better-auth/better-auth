@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "better-auth";
 import { parseSetCookieHeader } from "better-auth/cookies";
-import { bearer, multiSession } from "better-auth/plugins";
+import { bearer, multiSession, twoFactor } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import type { CryptoKey, JWK } from "jose";
 import { CompactSign, exportJWK, generateKeyPair } from "jose";
@@ -491,6 +491,22 @@ describe("dbsc", () => {
 		});
 		expect(updated.status).toBe(200);
 		expect(updated.headers.get("secure-session-registration")).toBeNull();
+	});
+
+	it("offers registration to a session that replaces a bound one", async () => {
+		const { signInAndBind, send, getSession, testUser } = await setup({
+			plugins: [dbsc(), twoFactor({ otpOptions: { sendOTP: async () => {} } })],
+		});
+		const { browser } = await signInAndBind();
+
+		const enabled = await send(browser, "/two-factor/enable", {
+			method: "POST",
+			body: { password: testUser.password, method: "otp" },
+		});
+		expect(enabled.status).toBe(200);
+		expect(readRegistrationChallenge(enabled)).toEqual(expect.any(String));
+		const session = await getSession(browser);
+		expect(session?.session.dbscPublicKey).toBeNull();
 	});
 
 	it("leaves unbound sessions working", async () => {

@@ -115,6 +115,7 @@ Some parts of Better Auth are not bound:
 * `getSessionCookie` and `getCookieCache` only read cookies, for fast checks in middleware. They do not check the binding, so use `auth.api.getSession` for anything that needs a verified session.
 * Credentials created from a session live on their own, such as JWTs from the [JWT plugin](/docs/plugins/jwt), API keys, and OAuth tokens. Keep their lifetimes short.
 * With the cookie cache enabled, a session can be served from a cached copy made before the key was registered. That copy expires after `session.cookieCache.maxAge`.
+* With `secondaryStorage`, Better Auth rewrites a stored session as a whole. A write to the same session at the moment the browser registers, such as a profile update, can drop the saved key. That session then works as an ordinary session until it ends.
 * Sessions created by [admin impersonation](/docs/plugins/admin) are never bound.
 * Removing the plugin turns bound sessions back into ordinary sessions, which a copied session cookie can use again. Revoke existing sessions when you remove it.
 
