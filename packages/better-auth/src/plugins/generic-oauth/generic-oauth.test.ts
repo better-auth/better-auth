@@ -1552,6 +1552,74 @@ describe("oauth2", async () => {
 		expect(receivedHeaders["x-custom-header"]).toBe("test-value");
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-6
+	 */
+	it("should pass authorization headers on token refresh", async () => {
+		const refreshHeaders: Record<string, unknown>[] = [];
+		const captureRefresh = (
+			_response: MutableResponse,
+			req: TokenRequestIncomingMessage,
+		) => {
+			if (req.body?.grant_type === "refresh_token") {
+				refreshHeaders.push(req.headers);
+			}
+		};
+		server.service.on("beforeResponse", captureRefresh);
+		mockUserInfo({
+			email: "refresh-headers@test.com",
+			name: "Refresh Headers",
+			sub: "refresh-headers",
+			email_verified: true,
+		});
+
+		try {
+			const { client, customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "refresh-headers",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								authorizationHeaders: { "X-Custom-Header": "test-value" },
+							},
+						],
+					}),
+				],
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "refresh-headers",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			const accountId = accounts.data?.[0]?.id;
+			expect(accountId).toBeDefined();
+			const refreshed = await client.refreshToken({
+				accountId: accountId!,
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			expect(refreshed.data?.accessToken).toBeTruthy();
+			expect(refreshHeaders).toHaveLength(1);
+			expect(refreshHeaders[0]?.["x-custom-header"]).toBe("test-value");
+		} finally {
+			server.service.off("beforeResponse", captureRefresh);
+		}
+	});
+
 	it("should delete oauth user with verification flow without password", async () => {
 		issueIdTokenFor("oauth2");
 		let token = "";

@@ -627,6 +627,48 @@ describe("siwe", async () => {
 		expect(await db.findMany({ model: "walletAddress" })).toEqual([]);
 	});
 
+	it("should not expose internal error messages when verification fails unexpectedly", async () => {
+		const { client } = await getTestInstance(
+			{
+				databaseHooks: {
+					session: {
+						create: {
+							async before() {
+								throw new Error('relation "session" does not exist');
+							},
+						},
+					},
+				},
+				plugins: [
+					siwe({
+						domain,
+						async getNonce() {
+							return NONCE;
+						},
+						async verifyMessage({ signature }) {
+							return signature === "valid_signature";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [siweClient()],
+				},
+				disableTestUser: true,
+			},
+		);
+
+		await client.siwe.nonce();
+		const { error } = await client.siwe.verify({
+			message: siweMessage(),
+			signature: "valid_signature",
+		});
+
+		expect(error?.status).toBe(401);
+		expect(JSON.stringify(error)).not.toContain("does not exist");
+	});
+
 	it("should reject new SIWE user when validateUserInfo returns error", async () => {
 		const { client } = await getTestInstance(
 			{

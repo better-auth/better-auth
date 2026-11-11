@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
+import { getAuthStateVerificationIdentifier } from "@better-auth/core/utils/state";
 import * as z from "zod";
 import { expireCookie } from "./cookies";
 import {
@@ -43,11 +44,8 @@ const stateDataSchema = z.looseObject({
 
 export type StateData = z.infer<typeof stateDataSchema>;
 
-/**
- * Verification key for database-backed OAuth and SAML relay state.
- */
-export const getAuthStateVerificationIdentifier = (state: string) =>
-	`auth-state:${state}`;
+// Re-exported for backward compatibility: `better-auth` has exported this from its root.
+export { getAuthStateVerificationIdentifier };
 
 export const INTERNAL_STATE_KEYS: ReadonlySet<string> = new Set(
 	Object.keys(stateDataSchema.shape),

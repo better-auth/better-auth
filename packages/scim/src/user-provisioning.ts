@@ -1,3 +1,4 @@
+import { HIDE_METADATA } from "@better-auth/core/api";
 import type {
 	AuthContext,
 	DBAdapter,
@@ -5,7 +6,6 @@ import type {
 	User,
 	Where,
 } from "better-auth";
-import { HIDE_METADATA } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import type {
 	SCIMAttributeProjection,
