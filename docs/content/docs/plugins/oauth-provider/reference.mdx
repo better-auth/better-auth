@@ -251,7 +251,7 @@ Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Witho
 
 DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
 
-`nonce` takes `{ required, expiresIn? }`. With `required: true`, DPoP proofs at the token and UserInfo endpoints must carry a nonce the server issued. `expiresIn` is in seconds and defaults to `300`. See [Server-provided nonces](/docs/plugins/oauth-provider/tokens#server-provided-nonces).
+`nonce` takes `{ required, expiresIn? }`. With `required: true`, DPoP proofs at the token and UserInfo endpoints, and at plugin endpoints that call `verifyDpopProof`, must carry a nonce the server issued. `expiresIn` is in seconds and defaults to `300`. See [Server-provided nonces](/docs/plugins/oauth-provider/tokens#server-provided-nonces).
 
 `requestUriResolver` <span className="opacity-70">`(input) => Promise<Record<string, string> | null>`</span>
 
@@ -580,7 +580,7 @@ export const customOAuthExtension = () =>
 * `metadata` and `claims` only add keys. A key the provider owns is kept, and a key two extensions contribute resolves to the first one registered. To advertise extension claims, set `advertisedMetadata.claims_supported`.
 * A `clientDiscovery` entry has a stable `id` stored as client provenance. Changing it requires migrating the owned clients, and removing it makes them fail closed.
 
-A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
+A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `verifyDpopProof`, `issueDpopNonce`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
 
 <Callout type="warn">
   `issueTokens` applies the provider's resource policy. Each resource must be registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default). Each resource's `allowedScopes` also applies. It does not re-check anything else it is given. Validate the user, the client's registered scopes, and any grant-specific policy in your handler before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
