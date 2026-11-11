@@ -11,6 +11,7 @@ import type {
 } from "./configuration";
 import { decommissionSCIMConnection } from "./connection-decommission";
 import type { SCIMIdentityCoordinator } from "./identity";
+import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 
 export const SCIM_MANAGED_CONNECTION_ID_PREFIX = "ba_scim_connection_";
@@ -369,6 +370,7 @@ async function getManagedConnectionState(
 		model: "scimManagedCredential",
 		where: [{ field: "connectionRecordId", value: connection.id }],
 		sortBy: { field: "createdAt", direction: "desc" },
+		limit: SCIM_UNBOUNDED_ROW_LIMIT,
 	});
 	return {
 		connection: toManagedConnection(connection),
@@ -949,6 +951,7 @@ export function createSCIMManagedConnectionEndpoints(
 						},
 					],
 					sortBy: { field: "createdAt", direction: "desc" },
+					limit: SCIM_UNBOUNDED_ROW_LIMIT,
 				});
 				return ctx.json({
 					connections: connections.map((connection) =>
