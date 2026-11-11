@@ -16,6 +16,7 @@ import {
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
+import { isWorkerd } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
@@ -267,6 +268,10 @@ export const createInternalAdapter = (
 		key: string,
 		fn: () => Promise<T>,
 	): Promise<T> {
+		// Workers never settle I/O of a request that has ended, so a lock held
+		// by that request would never be released. Callers race at the database
+		// instead, so a `delete.before` hook can run for one that loses.
+		if (isWorkerd()) return fn();
 		const previous = verificationConsumeLocks.get(key) ?? Promise.resolve();
 		let release!: () => void;
 		const current = new Promise<void>((resolve) => {
@@ -1556,22 +1561,30 @@ export const createInternalAdapter = (
 
 							// FIXME(consume-identifier-atomic): add an adapter primitive that
 							// deletes all rows for an identifier and returns the latest row in
-							// one operation. Until then, consume the latest row as the race gate
-							// and invalidate stale rows inside the same transaction/local lock.
+							// one operation. Until then, invalidate stale rows first and consume
+							// the latest row as the race gate, so no stale row is left to consume
+							// when neither a transaction nor the local lock orders the callers.
 							return consumeOneWithHooks<Verification>(
 								"verification",
 								[{ field: "id", value: latest.id }],
 								async () => {
-									const row = await txAdapter.consumeOne<Verification>({
+									await txAdapter.deleteMany({
+										model: "verification",
+										where: [
+											...where,
+											{ field: "id", operator: "ne", value: latest.id },
+											// A row created after this read is not stale.
+											{
+												field: "createdAt",
+												operator: "lte",
+												value: latest.createdAt,
+											},
+										],
+									});
+									return txAdapter.consumeOne<Verification>({
 										model: "verification",
 										where: [{ field: "id", value: latest.id }],
 									});
-									if (!row) return null;
-									await txAdapter.deleteMany({
-										model: "verification",
-										where,
-									});
-									return row;
 								},
 								latest,
 							);

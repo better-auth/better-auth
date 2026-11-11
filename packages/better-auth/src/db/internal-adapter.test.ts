@@ -6,6 +6,10 @@ import {
 } from "@better-auth/core/context";
 import type { SecondaryStorage } from "@better-auth/core/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { kyselyAdapter } from "@better-auth/kysely-adapter";
+import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
+import { memoryAdapter } from "@better-auth/memory-adapter";
+import { Kysely } from "kysely";
 import {
 	afterEach,
 	beforeAll,
@@ -2142,6 +2146,119 @@ describe("internal adapter test", async () => {
 			const winners = results.filter((r) => r !== null);
 			expect(winners).toHaveLength(1);
 			expect(winners[0]!.value).toBe("user-2");
+		});
+
+		it("does not wait on a consume that never settles on Cloudflare Workers", async () => {
+			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+			onTestFinished(() => {
+				vi.unstubAllGlobals();
+			});
+			// The first consume stalls like I/O owned by a request that has ended.
+			const before = vi
+				.fn()
+				.mockReturnValueOnce(new Promise(() => {}))
+				.mockReturnValue(true);
+			// Memory transactions never block each other, so only the lock orders consumes.
+			const { internalAdapter: adapter } = await init({
+				database: memoryAdapter({ verification: [] }),
+				databaseHooks: { verification: { delete: { before } } },
+			});
+			await adapter.createVerificationValue({
+				identifier: "consume:stalled",
+				value: "user-stalled",
+				expiresAt: new Date(Date.now() + 60_000),
+			});
+
+			void adapter.consumeVerificationValue("consume:stalled");
+			await vi.waitFor(() => expect(before).toHaveBeenCalledOnce());
+
+			const consumed =
+				await adapter.consumeVerificationValue("consume:stalled");
+			expect(consumed?.value).toBe("user-stalled");
+		});
+
+		/** A store without transactions whose first verification cleanup waits for `release`. */
+		async function makeHeldAdapter() {
+			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+			onTestFinished(() => {
+				vi.unstubAllGlobals();
+			});
+			const database = new DatabaseSync(":memory:");
+			await (await getMigrations({ database })).runMigrations();
+			const db = new Kysely<Record<string, never>>({
+				dialect: new NodeSqliteDialect({ database }),
+			});
+			let release = () => {};
+			const held = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			let holding = false;
+			const { internalAdapter: adapter } = await init({
+				database: (options) => {
+					const base = kyselyAdapter(db, {
+						type: "sqlite",
+						transaction: false,
+					})(options);
+					const withoutTransaction: typeof base = {
+						...base,
+						transaction: (callback) => callback(withoutTransaction),
+						deleteMany: async (data) => {
+							if (data.model === "verification" && !holding) {
+								holding = true;
+								await held;
+							}
+							return base.deleteMany(data);
+						},
+					};
+					return withoutTransaction;
+				},
+			});
+			const create = async (identifier: string, value: string) => {
+				await adapter.createVerificationValue({
+					identifier,
+					value,
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				// The newest row is picked by `createdAt`.
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			};
+			return {
+				adapter,
+				create,
+				release,
+				untilHeld: () => vi.waitFor(() => expect(holding).toBe(true)),
+			};
+		}
+
+		it("never consumes a superseded row on Cloudflare Workers without transactions", async () => {
+			const { adapter, create, release, untilHeld } = await makeHeldAdapter();
+			await create("consume:superseded", "old");
+			await create("consume:superseded", "new");
+
+			const first = adapter.consumeVerificationValue("consume:superseded");
+			await untilHeld();
+			const second =
+				await adapter.consumeVerificationValue("consume:superseded");
+			release();
+
+			const values = [(await first)?.value, second?.value];
+			expect(values).toContain("new");
+			expect(values).not.toContain("old");
+			expect(values.filter(Boolean)).toHaveLength(1);
+		});
+
+		it("keeps a row created while a consume is in flight", async () => {
+			const { adapter, create, release, untilHeld } = await makeHeldAdapter();
+			await create("consume:reissued", "first");
+
+			const consumed = adapter.consumeVerificationValue("consume:reissued");
+			await untilHeld();
+			await create("consume:reissued", "second");
+			release();
+
+			expect((await consumed)?.value).toBe("first");
+			const remaining = await adapter.findVerificationValue("consume:reissued");
+			expect(remaining?.value).toBe("second");
 		});
 
 		it("returns null for an unknown identifier", async () => {
