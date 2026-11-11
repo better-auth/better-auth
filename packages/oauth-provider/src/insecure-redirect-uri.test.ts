@@ -1,0 +1,597 @@
+import { createHash } from "node:crypto";
+import { generateRandomString } from "better-auth/crypto";
+import { jwt } from "better-auth/plugins/jwt";
+import { getTestInstance } from "better-auth/test";
+import { decodeJwt } from "jose";
+import { describe, expect, it } from "vitest";
+import { oauthProviderClient } from "./client";
+import { oauthProvider } from "./oauth";
+import type { OAuthOptions, Scope } from "./types";
+
+const lanOrigin = "http://192.168.1.50:8000";
+const lanRedirect = `${lanOrigin}/auth/callback`;
+const lanLogoutRedirect = `${lanOrigin}/logged-out`;
+const allowLanOrigin = (url: URL) => url.origin === lanOrigin;
+
+async function setupProvider(input: {
+	baseURL?: string;
+	allowInsecureRedirectUri?: OAuthOptions<Scope[]>["allowInsecureRedirectUri"];
+	validateRedirectUri?: OAuthOptions<Scope[]>["validateRedirectUri"];
+}) {
+	const baseURL = input.baseURL ?? "http://localhost:3000";
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL,
+			plugins: [
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowInsecureRedirectUri: input.allowInsecureRedirectUri,
+					validateRedirectUri: input.validateRedirectUri,
+				}),
+				jwt(),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+
+	function createClient(body: {
+		redirect_uris: string[];
+		application_type?: "web" | "native";
+		post_logout_redirect_uris?: string[];
+		skip_consent?: boolean;
+	}) {
+		return auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				...body,
+				token_endpoint_auth_method: "none",
+				skip_consent: body.skip_consent ?? true,
+				enable_end_session: true,
+			},
+		});
+	}
+
+	async function authorize(clientId: string, redirectUri: string) {
+		const codeVerifier = generateRandomString(43);
+		const url = new URL(`${baseURL}/api/auth/oauth2/authorize`);
+		url.searchParams.set("client_id", clientId);
+		url.searchParams.set("redirect_uri", redirectUri);
+		url.searchParams.set("response_type", "code");
+		url.searchParams.set("scope", "openid");
+		url.searchParams.set("state", "state");
+		url.searchParams.set(
+			"code_challenge",
+			createHash("sha256").update(codeVerifier).digest("base64url"),
+		);
+		url.searchParams.set("code_challenge_method", "S256");
+
+		let location: URL | undefined;
+		await client.$fetch(url.toString(), {
+			headers,
+			redirect: "manual",
+			onResponse(context) {
+				const header = context.response.headers.get("location");
+				if (header) location = new URL(header, baseURL);
+			},
+		});
+		if (!location)
+			throw new Error("Expected the authorize endpoint to redirect");
+		return { location, codeVerifier };
+	}
+
+	async function exchangeCode(input: {
+		clientId: string;
+		code: string;
+		codeVerifier: string;
+		redirectUri: string;
+	}) {
+		const response = await auth.handler(
+			new Request(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "authorization_code",
+					client_id: input.clientId,
+					code: input.code,
+					code_verifier: input.codeVerifier,
+					redirect_uri: input.redirectUri,
+				}),
+			}),
+		);
+		return {
+			status: response.status,
+			body: (await response.json()) as { id_token?: string },
+		};
+	}
+
+	function endSession(clientId: string, postLogoutRedirectUri: string) {
+		const url = new URL(`${baseURL}/api/auth/oauth2/end-session`);
+		url.searchParams.set("client_id", clientId);
+		url.searchParams.set("post_logout_redirect_uri", postLogoutRedirectUri);
+		const requestHeaders = new Headers(headers);
+		requestHeaders.set("accept", "text/html");
+		return auth.handler(
+			new Request(url, { headers: requestHeaders, redirect: "manual" }),
+		);
+	}
+
+	function confirmEndSession(confirmation: Response) {
+		const requestHeaders = new Headers(headers);
+		const confirmationCookies = confirmation.headers
+			.getSetCookie()
+			.map((cookie) => cookie.split(";")[0]);
+		requestHeaders.set(
+			"cookie",
+			[requestHeaders.get("cookie"), ...confirmationCookies].join("; "),
+		);
+		requestHeaders.set("accept", "text/html");
+		requestHeaders.set("content-type", "application/x-www-form-urlencoded");
+		requestHeaders.set("origin", baseURL);
+		return auth.handler(
+			new Request(`${baseURL}/api/auth/oauth2/end-session/confirm`, {
+				method: "POST",
+				headers: requestHeaders,
+				body: new URLSearchParams({ action: "confirm" }),
+				redirect: "manual",
+			}),
+		);
+	}
+
+	async function replaceRegisteredUris(
+		clientId: string,
+		update: {
+			redirectUris?: string[];
+			postLogoutRedirectUris?: string[];
+			applicationType?: "web" | "native";
+		},
+	) {
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+			update,
+		});
+	}
+
+	async function disableClient(clientId: string) {
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+			update: { disabled: true },
+		});
+	}
+
+	function denyConsent(consentLocation: URL) {
+		return auth.api.oauth2Consent({
+			headers: new Headers(headers),
+			body: {
+				accept: false,
+				oauth_query: consentLocation.searchParams.toString(),
+			},
+		});
+	}
+
+	return {
+		auth,
+		baseURL,
+		createClient,
+		disableClient,
+		denyConsent,
+		authorize,
+		exchangeCode,
+		endSession,
+		confirmEndSession,
+		replaceRegisteredUris,
+	};
+}
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11277
+ */
+describe("http redirect URIs on private networks", () => {
+	it("rejects a non-loopback http redirect URI at registration by default", async () => {
+		const provider = await setupProvider({});
+
+		await expect(
+			provider.createClient({ redirect_uris: [lanRedirect] }),
+		).rejects.toThrow();
+	});
+
+	it("shows the server error page instead of redirecting to a registered http URI the policy rejects", async () => {
+		const provider = await setupProvider({});
+		const client = await provider.createClient({
+			redirect_uris: ["https://rp.example.com/callback"],
+		});
+		await provider.replaceRegisteredUris(client.client_id, {
+			redirectUris: [lanRedirect],
+		});
+
+		const { location } = await provider.authorize(
+			client.client_id,
+			lanRedirect,
+		);
+
+		expect(location.origin).toBe(provider.baseURL);
+		expect(location.pathname).toBe("/api/auth/error");
+		expect(location.searchParams.get("error")).toBe("invalid_request");
+	});
+
+	it("accepts an http redirect URI the predicate allows through authorize and token", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: allowLanOrigin,
+		});
+		const client = await provider.createClient({
+			redirect_uris: [lanRedirect],
+		});
+
+		const { location, codeVerifier } = await provider.authorize(
+			client.client_id,
+			lanRedirect,
+		);
+		expect(`${location.origin}${location.pathname}`).toBe(lanRedirect);
+		const code = location.searchParams.get("code");
+		expect(code).toBeTypeOf("string");
+
+		const token = await provider.exchangeCode({
+			clientId: client.client_id,
+			code: code!,
+			codeVerifier,
+			redirectUri: lanRedirect,
+		});
+		expect(token.status).toBe(200);
+		expect(token.body.id_token).toBeTypeOf("string");
+	});
+
+	it("rejects an http origin the predicate does not allow", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: allowLanOrigin,
+		});
+
+		await expect(
+			provider.createClient({
+				redirect_uris: ["http://10.0.0.5:8000/callback"],
+			}),
+		).rejects.toThrow();
+		await expect(
+			provider.createClient({
+				redirect_uris: ["https://rp.example.com/callback"],
+				post_logout_redirect_uris: ["http://10.0.0.5:8000/logged-out"],
+			}),
+		).rejects.toThrow();
+	});
+
+	it("fails closed when the predicate throws", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: () => {
+				throw new Error("policy unavailable");
+			},
+		});
+
+		await expect(
+			provider.createClient({ redirect_uris: [lanRedirect] }),
+		).rejects.toThrow();
+	});
+
+	it("accepts an http post-logout redirect URI the predicate allows", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: allowLanOrigin,
+		});
+		const client = await provider.createClient({
+			redirect_uris: [lanRedirect],
+			post_logout_redirect_uris: [lanLogoutRedirect],
+		});
+
+		const response = await provider.endSession(
+			client.client_id,
+			lanLogoutRedirect,
+		);
+
+		expect(response.status).toBe(200);
+		expect(await response.text()).toContain("data-oidc-logout-confirmation");
+	});
+
+	it("rejects a registered http post-logout redirect URI the policy rejects", async () => {
+		const provider = await setupProvider({});
+		const client = await provider.createClient({
+			redirect_uris: ["https://rp.example.com/callback"],
+		});
+		await provider.replaceRegisteredUris(client.client_id, {
+			postLogoutRedirectUris: [lanLogoutRedirect],
+		});
+
+		const response = await provider.endSession(
+			client.client_id,
+			lanLogoutRedirect,
+		);
+
+		expect(response.status).toBe(400);
+	});
+});
+
+describe("allowInsecureRedirectUri boundaries", () => {
+	it.each([
+		"http://user:pass@192.168.1.50:8000/logged-out",
+		"http://user:pass@localhost:8000/logged-out",
+		"https://user:pass@rp.example.com/logged-out",
+	])("rejects credentials in the post-logout redirect URI %s", async (uri) => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: allowLanOrigin,
+		});
+
+		await expect(
+			provider.createClient({
+				redirect_uris: [lanRedirect],
+				post_logout_redirect_uris: [uri],
+			}),
+		).rejects.toThrow();
+	});
+
+	it("keeps the exact loopback host rule for native clients", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => url.origin === "http://127.0.0.1",
+		});
+
+		await expect(
+			provider.createClient({
+				redirect_uris: ["http://127.1/callback"],
+				application_type: "native",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("does not redirect to a stale logout confirmation after the predicate stops allowing it", async () => {
+		let allowed = true;
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => allowed && allowLanOrigin(url),
+		});
+		const client = await provider.createClient({
+			redirect_uris: [lanRedirect],
+			post_logout_redirect_uris: [lanLogoutRedirect],
+		});
+		const confirmation = await provider.endSession(
+			client.client_id,
+			lanLogoutRedirect,
+		);
+		expect(confirmation.status).toBe(200);
+
+		allowed = false;
+		const completed = await provider.confirmEndSession(confirmation);
+
+		expect(completed.headers.get("location")).toBeNull();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11445
+ */
+describe("web clients on localhost", () => {
+	const localhostRedirect = "http://localhost:5173/auth/callback";
+
+	it("rejects a web client localhost redirect URI by default", async () => {
+		const provider = await setupProvider({});
+
+		await expect(
+			provider.createClient({
+				redirect_uris: [localhostRedirect],
+				application_type: "web",
+			}),
+		).rejects.toThrow();
+	});
+
+	it("accepts a web client localhost redirect URI the predicate allows", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => url.hostname === "localhost",
+		});
+
+		const client = await provider.createClient({
+			redirect_uris: [localhostRedirect],
+			application_type: "web",
+		});
+		const { location } = await provider.authorize(
+			client.client_id,
+			localhostRedirect,
+		);
+
+		expect(client.redirect_uris).toEqual([localhostRedirect]);
+		expect(`${location.origin}${location.pathname}`).toBe(localhostRedirect);
+		expect(location.searchParams.get("code")).toBeTypeOf("string");
+	});
+
+	it("rejects a changed port for a web client localhost redirect URI", async () => {
+		// Allows every localhost port, so only registered-URI matching can reject.
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => url.hostname === "localhost",
+		});
+		const client = await provider.createClient({
+			redirect_uris: [localhostRedirect],
+			application_type: "web",
+		});
+
+		const { location } = await provider.authorize(
+			client.client_id,
+			"http://localhost:9999/auth/callback",
+		);
+
+		expect(location.origin).toBe(provider.baseURL);
+		expect(location.pathname).toBe("/api/auth/error");
+		expect(location.searchParams.has("code")).toBe(false);
+	});
+
+	it("rejects a stored web client localhost redirect URI without the predicate", async () => {
+		const provider = await setupProvider({});
+		const client = await provider.createClient({
+			redirect_uris: ["https://rp.example.com/callback"],
+			application_type: "web",
+		});
+		await provider.replaceRegisteredUris(client.client_id, {
+			redirectUris: [localhostRedirect],
+		});
+
+		const { location } = await provider.authorize(
+			client.client_id,
+			localhostRedirect,
+		);
+
+		expect(location.origin).toBe(provider.baseURL);
+		expect(location.pathname).toBe("/api/auth/error");
+		expect(location.searchParams.get("error")).toBe("invalid_request");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11740
+ */
+describe("http issuer on a private network", () => {
+	it("uses the configured http issuer in discovery, the authorization response, and the ID token", async () => {
+		const provider = await setupProvider({ baseURL: "http://10.0.0.5:3000" });
+		const expectedIssuer = "http://10.0.0.5:3000/api/auth";
+		const redirectUri = "https://rp.example.com/callback";
+		const client = await provider.createClient({
+			redirect_uris: [redirectUri],
+		});
+
+		const discovery = await provider.auth.api.getOpenIdConfig();
+		const { location, codeVerifier } = await provider.authorize(
+			client.client_id,
+			redirectUri,
+		);
+		const token = await provider.exchangeCode({
+			clientId: client.client_id,
+			code: location.searchParams.get("code")!,
+			codeVerifier,
+			redirectUri,
+		});
+
+		expect(discovery.issuer).toBe(expectedIssuer);
+		expect(location.searchParams.get("iss")).toBe(expectedIssuer);
+		expect(decodeJwt(token.body.id_token!).iss).toBe(expectedIssuer);
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+ * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.11.2
+ */
+describe("consent denial redirect trust", () => {
+	async function startConsent(
+		provider: Awaited<ReturnType<typeof setupProvider>>,
+		redirectUris: string[],
+	) {
+		const client = await provider.createClient({
+			redirect_uris: redirectUris,
+			skip_consent: false,
+		});
+		const { location } = await provider.authorize(
+			client.client_id,
+			redirectUris[0]!,
+		);
+		expect(location.pathname).toBe("/consent");
+		return { client, consentLocation: location };
+	}
+
+	function expectServerErrorPage(
+		provider: { baseURL: string },
+		result: { redirect: boolean; url: string },
+	) {
+		const url = new URL(result.url);
+		expect(result.redirect).toBe(true);
+		expect(url.origin).toBe(provider.baseURL);
+		expect(url.pathname).toBe("/api/auth/error");
+		expect(url.searchParams.get("error")).toBe("access_denied");
+	}
+
+	it("redirects the denial to the registered redirect URI", async () => {
+		const provider = await setupProvider({});
+		const { consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		const result = await provider.denyConsent(consentLocation);
+		const url = new URL(result.url);
+
+		expect(result.redirect).toBe(true);
+		expect(url.origin + url.pathname).toBe("https://rp.example.com/callback");
+		expect(url.searchParams.get("error")).toBe("access_denied");
+		expect(url.searchParams.get("state")).toBe("state");
+		expect(url.searchParams.get("iss")).toBe(`${provider.baseURL}/api/auth`);
+	});
+
+	it("shows the server error page once allowInsecureRedirectUri no longer allows the http redirect URI", async () => {
+		let lanAllowed = true;
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: (url) => lanAllowed && allowLanOrigin(url),
+		});
+		const { consentLocation } = await startConsent(provider, [lanRedirect]);
+
+		lanAllowed = false;
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
+	});
+
+	it("still redirects the denial to an http redirect URI the policy allows", async () => {
+		const provider = await setupProvider({
+			allowInsecureRedirectUri: allowLanOrigin,
+		});
+		const { consentLocation } = await startConsent(provider, [lanRedirect]);
+
+		const result = await provider.denyConsent(consentLocation);
+		const url = new URL(result.url);
+
+		expect(url.origin + url.pathname).toBe(lanRedirect);
+		expect(url.searchParams.get("error")).toBe("access_denied");
+	});
+
+	it("shows the server error page once validateRedirectUri rejects the redirect URI", async () => {
+		let validatorAccepts = true;
+		const provider = await setupProvider({
+			validateRedirectUri: (_uri, _registered, defaultResult) =>
+				validatorAccepts && defaultResult,
+		});
+		const { consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		validatorAccepts = false;
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
+	});
+
+	it("shows the server error page once the client is disabled", async () => {
+		const provider = await setupProvider({});
+		const { client, consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		await provider.disableClient(client.client_id);
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
+	});
+
+	it("shows the server error page once the redirect URI is removed from the client", async () => {
+		const provider = await setupProvider({});
+		const { client, consentLocation } = await startConsent(provider, [
+			"https://rp.example.com/callback",
+		]);
+
+		await provider.replaceRegisteredUris(client.client_id, {
+			redirectUris: ["https://rp.example.com/other"],
+		});
+
+		expectServerErrorPage(
+			provider,
+			await provider.denyConsent(consentLocation),
+		);
+	});
+});
