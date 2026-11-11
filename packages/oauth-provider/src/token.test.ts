@@ -5851,3 +5851,110 @@ describe("oauth token - in-flight issuance without foreign keys", async () => {
 		}
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/12402
+ */
+describe("oauth token - refresh family revocation with serial ids", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "http://localhost:5000/api/auth/callback/test";
+	const database: Record<string, Record<string, unknown>[]> = {
+		account: [],
+		jwks: [],
+		oauthAccessToken: [],
+		oauthClient: [],
+		oauthClientAssertion: [],
+		oauthClientResource: [],
+		oauthConsent: [],
+		oauthRefreshToken: [],
+		oauthResource: [],
+		session: [],
+		user: [],
+		verification: [],
+	};
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			database: memoryAdapter(database),
+			advanced: { database: { generateId: "serial" } },
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: ["authorization_code", "refresh_token"],
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			skip_consent: true,
+		},
+	});
+	const clientOptions = {
+		clientId: oauthClient.client_id,
+		clientSecret: oauthClient.client_secret!,
+		redirectURI: redirectUri,
+	};
+
+	async function issue(scopes: string[]) {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: "test",
+			options: clientOptions,
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes,
+			codeVerifier,
+		});
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code: new URL(location).searchParams.get("code")!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	async function refresh(refreshToken: string) {
+		const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	it("keeps access tokens issued without a refresh token when reuse revokes a family", async () => {
+		const accessOnly = await issue(["openid"]);
+		expect(accessOnly.data?.refresh_token).toBeUndefined();
+		const family = await issue(["openid", "offline_access"]);
+		const parentToken = family.data!.refresh_token!;
+
+		expect((await refresh(parentToken)).error).toBeNull();
+		const reused = await refresh(parentToken);
+
+		expect(reused.error).toMatchObject({ error: "invalid_grant" });
+		expect(database.oauthAccessToken).toHaveLength(1);
+		expect(database.oauthAccessToken?.[0]?.refreshId).toBeUndefined();
+	});
+});
