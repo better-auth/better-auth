@@ -14,7 +14,11 @@ import {
 	registerSchemaCheck,
 } from "@better-auth/core/db/internal";
 import { BetterAuthError } from "@better-auth/core/error";
-import { findPrismaSchemaProblems, readPrismaDataModel } from "./schema-check";
+import {
+	findObjectIdModels,
+	findPrismaSchemaProblems,
+	readPrismaDataModel,
+} from "./schema-check";
 
 export interface PrismaConfig {
 	/**
@@ -81,6 +85,7 @@ type PrismaClientInternal = {
 };
 
 export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
+	const objectIdModels = findObjectIdModels(readPrismaDataModel(prisma));
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(
@@ -872,7 +877,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						? mutateInTransaction(db)
 						: db.$transaction(mutateInTransaction);
 				},
-				options: config,
+				options: {
+					...config,
+					usesObjectIdKey: (model: string) =>
+						objectIdModels.has(getModelName(model)),
+				},
 			};
 		};
 

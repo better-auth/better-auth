@@ -32,6 +32,37 @@ describe("prisma-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12071
+	 */
+	it("reports which models key rows by ObjectId", () => {
+		const idField = (nativeType: [string, unknown[]] | null) => ({
+			name: "id",
+			kind: "scalar",
+			isId: true,
+			nativeType,
+		});
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				_runtimeDataModel: {
+					models: {
+						Verification: { fields: [idField(["ObjectId", []])] },
+						Identity: { fields: [idField(["ObjectId", []])] },
+						User: { fields: [idField(null)] },
+					},
+				},
+			} as never,
+			{ provider: "mongodb" },
+		)({ account: { modelName: "identity" } } as BetterAuthOptions);
+		const usesObjectIdKey = adapter.options?.usesObjectIdKey;
+
+		expect(usesObjectIdKey("verification")).toBe(true);
+		expect(usesObjectIdKey("account")).toBe(true);
+		expect(usesObjectIdKey("user")).toBe(false);
+		expect(usesObjectIdKey("session")).toBe(false);
+	});
+
 	it("keeps field mapping tied to the schema model", async () => {
 		const findFirst = vi.fn(async () => ({
 			id: "user-id",
