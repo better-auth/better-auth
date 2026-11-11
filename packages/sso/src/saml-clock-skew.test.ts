@@ -120,8 +120,9 @@ function buildSAMLResponse(spec: ResponseSpec): string {
 /**
  * @see https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf
  * SAML Profiles §4.1.4.3: validity times are checked "subject to allowable
- * clock skew between the providers". The documented default is 5 minutes and
- * must apply to every layer that checks the assertion window.
+ * clock skew between the providers". The spec sets no value. Better Auth's
+ * documented default is 5 minutes and must apply to every layer that checks
+ * the assertion window.
  */
 describe("SAML assertion clock skew", () => {
 	async function setup(clockSkew?: number) {
