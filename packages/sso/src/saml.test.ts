@@ -4860,13 +4860,11 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			headers,
 		});
 
-		let samlResponse: any;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse = await context.data;
-			},
-		});
-		const xml = Buffer.from(samlResponse.samlResponse, "base64").toString();
+		const { data } = await betterFetch<{ samlResponse: string }>(
+			"http://localhost:8081/api/sso/saml2/idp/post",
+		);
+		if (!data) throw new Error("mock IdP returned no SAML response");
+		const xml = Buffer.from(data.samlResponse, "base64").toString();
 		const respelled = xml.replace(
 			/(<saml:Assertion ID=")(.)/,
 			(_, prefix: string, first: string) =>
@@ -4889,7 +4887,13 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 			);
 
 		const first = await submit(xml);
-		expect(first.headers.get("location") || "").not.toContain("error");
+		expect(first.status).toBe(302);
+		expect(first.headers.get("location")).not.toContain("error");
+		expect(
+			parseSetCookieHeader(first.headers.get("set-cookie") ?? "").get(
+				"better-auth.session_token",
+			)?.value,
+		).toBeDefined();
 
 		const replay = await submit(respelled);
 		expect(replay.headers.get("location") || "").toContain(
