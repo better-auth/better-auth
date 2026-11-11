@@ -10,7 +10,11 @@ import { defineRequestState } from "@better-auth/core/context";
 import type { Session } from "@better-auth/core/db";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
-import { expireCookie, setCookieCache } from "better-auth/cookies";
+import {
+	createSessionStore,
+	expireCookie,
+	setCookieCache,
+} from "better-auth/cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -327,8 +331,14 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 					session.token,
 				);
 				if (stored?.session.dbscPublicKey == null) return !!stored;
-				// Drop the stale copy so the next lookup reads the bound session.
-				expireCookie(ctx, ctx.context.authCookies.sessionData);
+				// Drop the stale copy, every chunk of it, so the next lookup reads
+				// the bound session.
+				const cacheStore = createSessionStore(
+					ctx.context.authCookies.sessionData.name,
+					ctx.context.authCookies.sessionData.attributes,
+					ctx,
+				);
+				cacheStore.setCookies(cacheStore.clean());
 				return false;
 			}
 			if (session.dbscPublicKey == null) return true;
