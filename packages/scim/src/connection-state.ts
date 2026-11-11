@@ -1,5 +1,5 @@
+import { BetterAuthError } from "@better-auth/core/error";
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
-import { BetterAuthError } from "better-auth";
 import type { SCIMConnectionBinding } from "./persistence";
 import { createScopedKey } from "./resource-key";
 import { createSCIMError } from "./scim-error";

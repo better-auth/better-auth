@@ -1,5 +1,5 @@
+import { HIDE_METADATA } from "@better-auth/core/api";
 import type { DBAdapter, Where } from "better-auth";
-import { HIDE_METADATA } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
 import {
