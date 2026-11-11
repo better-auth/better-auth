@@ -6,7 +6,7 @@ If you use the MongoDB adapter, it now creates indexes for schema fields marked 
 
 The indexes build in the background when the adapter starts. Most deployments need no action.
 
-The adapter retries a build that fails because of a network error or a failover. If one of these causes stops a build, the adapter logs an error and keeps serving requests without that index. Your data is not changed. Uniqueness for that field is not enforced until you fix the cause and restart:
+The adapter retries a build that fails because of a network error or a failover. If one of the causes below stops a build, the adapter logs an error and keeps serving requests without that index. Your data is not changed. Uniqueness for that field is not enforced until you fix the cause and restart:
 
 - The collection already contains duplicate values. Remove them as the MongoDB adapter docs describe.
 - Your database user lacks the `createIndex` permission. Grant it, or create the indexes yourself.
