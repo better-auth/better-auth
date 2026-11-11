@@ -193,8 +193,14 @@ async function resolveActor(
 	// A client_credentials token has no user: its JWT carries the client as
 	// `sub`, and its opaque form has no `sub` at introspection.
 	const sub = typeof token.sub === "string" && token.sub ? token.sub : clientId;
-	if (sub === clientId) return { sub, token };
 	const user = await ctx.context.internalAdapter.findUserById(sub);
+	if (sub === clientId) {
+		// The payload cannot tell a client token from a user token whose user id
+		// equals the client id (`generateClientId` is configurable), so that
+		// collision is rejected rather than guessed.
+		if (user) deny("actor_token is invalid");
+		return { sub, token };
+	}
 	if (!user) deny("actor_token is invalid");
 	return { sub, user, token };
 }
@@ -337,11 +343,8 @@ async function exchangeToken(
 		deny("the actor is not permitted by the subject token's may_act");
 	}
 	// An exchange never drops the subject's actors: without an actor_token, the
-	// issued token keeps the subject's chain unchanged. It is copied so hooks
-	// that mutate the subject payload cannot rewrite the chain.
-	const subjectAct = subject.act
-		? (structuredClone(subject.act) as OAuthActorClaim)
-		: undefined;
+	// issued token keeps the subject's chain unchanged.
+	const subjectAct = subject.act as OAuthActorClaim | undefined;
 	const act: OAuthActorClaim | undefined = actor
 		? { sub: actor.sub, ...(subjectAct ? { act: subjectAct } : {}) }
 		: subjectAct;
@@ -432,10 +435,11 @@ async function exchangeToken(
 		scopes: effectiveScopes,
 		referenceId,
 		actor,
-		// Hooks get a copy: the issued chain is built from `act` below.
-		act: act ? structuredClone(act) : undefined,
+		act,
 	};
-	if (options.allowExchange && !(await options.allowExchange(request))) {
+	// Hooks get a copy, so nothing they change reaches the issued token.
+	const hookRequest = structuredClone(request);
+	if (options.allowExchange && !(await options.allowExchange(hookRequest))) {
 		deny("token exchange denied by policy");
 	}
 	// `act` is always set when `actor` is.
@@ -444,7 +448,10 @@ async function exchangeToken(
 			? withActorClaims(
 					ctx,
 					act,
-					await options.delegation.actorClaims({ ...request, actor }),
+					await options.delegation.actorClaims({
+						...hookRequest,
+						actor: hookRequest.actor!,
+					}),
 				)
 			: act;
 	// Delegated access ends when either the subject or the actor token expires.

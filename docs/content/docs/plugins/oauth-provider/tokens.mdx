@@ -723,6 +723,8 @@ The provider reads the reference from the subject token's [`reference_id`](#cons
 * `actor`: the validated actor, when the request sends an actor token. It has `sub`, the actor's `user` when the actor token represents a user, and `token`, the actor token's introspection payload
 * `act`: the `act` claim the exchanged token will carry, before fields from `delegation.actorClaims`
 
+`allowExchange` and `delegation.actorClaims` receive a copy of the request. Changing it does not change the exchanged token.
+
 ```ts title="auth.ts"
 oauthTokenExchange({
   allowExchange: ({ client, resources }) =>

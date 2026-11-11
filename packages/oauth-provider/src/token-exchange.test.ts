@@ -1865,6 +1865,66 @@ describe("oauthTokenExchange delegation", () => {
 		});
 	});
 
+	it("ignores hook changes to expiry, scopes, and the user", async () => {
+		const farFuture = Math.floor(Date.now() / 1000) + 86_400;
+		const { delegate } = await bootDelegation(
+			{
+				allowExchange: (request) => {
+					request.scopes.push("write");
+					request.user.id = "someone-else";
+					(request.subjectToken as { exp: number }).exp = farFuture;
+					return true;
+				},
+				delegation: {
+					actorClaims: ({ actor }) => {
+						(actor.token as { exp: number }).exp = farFuture;
+						return {};
+					},
+				},
+			},
+			{},
+			{ m2mAccessTokenExpiresIn: 20 },
+		);
+		const { data, error } = await delegate();
+		expect(error).toBeNull();
+		expect(data!.expires_in).toBeLessThanOrEqual(20);
+		expect(data!.scope).toBe("read");
+		expect(decodeJwt(data!.access_token).sub).not.toBe("someone-else");
+	});
+
+	it("rejects an actor token whose client id equals a user id", async () => {
+		let nextClientId: string | undefined;
+		const {
+			auth,
+			headers,
+			machineClient,
+			userTokenForMcp,
+			exchangeAs,
+			actorTokenFor,
+			actorParams,
+		} = await bootDelegation(
+			{},
+			{},
+			{ generateClientId: () => nextClientId ?? generateRandomString(16) },
+		);
+		const session = await auth.api.getSession({ headers });
+		nextClientId = session!.user.id;
+		const colliding = await machineClient([mcp, api]);
+		expect(colliding.client_id).toBe(session!.user.id);
+		nextClientId = undefined;
+		const subject = await userTokenForMcp();
+		const actor = await actorTokenFor(colliding);
+		const { error } = await exchangeAs(
+			colliding,
+			subject.access_token,
+			actorParams(actor.access_token),
+		);
+		expect(error).toMatchObject({
+			error: "invalid_request",
+			error_description: "actor_token is invalid",
+		});
+	});
+
 	it("reports an opaque token of a deleted user inactive", async () => {
 		const { auth, agent, userTokenForMcp, introspect } = await bootDelegation(
 			{},
