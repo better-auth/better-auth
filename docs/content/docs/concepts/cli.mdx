@@ -207,6 +207,6 @@ When a command can't continue, it fails and names what it needs, such as a flag 
 
 **Error: Cannot find module X**
 
-The CLI resolves most imports for you: `tsconfig.json` path aliases, `package.json` subpath imports (including SvelteKit 3's `#lib`), and stubbed framework virtual modules (`$env/*`, `$app/*`, `cloudflare:workers`, Vite assets like `?raw`). On SvelteKit 2, run `svelte-kit sync` first so `.svelte-kit/tsconfig.json` exists and `$lib` resolves.
+The CLI resolves most imports for you: `tsconfig.json` path aliases, `package.json` subpath imports (including SvelteKit 3's `#lib`), and stubbed framework virtual modules (`$env/*`, `$app/*`, `cloudflare:workers`, Vite assets like `?raw`). With `wrangler` installed, `env` from `cloudflare:workers` reads Wrangler's local bindings. On SvelteKit 2, run `svelte-kit sync` first so `.svelte-kit/tsconfig.json` exists and `$lib` resolves.
 
 A few module types can't load outside their bundler (e.g. `.svelte` components or `import.meta.glob`). Keep those out of your config file's import graph.

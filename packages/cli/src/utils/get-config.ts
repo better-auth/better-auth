@@ -10,7 +10,10 @@ import { loadConfig } from "c12";
 import type { TsConfigResult } from "get-tsconfig";
 import { createPathsMatcher, getTsconfig, parseTsconfig } from "get-tsconfig";
 import type { JitiOptions } from "jiti";
-import { addCloudflareVirtualModules } from "./cloudflare-virtual-modules";
+import {
+	addCloudflareVirtualModules,
+	loadCloudflarePlatformEnv,
+} from "./cloudflare-virtual-modules";
 import { addSvelteKitVirtualModules } from "./sveltekit-virtual-modules";
 import { getViteAssetStub } from "./vite-virtual-modules";
 
@@ -462,6 +465,7 @@ async function getLoadedConfig({
 	};
 
 	try {
+		await loadCloudflarePlatformEnv(cwd);
 		if (configPath) {
 			// If the configPath is a file, use it as is, as it means the path wasn't relative.
 			const resolvedPath = existsSync(configPath)
