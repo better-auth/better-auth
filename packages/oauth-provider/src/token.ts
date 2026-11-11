@@ -1313,8 +1313,11 @@ async function createUserTokens(
 	// Only mint a refresh token when the client may use refresh tokens.
 	// Otherwise an `offline_access` scope alone would hand a refresh token to a
 	// pure machine-to-machine client that was never authorized for one.
+	// A delegated issuance gets no refresh token: refreshed tokens do not carry
+	// `act`, so a refresh would turn delegated access into impersonation.
 	const isRefreshToken =
 		user &&
+		!params.act &&
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));

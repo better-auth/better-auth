@@ -279,7 +279,9 @@ export interface OAuthTokenIssueParams {
 	 * token. The authorization server writes it into a JWT access token after
 	 * contributed claims, persists it on an opaque access token, and returns it
 	 * as `act` at introspection. Like `sub`, it is the caller's assertion: pass
-	 * only an actor the grant has validated.
+	 * only an actor the grant has validated. An issuance with `act` never
+	 * includes a refresh token, even with `offline_access`, because refreshed
+	 * tokens do not carry `act`.
 	 */
 	act?: OAuthActorClaim;
 	/**

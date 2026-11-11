@@ -1068,6 +1068,65 @@ describe("oauthTokenExchange without the JWT plugin", () => {
  * @see https://github.com/better-auth/better-auth/issues/8023
  */
 describe("OAuthTokenIssueParams.maxExpiresAt", () => {
+	it("never issues a refresh token with act", async () => {
+		const delegatingGrant = "urn:better-auth:test:delegating-grant";
+		const delegatingPlugin = {
+			id: "test-delegating-grant",
+			init(ctx) {
+				extendOAuthProvider(ctx, {
+					grants: {
+						[delegatingGrant]: async ({ ctx, provider }) => {
+							const { client } = await provider.authenticateClient();
+							const user = await ctx.context.internalAdapter.findUserById(
+								(ctx.body as { user_id: string }).user_id,
+							);
+							return provider.issueTokens({
+								client,
+								user: user!,
+								scopes: ["read", "offline_access"],
+								act: { sub: "service-a" },
+							});
+						},
+					},
+				});
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			baseURL: issuer,
+			plugins: [
+				jwt({ jwt: { issuer } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["read", "offline_access"],
+					resources: [api],
+				}),
+				delegatingPlugin,
+			],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const registered = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: [delegatingGrant, "refresh_token"],
+				scope: "read offline_access",
+			},
+		});
+		const { data } = await client.$fetch<TokenResponse>("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: delegatingGrant,
+				client_id: registered.client_id,
+				client_secret: registered.client_secret!,
+				user_id: user.id,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(data?.access_token).toBeDefined();
+		expect(data?.refresh_token).toBeUndefined();
+	});
+
 	it("caps the expiry of an extension grant's access token", async () => {
 		const cappedGrant = "urn:better-auth:test:capped-grant";
 		let cap: Date | undefined;
