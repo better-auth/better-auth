@@ -933,6 +933,9 @@ importers:
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../../../../../packages/oauth-provider
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../../../../packages/scim
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso

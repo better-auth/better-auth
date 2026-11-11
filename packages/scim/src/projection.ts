@@ -24,6 +24,7 @@ import type {
 import { chunkSCIMIds, SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import { createScopedKey } from "./resource-key";
 import { runSCIMApplicationCallback } from "./scim-error";
+import { assertNativeSCIMTransactions } from "./transaction";
 
 export type SCIMProjectionCoordinator = ReturnType<
 	typeof createSCIMProjectionCoordinator
@@ -804,6 +805,7 @@ export function createReconcileSCIMProjectionEndpoint(
 			body: reconcileProjectionBodySchema,
 		},
 		async (ctx) => {
+			assertNativeSCIMTransactions(ctx.context.adapter);
 			requireConfiguredProjection(options);
 			const result = await reconcileProjectionDomain({
 				database: ctx.context.adapter,

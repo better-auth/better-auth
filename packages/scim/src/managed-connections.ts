@@ -13,6 +13,7 @@ import { decommissionSCIMConnection } from "./connection-decommission";
 import type { SCIMIdentityCoordinator } from "./identity";
 import { SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
+import { assertNativeSCIMTransactions } from "./transaction";
 
 export const SCIM_MANAGED_CONNECTION_ID_PREFIX = "ba_scim_connection_";
 const SCIM_MANAGED_CREDENTIAL_ID_PREFIX = "ba_scim_credential_";
@@ -882,6 +883,7 @@ export function createSCIMManagedConnectionEndpoints(
 				metadata: { noStore: true },
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				const options = requireManagedOptions();
 				assertFutureExpiry(ctx.body.expiresAt);
 				if (new Set(ctx.body.scopes).size !== ctx.body.scopes.length) {
@@ -984,6 +986,7 @@ export function createSCIMManagedConnectionEndpoints(
 				metadata: { noStore: true },
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				const options = requireManagedOptions();
 				assertFutureExpiry(ctx.body.expiresAt);
 				if (new Set(ctx.body.scopes).size !== ctx.body.scopes.length) {
@@ -1027,6 +1030,7 @@ export function createSCIMManagedConnectionEndpoints(
 				body: revokeManagedCredentialBodySchema,
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				requireManagedOptions();
 				for (let attempt = 0; attempt < 5; attempt++) {
 					const revoked = await runManagedMutationTransaction(
@@ -1085,6 +1089,7 @@ export function createSCIMManagedConnectionEndpoints(
 				body: decommissionManagedConnectionBodySchema,
 			},
 			async (ctx) => {
+				assertNativeSCIMTransactions(ctx.context.adapter);
 				requireManagedOptions();
 				const database = await getCurrentAdapter(ctx.context.adapter);
 				let started: ManagedConnectionRow | undefined;
