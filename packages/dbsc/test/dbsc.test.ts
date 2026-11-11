@@ -266,6 +266,87 @@ describe("dbsc", () => {
 		).toBeNull();
 	});
 
+	it("refuses a cookie-cache copy taken before the key was registered", async () => {
+		const { signIn, register, auth } = await setup({
+			session: { cookieCache: { enabled: true, maxAge: 300 } },
+		});
+		const browser = await createBrowser();
+		const challenge = readRegistrationChallenge(await signIn(browser))!;
+		expect(browser.jar.has("better-auth.session_data")).toBe(true);
+		const cookie = browser.cookieHeader();
+		expect(
+			await auth.api.getSession({ headers: new Headers({ cookie }) }),
+		).not.toBeNull();
+
+		expect((await register(browser, challenge)).status).toBe(200);
+		expect(
+			await auth.api.getSession({ headers: new Headers({ cookie }) }),
+		).toBeNull();
+	});
+
+	it("refuses a pre-registration cookie-cache copy that lives longer than cookieCache.maxAge", async () => {
+		const { signIn, register, auth } = await setup({
+			session: { cookieCache: { enabled: true, maxAge: 300 } },
+			advanced: {
+				cookies: { session_data: { attributes: { maxAge: 3600 } } },
+			},
+		});
+		const browser = await createBrowser();
+		const challenge = readRegistrationChallenge(await signIn(browser))!;
+		const cookie = browser.cookieHeader();
+		expect((await register(browser, challenge)).status).toBe(200);
+
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(Date.now() + 20 * 60 * 1000);
+		expect(
+			await auth.api.getSession({ headers: new Headers({ cookie }) }),
+		).toBeNull();
+	});
+
+	it("drops a key-less cookie-cache copy that sits beside the bound cookie", async () => {
+		const { signIn, register, send, getSession } = await setup({
+			session: { cookieCache: { enabled: true, maxAge: 300 } },
+		});
+		const browser = await createBrowser();
+		const challenge = readRegistrationChallenge(await signIn(browser))!;
+		const staleCache = browser.jar.get("better-auth.session_data")!;
+		expect((await register(browser, challenge)).status).toBe(200);
+		browser.jar.set("better-auth.session_data", staleCache);
+
+		const update = await send(browser, "/update-user", {
+			method: "POST",
+			body: { name: "Renamed" },
+		});
+		expect(update.status).toBe(401);
+		expect(browser.jar.has("better-auth.session_data")).toBe(false);
+		expect(await getSession(browser)).not.toBeNull();
+		expect(browser.jar.get("better-auth.session_data")).not.toBe(staleCache);
+	});
+
+	it("keeps serving an unbound session from the cookie cache", async () => {
+		const { signIn, getSession } = await setup({
+			session: { cookieCache: { enabled: true, maxAge: 300 } },
+		});
+		const browser = await createBrowser();
+		await signIn(browser);
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(Date.now() + 11 * 60 * 1000);
+		await getSession(browser);
+		const cached = browser.jar.get("better-auth.session_data");
+		expect(cached).toBeDefined();
+		expect(await getSession(browser)).not.toBeNull();
+		expect(browser.jar.get("better-auth.session_data")).toBe(cached);
+	});
+
+	it("refuses registration once the registration window has passed", async () => {
+		const { signIn, register } = await setup();
+		const browser = await createBrowser();
+		const challenge = readRegistrationChallenge(await signIn(browser))!;
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(Date.now() + 5 * 60 * 1000 + 1000);
+		expect((await register(browser, challenge)).status).toBe(400);
+	});
+
 	it("renews the bound cookie with the challenge sent ahead of time", async () => {
 		const { signInAndBind, refresh, getSession } = await setup();
 		const { browser, sessionIdentifier, nextChallenge } = await signInAndBind();
