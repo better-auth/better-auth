@@ -241,6 +241,26 @@ function assertNoAdditionalFieldCollisions(options?: SSOOptions) {
 	}
 }
 
+const SAML_SESSION_RECORD_PAGE_SIZE = 100;
+
+async function findSAMLSessionRecord(
+	ctx: AuthContext,
+	identifier: string,
+	isOwnRecord: (record: Verification) => boolean,
+) {
+	for (let offset = 0; ; offset += SAML_SESSION_RECORD_PAGE_SIZE) {
+		const page = await ctx.adapter.findMany<Verification>({
+			model: "verification",
+			where: [{ field: "identifier", value: identifier }],
+			sortBy: { field: "createdAt", direction: "desc" },
+			limit: SAML_SESSION_RECORD_PAGE_SIZE,
+			offset,
+		});
+		const record = page.find(isOwnRecord);
+		if (record || page.length < SAML_SESSION_RECORD_PAGE_SIZE) return record;
+	}
+}
+
 /**
  * SLO records are written with the session's expiry at sign-in. Move it when a
  * refresh extends the session, so expired-row cleanup doesn't drop them early.
@@ -256,31 +276,30 @@ async function extendSAMLSessionRecords(
 	const isOwnRecord = (record: Verification) =>
 		safeJsonParse<SAMLSessionRecord>(record.value)?.sessionId === session.id;
 	const latest = await ctx.internalAdapter.findVerificationValue(lookup.value);
-	if (latest) {
+	const secondaryStorageOnly =
+		ctx.options.secondaryStorage && !ctx.options.verification?.storeInDatabase;
+	if (latest && secondaryStorageOnly) {
 		// Secondary storage keeps one record per key, written by the latest sign-in.
-		if (ctx.options.secondaryStorage && isOwnRecord(latest)) {
+		if (isOwnRecord(latest)) {
 			await ctx.internalAdapter.updateVerificationByIdentifier(lookup.value, {
 				expiresAt,
 			});
 		}
-		if (
-			!ctx.options.secondaryStorage ||
-			ctx.options.verification?.storeInDatabase
-		) {
-			// Every sign-in with the same NameID adds a row under this identifier,
-			// and an update by identifier may change another session's row.
-			const records = await ctx.adapter.findMany<Verification>({
+	} else if (latest) {
+		// Every sign-in with the same NameID adds a row under this identifier, and
+		// an update by identifier may change another session's row. A cached copy
+		// needs no write: once it expires, reads fall back to these rows.
+		const record = await findSAMLSessionRecord(
+			ctx,
+			latest.identifier,
+			isOwnRecord,
+		);
+		if (record) {
+			await ctx.adapter.update({
 				model: "verification",
-				where: [{ field: "identifier", value: latest.identifier }],
+				where: [{ field: "id", value: record.id }],
+				update: { expiresAt },
 			});
-			const record = records.find(isOwnRecord);
-			if (record) {
-				await ctx.adapter.update({
-					model: "verification",
-					where: [{ field: "id", value: record.id }],
-					update: { expiresAt },
-				});
-			}
 		}
 	}
 	// Lookup row last: it gates the early return, so a failed write retries.

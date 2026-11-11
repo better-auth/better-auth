@@ -10,7 +10,12 @@ import { inflateRawSync } from "node:zlib";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { betterFetch } from "@better-fetch/fetch";
-import type { Account, DBTransactionAdapter, User } from "better-auth";
+import type {
+	Account,
+	DBTransactionAdapter,
+	User,
+	Verification,
+} from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
@@ -8036,12 +8041,19 @@ describe("SAML user resolution HTTP", () => {
 				storeInDatabase: true,
 				singleRowUpdate: true,
 			},
+			{
+				name: "more records for the NameID than one page",
+				adapter: "kysely",
+				singleRowUpdate: true,
+				newerRecords: 100,
+			},
 		] as const satisfies ReadonlyArray<{
 			name: string;
 			adapter: "kysely" | "memory" | "mongodb";
 			singleRowUpdate?: boolean;
 			secondaryStorage?: boolean;
 			storeInDatabase?: boolean;
+			newerRecords?: number;
 		}>;
 
 		it.each(storages)(
@@ -8071,8 +8083,49 @@ describe("SAML user resolution HTTP", () => {
 				// Both sign-ins share the NameID, so they share the SLO record key.
 				const firstSignIn = await completeSAMLSignIn(instance.baseURL);
 				expect(firstSignIn.callback.status).toBe(302);
+				const recordIdentifier = "saml-session:workforce-saml:test@email.com";
+				if ("newerRecords" in storage) {
+					// Rows inserted after the first record and dated after the second one
+					// push the second record past the first page in either order.
+					for (let index = 0; index < storage.newerRecords; index++) {
+						await context.adapter.create({
+							model: "verification",
+							data: {
+								identifier: recordIdentifier,
+								value: JSON.stringify({ sessionId: `other-${index}` }),
+								expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+								createdAt: new Date(Date.now() + 60 * 60 * 1000 + index),
+								updatedAt: new Date(),
+							},
+						});
+					}
+				}
 				const secondSignIn = await completeSAMLSignIn(instance.baseURL);
 				expect(secondSignIn.callback.status).toBe(302);
+				const current = await fetch(
+					`${instance.baseURL}/api/auth/get-session`,
+					{
+						headers: { cookie: cookieHeader(secondSignIn.cookies) },
+					},
+				);
+				const refreshedSessionId: string = (await current.json()).session.id;
+
+				async function otherRecordExpiries() {
+					const records = await context.adapter.findMany<Verification>({
+						model: "verification",
+						where: [{ field: "identifier", value: recordIdentifier }],
+						limit: 1000,
+					});
+					return records
+						.filter(
+							(record) =>
+								JSON.parse(record.value).sessionId !== refreshedSessionId,
+						)
+						.map((record) => [record.id, new Date(record.expiresAt).getTime()])
+						.sort(([a], [b]) => String(a).localeCompare(String(b)));
+				}
+				const otherExpiriesBeforeRefresh = await otherRecordExpiries();
+				expect(otherExpiriesBeforeRefresh.length).toBeGreaterThan(0);
 
 				vi.useFakeTimers({ toFake: ["Date"] });
 				deferredCleanups.push(async () => {
@@ -8086,6 +8139,8 @@ describe("SAML user resolution HTTP", () => {
 					{ headers: { cookie: cookieHeader(secondSignIn.cookies) } },
 				);
 				expect((await refreshed.json())?.session).toBeTruthy();
+				// Refreshing one session leaves the other sessions' records alone.
+				expect(await otherRecordExpiries()).toEqual(otherExpiriesBeforeRefresh);
 
 				vi.setSystemTime(Date.now() + 2 * hour);
 				// Any verification read deletes expired rows.
