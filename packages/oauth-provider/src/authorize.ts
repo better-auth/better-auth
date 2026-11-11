@@ -716,6 +716,18 @@ export async function authorizeEndpoint(
 			);
 		}
 	}
+	if (opts.requireOpenId && !requestedScopes?.includes("openid")) {
+		return handleRedirect(
+			ctx,
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_scope",
+				"the openid scope is required",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
+	}
 	// Always set default scopes if not originally sent
 	if (!requestedScopes) {
 		requestedScopes = client.scopes ?? opts.scopes ?? [];

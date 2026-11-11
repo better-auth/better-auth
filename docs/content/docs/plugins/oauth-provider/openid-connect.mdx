@@ -7,6 +7,15 @@ description: Configure discovery, ID token and UserInfo claims, authentication c
 
 Your OAuth provider is also an [OpenID Connect](https://openid.net/specs/openid-connect-core-1_0.html) provider. A client that requests the `openid` scope receives an ID token, can call UserInfo, and can take part in logout.
 
+To serve only OpenID Connect, set `requireOpenId`. An authorization request that leaves out `openid`, or sends no `scope`, is then redirected to the client with `invalid_scope` instead of being served as plain OAuth:
+
+```ts title="auth.ts"
+oauthProvider({
+  requireOpenId: true, // [!code highlight]
+  // ...
+});
+```
+
 ## Discovery metadata
 
 Better Auth serves [OpenID Provider metadata](https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderConfig) at `{issuer}/.well-known/openid-configuration` and [authorization server metadata](https://datatracker.ietf.org/doc/html/rfc8414#section-3) at `{issuer}/.well-known/oauth-authorization-server`. If your framework does not forward these routes to `auth.handler`, see [Expose the well-known metadata](/docs/plugins/oauth-provider#expose-the-well-known-metadata).
