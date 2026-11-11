@@ -1737,7 +1737,7 @@ describe("oauth2 - sign-up aborted by user.create.before", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11880
 	 */
-	it("redirects with FAILED_TO_CREATE_USER without logging an error", async () => {
+	it("fails with unable_to_create_user without logging an unexpected error", async () => {
 		server.use(
 			http.post("https://oauth2.googleapis.com/token", async () => {
 				const profile = {
@@ -1772,8 +1772,12 @@ describe("oauth2 - sign-up aborted by user.create.before", async () => {
 			},
 		});
 
-		expect(redirectLocation).toContain("error=FAILED_TO_CREATE_USER");
-		expect(log).not.toHaveBeenCalled();
+		expect(redirectLocation).toContain("error=unable_to_create_user");
+		expect(log).not.toHaveBeenCalledWith(
+			"error",
+			"Unable to create OAuth user",
+			expect.anything(),
+		);
 	});
 });
 

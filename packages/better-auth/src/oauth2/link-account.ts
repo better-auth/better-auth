@@ -7,7 +7,7 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
-import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "@better-auth/core/error";
 import { mergeScopes } from "@better-auth/core/oauth2";
 import { createEmailVerificationToken } from "../api";
 import { isStateful } from "../api/routes/session";
@@ -577,33 +577,33 @@ export async function handleOAuthUserInfo(
 				providerId: account.providerId,
 				accountId: account.accountId,
 			};
-			const { createdUser, createdAccount } = await runWithTransaction(
-				c.context.adapter,
-				async () => {
-					const createdUser = await c.context.internalAdapter.createUser(
-						{
-							name,
-							image,
-							...additionalUserFields,
-							email: userInfo.email.toLowerCase(),
-							emailVerified: userInfo.emailVerified,
-						},
-						source,
-					);
-					// A `user.create.before` hook returning false aborts with null.
-					if (!createdUser) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
-						);
-					}
-					const createdAccount = await c.context.internalAdapter.createAccount({
-						...accountData,
-						userId: createdUser.id,
-					});
-					return { createdUser, createdAccount };
-				},
-			);
+			const created = await runWithTransaction(c.context.adapter, async () => {
+				const createdUser = await c.context.internalAdapter.createUser(
+					{
+						name,
+						image,
+						...additionalUserFields,
+						email: userInfo.email.toLowerCase(),
+						emailVerified: userInfo.emailVerified,
+					},
+					source,
+				);
+				// A `user.create.before` hook returning false aborts with null.
+				if (!createdUser) return null;
+				const createdAccount = await c.context.internalAdapter.createAccount({
+					...accountData,
+					userId: createdUser.id,
+				});
+				return { createdUser, createdAccount };
+			});
+			if (!created) {
+				return {
+					error: "unable to create user",
+					data: null,
+					isRegister: false,
+				};
+			}
+			const { createdUser, createdAccount } = created;
 			if (
 				requireExactAccountBinding &&
 				(createdAccount.accountId !== account.accountId ||
