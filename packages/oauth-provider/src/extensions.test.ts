@@ -1465,10 +1465,31 @@ describe("client_credentials with a confirmation-proving strategy", async () => 
 	const assertionType =
 		"urn:better-auth:test:client-assertion-type:test-attestation";
 	let proven: Confirmation = { "x5t#S256": "attested-certificate" };
+	// A grant that consumes a one-time credential after resolving its binding,
+	// like the device code and CIBA grants.
+	const oneTimeGrant = "urn:better-auth:test:one-time-grant";
+	let consumed = 0;
 	const strategy = {
 		id: "test-confirmation-strategy",
 		init(ctx) {
 			extendOAuthProvider(ctx, {
+				grants: {
+					[oneTimeGrant]: async ({ provider }) => {
+						const { client, confirmation } =
+							await provider.authenticateClient();
+						const binding = await provider.resolveConfirmation({
+							client,
+							scopes: ["read"],
+							confirmation,
+						});
+						consumed++;
+						return provider.issueTokens({
+							client,
+							scopes: ["read"],
+							confirmation: binding,
+						});
+					},
+				},
 				clientAuthentication: {
 					[authMethod]: {
 						assertionTypes: [assertionType],
@@ -1549,6 +1570,35 @@ describe("client_credentials with a confirmation-proving strategy", async () => 
 		expect(error).toBeNull();
 		expect(data?.token_type).toBe("DPoP");
 		expect(decodeJwt(data!.access_token).cnf).toEqual(proven);
+	});
+
+	it("rejects a certificate confirmation before a one-time credential is consumed", async () => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: authMethod,
+				grant_types: [oneTimeGrant],
+				scope: "read",
+				dpop_bound_access_tokens: true,
+			},
+		});
+		consumed = 0;
+		const { error } = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: oneTimeGrant,
+				client_id: machine.client_id,
+				client_assertion_type: assertionType,
+				client_assertion: `assertion:${machine.client_id}`,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(error).toMatchObject({
+			error: "invalid_dpop_proof",
+			error_description: "A DPoP-bound access token is required",
+		});
+		expect(consumed).toBe(0);
 	});
 
 	it.each([

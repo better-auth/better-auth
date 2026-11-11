@@ -218,7 +218,8 @@ export function getOAuthProviderApi(
 			return createUserTokens(ctx, opts, { ...params, grantType });
 		},
 		resolveConfirmation: async (params) => {
-			if (params.confirmation) return params.confirmation;
+			// Resolved before a grant consumes a one-time credential, so a binding
+			// the DPoP policy rejects fails while the credential can still be retried.
 			const policy = await resolveResourcePolicy(ctx, opts, {
 				resource: params.resources,
 				clientId: params.client.clientId,
@@ -227,6 +228,7 @@ export function getOAuthProviderApi(
 			return resolveIssuanceConfirmation(ctx, opts, {
 				client: params.client,
 				dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
+				confirmation: params.confirmation,
 			});
 		},
 		hashToken: (token: string, type: StoreTokenType) =>
@@ -883,6 +885,25 @@ function clientRequiresDpopBoundAccessTokens(client: SchemaClient<Scope[]>) {
 }
 
 /**
+ * A confirmation that is not a DPoP key, such as an mTLS certificate, cannot
+ * stand in for a DPoP binding the client or a resource requires.
+ */
+function assertConfirmationMeetsDpopPolicy(
+	client: SchemaClient<Scope[]>,
+	dpopBoundAccessTokensRequired: boolean,
+	confirmation: Confirmation | undefined,
+) {
+	if (
+		confirmation &&
+		!getConfirmationJkt(confirmation) &&
+		(clientRequiresDpopBoundAccessTokens(client) ||
+			dpopBoundAccessTokensRequired)
+	) {
+		throwInvalidDpopProof("A DPoP-bound access token is required");
+	}
+}
+
+/**
  * Resolves the sender-constraint for an issuance: the `confirmation` the client
  * proved at authentication, or else the request's DPoP proof. With
  * `expectedJkt`, the binding must use that key and a proof is required, as on
@@ -899,6 +920,11 @@ export async function resolveIssuanceConfirmation(
 	},
 ): Promise<Confirmation | undefined> {
 	if (params.confirmation) {
+		assertConfirmationMeetsDpopPolicy(
+			params.client,
+			params.dpopBoundAccessTokensRequired,
+			params.confirmation,
+		);
 		if (
 			params.expectedJkt !== undefined &&
 			getConfirmationJkt(params.confirmation) !== params.expectedJkt
@@ -1348,17 +1374,11 @@ async function createUserTokens(
 	// the fallback. Either way the AS owns the RFC 7800 `cnf`: stamped into a JWT
 	// access token, persisted on opaque access and refresh tokens, and surfaced
 	// as `cnf` at introspection.
-	// A caller's confirmation that is not a DPoP key, such as an mTLS
-	// certificate, cannot stand in for a DPoP binding the client or a resource
-	// requires.
-	if (
-		params.confirmation &&
-		!getConfirmationJkt(params.confirmation) &&
-		(clientRequiresDpopBoundAccessTokens(client) ||
-			grantIssuance.dpopBoundAccessTokensRequired)
-	) {
-		throwInvalidDpopProof("A DPoP-bound access token is required");
-	}
+	assertConfirmationMeetsDpopPolicy(
+		client,
+		grantIssuance.dpopBoundAccessTokensRequired,
+		params.confirmation,
+	);
 	const confirmation =
 		params.confirmation ??
 		(await resolveDpopTokenBinding(ctx, opts, {
