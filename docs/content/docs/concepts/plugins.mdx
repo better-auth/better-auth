@@ -434,9 +434,9 @@ const myPlugin = () => {
 }
 ```
 
-The function runs on every authenticated request, so keep it fast and avoid database reads. Keep these limits in mind:
+The function runs on every session lookup. Keep it fast and avoid database reads. Keep these limits in mind:
 
-* Fields marked `returned: false` may be missing from the session and user it receives, so a field the check depends on must be returned.
+* Fields marked `returned: false` may be missing from the session and user it receives. A field that the check depends on must be returned.
 * It does not run for a session that a plugin places on `ctx.context.session` itself.
 * `getSessionCookie` and `getCookieCache` only read cookies and do not run it. Use `auth.api.getSession` when the result must pass every plugin's check.
 

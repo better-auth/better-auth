@@ -4,7 +4,19 @@ title: Device Bound Sessions
 description: Bind sessions to the device that signed in, so a copied session cookie stops working elsewhere.
 ---
 
-Malware that steals browser cookies can copy a user's session cookie and replay it from another machine. `HttpOnly` and `Secure` do not stop this, because the malware reads the cookie store directly. The DBSC plugin uses [Device Bound Session Credentials](https://w3c.github.io/webappsec-dbsc/) to bind each session to a private key that the browser keeps in the device's secure hardware. Once a session is bound, Better Auth accepts it only together with a short-lived cookie that the browser renews by signing a challenge with that key. The key never leaves the device, so a copied cookie stops working on any other machine.
+Malware that steals browser cookies can copy a user's session cookie and replay it from another machine. `HttpOnly` and `Secure` do not stop this, because the malware reads the cookie store directly. The DBSC plugin uses [Device Bound Session Credentials](https://w3c.github.io/webappsec-dbsc/) to bind each session to a private key that the browser keeps in the device's secure hardware. Once a session is bound, Better Auth accepts it only together with a short-lived cookie that the browser renews by signing a challenge with that key. The key never leaves the device. A copied cookie therefore stops working on any other machine.
+
+## When to use it
+
+Use the plugin when a stolen session would do real harm, such as in admin consoles or apps that hold payment or health data. Browsers without support keep ordinary sessions.
+
+Before you turn it on, check its requirements, costs, and limits:
+
+* Sessions are bound only over HTTPS. The plugin needs a database or secondary storage.
+* While a bound browser is in use, it renews its cookie about every 8 minutes by default. Each renewal reads the session and stores a challenge in the verification table or secondary storage. Every browser sign-in also stores a registration challenge.
+* With the [cookie cache](/docs/concepts/session-management#cookie-cache) on, Better Auth reads an unbound session from storage on each lookup for about the session's first 5 minutes plus the cache's lifetime. A cached copy made before the browser registered is then refused once it registers.
+* It cannot run with `advanced.crossSubDomainCookies` or partitioned cookies.
+* It does not stop malware that runs on the device while the user signs in or uses the app. See [Limits](#limits).
 
 ## Browser support
 
@@ -78,7 +90,7 @@ Chrome only registers keys over HTTPS. Sessions created on a plain `http://local
   </Step>
 </Steps>
 
-## How it works
+## Binding and renewing a session
 
 1. A user signs in. The sign-in response offers the browser a registration challenge.
 2. A supporting browser creates a key pair and sends the public key, signed over the challenge, to `/dbsc/register`.
@@ -106,7 +118,7 @@ When your server forwards a browser request to `auth.api.getSession`, pass the r
 Device binding protects against a copied cookie being used after sign-in, on another device. It does not protect against:
 
 * Malware that is already running on the device when the user signs in. It can register its own key.
-* Someone who copies the browser's cookies before the browser registers its key, which can take up to 5 minutes after a redirect sign-in, and registers a key of their own first. The user's browser is then signed out and must sign in again. A copy that does not register first stops working once the browser registers.
+* Someone who copies the browser's cookies before the browser registers its key, and registers a key of their own first. After a redirect sign-in, the browser can take up to 5 minutes to register. The user's browser is then signed out and must sign in again. A copy that does not register first stops working once the browser registers.
 * Malware or a script running in the user's browser while the user is signed in. It can make requests that the browser signs.
 * A copied bound cookie, for up to `boundCookieMaxAge`, which defaults to 10 minutes.
 
@@ -114,18 +126,17 @@ Some parts of Better Auth are not bound:
 
 * `getSessionCookie` and `getCookieCache` only read cookies, for fast checks in middleware. They do not check the binding, so use `auth.api.getSession` for anything that needs a verified session.
 * Credentials created from a session live on their own, such as JWTs from the [JWT plugin](/docs/plugins/jwt), API keys, and OAuth tokens. Keep their lifetimes short.
-* With the cookie cache enabled, a session can be served from a cached copy made before the key was registered. That copy expires after `session.cookieCache.maxAge`.
 * With `secondaryStorage`, Better Auth rewrites a stored session as a whole. A write to the same session at the moment the browser registers, such as a profile update, can drop the saved key. That session then works as an ordinary session until it ends.
 * Sessions created by [admin impersonation](/docs/plugins/admin) are never bound.
 * Removing the plugin turns bound sessions back into ordinary sessions, which a copied session cookie can use again. Revoke existing sessions when you remove it.
 
 ## Deployment
 
-**Separate app and auth hosts.** When your app runs on a different host than Better Auth on the same site, such as `app.example.com` calling `api.example.com`, add the app's origin to `trustedOrigins`, as `https://app.example.com` or `*.example.com`. Chrome refreshes a bound cookie only for requests started from Better Auth's own origin or from hosts the session lists, and the plugin lists the trusted origins on the same site as Better Auth. Without the entry, users are signed out when the bound cookie expires.
+**Separate app and auth hosts.** When your app runs on a different host than Better Auth on the same site, such as `app.example.com` calling `api.example.com`, add the app's exact origin, such as `https://app.example.com`, to `trustedOrigins`. Avoid a wildcard such as `*.example.com`. Trusted origins can receive redirects and pass the CSRF origin check, and a wildcard extends that trust to every subdomain, including ones you do not control. Chrome refreshes a bound cookie only for requests started from Better Auth's own origin or from hosts the session lists, and the plugin lists the trusted origins on the same site as Better Auth. Without the entry, users are signed out when the bound cookie expires.
 
 **Links from other sites.** When a user follows a link from another site, such as an email, and the bound cookie has expired, Chrome sends that first page request without it. Your server sees no session for that request. The next request the page makes to Better Auth, such as the client's `/get-session` call, renews the cookie. If your server redirects signed-out visitors to a sign-in page, have that page send users who turn out to be signed in back to where they were going.
 
-**Rate limiting.** The plugin allows 120 requests per minute from each client IP to each of `/dbsc/register` and `/dbsc/refresh`. A refresh usually takes one request, or two when the browser was idle longer than `boundCookieMaxAge`. Users behind one shared IP, such as an office network, count against the same limit. If Better Auth cannot read the client IP behind your proxy, every client shares one limit. Configure [`advanced.ipAddress`](/docs/concepts/rate-limit) so each client is counted separately. When Chrome's refresh is rate limited, it sends the request without the bound cookie, and the user appears signed out for that request.
+**Rate limiting.** The plugin allows 120 requests per minute from each client IP to each of `/dbsc/register` and `/dbsc/refresh`. A refresh usually takes one request, or two when the browser was idle longer than `boundCookieMaxAge`. Users behind one shared IP, such as an office network, count against the same limit. If Better Auth cannot read the client IP behind your proxy, every client shares one limit. To count each client separately, set [`advanced.ipAddress`](/docs/reference/security#ip-address-headers) to the header that your proxy overwrites on every request. When Chrome's refresh is rate limited, it sends the request without the bound cookie, and the user appears signed out for that request.
 
 **Several accounts in one browser.** With the [multi-session plugin](/docs/plugins/multi-session), each signed-in account is bound and refreshed separately. Chrome signs at most 6 times every 9 minutes for one site. With four or more bound accounts in one browser, some requests go out without a bound cookie and those accounts appear signed out until a later refresh succeeds.
 
@@ -137,11 +148,11 @@ Some parts of Better Auth are not bound:
 * `advanced.crossSubDomainCookies`. Sharing a bound session across subdomains is not supported yet.
 * `advanced.defaultCookieAttributes.partitioned`. Chrome cannot bind partitioned cookies.
 
-## Options
+## Configuration
 
 `boundCookieMaxAge` <span className="opacity-70">`number`</span>
 
-How long a bound cookie stays valid, in seconds. Defaults to `600`. Chrome replaces the cookie about two minutes before it expires, so this is also the longest a copied bound cookie keeps working. The minimum is `300`: shorter values make Chrome sign on almost every request and exhaust its signing limit.
+How long a bound cookie stays valid, in seconds. Defaults to `600`. Chrome replaces the cookie about two minutes before it expires. The value is also the longest time a copied bound cookie keeps working. The minimum is `300`: shorter values make Chrome sign on almost every request and exhaust its signing limit.
 
 `schema` <span className="opacity-70">`object`</span>
 
