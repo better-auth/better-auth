@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # Pull requests run only the E2E jobs whose Turborepo tasks are affected by the change.
+  # Pull requests run only the E2E jobs whose Turbo tasks are affected by the change.
   # Merge queue runs always run every job. Push runs skip commits the merge queue already
   # tested and run every job for commits that bypassed it. Any failure to compute the set runs every job.
   changes:
@@ -89,27 +89,41 @@ jobs:
             run_all
           fi
 
-          # These files shape every E2E job but are not Turborepo task inputs.
-          if ! ci_changes=$(git diff --name-only "$BASE_SHA"...HEAD -- docker-compose.yml .github/workflows/e2e.yml .github/actions) \
-            || [[ -n "$ci_changes" ]]; then
-            echo "E2E setup changed; running every E2E job."
+          # turbo exits non-zero and prints no task list when it cannot resolve the base commit.
+          if ! changed=$(git diff --name-only "$BASE_SHA"...HEAD) \
+            || ! affected=$(./node_modules/.bin/turbo query affected --tasks e2e:integration e2e:smoke --base "$BASE_SHA" --head HEAD) \
+            || ! tasks=$(jq -ce '[.data.affectedTasks.items[].fullName]' <<< "$affected"); then
+            echo "::warning::Could not compute affected E2E tasks; running every E2E job."
             run_all
           fi
 
-          # turbo exits non-zero and prints no task list when it cannot resolve the base commit.
-          if ! affected=$(./node_modules/.bin/turbo query affected --tasks e2e:integration e2e:smoke --base "$BASE_SHA" --head HEAD) \
-            || ! tasks=$(jq -ce '[.data.affectedTasks.items[].fullName]' <<< "$affected"); then
-            echo "::warning::Could not compute affected E2E tasks; running every E2E job."
+          # These files shape every E2E job but are not Turbo task inputs.
+          if grep -qE '^(docker-compose\.yml|\.github/workflows/e2e\.yml|\.github/actions/)' <<< "$changed"; then
+            echo "E2E setup changed; running every E2E job."
             run_all
           fi
 
           echo "Affected E2E tasks:"
           jq -r '.[]' <<< "$tasks"
 
+          smoke=$(jq 'any(.[]; endswith("#e2e:smoke"))' <<< "$tasks")
+          integration=$(jq 'index("@better-auth-test/integration#e2e:integration") != null' <<< "$tasks")
+          adapters=$(jq -c --argjson tasks "$tasks" '[.[] | select((.packages + "#e2e:integration") as $task | $tasks | index($task) != null)]' <<< "$all_adapters")
+
+          # Sources the E2E suites load by path, which Turbo's package graph does not see.
+          if grep -q '^demo/nextjs/' <<< "$changed"; then
+            echo "Next.js demo changed; the integration job builds and tests it."
+            integration=true
+          fi
+          if grep -qE '^(e2e/adapter/|packages/cli/src/generators/)' <<< "$changed"; then
+            echo "Shared adapter suites or schema generators changed; every adapter suite imports them."
+            adapters=$all_adapters
+          fi
+
           {
-            echo "smoke=$(jq 'any(.[]; endswith("#e2e:smoke"))' <<< "$tasks")"
-            echo "integration=$(jq 'index("@better-auth-test/integration#e2e:integration") != null' <<< "$tasks")"
-            echo "adapters=$(jq -c --argjson tasks "$tasks" '[.[] | select((.packages + "#e2e:integration") as $task | $tasks | index($task) != null)]' <<< "$all_adapters")"
+            echo "smoke=$smoke"
+            echo "integration=$integration"
+            echo "adapters=$adapters"
             echo "allow-skips=true"
           } >> "$GITHUB_OUTPUT"
 
