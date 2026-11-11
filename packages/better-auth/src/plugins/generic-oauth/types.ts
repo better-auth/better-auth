@@ -166,7 +166,7 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 * If provided, this function will be used instead of the default token exchange logic.
 	 * This is useful for providers with non-standard token endpoints.
 	 * @param data - Authorization code exchange parameters, plus the configured
-	 * or discovered `tokenUrl`
+	 * or discovered `tokenUrl` (`undefined` when neither is available)
 	 * @returns A promise that resolves to OAuth2Tokens
 	 */
 	getToken?:
