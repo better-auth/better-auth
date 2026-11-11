@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "better-auth";
+import type { AuthContext, BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
@@ -239,6 +239,27 @@ function assertNoAdditionalFieldCollisions(options?: SSOOptions) {
 	}
 }
 
+/**
+ * SLO records are written with the session's expiry at sign-in. Move it when a
+ * refresh extends the session, so expired-row cleanup doesn't drop them early.
+ */
+async function extendSAMLSessionRecords(
+	ctx: AuthContext,
+	session: { id: string; expiresAt: Date },
+) {
+	const lookupKey = `${SAML_SESSION_BY_ID_PREFIX}${session.id}`;
+	const lookup = await ctx.internalAdapter.findVerificationValue(lookupKey);
+	const expiresAt = new Date(session.expiresAt);
+	if (!lookup || new Date(lookup.expiresAt) >= expiresAt) return;
+	// Lookup row last: it gates the early return, so a failed write retries.
+	await ctx.internalAdapter.updateVerificationByIdentifier(lookup.value, {
+		expiresAt,
+	});
+	await ctx.internalAdapter.updateVerificationByIdentifier(lookupKey, {
+		expiresAt,
+	});
+}
+
 export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };
@@ -255,6 +276,7 @@ export function sso<
 	};
 	options: NoInfer<O>;
 };
+
 export function sso<O extends SSOOptions>(
 	options?: O | undefined,
 ): {
@@ -306,13 +328,32 @@ export function sso<O extends SSOOptions>(
 		version: PACKAGE_VERSION,
 		init(ctx) {
 			const existing = ctx.skipOriginCheck;
-			if (existing === true) {
-				return {};
-			}
 			const existingPaths = Array.isArray(existing) ? existing : [];
 			return {
-				context: {
-					skipOriginCheck: [...existingPaths, ...SAML_SKIP_ORIGIN_CHECK_PATHS],
+				...(existing !== true && {
+					context: {
+						skipOriginCheck: [
+							...existingPaths,
+							...SAML_SKIP_ORIGIN_CHECK_PATHS,
+						],
+					},
+				}),
+				options: {
+					databaseHooks: {
+						session: {
+							update: {
+								async after(session) {
+									if (!options?.saml?.enableSingleLogout) return;
+									await extendSAMLSessionRecords(ctx, session).catch(
+										(error: unknown) =>
+											ctx.logger.warn("Failed to extend SAML session records", {
+												error,
+											}),
+									);
+								},
+							},
+						},
+					},
 				},
 			};
 		},

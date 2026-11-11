@@ -547,7 +547,9 @@ export const createAdapterFactory =
 					if (useNumberId) {
 						if (Array.isArray(value)) {
 							newValue = value.map(Number);
-						} else {
+						} else if (value !== null) {
+							// `Number(null)` is 0, which would turn `eq null` and `ne null`
+							// into comparisons with 0.
 							newValue = Number(value);
 						}
 					}
@@ -827,7 +829,6 @@ export const createAdapterFactory =
 					where,
 					limit: joinConfig.limit,
 				});
-				console.error(error);
 				throw error;
 			}
 			return result;

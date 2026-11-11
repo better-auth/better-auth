@@ -191,6 +191,8 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     <Callout type="warn">
       The wildcard patterns for `exp://` should only be used in development. In production, use your app's specific scheme (e.g., `myapp://`).
     </Callout>
+
+    The authorization proxy only redirects to the authorization endpoint of a configured social or generic OAuth provider, or of an SSO provider on a trusted origin. To sign in through an SSO identity provider, add its origin to `trustedOrigins`.
   </Step>
 
   <Step>

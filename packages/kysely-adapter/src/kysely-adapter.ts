@@ -15,6 +15,7 @@ import {
 	registerSchemaCheck,
 } from "@better-auth/core/db/internal";
 import { logger } from "@better-auth/core/env";
+import { BetterAuthError } from "@better-auth/core/error";
 import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
@@ -213,9 +214,13 @@ export const kyselyAdapter = (
 							.executeTakeFirst();
 					}
 
-					await builder.execute();
 					// Inserts: cascading strategy inside a transaction
 					const fetchInserted = async (trx: any) => {
+						// Insert on the same transaction so a failed read-back rolls it back.
+						// LAST_INSERT_ID() cannot identify this insert on another connection.
+						const insertResult = await trx.executeQuery(builder);
+						const insertId: bigint | undefined = insertResult.insertId;
+
 						// 1. Known id from the data
 						if (values.id) {
 							return await trx
@@ -230,23 +235,26 @@ export const kyselyAdapter = (
 								.executeTakeFirst();
 						}
 
-						// 2. Serial auto-increment: LAST_INSERT_ID()
+						// Serial inserts cannot be identified safely by field matching.
 						if (options.advanced?.database?.generateId === "serial") {
-							const lastIdResult =
-								await sql`SELECT LAST_INSERT_ID() as id`.execute(trx);
-							const lastId = (lastIdResult.rows[0] as any)?.id;
-							if (lastId) {
-								return await trx
-									.selectFrom(model)
-									.selectAll()
-									.where(
-										getFieldName({ model: modelKey, field: "id" }),
-										"=",
-										lastId,
-									)
-									.limit(1)
-									.executeTakeFirst();
+							if (insertId === undefined) {
+								throw new BetterAuthError(
+									`[Kysely Adapter] MySQL did not report an auto-increment id for the inserted "${model}" row. ` +
+										'With generateId: "serial" the "id" column must be AUTO_INCREMENT.',
+								);
 							}
+							return await trx
+								.selectFrom(model)
+								.selectAll()
+								.where(
+									getFieldName({ model: modelKey, field: "id" }),
+									"=",
+									insertId <= BigInt(Number.MAX_SAFE_INTEGER)
+										? Number(insertId)
+										: insertId.toString(),
+								)
+								.limit(1)
+								.executeTakeFirst();
 						}
 
 						// 3. Unique column lookup via Better Auth schema

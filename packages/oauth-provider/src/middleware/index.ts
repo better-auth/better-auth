@@ -14,4 +14,11 @@ export const publicSessionMiddleware = (opts: OAuthOptions<Scope[]>) =>
 				error: "invalid_signature",
 			});
 		}
+		// The signed query authorizes a lookup of its own client only.
+		if (new URLSearchParams(query).get("client_id") !== ctx.body.client_id) {
+			throw new APIError("UNAUTHORIZED", {
+				error: "invalid_client",
+				error_description: "client_id does not match the signed oauth_query",
+			});
+		}
 	});

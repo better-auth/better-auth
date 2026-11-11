@@ -19,6 +19,7 @@ import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { createAccessControl } from "../access";
+import { phoneNumber } from "../phone-number";
 import { admin } from "./admin";
 import { ADMIN_ERROR_CODES, adminClient } from "./client";
 import type { UserWithRole } from "./types";
@@ -2034,6 +2035,38 @@ describe("access control", async () => {
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_SET_USERS_EMAIL");
 	});
 
+	it.for([{ phoneNumber: "+15550000001" }, { phoneNumberVerified: true }])(
+		"should require user:set-phone to update %o via update-user",
+		async (data) => {
+			const supportHeaders = new Headers();
+			await client.signUp.email(
+				{
+					email: `support-phone-${Object.keys(data)[0]}@test.com`,
+					password: "password",
+					name: "Support",
+				},
+				{
+					onSuccess: cookieSetter(supportHeaders),
+				},
+			);
+			const { user: adminUser } = await signInWithTestUser();
+
+			const res = await client.admin.updateUser(
+				{
+					userId: adminUser.id,
+					data,
+				},
+				{
+					headers: supportHeaders,
+				},
+			);
+			expect(res.error?.status).toBe(403);
+			expect(res.error?.code).toBe(
+				"YOU_ARE_NOT_ALLOWED_TO_SET_USERS_PHONE_NUMBER",
+			);
+		},
+	);
+
 	it("should validate on the client", async () => {
 		const canCreateOrder = client.admin.checkRolePermission({
 			role: "admin",
@@ -2811,5 +2844,151 @@ describe("admin create-user password length", async () => {
 		});
 
 		expect(hash).not.toHaveBeenCalled();
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/11706
+ */
+describe("admin create-user failures", async () => {
+	const { auth } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: {
+				hash: async (password) => {
+					if (password === "rejected-password") {
+						throw new Error("rejected by hasher");
+					}
+					return `hashed:${password}`;
+				},
+				verify: async ({ hash, password }) => hash === `hashed:${password}`,
+			},
+		},
+		databaseHooks: {
+			account: {
+				create: {
+					before: async (account) => {
+						if (account.password === "hashed:rejected-account") {
+							throw new Error("rejected by account hook");
+						}
+					},
+				},
+			},
+		},
+		plugins: [admin()],
+	});
+
+	it("should not leave a user behind when hashing the password fails", async () => {
+		const body = {
+			email: "hash-first@test.com",
+			name: "Hash First",
+		};
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					...body,
+					password: "rejected-password",
+				},
+			}),
+		).rejects.toThrow("rejected by hasher");
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					...body,
+					password: "accepted-password",
+				},
+			}),
+		).resolves.toMatchObject({
+			user: {
+				email: body.email,
+			},
+		});
+	});
+
+	it("should not leave a user behind when creating the credential account fails", async () => {
+		const body = {
+			email: "link-fails@test.com",
+			name: "Link Fails",
+		};
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					...body,
+					password: "rejected-account",
+				},
+			}),
+		).rejects.toThrow("rejected by account hook");
+
+		await expect(
+			auth.api.createUser({
+				body: {
+					...body,
+					password: "accepted-password",
+				},
+			}),
+		).resolves.toMatchObject({
+			user: {
+				email: body.email,
+			},
+		});
+	});
+});
+
+describe("admin update-user phone number with default roles", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				admin(),
+				phoneNumber({
+					async sendOTP() {},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name !== "Admin") return;
+							return {
+								data: {
+									...user,
+									role: "admin",
+								},
+							};
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+
+	it("lets the default admin role change another user's phone number", async () => {
+		const { headers } = await signInWithTestUser();
+		const target = await auth.api.signUpEmail({
+			body: {
+				email: "phone-target@test.com",
+				password: "password",
+				name: "Target",
+			},
+		});
+
+		const updated = await auth.api.adminUpdateUser({
+			body: {
+				userId: target.user.id,
+				data: {
+					phoneNumber: "+15550000003",
+				},
+			},
+			headers,
+		});
+
+		expect(updated).toMatchObject({ phoneNumber: "+15550000003" });
 	});
 });

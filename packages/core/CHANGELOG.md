@@ -1,5 +1,49 @@
 # @better-auth/core
 
+## 1.7.20
+
+### Patch Changes
+
+- [#11904](https://github.com/better-auth/better-auth/pull/11904) [`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth provider deployments served over plain HTTP on a private network, such as a LAN address, a VPN, or a private DNS name, can now accept `http` redirect URIs through the new `allowInsecureRedirectUri` option. Return `true` from it for origins you control. The same option lets web clients use `localhost` callbacks during development. Without the option, redirect URI validation is unchanged.
+
+  If your issuer (`baseURL`, or `jwt.issuer` when set) uses `http` on a non-loopback host, discovery and the `iss` authorization response parameter now report it as configured instead of rewriting it to `https`. They now match the issuer in issued tokens, so OpenID Connect sign-ins no longer fail on the mismatch. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+
+  When an authorization request uses a registered `http` redirect URI that the HTTPS policy rejects, the error now appears on the server error page instead of being redirected to that URI.
+
+  Client registration and updates now reject post-logout redirect URIs that contain credentials, such as `https://user:pass@example.com/logged-out`, matching the existing rule for redirect URIs.
+
+## 1.7.19
+
+### Patch Changes
+
+- [#12317](https://github.com/better-auth/better-auth/pull/12317) [`8412a5f`](https://github.com/better-auth/better-auth/commit/8412a5f43b724648b3faaa452bec0a6ba8e01765) Thanks [@bytaesu](https://github.com/bytaesu)! - Failed fallback join queries are now reported only through the configured logger, instead of also printing the raw database error (including SQL and bound values) with `console.error`.
+
+- [#12369](https://github.com/better-auth/better-auth/pull/12369) [`34ee100`](https://github.com/better-auth/better-auth/commit/34ee1008d8269d32b875e2743b9805090863f2f4) Thanks [@bytaesu](https://github.com/bytaesu)! - `getAccessToken` and `refreshToken` now fail when a provider refuses a token refresh with a 200 status, as GitHub does, instead of returning the expired access token.
+
+## 1.7.18
+
+### Patch Changes
+
+- [#12249](https://github.com/better-auth/better-auth/pull/12249) [`9342a73`](https://github.com/better-auth/better-auth/commit/9342a73e3635719011828c798e276c0f908792de) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource servers that set `verifyOptions.typ`, such as `"at+jwt"`, together with `remoteVerify` now accept tokens that introspection reports as active. Previously every token was rejected, because the `typ` check ran against the introspection response, which has no JWT header. The local JWT check still enforces `typ`. That check runs only when `jwksUrl` is set and `remoteVerify.force` is not `true`. Otherwise `typ` is not enforced, and the introspection result alone decides. This also fixes MCP servers that set `jwtVerifyOptions.typ` with `remoteVerify`.
+
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Generic OAuth providers whose discovery document has a `jwks_uri` now reject a user profile whose `sub` differs from the ID token's `sub`. Direct ID-token sign-in and linking with a generic OAuth provider now resolve the profile from the verified ID token only and ignore a submitted access or refresh token.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Account linking and new OAuth users now count an email as verified only when the provider claim is `true` or the string `"true"`, which covers generic OAuth, Cognito, and Microsoft Entra ID claims sent as strings. Any other `emailVerified` value, including a non-boolean value returned from `mapProfileToUser` such as `1`, now reads as unverified.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Zoom social provider now applies its configured provider options, so `disableSignUp`, `requireEmailVerification`, and `overrideUserInfoOnSignIn` take effect for Zoom sign-ins.
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12106](https://github.com/better-auth/better-auth/pull/12106) [`9ef0c5b`](https://github.com/better-auth/better-auth/commit/9ef0c5bda9c5ebc46d2c5d93fc0874893d1c6256) Thanks [@bytaesu](https://github.com/bytaesu)! - Built-in social providers no longer follow HTTP redirects on token exchange, refresh, verification, and signing key (JWKS) requests, matching the other server-side OAuth requests.
+
 ## 1.7.14
 
 ### Patch Changes

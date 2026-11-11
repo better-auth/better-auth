@@ -8,11 +8,13 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterFetch } from "@better-fetch/fetch";
-import { generateKeyPair, SignJWT } from "jose";
+import type { JWK } from "jose";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import type {
 	MutableResponse,
+	MutableToken,
 	TokenRequestIncomingMessage,
 } from "oauth2-mock-server";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -24,6 +26,7 @@ import {
 	describe,
 	expect,
 	it,
+	onTestFinished,
 	vi,
 } from "vitest";
 import { createAuthClient } from "../../client";
@@ -42,6 +45,7 @@ import { microsoftEntraId } from "./providers/microsoft-entra-id";
 import { okta } from "./providers/okta";
 import { slack } from "./providers/slack";
 import { yandex } from "./providers/yandex";
+import type { GenericOAuthConfig } from "./types";
 
 describe("oauth2", async () => {
 	const providerId = "test";
@@ -134,6 +138,37 @@ describe("oauth2", async () => {
 		};
 		userInfoResponse.statusCode = 200;
 	});
+
+	/**
+	 * Issues the next ID token for `sub`, so it names the same subject as the
+	 * UserInfo response.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#UserInfoResponse
+	 */
+	function issueIdTokenFor(sub: unknown) {
+		const alignIdToken = (token: MutableToken) => {
+			// Only the ID token carries an audience.
+			if (!token.payload.aud) return;
+			token.payload.sub = String(sub);
+			server.service.off("beforeTokenSigning", alignIdToken);
+		};
+		server.service.on("beforeTokenSigning", alignIdToken);
+		onTestFinished(() => {
+			server.service.off("beforeTokenSigning", alignIdToken);
+		});
+	}
+
+	/**
+	 * Answers the next UserInfo request with `claims` and issues the next ID
+	 * token for the same subject.
+	 */
+	function mockUserInfo(claims: Record<string, unknown>) {
+		issueIdTokenFor(claims.sub);
+		server.service.once("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = claims;
+			userInfoResponse.statusCode = 200;
+		});
+	}
 
 	async function simulateOAuthFlow(
 		authUrl: string,
@@ -245,6 +280,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should complete full sign-in flow and return correct session data", async () => {
+		issueIdTokenFor("oauth2");
 		const headers = new Headers();
 		const signInRes = await authClient.signIn.social({
 			provider: "test",
@@ -284,15 +320,12 @@ describe("oauth2", async () => {
 	});
 
 	it("should redirect to the provider and handle the response for a new user", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "oauth2-2@test.com",
-				name: "OAuth2 Test 2",
-				sub: "oauth2-2",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "oauth2-2@test.com",
+			name: "OAuth2 Test 2",
+			sub: "oauth2-2",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const headers = new Headers();
@@ -371,14 +404,11 @@ describe("oauth2", async () => {
 			fetchOptions: { customFetchImpl: localFetch },
 		});
 
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "encode-callback@test.com",
-				name: "Encode Callback",
-				sub: "encode-callback",
-				email_verified: false,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "encode-callback@test.com",
+			name: "Encode Callback",
+			sub: "encode-callback",
+			email_verified: false,
 		});
 
 		const callbackURL = "http://localhost:3000/welcome?ref=oauth&plan=pro";
@@ -441,15 +471,12 @@ describe("oauth2", async () => {
 		});
 
 		const newUserEmail = "first-time-generic-oauth@test.com";
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: newUserEmail,
-				name: "First Time SSO",
-				sub: "first-time-sso",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: newUserEmail,
+			name: "First Time SSO",
+			sub: "first-time-sso",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const headers = new Headers();
@@ -539,14 +566,11 @@ describe("oauth2", async () => {
 		expect(firstContext.options.database).toBeUndefined();
 
 		async function completeSignIn(providerId: string, accountId: string) {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email: sharedEmail,
-					name: "Implicit Link User",
-					sub: accountId,
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
+			mockUserInfo({
+				email: sharedEmail,
+				name: "Implicit Link User",
+				sub: accountId,
+				email_verified: true,
 			});
 
 			const stateHeaders = new Headers();
@@ -633,14 +657,11 @@ describe("oauth2", async () => {
 			}
 		};
 		server.service.on("beforeResponse", omitExpiresIn);
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "exp-fallback@test.com",
-				name: "Expires In Fallback",
-				sub: "exp-fallback",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "exp-fallback@test.com",
+			name: "Expires In Fallback",
+			sub: "exp-fallback",
+			email_verified: true,
 		});
 
 		try {
@@ -729,14 +750,11 @@ describe("oauth2", async () => {
 			}
 		};
 		server.service.on("beforeResponse", omitExpiresIn);
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "exp-none@test.com",
-				name: "No Fallback",
-				sub: "exp-none",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "exp-none@test.com",
+			name: "No Fallback",
+			sub: "exp-none",
+			email_verified: true,
 		});
 
 		try {
@@ -1007,14 +1025,11 @@ describe("oauth2", async () => {
 			});
 
 			async function signIn(providerId: string) {
-				server.service.once("beforeUserinfo", (userInfoResponse) => {
-					userInfoResponse.body = {
-						email: `${providerId}@test.com`,
-						name: providerId,
-						sub: providerId,
-						email_verified: true,
-					};
-					userInfoResponse.statusCode = 200;
+				mockUserInfo({
+					email: `${providerId}@test.com`,
+					name: providerId,
+					sub: providerId,
+					email_verified: true,
 				});
 				const headers = new Headers();
 				const signInRes = await client.signIn.social({
@@ -1145,6 +1160,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
+		issueIdTokenFor("oauth2");
 		const headers = new Headers();
 		const res = await authClient.signIn.social({
 			provider: "test",
@@ -1214,6 +1230,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should work with custom redirect uri", async () => {
+		issueIdTokenFor("oauth2");
 		const { customFetchImpl } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -1257,15 +1274,12 @@ describe("oauth2", async () => {
 	});
 
 	it("should not create user when sign ups are disabled", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "oauth2-signup-disabled@test.com",
-				name: "OAuth2 Test Signup Disabled",
-				sub: "oauth2-signup-disabled",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "oauth2-signup-disabled@test.com",
+			name: "OAuth2 Test Signup Disabled",
+			sub: "oauth2-signup-disabled",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -1337,14 +1351,11 @@ describe("oauth2", async () => {
 			},
 		});
 
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "generic-unverified@test.com",
-				name: "Generic Unverified",
-				sub: "generic-unverified",
-				email_verified: false,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "generic-unverified@test.com",
+			name: "Generic Unverified",
+			sub: "generic-unverified",
+			email_verified: false,
 		});
 
 		const headers = new Headers();
@@ -1366,15 +1377,12 @@ describe("oauth2", async () => {
 	});
 
 	it("should create user when sign ups are disabled and sign up is requested", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "oauth2-signup-disabled-and-requested@test.com",
-				name: "OAuth2 Test Signup Disabled And Requested",
-				sub: "oauth2-signup-disabled-and-requested",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "oauth2-signup-disabled-and-requested@test.com",
+			name: "OAuth2 Test Signup Disabled And Requested",
+			sub: "oauth2-signup-disabled-and-requested",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -1423,15 +1431,12 @@ describe("oauth2", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9702
 	 */
 	it("should redirect to cross-origin errorCallbackURL when a session hook throws APIError", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "hook-reject@test.com",
-				name: "Hook Reject User",
-				sub: "hook-reject",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "hook-reject@test.com",
+			name: "Hook Reject User",
+			sub: "hook-reject",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance(
@@ -1548,7 +1553,76 @@ describe("oauth2", async () => {
 		expect(receivedHeaders["x-custom-header"]).toBe("test-value");
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-6
+	 */
+	it("should pass authorization headers on token refresh", async () => {
+		const refreshHeaders: Record<string, unknown>[] = [];
+		const captureRefresh = (
+			_response: MutableResponse,
+			req: TokenRequestIncomingMessage,
+		) => {
+			if (req.body?.grant_type === "refresh_token") {
+				refreshHeaders.push(req.headers);
+			}
+		};
+		server.service.on("beforeResponse", captureRefresh);
+		mockUserInfo({
+			email: "refresh-headers@test.com",
+			name: "Refresh Headers",
+			sub: "refresh-headers",
+			email_verified: true,
+		});
+
+		try {
+			const { client, customFetchImpl } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "refresh-headers",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								clientSecret,
+								pkce: true,
+								authorizationHeaders: { "X-Custom-Header": "test-value" },
+							},
+						],
+					}),
+				],
+			});
+
+			const headers = new Headers();
+			const signInRes = await client.signIn.social({
+				provider: "refresh-headers",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { headers: postCallbackHeaders } = await simulateOAuthFlow(
+				signInRes.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			const accounts = await client.listAccounts({
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			const accountId = accounts.data?.[0]?.id;
+			expect(accountId).toBeDefined();
+			const refreshed = await client.refreshToken({
+				accountId: accountId!,
+				fetchOptions: { headers: postCallbackHeaders },
+			});
+			expect(refreshed.data?.accessToken).toBeTruthy();
+			expect(refreshHeaders).toHaveLength(1);
+			expect(refreshHeaders[0]?.["x-custom-header"]).toBe("test-value");
+		} finally {
+			server.service.off("beforeResponse", captureRefresh);
+		}
+	});
+
 	it("should delete oauth user with verification flow without password", async () => {
+		issueIdTokenFor("oauth2");
 		let token = "";
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			user: {
@@ -1640,15 +1714,12 @@ describe("oauth2", async () => {
 		const numericAccountId = 123456789;
 		const userEmail = "numeric-id-test@test.com";
 
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: userEmail,
-				name: "Numeric ID Test User",
-				sub: numericAccountId,
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: userEmail,
+			name: "Numeric ID Test User",
+			sub: numericAccountId,
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
@@ -1708,15 +1779,12 @@ describe("oauth2", async () => {
 			userId: userId,
 		});
 
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: userEmail,
-				name: "Numeric ID Test User",
-				sub: numericAccountId,
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: userEmail,
+			name: "Numeric ID Test User",
+			sub: numericAccountId,
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const secondSignIn = await authClient.signIn.social({
@@ -1911,6 +1979,138 @@ describe("oauth2", async () => {
 		expect(accounts).toHaveLength(0);
 	});
 
+	describe("custom getUserInfo against a verified ID token", () => {
+		async function signInWithCustomProfile(
+			providerId: string,
+			profile: Record<string, unknown>,
+			config: Partial<GenericOAuthConfig> = {},
+		) {
+			const { client, customFetchImpl, cookieSetter, auth } =
+				await getTestInstance({
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId,
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId,
+									clientSecret,
+									pkce: true,
+									getUserInfo: async () => ({
+										email: `${providerId}@test.com`,
+										name: "Custom Profile",
+										emailVerified: true,
+										...profile,
+									}),
+									accountSubject: ({ profile }) =>
+										String(profile.sub ?? profile.account_id),
+									...config,
+								},
+							],
+						}),
+					],
+				});
+			const headers = new Headers();
+			const signIn = await client.signIn.social({
+				provider: providerId,
+				callbackURL: "http://localhost:3000/dashboard",
+				newUserCallbackURL: "http://localhost:3000/new_user",
+				fetchOptions: {
+					onSuccess: cookieSetter(headers),
+				},
+			});
+			const flow = await simulateOAuthFlow(
+				signIn.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+			const ctx = await auth.$context;
+			const accounts = await ctx.adapter.findMany<Account>({
+				model: "account",
+				where: [{ field: "providerId", value: providerId }],
+			});
+			return { callbackURL: flow.callbackURL, accounts, auth };
+		}
+
+		it("rejects a custom profile whose sub differs from the ID token", async () => {
+			issueIdTokenFor("id-token-subject");
+			const { callbackURL, accounts } = await signInWithCustomProfile(
+				"custom-sub-mismatch",
+				{ sub: "other-subject" },
+			);
+			expect(callbackURL).toContain("error=unable_to_get_user_info");
+			expect(accounts).toHaveLength(0);
+		});
+
+		it("accepts a custom profile that carries no sub to compare", async () => {
+			issueIdTokenFor("id-token-subject");
+			const { callbackURL, accounts } = await signInWithCustomProfile(
+				"custom-no-sub",
+				{ account_id: "custom-account" },
+			);
+			expect(callbackURL).toBe("http://localhost:3000/new_user");
+			expect(accounts.map((account) => account.accountId)).toEqual([
+				"custom-account",
+			]);
+		});
+
+		it("keeps /account-info working on stored tokens for a custom profile without sub", async () => {
+			issueIdTokenFor("id-token-subject");
+			const { accounts, auth } = await signInWithCustomProfile(
+				"custom-no-sub-account-info",
+				{ account_id: "custom-account" },
+			);
+			const [account] = accounts;
+			const info = await auth.api.accountInfo({
+				query: {
+					accountId: account!.id,
+					userId: account!.userId,
+				},
+			});
+			expect(info?.data).toMatchObject({ account_id: "custom-account" });
+		});
+
+		it("keeps /account-info working on refreshed tokens for a custom profile without sub", async () => {
+			issueIdTokenFor("id-token-subject");
+			const { accounts, auth } = await signInWithCustomProfile(
+				"custom-no-sub-account-info-refresh",
+				{ account_id: "custom-account" },
+			);
+			const [account] = accounts;
+			const ctx = await auth.$context;
+			await ctx.internalAdapter.updateAccount(account!.id, {
+				accessTokenExpiresAt: new Date(Date.now() - 60_000),
+				refreshToken: "stored-refresh-token",
+			});
+			const info = await auth.api.accountInfo({
+				query: {
+					accountId: account!.id,
+					userId: account!.userId,
+				},
+			});
+			expect(info?.data).toMatchObject({ account_id: "custom-account" });
+			const [refreshed] = await ctx.internalAdapter.findAccounts(
+				account!.userId,
+			);
+			expect(refreshed?.accessTokenExpiresAt?.getTime()).toBeGreaterThan(
+				Date.now(),
+			);
+		});
+
+		it("takes the account subject from the ID token when a custom profile has no sub", async () => {
+			issueIdTokenFor("id-token-subject");
+			const { callbackURL, accounts } = await signInWithCustomProfile(
+				"custom-no-sub-default-subject",
+				{ account_id: "custom-account" },
+				{ accountSubject: undefined },
+			);
+			expect(callbackURL).toBe("http://localhost:3000/new_user");
+			expect(accounts.map((account) => account.accountId)).toEqual([
+				"id-token-subject",
+			]);
+		});
+	});
+
 	it("does not switch a plain OAuth account from id to sub", async () => {
 		const { customFetchImpl, auth, cookieSetter, client } =
 			await getTestInstance({
@@ -1975,15 +2175,13 @@ describe("oauth2", async () => {
 	});
 
 	it("completes sign-in when accountSubject derives identity from a non-standard profile field", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				username: "derived-id-user",
-				email: "derived-id@test.com",
-				name: "Derived Id User",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			sub: "derived-id-sub",
+			username: "derived-id-user",
+			email: "derived-id@test.com",
+			name: "Derived Id User",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
@@ -2051,16 +2249,13 @@ describe("oauth2", async () => {
 	});
 
 	it("uses the OIDC sub when the userinfo id field is empty", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				sub: "abc",
-				id: "",
-				email: "sub-over-empty-id@test.com",
-				name: "Sub Over Empty Id",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			sub: "abc",
+			id: "",
+			email: "sub-over-empty-id@test.com",
+			name: "Sub Over Empty Id",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
@@ -2120,16 +2315,13 @@ describe("oauth2", async () => {
 	});
 
 	it("uses the OIDC sub when the userinfo id field is null", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				sub: "null-id-sub",
-				id: null,
-				email: "sub-over-null-id@test.com",
-				name: "Sub Over Null Id",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			sub: "null-id-sub",
+			id: null,
+			email: "sub-over-null-id@test.com",
+			name: "Sub Over Null Id",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
@@ -2189,16 +2381,13 @@ describe("oauth2", async () => {
 	});
 
 	it("uses the OIDC sub as the account subject when userinfo also has an id field", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				sub: "subject-1",
-				id: "raw-id-1",
-				email: "id-over-sub@test.com",
-				name: "Id Over Sub",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			sub: "subject-1",
+			id: "raw-id-1",
+			email: "id-over-sub@test.com",
+			name: "Id Over Sub",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
@@ -2288,15 +2477,12 @@ describe("oauth2", async () => {
 			profileId: string,
 			name: string,
 		) {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					sub: "workforce-subject",
-					id: profileId,
-					email: "employee@workforce.test",
-					name,
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
+			mockUserInfo({
+				sub: "workforce-subject",
+				id: profileId,
+				email: "employee@workforce.test",
+				name,
+				email_verified: true,
 			});
 			const stateHeaders = new Headers();
 			const response = await client.signIn.social({
@@ -2363,16 +2549,13 @@ describe("oauth2", async () => {
 		});
 
 		async function signIn(subject: string, email: string) {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					subject,
-					sub: subject,
-					id: "reused-profile-id",
-					email,
-					name: subject,
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
+			mockUserInfo({
+				subject,
+				sub: subject,
+				id: "reused-profile-id",
+				email,
+				name: subject,
+				email_verified: true,
 			});
 			const stateHeaders = new Headers();
 			const response = await client.signIn.social({
@@ -2479,16 +2662,13 @@ describe("oauth2", async () => {
 	it("should handle accountSubject returning a numeric subject", async () => {
 		const numericProfileId = 111222333;
 
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "map-profile-numeric@test.com",
-				name: "Map Profile Numeric User",
-				sub: "string-sub-id",
-				user_id: numericProfileId,
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "map-profile-numeric@test.com",
+			name: "Map Profile Numeric User",
+			sub: "string-sub-id",
+			user_id: numericProfileId,
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, auth, cookieSetter } = await getTestInstance({
@@ -2649,12 +2829,9 @@ describe("oauth2", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/9124
 	 */
 	it("redirects with email_not_found when both the provider and mapProfileToUser omit email", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				sub: "no-email-no-synthesis",
-				name: "No Email User",
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			sub: "no-email-no-synthesis",
+			name: "No Email User",
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -2696,15 +2873,12 @@ describe("oauth2", async () => {
 	});
 
 	it("should work with cookie-based state storage", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "oauth2-cookie-state@test.com",
-				name: "OAuth2 Cookie State",
-				sub: "oauth2-cookie-state",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "oauth2-cookie-state@test.com",
+			name: "OAuth2 Cookie State",
+			sub: "oauth2-cookie-state",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -3845,15 +4019,12 @@ describe("oauth2", async () => {
 	// This test is redundant as the GET-based and custom provider tests verify raw data preservation
 
 	it("should handle errors in custom getToken", async () => {
-		server.service.once("beforeUserinfo", (userInfoResponse) => {
-			userInfoResponse.body = {
-				email: "error-test@test.com",
-				name: "Error Test User",
-				sub: "error-test",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
+		mockUserInfo({
+			email: "error-test@test.com",
+			name: "Error Test User",
+			sub: "error-test",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
 		});
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -4187,15 +4358,12 @@ describe("oauth2", async () => {
 
 	describe("storeIdentifier: hashed", () => {
 		it("should complete oauth flow when verification identifiers are hashed", async () => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email: "hashed-oauth@test.com",
-					name: "Hashed OAuth Test",
-					sub: "hashed-oauth",
-					picture: "https://test.com/picture.png",
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
+			mockUserInfo({
+				email: "hashed-oauth@test.com",
+				name: "Hashed OAuth Test",
+				sub: "hashed-oauth",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -4340,6 +4508,7 @@ describe("oauth2", async () => {
 
 	describe("tokenEndpointAuth", () => {
 		it("should send client_assertion instead of client_secret at the token endpoint", async () => {
+			issueIdTokenFor("oauth2");
 			const assertion = "test-client-assertion-jwt";
 			const getClientAssertion = vi.fn(async () => assertion);
 			let capturedBody: Record<string, unknown> | null = null;
@@ -4611,15 +4780,12 @@ describe("oauth2", async () => {
 
 	describe("validateUserInfo callback", () => {
 		it("should reject sign-in with provider metadata and raw profile", async () => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email: "bad@blocked.com",
-					name: "Bad User",
-					sub: "bad-oauth",
-					email_verified: true,
-					custom_field: "custom-value",
-				};
-				userInfoResponse.statusCode = 200;
+			mockUserInfo({
+				email: "bad@blocked.com",
+				name: "Bad User",
+				sub: "bad-oauth",
+				email_verified: true,
+				custom_field: "custom-value",
 			});
 
 			let capturedProfile: unknown;
@@ -4684,14 +4850,11 @@ describe("oauth2", async () => {
 		});
 
 		it("should work in stateless mode (no database)", async () => {
-			server.service.once("beforeUserinfo", (userInfoResponse) => {
-				userInfoResponse.body = {
-					email: "stateless@blocked.com",
-					name: "Stateless User",
-					sub: "stateless-oauth",
-					email_verified: true,
-				};
-				userInfoResponse.statusCode = 200;
+			mockUserInfo({
+				email: "stateless@blocked.com",
+				name: "Stateless User",
+				sub: "stateless-oauth",
+				email_verified: true,
 			});
 
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -5196,6 +5359,146 @@ describe("oauth2", async () => {
 			expect(res.data).toMatchObject({ token: expect.any(String) });
 		});
 
+		describe("client-submitted id_token with an access token", () => {
+			const issueIdToken = (
+				sub: string,
+				claims: Record<string, unknown> = {},
+			) =>
+				server.issuer.buildToken({
+					scopesOrTransform: (_header, payload) => {
+						Object.assign(payload, {
+							aud: clientId,
+							sub,
+							...claims,
+						});
+					},
+				});
+
+			/**
+			 * Counts UserInfo requests until the test finishes.
+			 */
+			function countUserInfoRequests() {
+				const requests = { count: 0 };
+				const count = () => {
+					requests.count++;
+				};
+				server.service.on("beforeUserinfo", count);
+				onTestFinished(() => {
+					server.service.off("beforeUserinfo", count);
+				});
+				return requests;
+			}
+
+			it("rejects a sign-in whose UserInfo sub differs from the ID token", async () => {
+				const res = await authClient.signIn.social({
+					provider: providerId,
+					idToken: {
+						token: await issueIdToken("other-subject"),
+						accessToken: "access-token-for-oauth2",
+					},
+				});
+				expect(res.data).toBeNull();
+				expect(res.error?.status).toBe(401);
+			});
+
+			it("does not call UserInfo with the caller's access token", async () => {
+				const userInfo = countUserInfoRequests();
+				const res = await authClient.signIn.social({
+					provider: providerId,
+					idToken: {
+						token: await issueIdToken("oauth2"),
+						accessToken: "access-token-for-oauth2",
+					},
+				});
+				expect(res.data).toBeNull();
+				expect(res.error?.status).toBe(401);
+				expect(userInfo.count).toBe(0);
+			});
+
+			it("signs in from the verified ID token claims alone", async () => {
+				const userInfo = countUserInfoRequests();
+				const res = await authClient.signIn.social({
+					provider: providerId,
+					idToken: {
+						token: await issueIdToken("id-token-claims-user", {
+							email: "id-token-claims@test.com",
+							email_verified: true,
+						}),
+						accessToken: "access-token-for-oauth2",
+					},
+				});
+				expect(res.error).toBeNull();
+				expect(res.data).toMatchObject({ token: expect.any(String) });
+				expect(userInfo.count).toBe(0);
+			});
+
+			/**
+			 * @see https://openid.net/specs/openid-connect-core-1_0.html#IDTokenValidation
+			 */
+			it.for(["sign-in", "link"] as const)(
+				"%s only passes a verified ID token to custom getUserInfo",
+				async (action) => {
+					const received: unknown[] = [];
+					const { client, auth, signInWithTestUser } = await getTestInstance({
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: "client-custom-no-sub",
+										discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+										clientId,
+										clientSecret,
+										getUserInfo: async (tokens) => {
+											received.push(tokens);
+											if (tokens.accessToken) {
+												return {
+													account_id: "access-token-owner",
+													email: "access-token-owner@test.com",
+													name: "Access Token Owner",
+													emailVerified: true,
+												};
+											}
+											return null;
+										},
+										accountSubject: ({ profile }) => String(profile.account_id),
+									},
+								],
+							}),
+						],
+					});
+					const { headers } = await signInWithTestUser();
+					const submit = (token: string) => {
+						const body = {
+							provider: "client-custom-no-sub",
+							idToken: {
+								token,
+								accessToken: "access-token-for-someone-else",
+								refreshToken: "refresh-token-for-someone-else",
+							},
+						};
+						return action === "sign-in"
+							? client.signIn.social(body)
+							: client.linkSocial(body, { headers });
+					};
+					const invalid = await submit("invalid-id-token");
+					expect(invalid.error?.status).toBe(401);
+					expect(received).toEqual([]);
+
+					const res = await submit(await issueIdToken("id-token-subject"));
+					expect(res.data).toBeNull();
+					expect(res.error?.status).toBe(401);
+					expect(received).toEqual([{ idToken: expect.any(String) }]);
+					const ctx = await auth.$context;
+					expect(
+						await ctx.adapter.count({
+							model: "account",
+							where: [{ field: "providerId", value: "client-custom-no-sub" }],
+						}),
+					).toBe(0);
+				},
+			);
+		});
+
 		it("should keep the decode posture for providers without discovery", async () => {
 			const forged = await forgeIdToken();
 			const { customFetchImpl, cookieSetter } = await getTestInstance({
@@ -5472,16 +5775,167 @@ describe("oauth2", async () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12151
+	 */
+	describe("discoveryHeaders on a header-gated provider", () => {
+		const gate = { "x-gate": "bypass-token" };
+		let privateKey: CryptoKey;
+		let jwks: { keys: JWK[] };
+		let gated: Awaited<ReturnType<typeof startServer>>;
+		let other: Awaited<ReturnType<typeof startServer>>;
+		let jwksUri = "";
+
+		const route = (path: string, origin: string): [number, object | string] => {
+			if (path === "/jwks") return [200, jwks];
+			if (path === "/same-origin-redirect") return [302, "/discovery"];
+			if (path === "/cross-origin-redirect")
+				return [302, `${other.url}/discovery`];
+			return [
+				200,
+				{
+					issuer: origin,
+					authorization_endpoint: `${origin}/authorize`,
+					token_endpoint: `${origin}/token`,
+					jwks_uri: jwksUri,
+					id_token_signing_alg_values_supported: ["RS256"],
+				},
+			];
+		};
+
+		// Records every x-gate value it receives; a gated server rejects requests without it.
+		async function startServer(requireGate: boolean) {
+			const gates: unknown[] = [];
+			const server = createServer((req, res) => {
+				gates.push(req.headers["x-gate"]);
+				if (requireGate && req.headers["x-gate"] !== gate["x-gate"]) {
+					res.statusCode = 401;
+					return res.end();
+				}
+				const [status, body] = route(req.url ?? "", url);
+				res.statusCode = status;
+				if (typeof body === "string") {
+					res.setHeader("location", body);
+					return res.end();
+				}
+				res.setHeader("content-type", "application/json");
+				res.end(JSON.stringify(body));
+			});
+			await new Promise<void>((resolve) => server.listen(0, resolve));
+			const url = `http://localhost:${(server.address() as AddressInfo).port}`;
+			const close = () =>
+				new Promise<void>((resolve, reject) =>
+					server.close((err) => (err ? reject(err) : resolve())),
+				);
+			return { url, close, gates };
+		}
+
+		beforeAll(async () => {
+			const keys = await generateKeyPair("RS256");
+			privateKey = keys.privateKey;
+			const jwk = await exportJWK(keys.publicKey);
+			jwks = { keys: [{ ...jwk, kid: "gated", alg: "RS256" }] };
+			gated = await startServer(true);
+			other = await startServer(false);
+		});
+		afterAll(async () => {
+			await gated.close();
+			await other.close();
+		});
+		afterEach(() => {
+			other.gates.length = 0;
+		});
+
+		async function signInWithIdToken(discoveryPath: string, issuer: string) {
+			const { client, auth } = await getTestInstance(
+				{
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "gated",
+									discoveryUrl: `${gated.url}${discoveryPath}`,
+									discoveryHeaders: gate,
+									clientId: "gated-client",
+									clientSecret: "gated-secret",
+								},
+							],
+						}),
+					],
+				},
+				{ disableTestUser: true },
+			);
+			const token = await new SignJWT({
+				email: "gated@test.com",
+				email_verified: true,
+			})
+				.setProtectedHeader({ alg: "RS256", kid: "gated" })
+				.setSubject("gated-user")
+				.setIssuer(issuer)
+				.setAudience("gated-client")
+				.setIssuedAt()
+				.setExpirationTime("1h")
+				.sign(privateKey);
+			const res = await client.signIn.social({
+				provider: "gated",
+				idToken: { token },
+			});
+			const providers = (await auth.$context).socialProviders;
+			return { res, registered: providers.some((p) => p.id === "gated") };
+		}
+
+		it("sends discoveryHeaders to a same-origin jwks_uri", async () => {
+			jwksUri = `${gated.url}/jwks`;
+			const { res } = await signInWithIdToken("/discovery", gated.url);
+			expect(res.error).toBeNull();
+			expect(res.data).toMatchObject({ token: expect.any(String) });
+		});
+
+		it("does not send discoveryHeaders to a jwks_uri on another origin", async () => {
+			jwksUri = `${other.url}/jwks`;
+			const { res } = await signInWithIdToken("/discovery", gated.url);
+			expect(res.error).toBeNull();
+			expect(other.gates).toEqual([undefined]);
+		});
+
+		it("follows a same-origin discovery redirect with discoveryHeaders", async () => {
+			jwksUri = `${gated.url}/jwks`;
+			const { res } = await signInWithIdToken(
+				"/same-origin-redirect",
+				gated.url,
+			);
+			expect(res.error).toBeNull();
+		});
+
+		it("refuses a cross-origin discovery redirect instead of sending discoveryHeaders to its target", async () => {
+			jwksUri = `${other.url}/jwks`;
+			const { registered } = await signInWithIdToken(
+				"/cross-origin-redirect",
+				other.url,
+			);
+			expect(registered).toBe(false);
+			expect(other.gates).toEqual([]);
+		});
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11404
 	 */
 	describe("retrying discovery that failed at startup", () => {
 		// Serves a discovery document for `${providerId}.test` only once `idp.up` is set.
 		function flakyDiscovery(providerId: string) {
 			const origin = `https://${providerId}.test`;
-			const idp = { up: false, fetches: 0 };
+			// Set `gate` to hold the next fetch until it resolves.
+			const idp = {
+				up: false,
+				fetches: 0,
+				gate: undefined as Promise<void> | undefined,
+			};
 			mswServer.use(
-				http.get(`${origin}/.well-known/openid-configuration`, () => {
+				http.get(`${origin}/.well-known/openid-configuration`, async () => {
 					idp.fetches++;
+					const gate = idp.gate;
+					idp.gate = undefined;
+					await gate;
 					return idp.up
 						? HttpResponse.json({
 								issuer: origin,
@@ -5512,17 +5966,71 @@ describe("oauth2", async () => {
 				});
 			await expect(signIn()).rejects.toThrow();
 			expect(idp.fetches).toBe(2);
-			// Concurrent requests share one retry, and a failed retry stays pending.
+			// Each request retries, and a failed retry stays pending.
 			await Promise.all([
 				expect(signIn()).rejects.toThrow(),
 				expect(signIn()).rejects.toThrow(),
 			]);
-			expect(idp.fetches).toBe(3);
+			expect(idp.fetches).toBe(4);
 
 			idp.up = true;
 			expect((await signIn()).url).toContain(authorizeUrl);
 			await signIn();
-			expect(idp.fetches).toBe(4);
+			expect(idp.fetches).toBe(5);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10315
+		 */
+		it("does not wait on another request's pending retry", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("flaky-idp");
+			const { auth } = await getTestInstance(
+				{ plugins: [genericOAuth({ config: [config] })] },
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				auth.api.signInSocial({
+					body: { provider: "flaky-idp", callbackURL: "/" },
+				});
+			await auth.$context;
+			expect(idp.fetches).toBe(1);
+			const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+			idp.gate = gate;
+			let aSettled = false;
+			const a = signIn().finally(() => {
+				aSettled = true;
+			});
+			await vi.waitFor(() => expect(idp.fetches).toBe(2));
+
+			idp.up = true;
+			expect((await signIn()).url).toContain(authorizeUrl);
+			expect(aSettled).toBe(false);
+			release();
+			expect((await a).url).toContain(authorizeUrl);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10315
+		 */
+		it("installs a recovered provider once when concurrent retries succeed", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("flaky-idp");
+			const { auth } = await getTestInstance(
+				{ plugins: [genericOAuth({ config: [config] })] },
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				auth.api.signInSocial({
+					body: { provider: "flaky-idp", callbackURL: "/" },
+				});
+			await auth.$context;
+			idp.up = true;
+			const results = await Promise.all([signIn(), signIn()]);
+			expect(idp.fetches).toBe(3);
+			for (const { url } of results) expect(url).toContain(authorizeUrl);
+			const { socialProviders } = await auth.$context;
+			expect(socialProviders.filter((p) => p.id === "flaky-idp")).toHaveLength(
+				1,
+			);
 		});
 
 		it("recovers a provider requested through the popup start endpoint", async () => {
@@ -5603,6 +6111,147 @@ describe("oauth2", async () => {
 				expect((await signIn(instance)).url).toContain(authorizeUrl);
 			}
 		});
+	});
+
+	describe("string email_verified claims", () => {
+		const verifiedEmail = "owner@example.com";
+
+		/**
+		 * Creates an instance with an email-verified owner and a helper that
+		 * signs in through the mock IdP.
+		 */
+		async function setup() {
+			let verificationUrl = "";
+			const { client, auth, cookieSetter, customFetchImpl } =
+				await getTestInstance({
+					emailAndPassword: {
+						enabled: true,
+					},
+					emailVerification: {
+						async sendVerificationEmail({ url }) {
+							verificationUrl = url;
+						},
+					},
+					plugins: [
+						genericOAuth({
+							config: [
+								{
+									providerId: "string-claims",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId: "client",
+									clientSecret: "secret",
+									pkce: true,
+								},
+								{
+									providerId: "string-claims-strict",
+									discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+									clientId: "client",
+									clientSecret: "secret",
+									pkce: true,
+									requireEmailVerification: true,
+								},
+							],
+						}),
+					],
+				});
+
+			const signUp = await client.signUp.email({
+				email: verifiedEmail,
+				password: "owner-password-123",
+				name: "Owner",
+			});
+			const ownerId = signUp.data!.user.id;
+			await client.sendVerificationEmail({
+				email: verifiedEmail,
+			});
+			await betterFetch(verificationUrl, {
+				customFetchImpl,
+				redirect: "manual",
+			});
+
+			async function signInThroughIdp(providerId: string) {
+				const headers = new Headers();
+				const start = await client.signIn.social({
+					provider: providerId,
+					callbackURL: "http://localhost:3000/dashboard",
+					fetchOptions: {
+						onSuccess: cookieSetter(headers),
+					},
+				});
+				const { callbackURL, headers: sessionHeaders } =
+					await simulateOAuthFlow(start.data!.url!, headers, customFetchImpl);
+				const session = await client.getSession({
+					fetchOptions: {
+						headers: sessionHeaders,
+					},
+				});
+				return { location: callbackURL, session: session.data };
+			}
+			return { auth, ownerId, signInThroughIdp };
+		}
+
+		it('does not link a string "false" claim to an existing verified user', async () => {
+			mockUserInfo({
+				sub: "string-false-link",
+				email: verifiedEmail,
+				name: "Other",
+				email_verified: "false",
+			});
+			const { signInThroughIdp } = await setup();
+			const { location, session } = await signInThroughIdp("string-claims");
+			expect(location).toContain("error=account_not_linked");
+			expect(session).toBeNull();
+		});
+
+		it('stores a new user with a string "false" claim as unverified', async () => {
+			mockUserInfo({
+				sub: "string-false-new",
+				email: "string-false-new@example.com",
+				name: "Newcomer",
+				email_verified: "false",
+			});
+			const { auth, signInThroughIdp } = await setup();
+			const { session } = await signInThroughIdp("string-claims");
+			const ctx = await auth.$context;
+			const found = await ctx.internalAdapter.findUserByEmail(
+				"string-false-new@example.com",
+			);
+			expect(found?.user.emailVerified).toBe(false);
+			expect(session?.user.emailVerified).toBe(false);
+		});
+
+		it('issues no session for a string "false" claim when email verification is required', async () => {
+			mockUserInfo({
+				sub: "string-false-strict",
+				email: "string-false-strict@example.com",
+				name: "Strict",
+				email_verified: "false",
+			});
+			const { signInThroughIdp } = await setup();
+			const { location, session } = await signInThroughIdp(
+				"string-claims-strict",
+			);
+			expect(location).toContain("error=email_not_verified");
+			expect(session).toBeNull();
+		});
+
+		it.for([
+			["string", "true"],
+			["boolean", true],
+		] as const)(
+			"links a %s true claim to the existing verified user",
+			async ([_, emailVerified]) => {
+				mockUserInfo({
+					sub: `verified-${typeof emailVerified}`,
+					email: verifiedEmail,
+					name: "Owner",
+					email_verified: emailVerified,
+				});
+				const { ownerId, signInThroughIdp } = await setup();
+				const { session } = await signInThroughIdp("string-claims");
+				expect(session?.user.id).toBe(ownerId);
+			},
+		);
 	});
 });
 

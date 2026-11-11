@@ -123,7 +123,10 @@ describe("prisma-adapter", () => {
 		expect(updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: {
-					identifier: { equals: "magic-link-token" },
+					AND: [
+						{ identifier: { equals: "magic-link-token" } },
+						{ id: "verification-id" },
+					],
 				},
 				data: expect.objectContaining({
 					value: "updated-value",
@@ -276,7 +279,10 @@ describe("prisma-adapter", () => {
 		expect(updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: {
-					email: { equals: "test@example.com", mode: "insensitive" },
+					AND: [
+						{ email: { equals: "test@example.com", mode: "insensitive" } },
+						{ id: "user-id" },
+					],
 				},
 				data: expect.objectContaining({
 					name: "Updated",
@@ -294,6 +300,219 @@ describe("prisma-adapter", () => {
 			email: "Test@Example.COM",
 			name: "Updated",
 		});
+	});
+
+	it("escapes regex characters in values the MongoDB connector matches as regex", async () => {
+		const findMany = vi.fn().mockResolvedValue([]);
+		const createAdapter = (provider: "mongodb" | "postgresql") =>
+			prismaAdapter({ $transaction: vi.fn(), user: { findMany } } as never, {
+				provider,
+			})({} as BetterAuthOptions);
+		const where = [
+			{ field: "name", value: ".*", operator: "contains" as const },
+			{ field: "name", value: "a.c", operator: "starts_with" as const },
+			{ field: "name", value: "(x)", operator: "ends_with" as const },
+			{ field: "email", value: "a.c@x.io", mode: "insensitive" as const },
+			{
+				field: "email",
+				value: ["a+b@x.io"],
+				operator: "in" as const,
+				mode: "insensitive" as const,
+			},
+			{ field: "email", value: "a.c@x.io" },
+			{
+				field: "name",
+				value: "a.c",
+				operator: "gte" as const,
+				mode: "insensitive" as const,
+			},
+		];
+
+		await createAdapter("mongodb").findMany({ model: "user", where });
+		expect(findMany.mock.calls[0]![0].where).toEqual({
+			AND: [
+				{ name: { contains: "\\.\\*" } },
+				{ name: { startsWith: "a\\.c" } },
+				{ name: { endsWith: "\\(x\\)" } },
+				{ email: { equals: "a\\.c@x\\.io", mode: "insensitive" } },
+				{ email: { in: ["a\\+b@x\\.io"], mode: "insensitive" } },
+				{ email: { equals: "a.c@x.io" } },
+				{ name: { gte: "a.c", mode: "insensitive" } },
+			],
+		});
+
+		await createAdapter("postgresql").findMany({ model: "user", where });
+		expect(findMany.mock.calls[1]![0].where).toEqual({
+			AND: [
+				{ name: { contains: ".*" } },
+				{ name: { startsWith: "a.c" } },
+				{ name: { endsWith: "(x)" } },
+				{ email: { equals: "a.c@x.io", mode: "insensitive" } },
+				{ email: { in: ["a+b@x.io"], mode: "insensitive" } },
+				{ email: { equals: "a.c@x.io" } },
+				{ name: { gte: "a.c", mode: "insensitive" } },
+			],
+		});
+	});
+
+	/**
+	 * @see https://www.prisma.io/docs/orm/overview/databases/mongodb#filtering-for-null-and-missing-fields
+	 */
+	it("matches unset fields for `eq null` on MongoDB", async () => {
+		const findMany = vi.fn().mockResolvedValue([]);
+		const update = vi.fn().mockResolvedValue({ id: "user-id" });
+		const adapter = prismaAdapter(
+			{ $transaction: vi.fn(), user: { findMany, update } },
+			{ provider: "mongodb" },
+		)({});
+		const isNull = {
+			OR: [{ image: null }, { image: { isSet: false } }],
+		};
+
+		await adapter.findMany({
+			model: "user",
+			where: [{ field: "image", operator: "eq", value: null }],
+		});
+		expect(findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: isNull }),
+		);
+
+		await adapter.update({
+			model: "user",
+			where: [
+				{ field: "id", value: "user-id" },
+				{ field: "image", operator: "eq", value: null },
+			],
+			update: { name: "Updated" },
+		});
+		expect(update).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { id: "user-id", AND: [isNull] } }),
+		);
+	});
+
+	/**
+	 * A unique field compared with `null` can match many rows, so it does not
+	 * select a single row for Prisma's `update`.
+	 *
+	 * @see https://www.prisma.io/docs/orm/reference/prisma-client-reference#update
+	 */
+	describe("a unique field compared with null", () => {
+		const createAdapter = (
+			provider: "sqlite" | "mongodb",
+			user: Record<string, unknown>,
+		) =>
+			prismaAdapter(
+				{ $transaction: vi.fn(), user },
+				{ provider },
+			)({
+				user: {
+					additionalFields: {
+						username: { type: "string", unique: true, required: false },
+					},
+				},
+			});
+		const isNull = {
+			sqlite: { username: { equals: null } },
+			mongodb: { OR: [{ username: null }, { username: { isSet: false } }] },
+		};
+
+		it.each(["sqlite", "mongodb"] as const)(
+			"falls back to updateMany on %s",
+			async (provider) => {
+				const update = vi.fn();
+				const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+				const findFirst = vi
+					.fn()
+					.mockResolvedValueOnce({ id: "user-id" })
+					.mockResolvedValueOnce({ id: "user-id", username: "alice" });
+				const adapter = createAdapter(provider, {
+					update,
+					updateMany,
+					findFirst,
+				});
+
+				const result = await adapter.update({
+					model: "user",
+					where: [{ field: "username", value: null }],
+					update: { username: "alice" },
+				});
+
+				expect(update).not.toHaveBeenCalled();
+				// Only the row read first is written, still guarded by the filter.
+				expect(updateMany).toHaveBeenCalledWith({
+					where: { AND: [isNull[provider], { id: "user-id" }] },
+					data: expect.objectContaining({ username: "alice" }),
+				});
+				// The update changed the filtered field, so the row is read back by ID.
+				expect(findFirst).toHaveBeenLastCalledWith({
+					where: { id: "user-id" },
+				});
+				expect(result).toEqual({ id: "user-id", username: "alice" });
+			},
+		);
+
+		it("reads the row back by its new ID when the update changes it", async () => {
+			const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+			const findFirst = vi
+				.fn()
+				.mockResolvedValueOnce({ id: "old-id" })
+				.mockResolvedValueOnce({ id: "new-id" });
+			const adapter = createAdapter("sqlite", {
+				update: vi.fn(),
+				updateMany,
+				findFirst,
+			});
+
+			const result = await adapter.update({
+				model: "user",
+				where: [{ field: "username", value: null }],
+				update: { id: "new-id" },
+			});
+
+			expect(findFirst).toHaveBeenLastCalledWith({ where: { id: "new-id" } });
+			expect(result).toEqual({ id: "new-id" });
+		});
+
+		it("returns null without writing when no row matches", async () => {
+			const updateMany = vi.fn();
+			const adapter = createAdapter("sqlite", {
+				update: vi.fn(),
+				updateMany,
+				findFirst: vi.fn().mockResolvedValue(null),
+			});
+
+			await expect(
+				adapter.update({
+					model: "user",
+					where: [{ field: "username", value: null }],
+					update: { name: "Updated" },
+				}),
+			).resolves.toBeNull();
+			expect(updateMany).not.toHaveBeenCalled();
+		});
+
+		it.each(["sqlite", "mongodb"] as const)(
+			"keeps the null comparison out of the unique selector on %s",
+			async (provider) => {
+				const update = vi.fn().mockResolvedValue({ id: "user-id" });
+				const adapter = createAdapter(provider, { update });
+
+				await adapter.update({
+					model: "user",
+					where: [
+						{ field: "id", value: "user-id" },
+						{ field: "username", value: null },
+					],
+					update: { name: "Updated" },
+				});
+
+				expect(update).toHaveBeenCalledWith(
+					expect.objectContaining({
+						where: { id: "user-id", AND: [isNull[provider]] },
+					}),
+				);
+			},
+		);
 	});
 
 	it("should use update (not updateMany) for insensitive mode on unsupported providers", async () => {
@@ -585,6 +804,125 @@ describe("prisma-adapter", () => {
 
 		expect(result).toBeNull();
 		expect(txClient.verification.update).toHaveBeenCalledTimes(1);
+	});
+
+	it.each(["postgresql", "mongodb"] as const)(
+		"incrementOne keeps an insensitive guard case-insensitive on the keyed update (%s)",
+		async (provider) => {
+			const target = { id: "row-1", identifier: "Mixed@Example.com" };
+			const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
+			const txClient = {
+				verification: {
+					findFirst: vi.fn().mockResolvedValue(target),
+					update,
+				},
+			};
+			const adapter = prismaAdapter(
+				{
+					$transaction: vi.fn(async (cb) => cb(txClient)),
+					verification: {},
+				} as never,
+				{ provider },
+			)({
+				verification: {
+					additionalFields: { remaining: { type: "number" } },
+				},
+			} as BetterAuthOptions);
+
+			// The MongoDB connector matches insensitive equality as a regex.
+			const identifier =
+				provider === "mongodb" ? "mixed@example\\.com" : "mixed@example.com";
+
+			await adapter.incrementOne({
+				model: "verification",
+				where: [
+					{
+						field: "identifier",
+						value: "mixed@example.com",
+						mode: "insensitive",
+					},
+				],
+				increment: { remaining: -1 },
+			});
+
+			expect(txClient.verification.findFirst).toHaveBeenCalledWith({
+				where: {
+					identifier: { equals: identifier, mode: "insensitive" },
+				},
+			});
+			expect(update).toHaveBeenCalledWith({
+				where: {
+					id: "row-1",
+					AND: [
+						{
+							identifier: { equals: identifier, mode: "insensitive" },
+						},
+					],
+				},
+				data: { remaining: { increment: -1 } },
+			});
+		},
+	);
+
+	it("incrementOne resolves an insensitive id before the keyed update", async () => {
+		const update = vi.fn().mockResolvedValue({ id: "row-1", remaining: 4 });
+		const txClient = {
+			verification: {
+				findFirst: vi.fn().mockResolvedValue({ id: "row-1" }),
+				update,
+			},
+		};
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(async (cb) => cb(txClient)),
+				verification: {},
+			} as never,
+			{ provider: "postgresql" },
+		)({
+			verification: {
+				additionalFields: { remaining: { type: "number" } },
+			},
+		} as BetterAuthOptions);
+
+		await adapter.incrementOne({
+			model: "verification",
+			where: [{ field: "id", value: "row-1", mode: "insensitive" }],
+			increment: { remaining: -1 },
+		});
+
+		expect(update).toHaveBeenCalledWith({
+			where: {
+				id: "row-1",
+				AND: [{ id: { equals: "row-1", mode: "insensitive" } }],
+			},
+			data: { remaining: { increment: -1 } },
+		});
+	});
+
+	it("update keeps an insensitive predicate next to a unique key", async () => {
+		const update = vi.fn().mockResolvedValue({ id: "user-id" });
+		const adapter = prismaAdapter(
+			{ $transaction: vi.fn(), user: { update } },
+			{ provider: "postgresql" },
+		)({});
+
+		await adapter.update({
+			model: "user",
+			where: [
+				{ field: "id", value: "user-id" },
+				{ field: "email", value: "test@example.com", mode: "insensitive" },
+			],
+			update: { name: "Updated" },
+		});
+
+		expect(update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: {
+					id: "user-id",
+					AND: [{ email: { equals: "test@example.com", mode: "insensitive" } }],
+				},
+			}),
+		);
 	});
 
 	it("consumeOne does not open a nested transaction from a transaction adapter", async () => {

@@ -285,9 +285,14 @@ export const memoryAdapter = (
 									}
 									return record[field].endsWith(value);
 								case "ne":
-									return isInsensitive
-										? !insensitiveCompare(record[field], value)
-										: record[field] !== value;
+									if (isInsensitive) {
+										return !insensitiveCompare(record[field], value);
+									}
+									// Mirror `eq null`: an unset field is null.
+									if (value === null) {
+										return record[field] != null;
+									}
+									return record[field] !== value;
 								case "gt":
 									return value != null && Boolean(record[field] > value);
 								case "gte":

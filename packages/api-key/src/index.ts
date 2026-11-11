@@ -1,10 +1,10 @@
 import type { BetterAuthPlugin, HookEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { BetterAuthError } from "@better-auth/core/error";
 import { getIP } from "@better-auth/core/utils/ip";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import { BetterAuthError } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, markSessionOutsideStore } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
 import { API_KEY_ERROR_CODES } from "./error-codes";
@@ -259,6 +259,7 @@ export function apiKey(
 							},
 						};
 
+						await markSessionOutsideStore(key);
 						ctx.context.session = session;
 
 						if (ctx.path === "/get-session") {

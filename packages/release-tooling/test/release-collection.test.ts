@@ -10,7 +10,11 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { findPreviousTag } from "../src/release-notes/collect.ts";
+import type { GitHubReader } from "../src/github.ts";
+import {
+	collectEntries,
+	findPreviousTag,
+} from "../src/release-notes/collect.ts";
 import {
 	parseSchema,
 	releaseManifestSchema,
@@ -537,6 +541,62 @@ describe("release changeset collection", () => {
 				},
 			});
 		} finally {
+			rmSync(fixture.workspace, { recursive: true });
+		}
+	});
+
+	it("credits the authors of the squash commit for every changeset of a PR", async () => {
+		const fixture = createReleaseWithFollowUpCommit({
+			secondChangesetInPR: "Also validate the migration target.",
+		});
+		const requested: string[] = [];
+		const github: GitHubReader = {
+			async getPullRequest() {
+				return null;
+			},
+			async getCommitAuthors(sha) {
+				requested.push(sha);
+				return ["octocat", "jane-doe"];
+			},
+			async getReleaseBody() {
+				return null;
+			},
+		};
+		const cwd = process.cwd();
+		try {
+			process.chdir(fixture.workspace);
+			const entries = await collectEntries(
+				github,
+				"2.0.0",
+				"HEAD",
+				fixture.commitRef,
+			);
+
+			expect(requested).toEqual([
+				git(fixture.workspace, [
+					"log",
+					"--format=%H",
+					"--fixed-strings",
+					"--grep=(#42)",
+				]),
+			]);
+			expect(
+				entries.map(({ rewriteKey, commitAuthors }) => ({
+					rewriteKey,
+					commitAuthors,
+				})),
+			).toEqual([
+				{
+					rewriteKey: "pr-42",
+					commitAuthors: ["octocat", "jane-doe"],
+				},
+				{
+					rewriteKey: "pr-42:second-intent",
+					commitAuthors: ["octocat", "jane-doe"],
+				},
+			]);
+		} finally {
+			process.chdir(cwd);
 			rmSync(fixture.workspace, { recursive: true });
 		}
 	});
