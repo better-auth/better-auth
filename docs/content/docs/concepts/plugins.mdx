@@ -402,6 +402,46 @@ const myPlugin = () => {
 }
 ```
 
+### Validate sessions
+
+`validateSession` lets your plugin reject a session after Better Auth has found it. For example, the plugin can require proof that the session is still on the device that signed in, or end every session created before a cutoff. Better Auth calls it every time it resolves a session from the session cookie:
+
+* `/get-session` and `auth.api.getSession`, including when the session comes from the cookie cache.
+* Every endpoint that requires a session, such as `/list-sessions` or `/update-user`.
+* Switching to, listing, or revoking stored sessions with the multi-session plugin, ending an impersonation with the admin plugin, and redeeming a one-time token.
+* Signing out. A rejected session only clears that browser's cookies and is not deleted.
+
+Return `true` to accept the session. Any other result treats the request as signed out:
+
+* Better Auth does not refresh the session or re-issue its cookies.
+* The session itself is not deleted.
+
+If the function throws, the lookup fails: `/get-session` responds with an error, and endpoints that require a session reject the request.
+
+```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
+// Sessions created before this moment are treated as signed out.
+const cutoff = new Date("2026-11-01T00:00:00Z");
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        validateSession: async ({ session }) => {
+            return session.createdAt >= cutoff;
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+The function runs on every authenticated request, so keep it fast and avoid database reads. Keep these limits in mind:
+
+* Fields marked `returned: false` may be missing from the session and user it receives, so a field the check depends on must be returned.
+* It does not run for a session that a plugin places on `ctx.context.session` itself.
+* `getSessionCookie` and `getCookieCache` only read cookies and do not run it. Use `auth.api.getSession` when the result must pass every plugin's check.
+
+When your plugin issues cookies for a session that it looked up itself, call `isSessionAccepted(ctx, { session, user })` from `better-auth/api` first, so other plugins can reject it.
+
 ### Rate Limit
 
 You can define custom rate limit rules for your plugin by passing a `rateLimit` array. The rate limit array should contain an array of rate limit objects.

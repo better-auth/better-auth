@@ -7,7 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import * as z from "zod";
-import { sessionMiddleware } from "../../api";
+import { isSessionAccepted, sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import type { Session, User } from "../../types";
@@ -196,14 +196,18 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 							message: "Session not found",
 						});
 					}
-					if (!opts?.disableSetSessionCookie) {
-						await setSessionCookie(c, session);
-					}
-
 					if (session.session.expiresAt < new Date()) {
 						throw c.error("BAD_REQUEST", {
 							message: "Session expired",
 						});
+					}
+					if (!(await isSessionAccepted(c, session))) {
+						throw c.error("BAD_REQUEST", {
+							message: "Invalid token",
+						});
+					}
+					if (!opts?.disableSetSessionCookie) {
+						await setSessionCookie(c, session);
 					}
 
 					return c.json(session);

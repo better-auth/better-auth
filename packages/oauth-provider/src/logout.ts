@@ -6,6 +6,7 @@ import {
 } from "@better-auth/core/context";
 import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { createHash } from "@better-auth/utils/hash";
+import { isSessionAccepted } from "better-auth/api";
 import { deleteSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getJwks } from "better-auth/oauth2";
@@ -722,7 +723,9 @@ async function getCurrentBrowserSession(
 
 	try {
 		const result = await ctx.context.internalAdapter.findSession(token);
-		return result ? { session: result.session } : null;
+		// A session a plugin rejects is not this browser's session to end.
+		if (!result || !(await isSessionAccepted(ctx, result))) return null;
+		return { session: result.session };
 	} catch (error) {
 		ctx.context.logger.error(
 			"Failed to read the current logout session",

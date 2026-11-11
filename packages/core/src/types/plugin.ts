@@ -6,9 +6,9 @@ import type {
 } from "better-call";
 import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
-import type { BetterAuthPluginDBSchema } from "../db";
+import type { BetterAuthPluginDBSchema, Session, User } from "../db";
 import type { RawError } from "../utils/error-codes";
-import type { AuthContext } from "./context";
+import type { AuthContext, GenericEndpointContext } from "./context";
 import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
@@ -99,6 +99,34 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 					handler: AuthMiddleware;
 				}[];
 		  }
+		| undefined;
+	/**
+	 * Gate which resolved sessions Better Auth accepts. Called every time a
+	 * session is resolved from the session cookie, including the cookie-cache
+	 * path, before the session is refreshed or its cookies are re-issued. This
+	 * covers `/get-session`, `auth.api.getSession`, and every endpoint that
+	 * requires a session.
+	 *
+	 * Return `true` to accept the session. Any other result treats the
+	 * request as unauthenticated: the session is not deleted and its cookies
+	 * are left untouched. A thrown error fails the lookup: `/get-session`
+	 * responds with an error and endpoints that require a session reject the
+	 * request.
+	 *
+	 * It runs on every authenticated request, so avoid per-request I/O. Fields
+	 * marked `returned: false` may be missing, so a field the check depends on
+	 * must be returned. It is not called for sessions a plugin places on
+	 * `ctx.context.session` itself, nor by the cookie-only helpers
+	 * `getSessionCookie` and `getCookieCache`.
+	 */
+	validateSession?:
+		| ((
+				data: {
+					session: Session & Record<string, unknown>;
+					user: User & Record<string, unknown>;
+				},
+				context: GenericEndpointContext,
+		  ) => Awaitable<boolean>)
 		| undefined;
 	/**
 	 * Schema the plugin needs

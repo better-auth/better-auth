@@ -156,13 +156,13 @@ const hash = createHash("sha256")
 	.update(JSON.stringify({ sections: sectionIcons, pages: pageIcons }))
 	.digest("hex");
 const expectedHash =
-	"629b354705d004faf049a77f5205222a8a6d4aab48f622c0126441708051514b";
+	"0f4aad43fe9306ecd30381de6a907a4e8effbdca303fd36b7851f9004560825b";
 
 if (sectionIcons.length !== 10) {
 	errors.push(`expected 10 section icons, received ${sectionIcons.length}`);
 }
-if (pageIcons.length !== 170) {
-	errors.push(`expected 170 page icons, received ${pageIcons.length}`);
+if (pageIcons.length !== 171) {
+	errors.push(`expected 171 page icons, received ${pageIcons.length}`);
 }
 if (hash !== expectedHash) {
 	errors.push(
