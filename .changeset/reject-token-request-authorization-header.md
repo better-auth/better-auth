@@ -3,7 +3,7 @@
 "@better-auth/core": minor
 ---
 
-Generic OAuth providers with an `Authorization` entry in `authorizationHeaders`, in any letter case, now fail at startup with an error naming the provider. Before, Better Auth sent that header to the token endpoint, where it could conflict with the client authentication from `clientSecret` or `tokenEndpointAuth`. To send a provider-specific `Authorization` header, set it from `customizeRequest`. The custom method adds no client credentials, so also set any `client_id`, secret, or client assertion the provider requires:
+Generic OAuth providers with an `Authorization` entry in `authorizationHeaders`, in any letter case, now fail at startup with an error naming the provider. Before, Better Auth sent that header to the token endpoint, where it could conflict with the client authentication from `clientSecret` or `tokenEndpointAuth`. To send a provider-specific `Authorization` header, set it from `customizeRequest`. The custom method adds no client credentials. Your hook must also set every credential the provider requires, such as a `client_id`, a secret, or a client assertion:
 
 ```ts
 tokenEndpointAuth: {
