@@ -3932,6 +3932,7 @@ describe("oauth2", async () => {
 
 		let getTokenCalled = false;
 		let capturedCode = "";
+		let capturedTokenUrl: string | undefined;
 
 		const { customFetchImpl, cookieSetter } = await getTestInstance({
 			plugins: [
@@ -3946,9 +3947,10 @@ describe("oauth2", async () => {
 							accountSubject: ({ profile }) => profile.id ?? "",
 							pkce: true,
 							// Custom token exchange that doesn't use standard OAuth flow
-							getToken: async ({ code }) => {
+							getToken: async ({ code, tokenUrl }) => {
 								getTokenCalled = true;
 								capturedCode = code;
+								capturedTokenUrl = tokenUrl;
 
 								// Simulate a GET-based token endpoint
 								// For testing, we directly return the mock response
@@ -4012,6 +4014,8 @@ describe("oauth2", async () => {
 		// Verify custom getToken was called
 		expect(getTokenCalled).toBe(true);
 		expect(capturedCode).toBeTruthy();
+		// @see https://github.com/better-auth/better-auth/issues/11362
+		expect(capturedTokenUrl).toBe(`http://localhost:${port}/token`);
 		expect(callbackURL).toBe("http://localhost:3000/new_user");
 	});
 
