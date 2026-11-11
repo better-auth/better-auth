@@ -253,7 +253,13 @@ export interface ApiKeyConfigurationOptions {
 	 * ⚠️ Warning: Enabling this introduces eventual consistency where the response
 	 * returns optimistic data before the database is updated. If the deferred update
 	 * fails, the database will have stale values. Only enable if your application
-	 * can tolerate this trade-off for improved latency.
+	 * can tolerate this trade-off for improved latency. Concurrent verifications
+	 * can be accepted from the same persisted counter snapshot. Synchronous guarded
+	 * enforcement is available only for database storage and secondary storage with
+	 * database fallback. Secondary-storage-only enforcement currently uses a
+	 * best-effort read-modify-write flow until atomic consumption is implemented.
+	 * Policy changes that race an optimistic verification, such as disabling a key
+	 * or changing its permissions, may take effect on the next verification.
 	 *
 	 * @default false
 	 */
