@@ -592,6 +592,22 @@ To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html
 
 A grant that consumes a one-time credential, such as a device code, should resolve the binding before it claims the credential. `provider.resolveConfirmation({ client, scopes, resources, confirmation })` returns the confirmation the client proved at authentication. Without one, it verifies the request's DPoP proof by the same rules `issueTokens` applies. Pass the result to `issueTokens` as `confirmation`. A rejected proof then fails before the credential is consumed, so the client can retry with a valid one.
 
+To stop a stolen DPoP-bound token from being reissued under another key, a grant that reissues an existing token can require that token's key. Verify the existing token first. When the caller is the client the token was issued to, pass the token's key thumbprint as `expectedJkt`, as the built-in refresh and token exchange grants do. Another party, such as a resource server, cannot hold that key.
+
+```ts
+import { getConfirmationJkt } from "better-auth/oauth2";
+
+const confirmation = await provider.resolveConfirmation({
+  client,
+  scopes,
+  resources,
+  confirmation: authenticated.confirmation,
+  expectedJkt: getConfirmationJkt(verifiedToken.cnf),
+});
+```
+
+The request must then carry a DPoP proof signed by that key, or client authentication must return a `confirmation` with the same `jkt`. A returned `confirmation` replaces the proof, so one with another key fails even when the proof uses the expected key. Anything else fails with `invalid_dpop_proof`, including an mTLS confirmation. With `dpop.nonce.required`, a proof without a current nonce gets `use_dpop_nonce` instead, so the client can retry. If the existing token is not DPoP-bound, `getConfirmationJkt` returns `undefined` and the usual rules apply.
+
 ### Client registration metadata
 
 An extension that defines its own client registration fields, such as CIBA's `backchannel_token_delivery_mode`, declares them in `clientMetadata`. The provider stores the fields in the client's `metadata`. `validate` runs whenever a client is registered through `/oauth2/register` or a client metadata document, or an admin creates or updates it. A bad value is therefore rejected with `invalid_client_metadata` at registration, not when the client first uses it.

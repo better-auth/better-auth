@@ -218,15 +218,20 @@ export function getOAuthProviderApi(
 			return createUserTokens(ctx, opts, { ...params, grantType });
 		},
 		resolveConfirmation: async (params) => {
-			if (params.confirmation) return params.confirmation;
-			const policy = await resolveResourcePolicy(ctx, opts, {
-				resource: params.resources,
-				clientId: params.client.clientId,
-				requestedScopes: params.scopes,
-			});
+			// A proven confirmation wins over the resource policy, so skip its lookup.
+			const policy = params.confirmation
+				? undefined
+				: await resolveResourcePolicy(ctx, opts, {
+						resource: params.resources,
+						clientId: params.client.clientId,
+						requestedScopes: params.scopes,
+					});
 			return resolveIssuanceConfirmation(ctx, opts, {
 				client: params.client,
-				dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
+				dpopBoundAccessTokensRequired:
+					policy?.dpopBoundAccessTokensRequired ?? false,
+				confirmation: params.confirmation,
+				expectedJkt: params.expectedJkt,
 			});
 		},
 		hashToken: (token: string, type: StoreTokenType) =>
