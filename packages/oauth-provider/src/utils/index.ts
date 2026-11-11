@@ -969,17 +969,23 @@ export type ExtractedCredentials =
 			clientId: string;
 	  };
 
-/** Whether a value is a {@link Confirmation} with exactly one string member. */
+/**
+ * Whether a value is a {@link Confirmation}: an object whose only own key is
+ * `jkt` or `x5t#S256`, holding a non-empty string.
+ */
 export function isConfirmation(value: unknown): value is Confirmation {
-	if (!value || typeof value !== "object") {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
 		return false;
 	}
-	const confirmation = value as Record<string, unknown>;
+	const entries = Object.entries(value);
+	if (entries.length !== 1) {
+		return false;
+	}
+	const [[key, member]] = entries as [[string, unknown]];
 	return (
-		(typeof confirmation.jkt === "string" &&
-			confirmation["x5t#S256"] === undefined) ||
-		(typeof confirmation["x5t#S256"] === "string" &&
-			confirmation.jkt === undefined)
+		(key === "jkt" || key === "x5t#S256") &&
+		typeof member === "string" &&
+		member.length > 0
 	);
 }
 

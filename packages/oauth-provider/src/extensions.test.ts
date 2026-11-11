@@ -1454,6 +1454,11 @@ describe("oauth-provider client metadata extensions", async () => {
 	});
 });
 
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc7800#section-3.1
+ * @see https://datatracker.ietf.org/doc/html/rfc9449#section-6
+ * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3.1
+ */
 describe("oauth-provider extension client authentication confirmation", async () => {
 	const baseURL = "http://localhost:3000";
 	const authMethod = "malformed_confirmation_jwt";
@@ -1525,6 +1530,11 @@ describe("oauth-provider extension client authentication confirmation", async ()
 		["both members", { jkt: "strategy-jkt", "x5t#S256": "strategy-cert" }],
 		["neither member", {}],
 		["a non-string member", { jkt: 1 }],
+		["an empty jkt", { jkt: "" }],
+		["an empty x5t#S256", { "x5t#S256": "" }],
+		["an extra member", { jkt: "strategy-jkt", extra: "value" }],
+		["an array", Object.assign([], { jkt: "strategy-jkt" })],
+		["an inherited member", Object.create({ jkt: "strategy-jkt" })],
 	])("rejects a strategy confirmation with %s", async (_, confirmation) => {
 		strategyConfirmation = confirmation;
 		const response = await requestToken();
