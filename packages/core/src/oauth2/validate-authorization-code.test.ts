@@ -27,7 +27,8 @@ describe("authorizationCodeRequest", () => {
 			tokenEndpointAuth: {
 				method: "custom",
 				customizeRequest: ({ headers }) => {
-					headers.Authorization = "Custom hook";
+					headers.Authorization = "first";
+					headers.authorization = "Custom hook";
 				},
 			},
 		});

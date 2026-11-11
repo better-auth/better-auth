@@ -167,6 +167,24 @@ function assertCompleteManualClientAssertion(body: URLSearchParams) {
 	}
 }
 
+/**
+ * Lets a custom hook read and write header names in any casing. Every access
+ * lands on the lowercase name the request builders use, so the hook's last
+ * write replaces a caller header instead of being sent next to it.
+ */
+function caseInsensitiveHeaders(headers: Record<string, string>) {
+	const name = (key: string | symbol) =>
+		typeof key === "string" ? key.toLowerCase() : key;
+	return new Proxy(headers, {
+		get: (target, key) => Reflect.get(target, name(key)),
+		set: (target, key, value) => Reflect.set(target, name(key), value),
+		has: (target, key) => Reflect.has(target, name(key)),
+		deleteProperty: (target, key) => Reflect.deleteProperty(target, name(key)),
+		getOwnPropertyDescriptor: (target, key) =>
+			Reflect.getOwnPropertyDescriptor(target, name(key)),
+	});
+}
+
 export async function applyTokenEndpointAuth({
 	body,
 	headers,
@@ -196,19 +214,11 @@ export async function applyTokenEndpointAuth({
 	if (auth.method === "custom") {
 		await auth.customizeRequest({
 			body,
-			headers,
+			headers: caseInsensitiveHeaders(headers),
 			options,
 			tokenEndpoint,
 			grantType,
 		});
-		// Caller headers arrive lowercased; fold the hook's names so its value replaces theirs.
-		for (const [key, value] of Object.entries(headers)) {
-			const name = key.toLowerCase();
-			if (name !== key) {
-				delete headers[key];
-				headers[name] = value;
-			}
-		}
 		assertCompleteManualClientAssertion(body);
 		return;
 	}
