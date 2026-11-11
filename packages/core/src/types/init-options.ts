@@ -509,7 +509,7 @@ export type BetterAuthAdvancedOptions = {
 	 * or timing-attack mitigation) to run after the response is sent.
 	 *
 	 * Use `waitUntil` from `@vercel/functions` on Vercel,
-	 * or `ctx.waitUntil` on Cloudflare Workers.
+	 * or `waitUntil` from `cloudflare:workers` on Cloudflare Workers.
 	 *
 	 * @example
 	 * // Vercel
@@ -517,12 +517,9 @@ export type BetterAuthAdvancedOptions = {
 	 * advanced: { backgroundTasks: { handler: waitUntil } }
 	 *
 	 * @example
-	 * // Cloudflare Workers (with AsyncLocalStorage)
-	 * advanced: {
-	 *   backgroundTasks: {
-	 *     handler: (p) => execCtxStorage.getStore()?.waitUntil(p)
-	 *   }
-	 * }
+	 * // Cloudflare Workers
+	 * import { waitUntil } from "cloudflare:workers";
+	 * advanced: { backgroundTasks: { handler: waitUntil } }
 	 */
 	backgroundTasks?: {
 		handler: (promise: Promise<unknown>) => void;
