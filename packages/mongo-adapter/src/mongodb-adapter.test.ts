@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { Db } from "mongodb";
 import {
 	MongoClient,
@@ -13,7 +14,7 @@ describe("mongodb-adapter", () => {
 	it("should create mongodb adapter", () => {
 		const db = {
 			collection: vi.fn(),
-		} as any;
+		} as unknown as Db;
 		const adapter = mongodbAdapter(db);
 		expect(adapter).toBeDefined();
 	});
@@ -443,7 +444,7 @@ describe("mongodb-adapter", () => {
 			collection: vi.fn(() => ({
 				findOneAndDelete,
 			})),
-		} as any;
+		} as unknown as Db;
 		const adapter = mongodbAdapter(db, { transaction: false })({});
 
 		const result = await adapter.consumeOne({
@@ -461,7 +462,9 @@ describe("mongodb-adapter", () => {
 		);
 	});
 
-	const rateLimitOptions = { rateLimit: { storage: "database" } } as any;
+	const rateLimitOptions = {
+		rateLimit: { storage: "database" },
+	} as unknown as BetterAuthOptions;
 
 	it("incrementOne applies $inc and $set atomically against the guard filter", async () => {
 		const findOneAndUpdate = vi.fn(async () => ({
@@ -471,7 +474,7 @@ describe("mongodb-adapter", () => {
 			collection: vi.fn(() => ({
 				findOneAndUpdate,
 			})),
-		} as any;
+		} as unknown as Db;
 		const adapter = mongodbAdapter(db, { transaction: false })(
 			rateLimitOptions,
 		);
@@ -506,7 +509,7 @@ describe("mongodb-adapter", () => {
 			collection: vi.fn(() => ({
 				findOneAndUpdate,
 			})),
-		} as any;
+		} as unknown as Db;
 		const adapter = mongodbAdapter(db, { transaction: false })(
 			rateLimitOptions,
 		);
@@ -522,7 +525,9 @@ describe("mongodb-adapter", () => {
 			{ $inc: { count: 1 } },
 			expect.anything(),
 		);
-		const updateArg = (findOneAndUpdate.mock.calls[0] as any[])[1];
+		const updateArg = (
+			findOneAndUpdate.mock.calls[0] as unknown[]
+		)[1] as Record<string, unknown>;
 		expect(updateArg).not.toHaveProperty("$set");
 	});
 
@@ -534,7 +539,7 @@ describe("mongodb-adapter", () => {
 			collection: vi.fn(() => ({
 				findOneAndUpdate,
 			})),
-		} as any;
+		} as unknown as Db;
 		const adapter = mongodbAdapter(db, { transaction: false })(
 			rateLimitOptions,
 		);
@@ -559,7 +564,9 @@ describe("mongodb-adapter", () => {
 				includeResultMetadata: true,
 			}),
 		);
-		const updateArg = (findOneAndUpdate.mock.calls[0] as any[])[1];
+		const updateArg = (
+			findOneAndUpdate.mock.calls[0] as unknown[]
+		)[1] as Record<string, unknown>;
 		expect(updateArg).not.toHaveProperty("$inc");
 	});
 
@@ -571,7 +578,7 @@ describe("mongodb-adapter", () => {
 				findOne,
 				findOneAndUpdate,
 			})),
-		} as any;
+		} as unknown as Db;
 		const adapter = mongodbAdapter(db, { transaction: false })(
 			rateLimitOptions,
 		);
@@ -596,7 +603,7 @@ describe("mongodb-adapter", () => {
 			collection: vi.fn(() => ({
 				findOneAndUpdate,
 			})),
-		} as any;
+		} as unknown as Db;
 		const adapter = mongodbAdapter(db, { transaction: false })(
 			rateLimitOptions,
 		);
@@ -643,12 +650,12 @@ describe("uuid support", () => {
 	const uuid = "550e8400-e29b-41d4-a716-446655440000";
 
 	function createMockDb() {
-		const insertedDocs: any[] = [];
-		const updatedFilters: any[] = [];
-		const updatedValues: any[] = [];
+		const insertedDocs: Record<string, unknown>[] = [];
+		const updatedFilters: Record<string, unknown>[] = [];
+		const updatedValues: Record<string, unknown>[] = [];
 
 		const collection = vi.fn(() => ({
-			insertOne: vi.fn(async (doc: any) => {
+			insertOne: vi.fn(async (doc: Record<string, unknown>) => {
 				insertedDocs.push(doc);
 				return { insertedId: doc._id };
 			}),
@@ -657,16 +664,26 @@ describe("uuid support", () => {
 					return [];
 				}),
 			})),
-			findOneAndUpdate: vi.fn(async (filter: any, update: any) => {
-				updatedFilters.push(filter);
-				updatedValues.push(update);
-				return { value: { ...update.$set, _id: filter._id } };
-			}),
+			findOneAndUpdate: vi.fn(
+				async (
+					filter: Record<string, unknown>,
+					update: Record<string, unknown>,
+				) => {
+					updatedFilters.push(filter);
+					updatedValues.push(update);
+					return {
+						value: {
+							...((update.$set as Record<string, unknown> | undefined) ?? {}),
+							_id: filter._id,
+						},
+					};
+				},
+			),
 			deleteOne: vi.fn(async () => {}),
 		}));
 
 		return {
-			db: { collection } as any,
+			db: { collection } as unknown as Db,
 			insertedDocs,
 			updatedFilters,
 			updatedValues,
@@ -674,18 +691,18 @@ describe("uuid support", () => {
 	}
 
 	function createAdapter(
-		db: any,
+		db: Db,
 		generateId: "uuid" | (() => string) | undefined,
 	) {
 		const adapterFactory = mongodbAdapter(db, { transaction: false });
 		return adapterFactory({
-			database: {} as any,
+			database: {},
 			advanced: {
 				database: {
 					...(generateId !== undefined ? { generateId } : {}),
 				},
 			},
-		} as any);
+		} as unknown as BetterAuthOptions);
 	}
 
 	it("should store _id as BSON UUID when generateId is 'uuid'", async () => {
@@ -704,8 +721,8 @@ describe("uuid support", () => {
 		});
 
 		expect(insertedDocs.length).toBe(1);
-		expect(insertedDocs[0]._id).toBeInstanceOf(UUID);
-		expect(insertedDocs[0]._id.toString()).toMatch(uuidRegex);
+		expect(insertedDocs[0]?._id).toBeInstanceOf(UUID);
+		expect((insertedDocs[0]?._id as UUID).toString()).toMatch(uuidRegex);
 	});
 
 	it("should store FK fields as BSON UUID when generateId is 'uuid'", async () => {
@@ -724,9 +741,9 @@ describe("uuid support", () => {
 		});
 
 		expect(insertedDocs.length).toBe(1);
-		expect(insertedDocs[0]._id).toBeInstanceOf(UUID);
-		expect(insertedDocs[0].userId).toBeInstanceOf(UUID);
-		expect(insertedDocs[0].userId.toString()).toBe(uuid);
+		expect(insertedDocs[0]?._id).toBeInstanceOf(UUID);
+		expect(insertedDocs[0]?.userId).toBeInstanceOf(UUID);
+		expect((insertedDocs[0]?.userId as UUID).toString()).toBe(uuid);
 	});
 
 	it("should store _id as ObjectId when generateId is not set", async () => {
@@ -745,7 +762,7 @@ describe("uuid support", () => {
 		});
 
 		expect(insertedDocs.length).toBe(1);
-		expect(insertedDocs[0]._id).toBeInstanceOf(ObjectId);
+		expect(insertedDocs[0]?._id).toBeInstanceOf(ObjectId);
 	});
 
 	it("should convert BSON UUID to string in output", async () => {
@@ -753,7 +770,7 @@ describe("uuid support", () => {
 		const { db } = createMockDb();
 
 		// Override aggregate to return a document with BSON UUID
-		(db.collection as any).mockReturnValue({
+		(db.collection as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
 			aggregate: vi.fn(() => ({
 				toArray: vi.fn(async () => [
 					{
@@ -773,5 +790,199 @@ describe("uuid support", () => {
 
 		expect(result).not.toBeNull();
 		expect((result as Record<string, unknown>).id).toBe(uuid);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7540
+ */
+describe("json support", () => {
+	it("should store JSON fields as native BSON objects/arrays on insert and return them on read when supportsJSON is true", async () => {
+		let insertedDoc: Record<string, unknown> | null = null;
+		const insertOne = vi.fn(async (doc: Record<string, unknown>) => {
+			insertedDoc = doc;
+			return { insertedId: doc._id };
+		});
+		const aggregate = vi.fn(() => ({
+			toArray: vi.fn(async () => (insertedDoc ? [insertedDoc] : [])),
+		}));
+		const db = {
+			collection: vi.fn(() => ({ insertOne, aggregate })),
+		} as unknown as Db;
+
+		const adapter = mongodbAdapter(db, {
+			transaction: false,
+			supportsJSON: true,
+		})({
+			plugins: [
+				{
+					id: "test",
+					schema: {
+						testModel: {
+							fields: {
+								metadata: {
+									type: "json",
+								},
+							},
+						},
+					},
+				},
+			],
+		});
+
+		const testData = {
+			foo: "bar",
+			count: 42,
+			nested: { role: "admin" },
+			tags: ["auth", "mongo"],
+		};
+		const created = await adapter.create({
+			model: "testModel",
+			data: {
+				metadata: testData,
+			},
+		});
+
+		expect(insertedDoc).not.toBeNull();
+		const doc = insertedDoc as unknown as Record<string, unknown>;
+		expect(typeof doc?.metadata).toBe("object");
+		expect(doc?.metadata).toEqual(testData);
+		expect(created).not.toBeNull();
+		expect((created as Record<string, unknown>).metadata).toEqual(testData);
+
+		const result = await adapter.findOne({
+			model: "testModel",
+			where: [
+				{
+					field: "id",
+					value: (created as Record<string, unknown>).id as string,
+				},
+			],
+		});
+
+		expect(result).not.toBeNull();
+		expect(typeof (result as Record<string, unknown>).metadata).toBe("object");
+		expect((result as Record<string, unknown>).metadata).toEqual(testData);
+	});
+
+	it("should default supportsJSON to false and store JSON fields as strings when omitted", async () => {
+		let insertedDoc: Record<string, unknown> | null = null;
+		const insertOne = vi.fn(async (doc: Record<string, unknown>) => {
+			insertedDoc = doc;
+			return { insertedId: doc._id };
+		});
+		const aggregate = vi.fn(() => ({
+			toArray: vi.fn(async () => (insertedDoc ? [insertedDoc] : [])),
+		}));
+		const db = {
+			collection: vi.fn(() => ({ insertOne, aggregate })),
+		} as unknown as Db;
+
+		const adapter = mongodbAdapter(db, { transaction: false })({
+			plugins: [
+				{
+					id: "test",
+					schema: {
+						testModel: {
+							fields: {
+								metadata: {
+									type: "json",
+								},
+							},
+						},
+					},
+				},
+			],
+		});
+
+		const testData = { foo: "bar", count: 42 };
+		const created = await adapter.create({
+			model: "testModel",
+			data: {
+				metadata: testData,
+			},
+		});
+
+		expect(insertedDoc).not.toBeNull();
+		const doc = insertedDoc as unknown as Record<string, unknown>;
+		expect(typeof doc?.metadata).toBe("string");
+		expect(JSON.parse(doc?.metadata as string)).toEqual(testData);
+		expect(created).not.toBeNull();
+		expect((created as Record<string, unknown>).metadata).toEqual(testData);
+
+		const result = await adapter.findOne({
+			model: "testModel",
+			where: [
+				{
+					field: "id",
+					value: (created as Record<string, unknown>).id as string,
+				},
+			],
+		});
+
+		expect(result).not.toBeNull();
+		expect((result as Record<string, unknown>).metadata).toEqual(testData);
+	});
+
+	it("should preserve stringification when supportsJSON is explicitly false", async () => {
+		let insertedDoc: Record<string, unknown> | null = null;
+		const insertOne = vi.fn(async (doc: Record<string, unknown>) => {
+			insertedDoc = doc;
+			return { insertedId: doc._id };
+		});
+		const aggregate = vi.fn(() => ({
+			toArray: vi.fn(async () => (insertedDoc ? [insertedDoc] : [])),
+		}));
+		const db = {
+			collection: vi.fn(() => ({ insertOne, aggregate })),
+		} as unknown as Db;
+
+		const adapter = mongodbAdapter(db, {
+			transaction: false,
+			supportsJSON: false,
+		})({
+			plugins: [
+				{
+					id: "test",
+					schema: {
+						testModel: {
+							fields: {
+								metadata: {
+									type: "json",
+								},
+							},
+						},
+					},
+				},
+			],
+		});
+
+		const testData = { foo: "bar", count: 42 };
+		const created = await adapter.create({
+			model: "testModel",
+			data: {
+				metadata: testData,
+			},
+		});
+
+		expect(insertedDoc).not.toBeNull();
+		const docExplicit = insertedDoc as unknown as Record<string, unknown>;
+		expect(typeof docExplicit?.metadata).toBe("string");
+		expect(JSON.parse(docExplicit?.metadata as string)).toEqual(testData);
+		expect(created).not.toBeNull();
+		expect((created as Record<string, unknown>).metadata).toEqual(testData);
+
+		const result = await adapter.findOne({
+			model: "testModel",
+			where: [
+				{
+					field: "id",
+					value: (created as Record<string, unknown>).id as string,
+				},
+			],
+		});
+
+		expect(result).not.toBeNull();
+		expect((result as Record<string, unknown>).metadata).toEqual(testData);
 	});
 });

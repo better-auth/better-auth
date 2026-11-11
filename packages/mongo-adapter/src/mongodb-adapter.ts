@@ -106,6 +106,17 @@ export interface MongoDBAdapterConfig {
 	 *   you must explicitly set `transaction: false`.
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Whether the adapter natively supports JSON objects.
+	 * When true, JSON fields are stored as native BSON objects and subdocuments instead of serialized JSON strings.
+	 *
+	 * Note: Enabling this option on an existing database does not automatically migrate pre-existing
+	 * stringified documents in MongoDB. Pre-existing stringified documents require migration before querying
+	 * with native BSON filters.
+	 *
+	 * @default false
+	 */
+	supportsJSON?: boolean | undefined;
 }
 
 export const mongodbAdapter = (
@@ -807,6 +818,7 @@ export const mongodbAdapter = (
 			},
 			supportsArrays: true,
 			supportsNumericIds: false,
+			supportsJSON: config?.supportsJSON ?? false,
 			transaction:
 				config?.client && (config?.transaction ?? true)
 					? async (cb) => {
