@@ -325,11 +325,13 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 							DBSC_ERROR_CODES.SESSION_ALREADY_BOUND,
 						);
 					}
-					const updated = await ctx.context.internalAdapter.updateSession(
-						found.session.token,
-						{ dbscPublicKey: JSON.stringify(registration.publicKey) },
-					);
-					const session = updated ?? found.session;
+					const session: (Session & { dbscPublicKey?: unknown }) | null =
+						await ctx.context.internalAdapter.updateSession(
+							found.session.token,
+							{ dbscPublicKey: JSON.stringify(registration.publicKey) },
+						);
+					// Never report a registration whose key was not saved.
+					if (!session?.dbscPublicKey) throw invalid();
 					const dontRememberMe = await ctx.getSignedCookie(
 						ctx.context.authCookies.dontRememberToken.name,
 						ctx.context.secret,
