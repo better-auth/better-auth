@@ -201,6 +201,14 @@ export async function applyTokenEndpointAuth({
 			tokenEndpoint,
 			grantType,
 		});
+		// Caller headers arrive lowercased; fold the hook's names so its value replaces theirs.
+		for (const [key, value] of Object.entries(headers)) {
+			const name = key.toLowerCase();
+			if (name !== key) {
+				delete headers[key];
+				headers[name] = value;
+			}
+		}
 		assertCompleteManualClientAssertion(body);
 		return;
 	}
