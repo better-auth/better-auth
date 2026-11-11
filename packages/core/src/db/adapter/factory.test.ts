@@ -379,6 +379,9 @@ describe("createAdapterFactory where value coercion", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/pull/12389#discussion_r4531585767
+ */
 describe("createAdapterFactory serial id where values", () => {
 	it("keeps null for id and reference fields instead of coercing it to 0", async () => {
 		const seenWhere: CleanedWhere[][] = [];
@@ -403,8 +406,16 @@ describe("createAdapterFactory serial id where values", () => {
 			model: "session",
 			where: [{ field: "userId", value: "2" }],
 		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "id", operator: "ne", value: null }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "id", value: "3" }],
+		});
 
-		expect(seenWhere.map(([w]) => w!.value)).toEqual([null, 2]);
+		expect(seenWhere.map(([w]) => w!.value)).toEqual([null, 2, null, 3]);
 	});
 });
 
