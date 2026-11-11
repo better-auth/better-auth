@@ -32,7 +32,7 @@ Better Auth allows you to revoke sessions to enhance security. When a session is
 
 ### Copied Session Cookies
 
-Malware on a user's device can copy the session cookie and use it from another machine until the session expires or is revoked. In supporting browsers, the [Device Bound Sessions plugin](/docs/plugins/dbsc) binds each session to the device that signed in. Once a session is bound, a copied session cookie stops working on other machines. A copied bound cookie works only until it expires, 10 minutes by default. See the plugin's [limits](/docs/plugins/dbsc#limits) for the cases it does not cover.
+Malware on a user's device can copy the session cookie and use it from another machine until the session expires or is revoked. In supporting browsers, the [Device Bound Sessions plugin](/docs/plugins/dbsc) binds each session to the device that signed in. Once a session is bound, a copied session cookie stops working on other machines. A copied bound cookie works only until it expires, after `boundCookieMaxAge` seconds, 10 minutes by default. See the plugin's [limits](/docs/plugins/dbsc#limits) for the cases it does not cover.
 
 See the [session management](/docs/concepts/session-management) for more details.
 
