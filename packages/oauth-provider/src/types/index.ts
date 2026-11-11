@@ -281,7 +281,7 @@ export interface OAuthTokenIssueParams {
 	 * as `act` at introspection. Like `sub`, it is the caller's assertion: pass
 	 * only an actor the grant has validated. An issuance with `act` never
 	 * includes a refresh token, even with `offline_access`, because refreshed
-	 * tokens do not carry `act`.
+	 * tokens do not carry `act`. Passing it with `refreshToken` throws.
 	 */
 	act?: OAuthActorClaim;
 	/**

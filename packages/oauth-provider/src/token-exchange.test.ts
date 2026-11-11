@@ -15,7 +15,12 @@ import {
 	oauthTokenExchange,
 	TOKEN_EXCHANGE_GRANT_TYPE,
 } from "./token-exchange";
-import type { Confirmation, OAuthOptions, Scope } from "./types";
+import type {
+	Confirmation,
+	OAuthOptions,
+	OAuthTokenIssueParams,
+	Scope,
+} from "./types";
 
 const issuer = "http://localhost:3000";
 const mcp = "https://mcp.example.com";
@@ -1068,8 +1073,10 @@ describe("oauthTokenExchange without the JWT plugin", () => {
  * @see https://github.com/better-auth/better-auth/issues/8023
  */
 describe("OAuthTokenIssueParams.maxExpiresAt", () => {
-	it("never issues a refresh token with act", async () => {
+	it("never issues or rotates a refresh token with act", async () => {
 		const delegatingGrant = "urn:better-auth:test:delegating-grant";
+		// A parent refresh token the grant asks to rotate, when set.
+		let parent: OAuthTokenIssueParams["refreshToken"];
 		const delegatingPlugin = {
 			id: "test-delegating-grant",
 			init(ctx) {
@@ -1084,7 +1091,9 @@ describe("OAuthTokenIssueParams.maxExpiresAt", () => {
 								client,
 								user: user!,
 								scopes: ["read", "offline_access"],
+								resources: [api],
 								act: { sub: "service-a" },
+								refreshToken: parent,
 							});
 						},
 					},
@@ -1111,20 +1120,40 @@ describe("OAuthTokenIssueParams.maxExpiresAt", () => {
 				token_endpoint_auth_method: "client_secret_post",
 				grant_types: [delegatingGrant, "refresh_token"],
 				scope: "read offline_access",
+				resources: [api],
 			},
 		});
-		const { data } = await client.$fetch<TokenResponse>("/oauth2/token", {
-			method: "POST",
-			body: new URLSearchParams({
-				grant_type: delegatingGrant,
-				client_id: registered.client_id,
-				client_secret: registered.client_secret!,
-				user_id: user.id,
-			}),
-			headers: { "content-type": "application/x-www-form-urlencoded" },
-		});
-		expect(data?.access_token).toBeDefined();
+		const issue = () =>
+			client.$fetch<TokenResponse>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: delegatingGrant,
+					client_id: registered.client_id,
+					client_secret: registered.client_secret!,
+					user_id: user.id,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			});
+
+		const { data } = await issue();
+		expect(decodeJwt(data!.access_token).act).toEqual({ sub: "service-a" });
 		expect(data?.refresh_token).toBeUndefined();
+
+		parent = {
+			id: "parent-refresh-token",
+			token: "parent",
+			userId: user.id,
+			clientId: registered.client_id,
+			scopes: ["read", "offline_access"],
+			createdAt: new Date(),
+			expiresAt: new Date(Date.now() + 60_000),
+		};
+		const { error } = await issue();
+		expect(error).toMatchObject({
+			status: 500,
+			error: "server_error",
+			error_description: "issueTokens does not accept act with refreshToken",
+		});
 	});
 
 	it("caps the expiry of an extension grant's access token", async () => {

@@ -1266,6 +1266,14 @@ async function createUserTokens(
 		verificationValue,
 	} = params;
 	const authenticationContext = { acr, amr };
+	// A delegated issuance gets no refresh token (see `isRefreshToken`), so it
+	// cannot rotate one either: the parent would stay usable.
+	if (params.act && existingRefreshToken) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: "issueTokens does not accept act with refreshToken",
+		});
+	}
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
