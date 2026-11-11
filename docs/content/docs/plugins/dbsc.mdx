@@ -82,7 +82,7 @@ Chrome only registers keys over HTTPS. Sessions created on a plain `http://local
 
 1. A user signs in. The sign-in response offers the browser a registration challenge.
 2. A supporting browser creates a key pair and sends the public key, signed over the challenge, to `/dbsc/register`.
-3. Better Auth stores the public key on the session and sets a bound cookie that expires after 10 minutes.
+3. Better Auth stores the public key on the session and sets a bound cookie that expires after `boundCookieMaxAge` seconds, 10 minutes by default.
 4. Before the bound cookie expires, the browser signs a challenge from Better Auth with the private key and sends it to `/dbsc/refresh`. It receives a new bound cookie and the challenge for its next refresh.
 
 Some sign-ins cannot carry the registration offer to the browser directly: social and SSO sign-ins that end in a redirect, and sign-ins that run on your server, such as a server action. For those, Better Auth sets a short-lived cookie, and the next same-site browser request to Better Auth makes the offer instead, usually the `/get-session` call the client makes after sign-in. If the browser does not register within 5 minutes, the session stays unbound.

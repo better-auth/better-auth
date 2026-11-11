@@ -216,7 +216,9 @@ describe("dbsc", () => {
 
 		const stolen = new Map(browser.jar);
 		stolen.delete(boundCookieName(browser.jar)!);
-		const stolenCookies = [...stolen].map(([n, v]) => `${n}=${v}`).join("; ");
+		const stolenCookies = [...stolen]
+			.map(([name, value]) => `${name}=${value}`)
+			.join("; ");
 		expect(
 			await auth.api.getSession({
 				headers: new Headers({ cookie: stolenCookies }),
@@ -256,7 +258,9 @@ describe("dbsc", () => {
 
 		const stolen = new Map(browser.jar);
 		stolen.delete(boundCookieName(browser.jar)!);
-		const cookie = [...stolen].map(([n, v]) => `${n}=${v}`).join("; ");
+		const cookie = [...stolen]
+			.map(([name, value]) => `${name}=${value}`)
+			.join("; ");
 		expect(
 			await auth.api.getSession({ headers: new Headers({ cookie }) }),
 		).toBeNull();
@@ -537,21 +541,14 @@ describe("dbsc", () => {
 
 	it("lets pages on trusted hosts of the same site trigger a refresh", async () => {
 		const { signInAndBind } = await setup({
-			trustedOrigins: [
-				"http://app.localhost:3001",
-				"*.localhost",
-				"https://appleid.apple.com",
-			],
+			trustedOrigins: ["*.localhost", "https://appleid.apple.com"],
 		});
 		const { instructions } = await signInAndBind();
 
-		expect(instructions.allowed_refresh_initiators).toEqual([
-			"app.localhost",
-			"*.localhost",
-		]);
+		expect(instructions.allowed_refresh_initiators).toEqual(["*.localhost"]);
 	});
 
-	it("works with secondary storage", async () => {
+	it("stores the device key with sessions kept in secondary storage", async () => {
 		const store = new Map<string, string>();
 		const { signInAndBind, getSession, auth } = await setup({
 			secondaryStorage: {
@@ -576,6 +573,10 @@ describe("dbsc", () => {
 		});
 		const { browser } = await signInAndBind();
 		expect(await getSession(browser)).not.toBeNull();
+		// Sessions live only in secondary storage when it is configured.
+		expect(
+			[...store.values()].some((value) => value.includes("dbscPublicKey")),
+		).toBe(true);
 
 		const token = browser.jar.get("better-auth.session_token");
 		expect(

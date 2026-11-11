@@ -8,6 +8,7 @@
   "dependencies": {
     "@better-auth/ciba": "workspace:*",
     "@better-auth/cimd": "workspace:*",
+    "@better-auth/dbsc": "workspace:*",
     "@better-auth/electron": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
     "@better-auth/mcp": "workspace:*",

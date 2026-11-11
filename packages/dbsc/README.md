@@ -19,6 +19,6 @@ export const auth = betterAuth({
 });
 ```
 
-Then run `npx auth@latest migrate` to add the `session.dbscPublicKey` field.
+Then migrate your database to add the `session.dbscPublicKey` field: run `npx auth@latest migrate` with the built-in database adapter, or `npx auth@latest generate` and your ORM's migration with Prisma or Drizzle.
 
 See the [documentation](https://www.better-auth.com/docs/plugins/dbsc) for browser support, deployment requirements, and limits.

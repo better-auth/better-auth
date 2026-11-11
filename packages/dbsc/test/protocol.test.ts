@@ -49,6 +49,25 @@ describe("toRefreshInitiators", () => {
 			),
 		).toEqual(["app.example.com", "*.example.com"]);
 	});
+
+	it("uses the public suffix list to decide what counts as the same site", () => {
+		expect(
+			toRefreshInitiators(
+				[
+					"https://app.example.co.uk",
+					"https://evil.co.uk",
+					"https://other-app.vercel.app",
+				],
+				"api.example.co.uk",
+			),
+		).toEqual(["app.example.co.uk"]);
+		expect(
+			toRefreshInitiators(
+				["https://other-app.vercel.app"],
+				"my-app.vercel.app",
+			),
+		).toEqual([]);
+	});
 });
 
 describe("readHeaderString", () => {

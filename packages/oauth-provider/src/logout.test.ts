@@ -32,6 +32,8 @@ type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
 describe("oauth logout", async () => {
 	const port = 3004;
+	// Lets a test make a plugin reject every session.
+	let rejectSessions = false;
 	const baseUrl = `http://localhost:${port}`;
 	const rpBaseUrl = "http://localhost:5000";
 	const state = "123";
@@ -51,6 +53,7 @@ describe("oauth logout", async () => {
 					scopes,
 				}),
 				jwt(),
+				{ id: "session-gate", validateSession: () => !rejectSessions },
 			],
 		});
 	let { headers } = await signInWithTestUser();
@@ -365,6 +368,24 @@ describe("oauth logout", async () => {
 
 		const after = await auth.api.getSession({ headers });
 		expect(after).toBeNull();
+	});
+
+	it("clears the browser's cookies but keeps a session a plugin rejects", async () => {
+		const sessionHeaders = new Headers(headers);
+		rejectSessions = true;
+		try {
+			const { completed } = await completeBrowserConfirmation({});
+			expect(completed.response.status).toBe(200);
+			const cookies = parseSetCookieHeader(
+				completed.response.headers.get("set-cookie") ?? "",
+			);
+			expect(cookies.get("better-auth.session_token")?.value).toBe("");
+		} finally {
+			rejectSessions = false;
+		}
+		expect(
+			await auth.api.getSession({ headers: sessionHeaders }),
+		).not.toBeNull();
 	});
 
 	/**

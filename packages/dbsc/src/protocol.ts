@@ -3,6 +3,7 @@ import type { CookieOptions } from "better-call";
 import { serializeCookie } from "better-call";
 import type { JWK } from "jose";
 import { EmbeddedJWK, importJWK, jwtVerify } from "jose";
+import { getDomain } from "tldts";
 
 /**
  * Header and JSON names from the Device Bound Session Credentials
@@ -131,20 +132,13 @@ export function serializeCookieAttributes(
 const HOST_PATTERN = /^(\*\.)?[a-z0-9-]+(\.[a-z0-9-]+)*$/i;
 
 /**
- * shortcut: treats the last two labels of the auth host as its site, which is
- * too broad under multi-label public suffixes such as `co.uk`; use a public
- * suffix list if a wider initiator set ever matters.
+ * The registrable domain that makes a host's site, as browsers compute it from
+ * the Public Suffix List, or the host itself when it has none (`localhost`).
  */
 function siteOf(host: string) {
-	return host.split(".").slice(-2).join(".");
+	return getDomain(host, { allowPrivateDomains: true }) ?? host;
 }
 
-/**
- * Host patterns, in the form Chrome accepts for `allowed_refresh_initiators`,
- * for the trusted origins on the auth host's site. Pages on these hosts may
- * trigger a refresh, which matters when the app and Better Auth run on
- * different hosts of one site.
- */
 export function toRefreshInitiators(
 	trustedOrigins: string[],
 	authHost: string,
@@ -159,7 +153,7 @@ export function toRefreshInitiators(
 			host &&
 			host !== authHost &&
 			HOST_PATTERN.test(host) &&
-			(host === site || host === `*.${site}` || host.endsWith(`.${site}`))
+			siteOf(host.replace(/^\*\./, "")) === site
 		) {
 			hosts.add(host);
 		}
