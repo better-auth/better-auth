@@ -1,5 +1,7 @@
 # @better-auth/expo
 
+## 1.8.0-beta.8
+
 ## 1.8.0-beta.7
 
 ## 1.8.0-beta.6
