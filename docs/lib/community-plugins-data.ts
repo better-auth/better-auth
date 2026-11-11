@@ -378,7 +378,7 @@ export const communityPlugins: CommunityPlugin[] = [
 	{
 		name: "BYO (byo-oss)",
 		url: "https://byo.dev",
-		description: "Open-source tooling for better-auth apps",
+		description: "Open-source packages for better-auth apps.",
 		author: {
 			name: "byo-oss",
 			github: "byo-oss",
