@@ -17,6 +17,7 @@ export { resolveSigningCerts, validateCertSources } from "./cert";
 export {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
+	readSAMLEmail,
 	validateSAMLResponseBinding,
 } from "./response-binding";
 export { validateAudience, validateInResponseTo } from "./response-validation";

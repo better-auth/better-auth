@@ -6,6 +6,7 @@ import type {
 } from "better-auth";
 import { APIError } from "better-auth/api";
 import type { handleOAuthUserInfo } from "better-auth/oauth2";
+import * as z from "zod";
 import type {
 	SSOMappedUser,
 	SSOOptions,
@@ -39,12 +40,22 @@ export async function mapSSOProfile(
 			const { email, name, image } = result;
 			mappedUser = { email, name, image };
 		}
-	} catch {
-		logFailure(logger, "SSO profile mapping failed");
+	} catch (error) {
+		logFailure(logger, "SSO profile mapping failed", {
+			providerId: input.providerId,
+			protocol: input.protocol,
+			error,
+		});
 		throw profileMappingFailure();
 	}
-	if (!isSSOMappedUser(mappedUser)) {
-		logFailure(logger, "SSO profile mapper returned an invalid profile");
+	if (
+		!isSSOMappedUser(mappedUser) ||
+		!isAcceptedEmail(mappedUser.email, input.providerUser.email)
+	) {
+		logFailure(logger, "SSO profile mapper returned an invalid profile", {
+			providerId: input.providerId,
+			protocol: input.protocol,
+		});
 		throw profileMappingFailure();
 	}
 	const { email, name, image } = mappedUser;
@@ -72,6 +83,18 @@ function isSSOMappedUser(value: unknown): value is SSOMappedUser {
 		(value.email === null || isOptionalString(value.email)) &&
 		isOptionalString(value.name) &&
 		isOptionalString(value.image)
+	);
+}
+
+/** A changed email must be an address; the provider's own email passes as sent. */
+function isAcceptedEmail(
+	email: string | null | undefined,
+	providerEmail: string | undefined,
+): boolean {
+	return (
+		typeof email !== "string" ||
+		email.toLowerCase() === providerEmail?.toLowerCase() ||
+		z.email().safeParse(email).success
 	);
 }
 
@@ -117,9 +140,13 @@ type ResolutionLogger = Pick<
 	"error"
 >;
 
-function logFailure(logger: ResolutionLogger, message: string): void {
+function logFailure(
+	logger: ResolutionLogger,
+	message: string,
+	details?: Record<string, unknown>,
+): void {
 	try {
-		logger.error(message);
+		logger.error(message, ...(details ? [details] : []));
 	} catch {
 		// A custom logger must not change the stable authentication failure.
 	}

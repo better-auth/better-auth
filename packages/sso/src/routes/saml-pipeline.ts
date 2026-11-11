@@ -22,6 +22,7 @@ import {
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
+	readSAMLEmail,
 	validateAudience,
 	validateInResponseTo,
 	validateSAMLAlgorithms,
@@ -624,11 +625,11 @@ export async function processSAMLResponse(
 			]),
 		),
 		id: extract.nameID,
-		email:
-			attr(mapping.email || "email") ||
-			(nameIDFormat === constants.SAML_EMAIL_NAME_ID_FORMAT
-				? extract.nameID
-				: undefined),
+		email: readSAMLEmail(attr, {
+			mappedAttribute: mapping.email,
+			nameID: extract.nameID,
+			nameIDFormat,
+		}),
 		name:
 			[
 				attr(mapping.firstName || "givenName"),
@@ -647,13 +648,19 @@ export async function processSAMLResponse(
 	const providerUserAttributes = Object.fromEntries(
 		Object.entries(userInfo).filter(([key]) => key !== "id"),
 	);
-	const missingUserInfo = (hasNameId: boolean, hasEmail: boolean) => {
-		ctx.context.logger.error("Missing essential user info from SAML response", {
-			providerId,
-			attributeNames: Object.keys(attributes),
-			hasNameId,
-			hasEmail,
-		});
+	const missingUserInfo = (hasNameId: boolean, providerSentEmail = false) => {
+		ctx.context.logger.error(
+			providerSentEmail
+				? "mapProfileToUser refused the email the SAML provider sent"
+				: hasNameId
+					? `SAML sign-in has no email. Send an email attribute, or a NameID with Format ${constants.SAML_EMAIL_NAME_ID_FORMAT}, from the IdP; set samlConfig.mapping.email; or return an email from mapProfileToUser.`
+					: "SAML response has no NameID",
+			{
+				providerId,
+				attributeNames: Object.keys(attributes),
+				nameIDFormat,
+			},
+		);
 		return new APIError("BAD_REQUEST", {
 			code: "MISSING_USER_INFO",
 			message:
@@ -661,7 +668,7 @@ export async function processSAMLResponse(
 		});
 	};
 	if (!userInfo.id) {
-		throw missingUserInfo(false, Boolean(userInfo.email));
+		throw missingUserInfo(false);
 	}
 	const accountKey = { issuer, accountId: userInfo.id };
 	const mappedUser = await mapSSOProfile(
@@ -690,7 +697,7 @@ export async function processSAMLResponse(
 	});
 	const email = mappedUser.email?.toLowerCase();
 	if (!email) {
-		throw missingUserInfo(true, false);
+		throw missingUserInfo(true, Boolean(userInfo.email));
 	}
 	const providerUser = {
 		...providerUserAttributes,

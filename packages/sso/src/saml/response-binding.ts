@@ -1,6 +1,10 @@
 import type { Element as XMLElement } from "@xmldom/xmldom";
 import { DOMParser } from "@xmldom/xmldom";
 import { APIError } from "better-auth/api";
+import {
+	SAML_EMAIL_NAME_ID_FORMAT,
+	SAML_FALLBACK_EMAIL_ATTRIBUTES,
+} from "../constants";
 import { countAllNodes, xmlParser } from "./parser";
 
 const SAML_HTTP_POST_BINDING = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
@@ -294,6 +298,31 @@ function validateAudienceRestrictions(
 			code: "SAML_AUDIENCE_MISMATCH",
 		});
 	}
+}
+
+/**
+ * Reads the user's email from a SAML assertion: the mapped attribute (default
+ * `email`), then a NameID whose Format is `emailAddress`, then, without a
+ * mapped attribute, the fallback email attributes. Other NameIDs are opaque or
+ * unspecified, so they never become the email.
+ */
+export function readSAMLEmail(
+	attr: (name: string) => string | undefined,
+	options: {
+		mappedAttribute?: string | undefined;
+		nameID?: string | undefined;
+		nameIDFormat?: string | undefined;
+	},
+): string | undefined {
+	return (
+		attr(options.mappedAttribute || "email") ||
+		(options.nameIDFormat === SAML_EMAIL_NAME_ID_FORMAT
+			? options.nameID
+			: undefined) ||
+		(options.mappedAttribute
+			? undefined
+			: SAML_FALLBACK_EMAIL_ATTRIBUTES.map(attr).find(Boolean))
+	);
 }
 
 function getBearerSubjectConfirmationData(assertion: XmlNode): XmlNode[] {
