@@ -123,8 +123,8 @@ export const auth = betterAuth({
 
   On a direct `auth.api` call, what the function receives depends on `baseURL`:
 
-  * **Static `baseURL`** (a string, or not set): the call uses the origins resolved at initialization, so `request` is `undefined`. When you pass a `request` that is not a GET and carries a `Cookie` header, the origin check calls the function again with that `Request`, unless you disabled the check.
-  * **Dynamic `baseURL`** (`allowedHosts`): the function receives the `request` you pass. If you pass `headers` instead, and they include `Host` or `X-Forwarded-Host`, it receives a `Request` built from those headers. If you pass neither, or headers with neither host header, the call uses `fallback` and `request` is `undefined`. Without `fallback`, the call throws an error.
+  * **Static `baseURL`** (a string, or not set): the call uses the origins resolved at initialization, so `request` is `undefined`. A few endpoints run their own CSRF check, such as email sign-in and sign-up. That check can call the function again with the `request` you pass.
+  * **Dynamic `baseURL`** (`allowedHosts`): the function receives the `request` you pass. If you pass `headers` with a `Host` header instead, it receives a `Request` built from those headers. `X-Forwarded-Host` also works when `advanced.trustedProxyHeaders` is enabled. If you pass neither, or headers without `Host` or `X-Forwarded-Host`, the call uses `fallback` and `request` is `undefined`. Without `fallback`, the call throws an error.
 
   Return your default trusted origins when `request` is `undefined`.
 </Callout>
