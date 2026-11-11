@@ -17,14 +17,113 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Pull requests run only the E2E jobs whose Turborepo tasks are affected by the change.
+  # Merge queue runs always run every job. Push runs skip commits the merge queue already
+  # tested and run every job for commits that bypassed it. Any failure to compute the set runs every job.
+  changes:
+    name: Select E2E jobs
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read # look up this commit's merge queue E2E run on push
+    outputs:
+      smoke: ${{ steps.select.outputs.smoke }}
+      integration: ${{ steps.select.outputs.integration }}
+      adapters: ${{ steps.select.outputs.adapters }}
+      allow-skips: ${{ steps.select.outputs.allow-skips }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+
+      - name: Select affected E2E jobs
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
+          ADAPTER_MATRIX: |
+            [
+              { "packages": "@better-auth-test/adapter-factory", "compose_services": "" },
+              { "packages": "@better-auth-test/drizzle-adapter", "compose_services": "postgres mysql" },
+              { "packages": "@better-auth-test/drizzle-v2-relations-adapter", "compose_services": "postgres mysql" },
+              { "packages": "@better-auth-test/kysely-prisma-adapter", "compose_services": "postgres-kysely mysql-kysely postgres-kysely2 mssql" },
+              { "packages": "@better-auth-test/memory-adapter", "compose_services": "" },
+              { "packages": "@better-auth-test/mongo-adapter", "compose_services": "mongodb" },
+              { "packages": "@better-auth-test/prisma-adapter", "compose_services": "postgres-prisma mysql-prisma" }
+            ]
+        run: |
+          all_adapters=$(jq -c . <<< "$ADAPTER_MATRIX")
+
+          run_all() {
+            {
+              echo "smoke=true"
+              echo "integration=true"
+              echo "adapters=$all_adapters"
+              echo "allow-skips=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            # The merge queue pushes the exact commit it tested. Commits merged by bypassing the queue have no such run.
+            if verified=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/e2e.yml/runs?head_sha=$GITHUB_SHA&event=merge_group&status=success" --jq '.total_count') \
+              && [[ "$verified" -gt 0 ]]; then
+              echo "This commit already passed E2E in the merge queue; skipping every E2E job."
+              {
+                echo "smoke=false"
+                echo "integration=false"
+                echo "adapters=[]"
+                echo "allow-skips=true"
+              } >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          if [[ "$EVENT_NAME" != "pull_request" ]]; then
+            echo "Running every E2E job for the $EVENT_NAME event."
+            run_all
+          fi
+
+          # These files shape every E2E job but are not Turborepo task inputs.
+          if ! ci_changes=$(git diff --name-only "$BASE_SHA"...HEAD -- docker-compose.yml .github/workflows/e2e.yml .github/actions) \
+            || [[ -n "$ci_changes" ]]; then
+            echo "E2E setup changed; running every E2E job."
+            run_all
+          fi
+
+          # turbo exits non-zero and prints no task list when it cannot resolve the base commit.
+          if ! affected=$(./node_modules/.bin/turbo query affected --tasks e2e:integration e2e:smoke --base "$BASE_SHA" --head HEAD) \
+            || ! tasks=$(jq -ce '[.data.affectedTasks.items[].fullName]' <<< "$affected"); then
+            echo "::warning::Could not compute affected E2E tasks; running every E2E job."
+            run_all
+          fi
+
+          echo "Affected E2E tasks:"
+          jq -r '.[]' <<< "$tasks"
+
+          {
+            echo "smoke=$(jq 'any(.[]; endswith("#e2e:smoke"))' <<< "$tasks")"
+            echo "integration=$(jq 'index("@better-auth-test/integration#e2e:integration") != null' <<< "$tasks")"
+            echo "adapters=$(jq -c --argjson tasks "$tasks" '[.[] | select((.packages + "#e2e:integration") as $task | $tasks | index($task) != null)]' <<< "$all_adapters")"
+            echo "allow-skips=true"
+          } >> "$GITHUB_OUTPUT"
+
   smoke:
     name: Smoke test (${{ matrix.node-version }})
+    needs: changes
+    if: needs.changes.outputs.smoke == 'true'
     timeout-minutes: 30
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22.x, 24.x]
+        # Node 22 runs in the merge queue and on push; pull requests run only the default Node 24.
+        node-version: ${{ github.event_name == 'pull_request' && fromJSON('["24.x"]') || fromJSON('["22.x", "24.x"]') }}
     permissions:
       contents: read
     env:
@@ -80,6 +179,8 @@ jobs:
         run: docker compose down --volumes --remove-orphans
   integration:
     name: Integration test
+    needs: changes
+    if: needs.changes.outputs.integration == 'true'
     timeout-minutes: 60
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
     permissions:
@@ -153,6 +254,8 @@ jobs:
         run: docker compose down --volumes --remove-orphans
   adapter-integration:
     name: ${{ matrix.packages }} Integration Test
+    needs: changes
+    if: needs.changes.outputs.adapters != '[]'
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
     timeout-minutes: 30
     permissions:
@@ -160,21 +263,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - packages: "@better-auth-test/adapter-factory"
-            compose_services: ""
-          - packages: "@better-auth-test/drizzle-adapter"
-            compose_services: "postgres mysql"
-          - packages: "@better-auth-test/drizzle-v2-relations-adapter"
-            compose_services: "postgres mysql"
-          - packages: "@better-auth-test/kysely-prisma-adapter"
-            compose_services: "postgres-kysely mysql-kysely postgres-kysely2 mssql"
-          - packages: "@better-auth-test/memory-adapter"
-            compose_services: ""
-          - packages: "@better-auth-test/mongo-adapter"
-            compose_services: "mongodb"
-          - packages: "@better-auth-test/prisma-adapter"
-            compose_services: "postgres-prisma mysql-prisma"
+        # The adapter list lives in the changes job's ADAPTER_MATRIX.
+        include: ${{ fromJSON(needs.changes.outputs.adapters) }}
     env:
       COMPOSE_SERVICES: ${{ matrix.compose_services }}
       FILTER: ${{ matrix.packages }}
@@ -251,9 +341,11 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
-    needs: [smoke, integration, adapter-integration]
+    needs: [changes, smoke, integration, adapter-integration]
     if: always()
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
         with:
+          # Skips are allowed only when the changes job chose them; every other run must run all jobs.
+          allowed-skips: ${{ needs.changes.outputs.allow-skips == 'true' && 'smoke, integration, adapter-integration' || '' }}
           jobs: ${{ toJSON(needs) }}

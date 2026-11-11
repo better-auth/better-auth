@@ -136,7 +136,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22.x, 24.x]
+        # Node 22 runs in the merge queue and on push; pull requests run only the default Node 24.
+        node-version: ${{ github.event_name == 'pull_request' && fromJSON('["24.x"]') || fromJSON('["22.x", "24.x"]') }}
     env:
       COMPOSE_SERVICES: postgres postgres-kysely mongodb mysql
     steps:

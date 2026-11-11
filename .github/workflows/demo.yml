@@ -1,10 +1,15 @@
 name: Demo
 
+# Demo is not a required check, so pull requests run it only when they change a demo.
+# Pushes to main catch demos broken by package changes.
 on:
   pull_request:
     types:
       - opened
       - synchronize
+    paths:
+      - "demo/**"
+      - ".github/workflows/demo.yml"
   push:
     branches:
       - main
