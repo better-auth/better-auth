@@ -373,11 +373,18 @@ describe("dbsc", () => {
 	});
 
 	it("refuses registration once the registration window has passed", async () => {
-		const { signIn, register } = await setup();
+		const { signIn, register, auth } = await setup();
 		const browser = await createBrowser();
-		const challenge = readRegistrationChallenge(await signIn(browser))!;
+		const { token } = await (await signIn(browser)).json();
 		vi.useFakeTimers({ toFake: ["Date"] });
 		vi.setSystemTime(Date.now() + 5 * 60 * 1000 + 1000);
+		// A challenge that is still valid, so only the session's age can refuse it.
+		const challenge = "late-registration-challenge";
+		await (await auth.$context).internalAdapter.createVerificationValue({
+			identifier: `dbsc-registration:${challenge}`,
+			value: token,
+			expiresAt: new Date(Date.now() + 60 * 1000),
+		});
 		expect((await register(browser, challenge)).status).toBe(400);
 	});
 
