@@ -2177,7 +2177,8 @@ describe("internal adapter test", async () => {
 			expect(consumed?.value).toBe("user-stalled");
 		});
 
-		it("never consumes a superseded row on Cloudflare Workers without transactions", async () => {
+		/** A store without transactions whose first verification cleanup waits for `release`. */
+		async function makeHeldAdapter() {
 			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
 			onTestFinished(() => {
 				vi.unstubAllGlobals();
@@ -2187,7 +2188,6 @@ describe("internal adapter test", async () => {
 			const db = new Kysely<Record<string, never>>({
 				dialect: new NodeSqliteDialect({ database }),
 			});
-			// Hold the first consume between its two writes, like D1 does between statements.
 			let release = () => {};
 			const held = new Promise<void>((resolve) => {
 				release = resolve;
@@ -2213,21 +2213,30 @@ describe("internal adapter test", async () => {
 					return withoutTransaction;
 				},
 			});
-			await adapter.createVerificationValue({
-				identifier: "consume:superseded",
-				value: "old",
-				expiresAt: new Date(Date.now() + 60_000),
-			});
-			// The newest row is picked by `createdAt`.
-			await new Promise((resolve) => setTimeout(resolve, 10));
-			await adapter.createVerificationValue({
-				identifier: "consume:superseded",
-				value: "new",
-				expiresAt: new Date(Date.now() + 60_000),
-			});
+			const create = async (identifier: string, value: string) => {
+				await adapter.createVerificationValue({
+					identifier,
+					value,
+					expiresAt: new Date(Date.now() + 60_000),
+				});
+				// The newest row is picked by `createdAt`.
+				await new Promise((resolve) => setTimeout(resolve, 10));
+			};
+			return {
+				adapter,
+				create,
+				release,
+				untilHeld: () => vi.waitFor(() => expect(holding).toBe(true)),
+			};
+		}
+
+		it("never consumes a superseded row on Cloudflare Workers without transactions", async () => {
+			const { adapter, create, release, untilHeld } = await makeHeldAdapter();
+			await create("consume:superseded", "old");
+			await create("consume:superseded", "new");
 
 			const first = adapter.consumeVerificationValue("consume:superseded");
-			await vi.waitFor(() => expect(holding).toBe(true));
+			await untilHeld();
 			const second =
 				await adapter.consumeVerificationValue("consume:superseded");
 			release();
@@ -2236,6 +2245,20 @@ describe("internal adapter test", async () => {
 			expect(values).toContain("new");
 			expect(values).not.toContain("old");
 			expect(values.filter(Boolean)).toHaveLength(1);
+		});
+
+		it("keeps a row created while a consume is in flight", async () => {
+			const { adapter, create, release, untilHeld } = await makeHeldAdapter();
+			await create("consume:reissued", "first");
+
+			const consumed = adapter.consumeVerificationValue("consume:reissued");
+			await untilHeld();
+			await create("consume:reissued", "second");
+			release();
+
+			expect((await consumed)?.value).toBe("first");
+			const remaining = await adapter.findVerificationValue("consume:reissued");
+			expect(remaining?.value).toBe("second");
 		});
 
 		it("returns null for an unknown identifier", async () => {

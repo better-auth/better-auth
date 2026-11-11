@@ -1573,6 +1573,12 @@ export const createInternalAdapter = (
 										where: [
 											...where,
 											{ field: "id", operator: "ne", value: latest.id },
+											// A row created after this read is not stale.
+											{
+												field: "createdAt",
+												operator: "lte",
+												value: latest.createdAt,
+											},
 										],
 									});
 									return txAdapter.consumeOne<Verification>({
