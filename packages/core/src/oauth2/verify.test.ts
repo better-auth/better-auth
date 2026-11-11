@@ -119,6 +119,8 @@ describe("verifyBearerToken", () => {
 				message,
 				body: {
 					message,
+					error: "invalid_token",
+					error_description: message,
 				},
 			});
 		}
@@ -1174,6 +1176,18 @@ describe("verifyBearerToken", () => {
 		function mockIntrospection(body: Record<string, unknown>) {
 			mockJSONResponse({ active: true, iss: issuer, sub: "user-123", ...body });
 		}
+
+		it("should reject an inactive introspected token as an invalid token", async () => {
+			mockJSONResponse({ active: false });
+
+			await expectUnauthorized(
+				verifyBearerToken("revoked-token", {
+					verifyOptions: { issuer, audience },
+					remoteVerify,
+				}),
+				"token inactive",
+			);
+		});
 
 		it("should reject an active token when audience is required but introspection omits aud", async () => {
 			mockIntrospection({ scope: "read" });

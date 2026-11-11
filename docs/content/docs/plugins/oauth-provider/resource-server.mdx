@@ -49,6 +49,10 @@ export const GET = async (req: Request) => {
 
 The thrown error has no `WWW-Authenticate` header, which [RFC 6750 §3](https://datatracker.ietf.org/doc/html/rfc6750#section-3) requires when a request has no usable token. To add it, pass the error and your API's resource identifier to `createResourceServerChallenge` from `@better-auth/oauth-provider`, and send the returned `headers`. It returns a challenge for 401 and `insufficient_scope` errors, and `undefined` for any other error. Bearer challenges, including `insufficient_scope`, carry a `resource_metadata` link to your [protected resource metadata](#protected-resource-metadata). A DPoP failure gets a `DPoP` challenge instead ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)). It lists the accepted proof algorithms in `algs` and has no `resource_metadata`.
 
+A request can send a token that fails verification, for example an expired or revoked one. Its Bearer challenge then carries `error="invalid_token"` and an `error_description` ([RFC 6750 §3.1](https://datatracker.ietf.org/doc/html/rfc6750#section-3.1)). A request that sent no token gets a challenge without an error code. The client can then tell a token it must replace from a request that needs authorization first. When your own code rejects a presented token, throw an `APIError` with status `UNAUTHORIZED` and `error: "invalid_token"` to get the same challenge.
+
+RFC 6750 limits `error_description` to printable ASCII without `"` or `\`. To fit a description into that set, `createResourceServerChallenge` replaces each `"` with `'` and each other character outside it with a space. When nothing is left, it leaves `error_description` out. The returned error's `body` keeps the original `error` and `error_description`.
+
 If the API runs in the same process as your auth server, you can use the resource client instead. Its 401 and `insufficient_scope` errors already carry the challenge in `headers`.
 
 ```ts title="lib/server-client.ts"
