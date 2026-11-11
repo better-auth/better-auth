@@ -1,5 +1,13 @@
 # @better-auth/electron
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12409](https://github.com/better-auth/better-auth/pull/12409) [`9362c0d`](https://github.com/better-auth/better-auth/commit/9362c0d42e7f65a1dbfd6318360cd97ea9dd9d5b) Thanks [@bytaesu](https://github.com/bytaesu)! - A deep link that fails to authenticate, such as one opened again after sign-in, is now logged instead of causing an unhandled promise rejection in the main process.
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
 ## 1.7.20
 
 ## 1.7.19

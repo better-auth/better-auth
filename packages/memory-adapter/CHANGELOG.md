@@ -1,5 +1,7 @@
 # @better-auth/memory-adapter
 
+## 1.7.21
+
 ## 1.7.20
 
 ### Patch Changes
