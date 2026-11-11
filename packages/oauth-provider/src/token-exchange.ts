@@ -460,9 +460,12 @@ async function exchangeToken(
 		actor,
 		act,
 	};
-	// Hooks get a copy, so nothing they change reaches the issued token.
-	const hookRequest = structuredClone(request);
-	if (options.allowExchange && !(await options.allowExchange(hookRequest))) {
+	// Each hook gets its own copy, so nothing one changes reaches the other
+	// hook or the issued token.
+	if (
+		options.allowExchange &&
+		!(await options.allowExchange(structuredClone(request)))
+	) {
 		deny("token exchange denied by policy");
 	}
 	// `act` is always set when `actor` is.
@@ -471,10 +474,9 @@ async function exchangeToken(
 			? withActorClaims(
 					ctx,
 					act,
-					await options.delegation.actorClaims({
-						...hookRequest,
-						actor: hookRequest.actor!,
-					}),
+					await options.delegation.actorClaims(
+						structuredClone({ ...request, actor }),
+					),
 				)
 			: act;
 	// Delegated access ends when either the subject or the actor token expires.

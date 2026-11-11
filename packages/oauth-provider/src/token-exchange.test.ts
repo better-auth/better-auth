@@ -1899,16 +1899,22 @@ describe("oauthTokenExchange delegation", () => {
 
 	it("ignores hook changes to expiry, scopes, and the user", async () => {
 		const farFuture = Math.floor(Date.now() / 1000) + 86_400;
+		let seen:
+			| { actorSub: string; userId: string; scopes: string[] }
+			| undefined;
 		const { delegate } = await bootDelegation(
 			{
 				allowExchange: (request) => {
 					request.scopes.push("write");
 					request.user.id = "someone-else";
+					if (request.actor) request.actor.sub = "forged-actor";
 					(request.subjectToken as { exp: number }).exp = farFuture;
 					return true;
 				},
 				delegation: {
-					actorClaims: ({ actor }) => {
+					actorClaims: ({ actor, user, scopes }) => {
+						// Changes made by allowExchange do not reach this hook.
+						seen = { actorSub: actor.sub, userId: user.id, scopes };
 						(actor.token as { exp: number }).exp = farFuture;
 						return {};
 					},
@@ -1921,7 +1927,13 @@ describe("oauthTokenExchange delegation", () => {
 		expect(error).toBeNull();
 		expect(data!.expires_in).toBeLessThanOrEqual(20);
 		expect(data!.scope).toBe("read");
-		expect(decodeJwt(data!.access_token).sub).not.toBe("someone-else");
+		const issued = decodeJwt(data!.access_token);
+		expect(issued.sub).not.toBe("someone-else");
+		expect(seen).toEqual({
+			actorSub: (issued.act as { sub: string }).sub,
+			userId: issued.sub,
+			scopes: ["read"],
+		});
 	});
 
 	it("rejects an actor token whose client id equals a user id", async () => {
