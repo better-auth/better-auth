@@ -522,6 +522,19 @@ async function verifyAccessTokenPayload(
 			);
 			payload = verify.payload;
 		} catch (error) {
+			if (error instanceof joseErrors.JWTExpired) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "token expired",
+				});
+			}
+			if (
+				error instanceof joseErrors.JOSEError &&
+				!isJoseInfrastructureError(error)
+			) {
+				throw new APIError("UNAUTHORIZED", {
+					message: "invalid access token",
+				});
+			}
 			throw new Error(error as unknown as string);
 		}
 	}
