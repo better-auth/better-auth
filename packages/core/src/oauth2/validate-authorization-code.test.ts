@@ -27,6 +27,8 @@ describe("authorizationCodeRequest", () => {
 			tokenEndpointAuth: {
 				method: "custom",
 				customizeRequest: ({ headers }) => {
+					expect(headers.hasOwnProperty("Authorization")).toBe(true);
+					expect(headers.Authorization).toBe("Bearer caller");
 					headers.Authorization = "first";
 					headers.authorization = "Custom hook";
 				},

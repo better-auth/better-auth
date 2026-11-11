@@ -173,15 +173,20 @@ function assertCompleteManualClientAssertion(body: URLSearchParams) {
  * write replaces a caller header instead of being sent next to it.
  */
 function caseInsensitiveHeaders(headers: Record<string, string>) {
-	const name = (key: string | symbol) =>
+	const lower = (key: string | symbol) =>
 		typeof key === "string" ? key.toLowerCase() : key;
+	// Reads fall back to the original key, so inherited methods such as hasOwnProperty still resolve.
+	const existing = (key: string | symbol) =>
+		Object.prototype.hasOwnProperty.call(headers, lower(key))
+			? lower(key)
+			: key;
 	return new Proxy(headers, {
-		get: (target, key) => Reflect.get(target, name(key)),
-		set: (target, key, value) => Reflect.set(target, name(key), value),
-		has: (target, key) => Reflect.has(target, name(key)),
-		deleteProperty: (target, key) => Reflect.deleteProperty(target, name(key)),
+		get: (target, key) => Reflect.get(target, existing(key)),
+		set: (target, key, value) => Reflect.set(target, lower(key), value),
+		has: (target, key) => Reflect.has(target, existing(key)),
+		deleteProperty: (target, key) => Reflect.deleteProperty(target, lower(key)),
 		getOwnPropertyDescriptor: (target, key) =>
-			Reflect.getOwnPropertyDescriptor(target, name(key)),
+			Reflect.getOwnPropertyDescriptor(target, existing(key)),
 	});
 }
 
