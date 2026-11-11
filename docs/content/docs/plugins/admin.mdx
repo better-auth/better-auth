@@ -315,12 +315,22 @@ Bans a user, preventing them from signing in and revokes all of their existing s
        */
       banExpiresIn?: number = 60 * 60 * 24 * 7
       /**
-       * An absolute date when the ban expires. Cannot be provided together with banExpiresIn.
+       * An absolute date in the future when the ban expires. Cannot be in the past, and cannot be provided together with banExpiresIn.
        */
-      banExpires?: Date = new Date("2026-12-31T23:59:59.999Z")
+      banExpires?: Date
   }
   ```
 </APIMethod>
+
+To set an absolute expiration date instead of a relative duration, provide `banExpires` (must be in the future):
+
+```ts title="ban-user-absolute-date.ts"
+await authClient.admin.banUser({
+    userId: "user-id",
+    banReason: "Spamming",
+    banExpires: new Date("2026-12-31T23:59:59.999Z")
+})
+```
 
 ### Unban User
 
