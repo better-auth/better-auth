@@ -29,7 +29,7 @@ In this setup:
 
    * **Single Sign-on URL**: Your Better Auth callback endpoint (e.g., `http://localhost:3000/api/auth/sso/saml2/sp/acs/sso`). Note: `sso` is your `providerId`
    * **Audience URI (SP Entity ID)**: Your Better Auth metadata URL (e.g., `http://localhost:3000/api/auth/sso/saml2/sp/metadata`)
-   * **Name ID format**: `EmailAddress`. Better Auth uses the NameID as the user's email only with this format. If you keep another format, such as the default `Unspecified`, add an attribute statement named `email` with the value `user.email`. Otherwise sign-in fails with `error=missing_user_info`.
+   * **Name ID format**: `EmailAddress`. Better Auth uses the NameID as the user's email only with this format. If you keep another format, such as the default `Unspecified`, add an attribute statement named `email` with the value `user.email`. Without an email attribute, sign-in fails with `error=missing_user_info`; see [Providers without an email](/docs/plugins/sso/provisioning#providers-without-an-email) for the other attributes Better Auth reads.
 
 6. Download the IdP metadata XML file and certificate
 

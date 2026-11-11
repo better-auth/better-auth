@@ -139,7 +139,7 @@ sso({
 });
 ```
 
-The email from the `NameID` is stored unverified. A value that is not an email address fails with `error=SSO_PROFILE_MAPPING_FAILED`.
+The email from the `NameID` is stored unverified. A `NameID` without `@` is skipped, so the sign-in fails with `error=missing_user_info`. A value with `@` that is not an email address fails with `error=SSO_PROFILE_MAPPING_FAILED`.
 
 ## Resolve SSO users
 
