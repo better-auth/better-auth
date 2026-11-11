@@ -149,6 +149,28 @@ describe("plugin validateSession", () => {
 		expect(await auth.api.getSession({ headers })).not.toBeNull();
 	});
 
+	it("keeps the session when sign-out cannot check it", async () => {
+		const gate = createGate();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [gate.plugin],
+			logger: { disabled: true },
+		});
+		const { headers } = await signInWithTestUser();
+		const ctx = await auth.$context;
+		const findSession = vi
+			.spyOn(ctx.internalAdapter, "findSession")
+			.mockRejectedValueOnce(new Error("store unavailable"));
+
+		const response = await auth.api.signOut({ headers, asResponse: true });
+		expect(response.status).toBe(200);
+		const cookies = parseSetCookieHeader(
+			response.headers.get("set-cookie") ?? "",
+		);
+		expect(cookies.get("better-auth.session_token")?.value).toBe("");
+		findSession.mockRestore();
+		expect(await auth.api.getSession({ headers })).not.toBeNull();
+	});
+
 	it("refuses to redeem a one-time token for a rejected session", async () => {
 		const gate = createGate();
 		const { auth, signInWithTestUser } = await getTestInstance({
