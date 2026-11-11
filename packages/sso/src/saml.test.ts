@@ -2570,6 +2570,7 @@ describe("SAML SSO", async () => {
 			const users = await context.adapter.findMany<{
 				email: string;
 				emailVerified: boolean;
+				name: string;
 			}>({ model: "user" });
 			const accounts = await context.adapter.findMany<{
 				accountId: string;
@@ -2611,9 +2612,33 @@ describe("SAML SSO", async () => {
 			);
 
 			expect(location).not.toContain("error=");
-			expect(ssoUsers.map((user) => user.email)).toEqual([
-				"nameid-user@example.com",
+			expect(ssoUsers).toEqual([
+				expect.objectContaining({
+					email: "nameid-user@example.com",
+					name: "nameid-user@example.com",
+				}),
 			]);
+		});
+
+		it("does not use an opaque NameID as the name", async () => {
+			let providerName: string | undefined = "unset";
+			const { location, ssoUsers } = await signInWithNameID(
+				{
+					mapProfileToUser: (input) => {
+						providerName = input.providerUser.name;
+						return {
+							email: "opaque-user@example.com",
+							name: input.providerUser.name ?? "Member",
+						};
+					},
+				},
+				"a1b2c3d4-opaque",
+				PERSISTENT_NAME_ID_FORMAT,
+			);
+
+			expect(location).not.toContain("error=");
+			expect(providerName).toBeUndefined();
+			expect(ssoUsers).toEqual([expect.objectContaining({ name: "Member" })]);
 		});
 
 		it("keeps using an opaque NameID as the email when mapProfileToUser returns it", async () => {

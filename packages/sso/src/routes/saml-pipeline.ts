@@ -651,8 +651,9 @@ export async function processSAMLResponse(
 			]
 				.filter(Boolean)
 				.join(" ") ||
+			// Never the NameID: persistent and transient NameIDs are opaque (SAML Core §8.3.7, §8.3.8).
 			attr(mapping.name || "displayName") ||
-			extract.nameID,
+			undefined,
 		emailVerified:
 			options?.trustEmailVerified && mapping.emailVerified
 				? parseProviderEmailVerified(attr(mapping.emailVerified))

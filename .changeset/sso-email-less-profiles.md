@@ -19,3 +19,5 @@ sso({
 A SAML response without a NameID now also redirects with `error=missing_user_info` instead of `error=saml_error`.
 
 OIDC and SAML providers that send no email can now sign users in with `mapProfileToUser`. It runs on every SSO sign-in before the user is looked up, and returns the `email`, `name`, and `image` to use, such as a placeholder from `createPlaceholderEmail` in `@better-auth/core/utils/email`. Previously an OIDC sign-in without an email always failed with `error_description=missing_user_info`. A returned email that differs from the provider's is never marked verified. A callback that throws or returns an invalid result redirects with `error=SSO_PROFILE_MAPPING_FAILED`.
+
+SAML users who sign in without a name attribute (`displayName`, or `givenName` and `surname`, unless remapped in `samlConfig.mapping`) now get their email as their name. Previously the NameID was used, so an opaque NameID such as `a1b2c3d4-opaque` became the stored display name. In `mapProfileToUser`, `providerUser.name` is now `undefined` in that case. Existing users keep their stored name unless `resolveUser` links them with `profile: "update"`.

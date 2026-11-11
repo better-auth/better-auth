@@ -469,7 +469,7 @@ Attribute names to read. See [Attribute mapping](/docs/plugins/sso/saml#attribut
 
     `name` <span className="opacity-70">`string`</span>
 
-    Attribute for the name, read only when neither the first-name nor the last-name attribute is present. Defaults to `displayName`, then the NameID.
+    Attribute for the name, read only when neither the first-name nor the last-name attribute is present. Defaults to `displayName`. Without a name attribute, the name is the user's email.
 
     `firstName` <span className="opacity-70">`string`</span>
 
