@@ -62,6 +62,19 @@ function isDpopChallengeError(error: APIError) {
 	);
 }
 
+/** Builds an RFC 9449 §7.1 `WWW-Authenticate: DPoP` challenge value. */
+export function buildDpopChallengeValue(
+	errorCode: string,
+	description: unknown,
+	algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS,
+) {
+	return [
+		`DPoP error="${quoteAuthParam(errorCode)}"`,
+		`error_description="${validateErrorDescription(description)}"`,
+		`algs="${quoteAuthParam(algorithms.join(" "))}"`,
+	].join(", ");
+}
+
 function buildDpopChallenge(
 	error: APIError,
 	opts?: {
