@@ -191,7 +191,7 @@ describe("plugin validateSession", () => {
 		async function signInTwoUsers() {
 			const gate = createGate();
 			const instance = await getTestInstance(
-				{ plugins: [multiSession(), gate.plugin] },
+				{ plugins: [multiSession(), gate.plugin], logger: { disabled: true } },
 				{ clientOptions: { plugins: [multiSessionClient()] } },
 			);
 			const { client, cookieSetter, testUser } = instance;
@@ -252,6 +252,21 @@ describe("plugin validateSession", () => {
 				}),
 			).rejects.toMatchObject({ statusCode: 401 });
 			gate.rejectUserIds.clear();
+			expect(await auth.api.listDeviceSessions({ headers })).toHaveLength(2);
+		});
+
+		it("clears the browser's cookies when sign-out cannot check its sessions", async () => {
+			const { auth, gate, headers } = await signInTwoUsers();
+			gate.validateSession.mockRejectedValue(new Error("gate unavailable"));
+
+			const response = await auth.api.signOut({ headers, asResponse: true });
+			expect(response.status).toBe(200);
+			const cookies = parseSetCookieHeader(
+				response.headers.get("set-cookie") ?? "",
+			);
+			expect(cookies.get("better-auth.session_token")?.value).toBe("");
+			gate.validateSession.mockReset();
+			gate.validateSession.mockResolvedValue(true);
 			expect(await auth.api.listDeviceSessions({ headers })).toHaveLength(2);
 		});
 
