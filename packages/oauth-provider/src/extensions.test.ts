@@ -1452,3 +1452,80 @@ describe("oauth-provider client metadata extensions", async () => {
 		).rejects.toThrow("client metadata field is reserved: redirect_uris");
 	});
 });
+
+describe("client_credentials with a confirmation-proving strategy", async () => {
+	const issuer = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const authMethod = "test_attestation_jwt";
+	const assertionType =
+		"urn:better-auth:test:client-assertion-type:test-attestation";
+	const strategy = {
+		id: "test-confirmation-strategy",
+		init(ctx) {
+			extendOAuthProvider(ctx, {
+				clientAuthentication: {
+					[authMethod]: {
+						assertionTypes: [assertionType],
+						authenticate: async ({ clientId }) => ({
+							clientId: clientId!,
+							confirmation: { "x5t#S256": "attested-certificate" },
+						}),
+					},
+				},
+			});
+		},
+	} satisfies BetterAuthPlugin;
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: issuer,
+		plugins: [
+			jwt({ jwt: { issuer } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				resources: [resource],
+				enforcePerClientResources: false,
+				clientPrivileges: () => true,
+			}),
+			strategy,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: issuer,
+		fetchOptions: { customFetchImpl },
+	});
+
+	it("binds the token to the confirmation the strategy proved", async () => {
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: authMethod,
+				grant_types: ["client_credentials"],
+				scope: "read",
+				client_credentials_scopes: ["read"],
+			},
+		});
+		const { data, error } = await client.$fetch<{
+			access_token: string;
+			token_type: string;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: "client_credentials",
+				client_id: machine.client_id,
+				client_assertion_type: assertionType,
+				client_assertion: `assertion:${machine.client_id}`,
+				scope: "read",
+				resource,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).cnf).toEqual({
+			"x5t#S256": "attested-certificate",
+		});
+		expect(data?.token_type).toBe("Bearer");
+	});
+});

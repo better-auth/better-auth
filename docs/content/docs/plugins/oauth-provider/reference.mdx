@@ -588,7 +588,13 @@ A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolve
 
 When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to check that client credentials are not repeated or combined across authentication methods. The endpoint must therefore keep a readable request after parsing the form.
 
-To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens` or return it from a `clientAuthentication` strategy. Claim contributors cannot set `cnf`.
+To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the key it proved as `confirmation`:
+
+* The built-in `client_credentials` grant binds its token to that confirmation.
+* An extension grant receives it from `authenticateClient()` and passes it to `issueTokens`.
+* The built-in `authorization_code` and `refresh_token` grants do not use it.
+
+Claim contributors cannot set `cnf`.
 
 A grant that consumes a one-time credential, such as a device code, should resolve the binding before it claims the credential. `provider.resolveConfirmation({ client, scopes, resources, confirmation })` returns the confirmation the client proved at authentication. Without one, it verifies the request's DPoP proof by the same rules `issueTokens` applies. Pass the result to `issueTokens` as `confirmation`. A rejected proof then fails before the credential is consumed, so the client can retry with a valid one.
 

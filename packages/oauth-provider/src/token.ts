@@ -1877,6 +1877,7 @@ async function handleClientCredentialsGrant(
 		clientSecret: client_secret,
 		preVerified,
 		authMethod,
+		confirmation,
 	} = destructureCredentials(credentials);
 	const { scope, resource }: { scope?: string; resource?: string | string[] } =
 		ctx.body;
@@ -1940,6 +1941,9 @@ async function handleClientCredentialsGrant(
 		scopes: requestedScopes,
 		grantType: "client_credentials",
 		resources,
+		// A sender-constraint the client-authentication strategy proved, such as
+		// an mTLS certificate. Without one, a DPoP proof on the request binds it.
+		confirmation,
 	});
 }
 
