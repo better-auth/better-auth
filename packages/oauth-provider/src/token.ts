@@ -62,12 +62,14 @@ import type { GrantType } from "./types/oauth";
 import { verificationValueSchema } from "./types/zod";
 import { pickClaims } from "./userinfo";
 import {
+	assertConfirmation,
 	clientAllowsGrant,
 	decryptStoredClientSecret,
 	destructureCredentials,
 	extractClientCredentials,
 	getClient,
 	getJwtPlugin,
+	isConfirmation,
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
@@ -216,18 +218,25 @@ export function getOAuthProviderApi(
 					error: "server_error",
 				});
 			}
+			assertConfirmation(params.confirmation, "issueTokens");
 			return createUserTokens(ctx, opts, { ...params, grantType });
 		},
 		resolveConfirmation: async (params) => {
-			if (params.confirmation) return params.confirmation;
-			const policy = await resolveResourcePolicy(ctx, opts, {
-				resource: params.resources,
-				clientId: params.client.clientId,
-				requestedScopes: params.scopes,
-			});
+			assertConfirmation(params.confirmation, "resolveConfirmation");
+			// A proven confirmation wins over the resource policy, so skip its lookup.
+			const policy = params.confirmation
+				? undefined
+				: await resolveResourcePolicy(ctx, opts, {
+						resource: params.resources,
+						clientId: params.client.clientId,
+						requestedScopes: params.scopes,
+					});
 			return resolveIssuanceConfirmation(ctx, opts, {
 				client: params.client,
-				dpopBoundAccessTokensRequired: policy.dpopBoundAccessTokensRequired,
+				dpopBoundAccessTokensRequired:
+					policy?.dpopBoundAccessTokensRequired ?? false,
+				confirmation: params.confirmation,
+				expectedJkt: params.expectedJkt,
 			});
 		},
 		hashToken: (token: string, type: StoreTokenType) =>
@@ -1034,19 +1043,6 @@ export function sameConfirmation(
 	right: Confirmation | undefined,
 ) {
 	return confirmationReplayKey(left) === confirmationReplayKey(right);
-}
-
-export function isConfirmation(value: unknown): value is Confirmation {
-	if (!value || typeof value !== "object") {
-		return false;
-	}
-	const confirmation = value as Record<string, unknown>;
-	return (
-		(typeof confirmation.jkt === "string" &&
-			confirmation["x5t#S256"] === undefined) ||
-		(typeof confirmation["x5t#S256"] === "string" &&
-			confirmation.jkt === undefined)
-	);
 }
 
 function isTokenType(value: unknown): value is TokenType {

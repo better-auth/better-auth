@@ -974,6 +974,41 @@ export type ExtractedCredentials =
 			clientId: string;
 	  };
 
+/**
+ * Whether a value is a {@link Confirmation}: an object whose only own key is
+ * `jkt` or `x5t#S256`, holding a non-empty string.
+ */
+export function isConfirmation(value: unknown): value is Confirmation {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return false;
+	}
+	const entries = Object.entries(value);
+	if (entries.length !== 1) {
+		return false;
+	}
+	const [[key, member]] = entries as [[string, unknown]];
+	return (
+		(key === "jkt" || key === "x5t#S256") &&
+		typeof member === "string" &&
+		member.length > 0
+	);
+}
+
+/**
+ * Rejects a caller-supplied confirmation that is not exactly one of `jkt` or
+ * `x5t#S256`. A token carrying both would be treated as DPoP-bound only, so a
+ * later DPoP-only proof would drop the certificate binding.
+ */
+export function assertConfirmation(value: unknown, source: string): void {
+	if (value !== undefined && !isConfirmation(value)) {
+		tokenError(
+			"INTERNAL_SERVER_ERROR",
+			"server_error",
+			`invalid confirmation in ${source}: it must have exactly one of jkt or x5t#S256`,
+		);
+	}
+}
+
 /** Unwraps ExtractedCredentials into the fields each grant handler needs. */
 export function destructureCredentials(
 	credentials: ExtractedCredentials | null,
@@ -1030,6 +1065,10 @@ export async function extractClientCredentials(
 				clientId: body.client_id as string | undefined,
 				expectedAudience,
 			});
+			assertConfirmation(
+				result.confirmation,
+				`clientAuthentication.${extensionStrategy.method}`,
+			);
 			return {
 				kind: "pre_verified",
 				method: extensionStrategy.method,

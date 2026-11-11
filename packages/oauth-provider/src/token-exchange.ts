@@ -6,11 +6,7 @@ import type { User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { extendOAuthProvider } from "./extensions";
 import { resolveResourcePolicy } from "./resources";
-import {
-	isConfirmation,
-	resolveIssuanceConfirmation,
-	sameConfirmation,
-} from "./token";
+import { resolveIssuanceConfirmation, sameConfirmation } from "./token";
 import type {
 	OAuthActorClaim,
 	OAuthExtensionGrantHandlerInput,
@@ -22,6 +18,7 @@ import type { Awaitable } from "./types/helpers";
 import {
 	consentCovers,
 	findConsent,
+	isConfirmation,
 	isRecord,
 	parseScopes,
 	tokenError,
