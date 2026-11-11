@@ -2148,9 +2148,6 @@ describe("internal adapter test", async () => {
 			expect(winners[0]!.value).toBe("user-2");
 		});
 
-		/**
-		 * @see https://github.com/better-auth/better-auth/issues/12397
-		 */
 		it("does not wait on a consume that never settles on Cloudflare Workers", async () => {
 			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
 			onTestFinished(() => {
