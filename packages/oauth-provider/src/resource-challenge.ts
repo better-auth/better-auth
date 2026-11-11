@@ -1,7 +1,9 @@
 import { isAPIError } from "better-auth/api";
+import type { ResourceRequestInput } from "better-auth/oauth2";
 import {
 	DPOP_SIGNING_ALGORITHMS,
 	isInsufficientScopeError,
+	parseAccessTokenAuthorization,
 } from "better-auth/oauth2";
 import { APIError } from "better-call";
 
@@ -62,19 +64,42 @@ function isDpopChallengeError(error: APIError) {
 	);
 }
 
+function presentsDpopScheme(
+	request: Request | Pick<ResourceRequestInput, "authorizationHeader">,
+) {
+	// Duck-type the `Request` so a cross-realm instance is still recognized.
+	const authorizationHeader =
+		typeof (request as Request).headers?.get === "function"
+			? (request as Request).headers.get("authorization")
+			: (request as Pick<ResourceRequestInput, "authorizationHeader">)
+					.authorizationHeader;
+	return parseAccessTokenAuthorization(authorizationHeader)?.scheme === "DPoP";
+}
+
 function buildDpopChallenge(
 	error: APIError,
-	opts?: {
-		dpopSigningAlgorithms?: readonly string[];
-	},
+	opts:
+		| {
+				dpopSigningAlgorithms?: readonly string[];
+		  }
+		| undefined,
+	omitInvalidDescription = false,
 ) {
 	const { errorCode, description } = extractDpopError(error);
 	const algorithms = opts?.dpopSigningAlgorithms ?? DPOP_SIGNING_ALGORITHMS;
+	// `error_description` is optional (RFC 6750 §3). A generic 401 challenged
+	// only because of its DPoP scheme may carry any message, so drop one that
+	// cannot be serialized rather than fail the response.
+	const includeDescription =
+		!omitInvalidDescription || ERROR_DESCRIPTION_PATTERN.test(description);
 	return [
-		`DPoP error="${quoteAuthParam(errorCode ?? "invalid_dpop_proof")}"`,
-		`error_description="${validateErrorDescription(description)}"`,
+		`DPoP error="${quoteAuthParam(errorCode ?? "invalid_token")}"`,
+		includeDescription &&
+			`error_description="${validateErrorDescription(description)}"`,
 		`algs="${quoteAuthParam(algorithms.join(" "))}"`,
-	].join(", ");
+	]
+		.filter((param) => !!param)
+		.join(", ");
 }
 
 function extractInsufficientScope(error: APIError): {
@@ -141,8 +166,12 @@ function buildBearerChallenge(
  * `insufficient_scope` challenge on a 403 naming the scopes the token lacks, so
  * clients can step up their authorization. DPoP-bound-token failures are
  * reported with RFC 9449's `DPoP` challenge so clients know which proof
- * algorithms to use. Non-URL resources (for example a `urn:` or a client id)
- * resolve their metadata URL through `resourceMetadataMappings`.
+ * algorithms to use. Pass the failed `request` so that any 401 on a request
+ * that presented its token with the `DPoP` scheme, such as an expired or
+ * revoked token, is also answered with a `DPoP` challenge (RFC 9449 §7.2).
+ * Without it, only DPoP-specific errors get one. Non-URL resources (for
+ * example a `urn:` or a client id) resolve their metadata URL through
+ * `resourceMetadataMappings`.
  *
  * Every other error returns `undefined`, including a plain `FORBIDDEN`: a
  * permission denial that re-authorizing cannot fix must not be answered with a
@@ -164,15 +193,22 @@ export function createResourceServerChallenge(
 		 * insufficient-scope failure advertises the scopes it names instead.
 		 */
 		challengeScopes?: readonly string[];
+		/**
+		 * The request that failed, or its `Authorization` header as
+		 * `{ authorizationHeader }`. A 401 on a request that used the `DPoP`
+		 * scheme is answered with a `DPoP` challenge rather than `Bearer`.
+		 */
+		request?: Request | Pick<ResourceRequestInput, "authorizationHeader">;
 	},
 ): APIError | undefined {
 	const challengeScope = serializeChallengeScopes(opts?.challengeScopes);
 	if (isAPIError(error) && error.status === "UNAUTHORIZED") {
-		if (isDpopChallengeError(error)) {
+		const dpopError = isDpopChallengeError(error);
+		if (dpopError || (opts?.request && presentsDpopScheme(opts.request))) {
 			return new APIError(
 				"UNAUTHORIZED",
 				{ message: error.message },
-				{ "WWW-Authenticate": buildDpopChallenge(error, opts) },
+				{ "WWW-Authenticate": buildDpopChallenge(error, opts, !dpopError) },
 			);
 		}
 		return new APIError(
