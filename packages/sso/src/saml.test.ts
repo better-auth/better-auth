@@ -7735,6 +7735,9 @@ describe("SAML user resolution HTTP", () => {
 		expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
 	});
 
+	/**
+	 * @see https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf SAML Profiles §4.4 (Single Logout Profile)
+	 */
 	describe("SAML Single Logout without a stored SAML session record", () => {
 		// The IdP metadata XML advertises a Redirect SingleLogoutService.
 		const sloSAMLConfiguration = () => ({
