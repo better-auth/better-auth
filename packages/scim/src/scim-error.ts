@@ -124,4 +124,9 @@ export const SCIMErrorOpenAPISchemas = {
 			"Internal Server Error. This is a problem with the server that you cannot fix.",
 		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
 	},
+	"501": {
+		description:
+			"Not Implemented. The database adapter has no native transaction support.",
+		content: createSCIMOpenAPIContent(SCIMErrorOpenAPISchema),
+	},
 };
