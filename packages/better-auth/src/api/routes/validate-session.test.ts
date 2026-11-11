@@ -270,6 +270,21 @@ describe("plugin validateSession", () => {
 			expect(await auth.api.listDeviceSessions({ headers })).toHaveLength(2);
 		});
 
+		it("still deletes the sessions it can check when one check fails", async () => {
+			const { auth, gate, headers, firstToken, secondToken } =
+				await signInTwoUsers();
+			gate.validateSession.mockImplementation(async ({ session }) => {
+				if (session.token === secondToken) throw new Error("gate unavailable");
+				return true;
+			});
+
+			const response = await auth.api.signOut({ headers, asResponse: true });
+			expect(response.status).toBe(200);
+			const { internalAdapter } = await auth.$context;
+			expect(await internalAdapter.findSession(firstToken)).toBeNull();
+			expect(await internalAdapter.findSession(secondToken)).not.toBeNull();
+		});
+
 		it("does not switch to a rejected session after revoking the active one", async () => {
 			const { auth, gate, headers, firstUser, secondToken } =
 				await signInTwoUsers();
