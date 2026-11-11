@@ -368,6 +368,21 @@ describe("dbsc", () => {
 		expect((await register(browser, "made-up")).status).toBe(400);
 	});
 
+	it("refuses registration when the key cannot be saved", async () => {
+		const { signIn, register, getSession } = await setup({
+			databaseHooks: {
+				session: { update: { before: async () => false } },
+			},
+		});
+		const browser = await createBrowser();
+		const challenge = readRegistrationChallenge(await signIn(browser))!;
+
+		const response = await register(browser, challenge);
+		expect(response.status).toBe(400);
+		expect(boundCookieName(browser.jar)).toBeUndefined();
+		expect(await getSession(browser)).not.toBeNull();
+	});
+
 	it("rejects a registration proof with the wrong type or a private key", async () => {
 		const { signIn, send } = await setup();
 		const browser = await createBrowser();
