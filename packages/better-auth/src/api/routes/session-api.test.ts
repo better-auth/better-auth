@@ -946,6 +946,29 @@ describe("cookie cache", () => {
 		expect(cached.data).toEqual(refreshed.data);
 		expect(findOne).toHaveBeenCalledOnce();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11690
+	 */
+	it.for(["/revoke-session", "/revoke-sessions"])(
+		"stops serving the caller's cached session after %s",
+		async (path) => {
+			const { client, headers, cookieSetter } = await createCachedSession();
+			const cached = await client.getSession({ fetchOptions: { headers } });
+
+			await client.$fetch(path, {
+				method: "POST",
+				body: {
+					token: cached.data?.session.token,
+				},
+				headers,
+				onSuccess: cookieSetter(headers),
+			});
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			expect(session.data).toBeNull();
+		},
+	);
 });
 
 describe("cookie cache with JWT strategy", async () => {

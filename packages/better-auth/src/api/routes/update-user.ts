@@ -499,6 +499,8 @@ export const deleteUser = createAuthEndpoint(
 					token: ctx.body.token,
 				},
 			});
+			// The callback's cookie writes land on its own context, not this response.
+			deleteSessionCookie(ctx);
 			return ctx.json({
 				success: true,
 				message: "User deleted",
