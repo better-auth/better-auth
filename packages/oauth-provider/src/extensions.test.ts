@@ -12,6 +12,7 @@ import { oauthProvider } from "./oauth";
 import { getOAuthProviderApi } from "./token";
 import type {
 	ClientDiscovery,
+	Confirmation,
 	OAuthProviderExtension,
 	SchemaClient,
 	Scope,
@@ -1453,12 +1454,17 @@ describe("oauth-provider client metadata extensions", async () => {
 	});
 });
 
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3
+ */
 describe("client_credentials with a confirmation-proving strategy", async () => {
 	const issuer = "http://localhost:3000";
 	const resource = "https://api.example.com";
+	const dpopResource = "https://dpop-api.example.com";
 	const authMethod = "test_attestation_jwt";
 	const assertionType =
 		"urn:better-auth:test:client-assertion-type:test-attestation";
+	let proven: Confirmation = { "x5t#S256": "attested-certificate" };
 	const strategy = {
 		id: "test-confirmation-strategy",
 		init(ctx) {
@@ -1468,14 +1474,14 @@ describe("client_credentials with a confirmation-proving strategy", async () => 
 						assertionTypes: [assertionType],
 						authenticate: async ({ clientId }) => ({
 							clientId: clientId!,
-							confirmation: { "x5t#S256": "attested-certificate" },
+							confirmation: proven,
 						}),
 					},
 				},
 			});
 		},
 	} satisfies BetterAuthPlugin;
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+	const { auth, client, signInWithTestUser } = await getTestInstance({
 		baseURL: issuer,
 		plugins: [
 			jwt({ jwt: { issuer } }),
@@ -1483,7 +1489,10 @@ describe("client_credentials with a confirmation-proving strategy", async () => 
 				loginPage: "/login",
 				consentPage: "/consent",
 				scopes: ["read"],
-				resources: [resource],
+				resources: [
+					resource,
+					{ identifier: dpopResource, dpopBoundAccessTokensRequired: true },
+				],
 				enforcePerClientResources: false,
 				clientPrivileges: () => true,
 			}),
@@ -1491,13 +1500,14 @@ describe("client_credentials with a confirmation-proving strategy", async () => 
 		],
 	});
 	const { headers } = await signInWithTestUser();
-	const client = createAuthClient({
-		plugins: [oauthProviderClient()],
-		baseURL: issuer,
-		fetchOptions: { customFetchImpl },
-	});
 
-	it("binds the token to the confirmation the strategy proved", async () => {
+	const issue = async ({
+		target = resource,
+		dpopBound = false,
+	}: {
+		target?: string;
+		dpopBound?: boolean;
+	} = {}) => {
 		const machine = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
@@ -1505,27 +1515,51 @@ describe("client_credentials with a confirmation-proving strategy", async () => 
 				grant_types: ["client_credentials"],
 				scope: "read",
 				client_credentials_scopes: ["read"],
+				...(dpopBound ? { dpop_bound_access_tokens: true } : {}),
 			},
 		});
-		const { data, error } = await client.$fetch<{
-			access_token: string;
-			token_type: string;
-		}>("/oauth2/token", {
-			method: "POST",
-			body: new URLSearchParams({
-				grant_type: "client_credentials",
-				client_id: machine.client_id,
-				client_assertion_type: assertionType,
-				client_assertion: `assertion:${machine.client_id}`,
-				scope: "read",
-				resource,
-			}),
-			headers: { "content-type": "application/x-www-form-urlencoded" },
-		});
+		return client.$fetch<{ access_token: string; token_type: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: machine.client_id,
+					client_assertion_type: assertionType,
+					client_assertion: `assertion:${machine.client_id}`,
+					scope: "read",
+					resource: target,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+	};
+
+	it("binds the token to the confirmation the strategy proved", async () => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const { data, error } = await issue();
 		expect(error).toBeNull();
-		expect(decodeJwt(data!.access_token).cnf).toEqual({
-			"x5t#S256": "attested-certificate",
-		});
+		expect(decodeJwt(data!.access_token).cnf).toEqual(proven);
 		expect(data?.token_type).toBe("Bearer");
+	});
+
+	it("issues a DPoP token for a DPoP key confirmation", async () => {
+		proven = { jkt: "strategy-proven-key" };
+		const { data, error } = await issue({ target: dpopResource });
+		expect(error).toBeNull();
+		expect(data?.token_type).toBe("DPoP");
+		expect(decodeJwt(data!.access_token).cnf).toEqual(proven);
+	});
+
+	it.each([
+		["the client requires DPoP-bound tokens", { dpopBound: true }],
+		["the resource requires DPoP-bound tokens", { target: dpopResource }],
+	])("rejects a certificate confirmation when %s", async (_, options) => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const { error } = await issue(options);
+		expect(error).toMatchObject({
+			error: "invalid_dpop_proof",
+			error_description: "A DPoP-bound access token is required",
+		});
 	});
 });

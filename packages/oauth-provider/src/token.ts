@@ -1348,6 +1348,17 @@ async function createUserTokens(
 	// the fallback. Either way the AS owns the RFC 7800 `cnf`: stamped into a JWT
 	// access token, persisted on opaque access and refresh tokens, and surfaced
 	// as `cnf` at introspection.
+	// A caller's confirmation that is not a DPoP key, such as an mTLS
+	// certificate, cannot stand in for a DPoP binding the client or a resource
+	// requires.
+	if (
+		params.confirmation &&
+		!getConfirmationJkt(params.confirmation) &&
+		(clientRequiresDpopBoundAccessTokens(client) ||
+			grantIssuance.dpopBoundAccessTokensRequired)
+	) {
+		throwInvalidDpopProof("A DPoP-bound access token is required");
+	}
 	const confirmation =
 		params.confirmation ??
 		(await resolveDpopTokenBinding(ctx, opts, {
