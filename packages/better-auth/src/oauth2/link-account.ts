@@ -576,26 +576,33 @@ export async function handleOAuthUserInfo(
 				providerId: account.providerId,
 				accountId: account.accountId,
 			};
-			const { createdUser, createdAccount } = await runWithTransaction(
-				c.context.adapter,
-				async () => {
-					const createdUser = await c.context.internalAdapter.createUser(
-						{
-							name,
-							image,
-							...additionalUserFields,
-							email: userInfo.email.toLowerCase(),
-							emailVerified: userInfo.emailVerified,
-						},
-						source,
-					);
-					const createdAccount = await c.context.internalAdapter.createAccount({
-						...accountData,
-						userId: createdUser.id,
-					});
-					return { createdUser, createdAccount };
-				},
-			);
+			const created = await runWithTransaction(c.context.adapter, async () => {
+				const createdUser = await c.context.internalAdapter.createUser(
+					{
+						name,
+						image,
+						...additionalUserFields,
+						email: userInfo.email.toLowerCase(),
+						emailVerified: userInfo.emailVerified,
+					},
+					source,
+				);
+				// A `user.create.before` hook returning false aborts with null.
+				if (!createdUser) return null;
+				const createdAccount = await c.context.internalAdapter.createAccount({
+					...accountData,
+					userId: createdUser.id,
+				});
+				return { createdUser, createdAccount };
+			});
+			if (!created) {
+				return {
+					error: "unable to create user",
+					data: null,
+					isRegister: false,
+				};
+			}
+			const { createdUser, createdAccount } = created;
 			if (
 				requireExactAccountBinding &&
 				(createdAccount.accountId !== account.accountId ||
