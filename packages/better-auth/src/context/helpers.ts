@@ -4,6 +4,7 @@ import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 } from "@better-auth/core";
+import { SchemaMismatchError } from "@better-auth/core/db/internal";
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import { isLoopbackHost } from "@better-auth/core/utils/host";
@@ -302,4 +303,30 @@ export async function getTrustedProviders(
 	}
 	const resolved = await trustedProviders(request);
 	return (resolved ?? []).filter((v): v is string => Boolean(v));
+}
+
+const reportedSchemaErrors = new WeakSet<object>();
+
+function reportSchemaError(ctx: AuthContext, error: unknown) {
+	// A mismatch is cached and rethrown to every caller, so report it once.
+	if (error instanceof Object) {
+		if (reportedSchemaErrors.has(error)) return;
+		reportedSchemaErrors.add(error);
+	}
+	ctx.logger.error(
+		error instanceof SchemaMismatchError
+			? error.message
+			: "Could not validate the database schema. Check your database connection.",
+	);
+}
+
+/**
+ * Runs the database schema check shared by startup and every request, and
+ * reports each failure to the context logger.
+ */
+export function runSchemaCheck(ctx: AuthContext): Promise<void> | undefined {
+	return ctx.checkSchema?.()?.catch((error: unknown) => {
+		reportSchemaError(ctx, error);
+		throw error;
+	});
 }

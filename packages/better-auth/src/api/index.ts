@@ -16,6 +16,7 @@ import {
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
+import { runSchemaCheck } from "../context/helpers";
 import type { OverrideMerge, UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
@@ -302,8 +303,7 @@ export const router = <Option extends BetterAuthOptions>(
 				return new Response("Not Found", { status: 404 });
 			}
 
-			const pendingSchemaCheck = ctx.checkSchema?.();
-			if (pendingSchemaCheck) await pendingSchemaCheck;
+			await runSchemaCheck(ctx);
 
 			let currentRequest = req;
 

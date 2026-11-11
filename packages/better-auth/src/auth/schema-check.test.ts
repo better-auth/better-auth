@@ -7,7 +7,7 @@ import {
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { memoryAdapter } from "@better-auth/memory-adapter";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "./full";
 import { betterAuth as betterAuthMinimal } from "./minimal";
 
@@ -165,19 +165,46 @@ describe.each([
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12400
 	 */
-	it("defers validation to the first request on Cloudflare Workers", async () => {
-		vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
-		const find = vi.fn(async (): Promise<SchemaFinding[]> => []);
-		const { auth, log } = createAuth(find);
+	describe("on Cloudflare Workers", () => {
+		beforeEach(() => {
+			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+		});
 
-		await auth.$context;
-		vi.unstubAllGlobals();
-		expect(find).not.toHaveBeenCalled();
-		expect(log).not.toHaveBeenCalledWith("error", expect.anything());
-		await expect(
-			auth.api.getSession({ headers: new Headers() }),
-		).resolves.toBeNull();
-		expect(find).toHaveBeenCalledTimes(1);
+		afterEach(() => {
+			vi.unstubAllGlobals();
+		});
+
+		it("defers validation to the first request", async () => {
+			const find = vi.fn(async (): Promise<SchemaFinding[]> => []);
+			const { auth, log } = createAuth(find);
+
+			await auth.$context;
+			expect(find).not.toHaveBeenCalled();
+			await expect(
+				auth.api.getSession({ headers: new Headers() }),
+			).resolves.toBeNull();
+			expect(find).toHaveBeenCalledTimes(1);
+			expect(log).not.toHaveBeenCalled();
+		});
+
+		it("reports a mismatch found by the first request once", async () => {
+			const { auth, log } = createAuth(async () => issuerDrift);
+
+			await auth.$context;
+			expect(log).not.toHaveBeenCalled();
+			await expect(
+				auth.api.getSession({ headers: new Headers() }),
+			).rejects.toThrow(SchemaMismatchError);
+			await expect(
+				auth.handler(
+					new Request("https://auth.example.com/api/auth/get-session"),
+				),
+			).rejects.toThrow(SchemaMismatchError);
+			expect(log).toHaveBeenCalledExactlyOnceWith(
+				"error",
+				new SchemaMismatchError(issuerDrift, "database").message,
+			);
+		});
 	});
 
 	it("leaves configuration accessible for migration tooling after a mismatch", async () => {

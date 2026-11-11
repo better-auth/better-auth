@@ -1,6 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
-import { SchemaMismatchError } from "@better-auth/core/db/internal";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
 import {
@@ -8,6 +7,7 @@ import {
 	getTrustedProviders,
 	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
+	runSchemaCheck,
 } from "../context/helpers";
 import type { Auth } from "../types";
 import { getBaseURL, getOrigin, isDynamicBaseURLConfig } from "../utils/url";
@@ -27,18 +27,8 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		// Workers forbid I/O in the global scope, where `betterAuth()` usually
 		// runs, so the first request validates instead.
 		// @see https://developers.cloudflare.com/workers/runtime-apis/request/#the-request-context
-		const pendingSchemaCheck =
-			globalThis.navigator?.userAgent === "Cloudflare-Workers"
-				? undefined
-				: ctx.checkSchema?.();
-		if (pendingSchemaCheck) {
-			void pendingSchemaCheck.catch((error: unknown) => {
-				ctx.logger.error(
-					error instanceof SchemaMismatchError
-						? error.message
-						: "Could not validate the database schema. Check your database connection.",
-				);
-			});
+		if (globalThis.navigator?.userAgent !== "Cloudflare-Workers") {
+			void runSchemaCheck(ctx)?.catch(() => {});
 		}
 		return ctx;
 	});

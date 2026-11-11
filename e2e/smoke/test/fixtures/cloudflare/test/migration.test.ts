@@ -21,12 +21,16 @@ afterAll(async () => {
  * @see https://github.com/better-auth/better-auth/issues/12400
  */
 it("validates the schema on the first request instead of at startup", async () => {
-	const response = await server.fetch("http://localhost:8787/_test/migrate", {
-		method: "POST",
-	});
-	expect(response.status).toBe(204);
-	expect(server.getLogs().map((log) => log.message)).not.toContainEqual(
+	const response = await server.fetch(
+		"http://localhost:8787/api/auth/get-session",
+	);
+	expect(response.status).toBe(500);
+	const messages = server.getLogs().map((log) => log.message);
+	expect(messages).not.toContainEqual(
 		expect.stringContaining("Could not validate the database schema"),
+	);
+	expect(messages).toContainEqual(
+		expect.stringContaining("[Better Auth]: Database schema mismatch"),
 	);
 });
 

@@ -15,6 +15,7 @@ import {
 	pickSource,
 	resolveDynamicTrustedProxyHeaders,
 	resolveRequestContext,
+	runSchemaCheck,
 } from "../context/helpers";
 import { isDynamicBaseURLConfig, isRequestLike } from "../utils/url";
 import { dispatchAuthEndpoint, getOperationId } from "./dispatch";
@@ -91,8 +92,7 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 
 			const run = async () => {
 				const rawContext = await ctx;
-				const pendingSchemaCheck = rawContext.checkSchema?.();
-				if (pendingSchemaCheck) await pendingSchemaCheck;
+				await runSchemaCheck(rawContext);
 				const authContext = isDynamicBaseURLConfig(rawContext.options.baseURL)
 					? await resolveDynamicContext(rawContext, context)
 					: rawContext;
