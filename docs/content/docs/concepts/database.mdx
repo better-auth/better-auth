@@ -127,7 +127,9 @@ await runMigrations();
 
 When the auth instance is first used, Better Auth checks that your database has the tables and columns it needs. If they don't match, requests fail with an error that explains how to fix it. To check ahead of time, run [`npx auth@latest check schema`](/docs/concepts/cli#schema).
 
-To disable validation, set `advanced.database.validateSchema` to `false`.
+Drizzle and Prisma are checked against your schema definitions, so the check cannot tell whether migrations were applied.
+
+To disable runtime validation, set `advanced.database.validateSchema` to `false`.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
