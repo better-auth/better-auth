@@ -314,6 +314,10 @@ Bans a user, preventing them from signing in and revokes all of their existing s
        * The number of seconds until the ban expires. If not provided, the ban will never expire. 
        */
       banExpiresIn?: number = 60 * 60 * 24 * 7
+      /**
+       * An absolute date when the ban expires. Cannot be provided together with banExpiresIn.
+       */
+      banExpires?: Date = new Date("2026-12-31T23:59:59.999Z")
   }
   ```
 </APIMethod>
