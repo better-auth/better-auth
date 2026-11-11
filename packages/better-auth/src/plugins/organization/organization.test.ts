@@ -1,4 +1,4 @@
-import type { APIError } from "@better-auth/core/error";
+import { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
 import {
@@ -3723,6 +3723,49 @@ describe("organization delete hooks receive endpoint context", async () => {
 		expect(seen.beforeDeleteOrganization?.hasRequest).toBe(true);
 		expect(seen.afterDeleteOrganization?.hasCtx).toBe(true);
 		expect(seen.afterDeleteOrganization?.hasRequest).toBe(true);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10590
+ */
+describe("organization delete rejected by beforeDeleteOrganization", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [
+			organization({
+				organizationHooks: {
+					beforeDeleteOrganization: async () => {
+						throw new APIError("BAD_REQUEST", {
+							message: "deletion refused",
+						});
+					},
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("keeps the active organization", async () => {
+		const org = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: "Kept Org",
+				slug: "kept-org",
+			},
+		});
+
+		await expect(
+			auth.api.deleteOrganization({
+				headers,
+				body: {
+					organizationId: org.id,
+				},
+			}),
+		).rejects.toThrow("deletion refused");
+
+		const session = await auth.api.getSession({ headers });
+		expect(session?.session.activeOrganizationId).toBe(org.id);
 	});
 });
 
