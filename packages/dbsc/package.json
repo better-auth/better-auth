@@ -59,7 +59,8 @@
     }
   },
   "dependencies": {
-    "jose": "^6.2.3"
+    "jose": "^6.2.3",
+    "tldts": "^7.4.3"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",

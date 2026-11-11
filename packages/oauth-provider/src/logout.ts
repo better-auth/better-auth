@@ -1019,6 +1019,8 @@ async function completeConfirmedLogout(
 	const redirect = await getConfirmedLogoutRedirect(ctx, opts, state);
 	if (!currentSession) {
 		clearLogoutConfirmationState(ctx);
+		// Clears cookies of a session a plugin rejected; the session is kept.
+		deleteSessionCookie(ctx);
 		if (redirect.uri) return handleRedirect(ctx, redirect.uri);
 		return isBrowserNavigation(ctx)
 			? logoutSuccessPage(

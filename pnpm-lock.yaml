@@ -702,6 +702,9 @@ importers:
       '@better-auth/cimd':
         specifier: workspace:*
         version: link:../../packages/cimd
+      '@better-auth/dbsc':
+        specifier: workspace:*
+        version: link:../../packages/dbsc
       '@better-auth/electron':
         specifier: workspace:*
         version: link:../../packages/electron
@@ -1471,6 +1474,9 @@ importers:
       jose:
         specifier: ^6.2.3
         version: 6.2.3
+      tldts:
+        specifier: ^7.4.3
+        version: 7.4.3
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
