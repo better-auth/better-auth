@@ -1,5 +1,27 @@
 import * as z from "zod";
+import type { CompiledUserSchemaExtensionDescriptor } from "./schema-extensions";
 import { createSCIMEmailTupleKey } from "./user-email";
+
+/**
+ * A built-in or application-defined User schema descriptor, in the minimal
+ * shape the schema builders consume. Built-in core and Enterprise descriptors
+ * and compiled custom extension descriptors are all assignable to this.
+ */
+export interface SCIMUserSchemaDescriptorLike {
+	kind: string;
+	id: string;
+	required: boolean;
+	canonicalAttribute?: string;
+	responseAttribute?: string;
+	inputSchema?: z.ZodType;
+	canonicalSchema?: z.ZodType;
+	openAPISchema?: Record<string, unknown>;
+	discoverySchema: {
+		id: string;
+		meta: { location: string };
+		[key: string]: unknown;
+	};
+}
 
 const SCIM_SCHEMA_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Schema";
 const SCIM_RESOURCE_TYPE_SCHEMA =
@@ -442,225 +464,338 @@ const SCIM_CORE_USER_SCHEMA_DESCRIPTOR = {
  * Ordered built-in schema descriptors for the SCIM User resource.
  *
  * Validation, discovery, ResourceType metadata, OpenAPI, persistence, and
- * response serialization consume these descriptors.
+ * response serialization consume these descriptors. Application-defined
+ * extensions are appended per instance by {@link buildUserSchemaDescriptors}.
  */
 export const SCIM_USER_SCHEMA_DESCRIPTORS = [
 	SCIM_CORE_USER_SCHEMA_DESCRIPTOR,
 	SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR,
 ] as const;
 
-const supportedUserSchemaIds: ReadonlySet<string> = new Set(
-	SCIM_USER_SCHEMA_DESCRIPTORS.map((descriptor) => descriptor.id),
-);
+/** The built-in descriptors followed by any compiled custom extensions. */
+export function buildUserSchemaDescriptors(
+	custom: readonly CompiledUserSchemaExtensionDescriptor[] = [],
+): readonly SCIMUserSchemaDescriptorLike[] {
+	return [...SCIM_USER_SCHEMA_DESCRIPTORS, ...custom];
+}
 
-const scimUserSchemasSchema = z
-	.array(z.string())
-	.min(1)
-	.max(SCIM_USER_SCHEMA_DESCRIPTORS.length)
-	.superRefine((schemas, context) => {
-		for (const schema of schemas) {
-			if (!supportedUserSchemaIds.has(schema)) {
-				context.addIssue({
-					code: "custom",
-					message: `Unsupported SCIM User schema ${schema}`,
-				});
-			}
-			if (schemas.indexOf(schema) !== schemas.lastIndexOf(schema)) {
-				context.addIssue({
-					code: "custom",
-					message: `SCIM User schema ${schema} must not be duplicated`,
-				});
-			}
-		}
-		for (const descriptor of SCIM_USER_SCHEMA_DESCRIPTORS) {
-			if (descriptor.required && !schemas.includes(descriptor.id)) {
-				context.addIssue({
-					code: "custom",
-					message: `schemas must contain ${descriptor.id}`,
-				});
-			}
-		}
-	})
-	.transform((schemas) =>
-		SCIM_USER_SCHEMA_DESCRIPTORS.filter((descriptor) =>
-			schemas.includes(descriptor.id),
-		).map((descriptor) => descriptor.id),
+function buildUserSchemasSchema(
+	descriptors: readonly SCIMUserSchemaDescriptorLike[],
+) {
+	const supportedUserSchemaIds: ReadonlySet<string> = new Set(
+		descriptors.map((descriptor) => descriptor.id),
 	);
+	return z
+		.array(z.string())
+		.min(1)
+		.max(descriptors.length)
+		.superRefine((schemas, context) => {
+			for (const schema of schemas) {
+				if (!supportedUserSchemaIds.has(schema)) {
+					context.addIssue({
+						code: "custom",
+						message: `Unsupported SCIM User schema ${schema}`,
+					});
+				}
+				if (schemas.indexOf(schema) !== schemas.lastIndexOf(schema)) {
+					context.addIssue({
+						code: "custom",
+						message: `SCIM User schema ${schema} must not be duplicated`,
+					});
+				}
+			}
+			for (const descriptor of descriptors) {
+				if (descriptor.required && !schemas.includes(descriptor.id)) {
+					context.addIssue({
+						code: "custom",
+						message: `schemas must contain ${descriptor.id}`,
+					});
+				}
+			}
+		})
+		.transform((schemas) =>
+			descriptors
+				.filter((descriptor) => schemas.includes(descriptor.id))
+				.map((descriptor) => descriptor.id),
+		);
+}
 
-function validateEnterpriseDeclaration(
-	user: {
-		schemas: readonly string[];
-		enterprise?: unknown;
-	},
+/**
+ * Validate that every extension whose value object is present also declares its
+ * schema URN in `schemas`. `attributeKey` selects the carrier field: the input
+ * payload carries an extension under its URN, while a canonical payload carries
+ * it under the extension's canonical attribute.
+ */
+function validateExtensionDeclarations(
+	user: { schemas: readonly string[] } & Record<string, unknown>,
+	descriptors: readonly SCIMUserSchemaDescriptorLike[],
+	attributeKey: (
+		descriptor: SCIMUserSchemaDescriptorLike,
+	) => string | undefined,
 	context: z.RefinementCtx,
 ): void {
-	if (
-		user.enterprise !== undefined &&
-		!user.schemas.includes(SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id)
-	) {
-		context.addIssue({
-			code: "custom",
-			path: ["schemas"],
-			message: `The Enterprise User extension requires ${SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id} in schemas`,
-		});
+	for (const descriptor of descriptors) {
+		if (descriptor.kind !== "extension") continue;
+		const key = attributeKey(descriptor);
+		if (key === undefined) continue;
+		if (user[key] !== undefined && !user.schemas.includes(descriptor.id)) {
+			context.addIssue({
+				code: "custom",
+				path: ["schemas"],
+				message:
+					descriptor.id === SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id
+						? `The Enterprise User extension requires ${descriptor.id} in schemas`
+						: `The ${descriptor.id} extension requires ${descriptor.id} in schemas`,
+			});
+		}
 	}
 }
 
-export const APIUserSchema = z
-	.object({
-		schemas: scimUserSchemasSchema,
-		userName: z.string().trim().min(1).max(512),
-		externalId: scimLongStringSchema.optional(),
-		displayName: scimLongStringSchema.optional(),
-		name: scimNameSchema.optional(),
-		emails: z
-			.array(scimEmailSchema)
-			.max(SCIM_MAX_MULTI_VALUE_COUNT)
-			.refine(primaryRefinement(), {
-				message: "emails cannot contain multiple primary values",
-			})
-			.refine(
-				(emails) =>
-					new Set(emails.map(createSCIMEmailTupleKey)).size === emails.length,
-				{ message: "emails cannot contain duplicate type and value pairs" },
-			)
-			.refine(hasUniqueSCIMDefinedTypes, {
-				message: "emails cannot contain duplicate defined types",
-			})
-			.optional(),
-		title: scimSingleValueScalar(scimLongStringSchema).optional(),
-		userType: scimSingleValueScalar(scimStringSchema).optional(),
-		preferredLanguage: scimSingleValueScalar(scimStringSchema).optional(),
-		locale: scimSingleValueScalar(scimStringSchema).optional(),
-		timezone: scimSingleValueScalar(scimStringSchema).optional(),
-		phoneNumbers: z
-			.array(scimPhoneNumberSchema)
-			.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
-			.refine(primaryRefinement(), {
-				message: "phoneNumbers cannot contain multiple primary values",
-			})
-			.refine(hasUniqueSCIMDefinedTypes, {
-				message: "phoneNumbers cannot contain duplicate defined types",
-			})
-			.optional(),
-		addresses: z
-			.array(scimAddressSchema)
-			.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
-			.refine(primaryRefinement(), {
-				message: "addresses cannot contain multiple primary values",
-			})
-			.refine(hasUniqueSCIMDefinedTypes, {
-				message: "addresses cannot contain duplicate defined types",
-			})
-			.optional(),
-		roles: z
-			.array(scimRoleSchema)
-			.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
-			.refine(primaryRefinement(), {
-				message: "roles cannot contain multiple primary values",
-			})
-			.refine(hasUniqueSCIMDefinedTypes, {
-				message: "roles cannot contain duplicate defined types",
-			})
-			.optional(),
-		entitlements: z
-			.array(scimEntitlementSchema)
-			.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
-			.refine(primaryRefinement(), {
-				message: "entitlements cannot contain multiple primary values",
-			})
-			.refine(hasUniqueSCIMDefinedTypes, {
-				message: "entitlements cannot contain duplicate defined types",
-			})
-			.optional(),
-		active: z.boolean().optional(),
-		[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id]:
-			SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.inputSchema.optional(),
-	})
-	.superRefine((user, context) => {
-		if (
-			(user.emails === undefined || user.emails.length === 0) &&
-			!scimEmailValueSchema.safeParse(user.userName).success
-		) {
-			context.addIssue({
-				code: "custom",
-				path: ["emails"],
-				message:
-					"emails must contain an email when userName is not an email address",
-			});
-		}
-		validateEnterpriseDeclaration(
-			{
-				schemas: user.schemas,
-				enterprise: user[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id],
-			},
-			context,
-		);
-		if (
-			JSON.stringify(user).length > SCIM_MAX_SERIALIZED_USER_ATTRIBUTES_LENGTH
-		) {
-			context.addIssue({
-				code: "custom",
-				message: "SCIM User attributes exceed the supported serialized size",
-			});
-		}
-	});
+const coreUserInputShape = {
+	userName: z.string().trim().min(1).max(512),
+	externalId: scimLongStringSchema.optional(),
+	displayName: scimLongStringSchema.optional(),
+	name: scimNameSchema.optional(),
+	emails: z
+		.array(scimEmailSchema)
+		.max(SCIM_MAX_MULTI_VALUE_COUNT)
+		.refine(primaryRefinement(), {
+			message: "emails cannot contain multiple primary values",
+		})
+		.refine(
+			(emails) =>
+				new Set(emails.map(createSCIMEmailTupleKey)).size === emails.length,
+			{ message: "emails cannot contain duplicate type and value pairs" },
+		)
+		.refine(hasUniqueSCIMDefinedTypes, {
+			message: "emails cannot contain duplicate defined types",
+		})
+		.optional(),
+	title: scimSingleValueScalar(scimLongStringSchema).optional(),
+	userType: scimSingleValueScalar(scimStringSchema).optional(),
+	preferredLanguage: scimSingleValueScalar(scimStringSchema).optional(),
+	locale: scimSingleValueScalar(scimStringSchema).optional(),
+	timezone: scimSingleValueScalar(scimStringSchema).optional(),
+	phoneNumbers: z
+		.array(scimPhoneNumberSchema)
+		.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
+		.refine(primaryRefinement(), {
+			message: "phoneNumbers cannot contain multiple primary values",
+		})
+		.refine(hasUniqueSCIMDefinedTypes, {
+			message: "phoneNumbers cannot contain duplicate defined types",
+		})
+		.optional(),
+	addresses: z
+		.array(scimAddressSchema)
+		.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
+		.refine(primaryRefinement(), {
+			message: "addresses cannot contain multiple primary values",
+		})
+		.refine(hasUniqueSCIMDefinedTypes, {
+			message: "addresses cannot contain duplicate defined types",
+		})
+		.optional(),
+	roles: z
+		.array(scimRoleSchema)
+		.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
+		.refine(primaryRefinement(), {
+			message: "roles cannot contain multiple primary values",
+		})
+		.refine(hasUniqueSCIMDefinedTypes, {
+			message: "roles cannot contain duplicate defined types",
+		})
+		.optional(),
+	entitlements: z
+		.array(scimEntitlementSchema)
+		.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
+		.refine(primaryRefinement(), {
+			message: "entitlements cannot contain multiple primary values",
+		})
+		.refine(hasUniqueSCIMDefinedTypes, {
+			message: "entitlements cannot contain duplicate defined types",
+		})
+		.optional(),
+	active: z.boolean().optional(),
+} as const;
+
+function buildCustomExtensionInputShape(
+	custom: readonly CompiledUserSchemaExtensionDescriptor[],
+): Record<string, z.ZodType> {
+	const shape: Record<string, z.ZodType> = {};
+	for (const descriptor of custom) {
+		shape[descriptor.id] = descriptor.inputSchema.optional();
+	}
+	return shape;
+}
+
+/** Build the ingress validation schema for the given custom extensions. */
+export function buildAPIUserSchema(
+	custom: readonly CompiledUserSchemaExtensionDescriptor[] = [],
+) {
+	const descriptors = buildUserSchemaDescriptors(custom);
+	return z
+		.object({
+			schemas: buildUserSchemasSchema(descriptors),
+			...coreUserInputShape,
+			// Keep the Enterprise extension as an explicit computed-literal key so
+			// its type is preserved on the inferred `APIUser`. Custom keys are
+			// dynamic and accessed by URN at runtime.
+			[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.id]:
+				SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.inputSchema.optional(),
+			...buildCustomExtensionInputShape(custom),
+		})
+		.superRefine((user, context) => {
+			if (
+				(user.emails === undefined || user.emails.length === 0) &&
+				!scimEmailValueSchema.safeParse(user.userName).success
+			) {
+				context.addIssue({
+					code: "custom",
+					path: ["emails"],
+					message:
+						"emails must contain an email when userName is not an email address",
+				});
+			}
+			// Built-in extensions (Enterprise) keep the strict contract: their value
+			// requires the URN in `schemas`. Custom extensions are lenient — see the
+			// transform below — because providers such as Microsoft Entra may send a
+			// custom extension's value without listing its URN.
+			validateExtensionDeclarations(
+				user,
+				SCIM_USER_SCHEMA_DESCRIPTORS,
+				(descriptor) => descriptor.id,
+				context,
+			);
+			// Account for the custom extension URNs the transform below auto-declares
+			// into `schemas`, so an oversized payload is a 400 here rather than a 500
+			// when the enlarged canonical payload is later serialized.
+			const record = user as Record<string, unknown>;
+			const autoDeclaredLength = custom.reduce(
+				(total, descriptor) =>
+					record[descriptor.id] !== undefined &&
+					!user.schemas.includes(descriptor.id)
+						? total + descriptor.id.length + 3
+						: total,
+				0,
+			);
+			if (
+				JSON.stringify(user).length + autoDeclaredLength >
+				SCIM_MAX_SERIALIZED_USER_ATTRIBUTES_LENGTH
+			) {
+				context.addIssue({
+					code: "custom",
+					message: "SCIM User attributes exceed the supported serialized size",
+				});
+			}
+		})
+		.transform((user) => {
+			// Auto-declare a custom extension's URN when its value is present but the
+			// URN was omitted from `schemas`, for provider interoperability.
+			const record = user as Record<string, unknown>;
+			const missing = custom
+				.filter(
+					(descriptor) =>
+						record[descriptor.id] !== undefined &&
+						!user.schemas.includes(descriptor.id),
+				)
+				.map((descriptor) => descriptor.id);
+			return missing.length === 0
+				? user
+				: { ...user, schemas: [...user.schemas, ...missing] };
+		});
+}
+
+export const APIUserSchema = buildAPIUserSchema();
 
 export type APIUser = z.infer<typeof APIUserSchema>;
 
-export const SCIMCanonicalUserAttributesSchema = z
-	.object({
-		schemas: scimUserSchemasSchema,
-		name: scimCanonicalNameSchema,
-		emails: z
-			.array(scimCanonicalEmailSchema)
-			.min(1)
-			.max(SCIM_MAX_MULTI_VALUE_COUNT)
-			.refine(
-				(emails) => emails.filter((email) => email.primary).length === 1,
-				{ message: "stored emails must contain exactly one primary value" },
-			)
-			.refine(
-				(emails) =>
-					new Set(emails.map(createSCIMEmailTupleKey)).size === emails.length,
-				{ message: "stored emails must contain unique type and value pairs" },
-			)
-			.refine(hasUniqueSCIMDefinedTypes, {
-				message: "stored emails must contain unique defined types",
-			}),
-		title: scimLongStringSchema.optional(),
-		userType: scimStringSchema.optional(),
-		preferredLanguage: scimStringSchema.optional(),
-		locale: scimStringSchema.optional(),
-		timezone: scimStringSchema.optional(),
-		phoneNumbers: z
-			.array(scimPhoneNumberSchema)
-			.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
-			.refine(primaryRefinement())
-			.refine(hasUniqueSCIMDefinedTypes)
-			.optional(),
-		addresses: z
-			.array(scimAddressSchema)
-			.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
-			.refine(primaryRefinement())
-			.refine(hasUniqueSCIMDefinedTypes)
-			.optional(),
-		roles: z
-			.array(scimRoleSchema)
-			.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
-			.refine(primaryRefinement())
-			.refine(hasUniqueSCIMDefinedTypes)
-			.optional(),
-		entitlements: z
-			.array(scimEntitlementSchema)
-			.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
-			.refine(primaryRefinement())
-			.refine(hasUniqueSCIMDefinedTypes)
-			.optional(),
-		[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.canonicalAttribute]:
-			SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.canonicalSchema.optional(),
-	})
-	.superRefine(validateEnterpriseDeclaration);
+const coreCanonicalUserShape = {
+	name: scimCanonicalNameSchema,
+	emails: z
+		.array(scimCanonicalEmailSchema)
+		.min(1)
+		.max(SCIM_MAX_MULTI_VALUE_COUNT)
+		.refine((emails) => emails.filter((email) => email.primary).length === 1, {
+			message: "stored emails must contain exactly one primary value",
+		})
+		.refine(
+			(emails) =>
+				new Set(emails.map(createSCIMEmailTupleKey)).size === emails.length,
+			{ message: "stored emails must contain unique type and value pairs" },
+		)
+		.refine(hasUniqueSCIMDefinedTypes, {
+			message: "stored emails must contain unique defined types",
+		}),
+	title: scimLongStringSchema.optional(),
+	userType: scimStringSchema.optional(),
+	preferredLanguage: scimStringSchema.optional(),
+	locale: scimStringSchema.optional(),
+	timezone: scimStringSchema.optional(),
+	phoneNumbers: z
+		.array(scimPhoneNumberSchema)
+		.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
+		.refine(primaryRefinement())
+		.refine(hasUniqueSCIMDefinedTypes)
+		.optional(),
+	addresses: z
+		.array(scimAddressSchema)
+		.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
+		.refine(primaryRefinement())
+		.refine(hasUniqueSCIMDefinedTypes)
+		.optional(),
+	roles: z
+		.array(scimRoleSchema)
+		.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
+		.refine(primaryRefinement())
+		.refine(hasUniqueSCIMDefinedTypes)
+		.optional(),
+	entitlements: z
+		.array(scimEntitlementSchema)
+		.max(SCIM_MAX_STRUCTURED_VALUE_COUNT)
+		.refine(primaryRefinement())
+		.refine(hasUniqueSCIMDefinedTypes)
+		.optional(),
+} as const;
+
+function buildCustomCanonicalExtensionShape(
+	custom: readonly CompiledUserSchemaExtensionDescriptor[],
+): Record<string, z.ZodType> {
+	const shape: Record<string, z.ZodType> = {};
+	for (const descriptor of custom) {
+		shape[descriptor.canonicalAttribute] =
+			descriptor.canonicalSchema.optional();
+	}
+	return shape;
+}
+
+/** Build the canonical persistence schema for the given custom extensions. */
+export function buildCanonicalUserAttributesSchema(
+	custom: readonly CompiledUserSchemaExtensionDescriptor[] = [],
+) {
+	const descriptors = buildUserSchemaDescriptors(custom);
+	return z
+		.object({
+			schemas: buildUserSchemasSchema(descriptors),
+			...coreCanonicalUserShape,
+			// Enterprise stays an explicit computed-literal key so its type is kept
+			// on the inferred `SCIMCanonicalUserAttributes`; custom keys are dynamic.
+			[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.canonicalAttribute]:
+				SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.canonicalSchema.optional(),
+			...buildCustomCanonicalExtensionShape(custom),
+		})
+		.superRefine((user, context) => {
+			validateExtensionDeclarations(
+				user,
+				descriptors,
+				(descriptor) => descriptor.canonicalAttribute,
+				context,
+			);
+		});
+}
+
+export const SCIMCanonicalUserAttributesSchema =
+	buildCanonicalUserAttributesSchema();
 
 export type SCIMCanonicalUserAttributes = z.infer<
 	typeof SCIMCanonicalUserAttributesSchema
@@ -676,126 +811,153 @@ const commonMultiValueProperties = {
 	primary: { type: "boolean" },
 };
 
-export const OpenAPIUserResourceSchema = {
-	type: "object",
-	properties: {
-		id: { type: "string" },
-		externalId: { type: "string", maxLength: 1_024 },
-		meta: {
+const coreOpenAPIUserProperties = {
+	id: { type: "string" },
+	externalId: { type: "string", maxLength: 1_024 },
+	meta: {
+		type: "object",
+		properties: {
+			resourceType: { type: "string" },
+			created: { type: "string", format: "date-time" },
+			lastModified: { type: "string", format: "date-time" },
+			location: { type: "string" },
+		},
+	},
+	userName: { type: "string", maxLength: 512 },
+	name: {
+		type: "object",
+		properties: {
+			formatted: { type: "string", maxLength: 1_024 },
+			givenName: { type: "string", maxLength: 256 },
+			familyName: { type: "string", maxLength: 256 },
+			middleName: { type: "string", maxLength: 256 },
+			honorificPrefix: { type: "string", maxLength: 256 },
+			honorificSuffix: { type: "string", maxLength: 256 },
+		},
+	},
+	displayName: { type: "string", maxLength: 1_024 },
+	title: { type: "string", maxLength: 1_024 },
+	userType: { type: "string", maxLength: 256 },
+	preferredLanguage: { type: "string", maxLength: 256 },
+	locale: { type: "string", maxLength: 256 },
+	timezone: { type: "string", maxLength: 256 },
+	active: { type: "boolean" },
+	emails: {
+		type: "array",
+		maxItems: SCIM_MAX_MULTI_VALUE_COUNT,
+		items: {
 			type: "object",
 			properties: {
-				resourceType: { type: "string" },
-				created: { type: "string", format: "date-time" },
-				lastModified: { type: "string", format: "date-time" },
-				location: { type: "string" },
+				value: { type: "string", format: "email", maxLength: 254 },
+				...commonMultiValueProperties,
 			},
 		},
-		userName: { type: "string", maxLength: 512 },
-		name: {
+	},
+	phoneNumbers: {
+		...complexMultiValueOpenAPISchema,
+		items: {
+			type: "object",
+			properties: {
+				value: { type: "string", maxLength: 1_024 },
+				...commonMultiValueProperties,
+			},
+		},
+	},
+	addresses: {
+		...complexMultiValueOpenAPISchema,
+		items: {
 			type: "object",
 			properties: {
 				formatted: { type: "string", maxLength: 1_024 },
-				givenName: { type: "string", maxLength: 256 },
-				familyName: { type: "string", maxLength: 256 },
-				middleName: { type: "string", maxLength: 256 },
-				honorificPrefix: { type: "string", maxLength: 256 },
-				honorificSuffix: { type: "string", maxLength: 256 },
-			},
-		},
-		displayName: { type: "string", maxLength: 1_024 },
-		title: { type: "string", maxLength: 1_024 },
-		userType: { type: "string", maxLength: 256 },
-		preferredLanguage: { type: "string", maxLength: 256 },
-		locale: { type: "string", maxLength: 256 },
-		timezone: { type: "string", maxLength: 256 },
-		active: { type: "boolean" },
-		emails: {
-			type: "array",
-			maxItems: SCIM_MAX_MULTI_VALUE_COUNT,
-			items: {
-				type: "object",
-				properties: {
-					value: { type: "string", format: "email", maxLength: 254 },
-					...commonMultiValueProperties,
-				},
-			},
-		},
-		phoneNumbers: {
-			...complexMultiValueOpenAPISchema,
-			items: {
-				type: "object",
-				properties: {
-					value: { type: "string", maxLength: 1_024 },
-					...commonMultiValueProperties,
-				},
-			},
-		},
-		addresses: {
-			...complexMultiValueOpenAPISchema,
-			items: {
-				type: "object",
-				properties: {
-					formatted: { type: "string", maxLength: 1_024 },
-					streetAddress: { type: "string", maxLength: 1_024 },
-					locality: { type: "string", maxLength: 256 },
-					region: { type: "string", maxLength: 256 },
-					postalCode: { type: "string", maxLength: 256 },
-					country: { type: "string", maxLength: 256 },
-					...commonMultiValueProperties,
-				},
-			},
-		},
-		roles: {
-			...complexMultiValueOpenAPISchema,
-			items: {
-				type: "object",
-				properties: {
-					value: { type: "string", maxLength: 1_024 },
-					display: { type: "string", maxLength: 1_024 },
-					...commonMultiValueProperties,
-				},
-			},
-		},
-		entitlements: {
-			...complexMultiValueOpenAPISchema,
-			items: {
-				type: "object",
-				properties: {
-					value: { type: "string", maxLength: 1_024 },
-					display: { type: "string", maxLength: 1_024 },
-					...commonMultiValueProperties,
-				},
-			},
-		},
-		[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.responseAttribute]:
-			SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.openAPISchema,
-		schemas: {
-			type: "array",
-			maxItems: SCIM_USER_SCHEMA_DESCRIPTORS.length,
-			items: {
-				type: "string",
-				enum: SCIM_USER_SCHEMA_DESCRIPTORS.map((descriptor) => descriptor.id),
+				streetAddress: { type: "string", maxLength: 1_024 },
+				locality: { type: "string", maxLength: 256 },
+				region: { type: "string", maxLength: 256 },
+				postalCode: { type: "string", maxLength: 256 },
+				country: { type: "string", maxLength: 256 },
+				...commonMultiValueProperties,
 			},
 		},
 	},
-	required: ["schemas", "id"] as string[],
+	roles: {
+		...complexMultiValueOpenAPISchema,
+		items: {
+			type: "object",
+			properties: {
+				value: { type: "string", maxLength: 1_024 },
+				display: { type: "string", maxLength: 1_024 },
+				...commonMultiValueProperties,
+			},
+		},
+	},
+	entitlements: {
+		...complexMultiValueOpenAPISchema,
+		items: {
+			type: "object",
+			properties: {
+				value: { type: "string", maxLength: 1_024 },
+				display: { type: "string", maxLength: 1_024 },
+				...commonMultiValueProperties,
+			},
+		},
+	},
 } as const;
 
-export const SCIMUserResourceType = {
-	schemas: [SCIM_RESOURCE_TYPE_SCHEMA],
-	id: "User",
-	name: "User",
-	endpoint: "/Users",
-	description: "User Account",
-	schema: SCIM_CORE_USER_SCHEMA_DESCRIPTOR.id,
-	schemaExtensions: SCIM_USER_SCHEMA_DESCRIPTORS.filter(
-		(descriptor) => !descriptor.required,
-	).map((descriptor) => ({
-		schema: descriptor.id,
-		required: descriptor.required,
-	})),
-	meta: {
-		resourceType: "ResourceType",
-		location: "/scim/v2/ResourceTypes/User",
-	},
-};
+/** Build the OpenAPI User response schema for the given custom extensions. */
+export function buildOpenAPIUserResourceSchema(
+	custom: readonly CompiledUserSchemaExtensionDescriptor[] = [],
+) {
+	const descriptors = buildUserSchemaDescriptors(custom);
+	const customProperties: Record<string, unknown> = {};
+	for (const descriptor of custom) {
+		customProperties[descriptor.responseAttribute] = descriptor.openAPISchema;
+	}
+	return {
+		type: "object",
+		properties: {
+			...coreOpenAPIUserProperties,
+			// Enterprise stays an explicit computed-literal key so its type is kept
+			// on the inferred schema; custom keys are dynamic.
+			[SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.responseAttribute]:
+				SCIM_ENTERPRISE_USER_SCHEMA_DESCRIPTOR.openAPISchema,
+			...customProperties,
+			schemas: {
+				type: "array",
+				maxItems: descriptors.length,
+				items: {
+					type: "string",
+					enum: descriptors.map((descriptor) => descriptor.id),
+				},
+			},
+		},
+		required: ["schemas", "id"] as string[],
+	};
+}
+
+export const OpenAPIUserResourceSchema = buildOpenAPIUserResourceSchema();
+
+/** Build the User ResourceType for the given custom extensions. */
+export function buildUserResourceType(
+	custom: readonly CompiledUserSchemaExtensionDescriptor[] = [],
+) {
+	const descriptors = buildUserSchemaDescriptors(custom);
+	return {
+		schemas: [SCIM_RESOURCE_TYPE_SCHEMA],
+		id: "User",
+		name: "User",
+		endpoint: "/Users",
+		description: "User Account",
+		schema: SCIM_CORE_USER_SCHEMA_DESCRIPTOR.id,
+		schemaExtensions: descriptors
+			.filter((descriptor) => !descriptor.required)
+			.map((descriptor) => ({
+				schema: descriptor.id,
+				required: descriptor.required,
+			})),
+		meta: {
+			resourceType: "ResourceType",
+			location: "/scim/v2/ResourceTypes/User",
+		},
+	};
+}
+
+export const SCIMUserResourceType = buildUserResourceType();

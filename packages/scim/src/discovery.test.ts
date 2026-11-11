@@ -2,15 +2,23 @@ import type { BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
+import type { SCIMUserSchemaExtension } from "./configuration";
 import {
-	getSCIMResourceType,
-	getSCIMResourceTypes,
-	getSCIMSchema,
-	getSCIMSchemas,
+	createGetSCIMResourceType,
+	createGetSCIMResourceTypes,
+	createGetSCIMSchema,
+	createGetSCIMSchemas,
 	getSCIMServiceProviderConfig,
 } from "./discovery";
+import { buildSCIMUserSchemaContext } from "./user-schema-context";
 
-function createDiscoveryTestAuth() {
+function createDiscoveryTestAuth(
+	userSchemaExtensions?: readonly SCIMUserSchemaExtension[],
+) {
+	const context = buildSCIMUserSchemaContext({
+		connections: [],
+		...(userSchemaExtensions ? { userSchemaExtensions } : {}),
+	});
 	return betterAuth({
 		baseURL: "http://localhost:3000",
 		database: memoryAdapter({
@@ -24,15 +32,27 @@ function createDiscoveryTestAuth() {
 				id: "scim-discovery-test",
 				endpoints: {
 					getSCIMServiceProviderConfig,
-					getSCIMSchemas,
-					getSCIMSchema,
-					getSCIMResourceTypes,
-					getSCIMResourceType,
+					getSCIMSchemas: createGetSCIMSchemas(context.discoverySchemas),
+					getSCIMSchema: createGetSCIMSchema(context.discoverySchemas),
+					getSCIMResourceTypes: createGetSCIMResourceTypes(
+						context.resourceTypes,
+					),
+					getSCIMResourceType: createGetSCIMResourceType(context.resourceTypes),
 				},
 			} satisfies BetterAuthPlugin,
 		],
 	});
 }
+
+const ACME_USER_EXTENSION: SCIMUserSchemaExtension = {
+	urn: "urn:ietf:params:scim:schemas:extension:acme:2.0:User",
+	name: "AcmeUser",
+	description: "Acme-specific User attributes",
+	attributes: [
+		{ name: "sapUserId", type: "string", mapTo: "sapUserId" },
+		{ name: "costCenter", type: "string" },
+	],
+};
 
 describe("SCIM discovery", () => {
 	it("describes supported protocol capabilities without an organization dependency", async () => {
@@ -90,7 +110,7 @@ describe("SCIM discovery", () => {
 			itemsPerPage: 2,
 		});
 		expect(
-			resourceTypes.Resources.map((resourceType) => ({
+			resourceTypes.Resources.map((resourceType: Record<string, unknown>) => ({
 				id: resourceType.id,
 				endpoint: resourceType.endpoint,
 				schema: resourceType.schema,
@@ -141,6 +161,55 @@ describe("SCIM discovery", () => {
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:Error"],
 				status: "404",
 			},
+		});
+	});
+
+	it("advertises a declared custom User schema extension in /Schemas", async () => {
+		const auth = createDiscoveryTestAuth([ACME_USER_EXTENSION]);
+
+		const schemas = await auth.api.getSCIMSchemas();
+
+		expect(schemas.Resources.map((schema) => schema.id)).toEqual([
+			"urn:ietf:params:scim:schemas:core:2.0:User",
+			"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+			"urn:ietf:params:scim:schemas:core:2.0:Group",
+			"urn:ietf:params:scim:schemas:extension:acme:2.0:User",
+		]);
+
+		const acme = await auth.api.getSCIMSchema({
+			params: {
+				schemaId: "urn:ietf:params:scim:schemas:extension:acme:2.0:User",
+			},
+		});
+		expect(acme).toMatchObject({
+			id: "urn:ietf:params:scim:schemas:extension:acme:2.0:User",
+			name: "AcmeUser",
+			attributes: [
+				expect.objectContaining({ name: "sapUserId", type: "string" }),
+				expect.objectContaining({ name: "costCenter", type: "string" }),
+			],
+		});
+	});
+
+	it("advertises the custom extension as a User schemaExtension", async () => {
+		const auth = createDiscoveryTestAuth([ACME_USER_EXTENSION]);
+
+		const user = await auth.api.getSCIMResourceType({
+			params: { resourceTypeId: "User" },
+		});
+
+		expect(user).toMatchObject({
+			id: "User",
+			schemaExtensions: [
+				{
+					schema: "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
+					required: false,
+				},
+				{
+					schema: "urn:ietf:params:scim:schemas:extension:acme:2.0:User",
+					required: false,
+				},
+			],
 		});
 	});
 });
