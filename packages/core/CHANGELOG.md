@@ -80,6 +80,24 @@
 
 ## 1.8.0-beta.0
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12126](https://github.com/better-auth/better-auth/pull/12126) [`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b) Thanks [@hardikguptaofficialgit](https://github.com/hardikguptaofficialgit)! - On Prisma with MongoDB, when your id columns use `@db.ObjectId`, magic link and email OTP sign-in for users with an unverified email no longer fail with a 500 (`Malformed ObjectID`). SAML sign-in, DPoP-bound OAuth requests, and `private_key_jwt` client authentication are fixed the same way, and Sign-In with Ethereum now keeps the email the user supplied instead of a placeholder. Setups with plain `String` id columns and other databases are unaffected.
+
+- [#12401](https://github.com/better-auth/better-auth/pull/12401) [`c3a94c5`](https://github.com/better-auth/better-auth/commit/c3a94c546af3c3bf4573f254b666facb4a94fc2d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers configured with `authorizationHeaders` now send those headers when refreshing an access token, not only when exchanging the authorization code. Before, a provider whose token endpoint requires one of those headers accepted the sign-in but rejected every refresh. Providers without `authorizationHeaders` are unaffected.
+
+  `refreshAccessToken` and `refreshAccessTokenRequest` from `@better-auth/core/oauth2` accept an optional `headers` input for providers that need extra headers on refresh. Client authentication headers still take precedence over it.
+
+  Extra headers whose names differ only in case from a client authentication header, such as `Authorization` with `authentication: "basic"`, no longer produce a combined, invalid header on the code exchange or refresh. Client authentication replaces them, including headers a custom `tokenEndpointAuth` hook sets in any casing.
+
+- [#11716](https://github.com/better-auth/better-auth/pull/11716) [`1a79da5`](https://github.com/better-auth/better-auth/commit/1a79da50672c8a7ccea89c93b11b25aea86262be) Thanks [@bytaesu](https://github.com/bytaesu)! - Authentication requests no longer hang on Cloudflare Workers when the request that started schema validation ends before validation finishes. On Workers, each request now runs its own schema lookup until one completes.
+
+- [#12402](https://github.com/better-auth/better-auth/pull/12402) [`2d10ae7`](https://github.com/better-auth/better-auth/commit/2d10ae733eacab919ce13413ac9e840f2ea7f1c6) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `advanced.database.generateId: "serial"`, filtering an `id` or reference field with `null` now compares it with `null`. Before, the `null` became `0`, so `eq null` matched no row and, on the memory adapter, `ne null` also matched rows where the field was unset.
+
+- [#12425](https://github.com/better-auth/better-auth/pull/12425) [`ef4d4f7`](https://github.com/better-auth/better-auth/commit/ef4d4f7dc457fc78b0414e9c6a60827a7a3eab0e) Thanks [@bytaesu](https://github.com/bytaesu)! - Telemetry now reports Cloudflare Workers as `workerd` instead of `node` when `nodejs_compat` is enabled. `@better-auth/core/env` exports the runtime detection it uses.
+
 ## 1.7.20
 
 ### Patch Changes

@@ -22,6 +22,24 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+- [#12417](https://github.com/better-auth/better-auth/pull/12417) [`671f54c`](https://github.com/better-auth/better-auth/commit/671f54ca8dc73df9a41353f5b81483215fa71dd3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixes SAML Single Logout (`saml.enableSingleLogout`) for users who stay signed in past their session's first expiry, which with default settings is any user active for more than 7 days.
+  - IdP-initiated logout now ends the Better Auth session. Before, after that point, a LogoutRequest that arrived without the session cookie, such as one sent with the HTTP-POST binding or from an iframe, left the user signed in.
+  - SP-initiated logout now sends the NameID and SessionIndex from sign-in. Before, after that point, it sent the user's email as the NameID, which the IdP can't match when it issued a persistent or transient NameID.
+
+  Sessions whose logout data was already gone before upgrading send the NameID saved on the user's SAML account, without a SessionIndex. Apps without Single Logout enabled are unaffected, and no action is needed.
+
+- [#12424](https://github.com/better-auth/better-auth/pull/12424) [`0df3618`](https://github.com/better-auth/better-auth/commit/0df3618378fbabe910a01d85b7af8ddef2f53b28) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixes SAML Single Logout (`saml.enableSingleLogout`) for users who signed in more than once with the same NameID, such as on two devices, when the app uses the Prisma or MongoDB adapter.
+
+  When one of those sessions was refreshed, the logout record of a different session was extended. The refreshed session's own record then expired with its original expiry, so an IdP-initiated LogoutRequest no longer ended that session. Each refresh now extends the refreshed session's own record.
+
+- [#12421](https://github.com/better-auth/better-auth/pull/12421) [`16f55e0`](https://github.com/better-auth/better-auth/commit/16f55e03fd3237d2405f5f6bdb7e55ed3d086458) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SAML providers that allow IdP-initiated sign-in (`allowIdpInitiated: true`) or turn off InResponseTo validation (`enableInResponseToValidation: false`) now reject a signed SAML response submitted again with its assertion ID written using XML character references, such as `&[#95](https://github.com/better-auth/better-auth/issues/95);` in place of `_`. Before, the re-spelled copy passed replay protection and signed the user in again. With the default SAML settings, a replayed response was already rejected.
+
 ## 1.7.20
 
 ### Patch Changes

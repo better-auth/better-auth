@@ -22,6 +22,12 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12409](https://github.com/better-auth/better-auth/pull/12409) [`9362c0d`](https://github.com/better-auth/better-auth/commit/9362c0d42e7f65a1dbfd6318360cd97ea9dd9d5b) Thanks [@bytaesu](https://github.com/bytaesu)! - The adapter test for `findMany` with multiple operators now creates users from generated data, as the other adapter tests do.
+
 ## 1.7.20
 
 ## 1.7.19

@@ -21,6 +21,12 @@
 - Updated dependencies []:
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.21
+
+### Patch Changes
+
+- [#11912](https://github.com/better-auth/better-auth/pull/11912) [`5c12074`](https://github.com/better-auth/better-auth/commit/5c120747e4d5ab37f1fa71fee11653ade82739bc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you use PostgreSQL and other schemas in the same database are dropped while Better Auth reads the database, for example one schema per tenant or parallel test runs, the startup schema check and `npx auth@latest migrate` no longer fail intermittently with `schema "…" does not exist` or `relation "…" does not exist`. The startup schema check now reads only the schemas on the connection's `search_path`, plus any schema set with `schemaName` or a schema plugin, and `migrate` reads only the schema it migrates. Before, both read every schema in the database. If no other schemas change while Better Auth reads the database, nothing changes for you.
+
 ## 1.7.20
 
 ## 1.7.19
