@@ -285,7 +285,7 @@ tokenEndpointAuth: {
 },
 ```
 
-Better Auth builds the standard grant parameters, while `customizeRequest` adds the client authentication required by the provider. It can also set headers, including an `Authorization` header in the provider's own scheme. With `method: "custom"`, Better Auth adds no client credentials, so set any `client_id` or secret the provider requires:
+Better Auth builds the standard grant parameters, while `customizeRequest` adds the client authentication required by the provider. It can also set headers, including an `Authorization` header in the provider's own scheme. With `method: "custom"`, Better Auth adds no client credentials, so set any `client_id`, secret, or client assertion the provider requires:
 
 ```ts
 tokenEndpointAuth: {
