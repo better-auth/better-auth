@@ -5,6 +5,7 @@
  * adapter authors once the registration and lifecycle contracts are stabilized.
  */
 
+import { isWorkerd } from "../env";
 import type { Awaitable, BetterAuthOptions } from "../types";
 import type { SchemaFinding, SchemaSource } from "./schema-diff";
 import { SchemaMismatchError } from "./schema-diff";
@@ -107,9 +108,7 @@ export function createSchemaCheck(
 	// Workers tie I/O to the request that started it, so a lookup begun by
 	// another request may never settle there.
 	// @see https://developers.cloudflare.com/workers/runtime-apis/request/#the-request-context
-	const sharesLookups =
-		typeof navigator === "undefined" ||
-		navigator.userAgent !== "Cloudflare-Workers";
+	const sharesLookups = !isWorkerd();
 
 	let verdict:
 		| {
