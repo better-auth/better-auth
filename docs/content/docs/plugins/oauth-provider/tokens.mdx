@@ -627,7 +627,12 @@ When the subject token is DPoP-bound, the rules depend on who exchanges it:
 * **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A missing proof, or a proof or `confirmation` with another key, fails with `invalid_dpop_proof`.
 * **A service in the token's audience**, such as the MCP server that received it, does not hold the client's key. If the service sends its own proof, the exchanged token is bound to the service's key. If it sends no proof and none is required, the exchanged token is a bearer token.
 
-An [actor token](#delegate-to-an-actor) is always the exchanging client's own token. When it is DPoP-bound, the request must carry a proof signed by the same key, and the exchanged token is bound to that key. When it is bound by a `clientAuthentication` strategy instead, the strategy must return the same `confirmation`.
+An [actor token](#delegate-to-an-actor) is always the exchanging client's own token. When it is bound to a key, the request must prove the same key:
+
+* For a DPoP-bound actor token, send a proof signed by that key, or let the client's `clientAuthentication` strategy return that key as `confirmation`.
+* For an actor token bound another way, such as to a certificate, the strategy must return the same `confirmation`.
+
+The exchanged token is then bound to that key.
 
 A service that passes the [exchange rules](#exchange-rules) does not need the client's key. It can turn each DPoP-bound token it receives into a token for the APIs it is linked to. To keep those tokens DPoP-bound, require a proof in either of these ways:
 
@@ -696,7 +701,7 @@ A token exchange fails with one of these errors:
   * The DPoP proof is invalid.
   * A proof is required and the request has none.
   * The client exchanges its own DPoP-bound token with a proof, or a strategy `confirmation`, for another key.
-  * A DPoP-bound actor token comes without a proof from its key.
+  * A DPoP-bound actor token comes without a proof from its key, and the client's strategy `confirmation` does not prove that key either.
   * The subject token and the actor token are both the client's own and are bound to different keys.
 
 ### Keep the organization the user approved

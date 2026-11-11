@@ -1886,6 +1886,130 @@ describe("oauthTokenExchange delegation", () => {
 		});
 	});
 
+	describe("an actor bound by client authentication", () => {
+		const authMethod = "test_attestation_jwt";
+		const assertionType =
+			"urn:better-auth:test:client-assertion-type:test-attestation";
+		const boundGrant = "urn:better-auth:test:bound-actor";
+
+		async function bootBoundActor() {
+			const state: { confirmation?: Confirmation } = {};
+			const plugin = {
+				id: "test-bound-actor",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientAuthentication: {
+							[authMethod]: {
+								assertionTypes: [assertionType],
+								authenticate: async ({ clientId }) => ({
+									clientId: clientId!,
+									confirmation: state.confirmation,
+								}),
+							},
+						},
+						// Issues an actor token bound to what client authentication proved.
+						grants: {
+							[boundGrant]: async ({ provider }) => {
+								const { client, confirmation } =
+									await provider.authenticateClient();
+								return provider.issueTokens({
+									client,
+									scopes: ["read"],
+									resources: [api],
+									confirmation,
+								});
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin;
+			const allowExchange = vi.fn(() => true);
+			const scenario = await bootDelegation(
+				{ allowExchange },
+				{ plugins: [plugin] },
+			);
+			const service = await scenario.createClient({
+				token_endpoint_auth_method: authMethod,
+				grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, boundGrant],
+				scope: "read write",
+				skip_consent: true,
+				resources: [mcp, api],
+			});
+			const clientAuth = {
+				client_id: service.client_id,
+				client_assertion_type: assertionType,
+				client_assertion: `assertion:${service.client_id}`,
+			};
+			/** Issues an actor token bound to `confirmation`. */
+			const issueActor = async (confirmation: Confirmation) => {
+				state.confirmation = confirmation;
+				const { data, error } = await scenario.postToken({
+					grant_type: boundGrant,
+					...clientAuth,
+				});
+				expect(error).toBeNull();
+				expect(decodeJwt(data!.access_token).cnf).toEqual(confirmation);
+				return data!.access_token;
+			};
+			/** Exchanges as the service while authentication proves `confirmation`. */
+			const exchange = async (
+				actorToken: string,
+				confirmation: Confirmation | undefined,
+			) => {
+				state.confirmation = confirmation;
+				const subject = await scenario.userTokenForMcp();
+				return scenario.postToken({
+					grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+					...clientAuth,
+					subject_token: subject.access_token,
+					subject_token_type: ACCESS_TOKEN_TYPE,
+					...scenario.actorParams(actorToken),
+					resource: api,
+				});
+			};
+			return { service, allowExchange, issueActor, exchange };
+		}
+
+		it("accepts a certificate-bound actor when authentication proves the same certificate", async () => {
+			const { service, issueActor, exchange } = await bootBoundActor();
+			const certificate = { "x5t#S256": "certificate-a" };
+			const actor = await issueActor(certificate);
+			const { data, error } = await exchange(actor, certificate);
+			expect(error).toBeNull();
+			const issued = decodeJwt(data!.access_token);
+			expect(issued.cnf).toEqual(certificate);
+			expect(issued.act).toEqual({ sub: service.client_id });
+		});
+
+		it.each([
+			["a different certificate", { "x5t#S256": "certificate-b" }],
+			["no confirmation", undefined],
+		] satisfies [string, Confirmation | undefined][])(
+			"rejects a certificate-bound actor with %s before allowExchange runs",
+			async (_, proven) => {
+				const { allowExchange, issueActor, exchange } = await bootBoundActor();
+				const actor = await issueActor({ "x5t#S256": "certificate-a" });
+				const { error } = await exchange(actor, proven);
+				expect(error).toMatchObject({
+					error: "invalid_request",
+					error_description:
+						"actor_token is bound to a key the request does not prove",
+				});
+				expect(allowExchange).not.toHaveBeenCalled();
+			},
+		);
+
+		it("accepts a matching confirmation in place of a DPoP proof", async () => {
+			const { issueActor, exchange } = await bootBoundActor();
+			const key = { jkt: "dpop-key-a" };
+			const actor = await issueActor(key);
+			const { data, error } = await exchange(actor, key);
+			expect(error).toBeNull();
+			expect(data?.token_type).toBe("DPoP");
+			expect(decodeJwt(data!.access_token).cnf).toEqual(key);
+		});
+	});
+
 	describe("DPoP", () => {
 		it("requires a proof from the key an actor token is bound to", async () => {
 			const {
