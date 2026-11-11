@@ -17,4 +17,24 @@ describe("authorizationCodeRequest", () => {
 			headers.authorization,
 		);
 	});
+
+	it("lets a custom auth hook replace a caller header in any casing", async () => {
+		const { headers } = await authorizationCodeRequest({
+			code: "auth-code",
+			redirectURI: "https://rp.example.com/callback",
+			options: { clientId: "test-client" },
+			headers: { Authorization: "Bearer caller" },
+			tokenEndpointAuth: {
+				method: "custom",
+				customizeRequest: ({ headers }) => {
+					expect(headers.hasOwnProperty("Authorization")).toBe(true);
+					expect(headers.Authorization).toBe("Bearer caller");
+					headers.Authorization = "first";
+					headers.authorization = "Custom hook";
+				},
+			},
+		});
+
+		expect(new Headers(headers).get("authorization")).toBe("Custom hook");
+	});
 });
