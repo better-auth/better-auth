@@ -16,6 +16,7 @@ import {
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import { encodeDeterministicId } from "@better-auth/core/db/internal";
 import type { InternalLogger } from "@better-auth/core/env";
+import { isWorkerd } from "@better-auth/core/env";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { getIP } from "@better-auth/core/utils/ip";
@@ -267,6 +268,13 @@ export const createInternalAdapter = (
 		key: string,
 		fn: () => Promise<T>,
 	): Promise<T> {
+		// Workers: I/O started by a request that has ended never settles, so
+		// chaining onto another request's lock can hang forever. Prefer a race
+		// over a hang when the lock holder may have already returned.
+		// @see https://github.com/better-auth/better-auth/issues/12397
+		if (isWorkerd()) {
+			return fn();
+		}
 		const previous = verificationConsumeLocks.get(key) ?? Promise.resolve();
 		let release!: () => void;
 		const current = new Promise<void>((resolve) => {

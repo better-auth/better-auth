@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
+import { isWorkerd } from "@better-auth/core/env";
 import { mapConcurrent } from "@better-auth/core/utils/async";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { PredefinedApiKeyOptions } from "./routes";
@@ -257,6 +258,13 @@ function withRefListLock<T>(
 	refKey: string,
 	task: () => Promise<T>,
 ): Promise<T> {
+	// Workers: I/O started by a request that has ended never settles, so
+	// chaining onto another request's lock can hang forever. Prefer a race
+	// over a hang when the lock holder may have already returned.
+	// @see https://github.com/better-auth/better-auth/issues/12397
+	if (isWorkerd()) {
+		return task();
+	}
 	const previous = refListLocks.get(refKey) ?? Promise.resolve();
 	const run = previous.then(task, task);
 	// The map holds the `.finally()` chain, so the cleanup must compare against
