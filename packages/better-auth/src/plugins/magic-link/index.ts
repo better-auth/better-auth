@@ -14,6 +14,10 @@ import {
 	revokeUnprovenAccountAccess,
 } from "../../db";
 import { isAPIError } from "../../utils/is-api-error";
+import {
+	findConcurrentlyCreatedUser,
+	reserveUserId,
+} from "../../utils/recover-concurrent-user-create";
 import { PACKAGE_VERSION } from "../../version";
 import { defaultKeyHasher } from "./utils";
 
@@ -425,9 +429,11 @@ export const magicLink = (options: MagicLinkOptions) => {
 							let newUser: Awaited<
 								ReturnType<typeof ctx.context.internalAdapter.createUser>
 							> | null;
+							const reservedId = reserveUserId(ctx);
 							try {
 								newUser = await ctx.context.internalAdapter.createUser(
 									{
+										...(reservedId !== undefined && { id: reservedId }),
 										email: email,
 										emailVerified: true,
 										name: name || "",
@@ -435,17 +441,31 @@ export const magicLink = (options: MagicLinkOptions) => {
 									{ method: "magic-link" },
 								);
 							} catch (e) {
-								// Browser flow: forward a gate rejection's code to the error
-								// URL instead of surfacing a raw API error.
-								if (isAPIError(e) && e.body?.code) {
-									redirectWithError(e.body.code, e.body.message);
+								// The token is already consumed. If a concurrent request created
+								// the user between the lookup and the insert, continue as an
+								// existing user instead of failing. Failures that happen after
+								// our own insert (e.g. an `after` hook) are rethrown.
+								const existingUser = (
+									await findConcurrentlyCreatedUser(ctx, email, reservedId, e)
+								)?.user;
+								if (existingUser) {
+									newUser = null;
+									user = existingUser;
+								} else {
+									// Browser flow: forward a gate rejection's code to the error
+									// URL instead of surfacing a raw API error.
+									if (isAPIError(e) && e.body?.code) {
+										redirectWithError(e.body.code, e.body.message);
+									}
+									throw e;
 								}
-								throw e;
 							}
-							isNewUser = true;
-							user = newUser;
 							if (!user) {
-								redirectWithError("failed_to_create_user");
+								isNewUser = true;
+								user = newUser ?? undefined;
+								if (!user) {
+									redirectWithError("failed_to_create_user");
+								}
 							}
 						} else {
 							redirectWithError("new_user_signup_disabled");

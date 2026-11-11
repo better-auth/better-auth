@@ -19,6 +19,10 @@ import {
 	assertPasswordNotTooShort,
 	resetCredentialPassword,
 } from "../../utils/password";
+import {
+	findConcurrentlyCreatedUser,
+	reserveUserId,
+} from "../../utils/recover-concurrent-user-create";
 import { EMAIL_OTP_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import { storeOTP, tryReuseOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions, RequiredEmailOTPOptions } from "./types";
@@ -636,7 +640,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			// Use atomic verification to prevent race conditions
 			await atomicVerifyOTP(ctx, opts, toOTPIdentifier("sign-in", email), otp);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			let user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				if (opts.disableSignUp) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
@@ -646,30 +650,54 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					rest,
 					"create",
 				);
-				const newUser = await ctx.context.internalAdapter.createUser(
-					{
-						...additionalFields,
+				let newUser: Awaited<
+					ReturnType<typeof ctx.context.internalAdapter.createUser>
+				> | null = null;
+				const reservedId = reserveUserId(ctx);
+				try {
+					newUser = await ctx.context.internalAdapter.createUser(
+						{
+							...additionalFields,
+							...(reservedId !== undefined && { id: reservedId }),
+							email,
+							emailVerified: true,
+							name: name || "",
+							image,
+						},
+						{ method: "email-otp" },
+					);
+				} catch (error) {
+					// The OTP is already consumed. If a concurrent request created the
+					// user between the lookup and the insert, continue as an existing
+					// user instead of failing with a unique constraint error. Failures
+					// that happen after our own insert (e.g. an `after` hook) are
+					// rethrown.
+					user = await findConcurrentlyCreatedUser(
+						ctx,
 						email,
-						emailVerified: true,
-						name: name || "",
-						image,
-					},
-					{ method: "email-otp" },
-				);
-				const session = await ctx.context.internalAdapter.createSession(
-					newUser.id,
-				);
-				await setSessionCookie(ctx, {
-					session,
-					user: newUser,
-				});
-				return ctx.json({
-					token: session.token,
-					user: parseUserOutput(ctx.context.options, newUser),
-				});
+						reservedId,
+						error,
+					);
+					if (!user) {
+						throw error;
+					}
+				}
+				if (newUser) {
+					const session = await ctx.context.internalAdapter.createSession(
+						newUser.id,
+					);
+					await setSessionCookie(ctx, {
+						session,
+						user: newUser,
+					});
+					return ctx.json({
+						token: session.token,
+						user: parseUserOutput(ctx.context.options, newUser),
+					});
+				}
 			}
 
-			let verifiedUser = user.user;
+			let verifiedUser = user!.user;
 			if (!verifiedUser.emailVerified) {
 				const promotedUser = await revokeUnprovenAccountAccess(
 					ctx,
