@@ -280,8 +280,47 @@ Requests without a `DPoP` proof are unaffected.
 Nonces are not stored. Each nonce holds its issue time and a signature keyed from your auth `secret`. Any instance with the same secret accepts a nonce another instance issued. Rotating the secret invalidates outstanding nonces, and each client recovers with one retry. Discovery metadata does not change, because RFC 9449 defines no metadata for nonces. A client learns that nonces are required from the first `use_dpop_nonce` response.
 
 <Callout>
-  The [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html#section-4) requires DPoP, and requires wallets to handle `DPoP-Nonce` from the authorization server and the credential issuer. To serve nonces from your own endpoints, such as a credential issuer's Nonce Endpoint or an API on the same origin, see [Require DPoP nonces](/docs/plugins/oauth-provider/resource-server#require-dpop-nonces).
+  The [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html#section-4) requires DPoP, and requires wallets to handle `DPoP-Nonce` from the authorization server and the credential issuer. To serve nonces from a plugin endpoint on the auth server, see [Nonces on your own endpoints](#nonces-on-your-own-endpoints). For an API that verifies access tokens, see [Require DPoP nonces](/docs/plugins/oauth-provider/resource-server#require-dpop-nonces).
 </Callout>
+
+#### Nonces on your own endpoints
+
+A plugin endpoint on the auth server can verify DPoP proofs with the same rules as the token endpoint, nonces included. Call `verifyDpopProof` on the provider API:
+
+```ts title="dpop-plugin.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthEndpoint } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth/types";
+
+export const dpopBinding = () =>
+  ({
+    id: "dpop-binding",
+    endpoints: {
+      bindKey: createAuthEndpoint(
+        "/dpop/bind",
+        { method: "POST" },
+        async (ctx) => {
+          const provider = getOAuthProviderApi(
+            ctx,
+            ctx.context.getPlugin("oauth-provider")!.options,
+          );
+          const proof = await provider.verifyDpopProof({ required: true });
+          // proof.jkt is the thumbprint of the key the client proved.
+          return ctx.json({ jkt: proof.jkt });
+        },
+      ),
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+`verifyDpopProof` checks the proof against your `dpop` settings and stores its `jti`, so the proof cannot be reused. Without `required: true`, it returns `undefined` when the request has no proof. When `dpop.nonce.required` is on:
+
+* A proof without a current nonce fails with a 400 `use_dpop_nonce` error and a fresh `DPoP-Nonce`.
+* A verified proof sets the client's next nonce on the response.
+
+Call it before your endpoint consumes a one-time credential, such as a code. The client's retry with the nonce can then still redeem it. Do not call it on a request that also calls `issueTokens` or `resolveConfirmation`. Those verify the proof themselves, and a second check rejects its `jti` as reused. A proof sent through `auth.api` fails, because there is no HTTP method to check against `htm`.
+
+An endpoint that only hands out nonces, such as a credential issuer's Nonce Endpoint, calls `provider.issueDpopNonce()`. It sets a nonce only when `dpop.nonce.required` is on. Otherwise it returns `undefined` and sets no header.
 
 ## Custom claims
 
