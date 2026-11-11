@@ -224,7 +224,7 @@ export const auth = betterAuth({
 
 Defer non-critical updates (rate limiting counters, timestamps, remaining count) to run after the response is sent using the global `backgroundTasks` handler. This can significantly improve response times on serverless platforms. Default is `false`.
 
-Requires [`advanced.backgroundTasks`](/docs/reference/options#backgroundtasks) to be configured in the main auth options.
+Requires a [`backgroundTasks` handler](/docs/reference/options#backgroundtasks), such as your platform's `waitUntil`.
 
 <Callout type="warn">
   Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
@@ -232,6 +232,11 @@ Requires [`advanced.backgroundTasks`](/docs/reference/options#backgroundtasks) t
 
 ```ts
 export const auth = betterAuth({
+  advanced: {
+    backgroundTasks: {
+      handler: waitUntil,
+    },
+  },
   plugins: [
     apiKey({
       deferUpdates: true,

@@ -18,7 +18,7 @@ Better Auth uses Node.js APIs such as `node:crypto` and `AsyncLocalStorage`. Clo
 
 ## Environment Variables
 
-Better Auth reads environment variables from `process.env`. Workers add [variables and secrets](https://developers.cloudflare.com/workers/configuration/secrets/) to `process.env` from compatibility date `2025-04-01`. Set the secret with Wrangler, and put local values in `.dev.vars` or `.env`:
+Better Auth reads environment variables from `process.env`. With Node.js compatibility, Workers add [variables and secrets](https://developers.cloudflare.com/workers/configuration/secrets/) to `process.env` from compatibility date `2025-04-01`. Set the secret with Wrangler, and put local values in `.dev.vars` or `.env`:
 
 ```bash
 npx wrangler secret put BETTER_AUTH_SECRET
@@ -53,11 +53,11 @@ export const auth = betterAuth({
 
 ## Background Tasks
 
-To run non-critical work after the response is sent, pass `waitUntil` from `cloudflare:workers` to [`advanced.backgroundTasks`](/docs/reference/options#backgroundtasks).
+To run non-critical work after the response is sent, pass `waitUntil` from `cloudflare:workers` as [`advanced.backgroundTasks.handler`](/docs/reference/options#backgroundtasks).
 
 ## Database Connections
 
-Workers don't allow I/O across requests, so an auth instance at module scope cannot hold a client that keeps connections open, such as a `pg` or `mysql2` pool. Use a driver that queries over HTTP instead. For details, see Cloudflare's [connection guidance](https://developers.cloudflare.com/hyperdrive/concepts/connection-lifecycle/).
+Workers don't allow I/O across requests, so an auth instance at module scope cannot hold a client that keeps connections open, such as a `pg` or `mysql2` pool, even through Hyperdrive. Use a driver that queries over HTTP instead. For details, see Cloudflare's [connection guidance](https://developers.cloudflare.com/hyperdrive/concepts/connection-lifecycle/).
 
 ## Cloudflare Workers KV
 
