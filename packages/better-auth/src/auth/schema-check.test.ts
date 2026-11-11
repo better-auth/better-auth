@@ -7,7 +7,7 @@ import {
 } from "@better-auth/core/db/internal";
 import { createLogger } from "@better-auth/core/env";
 import { memoryAdapter } from "@better-auth/memory-adapter";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { betterAuth } from "./full";
 import { betterAuth as betterAuthMinimal } from "./minimal";
 
@@ -94,7 +94,7 @@ describe.each([
 		expect(log).not.toHaveBeenCalled();
 	});
 
-	it("blocks concurrent requests with a completed initialization mismatch", async () => {
+	it("shares the initialization verdict with concurrent requests", async () => {
 		let finish = (_findings: SchemaFinding[]) => {};
 		const pending = new Promise<SchemaFinding[]>((resolve) => {
 			finish = resolve;
@@ -116,11 +116,10 @@ describe.each([
 			{ status: "rejected", reason: expect.any(SchemaMismatchError) },
 			{ status: "rejected", reason: expect.any(SchemaMismatchError) },
 		]);
-		const lookupCount = find.mock.calls.length;
 		await expect(
 			auth.api.getSession({ headers: new Headers() }),
 		).rejects.toThrow(SchemaMismatchError);
-		expect(find).toHaveBeenCalledTimes(lookupCount);
+		expect(find).toHaveBeenCalledTimes(1);
 	});
 
 	/**
@@ -130,8 +129,12 @@ describe.each([
 		{ name: "clean", findings: [] },
 		{ name: "mismatch", findings: issuerDrift },
 	])(
-		"validates API and HTTP requests while startup validation is still pending: $name",
+		"validates API and HTTP requests on Cloudflare Workers while startup validation is still pending: $name",
 		async ({ findings }) => {
+			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+			onTestFinished(() => {
+				vi.unstubAllGlobals();
+			});
 			let finish = (_findings: SchemaFinding[]) => {};
 			const pending = new Promise<SchemaFinding[]>((resolve) => {
 				finish = resolve;

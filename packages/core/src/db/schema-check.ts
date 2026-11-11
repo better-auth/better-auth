@@ -74,7 +74,9 @@ export function runtimeSchemaCheckFor(
 /**
  * Turns a schema comparison into a check shared by one adapter instance.
  *
- * Each call runs its own `find` until a completed result is available. A
+ * Concurrent calls share one `find` until a completed result is available. On
+ * Cloudflare Workers each call runs its own, and a newer lookup's result
+ * replaces an older one's. A
  * clean result is cached until invalidation. A mismatch is kept as one
  * {@link SchemaMismatchError} and rethrown on every later call without asking
  * the store again, until a migration invalidates it. When a database identity is supplied,
@@ -102,11 +104,24 @@ export function createSchemaCheck(
 		: undefined;
 	if (database && revision) schemaRevisions.set(database, revision);
 
+	// Workers tie I/O to the request that started it, so a lookup begun by
+	// another request may never settle there.
+	// @see https://developers.cloudflare.com/workers/runtime-apis/request/#the-request-context
+	const sharesLookups =
+		typeof navigator === "undefined" ||
+		navigator.userAgent !== "Cloudflare-Workers";
+
 	let verdict:
 		| {
 				revision: number | undefined;
 				sequence: number;
 				error: SchemaMismatchError | undefined;
+		  }
+		| undefined;
+	let pending:
+		| {
+				revision: number | undefined;
+				lookup: Promise<void>;
 		  }
 		| undefined;
 	let lookupSequence = 0;
@@ -145,7 +160,19 @@ export function createSchemaCheck(
 			return verdict.error ? Promise.reject(verdict.error) : undefined;
 		}
 
-		return runLookup(currentRevision);
+		if (!sharesLookups) return runLookup(currentRevision);
+		if (pending && pending.revision === currentRevision) {
+			return pending.lookup;
+		}
+
+		const lookup = runLookup(currentRevision).finally(() => {
+			if (pending?.lookup === lookup) pending = undefined;
+		});
+		pending = {
+			revision: currentRevision,
+			lookup,
+		};
+		return lookup;
 	};
 
 	checkSchema.source = source;

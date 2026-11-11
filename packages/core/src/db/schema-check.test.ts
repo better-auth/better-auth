@@ -1,4 +1,12 @@
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import type { BetterAuthOptions } from "../types";
 import {
 	createSchemaCheck,
@@ -23,7 +31,22 @@ describe("createSchemaCheck", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/11651
 	 */
-	describe("pending lookups", () => {
+	describe("pending lookups on Cloudflare Workers", () => {
+		beforeEach(() => {
+			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+		});
+
+		afterEach(() => {
+			vi.unstubAllGlobals();
+		});
+
+		it("runs independent lookups between concurrent first calls", async () => {
+			const find = vi.fn(async () => []);
+			const check = createSchemaCheck(find, "database");
+			await Promise.all([check(), check(), check()]);
+			expect(find).toHaveBeenCalledTimes(3);
+		});
+
 		it("lets a later check complete while an earlier lookup is still pending", async ({
 			onTestFinished,
 		}) => {
@@ -180,11 +203,11 @@ describe("createSchemaCheck", () => {
 		expect(find).toHaveBeenCalledTimes(1);
 	});
 
-	it("runs independent lookups between concurrent first calls", async () => {
+	it("shares one lookup between concurrent first calls", async () => {
 		const find = vi.fn(async () => []);
 		const check = createSchemaCheck(find, "database");
 		await Promise.all([check(), check(), check()]);
-		expect(find).toHaveBeenCalledTimes(3);
+		expect(find).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps one mismatch and rethrows it without asking again", async () => {
