@@ -445,19 +445,29 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							)
 						).filter((v) => typeof v === "string");
 						if (verifiedTokens.length > 0) {
-							// Sessions that cannot be checked are kept, like in sign-out.
-							const accepted = await ctx.context.internalAdapter
+							// A session that cannot be checked is kept, like in sign-out.
+							const logCheckFailure = (e: unknown) => {
+								ctx.context.logger.error(
+									"Failed to check sessions during sign-out",
+									e,
+								);
+							};
+							const sessions = await ctx.context.internalAdapter
 								.findSessions(verifiedTokens)
-								.then((sessions) =>
-									filterAcceptedSessions(ctx, sessions.filter(Boolean)),
-								)
+								.then((found) => found.filter(Boolean))
 								.catch((e) => {
-									ctx.context.logger.error(
-										"Failed to check sessions during sign-out",
-										e,
-									);
+									logCheckFailure(e);
 									return [];
 								});
+							const checks = await Promise.all(
+								sessions.map((session) =>
+									isSessionAccepted(ctx, session).catch((e) => {
+										logCheckFailure(e);
+										return false;
+									}),
+								),
+							);
+							const accepted = sessions.filter((_, index) => checks[index]);
 							if (accepted.length > 0) {
 								await ctx.context.internalAdapter.deleteSessions(
 									accepted.map(({ session }) => session.token),
