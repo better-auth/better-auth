@@ -1,5 +1,24 @@
 # @better-auth/oauth-provider
 
+## 1.8.0-beta.8
+
+### Minor Changes
+
+- [#12376](https://github.com/better-auth/better-auth/pull/12376) [`b91d155`](https://github.com/better-auth/better-auth/commit/b91d155bf775b43186bd2c817446c367bdfab657) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider can require server-provided DPoP nonces (RFC 9449 §8 and §9). A nonce stops a client from using DPoP proofs it signed ahead of time. Set `dpop: { nonce: { required: true } }` on `oauthProvider()` or `mcp()`. The token and UserInfo endpoints then answer a proof without a current nonce with `use_dpop_nonce` and a fresh nonce in the `DPoP-Nonce` header. Successful DPoP responses carry the next nonce. The token endpoint checks the nonce before it redeems an authorization code, device code, or refresh token, so the client's retry still succeeds. Nonces are derived from the auth secret and are not stored, so any instance that shares the secret accepts them.
+
+  Resource servers can require nonces too. Pass `dpop: { nonce: { required: true, secret } }` to `verifyAccessTokenRequest`, answer failures with `createResourceServerChallenge`, and send the next nonce with `createDpopNonce({ secret })` from `better-auth/oauth2`. Responses the library builds with a nonce are marked `Cache-Control: no-store`; mark your own nonce-bearing responses the same way. `requireMcpAuth` and the resource client created with your auth instance default to the auth secret and the provider's nonce lifetime.
+
+- [#11802](https://github.com/better-auth/better-auth/pull/11802) [`bca6570`](https://github.com/better-auth/better-auth/commit/bca65701bfcf9e416d1850506adbac542eaabde4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client secret expiry now takes effect. If you set `clientRegistrationClientSecretExpiration`, or pass `client_secret_expires_at` to `adminCreateOAuthClient` or `adminUpdateOAuthClient`, the expiry is now saved on the client and returned as `client_secret_expires_at` when the client is registered or read. Once it passes, the token, introspection, and revocation endpoints reject the secret with `invalid_client`. Previously the value was discarded, every response reported `client_secret_expires_at: 0`, and the secret never expired.
+
+  Clients created before you upgrade have no stored expiry, so their secrets still never expire. To give one an expiry, set `client_secret_expires_at` with `adminUpdateOAuthClient`; `0` removes it. A string value is read as a time span from now, such as `"90d"`. A string that is not a time span, or a timestamp too large to be a date, is rejected with `invalid_client_metadata`. Rotating a secret keeps the client's current expiry.
+
+  This adds an optional `expiresAt` column to the `oauthClient` table, which must exist in your database before you deploy:
+  - With the built-in Kysely adapter, run `npx auth@latest migrate`.
+  - With Prisma or Drizzle, run `npx auth@latest generate` and apply the migration to your database before you deploy the regenerated client or schema. If the regenerated client or schema is deployed first, every request that reads an OAuth client fails, even if you never set an expiry.
+  - MongoDB needs no migration.
+
+  Until the column exists, creating or updating a client with an expiry fails, and so does every dynamic registration that issues a client secret when `clientRegistrationClientSecretExpiration` is set.
+
 ## 1.8.0-beta.7
 
 ## 1.8.0-beta.6

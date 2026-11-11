@@ -1,5 +1,33 @@
 # @better-auth/core
 
+## 1.8.0-beta.8
+
+### Minor Changes
+
+- [#12376](https://github.com/better-auth/better-auth/pull/12376) [`b91d155`](https://github.com/better-auth/better-auth/commit/b91d155bf775b43186bd2c817446c367bdfab657) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider can require server-provided DPoP nonces (RFC 9449 §8 and §9). A nonce stops a client from using DPoP proofs it signed ahead of time. Set `dpop: { nonce: { required: true } }` on `oauthProvider()` or `mcp()`. The token and UserInfo endpoints then answer a proof without a current nonce with `use_dpop_nonce` and a fresh nonce in the `DPoP-Nonce` header. Successful DPoP responses carry the next nonce. The token endpoint checks the nonce before it redeems an authorization code, device code, or refresh token, so the client's retry still succeeds. Nonces are derived from the auth secret and are not stored, so any instance that shares the secret accepts them.
+
+  Resource servers can require nonces too. Pass `dpop: { nonce: { required: true, secret } }` to `verifyAccessTokenRequest`, answer failures with `createResourceServerChallenge`, and send the next nonce with `createDpopNonce({ secret })` from `better-auth/oauth2`. Responses the library builds with a nonce are marked `Cache-Control: no-store`; mark your own nonce-bearing responses the same way. `requireMcpAuth` and the resource client created with your auth instance default to the auth secret and the provider's nonce lifetime.
+
+- [#11823](https://github.com/better-auth/better-auth/pull/11823) [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps where clients sign in or link accounts with a provider ID token (for example from a native Google or Apple SDK) can now bind each token to one request. Set `requireIssuedIdTokenNonce: true` on a social provider. Clients then fetch a single-use nonce with `authClient.idToken.nonce({ provider })`, pass it to the provider's SDK, and send it with the ID token to `signIn.social` or `linkSocial`. A request without an issued nonce, or reusing one, is rejected with `400 INVALID_ID_TOKEN_NONCE`. The option is off by default, and providers without it behave as before.
+
+  One change applies to every provider that uses built-in verification: an opaque (non-JWT) token, such as a Facebook Graph access token, is now rejected when the request also sends a `nonce`, because the token cannot carry one. A custom `verifyIdToken` must compare the nonce to the token's claim itself. Opaque tokens sent without a nonce are still accepted.
+
+  Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. `verification.disableCleanup` turns off both.
+
+- [#12416](https://github.com/better-auth/better-auth/pull/12416) [`2326bad`](https://github.com/better-auth/better-auth/commit/2326bad1607e2e579d366a64d821e6cbecae3be3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers with an `Authorization` entry in `authorizationHeaders`, in any letter case, now fail at startup with an error naming the provider. Before, Better Auth sent that header to the token endpoint, where it could conflict with the client authentication from `clientSecret` or `tokenEndpointAuth`. To send a provider-specific `Authorization` header, set it from `customizeRequest`. The custom method adds no client credentials. Your hook must also set every credential the provider requires, such as a `client_id`, a secret, or a client assertion:
+
+  ```ts
+  tokenEndpointAuth: {
+    method: "custom",
+    customizeRequest({ body, headers }) {
+      body.set("client_id", providerClientId);
+      headers.authorization = `Provider ${providerCredential}`;
+    },
+  },
+  ```
+
+  Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw. Configs without an `Authorization` entry are unaffected.
+
 ## 1.8.0-beta.7
 
 ## 1.8.0-beta.6

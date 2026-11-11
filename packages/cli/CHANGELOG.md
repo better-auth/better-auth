@@ -1,5 +1,14 @@
 # auth
 
+## 1.8.0-beta.8
+
+### Patch Changes
+
+- Updated dependencies [[`b91d155`](https://github.com/better-auth/better-auth/commit/b91d155bf775b43186bd2c817446c367bdfab657), [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa), [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa), [`2326bad`](https://github.com/better-auth/better-auth/commit/2326bad1607e2e579d366a64d821e6cbecae3be3)]:
+  - @better-auth/core@1.8.0-beta.8
+  - better-auth@1.8.0-beta.8
+  - @better-auth/telemetry@1.8.0-beta.8
+
 ## 1.8.0-beta.7
 
 ### Patch Changes

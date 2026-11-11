@@ -1,5 +1,51 @@
 # better-auth
 
+## 1.8.0-beta.8
+
+### Minor Changes
+
+- [#11823](https://github.com/better-auth/better-auth/pull/11823) [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps where clients sign in or link accounts with a provider ID token (for example from a native Google or Apple SDK) can now bind each token to one request. Set `requireIssuedIdTokenNonce: true` on a social provider. Clients then fetch a single-use nonce with `authClient.idToken.nonce({ provider })`, pass it to the provider's SDK, and send it with the ID token to `signIn.social` or `linkSocial`. A request without an issued nonce, or reusing one, is rejected with `400 INVALID_ID_TOKEN_NONCE`. The option is off by default, and providers without it behave as before.
+
+  One change applies to every provider that uses built-in verification: an opaque (non-JWT) token, such as a Facebook Graph access token, is now rejected when the request also sends a `nonce`, because the token cannot carry one. A custom `verifyIdToken` must compare the nonce to the token's claim itself. Opaque tokens sent without a nonce are still accepted.
+
+  Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. `verification.disableCleanup` turns off both.
+
+- [#11823](https://github.com/better-auth/better-auth/pull/11823) [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - **Breaking for custom One Tap callers:** `/one-tap/callback` now requires a single-use nonce from the new `POST /one-tap/nonce` endpoint, so each Google ID token signs in only once.
+
+  If you sign in with `authClient.oneTap()`, there's nothing to change. The client fetches a nonce before each prompt and button render, passes it to Google, and sends it with the ID token. Button mode fetches a new nonce after each sign-in attempt and before the current one expires five minutes after it was issued.
+
+  If you call `/one-tap/callback` or `auth.api.oneTapCallback` yourself, call `POST /one-tap/nonce` first, pass the returned `nonce` to `google.accounts.id.initialize({ nonce })`, and send it back as `nonce` in the callback body. Callbacks are now rejected in three cases, all of which were accepted before:
+  - Without a `nonce`, with `400`.
+  - With a nonce that is unknown, expired, or already used, with `400 INVALID_ID_TOKEN_NONCE`.
+  - With a token whose `nonce` claim differs from the nonce, as an invalid ID token.
+
+  The client's `nonce` option is now ignored and logs a warning, and a `nonce` in `additionalOptions` is no longer passed to Google. Remove both.
+
+- [#12416](https://github.com/better-auth/better-auth/pull/12416) [`2326bad`](https://github.com/better-auth/better-auth/commit/2326bad1607e2e579d366a64d821e6cbecae3be3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers with an `Authorization` entry in `authorizationHeaders`, in any letter case, now fail at startup with an error naming the provider. Before, Better Auth sent that header to the token endpoint, where it could conflict with the client authentication from `clientSecret` or `tokenEndpointAuth`. To send a provider-specific `Authorization` header, set it from `customizeRequest`. The custom method adds no client credentials. Your hook must also set every credential the provider requires, such as a `client_id`, a secret, or a client assertion:
+
+  ```ts
+  tokenEndpointAuth: {
+    method: "custom",
+    customizeRequest({ body, headers }) {
+      body.set("client_id", providerClientId);
+      headers.authorization = `Provider ${providerCredential}`;
+    },
+  },
+  ```
+
+  Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw. Configs without an `Authorization` entry are unaffected.
+
+### Patch Changes
+
+- Updated dependencies [[`b91d155`](https://github.com/better-auth/better-auth/commit/b91d155bf775b43186bd2c817446c367bdfab657), [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa), [`2326bad`](https://github.com/better-auth/better-auth/commit/2326bad1607e2e579d366a64d821e6cbecae3be3)]:
+  - @better-auth/core@1.8.0-beta.8
+  - @better-auth/drizzle-adapter@1.8.0-beta.8
+  - @better-auth/kysely-adapter@1.8.0-beta.8
+  - @better-auth/memory-adapter@1.8.0-beta.8
+  - @better-auth/mongo-adapter@1.8.0-beta.8
+  - @better-auth/prisma-adapter@1.8.0-beta.8
+  - @better-auth/telemetry@1.8.0-beta.8
+
 ## 1.8.0-beta.7
 
 ### Patch Changes
