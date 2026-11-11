@@ -876,7 +876,9 @@ describe("oauthTokenExchange", () => {
 	 * Boots a wallet client whose `clientAuthentication` strategy returns
 	 * whatever `confirmation` the test sets, and exchanges as that wallet.
 	 */
-	async function bootConfirmingWallet() {
+	async function bootConfirmingWallet(
+		scenario: { disableJwtPlugin?: boolean } = {},
+	) {
 		const authMethod = "test_confirming_auth";
 		const assertionType =
 			"urn:better-auth:test:client-assertion-type:test-confirming";
@@ -900,7 +902,7 @@ describe("oauthTokenExchange", () => {
 		const allowExchange = vi.fn(() => true);
 		const { createClient, userTokenForMcp, postToken } = await bootScenario(
 			{ allowExchange },
-			{ plugins: [confirming] },
+			{ plugins: [confirming], ...scenario },
 		);
 		const wallet = await createClient({
 			token_endpoint_auth_method: authMethod,
@@ -992,16 +994,19 @@ describe("oauthTokenExchange", () => {
 		async function exchangeCertificateBoundSubject(
 			presented: Confirmation | undefined,
 			extraHeaders?: Record<string, string>,
+			scenario: { disableJwtPlugin?: boolean } = {},
 		) {
 			const { state, allowExchange, userToken, exchange } =
-				await bootConfirmingWallet();
+				await bootConfirmingWallet(scenario);
 			// Built-in grants bind only DPoP, so the certificate-bound subject comes
 			// from an exchange that presented the certificate.
 			state.confirmation = certificate;
 			const { data: subject } = await exchange(
 				(await userToken()).access_token,
 			);
-			expect(decodeJwt(subject!.access_token).cnf).toEqual(certificate);
+			if (!scenario.disableJwtPlugin) {
+				expect(decodeJwt(subject!.access_token).cnf).toEqual(certificate);
+			}
 
 			state.confirmation = presented;
 			allowExchange.mockClear();
@@ -1036,6 +1041,23 @@ describe("oauthTokenExchange", () => {
 				expect(allowExchange).not.toHaveBeenCalled();
 			},
 		);
+
+		it("checks the stored binding of an opaque subject token", async () => {
+			const opaque = { disableJwtPlugin: true };
+			const same = await exchangeCertificateBoundSubject(
+				{ ...certificate },
+				undefined,
+				opaque,
+			);
+			expect(same.error).toBeNull();
+			const other = await exchangeCertificateBoundSubject(
+				{ "x5t#S256": "another-certificate" },
+				undefined,
+				opaque,
+			);
+			expect(other.error).toMatchObject(mismatch);
+			expect(other.allowExchange).not.toHaveBeenCalled();
+		});
 
 		it("rejects a DPoP proof in place of the certificate", async () => {
 			const key = await createDpopKey();
