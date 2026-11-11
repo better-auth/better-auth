@@ -2177,9 +2177,6 @@ describe("internal adapter test", async () => {
 			expect(consumed?.value).toBe("user-stalled");
 		});
 
-		/**
-		 * @see https://github.com/better-auth/better-auth/issues/12397
-		 */
 		it("never consumes a superseded row on Cloudflare Workers without transactions", async () => {
 			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
 			onTestFinished(() => {
