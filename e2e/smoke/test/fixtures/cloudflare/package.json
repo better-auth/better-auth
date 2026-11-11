@@ -4,6 +4,7 @@
   "dependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
     "hono": "^4.13.7"

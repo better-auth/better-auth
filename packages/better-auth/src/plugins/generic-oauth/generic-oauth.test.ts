@@ -5780,10 +5780,18 @@ describe("oauth2", async () => {
 		// Serves a discovery document for `${providerId}.test` only once `idp.up` is set.
 		function flakyDiscovery(providerId: string) {
 			const origin = `https://${providerId}.test`;
-			const idp = { up: false, fetches: 0 };
+			// Set `gate` to hold the next fetch until it resolves.
+			const idp = {
+				up: false,
+				fetches: 0,
+				gate: undefined as Promise<void> | undefined,
+			};
 			mswServer.use(
-				http.get(`${origin}/.well-known/openid-configuration`, () => {
+				http.get(`${origin}/.well-known/openid-configuration`, async () => {
 					idp.fetches++;
+					const gate = idp.gate;
+					idp.gate = undefined;
+					await gate;
 					return idp.up
 						? HttpResponse.json({
 								issuer: origin,
@@ -5814,17 +5822,71 @@ describe("oauth2", async () => {
 				});
 			await expect(signIn()).rejects.toThrow();
 			expect(idp.fetches).toBe(2);
-			// Concurrent requests share one retry, and a failed retry stays pending.
+			// Each request retries, and a failed retry stays pending.
 			await Promise.all([
 				expect(signIn()).rejects.toThrow(),
 				expect(signIn()).rejects.toThrow(),
 			]);
-			expect(idp.fetches).toBe(3);
+			expect(idp.fetches).toBe(4);
 
 			idp.up = true;
 			expect((await signIn()).url).toContain(authorizeUrl);
 			await signIn();
-			expect(idp.fetches).toBe(4);
+			expect(idp.fetches).toBe(5);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10315
+		 */
+		it("does not wait on another request's pending retry", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("flaky-idp");
+			const { auth } = await getTestInstance(
+				{ plugins: [genericOAuth({ config: [config] })] },
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				auth.api.signInSocial({
+					body: { provider: "flaky-idp", callbackURL: "/" },
+				});
+			await auth.$context;
+			expect(idp.fetches).toBe(1);
+			const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+			idp.gate = gate;
+			let aSettled = false;
+			const a = signIn().finally(() => {
+				aSettled = true;
+			});
+			await vi.waitFor(() => expect(idp.fetches).toBe(2));
+
+			idp.up = true;
+			expect((await signIn()).url).toContain(authorizeUrl);
+			expect(aSettled).toBe(false);
+			release();
+			expect((await a).url).toContain(authorizeUrl);
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/10315
+		 */
+		it("installs a recovered provider once when concurrent retries succeed", async () => {
+			const { idp, config, authorizeUrl } = flakyDiscovery("flaky-idp");
+			const { auth } = await getTestInstance(
+				{ plugins: [genericOAuth({ config: [config] })] },
+				{ disableTestUser: true },
+			);
+			const signIn = () =>
+				auth.api.signInSocial({
+					body: { provider: "flaky-idp", callbackURL: "/" },
+				});
+			await auth.$context;
+			idp.up = true;
+			const results = await Promise.all([signIn(), signIn()]);
+			expect(idp.fetches).toBe(3);
+			for (const { url } of results) expect(url).toContain(authorizeUrl);
+			const { socialProviders } = await auth.$context;
+			expect(socialProviders.filter((p) => p.id === "flaky-idp")).toHaveLength(
+				1,
+			);
 		});
 
 		it("recovers a provider requested through the popup start endpoint", async () => {

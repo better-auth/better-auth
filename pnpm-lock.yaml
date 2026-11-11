@@ -930,6 +930,9 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../../packages/kysely-adapter
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../../../../../packages/oauth-provider
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso
