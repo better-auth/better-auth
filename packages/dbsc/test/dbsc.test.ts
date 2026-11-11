@@ -517,7 +517,7 @@ describe("dbsc", () => {
 		await refresh(browser, "not-a-session");
 		expect(debug).toHaveBeenCalledWith(
 			"dbsc: ended the browser's bound session",
-			{ sessionId: undefined, reason: "undecryptable" },
+			{ sessionId: undefined, reason: "unreadable-id" },
 		);
 	});
 

@@ -195,7 +195,7 @@ export const auth = betterAuth({
 })
 ```
 
-The check applies to every session that has no key, not only to browsers without support. It also ends sessions that cannot be bound, such as sessions of native and desktop apps and of clients that sign in with a bearer token.
+The check applies to every session that has no key, not only to browsers without support. It also rejects requests for sessions that cannot be bound, such as sessions of native and desktop apps and of clients that sign in with a bearer token. Rejected sessions stay stored until they expire.
 
 Adding the check has these effects:
 

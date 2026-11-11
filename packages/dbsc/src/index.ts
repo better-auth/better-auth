@@ -450,7 +450,7 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 								sessionId: found?.session.id,
 								// An id that no longer decrypts usually means the secret was rotated.
 								reason: !token
-									? "undecryptable"
+									? "unreadable-id"
 									: !found
 										? "not-found"
 										: !publicKey
