@@ -275,6 +275,12 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 					databaseHooks: {
 						session: {
 							create: {
+								// A new session has a new id and token, which a key registered
+								// for the session it replaces cannot refresh.
+								async before(session) {
+									if (session.dbscPublicKey == null) return;
+									return { data: { ...session, dbscPublicKey: null } };
+								},
 								async after(session) {
 									const tokens = await createdSessionTokens
 										.get()
