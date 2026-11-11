@@ -88,6 +88,25 @@ const registrationIdentifier = (challenge: string) =>
 const challengeIdentifier = (challenge: string) =>
 	`dbsc-challenge:${challenge}`;
 
+/** Covers clock skew between instances and requests in flight. */
+const STALE_COPY_MARGIN_SECONDS = 60;
+
+/**
+ * How long after a session is created a cookie-cache copy made before its
+ * registration can still be valid. Without "remember me", core signs cache
+ * copies for at least 5 minutes, whatever the cookie's own max age.
+ */
+function staleCopyWindowMs(ctx: GenericEndpointContext) {
+	const cacheLifetime = Math.max(
+		ctx.context.authCookies.sessionData.attributes.maxAge ?? 0,
+		5 * 60,
+	);
+	return (
+		(REGISTRATION_WINDOW_SECONDS + cacheLifetime + STALE_COPY_MARGIN_SECONDS) *
+		1000
+	);
+}
+
 function authPath(ctx: GenericEndpointContext, path: string) {
 	return `${new URL(ctx.context.baseURL).pathname.replace(/\/$/, "")}${path}`;
 }
@@ -295,6 +314,23 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 		},
 		schema: mergeSchema(schema, options?.schema),
 		async validateSession({ session }, ctx) {
+			// A cookie-cache copy made before registration lacks the key, and only
+			// a session's first minutes can register. Until every such copy has
+			// expired, read the binding from storage instead of trusting the copy.
+			if (
+				session.dbscPublicKey == null &&
+				ctx.context.options.session?.cookieCache?.enabled &&
+				new Date(session.createdAt).getTime() >
+					Date.now() - staleCopyWindowMs(ctx)
+			) {
+				const stored = await ctx.context.internalAdapter.findSession(
+					session.token,
+				);
+				if (stored?.session.dbscPublicKey == null) return !!stored;
+				// Drop the stale copy so the next lookup reads the bound session.
+				expireCookie(ctx, ctx.context.authCookies.sessionData);
+				return false;
+			}
 			if (session.dbscPublicKey == null) return true;
 			return hasValidBoundCookie(ctx, session.id);
 		},
@@ -324,7 +360,15 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 					const found = await ctx.context.internalAdapter.findSession(
 						offer.value,
 					);
-					if (!found || found.session.expiresAt < new Date()) throw invalid();
+					if (
+						!found ||
+						found.session.expiresAt < new Date() ||
+						// validateSession relies on registration ending with this window.
+						found.session.createdAt.getTime() <
+							Date.now() - REGISTRATION_WINDOW_SECONDS * 1000
+					) {
+						throw invalid();
+					}
 					if (found.session.dbscPublicKey != null) {
 						throw APIError.from(
 							"BAD_REQUEST",
