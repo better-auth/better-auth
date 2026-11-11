@@ -344,8 +344,9 @@ export interface OAuthProviderApi {
 	 * `issueTokens` as `confirmation`, so a rejected proof leaves the credential
 	 * for a retry with a valid one.
 	 *
-	 * A DPoP failure is an HTTP 400 `invalid_dpop_proof` error, except a proof
-	 * without a current nonce, which gets `use_dpop_nonce` and a nonce to retry.
+	 * A DPoP failure is an HTTP 400 `invalid_dpop_proof` error. With
+	 * `dpop.nonce.required`, a proof without a current nonce instead gets
+	 * `use_dpop_nonce` and a nonce to retry.
 	 * Without a `confirmation`, the resource policy check runs first and can
 	 * fail with `invalid_target` or `invalid_scope`.
 	 */
@@ -360,10 +361,11 @@ export interface OAuthProviderApi {
 		 * as the `cnf.jkt` of a token the client is exchanging or refreshing. Get
 		 * it with `getConfirmationJkt` from `better-auth/oauth2`.
 		 *
-		 * When set, the request must carry a DPoP proof signed with this key,
-		 * even if neither the client nor the resource requires DPoP. A
-		 * `confirmation` must carry the same `jkt`, so one with another key, or
-		 * with another binding such as mTLS `x5t#S256`, is rejected.
+		 * A `confirmation` replaces the proof and must carry the same `jkt`. One
+		 * with another key, or with another binding such as mTLS `x5t#S256`, is
+		 * rejected even if the proof uses this key. Without a `confirmation`, the
+		 * request must carry a DPoP proof signed with this key, even if neither
+		 * the client nor the resource requires DPoP.
 		 */
 		expectedJkt?: string;
 	}) => Promise<Confirmation | undefined>;

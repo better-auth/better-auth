@@ -606,7 +606,7 @@ const confirmation = await provider.resolveConfirmation({
 });
 ```
 
-The request must then carry a DPoP proof signed by that key, or client authentication must return a `confirmation` with the same `jkt`. Anything else fails with `invalid_dpop_proof`, including an mTLS confirmation. A proof without a current nonce gets `use_dpop_nonce` instead, so the client can retry. If the existing token is not DPoP-bound, `getConfirmationJkt` returns `undefined` and the usual rules apply.
+The request must then carry a DPoP proof signed by that key, or client authentication must return a `confirmation` with the same `jkt`. A returned `confirmation` replaces the proof, so one with another key fails even when the proof uses the expected key. Anything else fails with `invalid_dpop_proof`, including an mTLS confirmation. With `dpop.nonce.required`, a proof without a current nonce gets `use_dpop_nonce` instead, so the client can retry. If the existing token is not DPoP-bound, `getConfirmationJkt` returns `undefined` and the usual rules apply.
 
 ### Client registration metadata
 
