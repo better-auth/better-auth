@@ -1,5 +1,5 @@
+import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterAuthPlugin, Status } from "better-auth";
-import { BetterAuthError } from "better-auth";
 import { createAuthMiddleware, isAPIError } from "better-auth/api";
 import { statusCodes } from "better-call";
 import { normalizeSCIMUserEntraCompatibilityRequestBody } from "./active-normalization";

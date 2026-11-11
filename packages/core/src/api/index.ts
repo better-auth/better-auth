@@ -32,6 +32,10 @@ export const NO_STORE_HEADERS = {
 	Pragma: "no-cache",
 } as const;
 
+export const HIDE_METADATA = {
+	scope: "server",
+} as const;
+
 /**
  * Better-call's createEndpoint re-throws APIError without exposing the headers
  * accumulated on ctx.responseHeaders (e.g. Set-Cookie from deleteSessionCookie

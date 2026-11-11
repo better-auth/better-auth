@@ -1,5 +1,5 @@
+import { APIError } from "@better-auth/core/error";
 import type { Status } from "better-auth";
-import { APIError } from "better-auth";
 import { isAPIError } from "better-auth/api";
 import { statusCodes } from "better-call";
 import { createSCIMOpenAPIContent } from "./scim-metadata";

@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { HIDE_METADATA } from "@better-auth/core/api";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
-import { getAuthStateVerificationIdentifier, HIDE_METADATA } from "better-auth";
+import { getAuthStateVerificationIdentifier } from "@better-auth/core/utils/state";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
 

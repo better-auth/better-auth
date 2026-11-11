@@ -1,22 +1,20 @@
+import { HIDE_METADATA } from "@better-auth/core/api";
 import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import {
+	authorizationCodeRequest,
+	createAuthorizationURL,
+	createPrivateKeyJwtClientAssertionGetter,
+	getOAuth2Tokens,
+	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
+} from "@better-auth/core/oauth2";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import type {
 	PrivateKeyJwtSigningAlgorithm,
 	TokenEndpointAuth,
-} from "better-auth";
-import {
-	authorizationCodeRequest,
-	createAuthorizationURL,
-	createPrivateKeyJwtClientAssertionGetter,
-	generateState,
-	getOAuth2Tokens,
-	HIDE_METADATA,
-	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
-	parseState,
 } from "better-auth";
 import {
 	APIError,
@@ -33,7 +31,9 @@ import {
 import { generateRandomString } from "better-auth/crypto";
 import {
 	additionalAuthorizationParamsSchema,
+	generateState,
 	handleOAuthUserInfo,
+	parseState,
 } from "better-auth/oauth2";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { RequestInfo } from "samlify/types/src/types";

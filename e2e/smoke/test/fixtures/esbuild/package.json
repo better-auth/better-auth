@@ -5,8 +5,13 @@
     "typecheck:consumer": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {
+    "@better-auth/api-key": "workspace:*",
+    "@better-auth/electron": "workspace:*",
     "@better-auth/expo": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/scim": "workspace:*",
+    "@better-auth/sso": "workspace:*",
+    "@better-auth/stripe": "workspace:*",
     "better-auth": "workspace:*",
     "drizzle-orm": "^0.45.2"
   },

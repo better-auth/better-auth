@@ -37,8 +37,8 @@ it("build client without zod runtime", async () => {
 });
 
 // The metafile also lists tree-shaken inputs, so count only bytes kept in the output.
-async function bundledKyselyBytes(entry: string) {
-	const { metafile } = await bundle(entry);
+async function bundledKyselyBytes(entry: string, options?: BuildOptions) {
+	const { metafile } = await bundle(entry, options);
 	return Object.values(metafile.outputs)
 		.flatMap((output) => Object.entries(output.inputs))
 		.filter(([path]) => /\/kysely(-adapter)?\//.test(path))
@@ -50,6 +50,32 @@ async function bundledKyselyBytes(entry: string) {
  */
 it("build minimal with Drizzle and Expo without Kysely", async () => {
 	assert.strictEqual(await bundledKyselyBytes("minimal"), 0);
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12312
+ */
+it("split minimal with Drizzle and Expo without Kysely chunks", async () => {
+	// Splitting emits a chunk for every dynamic import, even in tree-shaken code.
+	const kyselyBytes = await bundledKyselyBytes("minimal", {
+		format: "esm",
+		splitting: true,
+		outdir: "dist",
+	});
+	assert.strictEqual(kyselyBytes, 0);
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12312
+ */
+it("split plugin packages without Kysely chunks", async () => {
+	const kyselyBytes = await bundledKyselyBytes("plugins", {
+		format: "esm",
+		splitting: true,
+		outdir: "dist",
+		platform: "node",
+	});
+	assert.strictEqual(kyselyBytes, 0);
 });
 
 it("detects Kysely in the full build", async () => {
