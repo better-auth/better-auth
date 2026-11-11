@@ -103,7 +103,14 @@ A sign-in on your server is offered registration only when you pass the incoming
 
 ## What a bound session requires
 
-Once a session is bound, every session lookup requires its bound cookie. This covers `/get-session`, `auth.api.getSession`, every endpoint that requires a session, and the multi-session and admin plugins. Without a valid bound cookie, the session token is treated as signed out:
+Once a session is bound, every session lookup requires its bound cookie. This covers:
+
+* `/get-session`, `auth.api.getSession`, and every endpoint that requires a session.
+* The multi-session and admin plugins.
+* Redeeming a token from the [one-time token plugin](/docs/plugins/one-time-token). The redeeming request must carry the bound cookie. A token handed to another browser or device is refused with `Invalid token`.
+* Finding the browser's session during logout with the [OAuth provider plugin](/docs/plugins/oauth-provider).
+
+Without a valid bound cookie, the session token is treated as signed out:
 
 * A copied session cookie, sent on its own or as a bearer token, returns no session.
 * A copied cookie-cache cookie returns no session.
@@ -132,7 +139,7 @@ Some parts of Better Auth are not bound:
 
 ## Deployment
 
-**Separate app and auth hosts.** When your app runs on a different host than Better Auth on the same site, such as `app.example.com` calling `api.example.com`, add the app's exact origin, such as `https://app.example.com`, to `trustedOrigins`. Avoid a wildcard such as `*.example.com`. Trusted origins can receive redirects and pass the CSRF origin check, and a wildcard extends that trust to every subdomain, including ones you do not control. Chrome refreshes a bound cookie only for requests started from Better Auth's own origin or from hosts the session lists, and the plugin lists the trusted origins on the same site as Better Auth. Without the entry, users are signed out when the bound cookie expires.
+**Separate app and auth origins.** When your app runs on a different host or port than Better Auth on the same site, such as `app.example.com` calling `api.example.com`, add the app's exact origin, such as `https://app.example.com`, to `trustedOrigins`. Avoid a wildcard such as `*.example.com`. Trusted origins can receive redirects and pass the CSRF origin check, and a wildcard extends that trust to every subdomain, including ones you do not control. Chrome refreshes a bound cookie only for requests started from Better Auth's own origin or from hosts the session lists, and the plugin lists the trusted origins on the same site as Better Auth. Without the entry, users are signed out when the bound cookie expires.
 
 **Links from other sites.** When a user follows a link from another site, such as an email, and the bound cookie has expired, Chrome sends that first page request without it. Your server sees no session for that request. The next request the page makes to Better Auth, such as the client's `/get-session` call, renews the cookie. If your server redirects signed-out visitors to a sign-in page, have that page send users who turn out to be signed in back to where they were going.
 
