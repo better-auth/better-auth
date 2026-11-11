@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getConfig } from "../src/utils/get-config";
 
 // Records the options of each call.
@@ -26,6 +26,7 @@ describe("getConfig with wrangler local bindings", () => {
 			Symbol.for("better-auth.cli.cloudflare-env"),
 		);
 		await fs.rm(tmpDir, { recursive: true });
+		vi.restoreAllMocks();
 	});
 
 	async function setupWorker(wranglerSource: string) {
@@ -74,19 +75,26 @@ describe("getConfig with wrangler local bindings", () => {
 		]);
 	});
 
-	it("should surface wrangler errors", async () => {
+	/**
+	 * @see https://developers.cloudflare.com/hyperdrive/configuration/local-development/
+	 */
+	it("should keep the stub env when wrangler can't load the bindings", async () => {
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 		const { appDir } = await setupWorker(
 			`export const getPlatformProxy = async () => {
-				throw new Error("invalid wrangler config");
+				throw new Error("When developing locally, you should use a local Postgres connection string to emulate Hyperdrive functionality.");
 			 };`,
 		);
 
-		await expect(
-			getConfig({
-				cwd: appDir,
-				configPath: "auth.ts",
-				shouldThrowOnError: true,
-			}),
-		).rejects.toThrow("invalid wrangler config");
+		const config = await getConfig({
+			cwd: appDir,
+			configPath: "auth.ts",
+			shouldThrowOnError: true,
+		});
+
+		expect(config).toBeTruthy();
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("local Postgres connection string"),
+		);
 	});
 });

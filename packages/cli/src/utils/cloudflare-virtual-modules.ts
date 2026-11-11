@@ -150,7 +150,9 @@ function resolveWrangler(cwd: string) {
  * Binds `env` from `cloudflare:workers` to Wrangler's local bindings, so a
  * config that passes `env.DB` reads the same local D1 as `wrangler dev`.
  * Remote bindings stay off so schema commands never touch production. Bindings
- * load once per process, and the workerd process exits with the CLI.
+ * load once per process, and the workerd process exits with the CLI. When
+ * Wrangler can't load them, `env` stays a stub, so configs that don't need a
+ * binding still load.
  *
  * @see https://developers.cloudflare.com/workers/wrangler/api/#getplatformproxy
  */
@@ -163,14 +165,22 @@ export async function loadCloudflarePlatformEnv(cwd: string) {
 	const wrangler: typeof import("wrangler") = await import(
 		pathToFileURL(wranglerPath).href
 	);
-	const { env } = await wrangler.getPlatformProxy({
-		configPath,
-		// Wrangler commands keep local state next to the config, while this API
-		// resolves its default against the working directory.
-		persist: {
-			path: path.join(path.dirname(configPath), ".wrangler", "state", "v3"),
-		},
-		remoteBindings: false,
-	});
-	Reflect.set(globalThis, Symbol.for(PLATFORM_ENV), env);
+	const proxy = await wrangler
+		.getPlatformProxy({
+			configPath,
+			// Wrangler commands keep local state next to the config, while this API
+			// resolves its default against the working directory.
+			persist: {
+				path: path.join(path.dirname(configPath), ".wrangler", "state", "v3"),
+			},
+			remoteBindings: false,
+		})
+		.catch((error: unknown) => {
+			console.warn(
+				`Couldn't read Wrangler's local bindings, so \`env\` from \`cloudflare:workers\` stays a stub: ${error instanceof Error ? error.message : String(error)}`,
+			);
+			return null;
+		});
+	if (!proxy) return;
+	Reflect.set(globalThis, Symbol.for(PLATFORM_ENV), proxy.env);
 }
