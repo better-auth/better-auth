@@ -1,0 +1,64 @@
+---
+icon: guidesCloudflare
+title: Cloudflare Guide
+description: Configure Better Auth for Cloudflare.
+---
+
+This guide covers what Better Auth needs on Cloudflare. Set up Better Auth with the [installation guide](/docs/installation) first.
+
+## Node.js Compatibility
+
+Better Auth uses Node.js APIs such as `node:crypto` and `AsyncLocalStorage`. Cloudflare Workers enable [Node.js compatibility](https://developers.cloudflare.com/workers/runtime-apis/nodejs/) by default from compatibility date `2026-08-04`. For an earlier date, add the `nodejs_compat` flag to your Wrangler configuration:
+
+```jsonc title="wrangler.jsonc"
+{
+  "compatibility_flags": ["nodejs_compat"]
+}
+```
+
+## Environment Variables
+
+Better Auth reads environment variables from `process.env`. Workers add [variables and secrets](https://developers.cloudflare.com/workers/configuration/secrets/) to `process.env` from compatibility date `2025-04-01`. Set the secret with Wrangler, and put local values in `.dev.vars` or `.env`:
+
+```bash
+npx wrangler secret put BETTER_AUTH_SECRET
+```
+
+For an earlier date, pass the values from `env` instead:
+
+```ts title="auth.ts"
+import { env } from "cloudflare:workers";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  secret: env.BETTER_AUTH_SECRET,
+});
+```
+
+## Client IP
+
+Requests to a Worker don't carry the client address in `X-Forwarded-For`, which Better Auth reads by default. Without it, [rate limiting](/docs/concepts/rate-limit) falls back to one shared bucket per path. Read the address from `CF-Connecting-IP` instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  advanced: {
+    ipAddress: {
+      ipAddressHeaders: ["cf-connecting-ip"],
+    },
+  },
+});
+```
+
+## Background Tasks
+
+To run non-critical work after the response is sent, pass `waitUntil` from `cloudflare:workers` to [`advanced.backgroundTasks`](/docs/reference/options#backgroundtasks).
+
+## Database Connections
+
+Workers don't allow I/O across requests, so an auth instance at module scope cannot hold a client that keeps connections open, such as a `pg` or `mysql2` pool. Use a driver that queries over HTTP instead. For details, see Cloudflare's [connection guidance](https://developers.cloudflare.com/hyperdrive/concepts/connection-lifecycle/).
+
+## Cloudflare Workers KV
+
+[Cloudflare Workers KV](https://developers.cloudflare.com/kv/) is eventually consistent, cannot expire a key sooner than 60 seconds, and has no atomic operations, so it cannot meet the [`secondaryStorage`](/docs/concepts/database#secondary-storage) contract. Use a store that can, such as Redis.
