@@ -2,22 +2,12 @@
 "@better-auth/sso": minor
 ---
 
-**Breaking for SAML providers that send no email attribute:** Better Auth now uses the `NameID` as the user's email only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. Previously any NameID became the email, including `persistent`, `transient`, `unspecified`, and Format-less ones, even when the value was not an address. Those sign-ins now fail with `error=missing_user_info`, including for users who already signed in that way. Providers that send an email attribute or an `emailAddress`-format NameID are unaffected.
+**Breaking for SAML providers that send no email attribute:** Better Auth now uses the `NameID` as the user's email only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. Previously any NameID became the email, including `persistent`, `transient`, `unspecified`, and Format-less ones, even when the value was not an address. Those sign-ins now fail with `error=missing_user_info`, including for users who already signed in that way.
 
-To keep signing these users in, map an email attribute with `samlConfig.mapping.email`, or return the NameID from the new `mapProfileToUser` option. A NameID returned this way is stored unverified, even with `trustEmailVerified` on.
+This commonly affects IdPs whose default SAML app sends the user's email as an `unspecified` NameID with no attribute statements. To keep signing these users in, change the IdP to send an `email` attribute or the `emailAddress` NameID Format, or set `samlConfig.mapping.email` to the attribute it does send. The server log names the NameID Format the IdP sent. If you cannot change the IdP and its NameID is an email only its administrator can change, you can return it from the new `mapProfileToUser` option for that provider; see "Use an email-valued NameID" in the SSO provisioning docs. A NameID returned this way is stored unverified.
 
-```ts
-sso({
-  mapProfileToUser: (input) => ({
-    email:
-      input.providerUser.email ??
-      (input.protocol === "saml" ? input.nameID : undefined),
-  }),
-});
-```
+Providers that send an `email` attribute, the attribute set in `samlConfig.mapping.email`, or an `emailAddress`-format NameID are unaffected. Without `samlConfig.mapping.email`, Better Auth then also tries the `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress`, `mail`, and `urn:oid:0.9.2342.19200300.100.1.3` attributes, so IdPs that send the email only under one of those keep working. A SAML response without a NameID now redirects with `error=missing_user_info` instead of `error=saml_error`.
 
-A SAML response without a NameID now also redirects with `error=missing_user_info` instead of `error=saml_error`.
-
-OIDC and SAML providers that send no email can now sign users in with `mapProfileToUser`. It runs on every SSO sign-in before the user is looked up, and returns the `email`, `name`, and `image` to use, such as a placeholder from `createPlaceholderEmail` in `@better-auth/core/utils/email`. Previously an OIDC sign-in without an email always failed with `error_description=missing_user_info`. A returned email that differs from the provider's is never marked verified. A callback that throws or returns an invalid result redirects with `error=SSO_PROFILE_MAPPING_FAILED`.
+OIDC and SAML providers that send no email can now sign users in with `mapProfileToUser`. It runs on every SSO sign-in before the user is looked up, and returns the `email`, `name`, and `image` to use, such as a placeholder from `createPlaceholderEmail` in `@better-auth/core/utils/email`. Previously an OIDC sign-in without an email always failed with `error_description=missing_user_info`. A returned email that differs from the provider's must be an email address and is never marked verified. A callback that throws or returns an invalid result redirects with `error=SSO_PROFILE_MAPPING_FAILED`.
 
 SAML users who sign in without a name attribute (`displayName`, `givenName`, or `surname`, unless remapped in `samlConfig.mapping`) now get their email as their name, unless `mapProfileToUser` returns one. Previously the NameID was used, so an opaque NameID such as `a1b2c3d4-opaque` became the stored display name. In `mapProfileToUser`, `providerUser.name` is now `undefined` in that case. Existing users keep their stored name, unless `resolveUser` links them with `profile: "update"`, or `account.accountLinking.updateUserInfoOnLink` is on when their SSO account is first linked by email.

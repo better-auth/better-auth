@@ -421,11 +421,17 @@ export interface SSOMappedUser {
 	/** The account subject always comes from the provider's `sub` claim or NameID. */
 	id?: never;
 	/**
-	 * Return `null` to refuse the email the provider sent. Sign-in then fails
-	 * with `missing_user_info`. An email that differs from the provider's is
-	 * stored unverified.
+	 * An email that differs from the provider's must be an email address and is
+	 * stored unverified. Return `null` to refuse the email the provider sent;
+	 * sign-in then fails with `missing_user_info`.
 	 */
 	email?: string | null | undefined;
+	/**
+	 * Not settable. The stored email is verified only when the provider asserts
+	 * it with `trustEmailVerified` on. Domain verification lets an unverified
+	 * email link to an existing user; it does not mark the email verified.
+	 */
+	emailVerified?: never;
 	name?: string | undefined;
 	image?: string | undefined;
 }

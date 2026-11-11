@@ -2888,16 +2888,28 @@ describe("OIDC providers without an email claim", async () => {
 		});
 	});
 
+	it("passes the provider's own email through even when it is not a common address", async () => {
+		tokenClaims = { email: "user@intranet" };
+		mapper = ({ providerUser }) => ({ email: providerUser.email });
+
+		const { callbackURL, user } = await signInThroughProvider(
+			"intranet-email-oidc",
+		);
+
+		expect(callbackURL).toContain("/dashboard");
+		expect(user?.email).toBe("user@intranet");
+	});
+
 	it("ignores an emailVerified value returned by mapProfileToUser", async () => {
 		tokenClaims = {
 			email: "directory-user@asserted-verified-oidc.example.com",
 			email_verified: false,
 		};
-		mapper = () =>
-			({
-				email: "directory-user@asserted-verified-oidc.example.com",
-				emailVerified: true,
-			}) as SSOMappedUser;
+		mapper = () => ({
+			email: "directory-user@asserted-verified-oidc.example.com",
+			// @ts-expect-error mapProfileToUser cannot set emailVerified
+			emailVerified: true,
+		});
 
 		const { user } = await signInThroughProvider("asserted-verified-oidc");
 
