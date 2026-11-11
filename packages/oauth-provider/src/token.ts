@@ -1019,14 +1019,14 @@ function confirmationReplayKey(confirmation: Confirmation | undefined) {
 	return `x5t#S256:${confirmation["x5t#S256"]}`;
 }
 
-function sameConfirmation(
+export function sameConfirmation(
 	left: Confirmation | undefined,
 	right: Confirmation | undefined,
 ) {
 	return confirmationReplayKey(left) === confirmationReplayKey(right);
 }
 
-function isConfirmation(value: unknown): value is Confirmation {
+export function isConfirmation(value: unknown): value is Confirmation {
 	if (!value || typeof value !== "object") {
 		return false;
 	}
