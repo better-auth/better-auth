@@ -23,6 +23,7 @@ import {
 	getSAMLNameIDFormat,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
+	readSAMLEmail,
 	validateAudience,
 	validateInResponseTo,
 	validateSAMLAlgorithms,
@@ -138,31 +139,6 @@ function getSafeRedirectCandidate(
 	}
 
 	return url;
-}
-
-/**
- * Reads the user's email from a SAML assertion: the mapped attribute (default
- * `email`), then a NameID whose Format is `emailAddress`, then, without a
- * mapped attribute, the fallback email attributes. Other NameIDs are opaque or
- * unspecified, so they never become the email.
- */
-export function readSAMLEmail(
-	attr: (name: string) => string | undefined,
-	options: {
-		mappedAttribute?: string | undefined;
-		nameID?: string | undefined;
-		nameIDFormat?: string | undefined;
-	},
-): string | undefined {
-	return (
-		attr(options.mappedAttribute || "email") ||
-		(options.nameIDFormat === constants.SAML_EMAIL_NAME_ID_FORMAT
-			? options.nameID
-			: undefined) ||
-		(options.mappedAttribute
-			? undefined
-			: constants.SAML_FALLBACK_EMAIL_ATTRIBUTES.map(attr).find(Boolean))
-	);
 }
 
 /**

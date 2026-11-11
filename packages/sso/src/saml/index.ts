@@ -18,6 +18,7 @@ export {
 	getSAMLNameIDFormat,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
+	readSAMLEmail,
 	validateSAMLResponseBinding,
 } from "./response-binding";
 export { validateAudience, validateInResponseTo } from "./response-validation";

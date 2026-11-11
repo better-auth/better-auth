@@ -50,7 +50,8 @@ import { ssoClient } from "./client";
 import { DEFAULT_CLOCK_SKEW_MS, SAML_EMAIL_NAME_ID_FORMAT } from "./constants";
 import { computeSSOProviderReference } from "./provider-reference";
 import { findSAMLProvider } from "./routes/helpers";
-import { getSafeRedirectUrl, readSAMLEmail } from "./routes/saml-pipeline";
+import { getSafeRedirectUrl } from "./routes/saml-pipeline";
+import { readSAMLEmail } from "./saml";
 import { saml } from "./samlify";
 import type {
 	SSOOptions,
