@@ -253,6 +253,55 @@ describe("info command", () => {
 		expect(output.betterAuth.config.baseURL).toBe("https://example.com");
 	});
 
+	/**
+	 * @see https://developers.cloudflare.com/workers/wrangler/api/#getplatformproxy
+	 */
+	it("should report a config that reads Wrangler local bindings", async () => {
+		await fs.writeFile(path.join(tmpDir, "wrangler.jsonc"), "{}");
+		const wranglerDir = path.join(tmpDir, "node_modules", "wrangler");
+		await fs.mkdir(wranglerDir, { recursive: true });
+		await fs.writeFile(
+			path.join(wranglerDir, "package.json"),
+			JSON.stringify({ name: "wrangler", main: "index.mjs" }),
+		);
+		// Like Wrangler's local runtime, the proxy keeps the process alive, and its
+		// D1 binding is an RPC stub that throws when serialized.
+		await fs.writeFile(
+			path.join(wranglerDir, "index.mjs"),
+			`export const getPlatformProxy = async () => {
+				setInterval(() => {}, 1000);
+				const DB = {
+					batch() {},
+					exec() {},
+					prepare() {
+						throw new Error("D1 is not reachable in this test");
+					},
+					toJSON() {
+						throw new Error('The RPC receiver does not implement the method "toJSON".');
+					},
+				};
+				return { env: { DB } };
+			};`,
+		);
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`import { env } from "cloudflare:workers";
+			import { betterAuth } from "better-auth";
+
+			export const auth = betterAuth({
+				appName: "worker",
+				database: env.DB,
+			});`,
+		);
+
+		const { stdout } = await runInfoCommand();
+
+		const output = JSON.parse(stdout);
+		expect(output.betterAuth.error).toBeUndefined();
+		expect(output.betterAuth.config.appName).toBe("worker");
+		expect(output.betterAuth.config.database).toBeUndefined();
+	});
+
 	it("should redact versioned secrets", async () => {
 		await fs.writeFile(
 			path.join(tmpDir, "package.json"),

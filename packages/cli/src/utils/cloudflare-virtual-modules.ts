@@ -165,6 +165,11 @@ export async function loadCloudflarePlatformEnv(cwd: string) {
 	);
 	const { env } = await wrangler.getPlatformProxy({
 		configPath,
+		// Wrangler commands keep local state next to the config, while this API
+		// resolves its default against the working directory.
+		persist: {
+			path: path.join(path.dirname(configPath), ".wrangler", "state", "v3"),
+		},
 		remoteBindings: false,
 	});
 	Reflect.set(globalThis, Symbol.for(PLATFORM_ENV), env);

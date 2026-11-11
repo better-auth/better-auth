@@ -173,7 +173,16 @@ function getDatabaseInfo(projectRoot: string) {
 function sanitizeBetterAuthConfig(config: any): any {
 	if (!config) return null;
 
-	const sanitized = JSON.parse(JSON.stringify(config));
+	// A D1 binding is an RPC stub that throws when serialized.
+	const { database } = config;
+	const isD1Binding =
+		typeof database === "object" &&
+		"batch" in database &&
+		"exec" in database &&
+		"prepare" in database;
+	const sanitized = JSON.parse(
+		JSON.stringify(isD1Binding ? { ...config, database: undefined } : config),
+	);
 
 	// List of sensitive keys to redact
 	const sensitiveKeys = [
@@ -473,6 +482,8 @@ export const info = new Command("info")
 	.option("--config <config>", "Path to the Better Auth configuration file")
 	.option("-j, --json", "Output as JSON")
 	.option("-c, --copy", "Copy output to clipboard (requires pbcopy/xclip)")
+	// The loaded config can keep handles open, such as Wrangler's local runtime.
+	.hook("postAction", () => process.exit())
 	.action(async (options) => {
 		const projectRoot = path.resolve(options.cwd || process.cwd());
 
