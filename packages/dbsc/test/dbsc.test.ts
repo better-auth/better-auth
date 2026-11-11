@@ -323,6 +323,40 @@ describe("dbsc", () => {
 		expect(browser.jar.get("better-auth.session_data")).not.toBe(staleCache);
 	});
 
+	it("drops every piece of a key-less cookie-cache copy split across cookies", async () => {
+		const { signIn, register, send, getSession } = await setup({
+			session: { cookieCache: { enabled: true, maxAge: 300 } },
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => ({
+							data: { ...user, name: "n".repeat(6000) },
+						}),
+					},
+				},
+			},
+		});
+		const isCache = (name: string) =>
+			name.startsWith("better-auth.session_data");
+		const browser = await createBrowser();
+		const challenge = readRegistrationChallenge(await signIn(browser))!;
+		const staleCache = [...browser.jar].filter(([name]) => isCache(name));
+		expect(staleCache.length).toBeGreaterThan(1);
+		expect((await register(browser, challenge)).status).toBe(200);
+		for (const [name] of [...browser.jar]) {
+			if (isCache(name)) browser.jar.delete(name);
+		}
+		for (const [name, value] of staleCache) browser.jar.set(name, value);
+
+		const update = await send(browser, "/update-user", {
+			method: "POST",
+			body: { image: "https://example.com/a.png" },
+		});
+		expect(update.status).toBe(401);
+		expect([...browser.jar.keys()].filter(isCache)).toEqual([]);
+		expect(await getSession(browser)).not.toBeNull();
+	});
+
 	it("keeps serving an unbound session from the cookie cache", async () => {
 		const { signIn, getSession } = await setup({
 			session: { cookieCache: { enabled: true, maxAge: 300 } },
