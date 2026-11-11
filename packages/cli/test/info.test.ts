@@ -280,7 +280,7 @@ describe("info command", () => {
 						throw new Error('The RPC receiver does not implement the method "toJSON".');
 					},
 				};
-				return { env: { DB } };
+				return { env: { APP_NAME: "from-wrangler", DB } };
 			};`,
 		);
 		await fs.writeFile(
@@ -289,7 +289,7 @@ describe("info command", () => {
 			import { betterAuth } from "better-auth";
 
 			export const auth = betterAuth({
-				appName: "worker",
+				appName: env.APP_NAME,
 				database: env.DB,
 			});`,
 		);
@@ -298,7 +298,7 @@ describe("info command", () => {
 
 		const output = JSON.parse(stdout);
 		expect(output.betterAuth.error).toBeUndefined();
-		expect(output.betterAuth.config.appName).toBe("worker");
+		expect(output.betterAuth.config.appName).toBe("from-wrangler");
 		expect(output.betterAuth.config.database).toBeUndefined();
 	});
 

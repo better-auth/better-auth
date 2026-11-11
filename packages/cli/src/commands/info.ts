@@ -177,6 +177,7 @@ function sanitizeBetterAuthConfig(config: any): any {
 	const { database } = config;
 	const isD1Binding =
 		typeof database === "object" &&
+		database !== null &&
 		"batch" in database &&
 		"exec" in database &&
 		"prepare" in database;
