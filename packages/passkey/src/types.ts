@@ -112,10 +112,13 @@ export interface PasskeyOptions {
 	rpName?: string | undefined;
 	/**
 	 * The origin, or list of origins, where registrations and authentications
-	 * run, without a trailing `/`. Set it when `rpID` is set and a wildcard in
-	 * `baseURL.allowedHosts` covers it.
+	 * run, without a trailing `/`.
 	 *
-	 * @default the origin of `baseURL`, plus a frontend origin listed exactly in `trustedOrigins`
+	 * @default the origin of `baseURL`, plus a frontend origin listed exactly in
+	 * `trustedOrigins`. When `rpID` is set and a wildcard in
+	 * `baseURL.allowedHosts` covers it, the default is the origin the credential
+	 * reports, if an exact `allowedHosts` entry, the `fallback`, or
+	 * `trustedOrigins` lists it exactly.
 	 */
 	origin?: (string | string[] | null) | undefined;
 	/**

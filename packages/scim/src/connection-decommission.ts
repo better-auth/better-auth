@@ -2,8 +2,9 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { BetterAuthError } from "@better-auth/core/error";
+import { generateId } from "@better-auth/core/utils/id";
 import type { AuthContext, DBAdapter } from "better-auth";
-import { BetterAuthError, generateId } from "better-auth";
 import { createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
 import {
@@ -17,6 +18,7 @@ import {
 	findSCIMProjectionDomainBatch,
 	reconcileSCIMProjectionDomainBatch,
 } from "./projection";
+import { assertNativeSCIMTransactions } from "./transaction";
 
 const SCIM_DECOMMISSION_LEASE_DURATION_MS = 5 * 60 * 1000;
 
@@ -417,6 +419,7 @@ export function createDecommissionSCIMConnectionEndpoint(
 			body: decommissionConnectionBodySchema,
 		},
 		async (ctx) => {
+			assertNativeSCIMTransactions(ctx.context.adapter);
 			return ctx.json(
 				await decommissionSCIMConnection({
 					database: ctx.context.adapter,

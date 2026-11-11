@@ -946,6 +946,34 @@ describe("Electron", () => {
 		);
 	});
 
+	it("should not reject the open-url listener when a deep link fails to authenticate", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+		const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
+		Object.defineProperty(process, "platform", { value: "darwin" });
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+
+		try {
+			client.setupMain({
+				scheme: true,
+			});
+			const openURL = mockElectron.app.on.mock.calls
+				.filter(([event]) => event === "open-url")
+				.at(-1)?.[1];
+
+			// No code verifier is stored for this state, so authentication throws.
+			const url = `${options.protocol.scheme}://auth/callback#token=${encodeRedirectToken("identifier", "unknown-state")}`;
+			await expect(openURL({}, url)).resolves.toBeUndefined();
+			expect(consoleError).toHaveBeenCalled();
+		} finally {
+			Object.defineProperty(process, "platform", platform);
+			consoleError.mockRestore();
+		}
+	});
+
 	it("should add client origin to CSP if missing", async ({
 		setProcessType,
 	}) => {

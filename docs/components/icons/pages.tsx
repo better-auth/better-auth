@@ -517,6 +517,7 @@ export const pageIcons = {
 		</svg>
 	),
 	guidesDynamicBaseURL: () => <Route className="w-4 h-4 text-current" />,
+	guidesCloudflare: brandIcons.cloudflare,
 	guidesSAMLSSOWithOkta: () => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
