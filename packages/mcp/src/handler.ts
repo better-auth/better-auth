@@ -148,7 +148,10 @@ export const createMcpProtectedRequestHandler = (
 				accessTokenVerificationOptions,
 			);
 		} catch (error) {
-			return toChallengeResponse(error, resource, resolvedChallengeOptions);
+			return toChallengeResponse(error, resource, {
+				...resolvedChallengeOptions,
+				request,
+			});
 		}
 		try {
 			return await handler(request, accessTokenClaims);

@@ -221,6 +221,88 @@ describe("resource server challenge", () => {
 	});
 
 	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.2
+	 */
+	describe("challenge scheme follows the presented authorization scheme", () => {
+		const expiredToken = () =>
+			new APIError("UNAUTHORIZED", {
+				message: "token expired",
+				error: "invalid_token",
+				error_description: "token expired",
+			});
+
+		it.each([
+			[
+				"a Request",
+				new Request("https://api.example.com", {
+					headers: { Authorization: "DPoP access-token" },
+				}),
+			],
+			[
+				"a resource request input",
+				{ authorizationHeader: "dpop access-token" },
+			],
+		])(
+			"answers a failed DPoP request with a DPoP challenge from %s",
+			(_, request) => {
+				const challenge = createResourceServerChallenge(
+					expiredToken(),
+					"https://api.example.com",
+					{ request, dpopSigningAlgorithms: ["ES256"] },
+				) as APIError;
+				expect(challenge.statusCode).toBe(401);
+				expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+					'DPoP error="invalid_token", error_description="token expired", algs="ES256"',
+				);
+			},
+		);
+
+		it("defaults the DPoP error code to invalid_token", () => {
+			const challenge = createResourceServerChallenge(
+				new APIError("UNAUTHORIZED", { message: "invalid access token" }),
+				"https://api.example.com",
+				{
+					request: { authorizationHeader: "DPoP access-token" },
+					dpopSigningAlgorithms: ["ES256"],
+				},
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'DPoP error="invalid_token", error_description="invalid access token", algs="ES256"',
+			);
+		});
+
+		it("omits the error_description of an empty message", () => {
+			const challenge = createResourceServerChallenge(
+				new APIError("UNAUTHORIZED"),
+				"https://api.example.com",
+				{
+					request: { authorizationHeader: "DPoP access-token" },
+					dpopSigningAlgorithms: ["ES256"],
+				},
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'DPoP error="invalid_token", algs="ES256"',
+			);
+			expect(challenge.body).toMatchObject({ error: "invalid_token" });
+		});
+
+		it.each([
+			["a Bearer request", "Bearer access-token"],
+			["a request without credentials", null],
+			["an unknown scheme", "Basic dXNlcjpwYXNz"],
+		])("keeps the Bearer challenge for %s", (_, authorizationHeader) => {
+			const challenge = createResourceServerChallenge(
+				expiredToken(),
+				"https://api.example.com",
+				{ request: { authorizationHeader } },
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'Bearer error="invalid_token", error_description="token expired", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+			);
+		});
+	});
+
+	/**
 	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
 	 */
 	describe("presented-token failures", () => {
