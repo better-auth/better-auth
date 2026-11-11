@@ -1043,7 +1043,7 @@ describe("magic link with ObjectId primary keys", () => {
 				})(options);
 				return {
 					...rejectNonObjectIds(adapter),
-					options: { ...adapter.options!, provider: "mongodb" },
+					options: { ...adapter.options!, usesObjectIdKey: () => true },
 					transaction: (callback) =>
 						adapter.transaction((trx) => callback(rejectNonObjectIds(trx))),
 				};

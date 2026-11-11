@@ -3,7 +3,7 @@ import { hex } from "@better-auth/utils/hex";
 import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
 import { generateId as defaultGenerateId } from "../../utils/id";
-import type { BetterAuthDBSchema, DBFieldAttribute, ModelNames } from "../type";
+import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
 let warnedSerialDeterministicId = false;
@@ -22,10 +22,9 @@ let warnedSerialDeterministicId = false;
  * base64url digest is still replaced by a database number, so the record is
  * not single use; this logs a warning once per process.
  *
- * On Prisma with MongoDB, ids that the database assigns or that `generateId`
- * returns as ObjectId hex mean an `@db.ObjectId` column, so the first 12 bytes
- * become 24 hex characters. Other setups keep the base64url digest, so markers
- * written before an upgrade still match.
+ * When the adapter reports an ObjectId id column for `model` (Prisma with
+ * `@db.ObjectId`), the first 12 bytes become 24 hex characters, the only id
+ * that column accepts. Every other column keeps the base64url digest.
  *
  * @internal Shared by Better Auth packages; not a supported public API.
  * @param digest - A hash of the guarded value, at least 16 bytes long.
@@ -51,14 +50,9 @@ export function encodeDeterministicId(
 			'Single-use checks (such as SAML assertion IDs, DPoP proofs, and private_key_jwt assertions) need string ids and are not enforced with `advanced.database.generateId: "serial"`.',
 		);
 	}
-	if (target?.adapter.options?.provider === "mongodb") {
-		const sample =
-			typeof generateId === "function"
-				? generateId({ model: target.model as ModelNames })
-				: generateId;
-		if (sample === false || /^[0-9a-f]{24}$/i.test(String(sample))) {
-			return hex.encode(digest.slice(0, 12));
-		}
+	const usesObjectIdKey = target?.adapter.options?.usesObjectIdKey;
+	if (typeof usesObjectIdKey === "function" && usesObjectIdKey(target?.model)) {
+		return hex.encode(digest.slice(0, 12));
 	}
 	if (generateId !== "uuid") {
 		return base64Url.encode(digest, { padding: false });

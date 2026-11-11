@@ -244,28 +244,25 @@ describe("encodeDeterministicId", () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12071
 	 */
-	describe("on Prisma with MongoDB", () => {
-		const encode = (generateId: unknown, provider = "mongodb") =>
+	describe("with ObjectId id columns", () => {
+		const encode = (usesObjectIdKey?: (model: string) => boolean) =>
 			encodeDeterministicId(
 				digest(1),
-				{ advanced: { database: { generateId } } } as BetterAuthOptions,
-				{ adapter: { options: { provider } }, model: "verification" },
+				{ advanced: { database: { generateId: false } } },
+				{ adapter: { options: { usesObjectIdKey } }, model: "verification" },
 			);
 
-		it.each([
-			["database-generated ids", false],
-			["an ObjectId generator", () => "65f1c0ffee0000000000beef"],
-			["a generator that leaves the model to the database", () => false],
-		])("encodes ObjectId hex with %s", (_, generateId) => {
-			expect(encode(generateId)).toBe("1f262d343b424950575e656c");
+		it("encodes ObjectId hex when the adapter reports an ObjectId column", () => {
+			expect(encode((model) => model === "verification")).toBe(
+				"1f262d343b424950575e656c",
+			);
 		});
 
 		it.each([
-			["default ids", undefined, "mongodb"],
-			["a string id generator", () => "cuid-style-id", "mongodb"],
-			["database-generated ids on PostgreSQL", false, "postgresql"],
-		])("keeps the base64url id with %s", (_, generateId, provider) => {
-			expect(encode(generateId, provider)).toBe(
+			["another model's column", (model: string) => model === "user"],
+			["an adapter without column metadata", undefined],
+		])("keeps the base64url id for %s", (_, usesObjectIdKey) => {
+			expect(encode(usesObjectIdKey)).toBe(
 				encodeDeterministicId(digest(1), {}),
 			);
 		});
