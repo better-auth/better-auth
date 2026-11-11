@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
+import { invalidateRefreshFamily } from "../token";
 import type { OAuthConsent, OAuthOptions, Scope } from "../types";
 import { getClient } from "../utils";
 
@@ -88,6 +89,8 @@ export async function deleteConsentEndpoint(
 		});
 	}
 	if (consent.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
+
+	await invalidateRefreshFamily(ctx, consent.clientId, consent.userId);
 
 	await ctx.context.adapter.delete({
 		model: "oauthConsent",
