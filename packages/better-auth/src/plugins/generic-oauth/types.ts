@@ -253,7 +253,8 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	discoveryHeaders?: Record<string, string> | undefined;
 	/**
 	 * Custom headers to include in token endpoint requests: the authorization
-	 * code exchange and token refresh.
+	 * code exchange and token refresh. A custom `getToken` replaces the default
+	 * code exchange, so it must add these headers itself.
 	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
 	 *
 	 * `Authorization` is not allowed in any letter case, and initialization fails

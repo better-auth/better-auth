@@ -4636,7 +4636,7 @@ describe("oauth2", async () => {
 				capturedHeaders = { ...req.headers };
 			});
 
-			const { customFetchImpl, cookieSetter } = await getTestInstance({
+			const { client, customFetchImpl, cookieSetter } = await getTestInstance({
 				plugins: [
 					genericOAuth({
 						config: [
@@ -4660,14 +4660,7 @@ describe("oauth2", async () => {
 			});
 
 			const headers = new Headers();
-			const authClient = createAuthClient({
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-					onSuccess: cookieSetter(headers),
-				},
-			});
-			const res = await authClient.signIn.social({
+			const res = await client.signIn.social({
 				provider: "test-custom-authorization",
 				callbackURL: "http://localhost:3000/dashboard",
 				fetchOptions: { onSuccess: cookieSetter(headers) },
