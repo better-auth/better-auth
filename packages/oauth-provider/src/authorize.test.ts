@@ -2497,7 +2497,10 @@ describe("oauth authorize - without requireOpenId", async () => {
 	);
 	const { headers } = await signInWithTestUser();
 
-	it("keeps serving requests that leave out openid", async () => {
+	it.each([
+		{ name: "scopes without openid", scope: "profile" },
+		{ name: "no scope", scope: undefined },
+	])("keeps serving requests with $name", async ({ scope }) => {
 		const oauthClient = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
@@ -2509,7 +2512,9 @@ describe("oauth authorize - without requireOpenId", async () => {
 		authUrl.searchParams.set("client_id", oauthClient.client_id);
 		authUrl.searchParams.set("redirect_uri", registeredUri);
 		authUrl.searchParams.set("response_type", "code");
-		authUrl.searchParams.set("scope", "profile");
+		if (scope !== undefined) {
+			authUrl.searchParams.set("scope", scope);
+		}
 		authUrl.searchParams.set("code_challenge", generateRandomString(43));
 		authUrl.searchParams.set("code_challenge_method", "S256");
 
