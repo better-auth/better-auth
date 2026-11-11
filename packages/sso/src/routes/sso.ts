@@ -2506,7 +2506,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					sessionLookupKey,
 				);
 
-			let nameID = session.user.email;
+			let nameID: string | undefined;
 			let sessionIndex: string | undefined;
 			let samlSessionKey: string | undefined;
 
@@ -2519,11 +2519,16 @@ export const initiateSLO = (options?: SSOOptions) => {
 				if (stored) {
 					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
 					if (data) {
-						nameID = data.nameID || nameID;
+						nameID = data.nameID;
 						sessionIndex = data.sessionIndex;
 					}
 				}
 			}
+			// The SAML account's accountId is the NameID from the assertion.
+			nameID ||=
+				(await ctx.context.internalAdapter.findAccounts(session.user.id)).find(
+					(account) => account.providerId === providerId,
+				)?.accountId ?? session.user.email;
 
 			const logoutRequest = sp.createLogoutRequest(idp, "redirect", {
 				logoutNameID: nameID,
