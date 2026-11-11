@@ -305,11 +305,11 @@ export async function getTrustedProviders(
 	return (resolved ?? []).filter((v): v is string => Boolean(v));
 }
 
-const reportedSchemaErrors = new WeakSet<object>();
+const reportedSchemaErrors = new WeakSet<SchemaMismatchError>();
 
 function reportSchemaError(ctx: AuthContext, error: unknown) {
 	// A mismatch is cached and rethrown to every caller, so report it once.
-	if (error instanceof Object) {
+	if (error instanceof SchemaMismatchError) {
 		if (reportedSchemaErrors.has(error)) return;
 		reportedSchemaErrors.add(error);
 	}

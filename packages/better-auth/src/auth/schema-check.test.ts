@@ -162,6 +162,22 @@ describe.each([
 		expect(find).toHaveBeenCalledTimes(2);
 	});
 
+	it("reports each connectivity failure even when the error is reused", async () => {
+		const failure = new Error("connection refused");
+		const find = vi
+			.fn<() => Promise<SchemaFinding[]>>()
+			.mockRejectedValue(failure);
+		const { auth, log } = createAuth(find);
+
+		await vi.waitFor(() => {
+			expect(log).toHaveBeenCalledTimes(1);
+		});
+		await expect(auth.api.getSession({ headers: new Headers() })).rejects.toBe(
+			failure,
+		);
+		expect(log).toHaveBeenCalledTimes(2);
+	});
+
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12400
 	 */
