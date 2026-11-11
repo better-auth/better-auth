@@ -191,6 +191,8 @@ describe("resource seeding at startup", () => {
 			return gate;
 		};
 		const first = register();
+		// Start the second request only once the first one holds the gate.
+		await vi.waitFor(() => expect(fault.current).toBeNull());
 
 		await expect(register()).resolves.toMatchObject({
 			resources: [resource],
@@ -218,6 +220,8 @@ describe("resource seeding at startup", () => {
 			return gate;
 		};
 		const first = register();
+		// Start the second request only once the first one holds the gate.
+		await vi.waitFor(() => expect(fault.current).toBeNull());
 		await register();
 		database.oauthResource[0]!.name = "Edited by admin";
 
