@@ -29,13 +29,13 @@ describe("getConfig with wrangler local bindings", () => {
 		vi.restoreAllMocks();
 	});
 
-	async function setupWorker(wranglerSource: string, version = "4.123.0") {
+	async function setupWorker(wranglerSource: string) {
 		await fs.writeFile(path.join(tmpDir, "wrangler.jsonc"), "{}");
 		const wranglerDir = path.join(tmpDir, "node_modules", "wrangler");
 		await fs.mkdir(wranglerDir, { recursive: true });
 		await fs.writeFile(
 			path.join(wranglerDir, "package.json"),
-			JSON.stringify({ name: "wrangler", version, main: "index.mjs" }),
+			JSON.stringify({ name: "wrangler", main: "index.mjs" }),
 		);
 		const wranglerEntry = path.join(wranglerDir, "index.mjs");
 		await fs.writeFile(wranglerEntry, wranglerSource);
@@ -99,22 +99,21 @@ describe("getConfig with wrangler local bindings", () => {
 	});
 
 	/**
-	 * @see https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/CHANGELOG.md#4460
+	 * @see https://github.com/cloudflare/workers-sdk/blob/main/packages/wrangler/CHANGELOG.md#3282
 	 */
-	it("should not start wrangler without the remoteBindings option", async () => {
+	it("should keep the stub env when wrangler has no getPlatformProxy", async () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-		const { appDir, wranglerEntry } = await setupWorker(
-			recordingWrangler,
-			"4.45.0",
-		);
+		const { appDir } = await setupWorker("export {};");
 
-		await getConfig({
+		const config = await getConfig({
 			cwd: appDir,
 			configPath: "auth.ts",
+			shouldThrowOnError: true,
 		});
 
-		const { calls } = await import(pathToFileURL(wranglerEntry).href);
-		expect(calls).toEqual([]);
-		expect(warn).toHaveBeenCalledWith(expect.stringContaining("4.46.0"));
+		expect(config).toBeTruthy();
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("getPlatformProxy"),
+		);
 	});
 });
