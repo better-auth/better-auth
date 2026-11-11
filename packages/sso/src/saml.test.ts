@@ -7,6 +7,7 @@ import {
 import type { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { inflateRawSync } from "node:zlib";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { betterFetch } from "@better-fetch/fetch";
 import type { Account, DBTransactionAdapter, User } from "better-auth";
@@ -6723,6 +6724,7 @@ describe("SAML user resolution HTTP", () => {
 		options: SSOOptions,
 		authOptions: Record<string, unknown> = {},
 		samlConfiguration: SAMLConfiguration = persistedSAMLConfiguration(),
+		adapter: "kysely" | "memory" | "mongodb" = "kysely",
 	) {
 		const sqlite = new DatabaseSync(":memory:");
 		const database = new Kysely({
@@ -6734,11 +6736,22 @@ describe("SAML user resolution HTTP", () => {
 		const instance = await getHttpTestInstance(
 			{
 				...authOptions,
-				database: {
-					db: database,
-					type: "sqlite",
-					transaction: true,
-				},
+				...(adapter === "kysely" && {
+					database: {
+						db: database,
+						type: "sqlite",
+						transaction: true,
+					},
+				}),
+				...(adapter === "memory" && {
+					database: memoryAdapter({
+						user: [],
+						session: [],
+						account: [],
+						verification: [],
+						ssoProvider: [],
+					}),
+				}),
 				plugins: [
 					sso({
 						...options,
@@ -6747,11 +6760,16 @@ describe("SAML user resolution HTTP", () => {
 				],
 				trustedOrigins: ["http://localhost:8081"],
 			},
-			{ disableTestUser: true, testWith: "sqlite" },
+			{
+				disableTestUser: true,
+				testWith: adapter === "mongodb" ? "mongodb" : "sqlite",
+			},
 		);
 		deferredCleanups.push(() => instance.server.close());
-		const migrations = await getMigrations(instance.auth.options);
-		await migrations.runMigrations();
+		if (adapter === "kysely") {
+			const migrations = await getMigrations(instance.auth.options);
+			await migrations.runMigrations();
+		}
 
 		const context = await instance.auth.$context;
 		const providerOwner = await context.adapter.create<User>({
@@ -7947,6 +7965,168 @@ describe("SAML user resolution HTTP", () => {
 			expect(slo.status).toBe(302);
 			expect(await instance.db.count({ model: "session", where: [] })).toBe(0);
 		});
+	});
+
+	/**
+	 * @see https://docs.oasis-open.org/security/saml/v2.0/saml-profiles-2.0-os.pdf SAML Profiles §4.4 (Single Logout Profile)
+	 */
+	describe("SAML Single Logout after refreshing one of several sessions for a NameID", () => {
+		function createExpiringStorage() {
+			const entries = new Map<string, { value: string; expiresAt?: number }>();
+			return {
+				get(key: string) {
+					const entry = entries.get(key);
+					if (!entry) return null;
+					if (entry.expiresAt !== undefined && entry.expiresAt <= Date.now()) {
+						entries.delete(key);
+						return null;
+					}
+					return entry.value;
+				},
+				set(key: string, value: string, ttl?: number) {
+					entries.set(key, {
+						value,
+						expiresAt: ttl ? Date.now() + ttl * 1000 : undefined,
+					});
+				},
+				delete(key: string) {
+					entries.delete(key);
+				},
+				getAndDelete(key: string) {
+					const value = this.get(key);
+					entries.delete(key);
+					return value;
+				},
+			};
+		}
+
+		// The adapter contract updates one row; Prisma and MongoDB write only the
+		// first match, while the Kysely and memory adapters write every match.
+		function updateOnlyFirstMatch(
+			adapter: Pick<DBAdapter, "findMany" | "update">,
+		) {
+			const update = adapter.update;
+			adapter.update = async <T>(data: Parameters<DBAdapter["update"]>[0]) => {
+				const [first] = await adapter.findMany<{ id: string }>({
+					model: data.model,
+					where: data.where,
+					limit: 1,
+				});
+				if (!first) return null;
+				return update<T>({
+					...data,
+					where: [{ field: "id", value: first.id }],
+				});
+			};
+		}
+
+		const storages = [
+			{ name: "Kysely", adapter: "kysely" },
+			{ name: "the memory adapter", adapter: "memory" },
+			{ name: "MongoDB", adapter: "mongodb" },
+			{
+				name: "a first-match-only update",
+				adapter: "kysely",
+				singleRowUpdate: true,
+			},
+			{
+				name: "secondary storage and the database",
+				adapter: "kysely",
+				secondaryStorage: true,
+				storeInDatabase: true,
+				singleRowUpdate: true,
+			},
+		] as const satisfies ReadonlyArray<{
+			name: string;
+			adapter: "kysely" | "memory" | "mongodb";
+			singleRowUpdate?: boolean;
+			secondaryStorage?: boolean;
+			storeInDatabase?: boolean;
+		}>;
+
+		it.each(storages)(
+			"revokes the refreshed session on IdP-initiated logout with $name",
+			async (storage) => {
+				const instance = await createSAMLUserResolutionInstance(
+					{ saml: { enableSingleLogout: true } },
+					{
+						...("secondaryStorage" in storage && {
+							secondaryStorage: createExpiringStorage(),
+						}),
+						...("storeInDatabase" in storage && {
+							verification: { storeInDatabase: true },
+						}),
+					},
+					{
+						...persistedSAMLConfiguration(),
+						idpMetadata: { metadata: idpMetadata },
+					},
+					storage.adapter,
+				);
+				const context = await instance.auth.$context;
+				if ("singleRowUpdate" in storage) {
+					updateOnlyFirstMatch(context.adapter);
+				}
+
+				// Both sign-ins share the NameID, so they share the SLO record key.
+				const firstSignIn = await completeSAMLSignIn(instance.baseURL);
+				expect(firstSignIn.callback.status).toBe(302);
+				const secondSignIn = await completeSAMLSignIn(instance.baseURL);
+				expect(secondSignIn.callback.status).toBe(302);
+
+				vi.useFakeTimers({ toFake: ["Date"] });
+				deferredCleanups.push(async () => {
+					vi.useRealTimers();
+				});
+				const hour = 60 * 60 * 1000;
+				// Default session: 7 days, refreshed once it is older than 1 day.
+				vi.setSystemTime(Date.now() + 7 * 24 * hour - hour);
+				const refreshed = await fetch(
+					`${instance.baseURL}/api/auth/get-session`,
+					{ headers: { cookie: cookieHeader(secondSignIn.cookies) } },
+				);
+				expect((await refreshed.json())?.session).toBeTruthy();
+
+				vi.setSystemTime(Date.now() + 2 * hour);
+				// Any verification read deletes expired rows.
+				await context.internalAdapter.findVerificationValue("unrelated");
+
+				const sloLocation = `${instance.baseURL}/api/auth/sso/saml2/sp/slo/workforce-saml`;
+				const identityProvider = saml.IdentityProvider({
+					metadata: idpMetadata,
+					privateKey: idPk,
+					privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+				});
+				const serviceProvider = saml.ServiceProvider({
+					entityID: "http://localhost:8081",
+					singleLogoutService: [
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+							Location: sloLocation,
+						},
+					],
+				});
+				const logoutRequest = identityProvider.createLogoutRequest(
+					serviceProvider,
+					saml.Constants.wording.binding.redirect,
+					{ logoutNameID: "test@email.com" },
+				) as { context: string };
+				const samlRequest = new URL(logoutRequest.context).searchParams.get(
+					"SAMLRequest",
+				)!;
+				const slo = await fetch(
+					`${sloLocation}?SAMLRequest=${encodeURIComponent(samlRequest)}`,
+					{ redirect: "manual" },
+				);
+				expect(slo.status).toBe(302);
+
+				const afterLogout = await fetch(
+					`${instance.baseURL}/api/auth/get-session`,
+					{ headers: { cookie: cookieHeader(secondSignIn.cookies) } },
+				);
+				expect(await afterLogout.json()).toBeNull();
+			},
+		);
 	});
 });
 

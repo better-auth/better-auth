@@ -1,4 +1,4 @@
-import type { AuthContext, BetterAuthPlugin } from "better-auth";
+import type { AuthContext, BetterAuthPlugin, Verification } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
@@ -54,6 +54,7 @@ import type {
 	OIDCConfig,
 	SAMLConfig,
 	SAMLIdentityProviderMetadata,
+	SAMLSessionRecord,
 	SSOOIDCUserResolutionInput,
 	SSOOptions,
 	SSOProvider,
@@ -67,6 +68,7 @@ import type {
 	SSOUserResolutionContext,
 	SSOUserResolutionInput,
 } from "./types";
+import { safeJsonParse } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 export type {
@@ -251,10 +253,37 @@ async function extendSAMLSessionRecords(
 	const lookup = await ctx.internalAdapter.findVerificationValue(lookupKey);
 	const expiresAt = new Date(session.expiresAt);
 	if (!lookup || new Date(lookup.expiresAt) >= expiresAt) return;
+	const isOwnRecord = (record: Verification) =>
+		safeJsonParse<SAMLSessionRecord>(record.value)?.sessionId === session.id;
+	const latest = await ctx.internalAdapter.findVerificationValue(lookup.value);
+	if (latest) {
+		// Secondary storage keeps one record per key, written by the latest sign-in.
+		if (ctx.options.secondaryStorage && isOwnRecord(latest)) {
+			await ctx.internalAdapter.updateVerificationByIdentifier(lookup.value, {
+				expiresAt,
+			});
+		}
+		if (
+			!ctx.options.secondaryStorage ||
+			ctx.options.verification?.storeInDatabase
+		) {
+			// Every sign-in with the same NameID adds a row under this identifier,
+			// and an update by identifier may change another session's row.
+			const records = await ctx.adapter.findMany<Verification>({
+				model: "verification",
+				where: [{ field: "identifier", value: latest.identifier }],
+			});
+			const record = records.find(isOwnRecord);
+			if (record) {
+				await ctx.adapter.update({
+					model: "verification",
+					where: [{ field: "id", value: record.id }],
+					update: { expiresAt },
+				});
+			}
+		}
+	}
 	// Lookup row last: it gates the early return, so a failed write retries.
-	await ctx.internalAdapter.updateVerificationByIdentifier(lookup.value, {
-		expiresAt,
-	});
 	await ctx.internalAdapter.updateVerificationByIdentifier(lookupKey, {
 		expiresAt,
 	});
