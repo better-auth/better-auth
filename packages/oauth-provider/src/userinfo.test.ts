@@ -1,3 +1,4 @@
+import { createAuthMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
@@ -1149,5 +1150,35 @@ describe("oauth userinfo - unresolved baseURL", async () => {
 			statusCode: 400,
 			body: { error: "invalid_scope" },
 		});
+	});
+});
+
+describe("oauth userinfo - exposed headers from hooks", async () => {
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				ctx.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
+			}),
+		},
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				disableJwtPlugin: true,
+			}),
+		],
+	});
+
+	it("keeps names a before hook exposed when a 401 exposes its challenge", async () => {
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/userinfo",
+			{ headers: { authorization: "Bearer this-is-not-a-valid-access-token" } },
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+			"X-Request-Id, WWW-Authenticate",
+		);
 	});
 });

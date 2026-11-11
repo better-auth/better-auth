@@ -104,6 +104,27 @@ function getUserInfoAccessToken(ctx: GenericEndpointContext) {
 }
 
 /**
+ * The exposed-header list with `WWW-Authenticate` added. Before hooks write to
+ * the dispatch's `ctx.context.responseHeaders`, which the endpoint's own
+ * `ctx.responseHeaders` does not include, and an error's header replaces the
+ * value they accumulated, so both lists are kept here.
+ */
+function exposeChallengeHeader(ctx: GenericEndpointContext) {
+	const scoped = ctx as GenericEndpointContext & {
+		context: GenericEndpointContext["context"] & { responseHeaders?: Headers };
+	};
+	const names = [scoped.context.responseHeaders, ctx.responseHeaders].flatMap(
+		(headers) =>
+			headers?.get("access-control-expose-headers")?.split(",") ?? [],
+	);
+	return withExposedHeaders(
+		undefined,
+		...names.map((name) => name.trim()).filter(Boolean),
+		"WWW-Authenticate",
+	);
+}
+
+/**
  * A 401 carrying `challenge`, which browsers hide from cross-origin clients
  * unless it is exposed.
  */
@@ -114,10 +135,7 @@ function unauthorized(
 ) {
 	return new APIError("UNAUTHORIZED", body, {
 		"WWW-Authenticate": challenge,
-		"Access-Control-Expose-Headers": withExposedHeaders(
-			ctx.responseHeaders?.get("access-control-expose-headers"),
-			"WWW-Authenticate",
-		),
+		"Access-Control-Expose-Headers": exposeChallengeHeader(ctx),
 	});
 }
 
