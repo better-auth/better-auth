@@ -27,6 +27,7 @@
 /packages/core/src/oauth2/                         @better-auth/identity
 /packages/better-auth/src/oauth2/                  @better-auth/identity
 /packages/passkey/                                 @better-auth/identity
+/packages/dbsc/                                    @better-auth/identity
 /packages/better-auth/src/plugins/two-factor/      @better-auth/identity
 /packages/better-auth/src/plugins/magic-link/      @better-auth/identity
 /packages/better-auth/src/plugins/email-otp/       @better-auth/identity

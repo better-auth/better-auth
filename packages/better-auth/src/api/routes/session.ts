@@ -26,6 +26,31 @@ import { getDate } from "../../utils/date";
 import { isAPIError } from "../../utils/is-api-error";
 import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
 
+/**
+ * Whether every plugin's `validateSession` accepts a resolved session.
+ *
+ * Call it before issuing cookies for a session that was resolved without
+ * going through `getSession`, such as when switching to another stored
+ * session. A validator that throws propagates the error.
+ */
+export async function isSessionAccepted(
+	ctx: GenericEndpointContext,
+	data: {
+		session: Session & Record<string, unknown>;
+		user: User & Record<string, unknown>;
+	},
+): Promise<boolean> {
+	for (const plugin of ctx.context.options.plugins ?? []) {
+		if (
+			plugin.validateSession &&
+			(await plugin.validateSession(data, ctx)) !== true
+		) {
+			return false;
+		}
+	}
+	return true;
+}
+
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/get-session",
@@ -171,6 +196,24 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					if (shouldExpireCookieCache) {
 						expireCookie(ctx, ctx.context.authCookies.sessionData);
 					} else {
+						// Rehydrate date fields from JSON strings
+						const hydrated = {
+							session: {
+								...session.session,
+								expiresAt: new Date(session.session.expiresAt),
+								createdAt: new Date(session.session.createdAt),
+								updatedAt: new Date(session.session.updatedAt),
+							},
+							user: {
+								...session.user,
+								createdAt: new Date(session.user.createdAt),
+								updatedAt: new Date(session.user.updatedAt),
+							},
+						};
+						if (!(await isSessionAccepted(ctx, hydrated))) {
+							ctx.context.session = null;
+							return ctx.json(null);
+						}
 						// Check if the cookie cache needs to be refreshed based on refreshCache
 						const cookieRefreshCache =
 							ctx.context.sessionConfig.cookieRefreshCache;
@@ -179,18 +222,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							// If refreshCache is disabled, return the session from cookie as-is
 							ctx.context.session = session;
 							// Parse session and user to ensure additionalFields are included
-							// Rehydrate date fields from JSON strings before parsing
-							const parsedSession = parseSessionOutput(ctx.context.options, {
-								...session.session,
-								expiresAt: new Date(session.session.expiresAt),
-								createdAt: new Date(session.session.createdAt),
-								updatedAt: new Date(session.session.updatedAt),
-							});
-							const parsedUser = parseUserOutput(ctx.context.options, {
-								...session.user,
-								createdAt: new Date(session.user.createdAt),
-								updatedAt: new Date(session.user.updatedAt),
-							});
+							const parsedSession = parseSessionOutput(
+								ctx.context.options,
+								hydrated.session,
+							);
+							const parsedUser = parseUserOutput(
+								ctx.context.options,
+								hydrated.user,
+							);
 							return ctx.json({
 								session: parsedSession,
 								user: parsedUser,
@@ -263,17 +302,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						}
 
 						// Parse session and user to ensure additionalFields are included
-						const parsedSession = parseSessionOutput(ctx.context.options, {
-							...session.session,
-							expiresAt: new Date(session.session.expiresAt),
-							createdAt: new Date(session.session.createdAt),
-							updatedAt: new Date(session.session.updatedAt),
-						});
-						const parsedUser = parseUserOutput(ctx.context.options, {
-							...session.user,
-							createdAt: new Date(session.user.createdAt),
-							updatedAt: new Date(session.user.updatedAt),
-						});
+						const parsedSession = parseSessionOutput(
+							ctx.context.options,
+							hydrated.session,
+						);
+						const parsedUser = parseUserOutput(
+							ctx.context.options,
+							hydrated.user,
+						);
 						ctx.context.session = {
 							session: parsedSession,
 							user: parsedUser,
@@ -303,6 +339,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							);
 						}
 					}
+					return ctx.json(null);
+				}
+				if (!(await isSessionAccepted(ctx, session))) {
 					return ctx.json(null);
 				}
 				ctx.context.session = session;
