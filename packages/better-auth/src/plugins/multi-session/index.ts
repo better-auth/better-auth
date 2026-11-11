@@ -445,12 +445,19 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							)
 						).filter((v) => typeof v === "string");
 						if (verifiedTokens.length > 0) {
-							const accepted = await filterAcceptedSessions(
-								ctx,
-								(
-									await ctx.context.internalAdapter.findSessions(verifiedTokens)
-								).filter(Boolean),
-							);
+							// Sessions that cannot be checked are kept, like in sign-out.
+							const accepted = await ctx.context.internalAdapter
+								.findSessions(verifiedTokens)
+								.then((sessions) =>
+									filterAcceptedSessions(ctx, sessions.filter(Boolean)),
+								)
+								.catch((e) => {
+									ctx.context.logger.error(
+										"Failed to check sessions during sign-out",
+										e,
+									);
+									return [];
+								});
 							if (accepted.length > 0) {
 								await ctx.context.internalAdapter.deleteSessions(
 									accepted.map(({ session }) => session.token),
