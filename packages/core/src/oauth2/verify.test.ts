@@ -1178,12 +1178,12 @@ describe("verifyBearerToken", () => {
 		it("should reject an active token when audience is required but introspection omits aud", async () => {
 			mockIntrospection({ scope: "read" });
 
-			await expect(
+			await expectUnauthorized(
 				verifyBearerToken("opaque-token-for-another-resource", {
 					verifyOptions: { issuer, audience },
 					remoteVerify,
 				}),
-			).rejects.toThrow();
+			);
 		});
 
 		it("should reject an active token whose introspected aud is for a different resource", async () => {
@@ -1192,12 +1192,39 @@ describe("verifyBearerToken", () => {
 				scope: "read",
 			});
 
-			await expect(
+			await expectUnauthorized(
 				verifyBearerToken("token-minted-for-other-api", {
 					verifyOptions: { issuer, audience },
 					remoteVerify,
 				}),
-			).rejects.toThrow();
+			);
+		});
+
+		it("should reject an active token whose introspected exp has passed", async () => {
+			mockIntrospection({
+				aud: audience,
+				exp: Math.floor(Date.now() / 1000) - 60,
+				scope: "read",
+			});
+
+			await expectUnauthorized(
+				verifyBearerToken("expired-token", {
+					verifyOptions: { issuer, audience },
+					remoteVerify,
+				}),
+				"token expired",
+			);
+		});
+
+		it("should reject an active token whose introspected iss does not match", async () => {
+			mockIntrospection({ aud: audience, iss: "https://evil.example.com" });
+
+			await expectUnauthorized(
+				verifyBearerToken("foreign-issuer-token", {
+					verifyOptions: { issuer, audience },
+					remoteVerify,
+				}),
+			);
 		});
 
 		it("should accept an active token whose introspected aud matches", async () => {
@@ -1228,12 +1255,12 @@ describe("verifyBearerToken", () => {
 				scope: "read",
 			});
 
-			await expect(
+			await expectUnauthorized(
 				verifyBearerToken("token-minted-for-other-api", {
 					verifyOptions: { issuer, audience },
 					remoteVerify: { ...remoteVerify, allowMissingAudience: true },
 				}),
-			).rejects.toThrow();
+			);
 		});
 	});
 
