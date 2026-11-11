@@ -761,11 +761,15 @@ async function getValidAccessToken(
 			scopes: parseStoredScopes(account.scope),
 			idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 		};
-	} catch (_error) {
-		throw APIError.from("BAD_REQUEST", {
-			message: "Failed to get a valid access token",
-			code: "FAILED_TO_GET_ACCESS_TOKEN",
-		});
+	} catch (error) {
+		throw APIError.from(
+			"BAD_REQUEST",
+			{
+				message: "Failed to get a valid access token",
+				code: "FAILED_TO_GET_ACCESS_TOKEN",
+			},
+			{ cause: error },
+		);
 	}
 }
 
@@ -958,11 +962,15 @@ export const refreshToken = createAuthEndpoint(
 				providerId: account.providerId,
 				accountId: account.id,
 			});
-		} catch (_error) {
-			throw APIError.from("BAD_REQUEST", {
-				message: "Failed to refresh access token",
-				code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
-			});
+		} catch (error) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				{
+					message: "Failed to refresh access token",
+					code: "FAILED_TO_REFRESH_ACCESS_TOKEN",
+				},
+				{ cause: error },
+			);
 		}
 	},
 );
