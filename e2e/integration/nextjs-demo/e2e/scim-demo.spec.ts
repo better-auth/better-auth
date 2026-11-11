@@ -88,16 +88,25 @@ function createNextDemoRuntime() {
 	async function compileRoutes(baseURL: string, deadline: number) {
 		await Promise.all(
 			EMPLOYEE_SIGN_IN_ROUTES.map(async (path) => {
+				let status: number;
+				let body: string;
 				try {
 					const response = await fetch(`${baseURL}${path}`, {
 						signal: AbortSignal.timeout(Math.max(deadline - Date.now(), 0)),
 					});
+					status = response.status;
 					// Pages stream, so the render finishes only with the body.
-					await response.arrayBuffer();
+					body = await response.text();
 				} catch (error) {
 					throw new Error(`Next.js demo did not compile ${path}:\n${output}`, {
 						cause: error,
 					});
+				}
+				// `next dev` answers a failed compile with a 500 error page.
+				if (status >= 500) {
+					throw new Error(
+						`Next.js demo failed to compile ${path} (HTTP ${status}):\n${body}\n${output}`,
+					);
 				}
 			}),
 		);
