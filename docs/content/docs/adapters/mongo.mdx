@@ -72,7 +72,7 @@ The adapter creates the indexes that SQL databases get from migrations:
 * A unique index for every field marked `unique`, such as `user.email` and `session.token`. This index stops concurrent requests from creating two users with the same email.
 * An index for every field marked `index`.
 
-The adapter starts building these indexes when your auth instance creates it. Requests don't wait for the build. Uniqueness is enforced once the build finishes. Index names follow the SQL migrations, for example `user_email_uidx` and `session_userId_idx`.
+The adapter starts building these indexes when your auth instance creates the adapter. Requests don't wait for the build. Uniqueness is enforced once the build finishes. Index names follow the SQL migrations, for example `user_email_uidx` and `session_userId_idx`.
 
 An optional unique field gets a partial index, so many documents can leave it unset or `null`. Table-level `indexes` declared by plugins are created before the first write to their collection. The adapter skips:
 
