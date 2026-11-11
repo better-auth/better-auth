@@ -1,5 +1,12 @@
 # @better-auth/mcp
 
+## 1.7.21
+
+### Patch Changes
+
+- Updated dependencies [[`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b), [`fd66861`](https://github.com/better-auth/better-auth/commit/fd66861c353574418a7bf48e0b79c0ebe4251c1c), [`db930d9`](https://github.com/better-auth/better-auth/commit/db930d90115a1d6182bac83a3f010205d86baa3b), [`900195d`](https://github.com/better-auth/better-auth/commit/900195df3f1313d84301f7b7dc4997845e568a8e), [`9362c0d`](https://github.com/better-auth/better-auth/commit/9362c0d42e7f65a1dbfd6318360cd97ea9dd9d5b), [`b0ced9d`](https://github.com/better-auth/better-auth/commit/b0ced9d2576db02f5c41b493e07e847d5a260e4d), [`79d61b0`](https://github.com/better-auth/better-auth/commit/79d61b0fb0ff3750ec42aa1ef5cd136f573c996b)]:
+  - @better-auth/oauth-provider@1.7.21
+
 ## 1.7.20
 
 ### Patch Changes
