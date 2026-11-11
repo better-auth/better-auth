@@ -15,7 +15,6 @@ export {
 } from "./assertions";
 export { resolveSigningCerts, validateCertSources } from "./cert";
 export {
-	getSAMLNameIDFormat,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
 	SAML_HTTP_POST_BINDING,

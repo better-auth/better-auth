@@ -7,7 +7,6 @@ import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
 import { setAccountCookie, setSessionCookie } from "better-auth/cookies";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
-import { XMLParser } from "fast-xml-parser";
 import type { FlowResult } from "samlify/types/src/flow";
 
 import * as constants from "../constants";
@@ -19,7 +18,6 @@ import {
 	SSO_PROVIDER_STATE_KEY,
 } from "../provider-reference";
 import {
-	getSAMLNameIDFormat,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
 	SAML_HTTP_POST_BINDING,
@@ -244,34 +242,6 @@ async function getSAMLResponseBindingContent(
 	return decryptedContent;
 }
 
-/**
- * Extracts the Assertion ID from a SAML response XML.
- * Used for replay protection per SAML 2.0 Core section 2.3.3.
- */
-function extractAssertionId(samlContent: string): string | null {
-	try {
-		const parser = new XMLParser({
-			ignoreAttributes: false,
-			attributeNamePrefix: "@_",
-			removeNSPrefix: true,
-		});
-		const parsed = parser.parse(samlContent);
-
-		const response = parsed.Response || parsed["samlp:Response"];
-		if (!response) return null;
-
-		const rawAssertion = response.Assertion || response["saml:Assertion"];
-		const assertion = Array.isArray(rawAssertion)
-			? rawAssertion[0]
-			: rawAssertion;
-		if (!assertion) return null;
-
-		return assertion["@_ID"] || null;
-	} catch {
-		return null;
-	}
-}
-
 export interface SAMLResponseParams {
 	SAMLResponse: string;
 	RelayState?: string;
@@ -456,16 +426,19 @@ export async function processSAMLResponse(
 	);
 	const serviceProviderPolicy =
 		deriveSAMLServiceProviderPolicy(parsedSamlConfig);
-	let samlBindingContent: string;
+	let boundAssertion: ReturnType<typeof validateSAMLResponseBinding>;
 	try {
-		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
+		const samlBindingContent = await getSAMLResponseBindingContent(
+			sp,
+			samlContent,
+		);
 		if (serviceProviderPolicy.wantAssertionsSigned) {
 			verifySAMLAssertionSignature(samlBindingContent, {
 				metadata: idp.entityMeta,
 				signatureAlgorithm: idp.entitySetting.requestSignatureAlgorithm,
 			});
 		}
-		validateSAMLResponseBinding(samlBindingContent, {
+		boundAssertion = validateSAMLResponseBinding(samlBindingContent, {
 			expectedAudiences,
 			expectedRecipients,
 		});
@@ -563,7 +536,7 @@ export async function processSAMLResponse(
 	// the row already present and is rejected. The deterministic primary key is
 	// the gate, so no separate find/expiry check is needed.
 	const issuer = idp.entityMeta.getEntityID();
-	const assertionId = extractAssertionId(samlBindingContent);
+	const { assertionId } = boundAssertion;
 
 	if (assertionId) {
 		const conditions = (extract as SAMLAssertionExtract).conditions as
@@ -622,7 +595,7 @@ export async function processSAMLResponse(
 		}
 	}
 	const mapping = parsedSamlConfig.mapping ?? {};
-	const nameIDFormat = getSAMLNameIDFormat(samlBindingContent);
+	const { nameIDFormat } = boundAssertion;
 
 	// samlify >= 2.13 types attribute values as `string | string[]` to support
 	// multi-valued attributes. The identity fields below are single-valued.

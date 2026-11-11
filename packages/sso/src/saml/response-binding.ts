@@ -297,14 +297,6 @@ function validateAudienceRestrictions(
 	}
 }
 
-/** Returns the `Format` of the assertion's Subject NameID, when it sets one. */
-export function getSAMLNameIDFormat(samlContent: string): string | undefined {
-	const parsed = parseSAMLContent(samlContent);
-	const assertion = getAssertionNode(parsed, getResponseNode(parsed));
-	const format = firstNode(firstNode(assertion.Subject)?.NameID)?.["@_Format"];
-	return typeof format === "string" ? format : undefined;
-}
-
 function getBearerSubjectConfirmationData(assertion: XmlNode): XmlNode[] {
 	const subject = firstNode(assertion.Subject);
 	const confirmations = toNodeArray(subject?.SubjectConfirmation);
@@ -367,10 +359,19 @@ function validateResponseDestination(
 	}
 }
 
+function stringAttribute(node: XmlNode | null, name: string) {
+	const value = node?.[`@_${name}`];
+	return typeof value === "string" && value ? value : undefined;
+}
+
+/**
+ * Validates that the assertion is bound to this Service Provider, then returns
+ * the assertion fields later steps need, so the response is parsed once.
+ */
 export function validateSAMLResponseBinding(
 	samlContent: string,
 	options: SAMLResponseBindingValidationOptions,
-): void {
+): { assertionId?: string; nameIDFormat?: string } {
 	const expectedAudiences = toStringSet(options.expectedAudiences);
 	const expectedRecipients = toStringSet(options.expectedRecipients);
 	const parsed = parseSAMLContent(samlContent);
@@ -380,4 +381,12 @@ export function validateSAMLResponseBinding(
 	validateAudienceRestrictions(assertion, expectedAudiences);
 	validateBearerRecipient(assertion, expectedRecipients);
 	validateResponseDestination(response, expectedRecipients);
+
+	return {
+		assertionId: stringAttribute(assertion, "ID"),
+		nameIDFormat: stringAttribute(
+			firstNode(firstNode(assertion.Subject)?.NameID),
+			"Format",
+		),
+	};
 }
