@@ -7771,6 +7771,18 @@ describe("SAML user resolution HTTP", () => {
 				},
 			});
 			selectedUserId = directoryUser.id;
+			// An older link to the same provider must not win over the current one.
+			const staleDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+			await context.adapter.create({
+				model: "account",
+				data: {
+					userId: directoryUser.id,
+					providerId: "workforce-saml",
+					accountId: "stale-name-id",
+					createdAt: staleDate,
+					updatedAt: staleDate,
+				},
+			});
 			const signIn = await completeSAMLSignIn(instance.baseURL);
 			expect(signIn.callback.status).toBe(302);
 

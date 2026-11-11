@@ -251,14 +251,13 @@ async function extendSAMLSessionRecords(
 	const lookup = await ctx.internalAdapter.findVerificationValue(lookupKey);
 	const expiresAt = new Date(session.expiresAt);
 	if (!lookup || new Date(lookup.expiresAt) >= expiresAt) return;
-	await Promise.all([
-		ctx.internalAdapter.updateVerificationByIdentifier(lookupKey, {
-			expiresAt,
-		}),
-		ctx.internalAdapter.updateVerificationByIdentifier(lookup.value, {
-			expiresAt,
-		}),
-	]);
+	// Lookup row last: it gates the early return, so a failed write retries.
+	await ctx.internalAdapter.updateVerificationByIdentifier(lookup.value, {
+		expiresAt,
+	});
+	await ctx.internalAdapter.updateVerificationByIdentifier(lookupKey, {
+		expiresAt,
+	});
 }
 
 export function sso<

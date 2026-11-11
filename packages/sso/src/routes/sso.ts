@@ -2524,11 +2524,19 @@ export const initiateSLO = (options?: SSOOptions) => {
 					}
 				}
 			}
-			// The SAML account's accountId is the NameID from the assertion.
-			nameID ||=
-				(await ctx.context.internalAdapter.findAccounts(session.user.id)).find(
-					(account) => account.providerId === providerId,
-				)?.accountId ?? session.user.email;
+			if (!nameID) {
+				// The SAML account's accountId is the NameID from the assertion.
+				// With several, the most recently updated is the newest link.
+				const [account] = (
+					await ctx.context.internalAdapter.findAccounts(session.user.id)
+				)
+					.filter((account) => account.providerId === providerId)
+					.sort(
+						(a, b) =>
+							new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+					);
+				nameID = account?.accountId ?? session.user.email;
+			}
 
 			const logoutRequest = sp.createLogoutRequest(idp, "redirect", {
 				logoutNameID: nameID,
