@@ -215,7 +215,12 @@ async function revokeRefreshToken(
 		});
 	}
 	if (refreshToken.revoked) {
-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		await invalidateRefreshFamily(
+			ctx,
+			clientId,
+			refreshToken.userId,
+			refreshToken.authorizationCodeId,
+		);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
 			error: "invalid_request",
@@ -248,7 +253,12 @@ async function revokeRefreshToken(
 		},
 	});
 	if (!won) {
-		await invalidateRefreshFamily(ctx, clientId, refreshToken.userId);
+		await invalidateRefreshFamily(
+			ctx,
+			clientId,
+			refreshToken.userId,
+			refreshToken.authorizationCodeId,
+		);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "refresh token revoked",
 			error: "invalid_request",
