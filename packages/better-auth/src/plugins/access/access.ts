@@ -118,8 +118,16 @@ export function role<
 			for (const [requestedResource, requestedActions] of Object.entries(
 				request,
 			)) {
-				const allowedActions = statements[requestedResource];
-				if (!allowedActions) {
+				// Resource names come from the request, so they can name members
+				// inherited from `Object.prototype` such as `constructor`. A plain
+				// index lookup resolves those to a truthy function, which would slip
+				// past this guard and fail on `allowedActions.includes` further down.
+				// Require an own, array-valued statement so anything else is treated
+				// as an unknown resource and fails closed.
+				const allowedActions = Object.hasOwn(statements, requestedResource)
+					? statements[requestedResource]
+					: undefined;
+				if (!Array.isArray(allowedActions)) {
 					if (connector === "AND") {
 						return unknownResourceResponse(requestedResource);
 					}
