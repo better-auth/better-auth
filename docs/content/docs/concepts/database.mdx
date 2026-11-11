@@ -63,66 +63,6 @@ await runMigrations();
   `getMigrations` only works with the built-in Kysely adapter (SQLite/D1, PostgreSQL, MySQL, MSSQL). It does **not** work with Prisma or Drizzle ORM adapters — use CLI migrations with those ORMs instead.
 </Callout>
 
-<Accordions>
-  <Accordion id="cloudflare-d1-example" title="Example: Cloudflare D1">
-    [Cloudflare D1](https://developers.cloudflare.com/d1/) can only be queried through a Cloudflare Worker, so the CLI cannot access it directly. Instead, you can run programmatic migrations through an endpoint:
-
-    ```typescript title="auth.ts"
-    import { env } from "cloudflare:workers";
-    import { betterAuth } from "better-auth";
-
-    export const auth = betterAuth({
-      database: env.DB,
-      // ... rest of config
-    });
-    ```
-
-    ```typescript title="src/index.ts"
-    import { Hono } from "hono";
-    import { auth } from "./auth";
-    import { getMigrations } from "better-auth/db/migration";
-
-    const app = new Hono();
-
-    // Protect or remove this endpoint in production
-    app.post("/migrate", async (c) => {
-      try {
-        const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(auth.options);
-
-        if (toBeCreated.length === 0 && toBeAdded.length === 0) {
-          return c.json({ message: "No migrations needed" });
-        }
-
-        await runMigrations();
-        return c.json({
-          message: "Migrations completed successfully",
-          created: toBeCreated.map((t) => t.table),
-          added: toBeAdded.map((t) => t.table),
-        });
-      } catch (error) {
-        return c.json(
-          { error: error instanceof Error ? error.message : "Migration failed" },
-          500,
-        );
-      }
-    });
-
-    app.on(["POST", "GET"], "/api/auth/*", (c) => {
-      return auth.handler(c.req.raw);
-    });
-
-    export default app;
-    ```
-
-    <Callout type="info">
-      If you're using Cloudflare D1 with Drizzle or Prisma, use [`cloudflare:workers`](https://developers.cloudflare.com/workers/runtime-apis/bindings/) to access `env` and follow the guides below:
-
-      * [Drizzle with Cloudflare D1 guide](https://orm.drizzle.team/docs/guides/d1-http-with-drizzle-kit)
-      * [Prisma with Cloudflare D1 guide](https://www.prisma.io/docs/guides/cloudflare-d1)
-    </Callout>
-  </Accordion>
-</Accordions>
-
 ## Schema Validation
 
 During initialization, Better Auth compares the schema with the tables it writes and reports missing tables, missing columns, and required columns it never fills, together with their fixes. Errors appear through your configured logger without waiting for an authentication request. Requests await the same check and fail if the schema does not match; validation does not automatically stop your server or build. Run [`npx auth@latest check schema`](/docs/concepts/cli#schema) whenever you want to check explicitly without making an authentication request.

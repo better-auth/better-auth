@@ -62,3 +62,7 @@ Workers don't allow I/O across requests, so an auth instance at module scope can
 ## Cloudflare Workers KV
 
 [Cloudflare Workers KV](https://developers.cloudflare.com/kv/) is eventually consistent, cannot expire a key sooner than 60 seconds, and has no atomic operations, so it cannot meet the [`secondaryStorage`](/docs/concepts/database#secondary-storage) contract. Use a store that can, such as Redis.
+
+## Cloudflare D1
+
+[Cloudflare D1](https://developers.cloudflare.com/d1/) is a serverless SQL database built on the SQLite engine. See the [SQLite adapter documentation](/docs/adapters/sqlite#cloudflare-d1) for the binding and migrations.

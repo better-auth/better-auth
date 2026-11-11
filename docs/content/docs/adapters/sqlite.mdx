@@ -69,6 +69,37 @@ export const auth = betterAuth({
 });
 ```
 
+### Cloudflare D1
+
+Pass the [D1](https://developers.cloudflare.com/d1/) binding as `database`:
+
+```ts title="auth.ts"
+import { env } from "cloudflare:workers";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  database: env.DB,
+});
+```
+
+With `wrangler` installed in your project, the CLI reads `env` from Wrangler's local bindings and compares your config with the local D1 database. Bring the local database up to date, generate the next migration, then apply it with [Wrangler migrations](https://developers.cloudflare.com/d1/reference/migrations/):
+
+```bash
+npx wrangler d1 migrations apply DB --local
+npx auth@latest generate --output migrations/0001_better_auth.sql
+npx wrangler d1 migrations apply DB --local
+npx wrangler d1 migrations apply DB --remote
+```
+
+`npx auth@latest migrate` only reaches the local database. To migrate a deployed database from inside the Worker instead, use [programmatic migrations](/docs/concepts/database#programmatic-migrations). Wrangler does not track migrations applied that way, so use one approach per database.
+
+<Callout type="info">
+  If you're using Cloudflare D1 with Drizzle or Prisma, use [`cloudflare:workers`](https://developers.cloudflare.com/workers/runtime-apis/bindings/) to access `env` and follow the guides below:
+
+  * [Drizzle with Cloudflare D1 guide](https://orm.drizzle.team/docs/guides/d1-http-with-drizzle-kit)
+  * [Prisma with Cloudflare D1 guide](https://www.prisma.io/docs/guides/cloudflare-d1)
+</Callout>
+
 ## Schema generation & migration
 
 The [Better Auth CLI](/docs/concepts/cli) allows you to generate or migrate
