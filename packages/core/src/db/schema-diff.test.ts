@@ -197,7 +197,7 @@ describe("schema diagnostic output", () => {
   Missing tables
     user, session, account, verification
 
-  help: Run \`npx auth migrate\` to add the missing tables and columns."
+  help: Run \`npx auth migrate\` to add the missing tables and columns, or generate a migration with \`npx auth generate\` and apply it with your migration tool."
 `);
 	});
 
@@ -226,7 +226,7 @@ describe("schema diagnostic output", () => {
   Inserts into account will fail.
 
   help: Make the listed columns nullable, give them defaults, or remove them.
-        Run \`npx auth migrate\` to add the missing tables and columns.
+        Run \`npx auth migrate\` to add the missing tables and columns, or generate a migration with \`npx auth generate\` and apply it with your migration tool.
 
   note: If this column came from Better Auth 1.7.0 through 1.7.2,
         follow the upgrade guide before removing it:

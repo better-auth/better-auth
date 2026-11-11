@@ -57,3 +57,18 @@ it("distinguishes rowid keys from indexed primary keys on D1", async () => {
 		),
 	).toEqual([false, true]);
 });
+
+/**
+ * @see https://developers.cloudflare.com/d1/reference/migrations/
+ */
+it("offers a generated migration for schema mismatches on D1", async () => {
+	await server.reset();
+	server.clearLogs();
+	const response = await server.fetch(
+		"http://localhost:8787/api/auth/get-session",
+	);
+	expect(response.status).toBe(500);
+	expect(server.getLogs().map((log) => log.message)).toContainEqual(
+		expect.stringContaining("npx auth generate"),
+	);
+});

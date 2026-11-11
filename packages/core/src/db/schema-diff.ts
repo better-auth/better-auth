@@ -125,7 +125,8 @@ export function diffSchema(
 }
 
 const applyHint: Record<SchemaSource, string> = {
-	database: "Run `npx auth migrate` to add it.",
+	database:
+		"Run `npx auth migrate` to add it, or generate a migration with `npx auth generate` and apply it with your migration tool.",
 	drizzle:
 		"Run `npx auth generate` to refresh the Drizzle schema, then apply it with your migration tool.",
 	prisma:
@@ -179,7 +180,8 @@ const repairHint: Record<SchemaSource, string> = {
 
 const migrationHint: Record<SchemaSource, string> = {
 	...applyHint,
-	database: "Run `npx auth migrate` to add the missing tables and columns.",
+	database:
+		"Run `npx auth migrate` to add the missing tables and columns, or generate a migration with `npx auth generate` and apply it with your migration tool.",
 };
 
 function formatSchemaMismatch(
