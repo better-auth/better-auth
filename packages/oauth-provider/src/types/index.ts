@@ -344,8 +344,10 @@ export interface OAuthProviderApi {
 	 * `issueTokens` as `confirmation`, so a rejected proof leaves the credential
 	 * for a retry with a valid one.
 	 *
-	 * Every rejection is an HTTP 400 `invalid_dpop_proof` error, except a proof
+	 * A DPoP failure is an HTTP 400 `invalid_dpop_proof` error, except a proof
 	 * without a current nonce, which gets `use_dpop_nonce` and a nonce to retry.
+	 * Without a `confirmation`, the resource policy check runs first and can
+	 * fail with `invalid_target` or `invalid_scope`.
 	 */
 	resolveConfirmation: (params: {
 		client: SchemaClient<Scope[]>;
