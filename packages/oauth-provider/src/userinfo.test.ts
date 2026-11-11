@@ -872,13 +872,12 @@ describe("oauth userinfo", async () => {
 
 		/**
 		 * The message `DPoP proof typ must be "dpop+jwt"` contains quotes, which
-		 * RFC 6750 §3 does not allow in `error_description`. Until the shared
-		 * challenge builder replaces them, building the challenge throws and the
-		 * request fails with 500. Switch to `it` once the builder cleans the text.
+		 * RFC 6750 §3 does not allow in `error_description`. The challenge carries
+		 * them as single quotes instead of failing the request with 500.
 		 *
 		 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3
 		 */
-		it.fails("challenges with invalid_dpop_proof when the proof message contains quotes", async () => {
+		it("challenges with invalid_dpop_proof when the proof message contains quotes", async () => {
 			const { dpopKey, accessToken } = await getDpopBoundToken();
 			const proof = await new SignJWT({
 				jti: crypto.randomUUID(),

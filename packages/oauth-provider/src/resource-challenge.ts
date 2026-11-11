@@ -8,6 +8,7 @@ import { APIError } from "better-call";
 const DPOP_CHALLENGE_ERRORS = new Set(["invalid_dpop_proof"]);
 const OAUTH_SCOPE_TOKEN_PATTERN = /^[\x21\x23-\x5b\x5d-\x7e]+$/;
 const ERROR_DESCRIPTION_PATTERN = /^[\x20-\x21\x23-\x5b\x5d-\x7e]+$/;
+const ERROR_DESCRIPTION_EXCLUDED = /[^\x20-\x21\x23-\x5b\x5d-\x7e]+/g;
 
 function quoteAuthParam(value: string): string {
 	if (/[\x00-\x1f\x7f]/.test(value)) {
@@ -34,6 +35,22 @@ function validateErrorDescription(description: unknown): string {
 		throw new TypeError("invalid error_description");
 	}
 	return description;
+}
+
+/**
+ * Fits a runtime error message into RFC 6750 §3's `error_description`
+ * character set instead of failing the response it describes: `"` becomes
+ * `'`, any other excluded character (`\`, controls, non-ASCII) becomes a space,
+ * and a description with nothing left is omitted.
+ */
+function formatErrorDescription(description: unknown): string | undefined {
+	if (typeof description !== "string") return undefined;
+	const formatted = description
+		.replace(/"/g, "'")
+		.replace(ERROR_DESCRIPTION_EXCLUDED, " ")
+		.replace(/ {2,}/g, " ")
+		.trim();
+	return formatted || undefined;
 }
 
 function extractDpopError(error: APIError): {
@@ -68,11 +85,14 @@ export function buildDpopChallengeValue(
 	description: unknown,
 	algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS,
 ) {
+	const errorDescription = formatErrorDescription(description);
 	return [
 		`DPoP error="${quoteAuthParam(errorCode)}"`,
-		`error_description="${validateErrorDescription(description)}"`,
+		errorDescription && `error_description="${errorDescription}"`,
 		`algs="${quoteAuthParam(algorithms.join(" "))}"`,
-	].join(", ");
+	]
+		.filter((param) => !!param)
+		.join(", ");
 }
 
 function buildDpopChallenge(
