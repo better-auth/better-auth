@@ -7,10 +7,11 @@ description: Configure discovery, ID token and UserInfo claims, authentication c
 
 Your OAuth provider is also an [OpenID Connect](https://openid.net/specs/openid-connect-core-1_0.html) provider. A client that requests the `openid` scope receives an ID token, can call UserInfo, and can take part in logout.
 
-To serve only OpenID Connect, set `requireOpenId`. An authorization request that leaves out `openid`, or sends no `scope`, is then redirected to the client with `invalid_scope` instead of being served as plain OAuth:
+To serve only OpenID Connect, set `requireOpenId`. An authorization request that leaves out `openid`, or sends no `scope`, is then redirected to the client with `invalid_scope` instead of being served as plain OAuth. `openid` must also be in `scopes`, or the plugin fails at startup:
 
 ```ts title="auth.ts"
 oauthProvider({
+  scopes: ["openid", "profile", "email"],
   requireOpenId: true, // [!code highlight]
   // ...
 });
