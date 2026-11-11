@@ -484,6 +484,43 @@ describe("dbsc", () => {
 		expect(await getSession(browser)).toBeNull();
 	});
 
+	it("logs at debug level when it signs a browser out", async () => {
+		const { signInAndBind, getSession, refresh, auth } = await setup();
+		const { browser, sessionIdentifier } = await signInAndBind();
+		const { session } = await getSession(browser);
+		const debug = vi.spyOn((await auth.$context).logger, "debug");
+
+		browser.jar.delete(boundCookieName(browser.jar)!);
+		expect(await getSession(browser)).toBeNull();
+		expect(debug).toHaveBeenCalledWith(
+			"dbsc: rejected a bound session without a valid bound cookie",
+			{ sessionId: session.id },
+		);
+
+		const { internalAdapter } = await auth.$context;
+		await internalAdapter.updateSession(session.token, {
+			expiresAt: new Date(Date.now() - 1000),
+		});
+		await refresh(browser, sessionIdentifier);
+		expect(debug).toHaveBeenCalledWith(
+			"dbsc: ended the browser's bound session",
+			{ sessionId: session.id, reason: "expired" },
+		);
+
+		await internalAdapter.deleteSession(session.token);
+		await refresh(browser, sessionIdentifier);
+		expect(debug).toHaveBeenCalledWith(
+			"dbsc: ended the browser's bound session",
+			{ sessionId: undefined, reason: "not-found" },
+		);
+
+		await refresh(browser, "not-a-session");
+		expect(debug).toHaveBeenCalledWith(
+			"dbsc: ended the browser's bound session",
+			{ sessionId: undefined, reason: "undecryptable" },
+		);
+	});
+
 	it("refuses to register twice or with a used challenge", async () => {
 		const { signIn, register } = await setup();
 		const browser = await createBrowser();
