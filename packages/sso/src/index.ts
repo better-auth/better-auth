@@ -1,4 +1,4 @@
-import type { AuthContext, BetterAuthPlugin } from "better-auth";
+import type { AuthContext, BetterAuthPlugin, Verification } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
@@ -54,6 +54,7 @@ import type {
 	OIDCConfig,
 	SAMLConfig,
 	SAMLIdentityProviderMetadata,
+	SAMLSessionRecord,
 	SSOOIDCUserResolutionInput,
 	SSOOptions,
 	SSOProvider,
@@ -67,6 +68,7 @@ import type {
 	SSOUserResolutionContext,
 	SSOUserResolutionInput,
 } from "./types";
+import { safeJsonParse } from "./utils";
 import { PACKAGE_VERSION } from "./version";
 
 export type {
@@ -239,6 +241,26 @@ function assertNoAdditionalFieldCollisions(options?: SSOOptions) {
 	}
 }
 
+const SAML_SESSION_RECORD_PAGE_SIZE = 100;
+
+async function findSAMLSessionRecord(
+	ctx: AuthContext,
+	identifier: string,
+	isOwnRecord: (record: Verification) => boolean,
+) {
+	for (let offset = 0; ; offset += SAML_SESSION_RECORD_PAGE_SIZE) {
+		const page = await ctx.adapter.findMany<Verification>({
+			model: "verification",
+			where: [{ field: "identifier", value: identifier }],
+			sortBy: { field: "createdAt", direction: "desc" },
+			limit: SAML_SESSION_RECORD_PAGE_SIZE,
+			offset,
+		});
+		const record = page.find(isOwnRecord);
+		if (record || page.length < SAML_SESSION_RECORD_PAGE_SIZE) return record;
+	}
+}
+
 /**
  * SLO records are written with the session's expiry at sign-in. Move it when a
  * refresh extends the session, so expired-row cleanup doesn't drop them early.
@@ -251,10 +273,36 @@ async function extendSAMLSessionRecords(
 	const lookup = await ctx.internalAdapter.findVerificationValue(lookupKey);
 	const expiresAt = new Date(session.expiresAt);
 	if (!lookup || new Date(lookup.expiresAt) >= expiresAt) return;
+	const isOwnRecord = (record: Verification) =>
+		safeJsonParse<SAMLSessionRecord>(record.value)?.sessionId === session.id;
+	const latest = await ctx.internalAdapter.findVerificationValue(lookup.value);
+	const secondaryStorageOnly =
+		ctx.options.secondaryStorage && !ctx.options.verification?.storeInDatabase;
+	if (latest && secondaryStorageOnly) {
+		// Secondary storage keeps one record per key, written by the latest sign-in.
+		if (isOwnRecord(latest)) {
+			await ctx.internalAdapter.updateVerificationByIdentifier(lookup.value, {
+				expiresAt,
+			});
+		}
+	} else if (latest) {
+		// Every sign-in with the same NameID adds a row under this identifier, and
+		// an update by identifier may change another session's row. A cached copy
+		// needs no write: once it expires, reads fall back to these rows.
+		const record = await findSAMLSessionRecord(
+			ctx,
+			latest.identifier,
+			isOwnRecord,
+		);
+		if (record) {
+			await ctx.adapter.update({
+				model: "verification",
+				where: [{ field: "id", value: record.id }],
+				update: { expiresAt },
+			});
+		}
+	}
 	// Lookup row last: it gates the early return, so a failed write retries.
-	await ctx.internalAdapter.updateVerificationByIdentifier(lookup.value, {
-		expiresAt,
-	});
 	await ctx.internalAdapter.updateVerificationByIdentifier(lookupKey, {
 		expiresAt,
 	});
