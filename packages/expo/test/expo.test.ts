@@ -954,6 +954,26 @@ describe("expo", async () => {
 		).resolves.toBeDefined();
 	});
 
+	it("should reject host-based deep-link OAuth errors when errorCallbackURL is omitted", async () => {
+		const expoWebBrowser = await import("expo-web-browser");
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			// myapp://dashboard vs myapp://error both have empty pathnames; host must differ.
+			url: "myapp://error?error=access_denied",
+		});
+
+		await expect(
+			client.signIn.social({
+				provider: "google",
+				callbackURL: "myapp://dashboard",
+			}),
+		).rejects.toMatchObject({
+			status: 400,
+			statusText: "access_denied",
+			error: { code: "access_denied" },
+		});
+	});
+
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
 		await client.signIn.social({
 			provider: "google",

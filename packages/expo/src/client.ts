@@ -120,10 +120,35 @@ export function getCookie(cookie: string | null) {
 }
 
 /**
+ * Compare deep-link destinations by host + pathname (query ignored).
+ * Custom-scheme URLs like `myapp://dashboard` and `myapp://error` both
+ * have empty pathnames, so host must be part of the match.
+ */
+export function matchesAuthCallbackDestination(
+	resultUrl: URL,
+	expected: string,
+): boolean {
+	try {
+		const expectedUrl = new URL(expected);
+		return (
+			resultUrl.protocol === expectedUrl.protocol &&
+			resultUrl.host === expectedUrl.host &&
+			resultUrl.pathname === expectedUrl.pathname
+		);
+	} catch {
+		const path = expected.startsWith("/")
+			? expected.split("?")[0]!
+			: `/${expected.split("?")[0]!}`;
+		return resultUrl.pathname === path;
+	}
+}
+
+/**
  * True when the auth-session return URL is an OAuth error redirect.
- * Only matches the configured errorCallbackURL path (or, if unset, any
- * path other than the success callbackURL) so application query params
- * like `callbackURL: "/dashboard?error=notice"` are not treated as failures.
+ * Prefers the configured errorCallbackURL destination; if unset, treats
+ * any return that is not the success callbackURL destination as an error
+ * so host-based deep links (`myapp://error` vs `myapp://dashboard`) and
+ * app query params like `callbackURL: "/dashboard?error=notice"` both work.
  */
 export function isOAuthErrorRedirect(
 	resultUrl: URL,
@@ -133,22 +158,11 @@ export function isOAuthErrorRedirect(
 ): boolean {
 	if (!error) return false;
 
-	const matchesPath = (expected: string) => {
-		try {
-			return resultUrl.pathname === new URL(expected).pathname;
-		} catch {
-			const path = expected.startsWith("/")
-				? expected.split("?")[0]!
-				: `/${expected.split("?")[0]!}`;
-			return resultUrl.pathname === path;
-		}
-	};
-
 	if (errorCallbackURL) {
-		return matchesPath(errorCallbackURL);
+		return matchesAuthCallbackDestination(resultUrl, errorCallbackURL);
 	}
 	if (callbackURL) {
-		return !matchesPath(callbackURL);
+		return !matchesAuthCallbackDestination(resultUrl, callbackURL);
 	}
 	return true;
 }
