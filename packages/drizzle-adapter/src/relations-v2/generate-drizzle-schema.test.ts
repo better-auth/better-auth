@@ -91,6 +91,109 @@ function typeErrors(code: string): string[] {
 }
 
 describe("relations-v2 schema generator", () => {
+	/**
+	 * @see https://orm.drizzle.team/docs/v0-v1-changes#new-casing-api
+	 */
+	describe("casing helpers", () => {
+		for (const provider of ["pg", "mysql", "sqlite"] as const) {
+			it.each([undefined, false, true])(
+				`uses unnamed columns with ${provider} casing (camelCase: %s)`,
+				async (camelCase) => {
+					const { code = "" } = await generateDrizzleSchema({
+						options: {
+							user: {
+								modelName: "authUser",
+								additionalFields: {
+									loginCount: { type: "number" },
+									largeCount: { type: "number", bigint: true },
+									tagNames: { type: "string[]" },
+									scoreValues: { type: "number[]" },
+									largeValues: { type: "number[]", bigint: true },
+									profileData: { type: "json" },
+									userRole: { type: ["admin", "member"] },
+									customName: { type: "string", fieldName: "ExactName" },
+								},
+							},
+						},
+						provider,
+						adapterConfig: { provider, camelCase },
+						camelCase,
+					});
+					const casing = camelCase ? "camelCase" : "snakeCase";
+					expect(code).toMatch(
+						new RegExp(
+							`import\\s*\\{[^}]*\\b${casing}\\b[^}]*\\}\\s*from\\s*["']drizzle-orm/${provider}-core["']`,
+						),
+					);
+					expect(code).toContain(
+						`export const authUser = ${casing}.table("${camelCase ? "authUser" : "auth_user"}"`,
+					);
+					expect(code).not.toContain(`${provider}Table`);
+					expect(code).toMatch(/image:\s*text\(\)/);
+					expect(code).toMatch(
+						/userId:\s*(?:text\(\)|varchar\(\{ length: 36 \}\))/,
+					);
+					expect(code).toMatch(/ExactName:\s*text\(["']ExactName["']\)/);
+					// Every column except an explicit fieldName override is unnamed,
+					// including builders taking options, enums, IDs, and arrays.
+					expect(code).not.toMatch(
+						/\b(?:text|varchar|integer|int|bigint|boolean|timestamp|jsonb?|uuid|mysqlEnum)\(["'](?!ExactName["'])/,
+					);
+					expect(code).toContain("r.session.userId");
+				},
+			);
+		}
+
+		it.each([false, true])(
+			"inherits casing from a PostgreSQL namespace (camelCase: %s)",
+			async (camelCase) => {
+				const { code = "" } = await generateDrizzleSchema({
+					options: {},
+					provider: "pg",
+					adapterConfig: { provider: "pg", schemaName: "auth" },
+					camelCase,
+				});
+				expect(code).toContain(
+					`export const authSchema = ${camelCase ? "camelCase" : "snakeCase"}.schema("auth")`,
+				);
+				expect(code).toContain("authSchema.table(");
+				expect(code).toMatch(/createdAt:\s*timestamp\(\)/);
+				expect(code).not.toContain("pgSchema");
+			},
+		);
+
+		it.each([
+			[
+				"pg",
+				"serial",
+				/id:\s*integer\(\)\.generatedByDefaultAsIdentity\(\)/,
+				/userId:\s*integer\(\)/,
+			],
+			["pg", "uuid", /id:\s*uuid\(\)\.default\(/, /userId:\s*uuid\(\)/],
+			[
+				"mysql",
+				"serial",
+				/id:\s*int\(\)\.autoincrement\(\)/,
+				/userId:\s*int\(\)/,
+			],
+			[
+				"sqlite",
+				"serial",
+				/id:\s*integer\(\{ mode: "number" \}\)\.primaryKey\(/,
+				/userId:\s*integer\(\)/,
+			],
+		] as const)(
+			"omits column names for %s %s IDs and references",
+			async (provider, generateId, id, reference) => {
+				const { code = "" } = await generateFor(provider, {
+					advanced: { database: { generateId } },
+				});
+				expect(code).toMatch(id);
+				expect(code).toMatch(reference);
+			},
+		);
+	});
+
 	test("generates valid TypeScript for the default schema", async () => {
 		const { code = "" } = await generate({});
 		expect(typeErrors(code)).toEqual([]);
@@ -212,9 +315,9 @@ describe("relations-v2 schema generator", () => {
 
 		expect(code).not.toMatch(/text\([^)]*mode:\s*["']json["']/);
 		expect(code).not.toMatch(/json\([^)]*mode:\s*["']json["']/);
-		expect(code).toMatch(/tags:\s*json\(['"]tags['"]\)/);
-		expect(code).toMatch(/scores:\s*json\(['"]scores['"]\)/);
-		expect(code).toMatch(/metadata:\s*json\(['"]metadata['"]\)/);
+		expect(code).toMatch(/tags:\s*json\(\)/);
+		expect(code).toMatch(/scores:\s*json\(\)/);
+		expect(code).toMatch(/metadata:\s*json\(\)/);
 		expect(code).toMatch(
 			/import\s*\{[^}]*\bjson\b[^}]*\}\s*from\s*["']drizzle-orm\/mysql-core["']/,
 		);
@@ -253,16 +356,18 @@ describe("relations-v2 schema generator", () => {
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10587
 		 */
-		test("declares a pgSchema and uses schema.table() when schemaName is set", async () => {
+		test("declares a casing-aware schema and uses schema.table() when schemaName is set", async () => {
 			const { code = "" } = await generateDrizzleSchema({
 				options: {},
 				provider: "pg",
 				adapterConfig: { provider: "pg", schemaName: "auth" },
 			});
 
-			expect(code).toContain('export const authSchema = pgSchema("auth")');
+			expect(code).toContain(
+				'export const authSchema = snakeCase.schema("auth")',
+			);
 			expect(code).toMatch(
-				/import\s*\{[^}]*\bpgSchema\b[^}]*\}\s*from\s*["']drizzle-orm\/pg-core["']/,
+				/import\s*\{[^}]*\bsnakeCase\b[^}]*\}\s*from\s*["']drizzle-orm\/pg-core["']/,
 			);
 			// Tables are namespaced; no bare pgTable() table definitions remain.
 			expect(code).toMatch(/export const \w+ = authSchema\.table\(/);
@@ -272,15 +377,15 @@ describe("relations-v2 schema generator", () => {
 			expect(typeErrors(code)).toEqual([]);
 		});
 
-		it("does not emit pgSchema when schemaName is undefined", async () => {
+		it("does not emit a namespace when schemaName is undefined", async () => {
 			const { code = "" } = await generateDrizzleSchema({
 				options: {},
 				provider: "pg",
 				adapterConfig: { provider: "pg" },
 			});
 
-			expect(code).not.toContain("pgSchema(");
-			expect(code).toMatch(/export const \w+ = pgTable\(/);
+			expect(code).not.toContain("snakeCase.schema(");
+			expect(code).toMatch(/export const \w+ = snakeCase\.table\(/);
 		});
 
 		it("ignores schemaName for non-pg providers", async () => {
@@ -290,10 +395,8 @@ describe("relations-v2 schema generator", () => {
 					provider,
 					adapterConfig: { provider, schemaName: "auth" },
 				});
-				expect(code).not.toContain("pgSchema");
-				expect(code).toMatch(
-					new RegExp(`export const \\w+ = ${provider}Table\\(`),
-				);
+				expect(code).not.toContain("snakeCase.schema");
+				expect(code).toMatch(/export const \w+ = snakeCase\.table\(/);
 			}
 		});
 
@@ -304,7 +407,9 @@ describe("relations-v2 schema generator", () => {
 				adapterConfig: { provider: "pg", schemaName: "my-auth" },
 			});
 
-			expect(code).toContain('export const myAuthSchema = pgSchema("my-auth")');
+			expect(code).toContain(
+				'export const myAuthSchema = snakeCase.schema("my-auth")',
+			);
 			expect(code).toContain("myAuthSchema.table");
 			expect(typeErrors(code)).toEqual([]);
 		});
@@ -326,7 +431,7 @@ describe("relations-v2 schema generator", () => {
 				adapterConfig: { provider: "pg", schemaName: "pg" },
 			});
 
-			expect(code).toContain('pgSchema("pg")');
+			expect(code).toContain('snakeCase.schema("pg")');
 			expect(code).not.toMatch(/const pgSchema\s*=/);
 			expect(code).toContain("pgCustomSchema");
 			expect(typeErrors(code)).toEqual([]);
@@ -339,7 +444,7 @@ describe("relations-v2 schema generator", () => {
 				adapterConfig: { provider: "pg", schemaName: 'auth"schema' },
 			});
 
-			expect(code).toContain('pgSchema("auth\\"schema")');
+			expect(code).toContain('snakeCase.schema("auth\\"schema")');
 			expect(typeErrors(code)).toEqual([]);
 		});
 	});

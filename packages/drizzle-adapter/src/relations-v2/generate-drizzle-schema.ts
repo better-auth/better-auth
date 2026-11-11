@@ -33,7 +33,8 @@ function convertToSnakeCase(str: string, camelCase?: boolean) {
 	if (camelCase) {
 		return str;
 	}
-	// Handle consecutive capitals (like ID, URL, API) by treating them as a single word
+	// Drizzle's casing helpers only affect columns, so table names still need
+	// conversion. Treat consecutive capitals (ID, URL, API) as a single word.
 	return str
 		.replace(/([A-Z]+)([A-Z][a-z])/g, "$1_$2") // Handle AABb -> AA_Bb
 		.replace(/([a-z\d])([A-Z])/g, "$1_$2") // Handle aBb -> a_Bb
@@ -42,7 +43,7 @@ function convertToSnakeCase(str: string, camelCase?: boolean) {
 
 /**
  * Convert a schema namespace into a valid JavaScript identifier so it can be
- * used as the `export const <name>Schema = pgSchema(...)` variable name.
+ * used as the `export const <name>Schema = snakeCase.schema(...)` variable name.
  * e.g. "my-auth" -> "myAuth", "123schema" -> "_123schema".
  */
 function toValidIdentifier(str: string): string {
@@ -76,6 +77,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined = provider;
 
 	const schemaName = adapterConfig?.schemaName;
+	const casing = camelCase ? "camelCase" : "snakeCase";
 
 	if (!databaseType) {
 		throw new Error(
@@ -88,7 +90,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		databaseType,
 		tables,
 		options,
-		schemaName,
+		casing,
 	});
 
 	// Add schema declaration for PostgreSQL when schemaName is provided.
@@ -100,15 +102,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		if (schemaVarName === "pgSchema") {
 			schemaVarName = "pgCustomSchema";
 		}
-		code += `\nexport const ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});\n`;
+		code += `\nexport const ${schemaVarName} = ${casing}.schema(${JSON.stringify(schemaName)});\n`;
 	}
 
 	// Table function to use: namespaced schema table for pg + schemaName,
-	// otherwise the plain dialect table helper.
+	// otherwise the dialect's casing-aware table helper.
 	const tableFunction =
 		databaseType === "pg" && schemaName && schemaVarName
 			? `${schemaVarName}.table`
-			: `${databaseType}Table`;
+			: `${casing}.table`;
 
 	const getModelName = initGetModelName({
 		schema: tables,
@@ -152,37 +154,44 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
 				);
 			}
-			name = convertToSnakeCase(name, camelCase);
+			// Drizzle applies casing only to unnamed columns. Keep explicit field
+			// mappings verbatim, but omit redundant names supplied by getAuthTables.
+			const columnName =
+				field.fieldName && field.fieldName !== name
+					? JSON.stringify(field.fieldName)
+					: "";
+			const column = (builder: string, config?: string) =>
+				`${builder}(${[columnName, config].filter(Boolean).join(", ")})`;
 			if (field.references?.field === "id") {
 				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				if (useNumberId) {
 					if (databaseType === "pg") {
-						return `integer('${name}')`;
+						return column("integer");
 					} else if (databaseType === "mysql") {
-						return `int('${name}')`;
+						return column("int");
 					} else {
 						// using sqlite
-						return `integer('${name}')`;
+						return column("integer");
 					}
 				}
 				if (useUUIDs && databaseType === "pg") {
-					return `uuid('${name}')`;
+					return column("uuid");
 				}
 				if (field.references.field) {
 					if (databaseType === "mysql") {
-						return `varchar('${name}', { length: 36 })`;
+						return column("varchar", "{ length: 36 }");
 					}
 				}
-				return `text('${name}')`;
+				return column("text");
 			}
 			const type = field.type;
 			if (typeof type !== "string") {
 				if (Array.isArray(type) && type.every((x) => typeof x === "string")) {
 					return {
-						sqlite: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
-						pg: `text('${name}', { enum: [${type.map((x) => `'${x}'`).join(", ")}] })`,
-						mysql: `mysqlEnum('${name}', [${type.map((x) => `'${x}'`).join(", ")}])`,
+						sqlite: column("text", `{ enum: ${JSON.stringify(type)} }`),
+						pg: column("text", `{ enum: ${JSON.stringify(type)} }`),
+						mysql: column("mysqlEnum", JSON.stringify(type)),
 					}[databaseType];
 				} else {
 					throw new TypeError(
@@ -195,55 +204,55 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 				Record<typeof databaseType, string>
 			> = {
 				string: {
-					sqlite: `text('${name}')`,
-					pg: `text('${name}')`,
+					sqlite: column("text"),
+					pg: column("text"),
 					mysql: tableIndexStringLength
-						? `varchar('${name}', { length: ${tableIndexStringLength} })`
+						? column("varchar", `{ length: ${tableIndexStringLength} }`)
 						: field.unique
-							? `varchar('${name}', { length: 255 })`
+							? column("varchar", "{ length: 255 }")
 							: field.references
-								? `varchar('${name}', { length: 36 })`
+								? column("varchar", "{ length: 36 }")
 								: field.sortable
-									? `varchar('${name}', { length: 255 })`
+									? column("varchar", "{ length: 255 }")
 									: field.index
-										? `varchar('${name}', { length: 255 })`
-										: `text('${name}')`,
+										? column("varchar", "{ length: 255 }")
+										: column("text"),
 				},
 				boolean: {
-					sqlite: `integer('${name}', { mode: 'boolean' })`,
-					pg: `boolean('${name}')`,
-					mysql: `boolean('${name}')`,
+					sqlite: column("integer", "{ mode: 'boolean' }"),
+					pg: column("boolean"),
+					mysql: column("boolean"),
 				},
 				number: {
-					sqlite: `integer('${name}')`,
+					sqlite: column("integer"),
 					pg: field.bigint
-						? `bigint('${name}', { mode: 'number' })`
-						: `integer('${name}')`,
+						? column("bigint", "{ mode: 'number' }")
+						: column("integer"),
 					mysql: field.bigint
-						? `bigint('${name}', { mode: 'number' })`
-						: `int('${name}')`,
+						? column("bigint", "{ mode: 'number' }")
+						: column("int"),
 				},
 				date: {
-					sqlite: `integer('${name}', { mode: 'timestamp_ms' })`,
-					pg: `timestamp('${name}')`,
-					mysql: `timestamp('${name}', { fsp: 3 })`,
+					sqlite: column("integer", "{ mode: 'timestamp_ms' }"),
+					pg: column("timestamp"),
+					mysql: column("timestamp", "{ fsp: 3 }"),
 				},
 				"number[]": {
-					sqlite: `text('${name}', { mode: "json" })`,
+					sqlite: column("text", '{ mode: "json" }'),
 					pg: field.bigint
-						? `bigint('${name}', { mode: 'number' }).array()`
-						: `integer('${name}').array()`,
-					mysql: `json('${name}')`,
+						? `${column("bigint", "{ mode: 'number' }")}.array()`
+						: `${column("integer")}.array()`,
+					mysql: column("json"),
 				},
 				"string[]": {
-					sqlite: `text('${name}', { mode: "json" })`,
-					pg: `text('${name}').array()`,
-					mysql: `json('${name}')`,
+					sqlite: column("text", '{ mode: "json" }'),
+					pg: `${column("text")}.array()`,
+					mysql: column("json"),
 				},
 				json: {
-					sqlite: `text('${name}', { mode: "json" })`,
-					pg: `jsonb('${name}')`,
-					mysql: `json('${name}')`,
+					sqlite: column("text", '{ mode: "json" }'),
+					pg: column("jsonb"),
+					mysql: column("json"),
 				},
 			} as const;
 			const dbTypeMap = (
@@ -263,22 +272,22 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		if (useUUIDs && databaseType === "pg") {
-			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
+			id = `uuid().default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
 		} else if (useNumberId) {
 			if (databaseType === "pg") {
-				id = `integer("id").generatedByDefaultAsIdentity().primaryKey()`;
+				id = `integer().generatedByDefaultAsIdentity().primaryKey()`;
 			} else if (databaseType === "sqlite") {
-				id = `integer("id", { mode: "number" }).primaryKey({ autoIncrement: true })`;
+				id = `integer({ mode: "number" }).primaryKey({ autoIncrement: true })`;
 			} else {
-				id = `int("id").autoincrement().primaryKey()`;
+				id = `int().autoincrement().primaryKey()`;
 			}
 		} else {
 			if (databaseType === "mysql") {
-				id = `varchar('id', { length: 36 }).primaryKey()`;
+				id = `varchar({ length: 36 }).primaryKey()`;
 			} else if (databaseType === "pg") {
-				id = `text('id').primaryKey()`;
+				id = `text().primaryKey()`;
 			} else {
-				id = `text('id').primaryKey()`;
+				id = `text().primaryKey()`;
 			}
 		}
 
@@ -324,7 +333,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							const attr = fields[field]!;
 							const fieldName = attr.fieldName || field;
 							let type = getType(
-								fieldName,
+								field,
 								attr,
 								databaseType === "mysql"
 									? getDatabaseIndexStringLength({
@@ -646,24 +655,15 @@ function generateImport({
 	databaseType,
 	tables,
 	options,
-	schemaName,
+	casing,
 }: {
 	databaseType: "sqlite" | "mysql" | "pg";
 	tables: BetterAuthDBSchema;
 	options: BetterAuthOptions;
-	schemaName?: string;
+	casing: "camelCase" | "snakeCase";
 }) {
 	const rootImports: string[] = ["defineRelationsPart"];
-	const coreImports: string[] = [];
-
-	// Import pgSchema for PostgreSQL when a custom schema namespace is provided.
-	if (databaseType === "pg" && schemaName) {
-		coreImports.push("pgSchema");
-	}
-
-	if (!(databaseType === "pg" && schemaName)) {
-		coreImports.push(`${databaseType}Table`);
-	}
+	const coreImports: string[] = [casing];
 
 	let hasBigint = false;
 	let hasJson = false;
