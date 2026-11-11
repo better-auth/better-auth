@@ -342,7 +342,12 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 				return false;
 			}
 			if (session.dbscPublicKey == null) return true;
-			return hasValidBoundCookie(ctx, session.id);
+			if (await hasValidBoundCookie(ctx, session.id)) return true;
+			ctx.context.logger.debug(
+				"dbsc: rejected a bound session without a valid bound cookie",
+				{ sessionId: session.id },
+			);
+			return false;
 		},
 		endpoints: {
 			/**
@@ -439,6 +444,20 @@ export const dbsc = (options?: DbscOptions | undefined) => {
 						: null;
 					const publicKey = parseStoredPublicKey(found?.session.dbscPublicKey);
 					if (!found || !publicKey || found.session.expiresAt < new Date()) {
+						ctx.context.logger.debug(
+							"dbsc: ended the browser's bound session",
+							{
+								sessionId: found?.session.id,
+								// An id that no longer decrypts usually means the secret was rotated.
+								reason: !token
+									? "undecryptable"
+									: !found
+										? "not-found"
+										: !publicKey
+											? "not-bound"
+											: "expired",
+							},
+						);
 						// Ends the browser's session; Chrome checks the id first.
 						return ctx.json({
 							session_identifier: sessionIdentifier,
