@@ -409,9 +409,15 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				}
 
 				if (shouldSkipAutoSignIn) {
+					// Adapters that omit unset optional fields (MongoDB) would
+					// otherwise return fewer keys than the synthetic user above.
+					const user = buildSyntheticUserOutput(
+						ctx.context.options,
+						createdUser,
+					);
 					return ctx.json({
 						token: null,
-						user: parseUserOutput(ctx.context.options, createdUser) as User<
+						user: parseUserOutput(ctx.context.options, user as User) as User<
 							O["user"],
 							O["plugins"]
 						>,
