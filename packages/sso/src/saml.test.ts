@@ -4830,6 +4830,73 @@ describe("SAML SSO - Assertion Replay Protection", () => {
 		expect(replayLocation).toContain("error=replay_detected");
 	});
 
+	/**
+	 * A character reference spells the same attribute value, so the signature
+	 * still verifies and the replay key must not change.
+	 * @see https://www.w3.org/TR/xml/#sec-references
+	 */
+	it("should reject a replay that re-spells the assertion ID with character references", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "respelled-replay-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: { metadata: idpMetadata },
+					spMetadata: { metadata: spMetadata },
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+		const xml = Buffer.from(samlResponse.samlResponse, "base64").toString();
+		const respelled = xml.replace(
+			/(<saml:Assertion ID=")(.)/,
+			(_, prefix: string, first: string) =>
+				`${prefix}&#${first.charCodeAt(0)};`,
+		);
+		expect(respelled).not.toBe(xml);
+
+		const submit = (body: string) =>
+			auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/respelled-replay-provider",
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/x-www-form-urlencoded" },
+						body: new URLSearchParams({
+							SAMLResponse: Buffer.from(body).toString("base64"),
+						}),
+					},
+				),
+			);
+
+		const first = await submit(xml);
+		expect(first.headers.get("location") || "").not.toContain("error");
+
+		const replay = await submit(respelled);
+		expect(replay.headers.get("location") || "").toContain(
+			"error=replay_detected",
+		);
+	});
+
 	it("should reject replayed SAML assertion on ACS endpoint", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso({ saml: { enableInResponseToValidation: false } })],
