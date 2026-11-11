@@ -139,6 +139,14 @@ function siteOf(host: string) {
 	return getDomain(host, { allowPrivateDomains: true }) ?? host;
 }
 
+function originOf(value: string) {
+	try {
+		return new URL(value).origin;
+	} catch {
+		return null;
+	}
+}
+
 export function toRefreshInitiators(
 	trustedOrigins: string[],
 	authOrigin: string,
@@ -148,9 +156,7 @@ export function toRefreshInitiators(
 	for (const origin of trustedOrigins) {
 		// The auth origin needs no entry, but an app on another port of the same
 		// host does: host patterns carry no port.
-		if (URL.canParse(origin) && new URL(origin).origin === authOrigin) {
-			continue;
-		}
+		if (originOf(origin) === authOrigin) continue;
 		const host = /^(?:[a-z][a-z0-9+.-]*:\/\/)?([^/:?#]+)/i
 			.exec(origin)?.[1]
 			?.toLowerCase();
