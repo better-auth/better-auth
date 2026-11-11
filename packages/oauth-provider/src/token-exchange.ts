@@ -171,6 +171,24 @@ function actorChainDepth(act: unknown): number | null {
 	return depth;
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Whether `id` has the shape of a user id under the configured id mode. A
+ * lookup with any other value cannot match, and some databases reject it: a
+ * serial id column receives `NaN`, and a Postgres `uuid` column rejects
+ * non-UUID text.
+ */
+function couldBeUserId(
+	ctx: OAuthExtensionGrantHandlerInput["ctx"],
+	id: string,
+): boolean {
+	const mode = ctx.context.options.advanced?.database?.generateId;
+	if (mode === "serial") return /^\d+$/.test(id);
+	if (mode === "uuid") return UUID.test(id);
+	return true;
+}
+
 /**
  * Validates and resolves the `actor_token`. Like the subject token, it must be
  * an active access token this server issued, but to the requesting client
@@ -193,14 +211,19 @@ async function resolveActor(
 	// A client_credentials token has no user: its JWT carries the client as
 	// `sub`, and its opaque form has no `sub` at introspection.
 	const sub = typeof token.sub === "string" && token.sub ? token.sub : clientId;
-	const user = await ctx.context.internalAdapter.findUserById(sub);
 	if (sub === clientId) {
 		// The payload cannot tell a client token from a user token whose user id
 		// equals the client id (`generateClientId` is configurable), so that
 		// collision is rejected rather than guessed.
-		if (user) deny("actor_token is invalid");
+		if (
+			couldBeUserId(ctx, clientId) &&
+			(await ctx.context.internalAdapter.findUserById(clientId))
+		) {
+			deny("actor_token is invalid");
+		}
 		return { sub, token };
 	}
+	const user = await ctx.context.internalAdapter.findUserById(sub);
 	if (!user) deny("actor_token is invalid");
 	return { sub, user, token };
 }

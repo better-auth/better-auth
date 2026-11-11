@@ -3,7 +3,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL, deriveDpopJkt } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import type { BetterAuthPlugin } from "better-auth/types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth/types";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import { extendOAuthProvider } from "./extensions";
@@ -72,10 +72,12 @@ async function bootScenario(
 		disableJwtPlugin = false,
 		testWith,
 		plugins = [],
+		advanced,
 	}: {
 		disableJwtPlugin?: boolean;
 		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
 		plugins?: BetterAuthPlugin[];
+		advanced?: BetterAuthOptions["advanced"];
 	} = {},
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {},
 ) {
@@ -94,6 +96,7 @@ async function bootScenario(
 	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
 			baseURL: issuer,
+			advanced,
 			plugins: [
 				...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
 				oauthProvider(opts),
@@ -1952,6 +1955,22 @@ describe("oauthTokenExchange delegation", () => {
 			error: "invalid_request",
 			error_description: "actor_token is invalid",
 		});
+	});
+
+	it("does not look up a client id as a serial user id", async () => {
+		const { auth, delegator, delegate } = await bootDelegation(
+			{},
+			{ advanced: { database: { generateId: "serial" } } },
+		);
+		const ctx = await auth.$context;
+		const lookup = vi.spyOn(ctx.internalAdapter, "findUserById");
+		const { data, error } = await delegate();
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).act).toEqual({
+			sub: delegator.client_id,
+		});
+		expect(lookup).not.toHaveBeenCalledWith(delegator.client_id);
+		lookup.mockRestore();
 	});
 
 	it("reports an opaque token of a deleted user inactive", async () => {
