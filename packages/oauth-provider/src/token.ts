@@ -1379,6 +1379,38 @@ async function createUserTokens(
 				error,
 			);
 		}
+		// A revoke-all sweep clears rotatedAt on every parent, including one
+		// already consumed by this request. Check after all token inserts and
+		// replay writes, so a sweep between the parent CAS and either insert
+		// cannot leave an active replacement behind. A later sweep sees all of
+		// these rows and revokes them itself (refresh rows before access rows).
+		const parent = await ctx.context.adapter.findOne<
+			OAuthRefreshToken<Scope[]>
+		>({
+			model: "oauthRefreshToken",
+			where: [{ field: "id", value: existingRefreshToken.id }],
+		});
+		if (!parent?.rotatedAt) {
+			const revokedAt = new Date();
+			await ctx.context.adapter.updateMany({
+				model: "oauthRefreshToken",
+				where: [{ field: "id", value: refreshToken.id }],
+				update: {
+					revoked: revokedAt,
+					rotatedAt: null,
+					rotationReplayExpiresAt: null,
+				},
+			});
+			await ctx.context.adapter.updateMany({
+				model: "oauthAccessToken",
+				where: [{ field: "refreshId", value: refreshToken.id }],
+				update: { revoked: revokedAt },
+			});
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_grant",
+				error_description: "invalid refresh token",
+			});
+		}
 	}
 	return ctx.json(responseBody);
 }

@@ -259,6 +259,56 @@ async function prepareBackchannelLogoutPlan(
 	}
 }
 
+// A revoke-all request can delete many sessions. Share only its user-wide
+// database sweep; each session still delivers its own back-channel logout.
+const userGrantRevocationsByContext = new WeakMap<
+	GenericEndpointContext,
+	Map<string, Promise<void>>
+>();
+
+function revokeAllUserGrants(ctx: GenericEndpointContext, userId: string) {
+	let users = userGrantRevocationsByContext.get(ctx);
+	if (!users) {
+		users = new Map();
+		userGrantRevocationsByContext.set(ctx, users);
+	}
+	const existing = users.get(userId);
+	if (existing) return existing;
+	const task = (async () => {
+		const adapter = await getCurrentAdapter(ctx.context.adapter);
+		const revokedAt = new Date();
+		// Include rotated parents, not only unrevoked rows. Clearing rotatedAt
+		// invalidates rotation replay and lets an in-flight issuer detect the
+		// revocation after inserting its replacement. This is persistent database
+		// state, so the issuer can run on a different worker.
+		// Refresh rows must be swept before access rows: an issuer that has
+		// already passed its final parent check has inserted both by this point.
+		for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
+			try {
+				await adapter.updateMany({
+					model,
+					where: [{ field: "userId", value: userId }],
+					update:
+						model === "oauthRefreshToken"
+							? {
+									revoked: revokedAt,
+									rotatedAt: null,
+									rotationReplayExpiresAt: null,
+								}
+							: { revoked: revokedAt },
+				});
+			} catch (error) {
+				ctx.context.logger.error(
+					"back-channel logout: token revocation update failed",
+					error,
+				);
+			}
+		}
+	})();
+	users.set(userId, task);
+	return task;
+}
+
 /**
  * Apply a prepared logout plan after the session deletion succeeds. Core runs
  * `session.delete.after` after the row is consumed and, for transactional
@@ -272,32 +322,21 @@ async function applyBackchannelLogoutPlan(
 	const sweepUserId = plan.revokeAllGrantsOfUserId;
 	const adapter = await getCurrentAdapter(ctx.context.adapter);
 	const revocations = await Promise.allSettled([
-		plan.accessTokenIds.length > 0
+		!sweepUserId && plan.accessTokenIds.length > 0
 			? adapter.updateMany({
 					model: "oauthAccessToken",
 					where: [{ field: "id", operator: "in", value: plan.accessTokenIds }],
 					update: { revoked: revokedAt },
 				})
 			: Promise.resolve(),
-		plan.refreshTokenIds.length > 0
+		!sweepUserId && plan.refreshTokenIds.length > 0
 			? adapter.updateMany({
 					model: "oauthRefreshToken",
 					where: [{ field: "id", operator: "in", value: plan.refreshTokenIds }],
 					update: { revoked: revokedAt },
 				})
 			: Promise.resolve(),
-		...(sweepUserId
-			? (["oauthAccessToken", "oauthRefreshToken"] as const).map((model) =>
-					adapter.updateMany({
-						model,
-						where: [
-							{ field: "userId", value: sweepUserId },
-							{ field: "revoked", operator: "eq", value: null },
-						],
-						update: { revoked: revokedAt },
-					}),
-				)
-			: []),
+		sweepUserId ? revokeAllUserGrants(ctx, sweepUserId) : Promise.resolve(),
 	]);
 	// Session liveness remains authoritative, but operators still need a signal
 	// if the stored revocation backstop drifts from the committed session state.

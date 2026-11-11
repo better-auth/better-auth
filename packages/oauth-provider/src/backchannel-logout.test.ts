@@ -687,6 +687,113 @@ describe("oauth back-channel logout", async () => {
 		}
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it.each(["oauthRefreshToken", "oauthAccessToken"])(
+		"rejects an in-flight refresh when all sessions end before the %s insert",
+		async (model) => {
+			const oauthClient = await registerClient({
+				backchannel_logout_uri: undefined,
+			});
+			const earlier = await issueTokens({ client: oauthClient });
+			await client.signOut({ fetchOptions: { headers } });
+			headers = (await signInWithTestUser()).headers;
+			const context = await auth.$context;
+			const create = context.adapter.create.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "create");
+			let revokedDuringRotation = false;
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === model) {
+					spy.mockRestore();
+					await auth.api.revokeSessions({ headers });
+					revokedDuringRotation = true;
+				}
+				return create(...args);
+			});
+			try {
+				const response = await refreshTokenGrant(
+					oauthClient,
+					earlier.refresh_token!,
+				);
+				expect(revokedDuringRotation).toBe(true);
+				expect(response.error?.status).toBe(400);
+				expect(response.data).toBeNull();
+				await expectAllClientTokensRevoked(oauthClient.client_id);
+			} finally {
+				spy.mockRestore();
+			}
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("revokes replacement tokens when the sweep follows the final parent read", async () => {
+		const oauthClient = await registerClient({
+			backchannel_logout_uri: undefined,
+		});
+		const earlier = await issueTokens({ client: oauthClient });
+		await client.signOut({ fetchOptions: { headers } });
+		headers = (await signInWithTestUser()).headers;
+		const context = await auth.$context;
+		const findOne = context.adapter.findOne.bind(context.adapter);
+		const spy = vi.spyOn(context.adapter, "findOne");
+		let sweptAfterRead = false;
+		spy.mockImplementation(async (...args) => {
+			const result = await findOne(...args);
+			if (
+				args[0].model === "oauthRefreshToken" &&
+				args[0].where.some((condition) => condition.field === "id")
+			) {
+				spy.mockRestore();
+				await auth.api.revokeSessions({ headers });
+				sweptAfterRead = true;
+			}
+			return result;
+		});
+		try {
+			const response = await refreshTokenGrant(
+				oauthClient,
+				earlier.refresh_token!,
+			);
+			expect(sweptAfterRead).toBe(true);
+			// If the final read already saw an invalidated parent the issuer may
+			// fail closed. Otherwise every inserted row is visible to the sweep.
+			if (response.error) expect(response.error.status).toBe(400);
+			await expectAllClientTokensRevoked(oauthClient.client_id);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("sweeps user grants once while delivering logout for every session", async () => {
+		await auth.api.revokeSessions({ headers });
+		headers = (await signInWithTestUser()).headers;
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+		for (let i = 0; i < 2; i++) {
+			headers = (await signInWithTestUser()).headers;
+			await issueTokens({ client: oauthClient });
+		}
+		const context = await auth.$context;
+		const updates = vi.spyOn(context.adapter, "updateMany");
+		await auth.api.revokeSessions({ headers });
+		const sweeps = updates.mock.calls.filter(
+			([args]) =>
+				(args.model === "oauthAccessToken" ||
+					args.model === "oauthRefreshToken") &&
+				args.where?.some((condition) => condition.field === "userId"),
+		);
+		expect(sweeps).toHaveLength(2);
+		await waitForDispatches(3);
+		expect(rp.received).toHaveLength(3);
+		await expectAllClientTokensRevoked(oauthClient.client_id);
+	});
+
 	it("revokes access tokens on session end even when no refresh token was issued", async () => {
 		// Without `offline_access` in scope, `handleAuthorizationCodeGrant` never
 		// mints a refresh token. Access tokens must still be revoked when the
