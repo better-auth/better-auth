@@ -470,10 +470,10 @@ describe("dbsc", () => {
 			});
 			const { browser } = await signInAndBind();
 			const token = browser.jar.get("better-auth.session_token")!;
-			const plain = decodeURIComponent(token).split(".")[0]!.toLowerCase();
+			const tokenKey = decodeURIComponent(token).split(".")[0]!.toLowerCase();
 
 			const response = await signOut(auth, {
-				cookie: `better-auth.session_token_multi-${plain}=${token}`,
+				cookie: `better-auth.session_token_multi-${tokenKey}=${token}`,
 			});
 			expect(response.status).toBe(200);
 			expect(await getSession(browser)).not.toBeNull();
