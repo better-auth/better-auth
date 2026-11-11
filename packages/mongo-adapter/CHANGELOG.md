@@ -21,6 +21,21 @@
 - Updated dependencies []:
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12299](https://github.com/better-auth/better-auth/pull/12299) [`4080630`](https://github.com/better-auth/better-auth/commit/40806302bf5245c675120bbd1e60f70e1f168252) Thanks [@ItzSudhan](https://github.com/ItzSudhan)! - If you use the MongoDB adapter, it now creates indexes for schema fields marked `unique` or `index`, such as `user.email` and `session.token`. Before, MongoDB did not enforce these fields, so concurrent sign-ups with the same email could create duplicate users. Now a write that repeats a unique value fails instead.
+
+  The indexes build in the background when the adapter starts. Most deployments need no action.
+
+  The adapter retries a build that fails because of a network error or a failover. If one of the causes below stops a build, the adapter logs an error and keeps serving requests without that index. Your data is not changed. Uniqueness for that field is not enforced until you fix the cause and restart:
+  - The collection already contains duplicate values. Remove them as the MongoDB adapter docs describe.
+  - Your database user lacks the `createIndex` permission. Grant it, or create the indexes yourself.
+  - Another index on the same field has different options. Drop it.
+
+## 1.7.20
+
 ## 1.7.19
 
 ## 1.7.18

@@ -1644,6 +1644,7 @@ export const createInternalAdapter = (
 					),
 				),
 				options,
+				{ adapter, model: "verification" },
 			);
 			const storageOption = getStorageOption(
 				data.identifier,

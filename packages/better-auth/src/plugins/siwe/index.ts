@@ -456,9 +456,9 @@ export const siwe = (options: SIWEPluginOptions) => {
 						});
 					} catch (error: unknown) {
 						if (isAPIError(error)) throw error;
+						ctx.context.logger.error("Failed to verify SIWE message", error);
 						throw APIError.fromStatus("UNAUTHORIZED", {
 							message: "Something went wrong. Please try again later.",
-							error: error instanceof Error ? error.message : "Unknown error",
 							status: 401,
 						});
 					}

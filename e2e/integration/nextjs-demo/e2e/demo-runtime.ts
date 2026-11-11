@@ -10,6 +10,11 @@ import { expect } from "@playwright/test";
 
 const demoDirectory = resolve(process.cwd(), "../../demo/nextjs");
 
+// Playwright's request client ignores the server's `Keep-Alive: timeout` and
+// can reuse a connection just as the dev server closes it. The server resets
+// that request without reading it, so one retry is safe.
+export const CONNECTION_RESET_RETRIES = 1;
+
 export async function getAvailablePort(): Promise<number> {
 	const server = createServer();
 	const port = await new Promise<number>((resolvePort, reject) => {
@@ -180,6 +185,7 @@ export async function createOrganization(
 				name,
 				slug: `${name.toLowerCase().replaceAll(" ", "-")}-${Date.now()}`,
 			},
+			maxRetries: CONNECTION_RESET_RETRIES,
 		},
 	);
 	const body: unknown = await response.json();
