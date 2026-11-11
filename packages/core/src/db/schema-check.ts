@@ -74,7 +74,9 @@ export function runtimeSchemaCheckFor(
 /**
  * Turns a schema comparison into a check shared by one adapter instance.
  *
- * The first call runs `find` and every concurrent call shares that promise. A
+ * Concurrent calls share one `find` until a completed result is available. On
+ * Cloudflare Workers each call runs its own, and a newer lookup's result
+ * replaces an older one's. A
  * clean result is cached until invalidation. A mismatch is kept as one
  * {@link SchemaMismatchError} and rethrown on every later call without asking
  * the store again, until a migration invalidates it. When a database identity is supplied,
@@ -97,39 +99,82 @@ export function createSchemaCheck(
 	source: SchemaSource,
 	database?: object,
 ): SchemaCheck {
-	let revision = database ? schemaRevisions.get(database) : undefined;
-	if (database && !revision) {
-		revision = { value: 0 };
-		schemaRevisions.set(database, revision);
-	}
-	let checkedRevision = revision?.value;
-	let clean = false;
-	let verdict: Promise<void> | undefined;
-	const checkSchema: SchemaCheck = function checkSchema():
-		| Promise<void>
-		| undefined {
-		const currentRevision = revision?.value;
-		if (checkedRevision !== currentRevision) {
-			checkedRevision = currentRevision;
-			clean = false;
-			verdict = undefined;
-		}
-		if (clean) return;
-		return (verdict ??= Promise.resolve()
+	const revision = database
+		? (schemaRevisions.get(database) ?? { value: 0 })
+		: undefined;
+	if (database && revision) schemaRevisions.set(database, revision);
+
+	// Workers tie I/O to the request that started it, so a lookup begun by
+	// another request may never settle there.
+	// @see https://developers.cloudflare.com/workers/runtime-apis/request/#the-request-context
+	const sharesLookups =
+		typeof navigator === "undefined" ||
+		navigator.userAgent !== "Cloudflare-Workers";
+
+	let verdict:
+		| {
+				revision: number | undefined;
+				sequence: number;
+				error: SchemaMismatchError | undefined;
+		  }
+		| undefined;
+	let pending:
+		| {
+				revision: number | undefined;
+				lookup: Promise<void>;
+		  }
+		| undefined;
+	let lookupSequence = 0;
+
+	const runLookup = (currentRevision: number | undefined): Promise<void> => {
+		const sequence = ++lookupSequence;
+
+		return Promise.resolve()
 			.then(find)
 			.then(
 				(findings) => {
-					if (revision?.value !== currentRevision) return checkSchema();
-					if (findings.length) throw new SchemaMismatchError(findings, source);
-					if (checkedRevision === currentRevision) clean = true;
+					if (
+						revision?.value !== currentRevision ||
+						(verdict && sequence < verdict.sequence)
+					) {
+						return checkSchema();
+					}
+
+					const error = findings.length
+						? new SchemaMismatchError(findings, source)
+						: undefined;
+					verdict = { revision: currentRevision, sequence, error };
+					if (error) throw error;
 				},
 				(error: unknown) => {
 					if (revision?.value !== currentRevision) return checkSchema();
-					if (checkedRevision === currentRevision) verdict = undefined;
 					throw error;
 				},
-			));
+			);
 	};
+
+	const checkSchema: SchemaCheck = () => {
+		const currentRevision = revision?.value;
+
+		if (verdict && verdict.revision === currentRevision) {
+			return verdict.error ? Promise.reject(verdict.error) : undefined;
+		}
+
+		if (!sharesLookups) return runLookup(currentRevision);
+		if (pending && pending.revision === currentRevision) {
+			return pending.lookup;
+		}
+
+		const lookup = runLookup(currentRevision).finally(() => {
+			if (pending?.lookup === lookup) pending = undefined;
+		});
+		pending = {
+			revision: currentRevision,
+			lookup,
+		};
+		return lookup;
+	};
+
 	checkSchema.source = source;
 	return checkSchema;
 }

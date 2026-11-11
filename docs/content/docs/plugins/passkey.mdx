@@ -460,13 +460,40 @@ until it hits an effective TLD. So `www.example.com` can use the RP IDs `www.exa
 
 **rpName**: Human-readable title for your website.
 
-**origin**: The origin, or list of origins, where passkey registration and authentication run, without a trailing `/`. Defaults to the origin of `baseURL`, plus a frontend origin listed exactly in `trustedOrigins`. Set it when `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it.
+**origin**: The origin, or list of origins, where passkey registration and authentication run, without a trailing `/`. Defaults to the origin of `baseURL`, plus a frontend origin listed exactly in `trustedOrigins`.
 
 ```ts title="auth.ts"
 passkey({
   origin: ["https://app.example.com", "https://admin.example.com"],
 });
 ```
+
+When `rpID` is set and a wildcard in `baseURL.allowedHosts` covers it, the default changes. Every host under that wildcard can create passkey responses for the shared `rpID`, and the client picks the host it sends. So the plugin ignores the request host. It accepts the origin the passkey reports only when that exact origin is trusted:
+
+* an exact entry in `baseURL.allowedHosts`, such as `example.com`
+* the `baseURL.fallback` origin
+* an origin listed exactly in `trustedOrigins`
+
+A wildcard entry in either list does not count.
+
+For tenants that you create at runtime, pass a function as `trustedOrigins` and return the origin only for tenants that your app knows:
+
+```ts title="auth.ts"
+betterAuth({
+  baseURL: { allowedHosts: ["example.com", "*.example.com"] },
+  trustedOrigins: async (request) => {
+    const origin = request?.headers.get("origin");
+    if (!origin) return [];
+    // Look the origin up in your own tenant records.
+    return (await isKnownTenantOrigin(origin)) ? [origin] : [];
+  },
+  plugins: [passkey({ rpID: "example.com" })],
+});
+```
+
+An origin that `trustedOrigins` returns is trusted beyond passkeys, for example for CSRF checks and redirect URLs. Return only origins that your app serves, never an origin copied from the request without a lookup. Compare the full origin, including scheme and port, not only the hostname.
+
+Better Auth calls this function on every request, so cache the lookup. If you call the passkey verify endpoints through `auth.api`, pass the browser request's headers, including `Host` and `Origin`. Otherwise `request` is undefined, and the tenant origin is not trusted.
 
 **authenticatorSelection**: Allows customization of WebAuthn authenticator selection criteria. Leave unspecified for default settings.
 

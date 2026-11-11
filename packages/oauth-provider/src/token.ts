@@ -445,7 +445,7 @@ async function encodeRefreshToken(
 	return (
 		(opts.prefix?.refreshToken ?? "") +
 		(opts.formatRefreshToken?.encrypt
-			? opts.formatRefreshToken.encrypt(token, sessionId)
+			? await opts.formatRefreshToken.encrypt(token, sessionId)
 			: token)
 	);
 }
@@ -495,8 +495,9 @@ async function createOpaqueAccessToken(
 		? await opts.generateOpaqueAccessToken()
 		: generateRandomString(32, "A-Z", "a-z");
 	const storedToken = await storeToken(opts.storeTokens, token, "access_token");
+	let accessTokenId: string;
 	try {
-		await ctx.context.adapter.create({
+		const created = await ctx.context.adapter.create<{ id: string }>({
 			model: "oauthAccessToken",
 			data: {
 				token: storedToken,
@@ -516,28 +517,48 @@ async function createOpaqueAccessToken(
 				expiresAt: new Date(exp * 1000),
 			},
 		});
+		accessTokenId = created.id;
 	} catch (error) {
 		// A concurrent reuse detection or code replay can delete the refresh
 		// token issued with this one before this insert runs.
-		if (
-			refreshId &&
-			!(await ctx.context.adapter.findOne({
-				model: "oauthRefreshToken",
-				where: [{ field: "id", value: refreshId }],
-			}))
-		) {
+		if (refreshId && !(await refreshTokenExists(ctx, refreshId))) {
 			ctx.context.logger.warn(
 				"access token not stored: its refresh token was revoked during issuance",
 				error,
 			);
-			throw new APIError("BAD_REQUEST", {
-				error_description: "grant revoked during token issuance",
-				error: "invalid_grant",
-			});
+			throw grantRevokedDuringIssuance();
 		}
 		throw error;
 	}
+	// Adapters that do not enforce the `refreshId` foreign key, such as the
+	// memory and MongoDB adapters, accept the insert after that revocation.
+	// Revocation deletes linked access tokens again after the refresh rows, so
+	// an insert it misses always sees the refresh token gone here.
+	if (refreshId && !(await refreshTokenExists(ctx, refreshId))) {
+		await ctx.context.adapter.delete({
+			model: "oauthAccessToken",
+			where: [{ field: "id", value: accessTokenId }],
+		});
+		throw grantRevokedDuringIssuance();
+	}
 	return (opts.prefix?.opaqueAccessToken ?? "") + token;
+}
+
+async function refreshTokenExists(
+	ctx: GenericEndpointContext,
+	refreshId: string,
+) {
+	return !!(await ctx.context.adapter.findOne({
+		model: "oauthRefreshToken",
+		where: [{ field: "id", value: refreshId }],
+	}));
+}
+
+function grantRevokedDuringIssuance() {
+	return new APIError("BAD_REQUEST", {
+		error_description: "grant revoked during token issuance",
+		error: "invalid_grant",
+	});
 }
 
 /**
@@ -562,25 +583,19 @@ export async function invalidateRefreshFamily(
 	clientId: string,
 	userId: string,
 ) {
-	const refreshTokens = await ctx.context.adapter.findMany<{ id: string }>({
-		model: "oauthRefreshToken",
-		where: [
-			{ field: "clientId", value: clientId },
-			{ field: "userId", value: userId },
-		],
-	});
-	if (refreshTokens.length) {
-		await ctx.context.adapter.deleteMany({
+	// Every access token linked to this family's refresh rows carries the same
+	// client and user, so the delete needs no list of refresh IDs, which
+	// `findMany` would cap at `defaultFindManyLimit`.
+	const deleteLinkedAccessTokens = () =>
+		ctx.context.adapter.deleteMany({
 			model: "oauthAccessToken",
 			where: [
-				{
-					field: "refreshId",
-					operator: "in",
-					value: refreshTokens.map((r) => r.id),
-				},
+				{ field: "clientId", value: clientId },
+				{ field: "userId", value: userId },
+				{ field: "refreshId", operator: "ne", value: null },
 			],
 		});
-	}
+	await deleteLinkedAccessTokens();
 	await ctx.context.adapter.deleteMany({
 		model: "oauthRefreshToken",
 		where: [
@@ -588,6 +603,9 @@ export async function invalidateRefreshFamily(
 			{ field: "userId", value: userId },
 		],
 	});
+	// Without a foreign key, an in-flight issuance can store an access token
+	// between the two deletes above. See `createOpaqueAccessToken`.
+	await deleteLinkedAccessTokens();
 }
 
 async function revokeTokensIssuedForAuthorizationCode(
@@ -612,6 +630,9 @@ async function revokeTokensIssuedForAuthorizationCode(
 
 	await deleteIssuedTokens("oauthAccessToken");
 	await deleteIssuedTokens("oauthRefreshToken");
+	// Without a foreign key, an in-flight redemption can store an access token
+	// between the two deletes above. See `createOpaqueAccessToken`.
+	await deleteIssuedTokens("oauthAccessToken");
 }
 
 async function createRefreshToken(

@@ -234,6 +234,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						return false;
 					}
 
+					// A unique column can hold many nulls, so `null` selects no single row.
+					if (condition.value === null) {
+						return false;
+					}
+
 					if (condition.field === "id") {
 						return true;
 					}
@@ -364,10 +369,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 
 					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND).
 					// A flat value is a case-sensitive match, so insensitive eq stays in AND.
+					// `WhereUniqueInput` rejects `null` for a unique field.
 					const isSimple = (w: Where) =>
 						(w.operator === "eq" || !w.operator) &&
-						!isInsensitiveForPrisma(w) &&
-						!isMongoNullMatch(w);
+						w.value !== null &&
+						!isInsensitiveForPrisma(w);
 					const andSimple = and.filter(isSimple);
 					const andComplex = and.filter((w) => !isSimple(w));
 
@@ -595,16 +601,29 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							where,
 							action: "updateMany",
 						});
-						const result = await db[model]!.updateMany({
+						// `update` targets one row. Write only the row found here, still
+						// guarded by the filter, and read it back by ID, because the
+						// update can change a filtered field.
+						const matched = await db[model]!.findFirst({
 							where: whereClause,
+						});
+						if (!matched) {
+							return null;
+						}
+						const idField = getFieldName({ model: modelKey, field: "id" });
+						const result = await db[model]!.updateMany({
+							where: { AND: [whereClause, { [idField]: matched[idField] }] },
 							data: update,
 						});
 						if (!result?.count) {
 							return null;
 						}
-
 						return await db[model]!.findFirst({
-							where: whereClause,
+							where: {
+								[idField]:
+									(update as Record<string, unknown>)[idField] ??
+									matched[idField],
+							},
 						});
 					}
 					const whereClause = convertWhereClause({
