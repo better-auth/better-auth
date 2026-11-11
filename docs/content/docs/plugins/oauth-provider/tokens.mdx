@@ -320,7 +320,7 @@ export const dpopBinding = () =>
 
 Call it before your endpoint consumes a one-time credential, such as a code. The client's retry with the nonce can then still redeem it. Do not call it on a request that also calls `issueTokens` or `resolveConfirmation`. Those verify the proof themselves, and a second check rejects its `jti` as reused. A proof sent through `auth.api` fails, because there is no HTTP method to check against `htm`.
 
-An endpoint that only hands out nonces, such as a credential issuer's Nonce Endpoint, calls `provider.issueDpopNonce()`.
+An endpoint that only hands out nonces, such as a credential issuer's Nonce Endpoint, calls `provider.issueDpopNonce()`. It sets a nonce only when `dpop.nonce.required` is on. Otherwise it returns `undefined` and sets no header.
 
 ## Custom claims
 
