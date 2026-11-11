@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { clientCredentialsTokenRequest } from "@better-auth/core/oauth2";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
@@ -24,7 +25,7 @@ import {
 	jwtVerify,
 	SignJWT,
 } from "jose";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
 import { confirmationTokenType, getOAuthProviderApi } from "./token";
@@ -472,6 +473,53 @@ describe("oauth token - authorization_code", async () => {
 		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
 			"invalid_grant",
 		);
+	});
+
+	/**
+	 * A replay that arrives while the first redemption is still issuing tokens
+	 * revokes them (RFC 6749 §4.1.2), including the refresh token already
+	 * stored, so the first redemption must fail with `invalid_grant`.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+	 */
+	it("fails an in-flight redemption with invalid_grant when a replay revokes its tokens", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid", "offline_access"],
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
+
+		const context = await auth.$context;
+		const create = context.adapter.create.bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		const spy = vi.spyOn(context.adapter, "create");
+		spy.mockImplementation(async (...args) => {
+			if (args[0].model === "oauthAccessToken") {
+				spy.mockRestore();
+				reached.resolve();
+				await released.promise;
+			}
+			return create(...args);
+		});
+		try {
+			const redeeming = validateAuthCode({ code, codeVerifier });
+			await reached.promise;
+			const replay = await validateAuthCode({ code, codeVerifier });
+			released.resolve();
+			const redeemed = await redeeming;
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(redeemed.error).toMatchObject({ error: "invalid_grant" });
+		} finally {
+			released.resolve();
+			spy.mockRestore();
+		}
 	});
 
 	/**
@@ -1500,118 +1548,6 @@ describe("oauth token - refresh_token", async () => {
 	});
 
 	/**
-	 * Concurrent refresh-token rotation against the same parent must mint
-	 * tokens for exactly one caller. Before the atomic CAS on the parent
-	 * row, two concurrent requests both passed the `revoked` check and
-	 * each minted a fresh refresh token (forked family). The loser now
-	 * fails with `invalid_grant`; the parent row's `revoked` flag is set,
-	 * so any subsequent replay of the original token trips the existing
-	 * family-invalidation guard in `handleRefreshTokenGrant`.
-	 *
-	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
-	 */
-	it("rejects concurrent rotation of the same refresh token", async () => {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
-		const scopes = ["openid", "profile", "offline_access"];
-		const tokens = await authorizeForRefreshToken(scopes);
-		expect(tokens?.refresh_token).toBeDefined();
-
-		async function refresh(refreshToken: string) {
-			const { body, headers } = await refreshAccessTokenRequest({
-				refreshToken,
-				options: {
-					clientId: oauthClient!.client_id,
-					clientSecret: oauthClient!.client_secret!,
-					redirectURI: redirectUri,
-				},
-			});
-			return client.$fetch<{
-				access_token?: string;
-				refresh_token?: string;
-				error?: string;
-			}>("/oauth2/token", {
-				method: "POST",
-				body,
-				headers,
-			});
-		}
-
-		const [first, second] = await Promise.all([
-			refresh(tokens!.refresh_token!),
-			refresh(tokens!.refresh_token!),
-		]);
-
-		const successes = [first, second].filter((r) => r.error === null);
-		const failures = [first, second].filter((r) => r.error !== null);
-		expect(successes).toHaveLength(1);
-		expect(failures).toHaveLength(1);
-		expect(successes[0]?.data?.refresh_token).toBeDefined();
-		expect((failures[0]?.error as { error?: string } | undefined)?.error).toBe(
-			"invalid_grant",
-		);
-
-		// Replay of the original (now revoked) parent token must trigger
-		// the existing family-invalidation guard.
-		const replay = await refresh(tokens!.refresh_token!);
-		expect((replay.error as { error?: string } | null | undefined)?.error).toBe(
-			"invalid_grant",
-		);
-	});
-
-	/**
-	 * After a contested rotation, the winner's child refresh token must remain
-	 * usable for a subsequent rotation. The CAS only revokes the parent row; it
-	 * must not poison the rest of the legitimate user's session.
-	 *
-	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
-	 */
-	it("winner's child token is usable for a subsequent rotation", async () => {
-		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
-		const scopes = ["openid", "profile", "offline_access"];
-		const tokens = await authorizeForRefreshToken(scopes);
-		expect(tokens?.refresh_token).toBeDefined();
-
-		async function refresh(refreshToken: string) {
-			const { body, headers } = await refreshAccessTokenRequest({
-				refreshToken,
-				options: {
-					clientId: oauthClient!.client_id,
-					clientSecret: oauthClient!.client_secret!,
-					redirectURI: redirectUri,
-				},
-			});
-			return client.$fetch<{
-				access_token?: string;
-				refresh_token?: string;
-				error?: string;
-			}>("/oauth2/token", {
-				method: "POST",
-				body,
-				headers,
-			});
-		}
-
-		const [first, second] = await Promise.all([
-			refresh(tokens!.refresh_token!),
-			refresh(tokens!.refresh_token!),
-		]);
-
-		const winner = [first, second].find((r) => r.error === null);
-		expect(winner?.data?.refresh_token).toBeDefined();
-
-		const next = await refresh(winner!.data!.refresh_token!);
-		expect(next.error).toBeNull();
-		expect(next.data?.refresh_token).toBeDefined();
-		expect(next.data?.refresh_token).not.toEqual(winner!.data!.refresh_token);
-	});
-
-	/**
 	 * /oauth2/revoke (RFC 7009) on an active refresh token must mark the row
 	 * `revoked` (via the same CAS used in rotation) so that subsequent reuse
 	 * trips the family-invalidation guard.
@@ -1677,14 +1613,15 @@ describe("oauth token - refresh_token", async () => {
 	});
 
 	/**
-	 * `revokeRefreshToken` racing `handleRefreshTokenGrant` on the same parent
-	 * row. Both run through the same CAS, so exactly one wins and the loser
-	 * fails closed. Each ordering is forced by holding the first CAS until the
-	 * other request has finished, instead of leaving it to scheduling.
+	 * Two requests racing on the same parent refresh token. Rotation and
+	 * `revokeRefreshToken` run through the same CAS, so exactly one wins and the
+	 * loser fails closed. Each ordering is forced by holding one request at an
+	 * adapter call until the other has finished, instead of leaving it to
+	 * scheduling.
 	 *
 	 * @see https://github.com/better-auth/better-auth/security/advisories/GHSA-392p-2q2v-4372
 	 */
-	describe("concurrent revoke + rotate against the same refresh token", () => {
+	describe("concurrent use of the same refresh token", () => {
 		async function refresh(refreshToken: string) {
 			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken,
@@ -1746,6 +1683,31 @@ describe("oauth token - refresh_token", async () => {
 			};
 		}
 
+		/** Pauses the next access-token insert until `release` is called. */
+		async function holdNextAccessTokenInsert() {
+			const context = await authorizationServer.$context;
+			const create = context.adapter.create.bind(context.adapter);
+			const reached = Promise.withResolvers<void>();
+			const released = Promise.withResolvers<void>();
+			const spy = vi.spyOn(context.adapter, "create");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === "oauthAccessToken") {
+					spy.mockRestore();
+					reached.resolve();
+					await released.promise;
+				}
+				return create(...args);
+			});
+			return {
+				reached: reached.promise,
+				release: released.resolve,
+				restore: () => {
+					released.resolve();
+					spy.mockRestore();
+				},
+			};
+		}
+
 		async function issueParentRefreshToken() {
 			const tokens = await authorizeForRefreshToken([
 				"openid",
@@ -1755,6 +1717,56 @@ describe("oauth token - refresh_token", async () => {
 			expect(tokens?.refresh_token).toBeDefined();
 			return tokens!.refresh_token!;
 		}
+
+		it("rotates once and fails the other rotation with invalid_grant", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const cas = await holdNextRefreshTokenCas();
+			try {
+				// Both requests read the parent before either CAS runs.
+				const losing = refresh(parentToken);
+				await cas.reached;
+				const rotated = await refresh(parentToken);
+				cas.release();
+				const lost = await losing;
+
+				expect(rotated.error).toBeNull();
+				expect(lost.error).toMatchObject({ error: "invalid_grant" });
+				// The loser leaves the winner's new refresh token usable.
+				const next = await refresh(rotated.data!.refresh_token!);
+				expect(next.error).toBeNull();
+				expect(next.data?.refresh_token).toBeDefined();
+				// Reusing the rotated parent still revokes the family.
+				expect((await refresh(parentToken)).error).toMatchObject({
+					error: "invalid_grant",
+				});
+			} finally {
+				cas.restore();
+			}
+		});
+
+		/**
+		 * A request that reads the parent after the other's CAS presents a reused
+		 * token, so it revokes the family (RFC 9700 §4.14.2), including the new
+		 * refresh token the winner is still issuing.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+		 */
+		it("fails an in-flight rotation with invalid_grant when reuse revokes its family", async () => {
+			const parentToken = await issueParentRefreshToken();
+			const insert = await holdNextAccessTokenInsert();
+			try {
+				const rotating = refresh(parentToken);
+				await insert.reached;
+				const reused = await refresh(parentToken);
+				insert.release();
+				const rotated = await rotating;
+
+				expect(reused.error).toMatchObject({ error: "invalid_grant" });
+				expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+			} finally {
+				insert.restore();
+			}
+		});
 
 		it("fails the revoke closed when the rotation wins", async () => {
 			const parentToken = await issueParentRefreshToken();
@@ -3204,6 +3216,71 @@ describe("oauth token - config", async () => {
 		} else {
 			expect.unreachable();
 		}
+	});
+
+	it("formatRefreshToken with an async encrypt - code_authorization, refresh_token", async () => {
+		const refreshTokenPrefix = "hello_rt_";
+		const { client, oauthClient } = await createTestInstance({
+			oauthProviderConfig: {
+				prefix: {
+					refreshToken: refreshTokenPrefix,
+				},
+				formatRefreshToken: {
+					encrypt: async (token) => `enc.${token}`,
+					decrypt: async (value) => ({ token: value.slice("enc.".length) }),
+				},
+			},
+		});
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			clientId: oauthClient?.client_id!,
+			clientSecret: oauthClient?.client_secret,
+		});
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const url = new URL(callbackRedirectUrl);
+
+		const tokens = await client.oauth2.token(
+			{
+				code: url.searchParams.get("code")!,
+				code_verifier: codeVerifier,
+				grant_type: "authorization_code",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+				redirect_uri: redirectUri,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		const refreshToken = (tokens.data as { refresh_token?: string })
+			?.refresh_token;
+		expect(refreshToken?.startsWith(`${refreshTokenPrefix}enc.`)).toBe(true);
+
+		const refreshedTokens = await client.oauth2.token(
+			{
+				refresh_token: refreshToken,
+				grant_type: "refresh_token",
+				client_id: oauthClient?.client_id,
+				client_secret: oauthClient?.client_secret,
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+			},
+		);
+		expect(refreshedTokens.error).toBeNull();
+		expect(
+			(refreshedTokens.data as { refresh_token?: string })?.refresh_token,
+		).toMatch(new RegExp(`^${refreshTokenPrefix}enc\\.`));
 	});
 
 	it("clientSecretPrefix - client_credentials", async () => {
@@ -5519,5 +5596,361 @@ describe("confirmationTokenType", () => {
 		}
 		expect(confirmationTokenType({ jkt: "thumbprint" })).toBe("DPoP");
 		expect(confirmationTokenType(undefined)).toBe("Bearer");
+	});
+});
+
+/**
+ * The memory and MongoDB adapters do not enforce the `refreshId` foreign key,
+ * so an access token insert that lands after a concurrent revocation succeeds.
+ * Revocation must still leave no access token behind.
+ *
+ * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+ * @see https://datatracker.ietf.org/doc/html/rfc9700#section-4.14.2
+ */
+describe("oauth token - in-flight issuance without foreign keys", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "http://localhost:5000/api/auth/callback/test";
+	const database: Record<string, Record<string, unknown>[]> = {
+		account: [],
+		jwks: [],
+		oauthAccessToken: [],
+		oauthClient: [],
+		oauthClientAssertion: [],
+		oauthClientResource: [],
+		oauthConsent: [],
+		oauthRefreshToken: [],
+		oauthResource: [],
+		session: [],
+		user: [],
+		verification: [],
+	};
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			database: memoryAdapter(database),
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: ["authorization_code", "refresh_token"],
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			skip_consent: true,
+		},
+	});
+	const clientOptions = {
+		clientId: oauthClient.client_id,
+		clientSecret: oauthClient.client_secret!,
+		redirectURI: redirectUri,
+	};
+
+	beforeEach(() => {
+		database.oauthAccessToken = [];
+		database.oauthRefreshToken = [];
+	});
+
+	async function authorize() {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: "test",
+			options: clientOptions,
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes: ["openid", "offline_access"],
+			codeVerifier,
+		});
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(location).searchParams.get("code")!;
+		return { code, codeVerifier };
+	}
+
+	async function redeem(code: string, codeVerifier: string) {
+		const { body, headers } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	async function refresh(refreshToken: string) {
+		const { body, headers } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers,
+		});
+	}
+
+	/** Pauses the first adapter call that `matches` until `release` runs. */
+	async function holdNext<M extends "create" | "deleteMany">(
+		method: M,
+		matches: (model: string) => boolean,
+	) {
+		const context = await auth.$context;
+		const original = context.adapter[method].bind(context.adapter);
+		const reached = Promise.withResolvers<void>();
+		const released = Promise.withResolvers<void>();
+		const spy = vi.spyOn(context.adapter, method);
+		spy.mockImplementation((async (...args: Parameters<typeof original>) => {
+			if (matches(args[0].model)) {
+				spy.mockRestore();
+				reached.resolve();
+				await released.promise;
+			}
+			return (original as (...a: typeof args) => unknown)(...args);
+		}) as never);
+		return {
+			reached: reached.promise,
+			release: released.resolve,
+			restore: () => {
+				released.resolve();
+				spy.mockRestore();
+			},
+		};
+	}
+
+	it("fails an in-flight redemption and keeps no access token when a replay revokes it", async () => {
+		const { code, codeVerifier } = await authorize();
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		try {
+			const redeeming = redeem(code, codeVerifier);
+			await insert.reached;
+			const replay = await redeem(code, codeVerifier);
+			insert.release();
+			const redeemed = await redeeming;
+
+			expect(replay.error).toMatchObject({ error: "invalid_grant" });
+			expect(redeemed.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+			expect(database.oauthRefreshToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+		}
+	});
+
+	it("fails an in-flight rotation and keeps no access token when reuse revokes its family", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		try {
+			const rotating = refresh(parentToken);
+			await insert.reached;
+			const reused = await refresh(parentToken);
+			insert.release();
+			const rotated = await rotating;
+
+			expect(reused.error).toMatchObject({ error: "invalid_grant" });
+			expect(rotated.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+		}
+	});
+
+	it("revokes every access token in a family larger than the findMany limit", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const context = await auth.$context;
+		const [family] = database.oauthRefreshToken as {
+			clientId: string;
+			userId: string;
+		}[];
+		for (let i = 0; i < 101; i++) {
+			const sibling = await context.adapter.create<{ id: string }>({
+				model: "oauthRefreshToken",
+				data: {
+					token: `sibling-refresh-${i}`,
+					clientId: family!.clientId,
+					userId: family!.userId,
+					scopes: ["openid", "offline_access"],
+					createdAt: new Date(),
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			});
+			await context.adapter.create({
+				model: "oauthAccessToken",
+				data: {
+					token: `sibling-access-${i}`,
+					clientId: family!.clientId,
+					userId: family!.userId,
+					refreshId: sibling.id,
+					scopes: ["openid"],
+					createdAt: new Date(),
+					expiresAt: new Date(Date.now() + 60_000),
+				},
+			});
+		}
+
+		const rotated = await refresh(parentToken);
+		expect(rotated.error).toBeNull();
+		const reused = await refresh(parentToken);
+
+		expect(reused.error).toMatchObject({ error: "invalid_grant" });
+		expect(database.oauthRefreshToken).toHaveLength(0);
+		expect(database.oauthAccessToken).toHaveLength(0);
+	});
+
+	it("removes an access token stored between the revocation's deletes", async () => {
+		const { code, codeVerifier } = await authorize();
+		const issued = await redeem(code, codeVerifier);
+		const parentToken = issued.data!.refresh_token!;
+		const insert = await holdNext("create", (m) => m === "oauthAccessToken");
+		const familyDelete = await holdNext(
+			"deleteMany",
+			(m) => m === "oauthRefreshToken",
+		);
+		try {
+			const rotating = refresh(parentToken);
+			await insert.reached;
+			// Reuse deletes the family's access tokens, then waits before
+			// deleting its refresh tokens.
+			const reusing = refresh(parentToken);
+			await familyDelete.reached;
+			insert.release();
+			const rotated = await rotating;
+			familyDelete.release();
+			const reused = await reusing;
+
+			expect(rotated.error).toBeNull();
+			expect(reused.error).toMatchObject({ error: "invalid_grant" });
+			expect(database.oauthAccessToken).toHaveLength(0);
+			expect(database.oauthRefreshToken).toHaveLength(0);
+		} finally {
+			insert.restore();
+			familyDelete.restore();
+		}
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/pull/12402
+ */
+describe("oauth token - refresh family revocation with serial ids", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const redirectUri = "http://localhost:5000/api/auth/callback/test";
+	const database: Record<string, Record<string, unknown>[]> = {
+		account: [],
+		jwks: [],
+		oauthAccessToken: [],
+		oauthClient: [],
+		oauthClientAssertion: [],
+		oauthClientResource: [],
+		oauthConsent: [],
+		oauthRefreshToken: [],
+		oauthResource: [],
+		session: [],
+		user: [],
+		verification: [],
+	};
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			baseURL: authServerBaseUrl,
+			database: memoryAdapter(database),
+			advanced: { database: { generateId: "serial" } },
+			plugins: [
+				jwt({ jwt: { issuer: authServerBaseUrl } }),
+				oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			],
+		},
+		{ clientOptions: { plugins: [oauthProviderClient()] } },
+	);
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: "client_secret_post",
+			grant_types: ["authorization_code", "refresh_token"],
+			redirect_uris: [redirectUri],
+			application_type: "native",
+			skip_consent: true,
+		},
+	});
+	const clientOptions = {
+		clientId: oauthClient.client_id,
+		clientSecret: oauthClient.client_secret!,
+		redirectURI: redirectUri,
+	};
+
+	async function issue(scopes: string[]) {
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: "test",
+			options: clientOptions,
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state: "123",
+			scopes,
+			codeVerifier,
+		});
+		let location = "";
+		await client.$fetch(url.toString(), {
+			headers,
+			onError(context) {
+				location = context.response.headers.get("Location") || "";
+			},
+		});
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code: new URL(location).searchParams.get("code")!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	async function refresh(refreshToken: string) {
+		const { body, headers: tokenHeaders } = await refreshAccessTokenRequest({
+			refreshToken,
+			options: clientOptions,
+		});
+		return client.$fetch<OAuthTokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	}
+
+	it("keeps access tokens issued without a refresh token when reuse revokes a family", async () => {
+		const accessOnly = await issue(["openid"]);
+		expect(accessOnly.data?.refresh_token).toBeUndefined();
+		const family = await issue(["openid", "offline_access"]);
+		const parentToken = family.data!.refresh_token!;
+
+		expect((await refresh(parentToken)).error).toBeNull();
+		const reused = await refresh(parentToken);
+
+		expect(reused.error).toMatchObject({ error: "invalid_grant" });
+		expect(database.oauthAccessToken).toHaveLength(1);
+		expect(database.oauthAccessToken?.[0]?.refreshId).toBeUndefined();
 	});
 });

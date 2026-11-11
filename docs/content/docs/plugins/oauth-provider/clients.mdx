@@ -40,7 +40,7 @@ To create a client owned by the signed-in user, or by the organization that [`cl
      */
     application_type?: "web" | "native" = "web"
     /**
-     * Space-separated scopes the client may request.
+     * Space-separated scopes the client may request. When omitted, the client may request every scope the server defines.
      */
     scope?: string = "openid profile email"
   }
@@ -66,9 +66,9 @@ Most of the other client endpoints take a `client_id`. Each requires a session, 
 
 You cannot change `token_endpoint_auth_method` after creation, and an update cannot set the secret. To retire a secret, rotate it with `rotateClientSecret`. The new secret keeps the client's `client_secret_expires_at`.
 
-An update takes the fields from the create request, except `jwks`, `jwks_uri`, and `subject_type`. It ignores those fields, and any other field it does not accept, without returning an error. Only `adminUpdateOAuthClient` can change `dpop_bound_access_tokens`. To let a client replace its own inline `jwks`, see [Rotating client keys](#rotating-client-keys). Omitted fields keep their current values. To remove a logout URI, send `null` for `backchannel_logout_uri` or `frontchannel_logout_uri`. Better Auth also clears the matching `backchannel_logout_session_required` or `frontchannel_logout_session_required` flag, and the client stops receiving [back-channel](/docs/plugins/oauth-provider/openid-connect#back-channel-logout) or [front-channel](/docs/plugins/oauth-provider/openid-connect#front-channel-logout) logout notifications.
+An update takes the fields from the create request, except `jwks`, `jwks_uri`, and `subject_type`. It ignores those fields, and any other field it does not accept, without returning an error. Only `adminUpdateOAuthClient` can change `dpop_bound_access_tokens`. To let a client replace its own inline `jwks`, see [Rotating client keys](#rotating-client-keys). Omitted fields keep their current values, with one exception: an update that removes `client_credentials` from `grant_types` also clears `client_credentials_scopes`. Adding the grant back does not restore them, so set them again with `adminUpdateOAuthClient`. To remove a logout URI, send `null` for `backchannel_logout_uri` or `frontchannel_logout_uri`. Better Auth also clears the matching `backchannel_logout_session_required` or `frontchannel_logout_session_required` flag, and the client stops receiving [back-channel](/docs/plugins/oauth-provider/openid-connect#back-channel-logout) or [front-channel](/docs/plugins/oauth-provider/openid-connect#front-channel-logout) logout notifications.
 
-To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, but that query is not bound to the client whose fields it reads. Anyone can get one by starting an authorization request. Enabling the option therefore makes the public fields of every enabled client, including `contacts`, readable without an account.
+To read a client's public fields on the login page, set `allowPublicClientPrelogin: true`, which turns on `getOAuthClientPublicPrelogin`. The method needs a valid signed `oauth_query`, and `client_id` must match the client in that query; a request for any other client gets a `401`. Anyone can get a signed query by starting an authorization request, so a client's public fields, including `contacts`, are readable without an account by anyone who knows its `client_id` and a registered redirect URI.
 
 ### Restricted fields
 
@@ -278,7 +278,7 @@ Keep these protections:
 | Reverse-domain private-use scheme ([RFC 8252 §7.1](https://datatracker.ietf.org/doc/html/rfc8252#section-7.1)) | `com.example.app:/callback`        | No    | Yes      |
 | Custom scheme with a host and a path                                                                           | `myapp://example.app/callback`     | No    | Yes      |
 
-An HTTP loopback URI must use exactly `localhost`, `127.0.0.1`, or `[::1]`, so spellings such as `127.1` are rejected. HTTPS on a loopback address and HTTP on any other host are also rejected. Better Auth also rejects fragments, credentials, malformed URIs, and reserved schemes such as `javascript:` and `file:`.
+An HTTP loopback URI must use exactly `localhost`, `127.0.0.1`, or `[::1]`, so spellings such as `127.1` are rejected. HTTPS on a loopback address and HTTP on any other host are also rejected. To accept HTTP on other hosts, or HTTP loopback for `web` clients, see [HTTP redirect URIs](#http-redirect-uris). Better Auth also rejects fragments, credentials, malformed URIs, and reserved schemes such as `javascript:` and `file:`.
 
 <Callout type="warn">
   [RFC 8252 §8.4](https://datatracker.ietf.org/doc/html/rfc8252#section-8.4) says to reject private-use schemes without a period, but Better Auth accepts them for native app compatibility. Another app can claim such a scheme and receive the code, so keep PKCE on for these clients.
@@ -307,13 +307,42 @@ oauthProvider({
 })
 ```
 
-Before the callback runs, Better Auth rejects only malformed URIs, credentials, fragments, dangerous schemes such as `javascript:`, and HTTP on hosts other than loopback. The [redirect URI form](#redirect-uri-forms) rules do not apply to URIs the callback accepts. The callback applies to every client. Returning `false` or throwing rejects the URI and sends early authorization errors to the server error page instead of the client.
+Before the callback runs, Better Auth rejects only malformed URIs, credentials, fragments, dangerous schemes such as `javascript:`, and HTTP on hosts other than loopback unless [`allowInsecureRedirectUri`](#http-redirect-uris) accepts it. The [redirect URI form](#redirect-uri-forms) rules do not apply to URIs the callback accepts. The callback applies to every client. Returning `false` or throwing rejects the URI and sends early authorization errors to the server error page instead of the client.
 
 <Callout type="warn">
   Accepting extra URIs relaxes the exact matching of [RFC 9700 §2.1](https://datatracker.ietf.org/doc/html/rfc9700#section-2.1). Accept only hosts you control that untrusted people cannot deploy to, and pin the scheme, host suffix, port, path, and query. If untrusted clients can register arbitrary URIs, a match in `registeredUris` does not prove which client it is.
 </Callout>
 
 With [pairwise subject identifiers](/docs/plugins/oauth-provider/openid-connect#pairwise-subject-identifiers), a URI the callback accepts does not change the client's sector, which comes from its registered redirect URIs. The client receives the same `sub` for a user whichever accepted URI it uses.
+
+## HTTP redirect URIs
+
+By default, `http` redirect URIs and post-logout redirect URIs are accepted only on loopback hosts, and `web` clients cannot use loopback hosts at all. A deployment served over plain HTTP on a private network, such as `http://192.168.1.50:8000` or `http://app.homelab.lan`, can't register its callbacks, and neither can a `web` client on `localhost` during development.
+
+To accept them, set `allowInsecureRedirectUri`. When the default policy rejects an `http` URI, it receives the parsed `URL` and returns `true` to accept it. Returning anything else, or throwing, keeps the URI rejected:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowInsecureRedirectUri: (url) => url.origin === "http://192.168.1.50:8000", // [!code highlight]
+})
+```
+
+To allow `localhost` callbacks for `web` clients in development only:
+
+```ts title="auth.ts"
+oauthProvider({
+  allowInsecureRedirectUri: (url) => // [!code highlight]
+    process.env.NODE_ENV !== "production" && url.hostname === "localhost", // [!code highlight]
+})
+```
+
+The callback applies at client registration and updates (`redirect_uris` and `post_logout_redirect_uris`), at the authorize endpoint, and at the end-session endpoint. Removing or narrowing it stops redirects to `http` URIs registered under it. It does not change matching: a `web` client on a loopback host must use the registered port, and native clients keep the exact loopback host rule. Credentials, fragments, and dangerous schemes are always rejected. `backchannel_logout_uri` and `frontchannel_logout_uri` are not affected, so an `http` logout URI must still be on a loopback host.
+
+When the authorize endpoint rejects an `http` redirect URI, it shows the server error page with `invalid_request` instead of sending the error to that URI.
+
+<Callout type="warn">
+  Over plain HTTP, anyone on the network path can read authorization codes and post-logout redirects. Accept only exact origins you control, especially with [dynamic client registration](#dynamic-client-registration), because the callback also decides what registering clients may submit.
+</Callout>
 
 ## Private key JWT
 
@@ -361,7 +390,7 @@ Any key left out of the new set stops working at once. To roll a key without dow
 To skip database lookups for first-party apps whose redirect URIs you control, list their client IDs in `cachedTrustedClients`. To also skip the consent screen, set `skip_consent` on each client.
 
 <Callout type="warn">
-  A `skip_consent` client gets authorization codes for any signed-in user without asking them, so whoever controls its redirect URIs controls those codes. The client's owner can still change `redirect_uris` through `updateOAuthClient`. With `clientReference`, that owner is an organization, and any member of it can make the change. Set `skip_consent` only on clients in `cachedTrustedClients`, which the client endpoints cannot change, or deny `update` for those clients in [`clientPrivileges`](#client-crud-privileges). Do not set it on a public native client. Any app on the device can start the flow and receive the redirect, and PKCE does not help when the attacker starts the flow.
+  A `skip_consent` client gets authorization codes for any signed-in user without asking them, unless the authorization request sets `prompt=consent`. Whoever starts the flow chooses `prompt`, so whoever controls the client's redirect URIs controls those codes. The client's owner can still change `redirect_uris` through `updateOAuthClient`. With `clientReference`, that owner is an organization, and any member of it can make the change. Set `skip_consent` only on clients in `cachedTrustedClients`, which the client endpoints cannot change, or deny `update` for those clients in [`clientPrivileges`](#client-crud-privileges). Do not set it on a public native client. Any app on the device can start the flow and receive the redirect, and PKCE does not help when the attacker starts the flow.
 </Callout>
 
 * Each server keeps the listed clients in memory until it restarts.

@@ -380,6 +380,46 @@ describe("createAdapterFactory where value coercion", () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/pull/12389#discussion_r4531585767
+ */
+describe("createAdapterFactory serial id where values", () => {
+	it("keeps null for id and reference fields instead of coercing it to 0", async () => {
+		const seenWhere: CleanedWhere[][] = [];
+		const adapter = createAdapterFactory({
+			config: { adapterId: "test-adapter", adapterName: "Test Adapter" },
+			adapter: () =>
+				createCustomAdapter({
+					findMany: async <T>(
+						params: Parameters<CustomAdapter["findMany"]>[0],
+					) => {
+						if (params.where) seenWhere.push(params.where);
+						return [] as T[];
+					},
+				}),
+		})({ advanced: { database: { generateId: "serial" } } });
+
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "userId", operator: "ne", value: null }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "userId", value: "2" }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "id", operator: "ne", value: null }],
+		});
+		await adapter.findMany({
+			model: "session",
+			where: [{ field: "id", value: "3" }],
+		});
+
+		expect(seenWhere.map(([w]) => w!.value)).toEqual([null, 2, null, 3]);
+	});
+});
+
+/**
  * @see https://cwe.mitre.org/data/definitions/367.html
  */
 describe("legacy adapter atomic fallbacks", () => {

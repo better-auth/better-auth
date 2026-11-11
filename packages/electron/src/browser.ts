@@ -189,6 +189,18 @@ function registerProtocolScheme(
 		);
 	}
 
+	// App event listeners have no caller to receive a rejection.
+	const onDeepLink = (url: string) =>
+		handleDeepLink({
+			$fetch,
+			options,
+			url,
+			getWindow,
+			clientOptions,
+		}).catch((error) => {
+			console.error("Error while handling deep link", error);
+		});
+
 	const gotTheLock = app.requestSingleInstanceLock();
 
 	if (!gotTheLock) {
@@ -214,25 +226,13 @@ function registerProtocolScheme(
 			}
 
 			if (process?.platform !== "darwin" && typeof url === "string") {
-				await handleDeepLink({
-					$fetch,
-					options,
-					url,
-					getWindow,
-					clientOptions,
-				});
+				await onDeepLink(url);
 			}
 		});
 
 		app.on("open-url", async (_event, url) => {
 			if (process?.platform === "darwin") {
-				await handleDeepLink({
-					$fetch,
-					options,
-					url,
-					getWindow,
-					clientOptions,
-				});
+				await onDeepLink(url);
 			}
 		});
 
@@ -241,13 +241,7 @@ function registerProtocolScheme(
 				process?.platform !== "darwin" &&
 				typeof process.argv[1] === "string"
 			) {
-				await handleDeepLink({
-					$fetch,
-					options,
-					url: process.argv[1],
-					getWindow,
-					clientOptions,
-				});
+				await onDeepLink(process.argv[1]);
 			}
 		});
 	}

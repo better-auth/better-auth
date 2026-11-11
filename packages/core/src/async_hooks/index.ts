@@ -55,7 +55,7 @@ export async function getAsyncLocalStorage(): Promise<
 				"[better-auth] Please read more about this warning at https://better-auth.com/docs/installation#mount-handler",
 			);
 			console.warn(
-				"[better-auth] If you are using Cloudflare Workers, please see: https://developers.cloudflare.com/workers/configuration/compatibility-flags/#nodejs-compatibility-flag",
+				"[better-auth] If you are using Cloudflare Workers, please see: https://better-auth.com/docs/guides/cloudflare#nodejs-compatibility",
 			);
 		}
 		throw err;

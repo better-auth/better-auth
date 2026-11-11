@@ -949,6 +949,12 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../../packages/kysely-adapter
+      '@better-auth/oauth-provider':
+        specifier: workspace:*
+        version: link:../../../../../packages/oauth-provider
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../../../../packages/scim
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso
@@ -971,12 +977,27 @@ importers:
 
   e2e/smoke/test/fixtures/esbuild:
     dependencies:
+      '@better-auth/api-key':
+        specifier: workspace:*
+        version: link:../../../../../packages/api-key
+      '@better-auth/electron':
+        specifier: workspace:*
+        version: link:../../../../../packages/electron
       '@better-auth/expo':
         specifier: workspace:*
         version: link:../../../../../packages/expo
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../../packages/kysely-adapter
+      '@better-auth/scim':
+        specifier: workspace:*
+        version: link:../../../../../packages/scim
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../../../../../packages/sso
+      '@better-auth/stripe':
+        specifier: workspace:*
+        version: link:../../../../../packages/stripe
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth

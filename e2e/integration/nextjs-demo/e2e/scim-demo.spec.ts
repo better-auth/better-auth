@@ -5,6 +5,7 @@ import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { DemoRuntime } from "./demo-runtime";
 import {
+	CONNECTION_RESET_RETRIES,
 	createDemoRuntime,
 	createOrganization,
 	getAvailablePort,
@@ -14,9 +15,39 @@ const USER_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:User";
 const GROUP_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Group";
 const PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
 
+// `next dev` compiles each route on its first request, which can outlast the
+// 5 s `expect` windows in employee sign-in, so startup requests these first.
+const EMPLOYEE_SIGN_IN_ROUTES = [
+	"/api/scim-demo/idp/.well-known/openid-configuration",
+	"/api/scim-demo/idp/authorize",
+	"/scim-demo/idp/authorize",
+	"/api/scim-demo/idp/token",
+	"/api/scim-demo/idp/jwks",
+];
+
 interface NextDemoRuntime {
 	baseURL: string;
 	databasePath: string;
+}
+
+async function compileRoutes(demo: DemoRuntime, baseURL: string) {
+	const deadline = Date.now() + 60_000;
+	await Promise.all(
+		EMPLOYEE_SIGN_IN_ROUTES.map(async (path) => {
+			try {
+				const response = await fetch(`${baseURL}${path}`, {
+					signal: AbortSignal.timeout(Math.max(deadline - Date.now(), 0)),
+				});
+				// Pages stream, so the render finishes only with the body.
+				await response.arrayBuffer();
+			} catch (error) {
+				throw new Error(
+					`Next.js demo did not compile ${path}:\n${demo.output()}`,
+					{ cause: error },
+				);
+			}
+		}),
+	);
 }
 
 async function startNextDemoRuntime(
@@ -42,6 +73,7 @@ async function startNextDemoRuntime(
 	};
 	await demo.migrate(environment);
 	await demo.startNextDev(port, environment);
+	await compileRoutes(demo, baseURL);
 	return { baseURL, databasePath };
 }
 
@@ -57,6 +89,7 @@ async function signUp(
 				...input,
 				password: "correct-horse-battery-staple",
 			},
+			maxRetries: CONNECTION_RESET_RETRIES,
 		},
 	);
 	expect(response.ok(), await response.text()).toBe(true);
@@ -106,6 +139,7 @@ async function scimRequest(
 			authorization: `Bearer ${token}`,
 			"content-type": "application/scim+json",
 		},
+		maxRetries: CONNECTION_RESET_RETRIES,
 		...(input.data === undefined ? {} : { data: input.data }),
 	});
 }
@@ -279,6 +313,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		try {
 			const unauthenticated = await anonymousContext.request.get(
 				managementURL(runtime.baseURL, organizationId),
+				{ maxRetries: CONNECTION_RESET_RETRIES },
 			);
 			expect(unauthenticated.status()).toBe(401);
 		} finally {
@@ -289,6 +324,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 			{
 				headers: { origin: "https://attacker.invalid" },
 				data: { organizationId },
+				maxRetries: CONNECTION_RESET_RETRIES,
 			},
 		);
 		expect(crossOriginMutation.status()).toBe(403);
@@ -508,6 +544,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 				{
 					headers: { origin: runtime.baseURL },
 					data: { organizationId: tenantBOrganizationId },
+					maxRetries: CONNECTION_RESET_RETRIES,
 				},
 			);
 			expect(tenantBCreate.status()).toBe(201);
@@ -524,6 +561,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 				(
 					await page.request.get(
 						managementURL(runtime.baseURL, tenantBOrganizationId),
+						{ maxRetries: CONNECTION_RESET_RETRIES },
 					)
 				).status(),
 			).toBe(403);
@@ -571,6 +609,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 		).toBe(true);
 		const finalManagementResponse = await page.request.get(
 			managementURL(runtime.baseURL, organizationId),
+			{ maxRetries: CONNECTION_RESET_RETRIES },
 		);
 		expect(finalManagementResponse.status()).toBe(200);
 		const finalManagementBody: unknown = await finalManagementResponse.json();
@@ -778,6 +817,7 @@ test.describe("Next.js managed SCIM catalog demo", () => {
 					organizationId,
 					scimUserId: maya.id,
 				},
+				maxRetries: CONNECTION_RESET_RETRIES,
 			},
 		);
 		expect(

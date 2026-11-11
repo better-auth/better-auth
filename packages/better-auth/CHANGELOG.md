@@ -146,6 +146,60 @@
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12126](https://github.com/better-auth/better-auth/pull/12126) [`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b) Thanks [@hardikguptaofficialgit](https://github.com/hardikguptaofficialgit)! - On Prisma with MongoDB, when your id columns use `@db.ObjectId`, magic link and email OTP sign-in for users with an unverified email no longer fail with a 500 (`Malformed ObjectID`). SAML sign-in, DPoP-bound OAuth requests, and `private_key_jwt` client authentication are fixed the same way, and Sign-In with Ethereum now keeps the email the user supplied instead of a placeholder. Setups with plain `String` id columns and other databases are unaffected.
+
+- [#12392](https://github.com/better-auth/better-auth/pull/12392) [`a277020`](https://github.com/better-auth/better-auth/commit/a277020fa3f0f379e153d008daad64267dc39227) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Fixed the device approval page showing a valid code as invalid when the same signed-in user looked it up twice at once, such as under React Strict Mode in development.
+
+- [#12052](https://github.com/better-auth/better-auth/pull/12052) [`1c3410a`](https://github.com/better-auth/better-auth/commit/1c3410a5c3af5bb93505c8da3671f538b286d6b1) Thanks [@lakshya-dhariwal](https://github.com/lakshya-dhariwal)! - If you set `advanced.backgroundTasks.handler` and your database adapter runs transactions (the built-in Kysely connection, MongoDB with `client`, or Prisma or Drizzle with `transaction: true`), email sign-up now keeps the database writes made while sending the verification email or running `onExistingUserSignUp`. Before, those writes failed because the sign-up had already been saved. With `emailOTP({ overrideDefaultEmailVerification: true })`, the code was never stored, so new users could not verify their email.
+
+  Whatever adapter or background handler you use, a sign-up verification email now goes out after the new user is saved, and `onExistingUserSignUp`, when a duplicate sign-up triggers it, runs after the request's database work completes. If `sendVerificationEmail` throws, the sign-up succeeds and the error is logged; before, the sign-up failed. To reject a sign-up, use a `databaseHooks.user.create.before` hook. If `onExistingUserSignUp` throws, the error is logged and the request still returns the generic response.
+
+- [#12179](https://github.com/better-auth/better-auth/pull/12179) [`9105261`](https://github.com/better-auth/better-auth/commit/91052614cb82051d19d4290c09aaaf2059585ede) Thanks [@ghazy2001](https://github.com/ghazy2001)! - Generic OAuth providers configured with `discoveryHeaders` now send those headers when fetching the provider's signing keys from a `jwks_uri` on the same origin as `discoveryUrl`. Before, the keys request went out without them. Providers whose key endpoint requires the headers rejected it, so every ID token failed verification and sign-in failed. A `jwks_uri` on another origin still gets no headers.
+
+  With `discoveryHeaders` set, the discovery request now follows redirects only within the origin of `discoveryUrl`, so the headers no longer reach another host. If your `discoveryUrl` redirects to another origin, discovery now fails and Better Auth logs an error. Set `discoveryUrl` to the final URL. Providers without `discoveryHeaders` are unaffected.
+
+- [#12401](https://github.com/better-auth/better-auth/pull/12401) [`c3a94c5`](https://github.com/better-auth/better-auth/commit/c3a94c546af3c3bf4573f254b666facb4a94fc2d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers configured with `authorizationHeaders` now send those headers when refreshing an access token, not only when exchanging the authorization code. Before, a provider whose token endpoint requires one of those headers accepted the sign-in but rejected every refresh. Providers without `authorizationHeaders` are unaffected.
+
+  `refreshAccessToken` and `refreshAccessTokenRequest` from `@better-auth/core/oauth2` accept an optional `headers` input for providers that need extra headers on refresh. Client authentication headers still take precedence over it.
+
+  Extra headers whose names differ only in case from a client authentication header, such as `Authorization` with `authentication: "basic"`, no longer produce a combined, invalid header on the code exchange or refresh. Client authentication replaces them, including headers a custom `tokenEndpointAuth` hook sets in any casing.
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+- [#12395](https://github.com/better-auth/better-auth/pull/12395) [`b0ced9d`](https://github.com/better-auth/better-auth/commit/b0ced9d2576db02f5c41b493e07e847d5a260e4d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On Cloudflare Workers, sign-ins with a `genericOAuth` provider that uses `discoveryUrl`, and OAuth provider requests that use a configured resource (`resources`), no longer hang. An auth instance created at module scope retries discovery and resource seeding on later requests. Previously, if the request running that retry ended first, every later request that needed it waited forever. Each request now retries on its own until one succeeds.
+
+  On other runtimes, concurrent requests may send a few more discovery requests or resource lookups while the identity provider or database is unreachable.
+
+- [#11912](https://github.com/better-auth/better-auth/pull/11912) [`5c12074`](https://github.com/better-auth/better-auth/commit/5c120747e4d5ab37f1fa71fee11653ade82739bc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you use PostgreSQL and other schemas in the same database are dropped while Better Auth reads the database, for example one schema per tenant or parallel test runs, the startup schema check and `npx auth@latest migrate` no longer fail intermittently with `schema "…" does not exist` or `relation "…" does not exist`. The startup schema check now reads only the schemas on the connection's `search_path`, plus any schema set with `schemaName` or a schema plugin, and `migrate` reads only the schema it migrates. Before, both read every schema in the database. If no other schemas change while Better Auth reads the database, nothing changes for you.
+
+- [#12403](https://github.com/better-auth/better-auth/pull/12403) [`e64f624`](https://github.com/better-auth/better-auth/commit/e64f62427300a1fb6885c0ceb494818f77684a82) Thanks [@bytaesu](https://github.com/bytaesu)! - SIWE verification no longer includes the internal error message (for example a database error) in its 401 response. The original error is now logged on the server instead.
+
+- Updated dependencies [[`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b), [`c3a94c5`](https://github.com/better-auth/better-auth/commit/c3a94c546af3c3bf4573f254b666facb4a94fc2d), [`4080630`](https://github.com/better-auth/better-auth/commit/40806302bf5245c675120bbd1e60f70e1f168252), [`5c12074`](https://github.com/better-auth/better-auth/commit/5c120747e4d5ab37f1fa71fee11653ade82739bc), [`b241ffc`](https://github.com/better-auth/better-auth/commit/b241ffc9404fa182fa60a2cf5c54765334729f4f), [`57fa843`](https://github.com/better-auth/better-auth/commit/57fa8432d89117e7a1ce49cdb7f194dbde0839e3), [`1a79da5`](https://github.com/better-auth/better-auth/commit/1a79da50672c8a7ccea89c93b11b25aea86262be), [`2d10ae7`](https://github.com/better-auth/better-auth/commit/2d10ae733eacab919ce13413ac9e840f2ea7f1c6), [`ef4d4f7`](https://github.com/better-auth/better-auth/commit/ef4d4f7dc457fc78b0414e9c6a60827a7a3eab0e)]:
+  - @better-auth/core@1.7.21
+  - @better-auth/prisma-adapter@1.7.21
+  - @better-auth/mongo-adapter@1.7.21
+  - @better-auth/kysely-adapter@1.7.21
+  - @better-auth/telemetry@1.7.21
+  - @better-auth/drizzle-adapter@1.7.21
+  - @better-auth/memory-adapter@1.7.21
+
+## 1.7.20
+
+### Patch Changes
+
+- Updated dependencies [[`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997), [`e9b43d7`](https://github.com/better-auth/better-auth/commit/e9b43d7149cec0b52e8194b1341e582d0ea19bba), [`265629c`](https://github.com/better-auth/better-auth/commit/265629cb958913cf4459ea7545ae212ccaa485e1), [`e9b43d7`](https://github.com/better-auth/better-auth/commit/e9b43d7149cec0b52e8194b1341e582d0ea19bba)]:
+  - @better-auth/core@1.7.20
+  - @better-auth/memory-adapter@1.7.20
+  - @better-auth/prisma-adapter@1.7.20
+  - @better-auth/drizzle-adapter@1.7.20
+  - @better-auth/kysely-adapter@1.7.20
+  - @better-auth/mongo-adapter@1.7.20
+  - @better-auth/telemetry@1.7.20
+
 ## 1.7.19
 
 ### Patch Changes
