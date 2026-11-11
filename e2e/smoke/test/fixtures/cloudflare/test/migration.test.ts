@@ -18,6 +18,19 @@ afterAll(async () => {
 });
 
 /**
+ * @see https://github.com/better-auth/better-auth/issues/12400
+ */
+it("validates the schema on the first request instead of at startup", async () => {
+	const response = await server.fetch("http://localhost:8787/_test/migrate", {
+		method: "POST",
+	});
+	expect(response.status).toBe(204);
+	expect(server.getLogs().map((log) => log.message)).not.toContainEqual(
+		expect.stringContaining("Could not validate the database schema"),
+	);
+});
+
+/**
  * @see https://github.com/better-auth/better-auth/issues/10551
  */
 it("runs built-in migrations repeatedly on D1", async () => {

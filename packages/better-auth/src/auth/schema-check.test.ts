@@ -162,6 +162,24 @@ describe.each([
 		expect(find).toHaveBeenCalledTimes(2);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12400
+	 */
+	it("defers validation to the first request on Cloudflare Workers", async () => {
+		vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
+		const find = vi.fn(async (): Promise<SchemaFinding[]> => []);
+		const { auth, log } = createAuth(find);
+
+		await auth.$context;
+		vi.unstubAllGlobals();
+		expect(find).not.toHaveBeenCalled();
+		expect(log).not.toHaveBeenCalledWith("error", expect.anything());
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).resolves.toBeNull();
+		expect(find).toHaveBeenCalledTimes(1);
+	});
+
 	it("leaves configuration accessible for migration tooling after a mismatch", async () => {
 		const { auth, log } = createAuth(async () => issuerDrift);
 		await expect(

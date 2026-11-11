@@ -24,7 +24,13 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				`Schema validation is not available for adapter "${ctx.adapter.id}". Skipping schema validation. Database operations will proceed normally.`,
 			);
 		}
-		const pendingSchemaCheck = ctx.checkSchema?.();
+		// Workers forbid I/O in the global scope, where `betterAuth()` usually
+		// runs, so the first request validates instead.
+		// @see https://developers.cloudflare.com/workers/runtime-apis/request/#the-request-context
+		const pendingSchemaCheck =
+			globalThis.navigator?.userAgent === "Cloudflare-Workers"
+				? undefined
+				: ctx.checkSchema?.();
 		if (pendingSchemaCheck) {
 			void pendingSchemaCheck.catch((error: unknown) => {
 				ctx.logger.error(
