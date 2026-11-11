@@ -92,6 +92,8 @@ export default {
 			};
 			auth = betterAuth(authOptions);
 			const initialized = await auth.$context;
+			// Respond while this request's schema lookup is still running.
+			void auth.api.getSession({ headers: request.headers }).catch(() => {});
 			for (let waited = 0; queriesStarted === 0; waited += 10) {
 				if (waited >= 5_000) {
 					return new Response("Schema lookup did not start", { status: 500 });

@@ -5,7 +5,6 @@ import {
 	registerSchemaCheck,
 	SchemaMismatchError,
 } from "@better-auth/core/db/internal";
-import { createLogger } from "@better-auth/core/env";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 import { betterAuth } from "./full";
@@ -80,35 +79,42 @@ describe.each([
 		},
 	);
 
-	it("starts validation without adding a public readiness API", async () => {
-		const find = vi.fn(async () => []);
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12400
+	 */
+	it("validates on first use and reports a mismatch by throwing", async () => {
+		const find = vi.fn(async () => issuerDrift);
 		const log = vi.fn();
 		const { auth } = createAuth(find, {
 			advanced: { database: { validateSchema: true } },
 			logger: { log, level: "debug" },
 		});
 		await auth.$context;
+		await new Promise((resolve) => setTimeout(resolve, 0));
 
-		expect(find).toHaveBeenCalledTimes(1);
+		expect(find).not.toHaveBeenCalled();
 		expect(auth).not.toHaveProperty("$ready");
+		await expect(
+			auth.api.getSession({ headers: new Headers() }),
+		).rejects.toThrow(SchemaMismatchError);
+		expect(find).toHaveBeenCalledOnce();
 		expect(log).not.toHaveBeenCalled();
 	});
 
-	it("shares the initialization verdict with concurrent requests", async () => {
+	it("shares one verdict with concurrent requests", async () => {
 		let finish = (_findings: SchemaFinding[]) => {};
 		const pending = new Promise<SchemaFinding[]>((resolve) => {
 			finish = resolve;
 		});
 		const find = vi.fn(() => pending);
 		const { auth } = createAuth(find);
-		await auth.$context;
-		expect(find).toHaveBeenCalledTimes(1);
 
 		const session = auth.api.getSession({ headers: new Headers() });
 		const request = auth.handler(
 			new Request("https://auth.example.com/api/auth/get-session"),
 		);
 		const outcomes = Promise.allSettled([session, request]);
+		await vi.waitFor(() => expect(find).toHaveBeenCalledOnce());
 		finish(issuerDrift);
 
 		const results = await outcomes;
@@ -129,7 +135,7 @@ describe.each([
 		{ name: "clean", findings: [] },
 		{ name: "mismatch", findings: issuerDrift },
 	])(
-		"validates API and HTTP requests on Cloudflare Workers while startup validation is still pending: $name",
+		"validates API and HTTP requests on Cloudflare Workers while another request's validation is still pending: $name",
 		async ({ findings }) => {
 			vi.stubGlobal("navigator", { userAgent: "Cloudflare-Workers" });
 			onTestFinished(() => {
@@ -144,8 +150,8 @@ describe.each([
 				.mockReturnValueOnce(pending)
 				.mockResolvedValue(findings);
 			const { auth } = createAuth(find);
-			await auth.$context;
-			expect(find).toHaveBeenCalledOnce();
+			const stalled = auth.api.getSession({ headers: new Headers() });
+			await vi.waitFor(() => expect(find).toHaveBeenCalledOnce());
 
 			const outcomes = await Promise.allSettled([
 				auth.api.getSession({ headers: new Headers() }),
@@ -170,8 +176,12 @@ describe.each([
 			const lookupCount = find.mock.calls.length;
 			expect(lookupCount).toBeGreaterThan(1);
 			finish([]);
-			// Let the stale startup lookup settle before reading the cached result.
-			await new Promise((resolve) => setTimeout(resolve, 0));
+			// The stale lookup follows the newer result.
+			if (findings.length) {
+				await expect(stalled).rejects.toThrow(SchemaMismatchError);
+			} else {
+				await expect(stalled).resolves.toBeNull();
+			}
 			const cached = auth.api.getSession({ headers: new Headers() });
 			if (findings.length) {
 				await expect(cached).rejects.toThrow(SchemaMismatchError);
@@ -198,21 +208,18 @@ describe.each([
 		expect(onRequest).not.toHaveBeenCalled();
 	});
 
-	it("retries connectivity failures without logging driver secrets", async () => {
-		const failure = new Error("postgres://user:secret@private-db/database");
+	it("retries connectivity failures on the next request", async () => {
+		const failure = new Error("connect ECONNREFUSED");
 		const find = vi
 			.fn<() => Promise<SchemaFinding[]>>()
 			.mockRejectedValueOnce(failure)
 			.mockResolvedValueOnce([]);
 		const { auth, log } = createAuth(find);
 
-		await vi.waitFor(() => {
-			expect(log).toHaveBeenCalledWith(
-				"error",
-				expect.stringContaining("Could not validate the database schema"),
-			);
-		});
-		expect(JSON.stringify(log.mock.calls)).not.toContain(failure.message);
+		await expect(auth.api.getSession({ headers: new Headers() })).rejects.toBe(
+			failure,
+		);
+		expect(log).not.toHaveBeenCalled();
 		await expect(
 			auth.api.getSession({ headers: new Headers() }),
 		).resolves.toBeNull();
@@ -223,18 +230,14 @@ describe.each([
 	});
 
 	it("leaves configuration accessible for migration tooling after a mismatch", async () => {
-		const { auth, log } = createAuth(async () => issuerDrift);
+		const { auth } = createAuth(async () => issuerDrift);
 		await expect(
 			auth.api.getSession({ headers: new Headers() }),
-		).rejects.toThrow(SchemaMismatchError);
+		).rejects.toThrow("1.7.0 through 1.7.2");
 
 		const context = await auth.$context;
 		expect(context.adapter.id).toBe("memory");
 		expect(auth.options.database).toBeTypeOf("function");
-		expect(log).toHaveBeenCalledWith(
-			"error",
-			expect.stringContaining("1.7.0 through 1.7.2"),
-		);
 	});
 
 	it("preserves context initialization failures", async () => {
@@ -266,31 +269,6 @@ describe.each([
 			failure,
 		);
 		expect(find).not.toHaveBeenCalled();
-		expect(log).not.toHaveBeenCalled();
-	});
-
-	it("reports schema failures through the initialized context logger", async () => {
-		const contextLog = vi.fn();
-		const { auth, log } = createAuth(async () => issuerDrift, {
-			plugins: [
-				{
-					id: "context-logger",
-					init: () => ({
-						context: { logger: createLogger({ log: contextLog }) },
-					}),
-				},
-			],
-		});
-
-		await expect(
-			auth.api.getSession({ headers: new Headers() }),
-		).rejects.toThrow(SchemaMismatchError);
-		await vi.waitFor(() => {
-			expect(contextLog).toHaveBeenCalledWith(
-				"error",
-				new SchemaMismatchError(issuerDrift, "database").message,
-			);
-		});
 		expect(log).not.toHaveBeenCalled();
 	});
 
