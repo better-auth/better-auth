@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
+import type { VerifiedDpopProof } from "better-auth/oauth2";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
@@ -16,12 +17,14 @@ import type { BetterAuthPlugin } from "better-auth/types";
 import type { APIError } from "better-call";
 import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import * as z from "zod";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
 import { oauthProvider } from "./oauth";
 import { createResourceServerChallenge } from "./resource-challenge";
 import { getOAuthProviderApi } from "./token";
+import type { OAuthProviderApi } from "./types";
 
 const authServerBaseUrl = "http://localhost:3000";
 const rpBaseUrl = "http://localhost:5000";
@@ -49,6 +52,44 @@ const pluginIssuer = {
 				);
 				const { client } = await provider.authenticateClient();
 				return ctx.json(await provider.issueTokens({ client, scopes: [] }));
+			},
+		),
+	},
+} satisfies BetterAuthPlugin;
+
+const pluginBindEndpoint = `${authServerBaseUrl}/api/auth/test/dpop-bind`;
+
+// A companion endpoint that accepts DPoP proofs outside the token endpoint,
+// and one that only hands out nonces.
+const dpopCompanion = {
+	id: "test-dpop-companion",
+	endpoints: {
+		testDpopBind: createAuthEndpoint(
+			"/test/dpop-bind",
+			{
+				method: "POST",
+				body: z.object({ required: z.boolean().optional() }),
+			},
+			async (ctx) => {
+				const provider = getOAuthProviderApi(
+					ctx,
+					ctx.context.getPlugin("oauth-provider")!.options,
+				);
+				const proof = await provider.verifyDpopProof({
+					required: ctx.body.required,
+				});
+				return ctx.json({ jkt: proof?.jkt ?? null });
+			},
+		),
+		testDpopNonce: createAuthEndpoint(
+			"/test/dpop-nonce",
+			{ method: "POST" },
+			async (ctx) => {
+				const provider = getOAuthProviderApi(
+					ctx,
+					ctx.context.getPlugin("oauth-provider")!.options,
+				);
+				return ctx.json({ nonce: (await provider.issueDpopNonce()) ?? null });
 			},
 		),
 	},
@@ -124,6 +165,7 @@ async function setupNonceProvider(params: {
 				baseURL,
 				plugins: [
 					pluginIssuer,
+					dpopCompanion,
 					jwt({ jwt: { issuer: baseURL } }),
 					oauthProvider({
 						loginPage: "/login",
@@ -799,6 +841,170 @@ describe("DPoP nonce lifetime shared with the resource client", async () => {
 			);
 		},
 	);
+});
+
+describe("DPoP nonces on a companion endpoint", async () => {
+	const { auth, context, customFetchImpl } = await setupNonceProvider({
+		testWith: "sqlite",
+	});
+
+	function bind(dpopProof?: string, body: { required?: boolean } = {}) {
+		return customFetchImpl(pluginBindEndpoint, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				...(dpopProof ? { DPoP: dpopProof } : {}),
+			},
+			body: JSON.stringify(body),
+		});
+	}
+
+	function bindProof(key: DpopKey, nonce?: string | null) {
+		return createProof(key, { method: "POST", url: pluginBindEndpoint, nonce });
+	}
+
+	it("challenges a proof without a nonce and accepts the retry", async () => {
+		const key = await createDpopKey();
+		const challenge = await bind(await bindProof(key));
+		expect(challenge.status).toBe(400);
+		expect(await challenge.json()).toMatchObject({ error: "use_dpop_nonce" });
+		const nonce = challenge.headers.get("DPoP-Nonce");
+		expect(nonce).toEqual(expect.any(String));
+		expect(challenge.headers.get("Cache-Control")).toBe("no-store");
+		expect(challenge.headers.get("Access-Control-Expose-Headers")).toContain(
+			"DPoP-Nonce",
+		);
+
+		const bound = await bind(await bindProof(key, nonce));
+		expect(bound.status).toBe(200);
+		expect(await bound.json()).toEqual({ jkt: key.jkt });
+		// RFC 9449 §8.2: the success response carries the next nonce.
+		expect(bound.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+		expect(bound.headers.get("Cache-Control")).toBe("no-store");
+	});
+
+	it("challenges an expired nonce", async () => {
+		const key = await createDpopKey();
+		const expired = await nonceIssuedAgo(context.secret, 301);
+		const response = await bind(await bindProof(key, expired));
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({ error: "use_dpop_nonce" });
+		expect(response.headers.get("DPoP-Nonce")).not.toBe(expired);
+	});
+
+	it("accepts a nonce from the token endpoint's secret and nonce endpoint", async () => {
+		const key = await createDpopKey();
+		const issued = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/test/dpop-nonce`,
+			{ method: "POST" },
+		);
+		const { nonce } = (await issued.json()) as { nonce: string };
+		expect(issued.headers.get("DPoP-Nonce")).toBe(nonce);
+		expect(issued.headers.get("Cache-Control")).toBe("no-store");
+		const bound = await bind(await bindProof(key, nonce));
+		expect(bound.status).toBe(200);
+	});
+
+	it("rejects a replayed proof", async () => {
+		const key = await createDpopKey();
+		const nonce = await createDpopNonce({ secret: context.secret });
+		const proof = await bindProof(key, nonce);
+		expect((await bind(proof)).status).toBe(200);
+		const replay = await bind(proof);
+		expect(replay.status).toBe(400);
+		expect(await replay.json()).toMatchObject({ error: "invalid_dpop_proof" });
+	});
+
+	it("rejects a missing proof only when required", async () => {
+		const optional = await bind();
+		expect(optional.status).toBe(200);
+		expect(await optional.json()).toEqual({ jkt: null });
+		expect(optional.headers.get("DPoP-Nonce")).toBeNull();
+
+		const required = await bind(undefined, { required: true });
+		expect(required.status).toBe(400);
+		expect(await required.json()).toMatchObject({
+			error: "invalid_dpop_proof",
+		});
+	});
+
+	it("rejects a proof on an auth.api call without an HTTP request", async () => {
+		const key = await createDpopKey();
+		const nonce = await createDpopNonce({ secret: context.secret });
+		const error = await auth.api
+			.testDpopBind({
+				headers: new Headers({ DPoP: await bindProof(key, nonce) }),
+				body: {},
+			})
+			.catch((e: APIError) => e);
+		expect(error).toMatchObject({
+			status: "BAD_REQUEST",
+			body: { error: "invalid_dpop_proof" },
+		});
+	});
+
+	it("issues a nonce on an auth.api call", async () => {
+		const { headers, response } = await auth.api.testDpopNonce({
+			returnHeaders: true,
+		});
+		expect(response.nonce).toEqual(expect.any(String));
+		expect(headers.get("DPoP-Nonce")).toBe(response.nonce);
+	});
+});
+
+describe("DPoP proofs on a companion endpoint without nonces", async () => {
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			dpopCompanion,
+			jwt(),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+		],
+	});
+
+	it("verifies a proof without a nonce and issues none", async () => {
+		const key = await createDpopKey();
+		const bound = await customFetchImpl(pluginBindEndpoint, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				DPoP: await createProof(key, {
+					method: "POST",
+					url: pluginBindEndpoint,
+				}),
+			},
+			body: "{}",
+		});
+		expect(bound.status).toBe(200);
+		expect(await bound.json()).toEqual({ jkt: key.jkt });
+		expect(bound.headers.get("DPoP-Nonce")).toBeNull();
+
+		const issued = await customFetchImpl(
+			`${authServerBaseUrl}/api/auth/test/dpop-nonce`,
+			{ method: "POST" },
+		);
+		expect(await issued.json()).toEqual({ nonce: null });
+		expect(issued.headers.get("DPoP-Nonce")).toBeNull();
+	});
+});
+
+describe("OAuthProviderApi DPoP types", () => {
+	it("exposes the proof verifier and nonce issuer", () => {
+		const verify = (async () =>
+			undefined) as unknown as OAuthProviderApi["verifyDpopProof"];
+		expectTypeOf(verify({ required: true })).toEqualTypeOf<
+			Promise<VerifiedDpopProof>
+		>();
+		expectTypeOf(verify()).toEqualTypeOf<
+			Promise<VerifiedDpopProof | undefined>
+		>();
+		expectTypeOf(verify({ required: false })).toEqualTypeOf<
+			Promise<VerifiedDpopProof | undefined>
+		>();
+		expectTypeOf<OAuthProviderApi["issueDpopNonce"]>().toEqualTypeOf<
+			() => Promise<string | undefined>
+		>();
+	});
 });
 
 describe("dpop.nonce configuration", () => {

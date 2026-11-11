@@ -1,4 +1,5 @@
 import type { GenericEndpointContext, LiteralString } from "@better-auth/core";
+import type { VerifiedDpopProof } from "better-auth/oauth2";
 import type { JWSAlgorithms } from "better-auth/plugins";
 import type { InferOptionSchema, Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
@@ -343,13 +344,71 @@ export interface OAuthProviderApi {
 	 * request) calls this before the claim and passes the result to
 	 * `issueTokens` as `confirmation`, so a rejected proof leaves the credential
 	 * for a retry with a valid one.
+	 *
+	 * A DPoP failure is an HTTP 400 `invalid_dpop_proof` error. With
+	 * `dpop.nonce.required`, a proof without a current nonce instead gets
+	 * `use_dpop_nonce` and a nonce to retry.
+	 * Without a `confirmation`, the resource policy check runs first and can
+	 * fail with `invalid_target` or `invalid_scope`.
 	 */
 	resolveConfirmation: (params: {
 		client: SchemaClient<Scope[]>;
 		scopes: string[];
 		resources?: string[];
+		/** The `confirmation` that `authenticateClient` returned, if any. */
 		confirmation?: Confirmation;
+		/**
+		 * The DPoP key thumbprint (RFC 7638) the tokens must stay bound to, such
+		 * as the `cnf.jkt` of a token the client is exchanging or refreshing. Get
+		 * it with `getConfirmationJkt` from `better-auth/oauth2`.
+		 *
+		 * A `confirmation` replaces the proof and must carry the same `jkt`. One
+		 * with another key, or with another binding such as mTLS `x5t#S256`, is
+		 * rejected even if the proof uses this key. Without a `confirmation`, the
+		 * request must carry a DPoP proof signed with this key, even if neither
+		 * the client nor the resource requires DPoP.
+		 */
+		expectedJkt?: string;
 	}) => Promise<Confirmation | undefined>;
+	/**
+	 * Verifies the request's DPoP proof (RFC 9449 §4.3) with this server's DPoP
+	 * settings, for an endpoint on the authorization server other than the token
+	 * endpoint: signing algorithms, proof age, `jti` replay protection, and the
+	 * `htm` and `htu` of this request. Returns the verified proof, whose `jkt`
+	 * is the key thumbprint to bind, or `undefined` when the request has no
+	 * `DPoP` header and `required` is not `true`.
+	 *
+	 * When `dpop.nonce.required` is on, a proof without a current nonce fails
+	 * with `use_dpop_nonce` and a fresh `DPoP-Nonce` header (RFC 9449 §8), and a
+	 * verified proof sets the client's next nonce on the response (§8.2).
+	 * Failures throw a 400 with `invalid_dpop_proof` or `use_dpop_nonce`. A
+	 * proof on a call without an HTTP request, such as `auth.api`, fails,
+	 * because its `htm` cannot be checked.
+	 *
+	 * Call it before consuming a one-time credential, so the client's retry
+	 * with the nonce can still redeem it. Do not also call it on a request that
+	 * reaches `issueTokens` or `resolveConfirmation`: they verify the proof
+	 * themselves, and a second verification rejects its `jti` as replayed.
+	 */
+	verifyDpopProof: {
+		(params: { required: true }): Promise<VerifiedDpopProof>;
+		(params?: {
+			/**
+			 * Reject a request without a `DPoP` header with `invalid_dpop_proof`.
+			 *
+			 * @default false
+			 */
+			required?: boolean;
+		}): Promise<VerifiedDpopProof | undefined>;
+	};
+	/**
+	 * Sets a fresh `DPoP-Nonce` on the response (RFC 9449 §8.2), with
+	 * `Cache-Control: no-store` and the header exposed to cross-origin
+	 * browsers, for an endpoint that hands out nonces without verifying a
+	 * proof. Returns the nonce, or `undefined` when `dpop.nonce.required` is
+	 * off.
+	 */
+	issueDpopNonce: () => Promise<string | undefined>;
 	/**
 	 * Computes the stored lookup key for a token value (the same hash the
 	 * provider persists), so a caller can find or revoke a previously issued
