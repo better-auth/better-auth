@@ -2458,6 +2458,42 @@ describe("deferSessionRefresh", async () => {
 		).rejects.toThrow("POST method requires deferSessionRefresh to be enabled");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should accept a refresh POST whose empty body arrives as a stream", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				deferSessionRefresh: true,
+			},
+		});
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+
+		// Next.js and Nuxt hand a bodyless POST to the handler as an empty stream.
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				method: "POST",
+				headers: {
+					cookie: signInRes.headers.getSetCookie()[0]!,
+				},
+				body: new ReadableStream({
+					start(controller) {
+						controller.close();
+					},
+				}),
+				duplex: "half",
+			} as RequestInit),
+		);
+
+		expect(res.status).toBe(200);
+	});
+
 	it("should not delete expired session on GET when deferSessionRefresh is enabled", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
