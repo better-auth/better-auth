@@ -97,11 +97,11 @@ export function createSchemaCheck(
 	source: SchemaSource,
 	database?: object,
 ): SchemaCheck {
-	let revision = database ? schemaRevisions.get(database) : undefined;
-	if (database && !revision) {
-		revision = { value: 0 };
-		schemaRevisions.set(database, revision);
-	}
+	const revision = database
+		? (schemaRevisions.get(database) ?? { value: 0 })
+		: undefined;
+	if (database && revision) schemaRevisions.set(database, revision);
+
 	let verdict:
 		| {
 				revision: number | undefined;
@@ -110,14 +110,10 @@ export function createSchemaCheck(
 		  }
 		| undefined;
 	let lookupSequence = 0;
-	const checkSchema: SchemaCheck = function checkSchema():
-		| Promise<void>
-		| undefined {
-		const currentRevision = revision?.value;
-		if (verdict && verdict.revision === currentRevision) {
-			return verdict.error ? Promise.reject(verdict.error) : undefined;
-		}
+
+	const runLookup = (currentRevision: number | undefined): Promise<void> => {
 		const sequence = ++lookupSequence;
+
 		return Promise.resolve()
 			.then(find)
 			.then(
@@ -128,6 +124,7 @@ export function createSchemaCheck(
 					) {
 						return checkSchema();
 					}
+
 					const error = findings.length
 						? new SchemaMismatchError(findings, source)
 						: undefined;
@@ -140,6 +137,17 @@ export function createSchemaCheck(
 				},
 			);
 	};
+
+	const checkSchema: SchemaCheck = () => {
+		const currentRevision = revision?.value;
+
+		if (verdict && verdict.revision === currentRevision) {
+			return verdict.error ? Promise.reject(verdict.error) : undefined;
+		}
+
+		return runLookup(currentRevision);
+	};
+
 	checkSchema.source = source;
 	return checkSchema;
 }
