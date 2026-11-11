@@ -982,6 +982,10 @@ describe("oauthTokenExchange", () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3
+	 * @see https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
+	 */
 	describe("a client exchanging its own certificate-bound subject token", () => {
 		const certificate = { "x5t#S256": "subject-certificate" };
 

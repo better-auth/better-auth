@@ -514,7 +514,7 @@ A [`clientAuthentication` strategy](/docs/plugins/oauth-provider/reference#provi
 
 When the subject token is DPoP-bound, the rules depend on who exchanges it:
 
-* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A missing proof, or a proof or `confirmation` with another key, fails with `invalid_dpop_proof`.
+* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A request with neither a proof nor a `confirmation` fails with `invalid_dpop_proof`. So does a proof or `confirmation` with another key.
 * **A service in the token's audience**, such as the MCP server that received it, does not hold the client's key. If the service sends its own proof, the exchanged token is bound to the service's key. If it sends no proof and none is required, the exchanged token is a bearer token.
 
 A subject token can also be bound by another mechanism, such as an mTLS certificate in `cnf["x5t#S256"]` that came from a strategy's `confirmation`. When the client the token was issued to exchanges it, its strategy must return the same `confirmation` again. The exchanged token then stays bound to that certificate. The exchange fails with `invalid_request` in any of these cases:

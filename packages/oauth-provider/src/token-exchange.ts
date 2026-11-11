@@ -180,10 +180,10 @@ async function exchangeToken(
 			deny("the user has not consented to this client for this exchange");
 		}
 	}
-	// As on refresh, a client exchanging its own sender-constrained token must
-	// prove the same key: a DPoP key, or whatever its client authentication
-	// confirmed, such as an mTLS certificate. A resource server cannot hold that
-	// key, so it binds its own.
+	// A client exchanging its own sender-constrained token must prove the same
+	// binding: the same DPoP key, as on refresh, or the same client-auth
+	// confirmation, such as an mTLS certificate. A resource server cannot hold
+	// that key, so it binds its own.
 	const ownBinding =
 		subject.client_id === client.clientId ? subject.cnf : undefined;
 	const expectedJkt = getConfirmationJkt(ownBinding);
