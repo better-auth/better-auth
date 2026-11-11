@@ -12,6 +12,7 @@ import { oauthProvider } from "./oauth";
 import { getOAuthProviderApi } from "./token";
 import type {
 	ClientDiscovery,
+	Confirmation,
 	OAuthProviderExtension,
 	SchemaClient,
 	Scope,
@@ -1450,5 +1451,114 @@ describe("oauth-provider client metadata extensions", async () => {
 				],
 			}),
 		).rejects.toThrow("client metadata field is reserved: redirect_uris");
+	});
+});
+
+describe("oauth-provider extension client authentication confirmation", async () => {
+	const baseURL = "http://localhost:3000";
+	const authMethod = "malformed_confirmation_jwt";
+	const assertionType =
+		"urn:better-auth:test:client-assertion-type:malformed-confirmation";
+	let strategyConfirmation: unknown;
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				clientPrivileges: () => true,
+			}),
+			{
+				id: "malformed-confirmation-extension",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientAuthentication: {
+							[authMethod]: {
+								assertionTypes: [assertionType],
+								authenticate: async ({ clientId }) => ({
+									clientId: clientId!,
+									confirmation: strategyConfirmation as Confirmation,
+								}),
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: authMethod,
+			grant_types: ["client_credentials"],
+			scope: "read",
+			client_credentials_scopes: ["read"],
+		},
+	});
+
+	const requestToken = () =>
+		auth.handler(
+			new Request(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					scope: "read",
+					client_id: oauthClient!.client_id,
+					client_assertion_type: assertionType,
+					client_assertion: "assertion",
+				}),
+			}),
+		);
+
+	it("issues a token bound to a well-formed strategy confirmation", async () => {
+		strategyConfirmation = { "x5t#S256": "strategy-cert" };
+		const response = await requestToken();
+		expect(response.status).toBe(200);
+	});
+
+	it.each([
+		["both members", { jkt: "strategy-jkt", "x5t#S256": "strategy-cert" }],
+		["neither member", {}],
+		["a non-string member", { jkt: 1 }],
+	])("rejects a strategy confirmation with %s", async (_, confirmation) => {
+		strategyConfirmation = confirmation;
+		const response = await requestToken();
+		expect(response.status).toBe(500);
+		expect(await response.json()).toMatchObject({ error: "server_error" });
+	});
+
+	describe("from an extension grant", () => {
+		const api = getOAuthProviderApi(
+			{
+				context: { baseURL },
+			} as Parameters<typeof getOAuthProviderApi>[0],
+			{} as Parameters<typeof getOAuthProviderApi>[1],
+			"urn:better-auth:test:grant",
+		);
+		const client = { clientId: "x" } as SchemaClient<Scope[]>;
+		const confirmation = {
+			jkt: "strategy-jkt",
+			"x5t#S256": "strategy-cert",
+		} as unknown as Confirmation;
+		const serverError = expect.objectContaining({
+			body: expect.objectContaining({ error: "server_error" }),
+		});
+
+		it("rejects a malformed confirmation passed to issueTokens", () => {
+			expect(() =>
+				api.issueTokens({ client, scopes: [], confirmation }),
+			).toThrow(serverError);
+		});
+
+		it("rejects a malformed confirmation passed to resolveConfirmation", async () => {
+			await expect(
+				api.resolveConfirmation({ client, scopes: [], confirmation }),
+			).rejects.toThrow(serverError);
+		});
 	});
 });
