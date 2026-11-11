@@ -1608,7 +1608,7 @@ export const getNormalTestSuiteTests = (
 					const user = await adapter.create({
 						model: "user",
 						data: {
-							...generate("user"),
+							...(await generate("user")),
 							...data,
 						},
 						forceAllowId: true,
