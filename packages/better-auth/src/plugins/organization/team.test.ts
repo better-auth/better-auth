@@ -1722,8 +1722,6 @@ describe("invitation with team id containing comma", async () => {
 });
 
 describe("invitation team ids are scoped to the invited organization", async () => {
-	// Teams are enabled with the default (unlimited) team size, where team/org
-	// scoping previously did not run.
 	const { auth, client, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance(
 			{
@@ -1797,8 +1795,6 @@ describe("invitation team ids are scoped to the invited organization", async () 
 	});
 
 	it("does not add the member to another organization's team when accepting an invitation that stored one", async () => {
-		// An older invitation in Org A that references Org B's team directly,
-		// created before team/org scoping was enforced.
 		const invitationId = `team-scope-invitation-${Date.now()}`;
 		await ctx.adapter.create({
 			model: "invitation",
@@ -1837,7 +1833,6 @@ describe("invitation team ids are scoped to the invited organization", async () 
 			body: { code: "TEAM_NOT_FOUND" },
 		});
 
-		// The member should not be added to Org B's team.
 		const otherOrgTeamMembers = await ctx.adapter.findMany<{ userId: string }>({
 			model: "teamMember",
 			where: [{ field: "teamId", value: otherOrgTeamId }],
@@ -1921,7 +1916,6 @@ describe("accept-invitation validates team capacity before adding the member", a
 			headers: owner.headers,
 			body: { name: "Almost Full Team", organizationId: org.id },
 		});
-		// One existing member; the limit is two, so the accept must fit.
 		await seedTeamMember(team.id);
 
 		const { invitationId, inviteeHeaders, userId } = await inviteAndSignUp(
@@ -2061,8 +2055,6 @@ describe("accept-invitation validates team capacity before adding the member", a
 			headers: owner.headers,
 			body: { name: "Filling Team", organizationId: org.id },
 		});
-		// Invite while the team is below the limit, then fill it so the accept
-		// would overflow: the capacity check must run at accept time.
 		await seedTeamMember(team.id);
 		const { invitationId, inviteeHeaders, userId } = await inviteAndSignUp(
 			team.id,
@@ -2087,8 +2079,6 @@ describe("accept-invitation validates team capacity before adding the member", a
 		expect(members).toHaveLength(2);
 		expect(members.some((m) => m.userId === userId)).toBe(false);
 
-		// The invitation must stay pending so the invitee can retry; a capacity
-		// failure cannot leave them marked accepted with no membership.
 		const invitationAfter = await ctx.adapter.findOne<{ status: string }>({
 			model: "invitation",
 			where: [{ field: "id", value: invitationId }],
@@ -2170,8 +2160,6 @@ describe("accept-invitation validates team capacity before adding the member", a
 			}),
 		]);
 
-		// One request wins the claim; the other observes the invitation is no
-		// longer pending and is rejected, never running the side effects twice.
 		expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
 		expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
 
@@ -2226,5 +2214,117 @@ describe("accept-invitation validates team capacity before adding the member", a
 			where: [{ field: "id", value: invitationId }],
 		});
 		expect(invitationAfter?.status).toBe("rejected");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7408
+ */
+describe("defaultTeam.name", async () => {
+	it("should use a static string for the default team name", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: {
+							enabled: true,
+							defaultTeam: {
+								enabled: true,
+								name: "General",
+							},
+						},
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{ testWith: "sqlite" },
+		);
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "My Org", slug: "my-org" },
+		});
+		expect(org?.id).toBeDefined();
+
+		const fullOrg = await auth.api.getFullOrganization({
+			headers,
+			query: { organizationId: org!.id },
+		});
+		const teams = (fullOrg as any)?.teams;
+		expect(teams).toHaveLength(1);
+		expect(teams[0].name).toBe("General");
+	});
+
+	it("should use a function for the default team name", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: {
+							enabled: true,
+							defaultTeam: {
+								enabled: true,
+								name: (org) => `${org.name} - Default`,
+							},
+						},
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{ testWith: "sqlite" },
+		);
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "Acme Corp", slug: "acme-corp" },
+		});
+		expect(org?.id).toBeDefined();
+
+		const fullOrg = await auth.api.getFullOrganization({
+			headers,
+			query: { organizationId: org!.id },
+		});
+		const teams = (fullOrg as any)?.teams;
+		expect(teams).toHaveLength(1);
+		expect(teams[0].name).toBe("Acme Corp - Default");
+	});
+
+	it("should fall back to organization name when defaultTeam.name is not set", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+						teams: {
+							enabled: true,
+							defaultTeam: {
+								enabled: true,
+							},
+						},
+					}),
+				],
+				logger: { level: "error" },
+			},
+			{ testWith: "sqlite" },
+		);
+
+		const { headers } = await signInWithTestUser();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: { name: "Fallback Org", slug: "fallback-org" },
+		});
+		expect(org?.id).toBeDefined();
+
+		const fullOrg = await auth.api.getFullOrganization({
+			headers,
+			query: { organizationId: org!.id },
+		});
+		const teams = (fullOrg as any)?.teams;
+		expect(teams).toHaveLength(1);
+		expect(teams[0].name).toBe("Fallback Org");
 	});
 });
