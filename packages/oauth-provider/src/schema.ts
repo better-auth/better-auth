@@ -512,6 +512,12 @@ export const schema = {
 				type: "json",
 				required: false,
 			},
+			// RFC 8693 `act` actor chain of a delegated (token exchange) access
+			// token. Surfaced as `act` at introspection.
+			act: {
+				type: "json",
+				required: false,
+			},
 			// Shall be same as refreshId.scopes if using refreshId
 			scopes: {
 				type: "string[]",

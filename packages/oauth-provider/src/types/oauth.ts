@@ -36,6 +36,18 @@ export type BearerMethodsSupported = "header" | "body";
 export type Confirmation = { jkt: string } | { "x5t#S256": string };
 
 /**
+ * RFC 8693 §4.1 actor claim (`act`) of a delegated access token. `sub` names
+ * the current actor; a nested `act` names the actor before it. The
+ * authorization server is the sole authority over this value: it is token
+ * material, never a contributed claim.
+ */
+export interface OAuthActorClaim {
+	sub: string;
+	act?: OAuthActorClaim;
+	[claim: string]: unknown;
+}
+
+/**
  * Token presentation scheme returned in `token_type`. A DPoP-bound token uses
  * `"DPoP"` (RFC 9449 §5); everything else (including mTLS-bound) uses
  * `"Bearer"`, since the mTLS constraint lives at the TLS layer.

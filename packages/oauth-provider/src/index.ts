@@ -30,6 +30,8 @@ export { createResourceServerChallenge } from "./resource-challenge";
 export { getOAuthProviderApi } from "./token";
 export {
 	ACCESS_TOKEN_TYPE,
+	type OAuthTokenExchangeActor,
+	type OAuthTokenExchangeDelegationOptions,
 	type OAuthTokenExchangeOptions,
 	type OAuthTokenExchangeRequest,
 	oauthTokenExchange,

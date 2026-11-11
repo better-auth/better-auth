@@ -250,6 +250,9 @@ async function validateOpaqueAccessToken(
 	let user: User | null | undefined;
 	if (accessToken.userId) {
 		user = await ctx.context.internalAdapter.findUserById(accessToken?.userId);
+		// A token for a deleted user represents no one. Reporting it active
+		// without `sub` would read as a client_credentials token.
+		if (!user) return inactiveAccessToken();
 	}
 	const userInfoEndpoint = `${ctx.context.baseURL}/oauth2/userinfo`;
 
@@ -322,6 +325,7 @@ async function validateOpaqueAccessToken(
 			iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
 			scope: accessToken.scopes?.join(" "),
 			token_type: confirmationTokenType(accessToken.confirmation),
+			...(accessToken.act ? { act: accessToken.act } : {}),
 			...(accessToken.confirmation ? { cnf: accessToken.confirmation } : {}),
 		} as JWTPayload,
 		requestedUserInfoClaims: accessToken.requestedUserInfoClaims ?? [],

@@ -43,6 +43,7 @@ import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import { findRefreshToken } from "./token-lookup";
 import type {
 	Confirmation,
+	OAuthActorClaim,
 	OAuthAuthenticatedClient,
 	OAuthAuthenticationContext,
 	OAuthClientAuthenticationRequest,
@@ -275,6 +276,8 @@ async function createJwtAccessToken(
 		 * contributor cannot forge it.
 		 */
 		confirmation?: Confirmation;
+		/** RFC 8693 actor chain, stamped as `act`. AS-owned, like `cnf`. */
+		act?: OAuthActorClaim;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -316,7 +319,9 @@ async function createJwtAccessToken(
 			// so audit trails and (future) revocation lookups can reference
 			// individual tokens.
 			jti: generateRandomString(32),
-			// RFC 7800 sender-constraint, stamped last so the AS owns it.
+			// RFC 8693 actor chain and RFC 7800 sender-constraint, stamped last so
+			// the AS owns them.
+			...(overrides?.act ? { act: overrides.act } : {}),
 			...(overrides?.confirmation ? { cnf: overrides.confirmation } : {}),
 		},
 	});
@@ -493,9 +498,13 @@ async function createOpaqueAccessToken(
 	referenceId?: string,
 	authorizationCodeId?: string,
 	refreshId?: string,
-	confirmation?: Confirmation,
-	requestedUserInfoClaims?: string[],
+	issuance: {
+		confirmation?: Confirmation;
+		requestedUserInfoClaims?: string[];
+		act?: OAuthActorClaim;
+	} = {},
 ) {
+	const { confirmation, requestedUserInfoClaims, act } = issuance;
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
 	const token = opts.generateOpaqueAccessToken
@@ -516,6 +525,7 @@ async function createOpaqueAccessToken(
 				resources,
 				refreshId,
 				confirmation,
+				act,
 				requestedUserInfoClaims: requestedUserInfoClaims?.length
 					? requestedUserInfoClaims
 					: undefined,
@@ -1019,14 +1029,14 @@ function confirmationReplayKey(confirmation: Confirmation | undefined) {
 	return `x5t#S256:${confirmation["x5t#S256"]}`;
 }
 
-function sameConfirmation(
+export function sameConfirmation(
 	left: Confirmation | undefined,
 	right: Confirmation | undefined,
 ) {
 	return confirmationReplayKey(left) === confirmationReplayKey(right);
 }
 
-function isConfirmation(value: unknown): value is Confirmation {
+export function isConfirmation(value: unknown): value is Confirmation {
 	if (!value || typeof value !== "object") {
 		return false;
 	}
@@ -1425,6 +1435,7 @@ async function createUserTokens(
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,
 						confirmation,
+						act: params.act,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -1442,8 +1453,7 @@ async function createUserTokens(
 					referenceId,
 					params.authorizationCodeId,
 					earlyRefreshToken?.id,
-					confirmation,
-					requestedUserInfoClaims,
+					{ confirmation, requestedUserInfoClaims, act: params.act },
 				),
 		earlyRefreshToken
 			? earlyRefreshToken
