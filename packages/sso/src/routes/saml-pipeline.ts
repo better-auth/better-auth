@@ -3,6 +3,8 @@ import {
 	runWithTransaction,
 } from "@better-auth/core/context";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
+import type { Element as XMLElement } from "@xmldom/xmldom";
+import { DOMParser } from "@xmldom/xmldom";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
 import { setAccountCookie, setSessionCookie } from "better-auth/cookies";
@@ -20,7 +22,6 @@ import {
 import {
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
-	SAML_HTTP_POST_BINDING,
 	validateAudience,
 	validateInResponseTo,
 	validateSAMLAlgorithms,
@@ -202,19 +203,11 @@ export function getSAMLRedirectCandidates(
 	];
 }
 
-function toArray<T>(value: T | T[] | undefined): T[] {
-	if (Array.isArray(value)) {
-		return value;
-	}
-	return value ? [value] : [];
-}
-
 function getExpectedSAMLRecipients(
 	config: SAMLConfig,
 	baseURL: string,
 	providerId: string,
 	currentCallbackPath: string,
-	assertionConsumerServiceUrl: string | string[] | undefined,
 ): string[] {
 	const configuredPostAssertionConsumerServiceUrls =
 		getSAMLPostAssertionConsumerServiceUrls(config.spMetadata?.metadata);
@@ -223,7 +216,6 @@ function getExpectedSAMLRecipients(
 		currentCallbackPath,
 		`${baseURL}/sso/saml2/sp/acs/${providerId}`,
 		...configuredPostAssertionConsumerServiceUrls,
-		...toArray(assertionConsumerServiceUrl),
 	];
 }
 
@@ -240,6 +232,32 @@ async function getSAMLResponseBindingContent(
 		samlContent,
 	);
 	return decryptedContent;
+}
+
+/**
+ * Extracts the Assertion ID from a SAML response XML.
+ * Used for replay protection per SAML 2.0 Core section 2.3.3.
+ *
+ * Reads the ID through the DOM so character references are decoded the same
+ * way the signature check decodes them: re-spelling the ID keeps the
+ * signature valid, so it must not change the replay key.
+ */
+function extractAssertionId(samlContent: string): string | null {
+	try {
+		const response = new DOMParser().parseFromString(
+			samlContent,
+			"text/xml",
+		).documentElement;
+		if (response?.localName !== "Response") return null;
+
+		const assertion = Array.from(response.childNodes).find(
+			(node): node is XMLElement =>
+				node.nodeType === 1 && node.localName === "Assertion",
+		);
+		return assertion?.getAttribute("ID") || null;
+	} catch {
+		return null;
+	}
 }
 
 export interface SAMLResponseParams {
@@ -414,24 +432,18 @@ export async function processSAMLResponse(
 		sp.entityMeta.getEntityID(),
 		parsedSamlConfig.audience,
 	];
-	const assertionConsumerServiceUrl = sp.entityMeta.getAssertionConsumerService(
-		SAML_HTTP_POST_BINDING,
-	);
 	const expectedRecipients = getExpectedSAMLRecipients(
 		parsedSamlConfig,
 		ctx.context.baseURL,
 		providerId,
 		currentCallbackPath,
-		assertionConsumerServiceUrl,
 	);
 	const serviceProviderPolicy =
 		deriveSAMLServiceProviderPolicy(parsedSamlConfig);
+	let samlBindingContent: string;
 	let boundAssertion: ReturnType<typeof validateSAMLResponseBinding>;
 	try {
-		const samlBindingContent = await getSAMLResponseBindingContent(
-			sp,
-			samlContent,
-		);
+		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
 		if (serviceProviderPolicy.wantAssertionsSigned) {
 			verifySAMLAssertionSignature(samlBindingContent, {
 				metadata: idp.entityMeta,
@@ -536,7 +548,7 @@ export async function processSAMLResponse(
 	// the row already present and is rejected. The deterministic primary key is
 	// the gate, so no separate find/expiry check is needed.
 	const issuer = idp.entityMeta.getEntityID();
-	const { assertionId } = boundAssertion;
+	const assertionId = extractAssertionId(samlBindingContent);
 
 	if (assertionId) {
 		const conditions = (extract as SAMLAssertionExtract).conditions as

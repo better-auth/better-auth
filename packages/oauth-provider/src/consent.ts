@@ -1,6 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { formatErrorURL, getAPIErrorURL, getIssuer } from "./authorize";
+import {
+	formatErrorURL,
+	getAPIErrorURL,
+	getErrorURL,
+	getIssuer,
+	resolveTrustedRedirectUri,
+} from "./authorize";
 import {
 	filterClaimsRequestUserInfoClaims,
 	getRequestedUserInfoClaims,
@@ -107,15 +113,23 @@ export async function consentEndpoint<Result>(
 					),
 			};
 		}
+		const redirectUri = await resolveTrustedRedirectUri(
+			ctx,
+			opts,
+			clientId,
+			query.get("redirect_uri") ?? undefined,
+		);
 		return {
 			redirect: true,
-			url: formatErrorURL(
-				query.get("redirect_uri") ?? "",
-				"access_denied",
-				"User denied access",
-				query.get("state") ?? undefined,
-				getIssuer(ctx, opts),
-			),
+			url: redirectUri
+				? formatErrorURL(
+						redirectUri,
+						"access_denied",
+						"User denied access",
+						query.get("state") ?? undefined,
+						getIssuer(ctx, opts),
+					)
+				: getErrorURL(ctx, "access_denied", "User denied access"),
 		};
 	}
 

@@ -3,8 +3,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import { APIError } from "better-auth/api";
 import { countAllNodes, xmlParser } from "./parser";
 
-export const SAML_HTTP_POST_BINDING =
-	"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
+const SAML_HTTP_POST_BINDING = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
 
 const SAML_BEARER_CONFIRMATION_METHOD = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
 const SAML_METADATA_NAMESPACE = "urn:oasis:names:tc:SAML:2.0:metadata";
@@ -359,19 +358,15 @@ function validateResponseDestination(
 	}
 }
 
-function stringAttribute(node: XmlNode | null, name: string) {
-	const value = node?.[`@_${name}`];
-	return typeof value === "string" && value ? value : undefined;
-}
-
 /**
  * Validates that the assertion is bound to this Service Provider, then returns
- * the assertion fields later steps need, so the response is parsed once.
+ * the NameID format so user attribute extraction need not parse the response
+ * again.
  */
 export function validateSAMLResponseBinding(
 	samlContent: string,
 	options: SAMLResponseBindingValidationOptions,
-): { assertionId?: string; nameIDFormat?: string } {
+): { nameIDFormat?: string } {
 	const expectedAudiences = toStringSet(options.expectedAudiences);
 	const expectedRecipients = toStringSet(options.expectedRecipients);
 	const parsed = parseSAMLContent(samlContent);
@@ -382,11 +377,13 @@ export function validateSAMLResponseBinding(
 	validateBearerRecipient(assertion, expectedRecipients);
 	validateResponseDestination(response, expectedRecipients);
 
+	const nameIDFormat = firstNode(firstNode(assertion.Subject)?.NameID)?.[
+		"@_Format"
+	];
 	return {
-		assertionId: stringAttribute(assertion, "ID"),
-		nameIDFormat: stringAttribute(
-			firstNode(firstNode(assertion.Subject)?.NameID),
-			"Format",
-		),
+		nameIDFormat:
+			typeof nameIDFormat === "string" && nameIDFormat
+				? nameIDFormat
+				: undefined,
 	};
 }

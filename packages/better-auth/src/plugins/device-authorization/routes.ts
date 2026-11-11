@@ -979,6 +979,22 @@ export const deviceVerify = (grant: DeviceAuthorizationGrant | undefined) =>
 					});
 				if (claimedDeviceCodeRecord) {
 					deviceCodeRecord.userId = session.user.id;
+				} else {
+					// A concurrent lookup claimed the code first, possibly for this
+					// same user, so the stored owner decides who may review it.
+					const current = await ctx.context.adapter.findOne<DeviceCode>({
+						model: "deviceCode",
+						where: [{ field: "id", value: deviceCodeRecord.id }],
+					});
+					if (!current) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_request",
+							error_description:
+								DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+						});
+					}
+					deviceCodeRecord.userId = current.userId;
+					deviceCodeRecord.status = current.status;
 				}
 			}
 

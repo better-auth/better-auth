@@ -1,4 +1,4 @@
-import { HIDE_METADATA } from "better-auth";
+import { HIDE_METADATA } from "@better-auth/core/api";
 import { createAuthEndpoint } from "better-auth/api";
 import { SCIM_MAX_PAGE_SIZE } from "./collection-query";
 import {

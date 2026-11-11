@@ -1,9 +1,12 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
-import { BetterAuthError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterFetch, CreateFetchOption } from "@better-fetch/fetch";
-import { APIError, getBaseURL, safeJSONParse } from "better-auth";
+// Still imported from the root, which pulls in the Kysely adapter. Remove once
+// client plugins receive the base URL resolved by the client.
+import { getBaseURL } from "better-auth";
 import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";

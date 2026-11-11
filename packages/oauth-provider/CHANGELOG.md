@@ -115,6 +115,44 @@
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12126](https://github.com/better-auth/better-auth/pull/12126) [`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b) Thanks [@hardikguptaofficialgit](https://github.com/hardikguptaofficialgit)! - On Prisma with MongoDB, when your id columns use `@db.ObjectId`, magic link and email OTP sign-in for users with an unverified email no longer fail with a 500 (`Malformed ObjectID`). SAML sign-in, DPoP-bound OAuth requests, and `private_key_jwt` client authentication are fixed the same way, and Sign-In with Ethereum now keeps the email the user supplied instead of a placeholder. Setups with plain `String` id columns and other databases are unaffected.
+
+- [#12385](https://github.com/better-auth/better-auth/pull/12385) [`fd66861`](https://github.com/better-auth/better-auth/commit/fd66861c353574418a7bf48e0b79c0ebe4251c1c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Denying consent now redirects to the client only while the client is enabled and its `redirect_uri` is still valid. Before, a denial within the signed request lifetime still redirected to the `redirect_uri` after the client was disabled, the URI was removed from its registration, or `allowInsecureRedirectUri` or `validateRedirectUri` stopped accepting it. The user now sees the server error page instead.
+
+- [#12389](https://github.com/better-auth/better-auth/pull/12389) [`db930d9`](https://github.com/better-auth/better-auth/commit/db930d90115a1d6182bac83a3f010205d86baa3b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On databases that do not enforce foreign keys, such as the memory adapter and MongoDB, an opaque access token could stay valid after refresh token reuse or a replayed authorization code revoked its grant, if the token request was still issuing a refresh token. That request now fails with `invalid_grant`, and refresh token reuse revokes every access token in the family, even past 100 refresh tokens. JWT access tokens and opaque access tokens issued without a refresh token stay valid until they expire.
+
+- [#11911](https://github.com/better-auth/better-auth/pull/11911) [`900195d`](https://github.com/better-auth/better-auth/commit/900195df3f1313d84301f7b7dc4997845e568a8e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When a client sent the same refresh token twice at nearly the same time, one of the requests could fail with a 500 error. This happened when the second request arrived after the first had already rotated the token. The second request counts as refresh token reuse and revokes the token family, including the tokens the first request was still issuing, so the first request then failed on the database insert. Both requests now return `invalid_grant`, and the client must sign in again, as after any detected reuse. The same applies when an authorization code is redeemed twice at once.
+
+  Only opaque access tokens on databases that enforce foreign keys were affected. JWT access tokens, and duplicate refreshes inside `refreshTokenReuseInterval`, were not.
+
+- [#12409](https://github.com/better-auth/better-auth/pull/12409) [`9362c0d`](https://github.com/better-auth/better-auth/commit/9362c0d42e7f65a1dbfd6318360cd97ea9dd9d5b) Thanks [@bytaesu](https://github.com/bytaesu)! - Refresh tokens are issued correctly when `formatRefreshToken.encrypt` is async. Before, the client received `[object Promise]` in place of the token.
+
+- [#12395](https://github.com/better-auth/better-auth/pull/12395) [`b0ced9d`](https://github.com/better-auth/better-auth/commit/b0ced9d2576db02f5c41b493e07e847d5a260e4d) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - On Cloudflare Workers, sign-ins with a `genericOAuth` provider that uses `discoveryUrl`, and OAuth provider requests that use a configured resource (`resources`), no longer hang. An auth instance created at module scope retries discovery and resource seeding on later requests. Previously, if the request running that retry ended first, every later request that needed it waited forever. Each request now retries on its own until one succeeds.
+
+  On other runtimes, concurrent requests may send a few more discovery requests or resource lookups while the identity provider or database is unreachable.
+
+- [#12391](https://github.com/better-auth/better-auth/pull/12391) [`79d61b0`](https://github.com/better-auth/better-auth/commit/79d61b0fb0ff3750ec42aa1ef5cd136f573c996b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client registration and client updates now return `invalid_redirect_uri`, not `invalid_client_metadata`, when a `post_logout_redirect_uris` entry uses `http` outside the allowed hosts or contains credentials, matching `redirect_uris`. Clients that match on the old error code need to check for the new one.
+
+## 1.7.20
+
+### Patch Changes
+
+- [#11904](https://github.com/better-auth/better-auth/pull/11904) [`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OAuth provider deployments served over plain HTTP on a private network, such as a LAN address, a VPN, or a private DNS name, can now accept `http` redirect URIs through the new `allowInsecureRedirectUri` option. Return `true` from it for origins you control. The same option lets web clients use `localhost` callbacks during development. Without the option, redirect URI validation is unchanged.
+
+  If your issuer (`baseURL`, or `jwt.issuer` when set) uses `http` on a non-loopback host, discovery and the `iss` authorization response parameter now report it as configured instead of rewriting it to `https`. They now match the issuer in issued tokens, so OpenID Connect sign-ins no longer fail on the mismatch. If a proxy terminates TLS in front of Better Auth, set `baseURL` to the public `https` URL.
+
+  When an authorization request uses a registered `http` redirect URI that the HTTPS policy rejects, the error now appears on the server error page instead of being redirected to that URI.
+
+  Client registration and updates now reject post-logout redirect URIs that contain credentials, such as `https://user:pass@example.com/logged-out`, matching the existing rule for redirect URIs.
+
+- [#12237](https://github.com/better-auth/better-auth/pull/12237) [`dc07ae4`](https://github.com/better-auth/better-auth/commit/dc07ae4565205d27589cb285052455ede56ce3f7) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - With `allowPublicClientPrelogin` enabled, `POST /oauth2/public-client-prelogin` now returns a client only when its `client_id` matches the one in the signed `oauth_query`. Before, any valid signed query returned the public fields of any client. A request for a different client now gets a `401` with `invalid_client`. The built-in client plugin and sign-in pages that pass the `client_id` from the current authorization request are unaffected.
+
+- [#12234](https://github.com/better-auth/better-auth/pull/12234) [`1a368a1`](https://github.com/better-auth/better-auth/commit/1a368a15350814822126ca5e4db05772784c9ed8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource servers that pass `auth` to `oauthProviderResourceClient(auth)` and rely on its defaults now accept the access tokens the OAuth provider issues when `baseURL` is only an origin, such as `https://example.com`. Previously the default issuer left out the auth path (`/api/auth` by default), and when `basePath` was not set the default JWKS and introspection URLs left it out too, so valid tokens failed verification unless `issuer` and `jwksUrl` were passed explicitly. The default audience and protected resource metadata now use the same base URL. Explicitly passed options and the JWT plugin's `jwt.issuer` and `jwks.remoteUrl` still take precedence.
+
 ## 1.7.19
 
 ### Patch Changes
