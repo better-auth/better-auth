@@ -625,6 +625,7 @@ To add custom fields, use the `additionalFields` property in the `user` or `sess
 * `defaultValue`: The default value for the field (note: this only applies in the JavaScript layer; in the database, the field will be optional).
 * `input`: Whether Better Auth accepts the field when creating or updating a record (default: `true`). For user fields, this includes values from API input and `mapProfileToUser`. Set this to `false` for server-owned fields such as `role`.
 * `returned`: Whether Better Auth includes the stored field in response bodies (default: `true`). This does not affect whether input can write the field.
+* `references`: Makes the field a foreign key, as `{ model, field, onDelete }`. See [Referencing Other Models](#referencing-other-models).
 
 Here's an example of how to extend the user schema with additional fields:
 
