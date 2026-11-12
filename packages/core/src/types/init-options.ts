@@ -480,8 +480,9 @@ export type BetterAuthAdvancedOptions = {
 				 * Requests and server API calls await the check and fail when the
 				 * schema does not match. Kysely introspects the database; Drizzle
 				 * and Prisma inspect local schema metadata without opening a
-				 * connection. Other adapters are not validated and log a skip
-				 * message instead. Set `false` to disable runtime schema validation.
+				 * connection. Other adapters are not validated; unless this is
+				 * `false`, they log a skip message instead. Set `false` to disable
+				 * runtime schema validation and its skip message.
 				 *
 				 * @default true
 				 */
