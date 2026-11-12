@@ -427,7 +427,7 @@ export function createApiKey({
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.NAME_REQUIRED);
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			ctx.context.runInBackground(deleteAllExpiredApiKeys(ctx.context));
 
 			const key = await keyGenerator({
 				length: opts.defaultKeyLength,

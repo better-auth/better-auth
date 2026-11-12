@@ -365,7 +365,7 @@ export function listApiKeys({
 				paginatedApiKeys = paginatedApiKeys.slice(0, limit);
 			}
 
-			deleteAllExpiredApiKeys(ctx.context);
+			ctx.context.runInBackground(deleteAllExpiredApiKeys(ctx.context));
 
 			// Build response with parsed metadata (synchronous, no DB calls)
 			const returningApiKeys = paginatedApiKeys.map((apiKey) => {
