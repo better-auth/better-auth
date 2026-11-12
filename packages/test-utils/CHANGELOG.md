@@ -1,5 +1,7 @@
 # @better-auth/test-utils
 
+## 1.7.22
+
 ## 1.7.21
 
 ### Patch Changes
