@@ -1,5 +1,24 @@
 # @better-auth/oauth-provider
 
+## 1.8.0-beta.8
+
+### Minor Changes
+
+- [#12376](https://github.com/better-auth/better-auth/pull/12376) [`b91d155`](https://github.com/better-auth/better-auth/commit/b91d155bf775b43186bd2c817446c367bdfab657) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider can require server-provided DPoP nonces (RFC 9449 §8 and §9). A nonce stops a client from using DPoP proofs it signed ahead of time. Set `dpop: { nonce: { required: true } }` on `oauthProvider()` or `mcp()`. The token and UserInfo endpoints then answer a proof without a current nonce with `use_dpop_nonce` and a fresh nonce in the `DPoP-Nonce` header. Successful DPoP responses carry the next nonce. The token endpoint checks the nonce before it redeems an authorization code, device code, or refresh token, so the client's retry still succeeds. Nonces are derived from the auth secret and are not stored, so any instance that shares the secret accepts them.
+
+  Resource servers can require nonces too. Pass `dpop: { nonce: { required: true, secret } }` to `verifyAccessTokenRequest`, answer failures with `createResourceServerChallenge`, and send the next nonce with `createDpopNonce({ secret })` from `better-auth/oauth2`. Responses the library builds with a nonce are marked `Cache-Control: no-store`; mark your own nonce-bearing responses the same way. `requireMcpAuth` and the resource client created with your auth instance default to the auth secret and the provider's nonce lifetime.
+
+- [#11802](https://github.com/better-auth/better-auth/pull/11802) [`bca6570`](https://github.com/better-auth/better-auth/commit/bca65701bfcf9e416d1850506adbac542eaabde4) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Client secret expiry now takes effect. If you set `clientRegistrationClientSecretExpiration`, or pass `client_secret_expires_at` to `adminCreateOAuthClient` or `adminUpdateOAuthClient`, the expiry is now saved on the client and returned as `client_secret_expires_at` when the client is registered or read. Once it passes, the token, introspection, and revocation endpoints reject the secret with `invalid_client`. Previously the value was discarded, every response reported `client_secret_expires_at: 0`, and the secret never expired.
+
+  Clients created before you upgrade have no stored expiry, so their secrets still never expire. To give one an expiry, set `client_secret_expires_at` with `adminUpdateOAuthClient`; `0` removes it. A string value is read as a time span from now, such as `"90d"`. A string that is not a time span, or a timestamp too large to be a date, is rejected with `invalid_client_metadata`. Rotating a secret keeps the client's current expiry.
+
+  This adds an optional `expiresAt` column to the `oauthClient` table, which must exist in your database before you deploy:
+  - With the built-in Kysely adapter, run `npx auth@latest migrate`.
+  - With Prisma or Drizzle, run `npx auth@latest generate` and apply the migration to your database before you deploy the regenerated client or schema. If the regenerated client or schema is deployed first, every request that reads an OAuth client fails, even if you never set an expiry.
+  - MongoDB needs no migration.
+
+  Until the column exists, creating or updating a client with an expiry fails, and so does every dynamic registration that issues a client secret when `clientRegistrationClientSecretExpiration` is set.
+
 ## 1.8.0-beta.7
 
 ## 1.8.0-beta.6
@@ -114,6 +133,22 @@
 - Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1)]:
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
+
+## 1.7.22
+
+### Patch Changes
+
+- [#12447](https://github.com/better-auth/better-auth/pull/12447) [`5976842`](https://github.com/better-auth/better-auth/commit/59768427a963413f1a7a4eb7595b00b395713770) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a failed request that used the `DPoP` authorization scheme with a `DPoP` challenge. Before, an expired, revoked, or otherwise invalid DPoP-bound token got a `Bearer` challenge, which a client that supports only DPoP might not act on. `createResourceServerChallenge` accepts a new `request` option, either the failed `Request` or `{ authorizationHeader }`, and reads the scheme from it. The resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass it automatically.
+
+- [#12445](https://github.com/better-auth/better-auth/pull/12445) [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource-server challenges no longer turn a rejected request into a 500, and they now tell clients when the token they sent is invalid.
+
+  `createResourceServerChallenge` used to throw when an `error_description` contained a character that RFC 6750 does not allow in that parameter. Better Auth's own DPoP message `DPoP proof typ must be "dpop+jwt"` was one of them. The description is now fitted into the allowed characters: `"` becomes `'`, other disallowed characters become spaces, and an empty result is left out. Invalid scope tokens in `challengeScopes` still throw.
+
+  When the request presented a token that failed verification, the 401 Bearer challenge now carries `error="invalid_token"` and an `error_description`, following RFC 6750 §3 and §3.1. A request without a token still gets no error code. `verifyBearerToken` and `verifyAccessTokenRequest` now set `error: "invalid_token"` and `error_description` on their expired, invalid, inactive, and unreadable token errors, and the challenge's response body includes both fields alongside `message`.
+
+- [#12446](https://github.com/better-auth/better-auth/pull/12446) [`1393028`](https://github.com/better-auth/better-auth/commit/139302823057cdf9693bca48735fca99faf3ccfd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Send a `WWW-Authenticate` challenge on every 401 from `/oauth2/userinfo`. Previously, a DPoP-bound token with a missing or invalid proof, a mismatched `htu` or `htm`, or the wrong authorization scheme got a 401 with no challenge, and so did a request with no access token. A client could not tell from the response which scheme or proof algorithms to retry with.
+
+  DPoP-bound tokens and requests that use the `DPoP` scheme now get a `DPoP` challenge with `algs` (RFC 9449 §7.1). Other failures keep the `Bearer` challenge, and a request with no token is offered both schemes. The challenge is also listed in `Access-Control-Expose-Headers`, so browser clients on other origins can read it. Response bodies are unchanged.
 
 ## 1.7.21
 

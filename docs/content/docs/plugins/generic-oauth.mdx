@@ -285,7 +285,17 @@ tokenEndpointAuth: {
 },
 ```
 
-Better Auth builds the standard grant parameters, while `customizeRequest` adds the client authentication required by the provider.
+With this method, Better Auth adds no client credentials. Your hook must set every credential the provider requires, such as a `client_id`, a secret, or a client assertion. The hook can also set headers, including an `Authorization` header in the provider's own scheme:
+
+```ts
+tokenEndpointAuth: {
+  method: "custom",
+  customizeRequest({ body, headers }) {
+    body.set("client_id", providerClientId);
+    headers.authorization = `Provider ${providerCredential}`;
+  },
+},
+```
 
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
@@ -394,7 +404,7 @@ genericOAuth({
 * The discovery request follows a redirect only within that origin. If `discoveryUrl` redirects to another origin, discovery fails and Better Auth logs an error. Set `discoveryUrl` to the final URL.
 * The request for the provider's signing keys (`jwks_uri`) gets the headers when `jwks_uri` is on that origin. A `jwks_uri` on another origin gets no headers.
 
-**authorizationHeaders**: (Optional) Custom headers to include in requests to the token endpoint, both the authorization code exchange and token refresh. A custom `getToken` replaces the default code exchange, so it must add these headers itself. Useful for providers that require special headers.
+**authorizationHeaders**: (Optional) Custom headers to include in requests to the token endpoint, both the authorization code exchange and token refresh. A custom `getToken` replaces the default code exchange, so it must add these headers itself. Useful for providers that require special headers. `Authorization` is not allowed in any letter case, because that header belongs to client authentication. Initialization fails with an error naming the provider. To send a provider-specific `Authorization` header, use `tokenEndpointAuth` with `method: "custom"`.
 
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
 

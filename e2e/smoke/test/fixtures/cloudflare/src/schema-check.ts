@@ -14,6 +14,7 @@ let delayEnabled = false;
 let queriesStarted = 0;
 let queriesCompleted = 0;
 let schemaLookups = 0;
+let waitUntilPending = 0;
 
 function delayedDatabase(database: D1Database, delay: number): D1Database {
 	function statement(
@@ -92,6 +93,8 @@ export default {
 			};
 			auth = betterAuth(authOptions);
 			const initialized = await auth.$context;
+			// Respond while this request's schema lookup is still running.
+			void auth.api.getSession({ headers: request.headers }).catch(() => {});
 			for (let waited = 0; queriesStarted === 0; waited += 10) {
 				if (waited >= 5_000) {
 					return new Response("Schema lookup did not start", { status: 500 });
@@ -100,13 +103,21 @@ export default {
 			}
 			if (url.searchParams.get("waitUntil") === "true") {
 				const check = initialized.checkSchema?.();
-				if (check) context.waitUntil(check);
+				if (check) {
+					waitUntilPending++;
+					context.waitUntil(
+						check.finally(() => {
+							waitUntilPending--;
+						}),
+					);
+				}
 			}
 			return Response.json({
 				instance,
 				queriesStarted,
 				queriesCompleted,
 				schemaLookups,
+				waitUntilPending,
 			});
 		}
 		if (url.pathname === "/status") {
@@ -115,6 +126,7 @@ export default {
 				queriesStarted,
 				queriesCompleted,
 				schemaLookups,
+				waitUntilPending,
 			});
 		}
 		if (!auth) return new Response("Missing auth instance", { status: 409 });

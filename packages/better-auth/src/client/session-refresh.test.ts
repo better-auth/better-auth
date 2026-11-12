@@ -14,6 +14,7 @@ describe("session-refresh", () => {
 	});
 
 	afterEach(() => {
+		vi.unstubAllGlobals();
 		vi.useRealTimers();
 		vi.restoreAllMocks();
 		delete (globalThis as any)[Symbol.for("better-auth:broadcast-channel")];
@@ -347,5 +348,75 @@ describe("session-refresh", () => {
 		expect(mockFetchSession).toHaveBeenCalledTimes(1);
 
 		secondManager.cleanup();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11389
+	 */
+	it("cleans up after the DOM globals are torn down", () => {
+		const manager = createSessionRefreshManager({
+			fetchSession: vi.fn(async () => {}),
+			sessionSignal: atom(false),
+		});
+		manager.init();
+		const removeFromWindow = vi.spyOn(window, "removeEventListener");
+		const removeFromDocument = vi.spyOn(document, "removeEventListener");
+
+		// Test environments such as happy-dom remove these globals on teardown.
+		vi.stubGlobal("window", undefined);
+		vi.stubGlobal("document", undefined);
+		Reflect.deleteProperty(globalThis, "window");
+		Reflect.deleteProperty(globalThis, "document");
+
+		expect(() => manager.cleanup()).not.toThrow();
+		expect(removeFromWindow).toHaveBeenCalledWith(
+			"storage",
+			expect.any(Function),
+		);
+		expect(removeFromWindow).toHaveBeenCalledWith(
+			"online",
+			expect.any(Function),
+			false,
+		);
+		expect(removeFromWindow).toHaveBeenCalledWith(
+			"offline",
+			expect.any(Function),
+			false,
+		);
+		expect(removeFromDocument).toHaveBeenCalledWith(
+			"visibilitychange",
+			expect.any(Function),
+			false,
+		);
+	});
+
+	/**
+	 * @see https://github.com/facebook/react-native/blob/897cca8273c689dfa99568e33aea7bc4baf0e8aa/packages/react-native/Libraries/Core/setUpNavigator.js
+	 */
+	it("polls when the runtime does not report connectivity", async () => {
+		Reflect.deleteProperty(
+			globalThis,
+			Symbol.for("better-auth:online-manager"),
+		);
+		// React Native defines navigator without onLine.
+		vi.stubGlobal("navigator", {
+			product: "ReactNative",
+		});
+		const fetchSession = vi.fn(async () => {});
+		const manager = createSessionRefreshManager({
+			fetchSession,
+			sessionSignal: atom(false),
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+		manager.cleanup();
+
+		expect(fetchSession).toHaveBeenCalledOnce();
 	});
 });

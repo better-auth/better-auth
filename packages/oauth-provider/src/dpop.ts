@@ -1,7 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { NO_STORE_HEADERS } from "better-auth/api";
-import type { DpopNonceOptions } from "better-auth/oauth2";
-import { createDpopNonce, DPOP_NONCE_HEADER } from "better-auth/oauth2";
+import { APIError, NO_STORE_HEADERS } from "better-auth/api";
+import type { DpopNonceOptions, VerifiedDpopProof } from "better-auth/oauth2";
+import {
+	createDpopNonce,
+	createDpopReplayStore,
+	DPOP_NONCE_HEADER,
+	isDpopProofError,
+	verifyDpopProof,
+} from "better-auth/oauth2";
 import type { OAuthOptions, Scope } from "./types";
 
 export function getDpopProofJwt(
@@ -119,4 +125,110 @@ export async function setDpopNonceHeader(
 		ctx.setHeader(name, value);
 	}
 	return headers;
+}
+
+export function throwInvalidDpopProof(errorDescription: string): never {
+	throw new APIError("BAD_REQUEST", {
+		error: "invalid_dpop_proof",
+		error_description: errorDescription,
+	});
+}
+
+/**
+ * RFC 9449 §8: answers a request whose DPoP proof lacks a current nonce with
+ * `use_dpop_nonce` and the nonce to retry with.
+ */
+export async function throwUseDpopNonce(
+	ctx: Pick<GenericEndpointContext, "setHeader" | "responseHeaders">,
+	nonce: DpopNonceOptions,
+	errorDescription: string,
+): Promise<never> {
+	throw new APIError(
+		"BAD_REQUEST",
+		{ error: "use_dpop_nonce", error_description: errorDescription },
+		await setDpopNonceHeader(ctx, nonce),
+	);
+}
+
+/**
+ * Verifies a DPoP proof sent to an authorization-server endpoint with this
+ * server's DPoP settings, answering failures with RFC 9449 §8 errors and a
+ * verified proof with the client's next nonce (§8.2).
+ */
+export async function verifyRequestDpopProof(
+	ctx: GenericEndpointContext,
+	opts: Pick<OAuthOptions<Scope[]>, "dpop">,
+	params: {
+		proofJwt: string;
+		method: string;
+		url: string;
+		expectedJkt?: string;
+	},
+): Promise<VerifiedDpopProof> {
+	const nonce = getDpopNonceOptions(ctx, opts);
+	let proof: VerifiedDpopProof;
+	try {
+		proof = await verifyDpopProof({
+			...params,
+			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
+			signingAlgorithms: opts.dpop?.signingAlgorithms,
+			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
+			nonce,
+			// The time the request arrived, which the token endpoint's nonce check
+			// also used, not the time a grant reaches issuance.
+			nowSeconds: getDpopRequestTime(ctx),
+		});
+	} catch (error) {
+		if (isDpopProofError(error)) {
+			if (error.code === "use_dpop_nonce" && nonce) {
+				await throwUseDpopNonce(ctx, nonce, error.message);
+			}
+			throwInvalidDpopProof(error.message);
+		}
+		throw error;
+	}
+	if (nonce) await setDpopNonceHeader(ctx, nonce);
+	return proof;
+}
+
+/**
+ * Verifies the request's DPoP proof for a plugin endpoint on the authorization
+ * server. Backs `OAuthProviderApi.verifyDpopProof`.
+ */
+export async function verifyEndpointDpopProof(
+	ctx: GenericEndpointContext,
+	opts: Pick<OAuthOptions<Scope[]>, "dpop">,
+	params?: { required?: boolean },
+): Promise<VerifiedDpopProof | undefined> {
+	const proofJwt = getDpopProofJwt(ctx);
+	if (!proofJwt) {
+		if (params?.required) {
+			throwInvalidDpopProof("DPoP proof header is required");
+		}
+		return undefined;
+	}
+	// `htm` must match the real request method, which an `auth.api` call
+	// without a request does not have.
+	if (!ctx.request) {
+		throwInvalidDpopProof("DPoP proof requires an HTTP request context");
+	}
+	return verifyRequestDpopProof(ctx, opts, {
+		proofJwt,
+		method: ctx.request.method,
+		url: getEndpointUrl(ctx, ctx.path),
+	});
+}
+
+/**
+ * Sets a fresh `DPoP-Nonce` on the response when `dpop.nonce.required` is on.
+ * Backs `OAuthProviderApi.issueDpopNonce`.
+ */
+export async function issueEndpointDpopNonce(
+	ctx: GenericEndpointContext,
+	opts: Pick<OAuthOptions<Scope[]>, "dpop">,
+): Promise<string | undefined> {
+	const nonce = getDpopNonceOptions(ctx, opts);
+	if (!nonce) return undefined;
+	const headers = await setDpopNonceHeader(ctx, nonce);
+	return headers[DPOP_NONCE_HEADER];
 }

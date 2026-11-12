@@ -1,5 +1,7 @@
 # @better-auth/stripe
 
+## 1.8.0-beta.8
+
 ## 1.8.0-beta.7
 
 ## 1.8.0-beta.6
@@ -21,6 +23,12 @@
 - Updated dependencies [[`5fd850f`](https://github.com/better-auth/better-auth/commit/5fd850f926a9500219d14d13adc5cbd2436d105e), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`ec0afde`](https://github.com/better-auth/better-auth/commit/ec0afdef5aa6d0dfb93b14357ae470977e28ecdf), [`034da07`](https://github.com/better-auth/better-auth/commit/034da07dbe92a0ce0ef735f2f31baff756cc25d1)]:
   - better-auth@1.8.0-beta.0
   - @better-auth/core@1.8.0-beta.0
+
+## 1.7.22
+
+### Patch Changes
+
+- [#12473](https://github.com/better-auth/better-auth/pull/12473) [`f6487ed`](https://github.com/better-auth/better-auth/commit/f6487eddd799de2758420621ddf5d248f30aa3f3) Thanks [@bytaesu](https://github.com/bytaesu)! - A `customer.subscription.updated` webhook for a customer with no local subscription now logs a clear warning instead of failing with a `TypeError`.
 
 ## 1.7.21
 

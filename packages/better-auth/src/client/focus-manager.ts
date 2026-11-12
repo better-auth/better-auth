@@ -31,20 +31,18 @@ class WindowFocusManager implements FocusManager {
 			return () => {};
 		}
 
+		// Cleanup can run after a test environment has removed this global.
+		const target = document;
 		const visibilityHandler = () => {
 			if (document.visibilityState === "visible") {
 				this.setFocused(true);
 			}
 		};
 
-		document.addEventListener("visibilitychange", visibilityHandler, false);
+		target.addEventListener("visibilitychange", visibilityHandler, false);
 
 		return () => {
-			document.removeEventListener(
-				"visibilitychange",
-				visibilityHandler,
-				false,
-			);
+			target.removeEventListener("visibilitychange", visibilityHandler, false);
 		};
 	}
 }

@@ -5,6 +5,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import {
 	additionalAuthorizationParamsSchema,
+	parseStringBoolean,
 	supportsIdTokenSignIn,
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
@@ -29,7 +30,6 @@ import {
 	getOAuthCallbackPath,
 	setTokenUtil,
 } from "../../oauth2/utils";
-import { toBoolean } from "../../utils/boolean";
 import { consumeIssuedIdTokenNonce } from "./id-token-nonce";
 import {
 	freshSessionMiddleware,
@@ -377,9 +377,10 @@ export const linkSocialAccount = createAuthEndpoint(
 			const isTrustedProvider = c.context.trustedProviders.includes(
 				provider.id,
 			);
+			const emailVerified =
+				parseStringBoolean(linkingUserInfo.user.emailVerified) ?? false;
 			if (
-				(!isTrustedProvider &&
-					!toBoolean(linkingUserInfo.user.emailVerified)) ||
+				(!isTrustedProvider && !emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
 			) {
 				throw APIError.from("UNAUTHORIZED", {

@@ -1,5 +1,7 @@
 # @better-auth/kysely-adapter
 
+## 1.8.0-beta.8
+
 ## 1.8.0-beta.7
 
 ## 1.8.0-beta.6
@@ -20,6 +22,8 @@
 
 - Updated dependencies []:
   - @better-auth/core@1.8.0-beta.0
+
+## 1.7.22
 
 ## 1.7.21
 

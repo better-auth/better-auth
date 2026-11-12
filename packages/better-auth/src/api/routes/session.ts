@@ -59,6 +59,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
+			// POST only triggers a refresh, so a bodyless one must not hit the media type check.
+			disableBody: true,
 			metadata: {
 				openapi: {
 					operationId: "getSession",
@@ -96,6 +98,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		} | null> => {
 			ctx.setHeader("cache-control", "no-store");
 			ctx.setHeader("pragma", "no-cache");
+			// Hooks may read the session only when this request returns one.
+			ctx.context.session = null;
 
 			const deferSessionRefresh =
 				ctx.context.options.session?.deferSessionRefresh;
@@ -322,7 +326,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
-				ctx.context.session = null;
 				if (!session || session.session.expiresAt < new Date()) {
 					deleteSessionCookie(ctx);
 					if (session) {
@@ -465,6 +468,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					user: User<Option["user"], Option["plugins"]>;
 				});
 			} catch (error) {
+				ctx.context.session = null;
 				if (isAPIError(error)) {
 					throw error;
 				}
@@ -787,6 +791,9 @@ export const revokeSession = createAuthEndpoint(
 				});
 			}
 		}
+		if (token === ctx.context.session.session.token) {
+			deleteSessionCookie(ctx);
+		}
 		return ctx.json({
 			status: true,
 		});
@@ -844,6 +851,7 @@ export const revokeSessions = createAuthEndpoint(
 				code: "INTERNAL_SERVER_ERROR",
 			});
 		}
+		deleteSessionCookie(ctx);
 		return ctx.json({
 			status: true,
 		});

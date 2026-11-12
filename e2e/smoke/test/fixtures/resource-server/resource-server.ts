@@ -68,8 +68,10 @@ async function handler(request: Request): Promise<Response> {
 				headers: error.headers,
 			});
 		}
-		const message = error instanceof Error ? error.message : String(error);
-		return Response.json({ error: message }, { status: 401 });
+		// Verification failures arrive above as challenge errors, so anything
+		// left is a fixture or server fault, not a rejected token.
+		console.error(error);
+		return Response.json({ error: "server_error" }, { status: 500 });
 	}
 }
 
