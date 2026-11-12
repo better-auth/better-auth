@@ -10,6 +10,7 @@ import type {
 import {
 	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
+	parseStringBoolean,
 	refreshAccessToken,
 	validateAuthorizationCode,
 	verifyProviderIdToken,
@@ -17,7 +18,6 @@ import {
 import { betterFetch } from "@better-fetch/fetch";
 import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, decodeJwt } from "jose";
-import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import type {
@@ -198,7 +198,7 @@ async function fetchUserInfo(
 		if (decoded?.sub && decoded?.email) {
 			return {
 				id: decoded.sub,
-				emailVerified: toBoolean(decoded.email_verified),
+				emailVerified: parseStringBoolean(decoded.email_verified) ?? false,
 				image: decoded.picture,
 				...decoded,
 			};
@@ -228,7 +228,7 @@ async function fetchUserInfo(
 	return {
 		...userInfo.data,
 		email: userInfo.data.email,
-		emailVerified: toBoolean(userInfo.data.email_verified),
+		emailVerified: parseStringBoolean(userInfo.data.email_verified) ?? false,
 		image: userInfo.data.picture,
 		name: userInfo.data.name,
 	};
@@ -399,7 +399,7 @@ export const genericOAuth = <const ID extends string>(
 				const mapped = c.mapProfileToUser ? await c.mapProfileToUser(raw) : {};
 				const user = {
 					email: raw.email,
-					emailVerified: toBoolean(raw.emailVerified),
+					emailVerified: parseStringBoolean(raw.emailVerified) ?? false,
 					image: raw.image,
 					name: raw.name,
 					...mapped,

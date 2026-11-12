@@ -367,7 +367,14 @@ export async function onSubscriptionUpdated(
 				}
 				subscription = activeSub;
 			} else {
-				subscription = subs[0]!;
+				const [onlySub] = subs;
+				if (!onlySub) {
+					ctx.context.logger.warn(
+						`Stripe webhook warning: No subscription found for customerId: ${customerId}`,
+					);
+					return;
+				}
+				subscription = onlySub;
 			}
 		}
 

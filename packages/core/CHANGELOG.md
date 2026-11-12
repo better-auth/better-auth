@@ -108,6 +108,20 @@
 
 ## 1.8.0-beta.0
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12333](https://github.com/better-auth/better-auth/pull/12333) [`6536174`](https://github.com/better-auth/better-auth/commit/6536174213f63a8d544cd0d018659515bab5f8ad) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `getSession` failing with "Failed to get session" when a `user.additionalFields` entry references a table outside the Better Auth schema, including with database joins enabled on Drizzle and Prisma. Join resolution now matches `references.model` against schema keys only.
+
+- [#12432](https://github.com/better-auth/better-auth/pull/12432) [`262adc0`](https://github.com/better-auth/better-auth/commit/262adc0e76969fe04ef9355d1c77972bd5f0a1a8) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Reject introspected access tokens that fail claim validation with a 401 `UNAUTHORIZED` error. When `remoteVerify` introspection reported an active token whose `aud`, `iss`, `exp`, or `nbf` claim did not pass the configured checks, `verifyBearerToken` and `verifyAccessTokenRequest` threw a plain `Error`, so resource servers answered with a 500 instead of a `WWW-Authenticate` challenge. Expired tokens now report `token expired` and other claim failures report `invalid access token`, matching local JWKS verification.
+
+- [#12445](https://github.com/better-auth/better-auth/pull/12445) [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource-server challenges no longer turn a rejected request into a 500, and they now tell clients when the token they sent is invalid.
+
+  `createResourceServerChallenge` used to throw when an `error_description` contained a character that RFC 6750 does not allow in that parameter. Better Auth's own DPoP message `DPoP proof typ must be "dpop+jwt"` was one of them. The description is now fitted into the allowed characters: `"` becomes `'`, other disallowed characters become spaces, and an empty result is left out. Invalid scope tokens in `challengeScopes` still throw.
+
+  When the request presented a token that failed verification, the 401 Bearer challenge now carries `error="invalid_token"` and an `error_description`, following RFC 6750 §3 and §3.1. A request without a token still gets no error code. `verifyBearerToken` and `verifyAccessTokenRequest` now set `error: "invalid_token"` and `error_description` on their expired, invalid, inactive, and unreadable token errors, and the challenge's response body includes both fields alongside `message`.
+
 ## 1.7.21
 
 ### Patch Changes

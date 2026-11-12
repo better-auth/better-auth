@@ -27,6 +27,12 @@
 - Updated dependencies []:
   - @better-auth/core@1.8.0-beta.0
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12333](https://github.com/better-auth/better-auth/pull/12333) [`6536174`](https://github.com/better-auth/better-auth/commit/6536174213f63a8d544cd0d018659515bab5f8ad) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `getSession` failing with "Failed to get session" when a `user.additionalFields` entry references a table outside the Better Auth schema, including with database joins enabled on Drizzle and Prisma. Join resolution now matches `references.model` against schema keys only.
+
 ## 1.7.21
 
 ## 1.7.20

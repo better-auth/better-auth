@@ -43,7 +43,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -100,7 +100,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Install Next.js demo
         run: pnpm --dir demo/nextjs install --frozen-lockfile
@@ -213,7 +213,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Reset Docker Containers
         run: docker compose down --volumes --remove-orphans

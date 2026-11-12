@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { parseStringBoolean } from "@better-auth/core/oauth2";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import {
 	isGoogleHostedDomainAllowed,
@@ -19,7 +20,6 @@ import { parseUserOutput } from "../../db/schema";
 import { toOAuthProfileRecord } from "../../oauth2/account-key";
 import { OAUTH_CALLBACK_ERROR_CODES } from "../../oauth2/errors";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import { toBoolean } from "../../utils/boolean";
 import { PACKAGE_VERSION } from "../../version";
 
 declare module "@better-auth/core" {
@@ -201,7 +201,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 									name: payload.name,
 									email: payload.email,
 									image: payload.picture,
-									emailVerified: toBoolean(payload.email_verified),
+									emailVerified:
+										parseStringBoolean(payload.email_verified) ?? false,
 								},
 								data: payload,
 							};
@@ -225,7 +226,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					}
 					const email = rawEmail.toLowerCase();
 
-					const emailVerified = toBoolean(providerUser.emailVerified);
+					const emailVerified =
+						parseStringBoolean(providerUser.emailVerified) ?? false;
 
 					// Resolve identity through the shared OAuth path so One Tap matches
 					// the redirect and `signIn.social` flows: the account that owns the

@@ -81,6 +81,22 @@ describe("schema validation across Worker requests", () => {
 			expect(await (await server.fetch("/status")).json()).toMatchObject({
 				schemaLookups: completed.schemaLookups,
 			});
+			// A lookup kept alive by waitUntil outlives its response. Let it settle
+			// so it cannot rerun while the schema changes below.
+			await expect
+				.poll(
+					async () => {
+						const status = (await (await server.fetch("/status")).json()) as {
+							waitUntilPending: number;
+						};
+						return status.waitUntilPending;
+					},
+					{
+						timeout: 5_000,
+						interval: 50,
+					},
+				)
+				.toBe(0);
 			expect((await server.fetch("/migrate")).status).toBe(204);
 			const migrated = (await (await server.fetch("/status")).json()) as {
 				schemaLookups: number;
