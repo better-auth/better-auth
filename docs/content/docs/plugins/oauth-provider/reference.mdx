@@ -826,6 +826,7 @@ export const oauthAccessTokenTableFields = [
   { name: "scopes", type: "string[]", description: "Granted scopes" },
   { name: "revoked", type: "Date", description: "When the token was revoked", isOptional: true },
   { name: "confirmation", type: "json", description: "`cnf` binding, returned by introspection", isOptional: true },
+  { name: "act", type: "json", description: "`act` actor chain of a delegated token exchange, returned by introspection", isOptional: true },
   { name: "createdAt", type: "Date", description: "Creation time" },
   { name: "expiresAt", type: "Date", description: "Expiry time" },
 ];

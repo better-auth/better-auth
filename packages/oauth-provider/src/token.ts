@@ -44,6 +44,7 @@ import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
 import { findRefreshToken } from "./token-lookup";
 import type {
 	Confirmation,
+	OAuthActorClaim,
 	OAuthAuthenticatedClient,
 	OAuthAuthenticationContext,
 	OAuthClientAuthenticationRequest,
@@ -293,6 +294,8 @@ async function createJwtAccessToken(
 		 * contributor cannot forge it.
 		 */
 		confirmation?: Confirmation;
+		/** RFC 8693 actor chain, stamped as `act`. AS-owned, like `cnf`. */
+		act?: OAuthActorClaim;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -334,7 +337,9 @@ async function createJwtAccessToken(
 			// so audit trails and (future) revocation lookups can reference
 			// individual tokens.
 			jti: generateRandomString(32),
-			// RFC 7800 sender-constraint, stamped last so the AS owns it.
+			// RFC 8693 actor chain and RFC 7800 sender-constraint, stamped last so
+			// the AS owns them.
+			...(overrides?.act ? { act: overrides.act } : {}),
 			...(overrides?.confirmation ? { cnf: overrides.confirmation } : {}),
 		},
 	});
@@ -511,9 +516,13 @@ async function createOpaqueAccessToken(
 	referenceId?: string,
 	authorizationCodeId?: string,
 	refreshId?: string,
-	confirmation?: Confirmation,
-	requestedUserInfoClaims?: string[],
+	issuance: {
+		confirmation?: Confirmation;
+		requestedUserInfoClaims?: string[];
+		act?: OAuthActorClaim;
+	} = {},
 ) {
+	const { confirmation, requestedUserInfoClaims, act } = issuance;
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
 	const token = opts.generateOpaqueAccessToken
@@ -534,6 +543,7 @@ async function createOpaqueAccessToken(
 				resources,
 				refreshId,
 				confirmation,
+				act,
 				requestedUserInfoClaims: requestedUserInfoClaims?.length
 					? requestedUserInfoClaims
 					: undefined,
@@ -1241,6 +1251,14 @@ async function createUserTokens(
 		verificationValue,
 	} = params;
 	const authenticationContext = { acr, amr };
+	// A delegated issuance gets no refresh token (see `isRefreshToken`), so it
+	// cannot rotate one either: the parent would stay usable.
+	if (params.act && existingRefreshToken) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description: "issueTokens does not accept act with refreshToken",
+		});
+	}
 
 	const iat = Math.floor(Date.now() / 1000);
 	const baseExpiry = user
@@ -1288,8 +1306,11 @@ async function createUserTokens(
 	// Only mint a refresh token when the client may use refresh tokens.
 	// Otherwise an `offline_access` scope alone would hand a refresh token to a
 	// pure machine-to-machine client that was never authorized for one.
+	// A delegated issuance gets no refresh token: refreshed tokens do not carry
+	// `act`, so a refresh would turn delegated access into impersonation.
 	const isRefreshToken =
 		user &&
+		!params.act &&
 		clientAllowsGrant(client, "refresh_token") &&
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
@@ -1415,6 +1436,7 @@ async function createUserTokens(
 						signingKeyId: grantIssuance.signingKeyId,
 						accessTokenClaims,
 						confirmation,
+						act: params.act,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -1432,8 +1454,7 @@ async function createUserTokens(
 					referenceId,
 					params.authorizationCodeId,
 					earlyRefreshToken?.id,
-					confirmation,
-					requestedUserInfoClaims,
+					{ confirmation, requestedUserInfoClaims, act: params.act },
 				),
 		earlyRefreshToken
 			? earlyRefreshToken

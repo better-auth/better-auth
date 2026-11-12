@@ -10,6 +10,7 @@ import type {
 	AuthServerMetadata,
 	Confirmation,
 	GrantType,
+	OAuthActorClaim,
 	OAuthClient,
 	OIDCMetadata,
 	TokenEndpointAuthMethod,
@@ -23,6 +24,7 @@ export type {
 	BearerMethodsSupported,
 	Confirmation,
 	GrantType,
+	OAuthActorClaim,
 	OAuthClient,
 	OIDCMetadata,
 	ResourceServerMetadata,
@@ -275,6 +277,16 @@ export interface OAuthTokenIssueParams {
 	 * is stamped after, and cannot be overridden by, contributed claims.
 	 */
 	confirmation?: Confirmation;
+	/**
+	 * Actor chain to stamp as the RFC 8693 `act` claim of a delegated access
+	 * token. The authorization server writes it into a JWT access token after
+	 * contributed claims, persists it on an opaque access token, and returns it
+	 * as `act` at introspection. Like `sub`, it is the caller's assertion: pass
+	 * only an actor the grant has validated. An issuance with `act` never
+	 * includes a refresh token, even with `offline_access`, because refreshed
+	 * tokens do not carry `act`. Passing it with `refreshToken` throws.
+	 */
+	act?: OAuthActorClaim;
 	/**
 	 * Latest time the access token may expire. The authorization server issues
 	 * the earlier of this and its configured lifetime, so a grant derived from
@@ -2372,6 +2384,11 @@ export interface OAuthOpaqueAccessToken<
 	 * example DPoP `{ jkt }`). Surfaced as the `cnf` claim at introspection.
 	 */
 	confirmation?: Confirmation;
+	/**
+	 * RFC 8693 actor chain of a delegated access token. Surfaced as the `act`
+	 * claim at introspection.
+	 */
+	act?: OAuthActorClaim;
 }
 
 /**
