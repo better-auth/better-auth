@@ -1054,6 +1054,229 @@ describe("oauth-proxy", async () => {
 		});
 
 		/**
+		 * @see https://github.com/better-auth/better-auth/issues/12429
+		 */
+		it("preserves mapped user fields from mapProfileToUser through passthrough proxy", async () => {
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
+					user: {
+						additionalFields: {
+							department: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							mapProfileToUser: () => ({
+								department: "engineering",
+							}),
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
+					user: {
+						additionalFields: {
+							department: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const res = await preview.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedProfile: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile = url.searchParams.get("profile");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedProfile).toBeTruthy();
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&profile=${encodeURIComponent(encryptedProfile!)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			const previewCtx = await preview.auth.$context;
+			const previewUsers = await previewCtx.internalAdapter.listUsers();
+			expect(previewUsers.length).toBe(1);
+			expect((previewUsers[0] as any)?.department).toBe("engineering");
+		});
+
+		it("updates existing user mapped fields when overrideUserInfoOnSignIn is enabled", async () => {
+			let currentDepartment = "engineering";
+			const production = await getTestInstance(
+				{
+					baseURL: "http://localhost:3000",
+					plugins: [oAuthProxy()],
+					user: {
+						additionalFields: {
+							department: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							mapProfileToUser: () => ({
+								department: currentDepartment,
+							}),
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							productionURL: "http://localhost:3000",
+						}),
+					],
+					user: {
+						additionalFields: {
+							department: {
+								type: "string",
+								required: false,
+							},
+						},
+					},
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+							overrideUserInfoOnSignIn: true,
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const res1 = await preview.client.signIn.social(
+				{ provider: "google", callbackURL: "/dashboard" },
+				{ throw: true },
+			);
+			const state1 = new URL(res1.url!).searchParams.get("state");
+			let encryptedProfile1: string | null = null;
+			let callbackURL1: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state1}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile1 = url.searchParams.get("profile");
+							callbackURL1 = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL1!)}&profile=${encodeURIComponent(encryptedProfile1!)}`,
+			);
+
+			const previewCtx = await preview.auth.$context;
+			const usersBefore = await previewCtx.internalAdapter.listUsers();
+			expect(usersBefore.length).toBe(1);
+			expect((usersBefore[0] as any)?.department).toBe("engineering");
+
+			currentDepartment = "product";
+
+			const res2 = await preview.client.signIn.social(
+				{ provider: "google", callbackURL: "/dashboard" },
+				{ throw: true },
+			);
+			const state2 = new URL(res2.url!).searchParams.get("state");
+			let encryptedProfile2: string | null = null;
+			let callbackURL2: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state2}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("profile=")) {
+							const url = new URL(location);
+							encryptedProfile2 = url.searchParams.get("profile");
+							callbackURL2 = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL2!)}&profile=${encodeURIComponent(encryptedProfile2!)}`,
+			);
+
+			const usersAfter = await previewCtx.internalAdapter.listUsers();
+			expect(usersAfter.length).toBe(1);
+			expect((usersAfter[0] as any)?.department).toBe("product");
+		});
+
+		/**
 		 * @see https://github.com/better-auth/better-auth/issues/10562
 		 */
 		it("runs callback hooks with restored OAuth state", async () => {
