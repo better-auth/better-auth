@@ -27,6 +27,8 @@ overrides:
   chromium-edge-launcher>@types/node: 25.9.4
   # vinxi pulls in vite 6, and pnpm would reuse it for the vite peer of vitest.
   vitest>vite:peer: ^8.0.0
+  # prisma pins mysql2 to an exact version below the security fix.
+  prisma>mysql2: ^3.23.1
 
 catalog:
   '@better-auth/utils': 0.5.1
