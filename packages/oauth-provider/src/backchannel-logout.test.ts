@@ -809,6 +809,7 @@ describe("oauth back-channel logout", async () => {
 			});
 			await issueTokens({ client: oauthClient });
 			const context = await auth.$context;
+			const errors = vi.spyOn(context.logger, "error");
 			const updateMany = context.adapter.updateMany.bind(context.adapter);
 			const spy = vi.spyOn(context.adapter, "updateMany");
 			const background = vi
@@ -820,7 +821,13 @@ describe("oauth back-channel logout", async () => {
 				return updateMany(...args);
 			});
 			try {
-				await expect(auth.api.revokeSessions({ headers })).rejects.toThrow();
+				await expect(
+					auth.api.revokeSessions({ headers }),
+				).rejects.toMatchObject({ status: "INTERNAL_SERVER_ERROR" });
+				expect(errors).toHaveBeenCalledWith(
+					"back-channel logout: token revocation update failed",
+					expect.objectContaining({ message: "token store unavailable" }),
+				);
 				expect(background).not.toHaveBeenCalled();
 				const { accessTokens, refreshTokens } = await readClientTokenRevocation(
 					oauthClient.client_id,
@@ -896,7 +903,7 @@ describe("oauth back-channel logout", async () => {
 						newPassword: "reset-failure-12276",
 					},
 				}),
-			).rejects.toThrow();
+			).rejects.toThrow("token store unavailable");
 		} finally {
 			spy.mockRestore();
 			// The password write precedes session deletion and cannot roll back.
@@ -950,6 +957,7 @@ describe("oauth back-channel logout", async () => {
 		const oauthClient = await registerClient();
 		await issueTokens({ client: oauthClient });
 		const context = await auth.$context;
+		const errors = vi.spyOn(context.logger, "error");
 		const findMany = context.adapter.findMany.bind(context.adapter);
 		vi.spyOn(context.adapter, "findMany").mockImplementation(
 			async (...args) => {
@@ -966,7 +974,13 @@ describe("oauth back-channel logout", async () => {
 				return updateMany(...args);
 			},
 		);
-		await expect(auth.api.revokeSessions({ headers })).rejects.toThrow();
+		await expect(auth.api.revokeSessions({ headers })).rejects.toMatchObject({
+			status: "INTERNAL_SERVER_ERROR",
+		});
+		expect(errors).toHaveBeenCalledWith(
+			"back-channel logout: token revocation update failed",
+			expect.objectContaining({ message: "token write failed" }),
+		);
 	});
 
 	/**
@@ -1019,6 +1033,7 @@ describe("oauth back-channel logout", async () => {
 				await issueTokens({ client: oauthClient });
 			}
 			const context = await auth.$context;
+			const errors = vi.spyOn(context.logger, "error");
 			const updateMany = context.adapter.updateMany.bind(context.adapter);
 			const spy = vi.spyOn(context.adapter, "updateMany");
 			spy.mockImplementation(async (...args) => {
@@ -1026,7 +1041,13 @@ describe("oauth back-channel logout", async () => {
 				return updateMany(...args);
 			});
 			try {
-				await expect(auth.api.revokeSessions({ headers })).rejects.toThrow();
+				await expect(
+					auth.api.revokeSessions({ headers }),
+				).rejects.toMatchObject({ status: "INTERNAL_SERVER_ERROR" });
+				expect(errors).toHaveBeenCalledWith(
+					"back-channel logout: token revocation update failed",
+					expect.objectContaining({ message: "token write failed" }),
+				);
 				await waitForDispatches(sessionCount);
 				expect(rp.received).toHaveLength(sessionCount);
 				expect(
