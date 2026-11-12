@@ -321,6 +321,34 @@ describe("resource server challenge", () => {
 			expect(challenge.body).toMatchObject({ error: "invalid_token" });
 		});
 
+		it("answers a DPoP request's insufficient scope with a DPoP challenge", () => {
+			const challenge = createResourceServerChallenge(
+				createInsufficientScopeError(["files:write"]),
+				"https://api.example.com",
+				{
+					request: { authorizationHeader: "DPoP access-token" },
+					dpopSigningAlgorithms: ["ES256"],
+					challengeScopes: ["files:read"],
+				},
+			) as APIError;
+			expect(challenge.statusCode).toBe(403);
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'DPoP error="insufficient_scope", scope="files:write", error_description="access token is missing required scope: files:write", algs="ES256"',
+			);
+			expect(challenge.body).toMatchObject({ error: "insufficient_scope" });
+		});
+
+		it("keeps the Bearer insufficient-scope challenge for a Bearer request", () => {
+			const challenge = createResourceServerChallenge(
+				createInsufficientScopeError(["files:write"]),
+				"https://api.example.com",
+				{ request: { authorizationHeader: "Bearer access-token" } },
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toMatch(
+				/^Bearer error="insufficient_scope", scope="files:write", resource_metadata=/,
+			);
+		});
+
 		it.each([
 			["a Bearer request", "Bearer access-token"],
 			["a request without credentials", null],

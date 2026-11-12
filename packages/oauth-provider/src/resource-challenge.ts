@@ -91,10 +91,12 @@ export function buildDpopChallengeValue(
 	errorCode: string,
 	description: unknown,
 	algorithms: readonly string[] = DPOP_SIGNING_ALGORITHMS,
+	scope?: string,
 ) {
 	const errorDescription = formatErrorDescription(description);
 	return [
 		`DPoP error="${quoteAuthParam(errorCode)}"`,
+		scope && `scope="${quoteAuthParam(scope)}"`,
 		errorDescription && `error_description="${errorDescription}"`,
 		`algs="${quoteAuthParam(algorithms.join(" "))}"`,
 	]
@@ -194,13 +196,14 @@ function buildBearerChallenge(
  * `insufficient_scope` challenge on a 403 naming the scopes the token lacks, so
  * clients can step up their authorization. DPoP-bound-token failures are
  * reported with RFC 9449's `DPoP` challenge so clients know which proof
- * algorithms to use. Pass the failed `request` so that any 401 on a request
- * that presented its token with the `DPoP` scheme, such as an expired or
- * revoked token, is also answered with a `DPoP` challenge (RFC 9449 §7.2),
- * and one with an unsupported scheme, or none, with a `Bearer` challenge
- * (RFC 6750 §3.1). Without it, only DPoP-specific errors get one. Non-URL
- * resources (for example a `urn:` or a client id) resolve their metadata URL
- * through `resourceMetadataMappings`.
+ * algorithms to use. Pass the failed `request` so that any 401 or
+ * insufficient-scope 403 on a request that presented its token with the
+ * `DPoP` scheme, such as an expired or revoked token, is also answered with a
+ * `DPoP` challenge (RFC 9449 §7.2), and a 401 on one with an unsupported
+ * scheme, or none, with a `Bearer` challenge (RFC 6750 §3.1). Without it,
+ * only DPoP-specific errors get one. Non-URL resources (for example a `urn:`
+ * or a client id) resolve their metadata URL through
+ * `resourceMetadataMappings`.
  *
  * An `error_description` is fitted into RFC 6750 §3's character set rather
  * than rejected: `"` becomes `'`, other excluded characters become spaces, and
@@ -230,9 +233,10 @@ export function createResourceServerChallenge(
 		challengeScopes?: readonly string[];
 		/**
 		 * The request that failed, or its `Authorization` header as
-		 * `{ authorizationHeader }`. A 401 on a request that used the `DPoP`
-		 * scheme is answered with a `DPoP` challenge rather than `Bearer`, and one
-		 * with an unsupported scheme, or none, always with `Bearer`.
+		 * `{ authorizationHeader }`. A 401 or insufficient-scope 403 on a
+		 * request that used the `DPoP` scheme is answered with a `DPoP`
+		 * challenge rather than `Bearer`, and a 401 with an unsupported scheme,
+		 * or none, always with `Bearer`.
 		 */
 		request?: Request | Pick<ResourceRequestInput, "authorizationHeader">;
 	},
@@ -301,6 +305,17 @@ export function createResourceServerChallenge(
 			typeof insufficientScope.description === "string"
 				? insufficientScope.description
 				: error.message;
+		// RFC 9449 §7.2: a request that presented its token with the `DPoP`
+		// scheme gets its error in a `DPoP` challenge, which allows `scope` (§7.1).
+		const dpopChallenge =
+			presentedScheme(opts?.request) === "DPoP"
+				? buildDpopChallengeValue(
+						"insufficient_scope",
+						insufficientScope.description,
+						opts?.dpopSigningAlgorithms,
+						scope,
+					)
+				: undefined;
 		return new APIError(
 			"FORBIDDEN",
 			challengeBody(
@@ -309,12 +324,13 @@ export function createResourceServerChallenge(
 				insufficientScope.description,
 			),
 			challengeHeaders(
-				buildBearerChallenge(resource, opts, (metadataUrl) => [
-					`error="insufficient_scope"`,
-					scope && `scope="${quoteAuthParam(scope)}"`,
-					`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
-					errorDescription && `error_description="${errorDescription}"`,
-				]),
+				dpopChallenge ??
+					buildBearerChallenge(resource, opts, (metadataUrl) => [
+						`error="insufficient_scope"`,
+						scope && `scope="${quoteAuthParam(scope)}"`,
+						`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
+						errorDescription && `error_description="${errorDescription}"`,
+					]),
 			),
 		);
 	}
