@@ -70,16 +70,20 @@ function isDpopChallengeError(error: APIError) {
 	);
 }
 
-function presentsDpopScheme(
-	request: Request | Pick<ResourceRequestInput, "authorizationHeader">,
+function presentedScheme(
+	request:
+		| Request
+		| Pick<ResourceRequestInput, "authorizationHeader">
+		| undefined,
 ) {
+	if (!request) return undefined;
 	// Duck-type the `Request` so a cross-realm instance is still recognized.
 	const authorizationHeader =
 		typeof (request as Request).headers?.get === "function"
 			? (request as Request).headers.get("authorization")
 			: (request as Pick<ResourceRequestInput, "authorizationHeader">)
 					.authorizationHeader;
-	return parseAccessTokenAuthorization(authorizationHeader)?.scheme === "DPoP";
+	return parseAccessTokenAuthorization(authorizationHeader)?.scheme;
 }
 
 /** Builds an RFC 9449 §7.1 `WWW-Authenticate: DPoP` challenge value. */
@@ -181,10 +185,11 @@ function buildBearerChallenge(
  * reported with RFC 9449's `DPoP` challenge so clients know which proof
  * algorithms to use. Pass the failed `request` so that any 401 on a request
  * that presented its token with the `DPoP` scheme, such as an expired or
- * revoked token, is also answered with a `DPoP` challenge (RFC 9449 §7.2).
- * Without it, only DPoP-specific errors get one. Non-URL resources (for
- * example a `urn:` or a client id) resolve their metadata URL through
- * `resourceMetadataMappings`.
+ * revoked token, is also answered with a `DPoP` challenge (RFC 9449 §7.2),
+ * and one with an unsupported scheme, or none, with a `Bearer` challenge
+ * (RFC 6750 §3.1). Without it, only DPoP-specific errors get one. Non-URL
+ * resources (for example a `urn:` or a client id) resolve their metadata URL
+ * through `resourceMetadataMappings`.
  *
  * An `error_description` is fitted into RFC 6750 §3's character set rather
  * than rejected: `"` becomes `'`, other excluded characters become spaces, and
@@ -215,7 +220,8 @@ export function createResourceServerChallenge(
 		/**
 		 * The request that failed, or its `Authorization` header as
 		 * `{ authorizationHeader }`. A 401 on a request that used the `DPoP`
-		 * scheme is answered with a `DPoP` challenge rather than `Bearer`.
+		 * scheme is answered with a `DPoP` challenge rather than `Bearer`, and one
+		 * with an unsupported scheme, or none, always with `Bearer`.
 		 */
 		request?: Request | Pick<ResourceRequestInput, "authorizationHeader">;
 	},
@@ -223,8 +229,12 @@ export function createResourceServerChallenge(
 	const challengeScope = serializeChallengeScopes(opts?.challengeScopes);
 	if (isAPIError(error) && error.status === "UNAUTHORIZED") {
 		const { errorCode, description } = extractTokenError(error);
-		const dpopError = isDpopChallengeError(error);
-		if (dpopError || (opts?.request && presentsDpopScheme(opts.request))) {
+		// `Unknown` is an unsupported scheme or none, which never attempted DPoP.
+		const scheme = presentedScheme(opts?.request);
+		if (
+			scheme === "DPoP" ||
+			(scheme !== "Unknown" && isDpopChallengeError(error))
+		) {
 			// Only the request's DPoP scheme can select this branch without an
 			// error code, and that request presented a token.
 			const dpopErrorCode = errorCode ?? "invalid_token";
