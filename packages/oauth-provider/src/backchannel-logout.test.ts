@@ -16,7 +16,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { toNodeHandler } from "better-auth/node";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
 import {
@@ -998,6 +998,47 @@ describe("oauth back-channel logout", async () => {
 			(await refreshTokenGrant(oauthClient, tokens.refresh_token!)).error,
 		).toBeNull();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it.each([
+		["oauthRefreshToken", 1],
+		["oauthAccessToken", 1],
+		["oauthRefreshToken", 3],
+		["oauthAccessToken", 3],
+	] as const)(
+		"delivers logout despite a failed %s sweep for %i sessions",
+		async (model, sessionCount) => {
+			await auth.api.revokeSessions({ headers });
+			headers = (await signInWithTestUser()).headers;
+			const oauthClient = await registerClient();
+			await issueTokens({ client: oauthClient });
+			for (let i = 1; i < sessionCount; i++) {
+				headers = (await signInWithTestUser()).headers;
+				await issueTokens({ client: oauthClient });
+			}
+			const context = await auth.$context;
+			const updateMany = context.adapter.updateMany.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "updateMany");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === model) throw new Error("token write failed");
+				return updateMany(...args);
+			});
+			try {
+				await expect(auth.api.revokeSessions({ headers })).rejects.toThrow();
+				await waitForDispatches(sessionCount);
+				expect(rp.received).toHaveLength(sessionCount);
+				expect(
+					new Set(
+						rp.received.map((request) => decodeJwt(request.logoutToken!).sid),
+					).size,
+				).toBe(sessionCount);
+			} finally {
+				spy.mockRestore();
+			}
+		},
+	);
 
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12276

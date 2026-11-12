@@ -364,6 +364,70 @@ async function applyBackchannelLogoutPlan(
 }
 
 /**
+ * Await required user revocation before handing off notification delivery.
+ * On failure, notify every verified ended session whose later hook would be
+ * skipped by the propagated error, retaining the original revocation error.
+ */
+export async function executeBackchannelLogoutPlan(
+	ctx: GenericEndpointContext,
+	plan: BackchannelLogoutPlan,
+	logoutPlanBySessionId: Map<string, BackchannelLogoutPlan>,
+): Promise<void> {
+	const dispatch = (endedPlan: BackchannelLogoutPlan) => {
+		const task = (
+			endedPlan.revokeAllGrantsOfUserId
+				? deliverBackchannelLogoutTokens(ctx, endedPlan)
+				: applyBackchannelLogoutPlan(ctx, endedPlan)
+		).catch((error) => {
+			ctx.context.logger.error(
+				"Back-channel logout failed after session deletion",
+				error,
+			);
+		});
+		return ctx.context.runInBackgroundOrAwait(task);
+	};
+	// Keep the required sweep ahead of best-effort delivery and
+	// surface its error even with a background handler configured.
+	if (plan.revokeAllGrantsOfUserId) {
+		try {
+			await revokeAllUserGrants(ctx, plan.revokeAllGrantsOfUserId);
+		} catch (error) {
+			const endedPlans = [plan];
+			// A batch deletes all rows before its after hooks. Throwing
+			// here stops later hooks, so dispatch their committed plans
+			// now too. Verify liveness first: a staged plan alone is not
+			// proof of deletion (a custom hook may have vetoed it).
+			const adapter = await getCurrentAdapter(ctx.context.adapter);
+			for (const [id, sibling] of logoutPlanBySessionId) {
+				if (sibling.revokeAllGrantsOfUserId !== plan.revokeAllGrantsOfUserId)
+					continue;
+				try {
+					const live = await adapter.findOne<Session>({
+						model: "session",
+						where: [{ field: "id", value: id }],
+					});
+					if (
+						(!live || live.expiresAt <= new Date()) &&
+						logoutPlanBySessionId.delete(id)
+					)
+						endedPlans.push(sibling);
+				} catch (lookupError) {
+					ctx.context.logger.error(
+						"Unable to verify ended session for logout delivery",
+						lookupError,
+					);
+				}
+			}
+			await Promise.allSettled(
+				endedPlans.filter((p) => p.targets.length > 0).map(dispatch),
+			);
+			throw error;
+		}
+	}
+	await dispatch(plan);
+}
+
+/**
  * Asynchronous phase: sign one Logout Token per target client and POST it to
  * the registered `backchannel_logout_uri`. The caller hands this to
  * `runInBackgroundOrAwait`, so when a background handler is configured (Vercel

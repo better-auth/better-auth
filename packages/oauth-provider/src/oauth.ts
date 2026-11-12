@@ -24,10 +24,9 @@ import { validateOAuthProviderExtensions } from "./extensions";
 import { introspectEndpoint } from "./introspect";
 import type { BackchannelLogoutPlan } from "./logout";
 import {
-	applyBackchannelLogoutPlan,
 	endsAllUserGrants,
+	executeBackchannelLogoutPlan,
 	prepareBackchannelLogoutPlan,
-	revokeAllUserGrants,
 	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
@@ -614,25 +613,16 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										backchannelLogoutPlansByContext.delete(hookCtx);
 									}
 									if (!plan) return;
-									// Revocation is part of the security-sensitive request,
-									// not best-effort background delivery. Surface storage
-									// failures even when a background handler is configured.
-									if (plan.revokeAllGrantsOfUserId) {
-										await revokeAllUserGrants(
+									try {
+										await executeBackchannelLogoutPlan(
 											hookCtx,
-											plan.revokeAllGrantsOfUserId,
+											plan,
+											logoutPlanBySessionId,
 										);
+									} finally {
+										if (logoutPlanBySessionId.size === 0)
+											backchannelLogoutPlansByContext.delete(hookCtx);
 									}
-									const logoutTask = applyBackchannelLogoutPlan(
-										hookCtx,
-										plan,
-									).catch((error) => {
-										hookCtx.context.logger.error(
-											"Back-channel logout failed after session deletion",
-											error,
-										);
-									});
-									await hookCtx.context.runInBackgroundOrAwait(logoutTask);
 								},
 							},
 						},
