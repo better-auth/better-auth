@@ -1,5 +1,21 @@
 # @better-auth/oauth-provider
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12447](https://github.com/better-auth/better-auth/pull/12447) [`5976842`](https://github.com/better-auth/better-auth/commit/59768427a963413f1a7a4eb7595b00b395713770) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a failed request that used the `DPoP` authorization scheme with a `DPoP` challenge. Before, an expired, revoked, or otherwise invalid DPoP-bound token got a `Bearer` challenge, which a client that supports only DPoP might not act on. `createResourceServerChallenge` accepts a new `request` option, either the failed `Request` or `{ authorizationHeader }`, and reads the scheme from it. The resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass it automatically.
+
+- [#12445](https://github.com/better-auth/better-auth/pull/12445) [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Resource-server challenges no longer turn a rejected request into a 500, and they now tell clients when the token they sent is invalid.
+
+  `createResourceServerChallenge` used to throw when an `error_description` contained a character that RFC 6750 does not allow in that parameter. Better Auth's own DPoP message `DPoP proof typ must be "dpop+jwt"` was one of them. The description is now fitted into the allowed characters: `"` becomes `'`, other disallowed characters become spaces, and an empty result is left out. Invalid scope tokens in `challengeScopes` still throw.
+
+  When the request presented a token that failed verification, the 401 Bearer challenge now carries `error="invalid_token"` and an `error_description`, following RFC 6750 §3 and §3.1. A request without a token still gets no error code. `verifyBearerToken` and `verifyAccessTokenRequest` now set `error: "invalid_token"` and `error_description` on their expired, invalid, inactive, and unreadable token errors, and the challenge's response body includes both fields alongside `message`.
+
+- [#12446](https://github.com/better-auth/better-auth/pull/12446) [`1393028`](https://github.com/better-auth/better-auth/commit/139302823057cdf9693bca48735fca99faf3ccfd) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Send a `WWW-Authenticate` challenge on every 401 from `/oauth2/userinfo`. Previously, a DPoP-bound token with a missing or invalid proof, a mismatched `htu` or `htm`, or the wrong authorization scheme got a 401 with no challenge, and so did a request with no access token. A client could not tell from the response which scheme or proof algorithms to retry with.
+
+  DPoP-bound tokens and requests that use the `DPoP` scheme now get a `DPoP` challenge with `algs` (RFC 9449 §7.1). Other failures keep the `Bearer` challenge, and a request with no token is offered both schemes. The challenge is also listed in `Access-Control-Expose-Headers`, so browser clients on other origins can read it. Response bodies are unchanged.
+
 ## 1.7.21
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @better-auth/telemetry
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12448](https://github.com/better-auth/better-auth/pull/12448) [`79219b4`](https://github.com/better-auth/better-auth/commit/79219b4f8e8b4cff0e184333fc46ef64e3c47e2e) Thanks [@bytaesu](https://github.com/bytaesu)! - Enabling telemetry without a static `baseURL` no longer fails every request to an auth instance created at module scope on Cloudflare Workers.
+
 ## 1.7.21
 
 ### Patch Changes
