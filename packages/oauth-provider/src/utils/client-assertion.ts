@@ -522,10 +522,10 @@ export async function verifyClientAssertion(
 		});
 	}
 
-	// Validate consistency with body client_id if provided
+	// The hint is the body client_id, or the client the caller expects.
 	if (clientIdHint && clientIdHint !== clientId) {
 		throw new APIError("BAD_REQUEST", {
-			error_description: "client_id in body does not match assertion sub/iss",
+			error_description: "client_id does not match assertion sub/iss",
 			error: "invalid_client",
 		});
 	}

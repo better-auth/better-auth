@@ -4,7 +4,7 @@ import { CLIENT_ASSERTION_TYPE } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { BetterAuthPlugin, User } from "better-auth/types";
-import { decodeJwt } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import { oauthProviderClient } from "./client";
 import { extendOAuthProvider } from "./extensions";
@@ -2048,13 +2048,23 @@ describe("authenticateClient with an expected client", async () => {
 				},
 				async (ctx) => {
 					const { handle } = ctx.body as { handle?: string };
+					const expectedClientId =
+						handle === undefined ? undefined : handles.get(handle);
+					// An undefined clientId removes the binding, so an unknown handle
+					// must fail here.
+					if (handle !== undefined && expectedClientId === undefined) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_request",
+							error_description: "unknown handle",
+						});
+					}
 					const provider = getOAuthProviderApi(
 						ctx,
 						ctx.context.getPlugin("oauth-provider")!.options,
 						"authorization_code",
 					);
 					const { clientId, method } = await provider.authenticateClient({
-						clientId: handle ? handles.get(handle) : undefined,
+						clientId: expectedClientId,
 						requireCredentials: false,
 					});
 					return ctx.json({ client_id: clientId, method });
@@ -2076,7 +2086,9 @@ describe("authenticateClient with an expected client", async () => {
 			| "none"
 			| "client_secret_post"
 			| "client_secret_basic"
+			| "private_key_jwt"
 			| typeof assertionMethod,
+		jwks?: { keys: Record<string, unknown>[] },
 	) =>
 		auth.api.adminCreateOAuthClient({
 			headers,
@@ -2084,6 +2096,7 @@ describe("authenticateClient with an expected client", async () => {
 				token_endpoint_auth_method: tokenEndpointAuthMethod,
 				grant_types: ["authorization_code"],
 				redirect_uris: [redirectUri],
+				jwks,
 			},
 		});
 	const [publicClient, otherPublicClient, postClient, basicClient] =
@@ -2100,7 +2113,19 @@ describe("authenticateClient with an expected client", async () => {
 	handles.set("public", publicClient.client_id);
 	handles.set("post", postClient.client_id);
 	handles.set("basic", basicClient.client_id);
+	const keyPair = await generateKeyPair("ES256", { extractable: true });
+	const publicJwk = {
+		...(await exportJWK(keyPair.publicKey)),
+		kid: "follow-up",
+		alg: "ES256",
+		use: "sig",
+	};
+	const [jwtClient, otherJwtClient] = await Promise.all([
+		createClient("private_key_jwt", { keys: [publicJwk] }),
+		createClient("private_key_jwt", { keys: [publicJwk] }),
+	]);
 	handles.set("assertion", assertionClient.client_id);
+	handles.set("jwt", jwtClient.client_id);
 
 	const followUp = (
 		params: Record<string, string>,
@@ -2216,6 +2241,38 @@ describe("authenticateClient with an expected client", async () => {
 		const other = await followUp(assertion(otherAssertionClient.client_id));
 		expect(other.status).toBe(400);
 		expect(await other.json()).toMatchObject({ error: "invalid_client" });
+	});
+
+	it("authenticates a private_key_jwt assertion for the expected client only", async () => {
+		const signedAssertion = (clientId: string) =>
+			new SignJWT({})
+				.setProtectedHeader({ alg: "ES256", kid: "follow-up" })
+				.setIssuer(clientId)
+				.setSubject(clientId)
+				.setAudience(`${baseURL}/api/auth/test/follow-up`)
+				.setIssuedAt()
+				.setExpirationTime("2m")
+				.setJti(crypto.randomUUID())
+				.sign(keyPair.privateKey);
+		const assertion = async (clientId: string) => ({
+			handle: "jwt",
+			client_assertion_type: CLIENT_ASSERTION_TYPE,
+			client_assertion: await signedAssertion(clientId),
+		});
+
+		const authenticated = await followUp(await assertion(jwtClient.client_id));
+		expect(authenticated.status).toBe(200);
+		expect(await authenticated.json()).toEqual({
+			client_id: jwtClient.client_id,
+			method: "private_key_jwt",
+		});
+
+		const other = await followUp(await assertion(otherJwtClient.client_id));
+		expect(other.status).toBe(400);
+		expect(await other.json()).toEqual({
+			error: "invalid_client",
+			error_description: "client_id does not match assertion sub/iss",
+		});
 	});
 
 	it("requires client_id when no client is expected", async () => {

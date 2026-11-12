@@ -230,6 +230,9 @@ export interface OAuthClientAuthenticationRequest {
 	 * client assertion for another client fails with `invalid_client`.
 	 *
 	 * Without it, a request that names no client fails with `invalid_request`.
+	 * When it is `undefined`, the request is authenticated as whichever client
+	 * it names, so reject an unknown or expired handle before calling
+	 * `authenticateClient()`.
 	 */
 	clientId?: string;
 }
