@@ -227,6 +227,27 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
+	test("keeps foreign keys to a table whose key is another table's model name", async () => {
+		const { code = "" } = await generate({
+			user: { modelName: "users" },
+			plugins: [
+				{
+					id: "app-tables",
+					schema: {
+						role: {
+							modelName: "user",
+							disableMigration: true,
+							fields: {},
+						},
+					},
+				},
+			],
+		});
+
+		expect(code).toContain("references(()=> users.id");
+		expect(typeErrors(code)).toEqual([]);
+	});
+
 	/**
 	 * A hardcoded `export const relations = defineRelationsPart(...)` collides
 	 * with a user model whose table name is `relations` (e.g.

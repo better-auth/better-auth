@@ -169,21 +169,15 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schema: getAuthTables(options),
 		usePlural: false,
 	});
-	const matchesTable = (model: string, tableKey: string, modelName: string) =>
-		model === tableKey ||
-		model === modelName ||
-		model === getModelName(tableKey) ||
-		model === getModelName(modelName);
-	const isMigrationDisabled = (model: string) =>
-		Object.entries(tables).some(
+	// Schema keys win over aliases, as in `getDefaultModelName`.
+	const getTable = (model: string) =>
+		tables[model] ??
+		Object.entries(tables).find(
 			([tableKey, table]) =>
-				table.disableMigrations === true &&
-				matchesTable(model, tableKey, table.modelName || tableKey),
-		);
-	const isSchemaModel = (model: string) =>
-		Object.entries(tables).some(([tableKey, table]) =>
-			matchesTable(model, tableKey, table.modelName || tableKey),
-		);
+				model === table.modelName || model === getModelName(tableKey),
+		)?.[1];
+	const isMigrationDisabled = (model: string) =>
+		getTable(model)?.disableMigrations === true;
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
 		Object.keys(tables)
 			.filter((tableKey) => !isMigrationDisabled(tableKey))
@@ -259,7 +253,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				if (isMigrationDisabled(referencedOriginalModel)) {
 					continue;
 				}
-				if (!isSchemaModel(referencedOriginalModel)) {
+				if (!getTable(referencedOriginalModel)) {
 					throw new BetterAuthError(
 						`"${table}.${field}" references "${referencedOriginalModel}", which is not in the Better Auth schema.`,
 					);
