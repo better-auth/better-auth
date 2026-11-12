@@ -24,6 +24,8 @@ export interface ElectronOptions extends ElectronSharedOptions {
 	 * The prefix to use for cookies set by the plugin.
 	 *
 	 * @default "better-auth"
+	 *
+	 * @deprecated The prefix is now determined by the Better Auth options.
 	 */
 	cookiePrefix?: string | undefined;
 }
