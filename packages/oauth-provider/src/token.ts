@@ -248,6 +248,14 @@ export function getOAuthProviderApi(
 				params,
 			)) as OAuthProviderApi["verifyDpopProof"],
 		issueDpopNonce: () => issueEndpointDpopNonce(ctx, opts),
+		validateAuthorizationRequest: async (params) => {
+			const { validateAuthorizationRequest } = await import("./authorize");
+			return validateAuthorizationRequest(ctx, opts, params);
+		},
+		issueAuthorizationCode: async (params) => {
+			const { issueAuthorizationCode } = await import("./authorize");
+			return issueAuthorizationCode(ctx, opts, params);
+		},
 		hashToken: (token: string, type: StoreTokenType) =>
 			storeToken(opts.storeTokens, token, type),
 		validateAccessToken: async (token: string, clientId?: string) => {

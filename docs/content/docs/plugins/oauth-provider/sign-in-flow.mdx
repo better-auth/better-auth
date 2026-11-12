@@ -33,6 +33,8 @@ Better Auth also applies these rules to the authorize request ([OAuth 2.1 §4.1.
 * Every success and error response includes `iss` ([RFC 9207 §2](https://datatracker.ietf.org/doc/html/rfc9207#section-2)).
 * `resource` restricts the tokens to a resource server ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). See [Resources](/docs/plugins/oauth-provider/tokens#resources).
 
+A plugin that signs users in without these redirects, such as a sign-in endpoint for a first-party native app, can apply the same request rules and issue the authorization code itself. See [Authorization codes from your own endpoint](/docs/plugins/oauth-provider/reference#authorization-codes-from-your-own-endpoint).
+
 ## Login page
 
 To send users to your sign-in page, set `loginPage`. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. With `oauthProviderClient`, your page needs no OAuth code.

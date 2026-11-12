@@ -69,8 +69,9 @@ export interface OAuthAuthenticationContextOptions<
 	/**
 	 * Returns the `acr` and `amr` the current session establishes. Called when
 	 * the user approves an authorization request or an interaction request, such
-	 * as a device code or a CIBA request, on the provider's pages. Return only
-	 * what the session actually proved; do not raise `acr` to match
+	 * as a device code or a CIBA request, on the provider's pages, and when a
+	 * plugin issues a code with `issueAuthorizationCode`. Return only what the
+	 * session actually proved; do not raise `acr` to match
 	 * `requestedAcrValues`.
 	 *
 	 * An essential `acr` request (`claims.id_token.acr.essential`) that the
@@ -93,6 +94,16 @@ export interface OAuthAuthenticationContextOptions<
 		 * `acr_values`, in order of preference.
 		 */
 		requestedAcrValues: string[];
+		/**
+		 * Set only for a code from `issueAuthorizationCode`: when the user
+		 * authenticated, and the `amr` values the issuing plugin reported. The
+		 * plugin authenticated the user itself, so use these instead of how
+		 * `session` was created.
+		 */
+		authentication?: {
+			authTime: Date;
+			amr?: string[] | undefined;
+		};
 	}) => Awaitable<OAuthAuthenticationContext | undefined>;
 }
 
@@ -423,6 +434,103 @@ export interface OAuthProviderApi {
 	 * off.
 	 */
 	issueDpopNonce: () => Promise<string | undefined>;
+	/**
+	 * Validates an authorization request by the rules `/oauth2/authorize`
+	 * applies before sign-in, for a plugin endpoint that receives the request
+	 * itself. Call it before asking the user for anything, so a bad request
+	 * fails first. It checks the client, `response_type`, `redirect_uri`,
+	 * scopes, PKCE, `claims`, `dpop_jkt`, and resources. It also fails when no
+	 * supported `acr` can meet an essential `acr` request. It does not handle
+	 * `prompt` or `max_age`, which ask for user interaction.
+	 *
+	 * Returns the request to pass to `issueAuthorizationCode`, with `client_id`
+	 * set to `client`, `response_type: "code"`, and the client's default scopes
+	 * when the request names none. Client credentials (`client_secret`,
+	 * `client_assertion`, `client_assertion_type`) are removed. Other unknown
+	 * parameters are kept, as `/oauth2/authorize` keeps them, so remove your
+	 * endpoint's own parameters first. The result is plain JSON, so it can be
+	 * stored between requests.
+	 *
+	 * Failures throw a 400 `APIError` whose body carries the OAuth `error`
+	 * (such as `invalid_request`, `invalid_scope`, `invalid_target`,
+	 * `unauthorized_client`, or `access_denied`) and `error_description`.
+	 */
+	validateAuthorizationRequest: (params: {
+		/**
+		 * The client making the request, such as the one `authenticateClient`
+		 * returned. A `client_id` in `request` must name the same client.
+		 */
+		client: SchemaClient<Scope[]>;
+		/** The authorization request parameters as received. */
+		request: Record<string, unknown>;
+		/**
+		 * How the client receives the code:
+		 * - `"redirect"`: at its `redirect_uri`, as from `/oauth2/authorize`.
+		 *   `response_type` and `redirect_uri` are required, and the code is
+		 *   bound to the `redirect_uri`.
+		 * - `"headless"`: in the response of the plugin's endpoint.
+		 *   `response_type` is optional. A `redirect_uri` must be registered
+		 *   for the client, but is removed from the result, so the code is
+		 *   redeemed without one (RFC 6749 §4.1.3). `state` is removed too.
+		 *   `response_mode` is rejected.
+		 *
+		 * Both modes reject `request`, `request_uri`, and the parameters that
+		 * identify an extension's interaction request, such as `user_code`.
+		 */
+		mode: "redirect" | "headless";
+	}) => Promise<StoredAuthorizationQuery>;
+	/**
+	 * Stores a single-use authorization code for an approved request and
+	 * returns it, without a redirect. Use it in a flow that authenticates the
+	 * user outside `/oauth2/authorize`, such as a first-party app's sign-in.
+	 * The code redeems at the token endpoint like a code from
+	 * `/oauth2/authorize`, with the same PKCE, `redirect_uri`, `dpop_jkt`, and
+	 * resource checks, and honors `codeExpiresIn` and `storeTokens`.
+	 *
+	 * The request is validated again first, so a stored request that is no
+	 * longer valid fails here and not at redemption. For requests with the
+	 * `openid` scope, the configured `authenticationContext.resolve` runs and
+	 * receives `authentication`. An unmet essential `acr` request then fails
+	 * with `access_denied`, and nothing is stored. Failures throw an `APIError`
+	 * like `validateAuthorizationRequest`.
+	 *
+	 * It skips what `/oauth2/authorize` does once a user is signed in: the
+	 * `prompt` and `max_age` checks, account selection, post-login, and
+	 * consent. The caller decides these before calling it.
+	 */
+	issueAuthorizationCode: (params: {
+		/**
+		 * The result of `validateAuthorizationRequest`, which may have been
+		 * stored in between. Its `client_id` names the client.
+		 */
+		request: StoredAuthorizationQuery;
+		/**
+		 * The session that backs the code. Its user is the code's user, and
+		 * redeeming the code fails once the session has ended.
+		 */
+		session: Session;
+		/** What the caller observed when it authenticated the user. */
+		authentication?: {
+			/**
+			 * When the user authenticated, issued as `auth_time`. Defaults to
+			 * when `session` was created.
+			 */
+			authTime?: Date;
+			/**
+			 * Authentication Methods References (RFC 8176), such as
+			 * `["pwd", "otp"]`. Passed to `authenticationContext.resolve`,
+			 * which decides the `amr` the ID token carries.
+			 */
+			amr?: string[];
+		};
+		/** Consent reference to record on the code and the tokens it yields. */
+		referenceId?: string;
+	}) => Promise<{
+		/** The authorization code to return to the client. */
+		code: string;
+		/** When the code expires, `codeExpiresIn` seconds from now. */
+		expiresAt: Date;
+	}>;
 	/**
 	 * Computes the stored lookup key for a token value (the same hash the
 	 * provider persists), so a caller can find or revoke a previously issued

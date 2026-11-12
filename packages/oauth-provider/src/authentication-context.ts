@@ -47,6 +47,7 @@ export async function resolveAuthenticationContext(
 		scopes: string[];
 		headers: Headers;
 		query: Pick<OAuthInteractionQuery, "claims" | "acr_values">;
+		authentication?: { authTime: Date; amr?: string[] | undefined };
 	},
 ): Promise<OAuthAuthenticationContext> {
 	const resolve = opts.authenticationContext?.resolve;

@@ -5,7 +5,6 @@ import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-
 import { appendQueryParams } from "@better-auth/core/utils/url";
 import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
-import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import {
 	getAcrValuesSupported,
@@ -17,7 +16,10 @@ import {
 	getRequestedUserInfoClaims,
 	isValidOidcClaimsRequest,
 } from "./claims-request";
-import { getExtensionInteractionRequest } from "./extensions";
+import {
+	findExtensionInteractionParameter,
+	getExtensionInteractionRequest,
+} from "./extensions";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
 import { mapIssuesToOAuthError } from "./oauth-endpoint";
@@ -35,7 +37,10 @@ import type {
 	OAuthInteractionQuery,
 	OAuthInteractionRequest,
 	OAuthOptions,
+	OAuthProviderApi,
+	SchemaClient,
 	Scope,
+	StoredAuthorizationQuery,
 	VerificationValue,
 } from "./types";
 import { authorizationQuerySchema, RedirectUriSyntaxSchema } from "./types/zod";
@@ -401,26 +406,38 @@ export async function resolveTrustedRedirectUri(
 	if (!isRedirectUriTransportAllowed(opts, redirectUri, isWebClient)) {
 		return null;
 	}
+	return (await isAllowedRedirectUri(opts, client, redirectUri))
+		? redirectUri
+		: null;
+}
+
+/**
+ * Whether `client` may use `redirectUri`: a registered redirect URI, or one the
+ * custom `validateRedirectUri` accepts. Callers apply the HTTPS policy first.
+ */
+async function isAllowedRedirectUri(
+	opts: OAuthOptions<Scope[]>,
+	client: SchemaClient<Scope[]>,
+	redirectUri: string,
+): Promise<boolean> {
 	const registeredUris = client.redirectUris ?? [];
-	const matched = findRegisteredRedirectUri(
-		registeredUris,
-		redirectUri,
-		isWebClient,
+	// Default validation: exact match + native loopback port variance
+	const matched = Boolean(
+		findRegisteredRedirectUri(
+			registeredUris,
+			redirectUri,
+			client.applicationType === "web",
+		),
 	);
-	if (opts.validateRedirectUri) {
-		if (!isSafeCustomRedirectUri(redirectUri)) return null;
-		try {
-			const isValid = await opts.validateRedirectUri(
-				redirectUri,
-				registeredUris,
-				Boolean(matched),
-			);
-			return isValid ? redirectUri : null;
-		} catch {
-			return null;
-		}
+	if (!opts.validateRedirectUri) return matched;
+	if (!isSafeCustomRedirectUri(redirectUri)) return false;
+	try {
+		// Custom validator receives the default result for composition
+		return await opts.validateRedirectUri(redirectUri, registeredUris, matched);
+	} catch {
+		// Fail closed: a throwing validator rejects the request
+		return false;
 	}
-	return matched ? redirectUri : null;
 }
 
 /**
@@ -672,49 +689,80 @@ export async function authorizeEndpoint(
 		);
 	}
 
-	const registeredUris = client.redirectUris ?? [];
-	const isWebClient = client.applicationType === "web";
-	let isValidRedirectUri = false;
-	if (query.redirect_uri) {
-		if (!isRedirectUriTransportAllowed(opts, query.redirect_uri, isWebClient)) {
-			return handleRedirect(
-				ctx,
-				getErrorURL(ctx, "invalid_request", INSECURE_REDIRECT_URI_MESSAGE),
-			);
-		}
-		// Default validation: exact match + native loopback port variance
-		const defaultResult = Boolean(
-			findRegisteredRedirectUri(
-				registeredUris,
-				query.redirect_uri,
-				isWebClient,
-			),
+	if (
+		query.redirect_uri &&
+		!isRedirectUriTransportAllowed(
+			opts,
+			query.redirect_uri,
+			client.applicationType === "web",
+		)
+	) {
+		return handleRedirect(
+			ctx,
+			getErrorURL(ctx, "invalid_request", INSECURE_REDIRECT_URI_MESSAGE),
 		);
-		if (
-			opts.validateRedirectUri &&
-			isSafeCustomRedirectUri(query.redirect_uri)
-		) {
-			try {
-				// Custom validator receives defaultResult for composition
-				isValidRedirectUri = await opts.validateRedirectUri(
-					query.redirect_uri,
-					registeredUris,
-					defaultResult,
-				);
-			} catch {
-				// Fail closed: a throwing validator rejects the request
-				isValidRedirectUri = false;
-			}
-		} else if (!opts.validateRedirectUri) {
-			isValidRedirectUri = defaultResult;
-		}
 	}
-	if (!isValidRedirectUri) {
+	if (
+		!query.redirect_uri ||
+		!(await isAllowedRedirectUri(opts, client, query.redirect_uri))
+	) {
 		return handleRedirect(
 			ctx,
 			getErrorURL(ctx, "invalid_redirect", "invalid redirect uri"),
 		);
 	}
+	// The redirect URI is now trusted, so later errors go to the client.
+	try {
+		query = await validateAuthorizationParameters(ctx, opts, client, query);
+	} catch (error) {
+		if (!(error instanceof APIError)) throw error;
+		const body = error.body as
+			| { error?: OAuthErrorCode; error_description?: string }
+			| undefined;
+		return redirectWithAuthorizationError(
+			ctx,
+			opts,
+			query,
+			body?.error ?? "invalid_request",
+			body?.error_description ?? "invalid request",
+		);
+	}
+
+	return runAuthorizationInteraction(ctx, opts, headers, settings, {
+		query,
+		client,
+		approve: (approval) =>
+			createAuthorizationCodeURL(ctx, opts, {
+				...approval,
+				// An authorization request always carries its validated redirect_uri.
+				query: approval.query as OAuthAuthorizationQuery,
+				resource: toResourceList(approval.query.resource) ?? [],
+			}),
+	});
+}
+
+function authorizationRequestError(
+	error: OAuthErrorCode,
+	description: string,
+): APIError {
+	return new APIError("BAD_REQUEST", { error, error_description: description });
+}
+
+/**
+ * Checks the parameters of an authorization request for `client`: scopes, the
+ * claims request, an essential `acr`, resources, and PKCE. Returns the request
+ * with the default scopes when it names none. A failure throws a 400
+ * `APIError` with the OAuth error, which `/oauth2/authorize` sends to the
+ * client's redirect URI.
+ */
+async function validateAuthorizationParameters<
+	Query extends StoredAuthorizationQuery,
+>(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	client: SchemaClient<Scope[]>,
+	query: Query,
+): Promise<Query> {
 	// Check for invalid scopes if requested from query
 	let requestedScopes = query.scope?.split(" ").filter((s) => s);
 	if (requestedScopes) {
@@ -723,46 +771,28 @@ export async function authorizeEndpoint(
 			return !validScopes?.has(scope);
 		});
 		if (invalidScopes.length) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_scope",
-					`The following scopes are invalid: ${invalidScopes.join(", ")}`,
-					query.state,
-					getIssuer(ctx, opts),
-				),
+			throw authorizationRequestError(
+				"invalid_scope",
+				`The following scopes are invalid: ${invalidScopes.join(", ")}`,
 			);
 		}
 	}
 	// Always set default scopes if not originally sent
 	if (!requestedScopes) {
 		requestedScopes = client.scopes ?? opts.scopes ?? [];
-		query.scope = requestedScopes.join(" ");
+		query = { ...query, scope: requestedScopes.join(" ") };
 	}
 	const openidRequested = requestedScopes.includes("openid");
 	if (query.claims !== undefined && !openidRequested) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"openid scope must be requested when using the claims parameter",
-				query.state,
-				getIssuer(ctx, opts),
-			),
+		throw authorizationRequestError(
+			"invalid_request",
+			"openid scope must be requested when using the claims parameter",
 		);
 	}
 	if (openidRequested && !isValidOidcClaimsRequest(query.claims)) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"claims must be a valid Claims request object",
-				query.state,
-				getIssuer(ctx, opts),
-			),
+		throw authorizationRequestError(
+			"invalid_request",
+			"claims must be a valid Claims request object",
 		);
 	}
 	// Fail before sign-in when no supported ACR can satisfy an essential request;
@@ -773,15 +803,9 @@ export async function authorizeEndpoint(
 			canSatisfyEssentialAcrRequest(query.claims, acr),
 		)
 	) {
-		return handleRedirect(
-			ctx,
-			formatErrorURL(
-				query.redirect_uri,
-				"access_denied",
-				"essential acr requirement cannot be met",
-				query.state,
-				getIssuer(ctx, opts),
-			),
+		throw authorizationRequestError(
+			"access_denied",
+			"essential acr requirement cannot be met",
 		);
 	}
 
@@ -797,24 +821,14 @@ export async function authorizeEndpoint(
 				requestedScopes,
 			});
 		} catch (err) {
-			if (err instanceof APIError) {
-				const error =
-					(err.body as { error?: string })?.error ?? "invalid_target";
-				const description =
-					(err.body as { error_description?: string })?.error_description ??
-					"requested resource invalid";
-				return handleRedirect(
-					ctx,
-					formatErrorURL(
-						query.redirect_uri,
-						error,
-						description,
-						query.state,
-						getIssuer(ctx, opts),
-					),
-				);
-			}
-			throw err;
+			if (!(err instanceof APIError)) throw err;
+			const body = err.body as
+				| { error?: OAuthErrorCode; error_description?: string }
+				| undefined;
+			throw authorizationRequestError(
+				body?.error ?? "invalid_target",
+				body?.error_description ?? "requested resource invalid",
+			);
 		}
 	}
 
@@ -827,15 +841,9 @@ export async function authorizeEndpoint(
 	// Validate PKCE parameters if required
 	if (pkceRequired) {
 		if (!query.code_challenge || !query.code_challenge_method) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_request",
-					pkceRequired.valueOf(),
-					query.state,
-					getIssuer(ctx, opts),
-				),
+			throw authorizationRequestError(
+				"invalid_request",
+				pkceRequired.valueOf(),
 			);
 		}
 	}
@@ -844,45 +852,219 @@ export async function authorizeEndpoint(
 	if (query.code_challenge || query.code_challenge_method) {
 		// Both parameters must be provided together
 		if (!query.code_challenge || !query.code_challenge_method) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_request",
-					"code_challenge and code_challenge_method must both be provided",
-					query.state,
-					getIssuer(ctx, opts),
-				),
+			throw authorizationRequestError(
+				"invalid_request",
+				"code_challenge and code_challenge_method must both be provided",
 			);
 		}
 
 		// Check code challenge method is supported (only S256)
 		const codeChallengesSupported = ["S256"];
 		if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-			return handleRedirect(
-				ctx,
-				formatErrorURL(
-					query.redirect_uri,
-					"invalid_request",
-					"invalid code_challenge method, only S256 is supported",
-					query.state,
-					getIssuer(ctx, opts),
-				),
+			throw authorizationRequestError(
+				"invalid_request",
+				"invalid code_challenge method, only S256 is supported",
 			);
 		}
 	}
+	return query;
+}
 
-	return runAuthorizationInteraction(ctx, opts, headers, settings, {
-		query,
+/**
+ * Validates an authorization request received outside `/oauth2/authorize`.
+ * See {@link OAuthProviderApi.validateAuthorizationRequest}.
+ */
+export async function validateAuthorizationRequest(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: Parameters<OAuthProviderApi["validateAuthorizationRequest"]>[0],
+): Promise<StoredAuthorizationQuery> {
+	const { client, request } = params;
+	// Any mode other than "headless" gets the stricter redirect rules.
+	const headless = params.mode === "headless";
+	if (opts.grantTypes && !opts.grantTypes.includes("authorization_code")) {
+		throw authorizationRequestError(
+			"unsupported_response_type",
+			"the authorization_code grant is not enabled",
+		);
+	}
+	if (request.request !== undefined) {
+		throw authorizationRequestError(
+			"request_not_supported",
+			"request object not supported",
+		);
+	}
+	if (request.request_uri !== undefined) {
+		throw authorizationRequestError(
+			"request_uri_not_supported",
+			"request_uri not supported",
+		);
+	}
+	const interactionParameter = findExtensionInteractionParameter(opts, request);
+	if (interactionParameter) {
+		throw authorizationRequestError(
+			"invalid_request",
+			`${interactionParameter} is not an authorization request parameter`,
+		);
+	}
+	if (headless && request.response_mode !== undefined) {
+		throw authorizationRequestError(
+			"invalid_request",
+			"response_mode is not supported without a redirect",
+		);
+	}
+	if (
+		request.client_id !== undefined &&
+		request.client_id !== client.clientId
+	) {
+		throw authorizationRequestError(
+			"invalid_request",
+			"client_id does not match the client",
+		);
+	}
+	// Client credentials may share the request body, but must not be stored
+	// with the code.
+	const {
+		client_secret: _clientSecret,
+		client_assertion: _clientAssertion,
+		client_assertion_type: _clientAssertionType,
+		...parameters
+	} = request;
+	const parsed = authorizationQuerySchema.safeParse({
+		...parameters,
+		client_id: client.clientId,
+	});
+	if (!parsed.success) {
+		const mappedError = mapIssuesToOAuthError(
+			parsed.error.issues,
+			authorizationQueryErrorCodesByField,
+		);
+		throw authorizationRequestError(
+			mappedError.error,
+			mappedError.error_description,
+		);
+	}
+	const query = parsed.data as StoredAuthorizationQuery;
+	if (!headless && !query.response_type) {
+		throw authorizationRequestError(
+			"invalid_request",
+			"response_type is required",
+		);
+	}
+	if (client.disabled) {
+		throw authorizationRequestError("invalid_client", "client is disabled");
+	}
+	if (!clientAllowsGrant(client, "authorization_code")) {
+		throw authorizationRequestError(
+			"unauthorized_client",
+			"client is not authorized to use the authorization_code grant",
+		);
+	}
+	if (query.redirect_uri) {
+		if (
+			!isRedirectUriTransportAllowed(
+				opts,
+				query.redirect_uri,
+				client.applicationType === "web",
+			)
+		) {
+			throw authorizationRequestError(
+				"invalid_request",
+				INSECURE_REDIRECT_URI_MESSAGE,
+			);
+		}
+		if (!(await isAllowedRedirectUri(opts, client, query.redirect_uri))) {
+			throw authorizationRequestError(
+				"invalid_request",
+				"invalid redirect uri",
+			);
+		}
+	} else if (!headless) {
+		throw authorizationRequestError(
+			"invalid_request",
+			"redirect_uri is required",
+		);
+	}
+	// A headless code is returned in a response, not through a redirect, so it
+	// binds no redirect_uri and carries no state.
+	const { redirect_uri: _redirectUri, state: _state, ...headlessQuery } = query;
+	return validateAuthorizationParameters(ctx, opts, client, {
+		...(headless ? headlessQuery : query),
+		response_type: "code",
+	});
+}
+
+/**
+ * Stores an authorization code for a request the caller approved.
+ * See {@link OAuthProviderApi.issueAuthorizationCode}.
+ */
+export async function issueAuthorizationCode(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	params: Parameters<OAuthProviderApi["issueAuthorizationCode"]>[0],
+): Promise<{ code: string; expiresAt: Date }> {
+	const client = await getClient(ctx, opts, params.request.client_id);
+	if (!client) {
+		throw authorizationRequestError("invalid_client", "client not found");
+	}
+	// The request may have been stored since it was validated, and the client
+	// or the provider configuration may have changed in the meantime.
+	const query = await validateAuthorizationRequest(ctx, opts, {
 		client,
-		approve: (approval) =>
-			createAuthorizationCodeURL(ctx, opts, {
-				...approval,
-				// An authorization request always carries its validated redirect_uri.
-				query: approval.query as OAuthAuthorizationQuery,
-				clientId: client.clientId,
-				resource: toResourceList(approval.query.resource) ?? [],
-			}),
+		request: { ...params.request },
+		mode: params.request.redirect_uri ? "redirect" : "headless",
+	});
+	const { session } = params;
+	const authTime =
+		params.authentication?.authTime ?? new Date(session.createdAt);
+	if (!(authTime.getTime() <= Date.now())) {
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			error: "server_error",
+			error_description:
+				"authentication.authTime must be a valid date that is not in the future",
+		});
+	}
+	const scopes = query.scope?.split(" ").filter((scope) => scope) ?? [];
+	let authenticationContext: OAuthAuthenticationContext = {};
+	// The resolver runs only for requests that can yield an ID token.
+	if (opts.authenticationContext?.resolve && scopes.includes("openid")) {
+		const user = await ctx.context.internalAdapter.findUserById(session.userId);
+		if (!user) {
+			throw authorizationRequestError(
+				"invalid_request",
+				"the session's user no longer exists",
+			);
+		}
+		authenticationContext = await resolveAuthenticationContext(opts, {
+			user,
+			session,
+			client,
+			scopes,
+			headers: ctx.request?.headers ?? ctx.headers ?? new Headers(),
+			query,
+			authentication: { authTime, amr: params.authentication?.amr },
+		});
+	}
+	// OIDC Core §5.5.1.1: an unmet essential acr is a failed authentication.
+	if (
+		!canSatisfyEssentialAcrRequest(
+			query.claims,
+			authenticationContext.acr ?? LEVEL_0_ACR,
+		)
+	) {
+		throw authorizationRequestError(
+			"access_denied",
+			"essential acr requirement cannot be met",
+		);
+	}
+	return storeAuthorizationCode(ctx, opts, {
+		query,
+		userId: session.userId,
+		sessionId: session.id,
+		referenceId: params.referenceId,
+		authTime: authTime.getTime(),
+		...authenticationContext,
+		resource: toResourceList(query.resource) ?? [],
 	});
 }
 
@@ -1153,46 +1335,49 @@ function serializeAuthorizationQuery(query: OAuthInteractionQuery) {
 	return params;
 }
 
+/**
+ * Stores a single-use authorization code in the form the token endpoint
+ * redeems, and returns the code with its expiry.
+ */
+async function storeAuthorizationCode(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	approval: Omit<VerificationValue, "type">,
+): Promise<{ code: string; expiresAt: Date }> {
+	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
+	const iat = Math.floor(Date.now() / 1000);
+	const exp = iat + (opts.codeExpiresIn ?? 600);
+	const expiresAt = new Date(exp * 1000);
+
+	await ctx.context.internalAdapter.createVerificationValue({
+		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
+		createdAt: new Date(iat * 1000),
+		updatedAt: new Date(iat * 1000),
+		expiresAt,
+		value: JSON.stringify({
+			type: "authorization_code",
+			query: approval.query,
+			userId: approval.userId,
+			sessionId: approval.sessionId,
+			referenceId: approval.referenceId,
+			authTime: approval.authTime,
+			acr: approval.acr,
+			amr: approval.amr,
+			resource: approval.resource,
+		} satisfies VerificationValue),
+	});
+	return { code, expiresAt };
+}
+
 /** Stores a single-use authorization code and returns the client redirect URL carrying it. */
 async function createAuthorizationCodeURL(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
-	verificationValue: {
+	verificationValue: Omit<VerificationValue, "type"> & {
 		query: OAuthAuthorizationQuery;
-		clientId: string;
-		userId: string;
-		sessionId: string;
-		authTime: number;
-		acr?: string;
-		amr?: string[];
-		referenceId?: string;
-		resource?: string[];
 	},
 ) {
-	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const iat = Math.floor(Date.now() / 1000);
-	const exp = iat + (opts.codeExpiresIn ?? 600);
-
-	const data: Omit<Verification, "id" | "createdAt"> = {
-		identifier: await storeToken(opts.storeTokens, code, "authorization_code"),
-		updatedAt: new Date(iat * 1000),
-		expiresAt: new Date(exp * 1000),
-		value: JSON.stringify({
-			type: "authorization_code",
-			query: verificationValue.query,
-			userId: verificationValue.userId,
-			sessionId: verificationValue?.sessionId,
-			referenceId: verificationValue.referenceId,
-			authTime: verificationValue.authTime,
-			acr: verificationValue.acr,
-			amr: verificationValue.amr,
-			resource: verificationValue.resource,
-		} satisfies VerificationValue),
-	};
-	await ctx.context.internalAdapter.createVerificationValue({
-		...data,
-		createdAt: new Date(iat * 1000),
-	});
+	const { code } = await storeAuthorizationCode(ctx, opts, verificationValue);
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);

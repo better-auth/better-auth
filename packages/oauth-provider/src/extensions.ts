@@ -309,6 +309,22 @@ export function getExtensionInteractionRequest(
 	return undefined;
 }
 
+/**
+ * Returns the first extension interaction parameter that `parameters` carries,
+ * whatever else the request contains.
+ */
+export function findExtensionInteractionParameter(
+	opts: OAuthOptions<Scope[]>,
+	parameters: Record<string, unknown>,
+) {
+	for (const extension of getOAuthProviderExtensions(opts)) {
+		for (const parameter of Object.keys(extension.interactionRequests ?? {})) {
+			if (parameters[parameter] !== undefined) return parameter;
+		}
+	}
+	return undefined;
+}
+
 export function getExtensionGrantHandler(
 	opts: OAuthOptions<Scope[]>,
 	grantType: GrantType,

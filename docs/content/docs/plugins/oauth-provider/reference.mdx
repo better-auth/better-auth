@@ -580,7 +580,7 @@ export const customOAuthExtension = () =>
 * `metadata` and `claims` only add keys. A key the provider owns is kept, and a key two extensions contribute resolves to the first one registered. To advertise extension claims, set `advertisedMetadata.claims_supported`.
 * A `clientDiscovery` entry has a stable `id` stored as client provenance. Changing it requires migrating the owned clients, and removing it makes them fail closed.
 
-A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `verifyDpopProof`, `issueDpopNonce`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
+A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `verifyDpopProof`, `issueDpopNonce`, `validateAuthorizationRequest`, `issueAuthorizationCode`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
 
 <Callout type="warn">
   `issueTokens` applies the provider's resource policy. Each resource must be registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default). Each resource's `allowedScopes` also applies. It does not re-check anything else it is given. Validate the user, the client's registered scopes, and any grant-specific policy in your handler before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
@@ -621,6 +621,85 @@ const confirmation = await provider.resolveConfirmation({
 ```
 
 The request must then carry a DPoP proof signed by that key, or client authentication must return a `confirmation` with the same `jkt`. A returned `confirmation` replaces the proof, so one with another key fails even when the proof uses the expected key. Anything else fails with `invalid_dpop_proof`, including an mTLS confirmation. With `dpop.nonce.required`, a proof without a current nonce gets `use_dpop_nonce` instead, so the client can retry. If the existing token is not DPoP-bound, `getConfirmationJkt` returns `undefined` and the usual rules apply.
+
+### Authorization codes from your own endpoint
+
+A plugin can sign users in through its own endpoint, such as a sign-in endpoint for a first-party native app, and still give the client a standard authorization code to redeem at `/oauth2/token`. The provider API has two methods for this:
+
+* `validateAuthorizationRequest({ client, request, mode })` checks an authorization request by the rules `/oauth2/authorize` applies before sign-in. It returns the normalized request. A bad request throws a 400 `APIError` with an OAuth error, such as `invalid_request`, `invalid_scope`, or `invalid_target`.
+* `issueAuthorizationCode({ request, session, authentication, referenceId })` checks the request again, stores a single-use code, and returns `{ code, expiresAt }`. It does not redirect.
+
+```ts title="first-party-sign-in.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthEndpoint } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth/types";
+import * as z from "zod";
+
+export const firstPartySignIn = () =>
+  ({
+    id: "first-party-sign-in",
+    endpoints: {
+      firstPartySignIn: createAuthEndpoint(
+        "/first-party/sign-in",
+        {
+          method: "POST",
+          body: z.record(z.string(), z.unknown()),
+          metadata: { noStore: true },
+        },
+        async (ctx) => {
+          const provider = getOAuthProviderApi(
+            ctx,
+            ctx.context.getPlugin("oauth-provider")!.options,
+          );
+          // A public client sends client_id; a confidential client authenticates.
+          const { client } = await provider.authenticateClient({
+            requireCredentials: false,
+          });
+          const { username, password, ...authorizationRequest } = ctx.body;
+          // Rejects a bad request before the user is asked for anything.
+          const request = await provider.validateAuthorizationRequest({
+            client,
+            request: authorizationRequest,
+            mode: "headless",
+          });
+          // Your sign-in, including any second factor it requires.
+          const session = await signInUser(ctx, { username, password });
+          const { code } = await provider.issueAuthorizationCode({
+            request,
+            session,
+            authentication: { amr: ["pwd"] },
+          });
+          return ctx.json({ code });
+        },
+      ),
+    },
+    rateLimit: [
+      {
+        pathMatcher: (path) => path === "/first-party/sign-in",
+        window: 60, // seconds
+        max: 10,
+      },
+    ],
+  }) satisfies BetterAuthPlugin;
+```
+
+`mode` sets how the client receives the code:
+
+* `"redirect"`: at its `redirect_uri`, as from `/oauth2/authorize`. The request must include `response_type` and `redirect_uri`. The client must send the same `redirect_uri` to the token endpoint.
+* `"headless"`: in your endpoint's response. A `redirect_uri` in the request must still be registered for the client, but the code is not bound to it, so the client redeems the code without `redirect_uri` ([RFC 6749 §4.1.3](https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3)). The method drops `state`, and rejects `response_mode`.
+
+Both modes reject `request`, `request_uri`, and the parameter that identifies an extension's interaction request, such as `user_code`. The result has no client credentials, such as `client_secret`. It keeps other parameters it does not recognize, as `/oauth2/authorize` does, so remove your endpoint's own parameters before you pass the request. The result is plain JSON, so you can store it while the user signs in. `issueAuthorizationCode` checks it again against the current client and configuration.
+
+The token endpoint redeems the code like one from `/oauth2/authorize`. It checks the request's PKCE challenge, `dpop_jkt`, scopes, and resources. Codes follow `codeExpiresIn` and `storeTokens`. To bind the code to the client's DPoP key, set `dpop_jkt` in the request before you validate it, for example to the `jkt` that `verifyDpopProof` returns.
+
+The ID token's `auth_time` is `authentication.authTime`, or the session's creation time when you omit it. For requests with the `openid` scope, `issueAuthorizationCode` calls [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context) with `authentication`, and the code carries the `acr` and `amr` that `resolve` returns. When the request asks for an essential `acr` that the result does not meet, the call fails with `access_denied` and stores no code.
+
+`issueAuthorizationCode` skips everything `/oauth2/authorize` does once a user is signed in, including its pages. Your endpoint is responsible for:
+
+* authenticating the user, including any second factor or email verification your sign-in requires. A session you create with `internalAdapter.createSession` skips the two-factor and email verification checks of the sign-in endpoints.
+* authenticating the user again when the request has `prompt=login`, or a `max_age` that the last authentication does not meet.
+* getting the user's consent when the client needs it, and passing the consent's `referenceId`.
+* rate limiting the endpoint, because it checks user credentials.
 
 ### Client registration metadata
 

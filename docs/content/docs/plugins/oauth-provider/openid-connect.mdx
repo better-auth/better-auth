@@ -116,6 +116,8 @@ export const auth = betterAuth({
 });
 ```
 
+`resolve` also runs when a plugin signs the user in itself and issues a code with [`issueAuthorizationCode`](/docs/plugins/oauth-provider/reference#authorization-codes-from-your-own-endpoint). It then also receives `authentication`, with the `authTime` and `amr` the plugin reports. Session fields that track how the user signed in, such as `twoFactorVerified` above, may not reflect the plugin's sign-in. Base the result on `authentication` when it is set.
+
 How a request for a class is handled depends on whether it is essential:
 
 * An essential request (`claims={"id_token":{"acr":{"essential":true,"value":"…"}}}`) that the session does not satisfy fails with `access_denied` at the client's redirect URI. If no value in `acrValuesSupported` could satisfy it, the request fails before sign-in.

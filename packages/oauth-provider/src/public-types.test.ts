@@ -6,10 +6,13 @@ import type {
 	OAuthClientAdministrativeResponse,
 	OAuthClientRegistrationResponse,
 	OAuthOptions,
+	OAuthProviderApi,
 	SchemaClient,
 	Scope,
+	StoredAuthorizationQuery,
 	TokenEndpointAuthMethod,
 } from "@better-auth/oauth-provider";
+import type { Session } from "better-auth/types";
 import { describe, expectTypeOf, it } from "vitest";
 
 type ClientPrivilegeAction = Parameters<
@@ -80,6 +83,27 @@ describe("public oauth-provider types", () => {
 		expectTypeOf<"configure-client-credentials">().not.toMatchTypeOf<ClientPrivilegeAction>();
 		expectTypeOf<ClientPrivilegeContext["clientId"]>().toEqualTypeOf<
 			string | undefined
+		>();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10414
+	 */
+	it("passes a validated authorization request on to code issuance", () => {
+		type Validate = OAuthProviderApi["validateAuthorizationRequest"];
+		type Issue = OAuthProviderApi["issueAuthorizationCode"];
+		expectTypeOf<Parameters<Validate>[0]["mode"]>().toEqualTypeOf<
+			"redirect" | "headless"
+		>();
+		expectTypeOf<ReturnType<Validate>>().toEqualTypeOf<
+			Promise<StoredAuthorizationQuery>
+		>();
+		expectTypeOf<Parameters<Issue>[0]["request"]>().toEqualTypeOf<
+			Awaited<ReturnType<Validate>>
+		>();
+		expectTypeOf<Parameters<Issue>[0]["session"]>().toEqualTypeOf<Session>();
+		expectTypeOf<ReturnType<Issue>>().toEqualTypeOf<
+			Promise<{ code: string; expiresAt: Date }>
 		>();
 	});
 });
