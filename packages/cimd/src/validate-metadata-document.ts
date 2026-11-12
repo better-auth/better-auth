@@ -331,7 +331,6 @@ export function validateCimdMetadata(
 	// Origin-bound fields: values must share the same origin as the client_id URL
 	const fieldsToCheck = options.originBoundFields ?? [
 		"post_logout_redirect_uris",
-		"client_uri",
 	];
 
 	let clientIdOrigin: string;
