@@ -553,8 +553,16 @@ A [`clientAuthentication` strategy](/docs/plugins/oauth-provider/reference#provi
 
 When the subject token is DPoP-bound, the rules depend on who exchanges it:
 
-* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A missing proof, or a proof or `confirmation` with another key, fails with `invalid_dpop_proof`.
+* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A request with neither a proof nor a `confirmation` fails with `invalid_dpop_proof`. So does a proof or `confirmation` with another key.
 * **A service in the token's audience**, such as the MCP server that received it, does not hold the client's key. If the service sends its own proof, the exchanged token is bound to the service's key. If it sends no proof and none is required, the exchanged token is a bearer token.
+
+A subject token can also be bound by another mechanism, such as an mTLS certificate in `cnf["x5t#S256"]` that came from a strategy's `confirmation`. When the client the token was issued to exchanges it, its strategy must return the same `confirmation` again. The exchanged token then stays bound to that certificate. The exchange fails with `invalid_request` in any of these cases:
+
+* The strategy returns a different certificate.
+* The strategy returns no `confirmation`. A DPoP proof does not replace it.
+* The token's `cnf` uses a method the server does not recognize.
+
+A service in the token's audience is treated as for a DPoP-bound token. The exchanged token is bound to the service's own proof or `confirmation`, or is a bearer token when the service sends neither and none is required.
 
 A service that passes the [exchange rules](#exchange-rules) does not need the client's key. It can turn each DPoP-bound token it receives into a token for the APIs it is linked to. To keep those tokens DPoP-bound, require a proof in either of these ways:
 
@@ -581,7 +589,7 @@ The provider applies these rules to every exchange, before your `allowExchange` 
 | The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
 | The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
 | The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
-| A client that exchanges its own DPoP-bound token sends a proof signed by the same key                                                                 | An exchange cannot remove or replace the client's DPoP binding                                                      |
+| A client that exchanges its own sender-constrained token proves the same binding: the same DPoP key, or the same strategy `confirmation`              | An exchange cannot remove or replace the client's binding                                                           |
 | The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
 | Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
 | A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
@@ -601,6 +609,7 @@ A token exchange fails with one of these errors:
   * `requested_token_type` is unsupported.
   * The request sends neither `resource` nor `audience`.
   * The user has no stored consent for the client that covers the request.
+  * The client exchanges its own token bound by a non-DPoP `cnf`, such as an mTLS certificate, and its client authentication does not return that same `confirmation`.
   * Your `allowExchange` policy denies the exchange.
 * `invalid_scope` (400), when any of these applies:
   * The request names a scope that the subject token or the client does not have.

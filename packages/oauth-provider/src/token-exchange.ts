@@ -5,7 +5,7 @@ import type { User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { extendOAuthProvider } from "./extensions";
 import { resolveResourcePolicy } from "./resources";
-import { resolveIssuanceConfirmation } from "./token";
+import { resolveIssuanceConfirmation, sameConfirmation } from "./token";
 import type {
 	OAuthExtensionGrantHandlerInput,
 	OAuthTokenResponse,
@@ -16,6 +16,7 @@ import type { Awaitable } from "./types/helpers";
 import {
 	consentCovers,
 	findConsent,
+	isConfirmation,
 	parseScopes,
 	tokenError,
 	validateClientScopes,
@@ -176,16 +177,26 @@ async function exchangeToken(
 			deny("the user has not consented to this client for this exchange");
 		}
 	}
-	// As on refresh, a client exchanging its own DPoP-bound token must prove the
-	// same key. A resource server cannot hold that key, so it binds its own.
+	// A client exchanging its own sender-constrained token must prove the same
+	// binding: the same DPoP key, as on refresh, or the same client-auth
+	// confirmation, such as an mTLS certificate. A resource server cannot hold
+	// that key, so it binds its own.
+	const ownBinding =
+		subject.client_id === client.clientId ? subject.cnf : undefined;
+	const expectedJkt = getConfirmationJkt(ownBinding);
+	// A DPoP binding is checked against the proof below, as `invalid_dpop_proof`.
+	if (
+		ownBinding != null &&
+		expectedJkt === undefined &&
+		!(isConfirmation(ownBinding) && sameConfirmation(confirmation, ownBinding))
+	) {
+		deny("client authentication does not match the subject_token binding");
+	}
 	const binding = await resolveIssuanceConfirmation(ctx, opts, {
 		client,
 		dpopBoundAccessTokensRequired,
 		confirmation,
-		expectedJkt:
-			subject.client_id === client.clientId
-				? getConfirmationJkt(subject.cnf)
-				: undefined,
+		expectedJkt,
 	});
 	if (
 		options.allowExchange &&

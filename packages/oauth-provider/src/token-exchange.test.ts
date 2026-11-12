@@ -872,67 +872,88 @@ describe("oauthTokenExchange", () => {
 		expect(error).toBeNull();
 	});
 
-	describe("a client whose authentication strategy proves a confirmation", () => {
-		const authMethod = "test_attestation_jwt";
+	/**
+	 * Boots a wallet client whose `clientAuthentication` strategy returns
+	 * whatever `confirmation` the test sets, and exchanges as that wallet.
+	 */
+	async function bootConfirmingWallet(
+		scenario: { disableJwtPlugin?: boolean } = {},
+	) {
+		const authMethod = "test_confirming_auth";
 		const assertionType =
-			"urn:better-auth:test:client-assertion-type:test-attestation";
-
-		async function exchangeWithProvenConfirmation(
-			proven: (subjectJkt: string) => Confirmation,
-		) {
-			let confirmation: Confirmation | undefined;
-			const attestation = {
-				id: "test-attestation",
-				init(ctx) {
-					extendOAuthProvider(ctx, {
-						clientAuthentication: {
-							[authMethod]: {
-								assertionTypes: [assertionType],
-								authenticate: async ({ clientId }) => ({
-									clientId: clientId!,
-									confirmation,
-								}),
-							},
+			"urn:better-auth:test:client-assertion-type:test-confirming";
+		const state: { confirmation?: Confirmation } = {};
+		const confirming = {
+			id: "test-confirming",
+			init(ctx) {
+				extendOAuthProvider(ctx, {
+					clientAuthentication: {
+						[authMethod]: {
+							assertionTypes: [assertionType],
+							authenticate: async ({ clientId }) => ({
+								clientId: clientId!,
+								confirmation: state.confirmation,
+							}),
 						},
-					});
-				},
-			} satisfies BetterAuthPlugin;
-			const allowExchange = vi.fn(() => true);
-			const { createClient, userTokenForMcp, postToken } = await bootScenario(
-				{ allowExchange },
-				{ plugins: [attestation] },
-			);
-			const wallet = await createClient({
-				token_endpoint_auth_method: authMethod,
-				grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
-				redirect_uris: [redirectUri],
-				scope: "openid read write",
-				skip_consent: true,
-				resources: [mcp, api],
-			});
-			const clientAuth = {
-				client_assertion_type: assertionType,
-				client_assertion: `assertion:${wallet.client_id}`,
-			};
-			const key = await createDpopKey();
-			const subject = await userTokenForMcp({
+					},
+				});
+			},
+		} satisfies BetterAuthPlugin;
+		const allowExchange = vi.fn(() => true);
+		const { createClient, userTokenForMcp, postToken } = await bootScenario(
+			{ allowExchange },
+			{ plugins: [confirming], ...scenario },
+		);
+		const wallet = await createClient({
+			token_endpoint_auth_method: authMethod,
+			grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+			redirect_uris: [redirectUri],
+			scope: "openid read write",
+			skip_consent: true,
+			resources: [mcp, api],
+		});
+		const clientAuth = {
+			client_assertion_type: assertionType,
+			client_assertion: `assertion:${wallet.client_id}`,
+		};
+		const userToken = (tokenHeaders?: Record<string, string>) =>
+			userTokenForMcp({
 				scope: "openid read",
 				requester: wallet,
 				clientAuth,
-				tokenHeaders: { DPoP: await key.prove() },
+				tokenHeaders,
 			});
+		const exchange = (
+			subjectToken: string,
+			extraHeaders?: Record<string, string>,
+		) =>
+			postToken(
+				{
+					grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+					client_id: wallet.client_id,
+					...clientAuth,
+					subject_token: subjectToken,
+					subject_token_type: ACCESS_TOKEN_TYPE,
+					resource: api,
+				},
+				extraHeaders,
+			);
+		return { state, allowExchange, userToken, exchange };
+	}
+
+	describe("a client whose authentication strategy proves a confirmation", () => {
+		async function exchangeWithProvenConfirmation(
+			proven: (subjectJkt: string) => Confirmation,
+		) {
+			const { state, allowExchange, userToken, exchange } =
+				await bootConfirmingWallet();
+			const key = await createDpopKey();
+			const subject = await userToken({ DPoP: await key.prove() });
 			const subjectJkt = await deriveDpopJkt(key.publicJwk);
 			expect(decodeJwt(subject.access_token).cnf).toEqual({ jkt: subjectJkt });
 
-			confirmation = proven(subjectJkt);
-			const result = await postToken({
-				grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
-				client_id: wallet.client_id,
-				...clientAuth,
-				subject_token: subject.access_token,
-				subject_token_type: ACCESS_TOKEN_TYPE,
-				resource: api,
-			});
+			state.confirmation = proven(subjectJkt);
+			const result = await exchange(subject.access_token);
 			return { ...result, allowExchange, subjectJkt };
 		}
 
@@ -961,6 +982,92 @@ describe("oauthTokenExchange", () => {
 				expect(allowExchange).not.toHaveBeenCalled();
 			},
 		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3
+	 * @see https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
+	 */
+	describe("a client exchanging its own certificate-bound subject token", () => {
+		const certificate = { "x5t#S256": "subject-certificate" };
+
+		async function exchangeCertificateBoundSubject(
+			presented: Confirmation | undefined,
+			extraHeaders?: Record<string, string>,
+			scenario: { disableJwtPlugin?: boolean } = {},
+		) {
+			const { state, allowExchange, userToken, exchange } =
+				await bootConfirmingWallet(scenario);
+			// Built-in grants bind only DPoP, so the certificate-bound subject comes
+			// from an exchange that presented the certificate.
+			state.confirmation = certificate;
+			const { data: subject } = await exchange(
+				(await userToken()).access_token,
+			);
+			if (!scenario.disableJwtPlugin) {
+				expect(decodeJwt(subject!.access_token).cnf).toEqual(certificate);
+			}
+
+			state.confirmation = presented;
+			allowExchange.mockClear();
+			const result = await exchange(subject!.access_token, extraHeaders);
+			return { ...result, allowExchange };
+		}
+
+		const mismatch = {
+			error: "invalid_request",
+			error_description:
+				"client authentication does not match the subject_token binding",
+		};
+
+		it("keeps the binding when the client presents the same certificate", async () => {
+			const { data, error } = await exchangeCertificateBoundSubject({
+				...certificate,
+			});
+			expect(error).toBeNull();
+			expect(data?.token_type).toBe("Bearer");
+			expect(decodeJwt(data!.access_token).cnf).toEqual(certificate);
+		});
+
+		it.each([
+			["a different certificate", { "x5t#S256": "another-certificate" }],
+			["no certificate", undefined],
+		] satisfies [string, Confirmation | undefined][])(
+			"rejects %s before allowExchange runs",
+			async (_label, presented) => {
+				const { error, allowExchange } =
+					await exchangeCertificateBoundSubject(presented);
+				expect(error).toMatchObject(mismatch);
+				expect(allowExchange).not.toHaveBeenCalled();
+			},
+		);
+
+		it("checks the stored binding of an opaque subject token", async () => {
+			const opaque = { disableJwtPlugin: true };
+			const same = await exchangeCertificateBoundSubject(
+				{ ...certificate },
+				undefined,
+				opaque,
+			);
+			expect(same.error).toBeNull();
+			const other = await exchangeCertificateBoundSubject(
+				{ "x5t#S256": "another-certificate" },
+				undefined,
+				opaque,
+			);
+			expect(other.error).toMatchObject(mismatch);
+			expect(other.allowExchange).not.toHaveBeenCalled();
+		});
+
+		it("rejects a DPoP proof in place of the certificate", async () => {
+			const key = await createDpopKey();
+			const { error, allowExchange } = await exchangeCertificateBoundSubject(
+				undefined,
+				{ DPoP: await key.prove() },
+			);
+			expect(error).toMatchObject(mismatch);
+			expect(allowExchange).not.toHaveBeenCalled();
+		});
 	});
 
 	it.each([

@@ -201,7 +201,9 @@ export interface OAuthAuthenticatedClient {
 	 * wallet-instance key thumbprint). Pass it to `issueTokens` as
 	 * {@link OAuthTokenIssueParams.confirmation} to bind the issued token to it.
 	 * The authorization server writes this as token material and does not verify
-	 * it again, so a strategy must set it only after proving possession.
+	 * it again, so a strategy must set it only after proving possession. Return
+	 * the same value whenever the client proves the same key: token exchange
+	 * compares it with the `cnf` of the client's own subject token.
 	 */
 	confirmation?: Confirmation;
 }
