@@ -7,11 +7,14 @@ For the `title`:
 
 - Remove conventional commit prefixes (`fix(scope):`, `feat:`, and similar)
 - Start with a past-tense verb such as "Fixed", "Added", or "Improved"
-- Keep it to one sentence and one line
+- Keep it to one sentence and one line, aiming for about 150 characters and
+  never more than 300
 - Describe the user-visible impact, not the internal implementation
-- Keep API names, compatibility conditions, security guarantees, the affected
-  case, and the restored version when the description states them, because
-  most users read only the title
+- Lead with the headline: the affected API or feature and what changed for
+  users. When only some users are affected, name that condition briefly so the
+  title does not imply everyone is
+- Leave secondary details, exceptions, version ranges, and additional fixes in
+  the same changeset to the changelog. A title that omits them is complete
 - Wrap code identifiers in backticks, but not general concepts
 - Do not include links, HTML, images, bold or italic emphasis, `@mentions`, PR
   numbers, or author attribution
