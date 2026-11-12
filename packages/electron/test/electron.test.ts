@@ -2869,15 +2869,44 @@ describe("main-process session polling", () => {
 		expect(getSessionRequests).not.toHaveBeenCalled();
 	});
 
-	it("does not poll while offline by default", async ({ setProcessType }) => {
+	it("waits for app readiness before the first session fetch", async ({
+		setProcessType,
+	}) => {
 		setProcessType("browser");
+		let markReady!: () => void;
+		mockElectron.app.whenReady.mockReturnValueOnce(
+			new Promise<void>((resolve) => {
+				markReady = resolve;
+			}),
+		);
+
+		client.setupMain({ bridges: true });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(getSessionRequests).not.toHaveBeenCalled();
+
+		markReady();
+		await vi.advanceTimersByTimeAsync(0);
+		expect(getSessionRequests).toHaveBeenCalledTimes(1);
+		quitApp();
+	});
+
+	it("does not poll while offline by default, and fetches once back online", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+		client.$store.atoms.session!.set({
+			...client.$store.atoms.session!.get(),
+			data: null,
+		});
 		mockElectron.net.isOnline.mockReturnValue(false);
 
 		client.setupMain({ bridges: true });
-		setSessionData();
 		await vi.advanceTimersByTimeAsync(120_000);
-
 		expect(getSessionRequests).not.toHaveBeenCalled();
+
+		mockElectron.net.isOnline.mockReturnValue(true);
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(getSessionRequests).toHaveBeenCalledTimes(1);
 		quitApp();
 	});
 });

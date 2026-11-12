@@ -359,15 +359,20 @@ function setupBridges(
 			clientOptions?.sessionOptions?.refetchWhenOffline ?? false;
 		const canRefetch = () => refetchWhenOffline || net.isOnline();
 		// Without `window` the session atom skips its mount fetch, so a session restored from storage would stay `null` and never poll.
-		if (canRefetch()) {
+		// Retry that first fetch on each tick until it runs, in case the app started offline.
+		let hasFetched = false;
+		const poll = () => {
+			if (!canRefetch()) return;
+			if (hasFetched && $store.atoms.session?.get()?.data == null) return;
+			hasFetched = true;
 			$store.notify("$sessionSignal");
-		}
-		const pollInterval = setInterval(() => {
-			if ($store.atoms.session?.get()?.data != null && canRefetch()) {
-				$store.notify("$sessionSignal");
-			}
-		}, refetchInterval * 1000);
-		app.on("will-quit", () => clearInterval(pollInterval));
+		};
+		// `safeStorage` and `net` need the app to be ready on Windows and Linux.
+		app.whenReady().then(() => {
+			poll();
+			const pollInterval = setInterval(poll, refetchInterval * 1000);
+			app.on("will-quit", () => clearInterval(pollInterval));
+		});
 	}
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
