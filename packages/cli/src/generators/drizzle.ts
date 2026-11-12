@@ -4,6 +4,7 @@ import {
 	getDatabaseIndexStringLength,
 	resolveDatabaseSchemaIndexes,
 } from "@better-auth/core/db/internal";
+import { BetterAuthError } from "@better-auth/core/error";
 import { toSnakeCase } from "@better-auth/core/utils/string";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
@@ -93,6 +94,10 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			([tableKey, table]) =>
 				table.disableMigrations === true &&
 				matchesTable(model, tableKey, table.modelName || tableKey),
+		);
+	const isSchemaModel = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) =>
+			matchesTable(model, tableKey, table.modelName || tableKey),
 		);
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
 		Object.keys(tables)
@@ -371,6 +376,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}
 							const referencesDisabledModel =
 								attr.references && isMigrationDisabled(attr.references.model);
+							if (
+								attr.references &&
+								!referencesDisabledModel &&
+								!isSchemaModel(attr.references.model)
+							) {
+								throw new BetterAuthError(
+									`"${tableKey}.${field}" references "${attr.references.model}", which is not in the Better Auth schema.`,
+								);
+							}
 
 							return `${fieldName}: ${type}${attr.required !== false ? ".notNull()" : ""}${
 								attr.unique ? ".unique()" : ""

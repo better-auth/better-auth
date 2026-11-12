@@ -180,6 +180,10 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				table.disableMigrations === true &&
 				matchesTable(model, tableKey, table.modelName || tableKey),
 		);
+	const isSchemaModel = (model: string) =>
+		Object.entries(tables).some(([tableKey, table]) =>
+			matchesTable(model, tableKey, table.modelName || tableKey),
+		);
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
 		Object.keys(tables)
 			.filter((tableKey) => !isMigrationDisabled(tableKey))
@@ -254,6 +258,11 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				const referencedOriginalModel = attr.references.model;
 				if (isMigrationDisabled(referencedOriginalModel)) {
 					continue;
+				}
+				if (!isSchemaModel(referencedOriginalModel)) {
+					throw new BetterAuthError(
+						`"${table}.${field}" references "${referencedOriginalModel}", which is not in the Better Auth schema.`,
+					);
 				}
 				const referencedCustomModel =
 					tables[referencedOriginalModel]?.modelName || referencedOriginalModel;

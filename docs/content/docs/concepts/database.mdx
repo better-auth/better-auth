@@ -717,6 +717,40 @@ export const auth = betterAuth({
 });
 ```
 
+#### Referencing Other Models
+
+`references.model` must be a model in the Better Auth schema, from the core schema or a plugin. To reference a table your app defines, declare it in a plugin schema, and set `disableMigration: true` if your app already creates it.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import type { BetterAuthPlugin } from "better-auth";
+
+const appTables = {
+  id: "app-tables",
+  schema: {
+    roles: {
+      fields: {},
+      disableMigration: true,
+    },
+  },
+} satisfies BetterAuthPlugin;
+
+export const auth = betterAuth({
+  user: {
+    additionalFields: {
+      roleId: {
+        type: "string",
+        required: false,
+        references: { model: "roles", field: "id" },
+      },
+    },
+  },
+  plugins: [appTables],
+});
+```
+
+`npx auth@latest migrate` adds the foreign key. Generated Drizzle and Prisma schemas include the `roleId` column without a relation, since the `roles` table lives in your own schema. Add the relation there if you need one.
+
 ### ID Generation
 
 Better Auth by default will generate unique IDs for users, sessions, and other entities.
