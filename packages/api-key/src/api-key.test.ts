@@ -956,6 +956,22 @@ describe("api-key", async () => {
 		expect(apiKey.error?.code).toBe("INVALID_API_KEY");
 	});
 
+	it("verify API key throws when the lookup fails instead of reporting an invalid key", async () => {
+		const context = await auth.$context;
+		const failure = new Error("connection terminated");
+		const findOne = vi
+			.spyOn(context.adapter, "findOne")
+			.mockRejectedValueOnce(failure);
+
+		try {
+			await expect(
+				auth.api.verifyApiKey({ body: { key: firstApiKey.key } }),
+			).rejects.toBe(failure);
+		} finally {
+			findOne.mockRestore();
+		}
+	});
+
 	let rateLimitedApiKey: ApiKey;
 
 	const {
