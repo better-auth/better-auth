@@ -368,3 +368,12 @@ const handler = createMcpProtectedRequestHandler( // [!code highlight]
 ```
 
 `createMcpProtectedRequestHandler` returns the same RFC 9728 `WWW-Authenticate` response for unauthenticated requests. Set `requiredScopes` in its options to require scopes; a token missing any of them receives the same `403` `insufficient_scope` challenge as `requireMcpAuth`. Set `challengeScopes` in the same options object to advertise a scope hint on unauthenticated challenges.
+
+<Callout type="warn">
+  To stop a captured DPoP proof from being used twice, the handler records each proof it accepts for a DPoP-bound token. Unlike `requireMcpAuth`, `createMcpProtectedRequestHandler` keeps that record in memory by default. The default is safe only for a single long-lived instance. Other instances do not see the record, and a restart clears it. An attacker who captures a proof can replay it against another instance until the proof expires.
+
+  If the handler runs on several instances or on serverless, pass a shared store as `dpop.replayStore`:
+
+  * If the handler runs in the same app as your Better Auth server, use `createDpopReplayStore`, as shown in [Protect your API](/docs/plugins/oauth-provider/resource-server#verify-access-tokens). It needs database-backed verification storage. If you configure secondary storage, also set `verification.storeInDatabase: true`. Otherwise every DPoP request fails.
+  * Otherwise, implement `DpopReplayStore` on storage that every instance shares. Its `reserve` method must record the proof's `key` until at least `expiresAt` in one atomic step, and return `false` if the key is already recorded. If `reserve` throws, the request fails.
+</Callout>
