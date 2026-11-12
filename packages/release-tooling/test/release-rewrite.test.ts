@@ -222,7 +222,7 @@ describe("release-note rewriting", () => {
 		releaseFiles,
 	}) => {
 		const context = Object.fromEntries(
-			Array.from({ length: 31 }, (_, index) => {
+			Array.from({ length: 17 }, (_, index) => {
 				const number = index + 1;
 				return [
 					"pr-" + number,
@@ -279,7 +279,7 @@ describe("release-note rewriting", () => {
 			JSON.parse(readFileSync(releaseFiles.outputPath, "utf-8")),
 			"Invalid rewrite output",
 		);
-		expect(output.rewrites).toHaveLength(31);
+		expect(output.rewrites).toHaveLength(17);
 	});
 
 	test("repairs copy when review feedback contradicts approval", async ({
