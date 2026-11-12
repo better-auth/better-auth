@@ -83,28 +83,7 @@ export function setupMain(
 	}
 }
 
-/**
- * Handles the deep link URL for authentication.
- */
-export async function handleDeepLink({
-	$fetch,
-	options,
-	url,
-	getWindow,
-	clientOptions,
-}: {
-	$fetch: BetterFetch;
-	options: ElectronClientOptions;
-	url: string;
-	getWindow?: SetupMainConfig["getWindow"] | undefined;
-	clientOptions?: BetterAuthClientOptions | undefined;
-}) {
-	if (!isProcessType("browser")) {
-		throw new BetterAuthError(
-			"`handleDeepLink` can only be called in the main process.",
-		);
-	}
-
+function parseAuthCallbackURL(url: string, options: ElectronClientOptions) {
 	let parsedURL: URL | null = null;
 	try {
 		parsedURL = new URL(url);
@@ -133,7 +112,48 @@ export async function handleDeepLink({
 		return;
 	}
 
-	const token = hash.substring("#token=".length);
+	return parsedURL;
+}
+
+function findAuthCallbackURL(
+	candidates: readonly unknown[],
+	options: ElectronClientOptions,
+) {
+	return candidates.find(
+		(candidate): candidate is string =>
+			typeof candidate === "string" &&
+			parseAuthCallbackURL(candidate, options) !== undefined,
+	);
+}
+
+/**
+ * Handles the deep link URL for authentication.
+ */
+export async function handleDeepLink({
+	$fetch,
+	options,
+	url,
+	getWindow,
+	clientOptions,
+}: {
+	$fetch: BetterFetch;
+	options: ElectronClientOptions;
+	url: string;
+	getWindow?: SetupMainConfig["getWindow"] | undefined;
+	clientOptions?: BetterAuthClientOptions | undefined;
+}) {
+	if (!isProcessType("browser")) {
+		throw new BetterAuthError(
+			"`handleDeepLink` can only be called in the main process.",
+		);
+	}
+
+	const parsedURL = parseAuthCallbackURL(url, options);
+	if (!parsedURL) {
+		return;
+	}
+
+	const token = parsedURL.hash.substring("#token=".length);
 
 	await authenticate({
 		$fetch,
@@ -206,29 +226,26 @@ function registerProtocolScheme(
 	if (!gotTheLock) {
 		app.quit();
 	} else {
-		app.on("second-instance", async (_event, commandLine, _workingDir, url) => {
-			// Someone tried to run a second instance, we should focus our window.
-			const win = getWindow();
-			if (win) {
-				if (win.isMinimized()) win.restore();
-				win.focus();
-			}
-
-			if (!url) {
-				const maybeURL = commandLine.pop();
-				if (typeof maybeURL === "string" && maybeURL.trim() !== "") {
-					try {
-						url = new URL(maybeURL).toString();
-					} catch {
-						//
-					}
+		app.on(
+			"second-instance",
+			async (_event, commandLine, _workingDir, additionalData) => {
+				// Someone tried to run a second instance, we should focus our window.
+				const win = getWindow();
+				if (win) {
+					if (win.isMinimized()) win.restore();
+					win.focus();
 				}
-			}
 
-			if (process?.platform !== "darwin" && typeof url === "string") {
-				await onDeepLink(url);
-			}
-		});
+				const url = findAuthCallbackURL(
+					[additionalData, ...commandLine],
+					options,
+				);
+
+				if (process?.platform !== "darwin" && url) {
+					await onDeepLink(url);
+				}
+			},
+		);
 
 		app.on("open-url", async (_event, url) => {
 			if (process?.platform === "darwin") {
@@ -237,11 +254,11 @@ function registerProtocolScheme(
 		});
 
 		app.whenReady().then(async () => {
-			if (
-				process?.platform !== "darwin" &&
-				typeof process.argv[1] === "string"
-			) {
-				await onDeepLink(process.argv[1]);
+			if (process?.platform !== "darwin") {
+				const url = findAuthCallbackURL(process.argv, options);
+				if (url) {
+					await onDeepLink(url);
+				}
 			}
 		});
 	}
