@@ -2,4 +2,4 @@
 "better-auth": patch
 ---
 
-Fixed session polling never firing in runtimes that do not report connectivity, such as React Native without the Expo plugin.
+Fixed session polling never firing when the runtime's `navigator` does not report connectivity.
