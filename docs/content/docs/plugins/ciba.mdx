@@ -81,12 +81,16 @@ The plugin extends [`@better-auth/oauth-provider`](./oauth-provider) and require
   <Step>
     ### Show the binding message on your consent page
 
-    The link opens your existing `consentPage`. For a CIBA request, its query carries `ciba_request_id`, `client_id`, `scope`, and the client's `binding_message` when it sent one. Show the binding message as plain text next to the client and scopes, so the user can check that it matches what the client displays.
+    The link opens your existing `consentPage`. For a CIBA request, its query carries `ciba_request_id`, `client_id`, and `scope`. It also carries what the client sent of `binding_message`, `acr_values`, and `authorization_details`. Show the binding message as plain text next to the client and scopes, so the user can check that it matches what the client displays.
 
     ```ts title="consent-page.ts"
     const params = new URLSearchParams(location.search);
     const bindingMessage = params.get("binding_message"); // only for CIBA requests
+    // A JSON array, only when you configure authorizationDetailsTypes.
+    const authorizationDetails = params.get("authorization_details");
     ```
+
+    The client chose the authorization details. Render them as text, never as HTML.
 
     Accept or deny with `oauth2.consent` as you already do for authorization requests.
   </Step>
@@ -195,6 +199,56 @@ The link points to `/oauth2/authorize?ciba_request_id=<id>`, so the request runs
 
 A denial is final: the client's next poll returns `access_denied`, and the link stops working. The ID token's `auth_time` is the creation time of the approving user's session, and its `acr` and `amr` are what the provider's [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context) returned for that session.
 
+## Request a stronger sign-in
+
+A client can ask for a stronger sign-in with `acr_values`, a space-separated list of ACR values in order of preference (CIBA §7.1). The request is voluntary. The provider accepts values it does not support, and the user can still approve with a weaker sign-in.
+
+* When the user decides from the link, the provider passes the values to [`authenticationContext.resolve`](/docs/plugins/oauth-provider/openid-connect#authentication-context) as `requestedAcrValues`. The ID token's `acr` is what `resolve` returns.
+* `sendNotification` receives them as `acrValues`. When your own app collects the decision, authenticate the user as strongly as they ask when you can, and pass the `acr` the user actually proved to `completeCibaRequest`.
+
+The client reads the ID token's `acr` to learn what it got.
+
+## Approve structured actions
+
+Some requests need more than scopes, such as a payment of a stated amount to a stated recipient. A client can describe these actions with `authorization_details` (RFC 9396), a JSON array of objects. Each object has a `type`, and you define the fields of each type.
+
+To accept them, list each type in `authorizationDetailsTypes` with a `validate` function:
+
+```ts title="auth.ts"
+import * as z from "zod";
+
+const payment = z.strictObject({
+  type: z.literal("payment_initiation"),
+  actions: z.array(z.literal("initiate")),
+  locations: z.array(z.url()),
+  instructedAmount: z.strictObject({ currency: z.string().length(3), amount: z.string() }),
+  creditorName: z.string().max(70),
+});
+
+ciba({
+  resultPage: "/ciba",
+  sendNotification,
+  authorizationDetailsTypes: {
+    payment_initiation: {
+      validate: (detail) => payment.safeParse(detail).success,
+    },
+  },
+});
+```
+
+Check every field in `validate`, and reject unknown fields and missing required ones. The client chooses every value, and the user approves what your pages show from it.
+
+The provider then handles each request with `authorization_details` as follows:
+
+1. It rejects the request with `invalid_authorization_details` when the value is not a non-empty JSON array of objects, a `type` is not listed, or `validate` returns `false`. Without `authorizationDetailsTypes`, every request with `authorization_details` is rejected this way.
+2. It requires a `resource`, so the access token is a JWT that can carry the details to your API.
+3. It shows the details to the user, as `authorizationDetails` in `sendNotification` and as `authorization_details` on the consent page. Approval from the link grants all of them.
+4. It returns the granted details as `authorization_details` in the token response and in the JWT access token.
+
+Your API must check the `authorization_details` claim before it acts, such as that the payment it is asked to make matches the approved amount and recipient.
+
+A refreshed token would not carry the details. So the provider issues no refresh token for a request with authorization details, even with `offline_access`, and leaves `offline_access` out of the returned `scope`. Discovery metadata lists the types as `authorization_details_types_supported`.
+
 ## Decide from your own app
 
 When your own app can reach the user, such as a mobile app that shows a push notification with Approve and Deny buttons, record the decision from your server with `auth.api.completeCibaRequest` instead of sending the user to the link. `sendNotification` receives the `requestId` to send to the app:
@@ -222,6 +276,7 @@ await auth.api.completeCibaRequest({
     authTime: new Date(), // issued as auth_time
     acr: "urn:example:acr:biometric", // must be in acrValuesSupported
     amr: ["face"],
+    authorizationDetails: approvedDetails, // what the user approved, if the request had any
   },
 });
 ```
@@ -234,33 +289,36 @@ This call skips the provider's sign-in, post-login, and consent pages. It does n
 * showing the client, the scopes, and the binding message before the user approves, and
 * passing `scopes` without any scope that needs a reference, such as an organization scope.
 
-Without `scopes`, the approval covers every requested scope.
+Without `scopes`, the approval covers every requested scope. Without `authorizationDetails`, it covers every requested detail. Pass `[]` to grant none. Each detail you pass must have a `type` the request carried and pass that type's `validate`. You can change a detail's fields, such as the account the user picked, so pass exactly what the user approved.
 
 The ID token carries only the `auth_time`, `acr`, and `amr` you pass; without `acr` it reports `"0"`.
 
-| Error             | Meaning                                                                                                         |
-| ----------------- | --------------------------------------------------------------------------------------------------------------- |
-| `invalid_request` | The request is unknown, already decided, expired, or for another user, or `acr` is not in `acrValuesSupported`. |
-| `invalid_scope`   | `scopes` includes a scope the client did not request, or leaves out `openid`. The request stays pending.        |
+| Error                           | Meaning                                                                                                                  |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `invalid_request`               | The request is unknown, already decided, expired, or for another user, or `acr` is not in `acrValuesSupported`.          |
+| `invalid_scope`                 | `scopes` includes a scope the client did not request, or leaves out `openid`. The request stays pending.                 |
+| `invalid_authorization_details` | A detail in `authorizationDetails` has a type the request did not carry, or fails `validate`. The request stays pending. |
 
 ## Endpoints
 
 ### `POST /oauth2/bc-authorize`
 
-Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and `interval`. Each IP address can start 10 requests per minute. Discovery metadata advertises it as `backchannel_authentication_endpoint`, with `backchannel_token_delivery_modes_supported` set to `deliveryModes` and `backchannel_user_code_parameter_supported` set to `false`.
+Starts a request. It accepts only `application/x-www-form-urlencoded` (CIBA §7.1), authenticates the client, and returns `auth_req_id`, `expires_in`, and `interval`. Each IP address can start 10 requests per minute. Discovery metadata advertises it as `backchannel_authentication_endpoint`, with `backchannel_token_delivery_modes_supported` set to `deliveryModes` and `backchannel_user_code_parameter_supported` set to `false`. With `authorizationDetailsTypes`, it also lists `authorization_details_types_supported`.
 
-| Parameter                   | Required  | Description                                                                                                          |
-| --------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------- |
-| `scope`                     | yes       | Space-delimited scopes. Must include `openid`.                                                                       |
-| `login_hint`                | yes       | Identifies the user, by email unless you set `resolveUser`.                                                          |
-| `client_notification_token` | ping only | An RFC 6750 bearer token of at most 1024 characters, sent back on the ping callback.                                 |
-| `binding_message`           | no        | Up to 64 characters of plain text, in any script, shown in the notification, on the consent page, and by the client. |
-| `requested_expiry`          | no        | Requested lifetime in seconds, a positive integer. Capped at `expiresIn`.                                            |
-| `resource`                  | no        | One or more resource indicators the token is bound to.                                                               |
+| Parameter                   | Required  | Description                                                                                                                                                |
+| --------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scope`                     | yes       | Space-delimited scopes. Must include `openid`.                                                                                                             |
+| `login_hint`                | yes       | Identifies the user, by email unless you set `resolveUser`.                                                                                                |
+| `client_notification_token` | ping only | An RFC 6750 bearer token of at most 1024 characters, sent back on the ping callback.                                                                       |
+| `binding_message`           | no        | Up to 64 characters of plain text, in any script, shown in the notification, on the consent page, and by the client.                                       |
+| `requested_expiry`          | no        | Requested lifetime in seconds, a positive integer. Capped at `expiresIn`.                                                                                  |
+| `resource`                  | no        | One or more resource indicators the token is bound to.                                                                                                     |
+| `acr_values`                | no        | Space-separated ACR values in order of preference. See [Request a stronger sign-in](#request-a-stronger-sign-in).                                          |
+| `authorization_details`     | no        | A JSON array of RFC 9396 authorization details, up to 4096 characters. Requires `resource`. See [Approve structured actions](#approve-structured-actions). |
 
 ### `POST /oauth2/token`
 
-The provider's token endpoint. With `grant_type=urn:openid:params:grant-type:ciba` and the `auth_req_id`, it returns the tokens once the user approves, or one of the errors below. Each `auth_req_id` issues tokens once. The poll may send `resource` to narrow the token to some of the approved resources (RFC 8707 §2.2).
+The provider's token endpoint. With `grant_type=urn:openid:params:grant-type:ciba` and the `auth_req_id`, it returns the tokens once the user approves, or one of the errors below. Each `auth_req_id` issues tokens once. The poll may send `resource` to narrow the token to some of the approved resources (RFC 8707 §2.2). For a request with authorization details, the response carries the granted `authorization_details`. The poll cannot narrow them and is rejected with `invalid_authorization_details` when it sends `authorization_details`.
 
 ## Options
 
@@ -268,7 +326,7 @@ export const cibaOptionsType = {
 	sendNotification: {
 		type: "(notification, ctx) => void | Promise<void>",
 		description:
-			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, url, expiresAt }`; pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
+			"Tell the user about the request: send them the link, or reach them through your own app with `requestId`. Receives `{ requestId, user, clientId, clientName, scopes, bindingMessage, acrValues, authorizationDetails, url, expiresAt }`; pass `requestId` to `completeCibaRequest` when your own app collects the decision. Runs in the background when `advanced.backgroundTasks` is configured and is awaited otherwise. A failure is logged, and the client still receives its `auth_req_id`.",
 	},
 	resultPage: {
 		type: "string",
@@ -305,6 +363,11 @@ export const cibaOptionsType = {
 		description:
 			"Minimum seconds between token polls, returned as `interval`. A faster poll receives `slow_down`; the interval itself does not change.",
 	},
+	authorizationDetailsTypes: {
+		type: "Record<string, { validate: (detail, { client }, ctx) => boolean | Promise<boolean> }>",
+		description:
+			"RFC 9396 authorization details types clients may request, keyed by `type` and advertised as `authorization_details_types_supported`. `validate` must check every field of the type. Without this option, a request with `authorization_details` is rejected. See [Approve structured actions](#approve-structured-actions).",
+	},
 	schema: {
 		type: "{ cibaRequest?: { modelName?, fields? } }",
 		description: "Rename the `cibaRequest` model or its fields.",
@@ -317,27 +380,29 @@ export const cibaOptionsType = {
 
 The backchannel endpoint returns these [CIBA §13](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html#auth_error_response) errors:
 
-| Error                     | Meaning                                                                                                                                                    |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `invalid_request`         | A required parameter is missing or malformed, the request uses a hint other than `login_hint`, or a ping client sent no valid `client_notification_token`. |
-| `invalid_scope`           | `scope` does not include `openid`, the client may not request it, or a requested resource does not allow `openid`.                                         |
-| `invalid_client`          | The client did not authenticate, or is public and `allowPublicClients` is off.                                                                             |
-| `unauthorized_client`     | The client is not registered for the CIBA grant with a delivery mode this server supports.                                                                 |
-| `invalid_binding_message` | The binding message is longer than 64 characters or contains control or invisible formatting characters.                                                   |
-| `unknown_user_id`         | No user matches the `login_hint`.                                                                                                                          |
-| `invalid_target`          | A `resource` is malformed or unknown.                                                                                                                      |
+| Error                           | Meaning                                                                                                                                                    |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid_request`               | A required parameter is missing or malformed, the request uses a hint other than `login_hint`, or a ping client sent no valid `client_notification_token`. |
+| `invalid_scope`                 | `scope` does not include `openid`, the client may not request it, or a requested resource does not allow `openid`.                                         |
+| `invalid_client`                | The client did not authenticate, or is public and `allowPublicClients` is off.                                                                             |
+| `unauthorized_client`           | The client is not registered for the CIBA grant with a delivery mode this server supports.                                                                 |
+| `invalid_binding_message`       | The binding message is longer than 64 characters or contains control or invisible formatting characters.                                                   |
+| `unknown_user_id`               | No user matches the `login_hint`.                                                                                                                          |
+| `invalid_target`                | A `resource` is malformed or unknown.                                                                                                                      |
+| `invalid_authorization_details` | `authorization_details` is malformed, has a type that is not in `authorizationDetailsTypes`, fails its type's `validate`, or comes without a `resource`.   |
 
 The token poll returns:
 
-| Error                   | Meaning                                                                                                                       |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `authorization_pending` | The user has not decided yet. Keep polling.                                                                                   |
-| `slow_down`             | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                   |
-| `access_denied`         | The user denied the request.                                                                                                  |
-| `expired_token`         | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead.   |
-| `invalid_grant`         | The `auth_req_id` is unknown, belongs to another client, or was already used.                                                 |
-| `invalid_target`        | The poll's `resource` was not approved for this request. The request stays approved.                                          |
-| `invalid_scope`         | The client no longer allows an approved scope, or a requested resource no longer allows `openid`. The request stays approved. |
+| Error                           | Meaning                                                                                                                       |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `authorization_pending`         | The user has not decided yet. Keep polling.                                                                                   |
+| `slow_down`                     | Polling faster than `interval`. Wait at least 5 more seconds between polls.                                                   |
+| `access_denied`                 | The user denied the request.                                                                                                  |
+| `expired_token`                 | The request expired before the user decided. Once a later request has cleared it, the poll returns `invalid_grant` instead.   |
+| `invalid_grant`                 | The `auth_req_id` is unknown, belongs to another client, or was already used.                                                 |
+| `invalid_target`                | The poll's `resource` was not approved for this request. The request stays approved.                                          |
+| `invalid_scope`                 | The client no longer allows an approved scope, or a requested resource no longer allows `openid`. The request stays approved. |
+| `invalid_authorization_details` | The poll sent `authorization_details`. The request stays approved.                                                            |
 
 ## Schema
 
@@ -350,6 +415,8 @@ The plugin adds one model, `cibaRequest`:
 | `userId`                           | string    | The user the `login_hint` named, the only user who can decide.                                                                                                           |
 | `scope`                            | string    | The requested scopes, narrowed to the approved ones on approval.                                                                                                         |
 | `bindingMessage`                   | string    | The optional binding message.                                                                                                                                            |
+| `acrValues`                        | string\[] | The optional requested ACR values, in order of preference.                                                                                                               |
+| `authorizationDetails`             | string    | The optional RFC 9396 authorization details as JSON text, narrowed to the granted ones on approval.                                                                      |
 | `resources`                        | string\[] | The optional resource indicators.                                                                                                                                        |
 | `status`                           | string    | `pending`, `approved`, or `denied`. A request is deleted when tokens are issued, when the client learns of a denial or expiry, or when a later request finds it expired. |
 | `clientNotificationEndpoint`       | string    | Ping mode only: the client's notification endpoint when the request started.                                                                                             |
@@ -368,6 +435,7 @@ The plugin adds one model, `cibaRequest`:
 * **Only the named user can decide.** Approval from the link always shows consent, so a user who receives a request they did not expect can deny it, and someone else who gets hold of the link cannot approve or deny it. `completeCibaRequest` also refuses a decision for any other user, but it skips consent: it trusts your server to have authenticated that user and shown them the request.
 * **Limit who a client can name.** Each request notifies a person, and `unknown_user_id` tells the client whether a hint matched a user, as CIBA §13 specifies. Each IP address can start 10 requests per minute. When anyone can register a client, resolve `login_hint` only to users the client already knows, as shown in [Register a client](#register-a-client).
 * **The binding message ties the two devices together.** Ask clients to send a short, random `binding_message` and to display it, so the user can tell their request apart from one someone else started at the same moment. Render it as text.
+* **Authorization details come from the client.** The provider checks only their shape and type, and leaves each field to your `validate`. Validate strictly, render them as text, and have your API enforce the granted details itself.
 * **The ping callback only reaches safe endpoints.** Registration and each request check that the notification endpoint is absolute `https` on a public host, with no credentials or fragment, the same rules as `backchannel_logout_uri`. The check does not resolve DNS, so restrict outbound network access where you can.
 * **Tokens are issued once.** An approved request is claimed and deleted in one atomic step, so of two concurrent polls only one receives tokens. The `auth_req_id` is stored hashed.
 
@@ -375,6 +443,9 @@ The plugin adds one model, `cibaRequest`:
 
 * Push delivery is not supported.
 * Only `login_hint` is supported; `id_token_hint` and `login_hint_token` are rejected with `invalid_request`.
-* `user_code`, signed authentication requests, `acr_values`, and `authorization_details` are not supported. `acr_values` are ignored.
+* `user_code` and signed authentication requests are not supported.
+* Authorization details reach your API only in JWT access tokens. They are not stored on refresh tokens or opaque access tokens, so a request with authorization details needs a `resource` and gets no refresh token.
+* Only `/oauth2/bc-authorize` accepts authorization details. Discovery lists `authorization_details_types_supported` for the whole server, but `/oauth2/authorize` ignores `authorization_details`.
+* A client cannot register the authorization details types it may use. Every client may request every type in `authorizationDetailsTypes`.
 * There is no API that lists a user's pending requests. To show them in your app, keep the `requestId`s that `sendNotification` receives.
 * There is no per-user limit on requests; the limit applies per IP address.
