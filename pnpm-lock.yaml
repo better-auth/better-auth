@@ -1596,6 +1596,25 @@ importers:
         specifier: 'catalog:'
         version: 0.23.1(@arethetypeswrong/core@0.18.3)(@volar/typescript@2.4.28(typescript@6.0.3))(@vue/language-core@3.3.11)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.21.0)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
 
+  packages/dbsc:
+    dependencies:
+      better-call:
+        specifier: 'catalog:'
+        version: 1.4.5(zod@4.6.7)
+      jose:
+        specifier: ^6.2.3
+        version: 6.2.3
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.23.1(@arethetypeswrong/core@0.18.3)(@volar/typescript@2.4.28(typescript@6.0.3))(@vue/language-core@3.3.11)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.21.0)(typescript@6.0.3)(vue-tsc@3.3.11(typescript@6.0.3))
+
   packages/drizzle-adapter:
     devDependencies:
       '@better-auth/core':
