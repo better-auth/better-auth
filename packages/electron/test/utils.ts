@@ -3,7 +3,7 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
-import type { FetchEsque } from "better-auth/client";
+import type { BetterAuthClientOptions, FetchEsque } from "better-auth/client";
 import { createAuthClient } from "better-auth/client";
 import { getMigrations } from "better-auth/db/migration";
 import { oAuthProxy } from "better-auth/plugins";
@@ -48,7 +48,10 @@ export const it = test.extend<{
 	},
 });
 
-function getTestInstance(overrideOpts?: BetterAuthOptions) {
+function getTestInstance(
+	overrideOpts?: BetterAuthOptions,
+	clientOpts?: Pick<BetterAuthClientOptions, "sessionOptions">,
+) {
 	const storage = new Map<string, any>();
 	const options = {
 		signInURL: "http://localhost:3000/sign-in",
@@ -101,6 +104,7 @@ function getTestInstance(overrideOpts?: BetterAuthOptions) {
 			customFetchImpl,
 		},
 		plugins: [electronClient(options)],
+		...(clientOpts || {}),
 	});
 
 	return {
@@ -113,8 +117,11 @@ function getTestInstance(overrideOpts?: BetterAuthOptions) {
 	};
 }
 
-export function testUtils(overrideOpts?: BetterAuthOptions) {
-	const testInstance = getTestInstance(overrideOpts);
+export function testUtils(
+	overrideOpts?: BetterAuthOptions,
+	clientOpts?: Pick<BetterAuthClientOptions, "sessionOptions">,
+) {
+	const testInstance = getTestInstance(overrideOpts, clientOpts);
 
 	beforeAll(async () => {
 		const { runMigrations } = await getMigrations(testInstance.auth.options);

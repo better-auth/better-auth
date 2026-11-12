@@ -351,6 +351,18 @@ function setupBridges(
 		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
 	});
 
+	// The core session refresh manager skips timers when `window` is undefined, which includes the Electron main process.
+	const refetchInterval = clientOptions?.sessionOptions?.refetchInterval ?? 0;
+	if (ctx.$store && refetchInterval > 0) {
+		const $store = ctx.$store;
+		const pollInterval = setInterval(() => {
+			if ($store.atoms.session?.get()?.data != null) {
+				$store.notify("$sessionSignal");
+			}
+		}, refetchInterval * 1000);
+		app.on("will-quit", () => clearInterval(pollInterval));
+	}
+
 	ipcMain.handle(`${prefix}getUser`, async () => {
 		const result = await ctx.$fetch<{ user: User & Record<string, any> }>(
 			"/get-session",

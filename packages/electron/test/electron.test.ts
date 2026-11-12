@@ -2804,3 +2804,47 @@ describe("cookies getCookie", () => {
 		expect(getCookie(stored)).toBe("");
 	});
 });
+
+describe("main-process session polling", () => {
+	const getSessionRequests = vi.fn();
+	const { client } = testUtils(
+		{
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					if (ctx.path === "/get-session") getSessionRequests();
+				}),
+			},
+		},
+		{ sessionOptions: { refetchInterval: 60 } },
+	);
+
+	it("polls /get-session on refetchInterval while a session exists", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+		expect(typeof window).toBe("undefined");
+
+		client.setupMain({ bridges: true });
+		client.$store.atoms.session!.set({
+			...client.$store.atoms.session!.get(),
+			data: { user: { id: "test-user" }, session: { id: "test-session" } },
+		});
+		getSessionRequests.mockClear();
+
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(getSessionRequests).toHaveBeenCalled();
+
+		const onWillQuit = mockElectron.app.on.mock.calls.find(
+			([event]) => event === "will-quit",
+		)?.[1] as (() => void) | undefined;
+		expect(onWillQuit).toBeTypeOf("function");
+		onWillQuit!();
+		getSessionRequests.mockClear();
+		client.$store.atoms.session!.set({
+			...client.$store.atoms.session!.get(),
+			data: { user: { id: "test-user" }, session: { id: "test-session" } },
+		});
+		await vi.advanceTimersByTimeAsync(120_000);
+		expect(getSessionRequests).not.toHaveBeenCalled();
+	});
+});
