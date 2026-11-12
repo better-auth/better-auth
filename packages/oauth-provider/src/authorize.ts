@@ -3,7 +3,7 @@ import { isBrowserFetchRequest } from "@better-auth/core/utils/fetch-metadata";
 import { isLoopbackIP } from "@better-auth/core/utils/host";
 import { INSECURE_REDIRECT_URI_MESSAGE } from "@better-auth/core/utils/redirect-uri";
 import { appendQueryParams } from "@better-auth/core/utils/url";
-import { getSessionFromCtx } from "better-auth/api";
+import { getSessionFromCtx, isAPIError } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import { APIError } from "better-call";
 import {
@@ -902,7 +902,7 @@ async function validateAuthorizationRequest(
 				requestedScopes,
 			});
 		} catch (err) {
-			if (err instanceof APIError) {
+			if (isAPIError(err)) {
 				const error =
 					(err.body as { error?: string })?.error ?? "invalid_target";
 				const description =

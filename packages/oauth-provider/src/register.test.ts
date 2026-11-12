@@ -1770,6 +1770,51 @@ describe("oauth register - protected dynamic registration", async () => {
 		expect(body.error).toBe("access_denied");
 	});
 
+	it("passes through an APIError from another copy of better-call", async () => {
+		// Stands in for an APIError class loaded from a second better-call
+		// install, which fails `instanceof` against this package's copy.
+		const ForeignAPIError = class extends Error {
+			override name = "APIError";
+			status = "FORBIDDEN";
+			statusCode = 403;
+			headers = new Headers();
+			body = { error: "access_denied", error_description: "tenant suspended" };
+		};
+		const foreignBaseUrl = "http://localhost:3007";
+		const { customFetchImpl: foreignFetch } = await getTestInstance({
+			baseURL: foreignBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					allowDynamicClientRegistration: true,
+					validateInitialAccessToken: () => {
+						throw new ForeignAPIError();
+					},
+				}),
+			],
+		});
+
+		const response = await foreignFetch(
+			`${foreignBaseUrl}/api/auth/oauth2/register`,
+			{
+				method: "POST",
+				headers: {
+					authorization: `Bearer ${validInitialAccessToken}`,
+					"content-type": "application/json",
+				},
+				body: JSON.stringify({
+					client_name: "Machine Client",
+					redirect_uris: [redirectUri],
+				}),
+			},
+		);
+		expect(response.status).toBe(403);
+		const body = (await response.json()) as { error?: string };
+		expect(body.error).toBe("access_denied");
+	});
+
 	it("should not consult the validator for session-backed registration", async () => {
 		const sessionBaseUrl = "http://localhost:3004";
 		const sessionValidator = vi.fn<
