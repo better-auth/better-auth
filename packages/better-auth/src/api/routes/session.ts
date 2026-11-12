@@ -288,7 +288,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				const session =
 					await ctx.context.internalAdapter.findSession(sessionCookieToken);
-				ctx.context.session = session;
 				if (!session || session.session.expiresAt < new Date()) {
 					deleteSessionCookie(ctx);
 					if (session) {
@@ -304,6 +303,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					return ctx.json(null);
 				}
+				// Set only after the expiry check so after-hooks never see an expired session.
+				ctx.context.session = session;
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
 				 * or if the session refresh is disabled

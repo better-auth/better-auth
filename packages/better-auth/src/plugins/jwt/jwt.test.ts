@@ -62,6 +62,30 @@ describe("jwt", async () => {
 		expect(token.length).toBeGreaterThan(10);
 	});
 
+	it("does not issue a token for an expired session", async () => {
+		const { headers: expiredHeaders } = await signInWithTestUser();
+		const session = await auth.api.getSession({
+			headers: expiredHeaders,
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.updateSession(session!.session.token, {
+			expiresAt: new Date(Date.now() - 1000),
+		});
+
+		let token: string | null = null;
+		const result = await client.getSession({
+			fetchOptions: {
+				headers: expiredHeaders,
+				onSuccess(context) {
+					token = context.response.headers.get("set-auth-jwt");
+				},
+			},
+		});
+
+		expect(result.data).toBeNull();
+		expect(token).toBeNull();
+	});
+
 	it("Client gets a token", async () => {
 		const token = await client.token({
 			fetchOptions: {
