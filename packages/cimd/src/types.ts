@@ -126,10 +126,11 @@ export interface CimdOptions {
 	 * Pass an empty array to disable origin binding (not recommended for
 	 * production).
 	 *
-	 * Redirect URIs and informational URIs such as `client_uri` are excluded by
-	 * default: exact redirect URI matching remains mandatory at authorization
-	 * time, and CIMD forbids requiring `client_uri` to share an origin with
-	 * `client_id` or `redirect_uris`.
+	 * `redirect_uris` and `client_uri` are excluded by default while
+	 * `post_logout_redirect_uris` remains origin-bound: exact redirect URI
+	 * matching remains mandatory at authorization time, and CIMD forbids
+	 * requiring `client_uri` to share an origin with `client_id` or
+	 * `redirect_uris`.
 	 *
 	 * @default ["post_logout_redirect_uris"]
 	 */
