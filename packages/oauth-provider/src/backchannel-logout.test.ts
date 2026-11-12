@@ -1260,6 +1260,26 @@ describe("oauth back-channel logout (jwt plugin disabled)", async () => {
 		});
 		for (const t of after) expect(t.revoked).toBeInstanceOf(Date);
 	});
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("does not attempt signing during revoke-all with the jwt plugin disabled", async () => {
+		const signed = await signInWithTestUser();
+		const context = await auth.$context;
+		const errors = vi.spyOn(context.logger, "error");
+		const updates = vi.spyOn(context.adapter, "updateMany");
+		await expect(
+			auth.api.revokeSessions({ headers: signed.headers }),
+		).resolves.toEqual({ status: true });
+		expect(errors).not.toHaveBeenCalled();
+		expect(
+			updates.mock.calls.filter(
+				([args]) =>
+					["oauthRefreshToken", "oauthAccessToken"].includes(args.model) &&
+					args.where?.some((condition) => condition.field === "userId"),
+			),
+		).toHaveLength(2);
+	});
 });
 
 describe("oauth back-channel logout - secondaryStorage + preserveSessionInDatabase", async () => {

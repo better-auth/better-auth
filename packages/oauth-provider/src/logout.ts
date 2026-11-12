@@ -443,6 +443,7 @@ async function deliverBackchannelLogoutTokens(
 	ctx: GenericEndpointContext,
 	plan: BackchannelLogoutPlan,
 ): Promise<void> {
+	if (plan.targets.length === 0) return;
 	const logger = ctx.context.logger;
 	const jwtPluginOptions = getJwtPlugin(ctx.context)?.options;
 	const iss = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
