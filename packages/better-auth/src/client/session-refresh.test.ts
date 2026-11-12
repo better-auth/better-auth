@@ -389,4 +389,34 @@ describe("session-refresh", () => {
 			false,
 		);
 	});
+
+	/**
+	 * @see https://github.com/facebook/react-native/blob/897cca8273c689dfa99568e33aea7bc4baf0e8aa/packages/react-native/Libraries/Core/setUpNavigator.js
+	 */
+	it("polls when the runtime does not report connectivity", async () => {
+		Reflect.deleteProperty(
+			globalThis,
+			Symbol.for("better-auth:online-manager"),
+		);
+		// React Native defines navigator without onLine.
+		vi.stubGlobal("navigator", {
+			product: "ReactNative",
+		});
+		const fetchSession = vi.fn(async () => {});
+		const manager = createSessionRefreshManager({
+			fetchSession,
+			sessionSignal: atom(false),
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+		manager.cleanup();
+
+		expect(fetchSession).toHaveBeenCalledOnce();
+	});
 });

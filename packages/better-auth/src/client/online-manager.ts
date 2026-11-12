@@ -12,7 +12,8 @@ export interface OnlineManager {
 
 class WindowOnlineManager implements OnlineManager {
 	listeners = new Set<OnlineListener>();
-	isOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+	// Runtimes such as React Native define navigator without onLine.
+	isOnline = globalThis.navigator?.onLine ?? true;
 
 	subscribe(listener: OnlineListener) {
 		this.listeners.add(listener);
