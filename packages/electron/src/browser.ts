@@ -359,11 +359,12 @@ function setupBridges(
 			clientOptions?.sessionOptions?.refetchWhenOffline ?? false;
 		const canRefetch = () => refetchWhenOffline || net.isOnline();
 		// Without `window` the session atom skips its mount fetch, so a session restored from storage would stay `null` and never poll.
-		// Retry that first fetch on each tick until it runs, in case the app started offline.
+		// Retry that first fetch on each tick until it succeeds, in case the app started offline or the request failed.
 		let hasFetched = false;
 		const poll = () => {
 			if (!canRefetch()) return;
-			if (hasFetched && $store.atoms.session?.get()?.data == null) return;
+			const state = $store.atoms.session?.get();
+			if (hasFetched && state?.data == null && state?.error == null) return;
 			hasFetched = true;
 			$store.notify("$sessionSignal");
 		};

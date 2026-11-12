@@ -2811,11 +2811,17 @@ describe("cookies getCookie", () => {
  */
 describe("main-process session polling", () => {
 	const getSessionRequests = vi.fn();
+	let failNextGetSession = false;
 	const { client } = testUtils(
 		{
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
-					if (ctx.path === "/get-session") getSessionRequests();
+					if (ctx.path !== "/get-session") return;
+					getSessionRequests();
+					if (failNextGetSession) {
+						failNextGetSession = false;
+						throw new Error("session lookup failed");
+					}
 				}),
 			},
 		},
@@ -2890,6 +2896,31 @@ describe("main-process session polling", () => {
 		quitApp();
 	});
 
+	it("retries the first session fetch after it fails", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+		client.$store.atoms.session!.set({
+			...client.$store.atoms.session!.get(),
+			data: null,
+			error: null,
+		});
+		failNextGetSession = true;
+		vi.spyOn(console, "error").mockImplementation(() => {});
+
+		client.setupMain({ bridges: true });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(getSessionRequests).toHaveBeenCalledTimes(1);
+		expect(client.$store.atoms.session!.get().error).not.toBeNull();
+
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(getSessionRequests).toHaveBeenCalledTimes(2);
+
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(getSessionRequests).toHaveBeenCalledTimes(2);
+		quitApp();
+	});
+
 	it("does not poll while offline by default, and fetches once back online", async ({
 		setProcessType,
 	}) => {
@@ -2908,5 +2939,40 @@ describe("main-process session polling", () => {
 		await vi.advanceTimersByTimeAsync(60_000);
 		expect(getSessionRequests).toHaveBeenCalledTimes(1);
 		quitApp();
+	});
+});
+
+describe("main-process session polling with refetchWhenOffline", () => {
+	const getSessionRequests = vi.fn();
+	const { client } = testUtils(
+		{
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					if (ctx.path === "/get-session") getSessionRequests();
+				}),
+			},
+		},
+		{ sessionOptions: { refetchInterval: 60, refetchWhenOffline: true } },
+	);
+
+	it("fetches and polls while offline", async ({ setProcessType }) => {
+		setProcessType("browser");
+		mockElectron.net.isOnline.mockReturnValue(false);
+
+		client.setupMain({ bridges: true });
+		await vi.advanceTimersByTimeAsync(0);
+		expect(getSessionRequests).toHaveBeenCalledTimes(1);
+
+		client.$store.atoms.session!.set({
+			...client.$store.atoms.session!.get(),
+			data: { user: { id: "test-user" }, session: { id: "test-session" } },
+		});
+		getSessionRequests.mockClear();
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(getSessionRequests).toHaveBeenCalled();
+
+		mockElectron.app.on.mock.calls.find(
+			([event]) => event === "will-quit",
+		)?.[1]?.();
 	});
 });
