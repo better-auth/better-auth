@@ -61,8 +61,7 @@ export const generatedMigrationMaxLength = 500;
 
 // Providers enforce only the shape while decoding. Length and line limits are
 // checked per entry in render.ts, so one overlong entry cannot fail its batch.
-const releaseRewriteSchema = z.strictObject({
-	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
+const releaseRewriteFields = {
 	title: z
 		.string()
 		.describe(
@@ -74,14 +73,18 @@ const releaseRewriteSchema = z.strictObject({
 		.describe(
 			`A single-line action users must take, of at most ${generatedMigrationMaxLength} characters, otherwise null`,
 		),
+};
+
+const releaseRewriteSchema = z.strictObject({
+	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
+	...releaseRewriteFields,
 });
 
 export const releaseRewritesSchema = z.strictObject({
 	rewrites: z.array(releaseRewriteSchema).max(250),
 });
 
-const releaseReviewSchema = z.strictObject({
-	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
+const releaseReviewFields = {
 	approved: z.boolean().describe("Whether the rewrite is ready to publish"),
 	feedback: z
 		.string()
@@ -90,11 +93,29 @@ const releaseReviewSchema = z.strictObject({
 		.max(500)
 		.nullable()
 		.describe("A specific correction for rejected copy, otherwise null"),
-});
+};
 
-export const releaseReviewsSchema = z.strictObject({
-	reviews: z.array(releaseReviewSchema).max(250),
-});
+// Generation output is keyed by change ID with every key required, so a
+// constrained decoder cannot return an empty or partial batch.
+function keyedByChangeId<T extends z.core.$ZodShape>(
+	ids: readonly string[],
+	fields: T,
+) {
+	const entry = z.strictObject(fields);
+	return z.strictObject(Object.fromEntries(ids.map((id) => [id, entry])));
+}
+
+export function generatedRewritesSchema(ids: readonly string[]) {
+	return z.strictObject({
+		rewrites: keyedByChangeId(ids, releaseRewriteFields),
+	});
+}
+
+export function generatedReviewsSchema(ids: readonly string[]) {
+	return z.strictObject({
+		reviews: keyedByChangeId(ids, releaseReviewFields),
+	});
+}
 
 export const releaseRewriteFallbacksSchema = z
 	.array(
@@ -132,9 +153,9 @@ export type ReleaseManifest = z.infer<typeof releaseManifestSchema>;
 export type GeneratedReleaseRewrites = z.infer<
 	typeof releaseRewritesSchema
 >["rewrites"];
-export type GeneratedReleaseReviews = z.infer<
-	typeof releaseReviewsSchema
->["reviews"];
+export type GeneratedReleaseReviews = Array<
+	{ id: string } & z.infer<z.ZodObject<typeof releaseReviewFields>>
+>;
 export type ReleaseRewriteFallback = z.infer<
 	typeof releaseRewriteFallbacksSchema
 >[number];
