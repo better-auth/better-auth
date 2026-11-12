@@ -108,8 +108,10 @@ export type StripePlan = {
 	 * subscribed to this plan. Uses your default portal configuration when not
 	 * set.
 	 *
-	 * Applies to the billing portal, plan changes, and cancellation. During a
-	 * plan change, the configuration of the customer's current plan is used.
+	 * Applies to the billing portal and to the Billing Portal sessions the
+	 * plugin creates for plan changes and cancellation. Plan changes that are
+	 * scheduled or applied directly do not open the portal. During a plan
+	 * change, the configuration of the customer's current plan is used.
 	 *
 	 * @see https://docs.stripe.com/customer-management/portal-deep-dive
 	 */

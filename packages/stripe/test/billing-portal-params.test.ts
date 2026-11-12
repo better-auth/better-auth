@@ -556,3 +556,78 @@ describe("plan billingPortalConfiguration", () => {
 		);
 	});
 });
+
+describe("billing portal when plans cannot be resolved", () => {
+	function withFailingPlans(stripeOptions: StripeOptions): StripeOptions {
+		return {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: async () => {
+					throw new Error("plan provider unavailable");
+				},
+			},
+		};
+	}
+
+	test("should still open the default billing portal", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
+		const { client, headers } = await setup(
+			withFailingPlans(stripeOptions),
+			memory,
+		);
+
+		const res = await client.subscription.billingPortal({
+			returnUrl: "/dashboard",
+			fetchOptions: { headers },
+		});
+
+		expect(res.error).toBeNull();
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith({
+			customer: "cus_mock123",
+			return_url: "http://localhost:3000/dashboard",
+		});
+	});
+
+	test("should still open the cancellation flow", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
+		const { client, ctx, headers, userId } = await setup(
+			withFailingPlans(stripeOptions),
+			memory,
+		);
+		await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_mock123",
+				stripeSubscriptionId: "sub_cancel",
+				status: "active",
+				plan: "starter",
+			},
+		});
+		stripeMock.subscriptions.retrieve.mockResolvedValueOnce(
+			createSubscription({ id: "sub_cancel", status: "active" }),
+		);
+
+		const res = await client.subscription.cancel({
+			returnUrl: "/account",
+			fetchOptions: { headers },
+		});
+
+		expect(res.error).toBeNull();
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith({
+			customer: "cus_mock123",
+			return_url: "http://localhost:3000/account",
+			flow_data: {
+				type: "subscription_cancel",
+				subscription_cancel: { subscription: "sub_cancel" },
+			},
+		});
+	});
+});

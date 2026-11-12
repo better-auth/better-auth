@@ -1072,7 +1072,7 @@ subscription: {
 }
 ```
 
-The plan's configuration is used when the customer opens the billing portal, changes plans, or cancels. During a plan change, the configuration of the plan they are switching **from** is used. Customers without an active subscription, and plans without `billingPortalConfiguration`, use your default portal configuration.
+The plan's configuration is used when the customer opens the billing portal or when the plugin creates a Billing Portal session for a plan change or cancellation. During a plan change, the configuration of the plan they are switching **from** is used. Customers without an active subscription, and plans without `billingPortalConfiguration`, use your default portal configuration.
 
 ### Custom Billing Portal Session Parameters
 

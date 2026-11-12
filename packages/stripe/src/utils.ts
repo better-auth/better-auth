@@ -32,7 +32,15 @@ export async function resolveBillingPortalSessionParams(
 }> {
 	const subscriptionOptions = options.subscription as SubscriptionOptions;
 	const getParams = subscriptionOptions.getBillingPortalSessionParams;
-	const plans = await getPlans(options.subscription);
+	// Plans are only needed for optional portal settings, so a failing plan
+	// provider must not block access to the billing portal or cancellation.
+	const plans = await getPlans(options.subscription).catch((error) => {
+		ctx.context.logger.error(
+			"Failed to resolve plans for Billing Portal session; using the default portal configuration",
+			error,
+		);
+		return [];
+	});
 	if (!getParams && !plans.some((plan) => plan.billingPortalConfiguration)) {
 		return { params: {}, requestOptions: [] };
 	}
