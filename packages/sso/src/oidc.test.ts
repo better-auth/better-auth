@@ -1,14 +1,28 @@
 import { APIError } from "@better-auth/core/error";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { betterFetch } from "@better-fetch/fetch";
 import { createAuthClient } from "better-auth/client";
 import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { createLocalJWKSet, exportJWK, generateKeyPair, jwtVerify } from "jose";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	beforeAll,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { sso } from ".";
 import { ssoClient } from "./client";
+import type {
+	SSOMappedUser,
+	SSOOptions,
+	SSOProfileMappingInput,
+} from "./types";
 
 const server = new OAuth2Server();
 
@@ -2651,4 +2665,298 @@ describe("SSO OIDC IDP-initiated bounce", async () => {
 		expect(res.status).toBe(302);
 		expect(res.headers.get("location")).toContain("state_not_found");
 	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/10209
+ */
+describe("OIDC providers without an email claim", async () => {
+	let mapper: NonNullable<SSOOptions["mapProfileToUser"]> = () => ({});
+	let provisionedUserInfo: Record<string, unknown> | undefined;
+	let roleUserInfo: Record<string, unknown> | undefined;
+	let tokenClaims: Record<string, unknown> = {};
+	const { auth, client, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance(
+			{
+				trustedOrigins: ["http://localhost:8080"],
+				plugins: [
+					sso({
+						trustEmailVerified: true,
+						// Each test registers its own provider for the same test user.
+						providersLimit: 20,
+						mapProfileToUser: (input) => mapper(input),
+						provisionUser: async ({ userInfo }) => {
+							provisionedUserInfo = userInfo;
+						},
+						organizationProvisioning: {
+							getRole: async ({ userInfo }) => {
+								roleUserInfo = userInfo;
+								return "member";
+							},
+						},
+					}),
+					organization(),
+				],
+			},
+			{ clientOptions: { plugins: [ssoClient()] } },
+		);
+	const placeholderEmail = (input: SSOProfileMappingInput) =>
+		createPlaceholderEmail({
+			identifier: input.accountKey.accountId,
+			namespace: input.providerId,
+		});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		await server.start(8080, "localhost");
+		// Earlier suites leave listeners that set an email on the shared server.
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.sub = "subject-without-email";
+			token.payload.name = "No Email User";
+			Object.assign(token.payload, tokenClaims);
+		});
+	});
+
+	beforeEach(() => {
+		mapper = () => ({});
+		tokenClaims = {};
+		provisionedUserInfo = undefined;
+		roleUserInfo = undefined;
+	});
+
+	afterAll(async () => {
+		server.service.removeAllListeners("beforeTokenSigning");
+		await server.stop();
+	});
+
+	async function signInThroughProvider(
+		providerId: string,
+		{ withOrganization = false } = {},
+	) {
+		const { headers } = await signInWithTestUser();
+		const organizationId = withOrganization
+			? (
+					await auth.api.createOrganization({
+						body: { name: providerId, slug: providerId },
+						headers,
+					})
+				)?.id
+			: undefined;
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId,
+				issuer: server.issuer.url!,
+				domain: `${providerId}.example.com`,
+				organizationId,
+				oidcConfig: {
+					clientId: `${providerId}-client`,
+					clientSecret: "test-client-secret",
+					skipDiscovery: true,
+					authorizationEndpoint: `${server.issuer.url!}/authorize`,
+					tokenEndpoint: `${server.issuer.url!}/token`,
+					jwksEndpoint: `${server.issuer.url!}/jwks`,
+					pkce: false,
+				},
+			},
+			headers,
+		});
+		const signInHeaders = new Headers();
+		const res = await client.signIn.sso({
+			providerId,
+			callbackURL: "/dashboard",
+			fetchOptions: { throw: true, onSuccess: cookieSetter(signInHeaders) },
+		});
+		let location: string | null = null;
+		await betterFetch(res.url, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+		let callbackURL = "";
+		const sessionHeaders = new Headers();
+		await betterFetch(location!, {
+			method: "GET",
+			customFetchImpl,
+			headers: signInHeaders,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(sessionHeaders)(context);
+			},
+		});
+		const session = await auth.api.getSession({ headers: sessionHeaders });
+		return { callbackURL, user: session?.user };
+	}
+
+	it("creates the user with the email returned by mapProfileToUser", async () => {
+		let mappingInput: SSOProfileMappingInput | undefined;
+		mapper = (input) => {
+			mappingInput = input;
+			return { email: input.providerUser.email ?? placeholderEmail(input) };
+		};
+
+		const { callbackURL, user } = await signInThroughProvider("no-email-oidc", {
+			withOrganization: true,
+		});
+
+		expect(callbackURL).toContain("/dashboard");
+		expect(mappingInput).toMatchObject({
+			protocol: "oidc",
+			providerId: "no-email-oidc",
+			accountKey: { accountId: "subject-without-email" },
+			providerClaims: { sub: "subject-without-email" },
+			verifiedIdTokenClaims: { sub: "subject-without-email" },
+		});
+		expect(mappingInput?.providerUser.email).toBeUndefined();
+		const placeholder =
+			"subject-without-email@no-email-oidc.placeholder.invalid";
+		expect(user).toMatchObject({ email: placeholder, emailVerified: false });
+		expect(provisionedUserInfo?.email).toBe(placeholder);
+		expect(roleUserInfo?.email).toBe(placeholder);
+	});
+
+	it("rejects the sign-in when neither the provider nor mapProfileToUser yields an email", async () => {
+		const { callbackURL, user } = await signInThroughProvider(
+			"still-no-email-oidc",
+		);
+
+		expect(callbackURL).toContain("missing_user_info");
+		expect(user).toBeUndefined();
+	});
+
+	it("rejects the sign-in when mapProfileToUser discards the provider's email", async () => {
+		tokenClaims = { email: "discarded@discarded-email-oidc.example.com" };
+		mapper = () => ({ email: null });
+
+		const { callbackURL, user } = await signInThroughProvider(
+			"discarded-email-oidc",
+		);
+
+		expect(callbackURL).toContain("missing_user_info");
+		expect(user).toBeUndefined();
+	});
+
+	it("applies the name and image returned by mapProfileToUser", async () => {
+		mapper = (input) => ({
+			email: placeholderEmail(input),
+			name: "Mapped Name",
+			image: "https://example.com/mapped.png",
+		});
+
+		const { user } = await signInThroughProvider("mapped-fields-oidc");
+
+		expect(user).toMatchObject({
+			name: "Mapped Name",
+			image: "https://example.com/mapped.png",
+			emailVerified: false,
+		});
+	});
+
+	it("does not carry the provider's email verification to a replaced email", async () => {
+		tokenClaims = {
+			email: "verified@replaced-email-oidc.example.com",
+			email_verified: true,
+		};
+		mapper = () => ({ email: "other@replaced-email-oidc.example.com" });
+
+		const { user } = await signInThroughProvider("replaced-email-oidc");
+
+		expect(user).toMatchObject({
+			email: "other@replaced-email-oidc.example.com",
+			emailVerified: false,
+		});
+	});
+
+	it("keeps the provider's email verification when the email is unchanged", async () => {
+		tokenClaims = {
+			email: "Verified@kept-email-oidc.example.com",
+			email_verified: true,
+		};
+		mapper = () => ({
+			email: "verified@kept-email-oidc.example.com",
+			name: "Mapped Name",
+		});
+
+		const { user } = await signInThroughProvider("kept-email-oidc");
+
+		expect(user).toMatchObject({
+			email: "verified@kept-email-oidc.example.com",
+			emailVerified: true,
+		});
+	});
+
+	it("passes the provider's own email through even when it is not a common address", async () => {
+		tokenClaims = { email: "user@intranet" };
+		mapper = ({ providerUser }) => ({ email: providerUser.email });
+
+		const { callbackURL, user } = await signInThroughProvider(
+			"intranet-email-oidc",
+		);
+
+		expect(callbackURL).toContain("/dashboard");
+		expect(user?.email).toBe("user@intranet");
+	});
+
+	it("ignores an emailVerified value returned by mapProfileToUser", async () => {
+		tokenClaims = {
+			email: "directory-user@asserted-verified-oidc.example.com",
+			email_verified: false,
+		};
+		mapper = () => ({
+			email: "directory-user@asserted-verified-oidc.example.com",
+			// @ts-expect-error mapProfileToUser cannot set emailVerified
+			emailVerified: true,
+		});
+
+		const { user } = await signInThroughProvider("asserted-verified-oidc");
+
+		expect(user).toMatchObject({
+			email: "directory-user@asserted-verified-oidc.example.com",
+			emailVerified: false,
+		});
+	});
+
+	it("redirects with a stable error when mapProfileToUser throws", async () => {
+		mapper = () => {
+			throw new APIError("FORBIDDEN", {
+				code: "NOT_IN_DIRECTORY",
+				message: "directory unavailable",
+			});
+		};
+
+		const { callbackURL, user } = await signInThroughProvider("failing-oidc");
+
+		expect(callbackURL).toContain("error=SSO_PROFILE_MAPPING_FAILED");
+		expect(callbackURL).not.toContain("NOT_IN_DIRECTORY");
+		expect(callbackURL).not.toContain("directory");
+		expect(user).toBeUndefined();
+	});
+
+	it.each([
+		["undefined", undefined],
+		["an array email", { email: ["a@invalid-result-oidc.example.com"] }],
+		[
+			"a throwing email getter",
+			{
+				get email(): string {
+					throw new Error("getter failed");
+				},
+			},
+		],
+	])(
+		"redirects with a stable error when mapProfileToUser returns %s",
+		async (label, result) => {
+			mapper = () => result as unknown as SSOMappedUser;
+
+			const { callbackURL, user } = await signInThroughProvider(
+				`invalid-result-oidc-${label.replace(/\W+/g, "-")}`,
+			);
+
+			expect(callbackURL).toContain("error=SSO_PROFILE_MAPPING_FAILED");
+			expect(user).toBeUndefined();
+		},
+	);
 });

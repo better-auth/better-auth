@@ -6,13 +6,104 @@ import type {
 } from "better-auth";
 import { APIError } from "better-auth/api";
 import type { handleOAuthUserInfo } from "better-auth/oauth2";
+import * as z from "zod";
 import type {
+	SSOMappedUser,
 	SSOOptions,
+	SSOProfileMappingInput,
 	SSOUserResolution,
 	SSOUserResolutionInput,
 } from "./types";
 
 const SSO_AUTHENTICATION_FAILURE = Symbol("SSO_AUTHENTICATION_FAILURE");
+
+/**
+ * Applies `mapProfileToUser` to the profile read from the provider. Only the
+ * documented user fields are taken from the callback's result.
+ */
+export async function mapSSOProfile(
+	options: SSOOptions | undefined,
+	input: SSOProfileMappingInput,
+	logger: ResolutionLogger,
+): Promise<SSOProfileMappingInput["providerUser"]> {
+	if (!options?.mapProfileToUser) {
+		return input.providerUser;
+	}
+	let mappedUser: unknown;
+	try {
+		// A clone keeps the verified identity and provider data authoritative.
+		const result: unknown = await options.mapProfileToUser(
+			structuredClone(input),
+		);
+		if (isRecord(result)) {
+			// Read each field once, so the checks below see the values used.
+			const { email, name, image } = result;
+			mappedUser = { email, name, image };
+		}
+	} catch (error) {
+		logFailure(logger, "SSO profile mapping failed", {
+			providerId: input.providerId,
+			protocol: input.protocol,
+			error,
+		});
+		throw profileMappingFailure();
+	}
+	if (
+		!isSSOMappedUser(mappedUser) ||
+		!isAcceptedEmail(mappedUser.email, input.providerUser.email)
+	) {
+		logFailure(logger, "SSO profile mapper returned an invalid profile", {
+			providerId: input.providerId,
+			protocol: input.protocol,
+		});
+		throw profileMappingFailure();
+	}
+	const { email, name, image } = mappedUser;
+	const providerUser = input.providerUser;
+	const mappedEmail =
+		email === null ? undefined : (email ?? providerUser.email);
+	return {
+		email: mappedEmail,
+		// The provider's verification covers only the address it sent.
+		emailVerified:
+			providerUser.emailVerified &&
+			mappedEmail?.toLowerCase() === providerUser.email?.toLowerCase(),
+		name: name ?? providerUser.name,
+		image: image ?? providerUser.image,
+	};
+}
+
+function isOptionalString(value: unknown): boolean {
+	return value === undefined || typeof value === "string";
+}
+
+function isSSOMappedUser(value: unknown): value is SSOMappedUser {
+	return (
+		isRecord(value) &&
+		(value.email === null || isOptionalString(value.email)) &&
+		isOptionalString(value.name) &&
+		isOptionalString(value.image)
+	);
+}
+
+/** A changed email must be an address; the provider's own email passes as sent. */
+function isAcceptedEmail(
+	email: string | null | undefined,
+	providerEmail: string | undefined,
+): boolean {
+	return (
+		typeof email !== "string" ||
+		email.toLowerCase() === providerEmail?.toLowerCase() ||
+		z.email().safeParse(email).success
+	);
+}
+
+function profileMappingFailure(): APIError {
+	return new APIError("INTERNAL_SERVER_ERROR", {
+		code: "SSO_PROFILE_MAPPING_FAILED",
+		message: "Unable to map the SSO profile",
+	});
+}
 
 type SSOAuthenticationResult = Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 type SSOAuthenticationFailure = Error & {
@@ -49,9 +140,13 @@ type ResolutionLogger = Pick<
 	"error"
 >;
 
-function logFailure(logger: ResolutionLogger, message: string): void {
+function logFailure(
+	logger: ResolutionLogger,
+	message: string,
+	details?: Record<string, unknown>,
+): void {
 	try {
-		logger.error(message);
+		logger.error(message, ...(details ? [details] : []));
 	} catch {
 		// A custom logger must not change the stable authentication failure.
 	}

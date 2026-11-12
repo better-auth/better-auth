@@ -8,6 +8,7 @@ import type { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
 import { inflateRawSync } from "node:zlib";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import { betterFetch } from "@better-fetch/fetch";
 import type {
@@ -46,12 +47,17 @@ import { getMigrations } from "../../better-auth/src/db/get-migration";
 import { getAuthStateVerificationIdentifier } from "../../better-auth/src/state";
 import { sso, validateSAMLTimestamp } from ".";
 import { ssoClient } from "./client";
-import { DEFAULT_CLOCK_SKEW_MS } from "./constants";
+import { DEFAULT_CLOCK_SKEW_MS, SAML_EMAIL_NAME_ID_FORMAT } from "./constants";
 import { computeSSOProviderReference } from "./provider-reference";
 import { findSAMLProvider } from "./routes/helpers";
 import { getSafeRedirectUrl } from "./routes/saml-pipeline";
+import { readSAMLEmail } from "./saml";
 import { saml } from "./samlify";
-import type { SSOOptions, SSOUserResolutionInput } from "./types";
+import type {
+	SSOOptions,
+	SSOProfileMappingInput,
+	SSOUserResolutionInput,
+} from "./types";
 import { normalizePem } from "./utils";
 
 const spMetadata = `
@@ -379,6 +385,8 @@ interface MockSAMLTemplateOverrides {
 	audience?: string;
 	destination?: string;
 	inResponseTo?: string;
+	nameID?: string;
+	nameIDFormat?: string;
 	subjectRecipient?: string;
 }
 
@@ -418,8 +426,8 @@ const createTemplateCallback =
 			ConditionsNotBefore: now.toISOString(),
 			ConditionsNotOnOrAfter: fiveMinutesLater.toISOString(),
 			SubjectConfirmationDataNotOnOrAfter: fiveMinutesLater.toISOString(),
-			NameIDFormat: selectedNameIDFormat,
-			NameID: email,
+			NameIDFormat: overrides.nameIDFormat ?? selectedNameIDFormat,
+			NameID: overrides.nameID ?? email,
 			InResponseTo: overrides.inResponseTo ?? "null",
 			AuthnStatement: "",
 			attrFirstName: "Test",
@@ -599,6 +607,8 @@ const createMockSAMLIdP = (port: number, options: MockIdPOptions = {}) => {
 					: typeof requestId === "string"
 						? requestId
 						: "null",
+				nameID: queryValue(req.query.nameID),
+				nameIDFormat: queryValue(req.query.nameIDFormat),
 				subjectRecipient: queryValue(req.query.recipient),
 			};
 			const { context, entityEndpoint } = (await idp.createLoginResponse(
@@ -2503,6 +2513,392 @@ describe("SAML SSO", async () => {
 		expect(response.status).toBe(302);
 		const redirectLocation = response.headers.get("location") || "";
 		expect(redirectLocation).toContain("error=invalid_saml_response");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10209
+	 */
+	describe("profiles without an email attribute", () => {
+		const PERSISTENT_NAME_ID_FORMAT =
+			"urn:oasis:names:tc:SAML:2.0:nameid-format:persistent";
+
+		describe("readSAMLEmail", () => {
+			const from =
+				(attributes: Record<string, string>) =>
+				(name: string): string | undefined =>
+					attributes[name];
+			const nameID = "nameid-user@example.com";
+
+			it.each([
+				"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+				"mail",
+				"urn:oid:0.9.2342.19200300.100.1.3",
+			])("falls back to the %s attribute", (name) => {
+				expect(
+					readSAMLEmail(from({ [name]: "user@example.com" }), {
+						nameID: "opaque",
+						nameIDFormat: PERSISTENT_NAME_ID_FORMAT,
+					}),
+				).toBe("user@example.com");
+			});
+
+			it("prefers the email attribute, then an emailAddress NameID, over the fallbacks", () => {
+				expect(
+					readSAMLEmail(
+						from({ email: "email@example.com", mail: "mail@example.com" }),
+						{},
+					),
+				).toBe("email@example.com");
+				expect(
+					readSAMLEmail(from({ mail: "mail@example.com" }), {
+						nameID,
+						nameIDFormat: SAML_EMAIL_NAME_ID_FORMAT,
+					}),
+				).toBe(nameID);
+			});
+
+			it("reads only the mapped attribute when one is set", () => {
+				expect(
+					readSAMLEmail(
+						from({ email: "default@example.com", mail: "mail@example.com" }),
+						{ mappedAttribute: "workEmail" },
+					),
+				).toBeUndefined();
+			});
+
+			it("uses the NameID only when its Format is emailAddress", () => {
+				expect(
+					readSAMLEmail(from({}), {
+						nameID,
+						nameIDFormat: SAML_EMAIL_NAME_ID_FORMAT,
+					}),
+				).toBe(nameID);
+				expect(readSAMLEmail(from({}), { nameID })).toBeUndefined();
+			});
+		});
+
+		async function signInWithNameID(
+			options: SSOOptions,
+			nameID: string,
+			nameIDFormat: string,
+			logs: unknown[][] = [],
+		) {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				logger: {
+					level: "error",
+					log: (...entry: unknown[]) => {
+						logs.push(entry);
+					},
+				},
+				plugins: [sso({ ...options, saml: { allowIdpInitiated: true } })],
+			});
+			const { headers } = await signInWithTestUser();
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "nameid-provider",
+					issuer: "http://localhost:8081",
+					domain: "http://localhost:8081",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						wantAssertionsSigned: false,
+						signatureAlgorithm: "sha256",
+						digestAlgorithm: "sha256",
+						idpMetadata: { metadata: idpMetadata },
+						spMetadata: { metadata: spMetadata },
+						// The mock IdP sends no `mail` attribute.
+						mapping: { email: "mail", name: "displayName" },
+					},
+				},
+				headers,
+			});
+			const idpResponseUrl = new URL(
+				"http://localhost:8081/api/sso/saml2/idp/post",
+			);
+			idpResponseUrl.searchParams.set("idpInitiated", "true");
+			idpResponseUrl.searchParams.set("nameID", nameID);
+			idpResponseUrl.searchParams.set("nameIDFormat", nameIDFormat);
+			let samlResponse: MockSAMLResponse | undefined;
+			await betterFetch(idpResponseUrl.toString(), {
+				onSuccess: async (context) => {
+					samlResponse = (await context.data) as MockSAMLResponse;
+				},
+			});
+			const response = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/sso/saml2/sp/acs/nameid-provider",
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/x-www-form-urlencoded" },
+						body: new URLSearchParams({
+							SAMLResponse: samlResponse!.samlResponse,
+						}),
+					},
+				),
+			);
+			const context = await auth.$context;
+			const users = await context.adapter.findMany<{
+				email: string;
+				emailVerified: boolean;
+				name: string;
+			}>({ model: "user" });
+			const accounts = await context.adapter.findMany<{
+				accountId: string;
+				providerId: string;
+			}>({
+				model: "account",
+				where: [{ field: "providerId", value: "nameid-provider" }],
+			});
+			return {
+				location: response.headers.get("location") ?? "",
+				ssoUsers: users.filter((user) => user.email !== "test@test.com"),
+				ssoAccountIds: accounts.map((account) => account.accountId),
+			};
+		}
+
+		it.each([
+			PERSISTENT_NAME_ID_FORMAT,
+			"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+			"urn:oasis:names:tc:SAML:2.0:nameid-format:emailAddress",
+		])(
+			"does not use an email-valued NameID with Format %s as the email",
+			async (format) => {
+				const { location, ssoUsers } = await signInWithNameID(
+					{},
+					"nameid-user@example.com",
+					format,
+				);
+
+				expect(location).toContain("error=missing_user_info");
+				expect(ssoUsers).toEqual([]);
+			},
+		);
+
+		it("uses an emailAddress-format NameID as the email", async () => {
+			const { location, ssoUsers } = await signInWithNameID(
+				{},
+				"nameid-user@example.com",
+				SAML_EMAIL_NAME_ID_FORMAT,
+			);
+
+			expect(location).not.toContain("error=");
+			expect(ssoUsers).toEqual([
+				expect.objectContaining({
+					email: "nameid-user@example.com",
+					name: "nameid-user@example.com",
+				}),
+			]);
+		});
+
+		it("does not use an opaque NameID as the name", async () => {
+			let providerName: string | undefined = "unset";
+			const { location, ssoUsers } = await signInWithNameID(
+				{
+					mapProfileToUser: (input) => {
+						providerName = input.providerUser.name;
+						return {
+							email: "opaque-user@example.com",
+							name: input.providerUser.name ?? "Member",
+						};
+					},
+				},
+				"a1b2c3d4-opaque",
+				PERSISTENT_NAME_ID_FORMAT,
+			);
+
+			expect(location).not.toContain("error=");
+			expect(providerName).toBeUndefined();
+			expect(ssoUsers).toEqual([expect.objectContaining({ name: "Member" })]);
+		});
+
+		it("logs the NameID Format and the fix when a NameID is not used as the email", async () => {
+			const logs: unknown[][] = [];
+			await signInWithNameID(
+				{},
+				"nameid-user@example.com",
+				"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+				logs,
+			);
+
+			expect(logs).toContainEqual([
+				"error",
+				expect.stringContaining("set samlConfig.mapping.email"),
+				expect.objectContaining({
+					providerId: "nameid-provider",
+					nameIDFormat: "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+				}),
+			]);
+		});
+
+		describe("the provisioning docs' email-valued NameID recipe", () => {
+			const NAME_ID_EMAIL_PROVIDERS = new Set(["nameid-provider"]);
+			const UNSPECIFIED_NAME_ID_FORMATS = [
+				undefined,
+				"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+				"urn:oasis:names:tc:SAML:1.0:nameid-format:unspecified",
+			];
+			const recipe: SSOOptions["mapProfileToUser"] = (input) =>
+				input.protocol === "saml" &&
+				NAME_ID_EMAIL_PROVIDERS.has(input.providerId) &&
+				!input.providerUser.email &&
+				UNSPECIFIED_NAME_ID_FORMATS.includes(input.nameIDFormat) &&
+				input.nameID.includes("@")
+					? { email: input.nameID }
+					: {};
+
+			it("uses an email-valued unspecified NameID as the email", async () => {
+				const { location, ssoUsers } = await signInWithNameID(
+					{ mapProfileToUser: recipe },
+					"Nameid-User@example.com",
+					"urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+				);
+
+				expect(location).not.toContain("error=");
+				expect(ssoUsers).toEqual([
+					expect.objectContaining({
+						email: "nameid-user@example.com",
+						emailVerified: false,
+					}),
+				]);
+			});
+
+			it("still rejects a persistent NameID", async () => {
+				const { location, ssoUsers } = await signInWithNameID(
+					{ mapProfileToUser: recipe },
+					"nameid-user@example.com",
+					PERSISTENT_NAME_ID_FORMAT,
+				);
+
+				expect(location).toContain("error=missing_user_info");
+				expect(ssoUsers).toEqual([]);
+			});
+		});
+
+		it("redirects with an error when mapProfileToUser returns an email that is not an address", async () => {
+			const logs: unknown[][] = [];
+			const { location, ssoUsers } = await signInWithNameID(
+				{
+					mapProfileToUser: (input) => ({
+						email: input.protocol === "saml" ? input.nameID : undefined,
+					}),
+				},
+				"a1b2c3d4-opaque",
+				PERSISTENT_NAME_ID_FORMAT,
+				logs,
+			);
+
+			expect(location).toContain("error=SSO_PROFILE_MAPPING_FAILED");
+			expect(ssoUsers).toEqual([]);
+			expect(logs).toContainEqual([
+				"error",
+				"SSO profile mapper returned an invalid profile",
+				{ providerId: "nameid-provider", protocol: "saml" },
+			]);
+		});
+
+		it("keeps the signed NameID as the account ID when mapProfileToUser mutates its input", async () => {
+			const { location, ssoAccountIds } = await signInWithNameID(
+				{
+					mapProfileToUser: (input) => {
+						input.accountKey.accountId = "attacker-chosen-subject";
+						return { email: "mutating@example.com" };
+					},
+				},
+				"a1b2c3d4-opaque",
+				PERSISTENT_NAME_ID_FORMAT,
+			);
+
+			expect(location).not.toContain("error=");
+			expect(ssoAccountIds).toEqual(["a1b2c3d4-opaque"]);
+		});
+
+		it("redirects with an error when mapProfileToUser throws", async () => {
+			const logs: unknown[][] = [];
+			const thrown = new Error("directory unavailable");
+			const { location, ssoUsers } = await signInWithNameID(
+				{
+					mapProfileToUser: () => {
+						throw thrown;
+					},
+				},
+				"nameid-user@example.com",
+				SAML_EMAIL_NAME_ID_FORMAT,
+				logs,
+			);
+
+			expect(logs).toContainEqual([
+				"error",
+				"SSO profile mapping failed",
+				{ providerId: "nameid-provider", protocol: "saml", error: thrown },
+			]);
+
+			expect(location).toContain("error=SSO_PROFILE_MAPPING_FAILED");
+			expect(location).not.toContain("directory");
+			expect(ssoUsers).toEqual([]);
+		});
+
+		it("rejects the sign-in when mapProfileToUser discards the email", async () => {
+			const logs: unknown[][] = [];
+			const { location, ssoUsers } = await signInWithNameID(
+				{ mapProfileToUser: () => ({ email: null }) },
+				"nameid-user@example.com",
+				SAML_EMAIL_NAME_ID_FORMAT,
+				logs,
+			);
+
+			expect(logs).toContainEqual([
+				"error",
+				"mapProfileToUser refused the email the SAML provider sent",
+				expect.objectContaining({ providerId: "nameid-provider" }),
+			]);
+
+			expect(location).toContain("error=missing_user_info");
+			expect(ssoUsers).toEqual([]);
+		});
+
+		it("creates the user with the email returned by mapProfileToUser", async () => {
+			let mappingInput: SSOProfileMappingInput | undefined;
+			let provisionedUserInfo: Record<string, unknown> | undefined;
+			const { location, ssoUsers } = await signInWithNameID(
+				{
+					provisionUser: async ({ userInfo }) => {
+						provisionedUserInfo = userInfo;
+					},
+					mapProfileToUser(input) {
+						mappingInput = input;
+						return {
+							email:
+								input.providerUser.email ??
+								createPlaceholderEmail({
+									identifier: input.accountKey.accountId,
+									namespace: input.providerId,
+								}),
+						};
+					},
+				},
+				"a1b2c3d4-opaque",
+				PERSISTENT_NAME_ID_FORMAT,
+			);
+
+			expect(location).not.toContain("error=");
+			expect(mappingInput).toMatchObject({
+				protocol: "saml",
+				providerId: "nameid-provider",
+				accountKey: { accountId: "a1b2c3d4-opaque" },
+				nameID: "a1b2c3d4-opaque",
+				nameIDFormat: PERSISTENT_NAME_ID_FORMAT,
+			});
+			expect(mappingInput?.providerUser.email).toBeUndefined();
+			expect(ssoUsers).toEqual([
+				expect.objectContaining({
+					email: "a1b2c3d4-opaque@nameid-provider.placeholder.invalid",
+					emailVerified: false,
+				}),
+			]);
+			expect(provisionedUserInfo?.email).toBe(
+				"a1b2c3d4-opaque@nameid-provider.placeholder.invalid",
+			);
+		});
 	});
 
 	it("should allow unsolicited SAML response when allowIdpInitiated is explicitly true", async () => {

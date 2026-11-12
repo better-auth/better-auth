@@ -45,11 +45,101 @@ sso({
 
 ### Update profiles on sign-in
 
-Better Auth sets the user's profile only when it creates the user. To refresh the profile on every sign-in, set `overrideUserInfo: true` on an OIDC provider. Each sign-in then overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values. Enable it only for IdPs that control their users' email addresses.
+Better Auth sets the user's profile only when it creates the user. To refresh the profile on every sign-in, set `overrideUserInfo: true` on an OIDC provider. Each sign-in then overwrites the user's `name`, `email`, `image`, and mapped additional fields with the IdP's values, after `mapProfileToUser` when it is set. Enable it only for IdPs that control their users' email addresses.
 
-* A changed email is stored unverified, unless the deprecated `trustEmailVerified` option is on and the IdP reports it verified.
+* A changed email is stored unverified, unless the deprecated `trustEmailVerified` option is on and the IdP reports that same address verified. An email from `mapProfileToUser` that differs from the IdP's is always unverified.
 * Set it per provider in the registration body. To apply it to every provider registered afterwards, set `defaultOverrideUserInfo: true` on the plugin.
 * SAML sign-ins update the profile only when `resolveUser` returns `profile: "update"`.
+
+## Providers without an email
+
+Better Auth needs an email to find, link, and create the user. It reads the email from the provider's `mapping`. For OIDC, the default is the `email` claim. For SAML, Better Auth takes the first of these that is present:
+
+1. The `samlConfig.mapping.email` attribute, which defaults to `email`.
+2. The `NameID`, only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`.
+3. When `samlConfig.mapping.email` is not set, the `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress`, `mail`, or `urn:oid:0.9.2342.19200300.100.1.3` attribute, in that order.
+
+A `NameID` with any other `Format`, or with no `Format`, is not used as the email, even when its value looks like an email address. Persistent and transient NameIDs are opaque, and an unspecified NameID is often a username that users can edit. To pin the email to one attribute your IdP administrator controls, set `samlConfig.mapping.email`.
+
+When no email is found, sign-in fails. OIDC redirects with `error=invalid_provider&error_description=missing_user_info`, and SAML with `error=missing_user_info`. For SAML, the server log names the `NameID` Format the IdP sent and the attributes it included. Many IdPs send the email as an `unspecified` NameID with no attributes by default. To fix that, configure the IdP to send an `email` attribute or the `emailAddress` Format, or set `samlConfig.mapping.email` to the attribute it does send.
+
+To sign in users from a provider that sends no email, return one from `mapProfileToUser`. It runs on every OIDC and SAML sign-in, after `mapping` is applied and before the user is looked up:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { createPlaceholderEmail } from "@better-auth/core/utils/email";
+import { sso } from "@better-auth/sso";
+
+export const auth = betterAuth({
+    plugins: [
+        sso({
+            mapProfileToUser: ({ providerId, accountKey, providerUser }) => ({
+                email:
+                    providerUser.email ??
+                    createPlaceholderEmail({
+                        identifier: accountKey.accountId,
+                        namespace: providerId,
+                    }),
+            }),
+        }),
+    ],
+});
+```
+
+<Callout type="warn">
+  The returned email decides which existing user a new account links to, as [How SSO users are matched](#how-sso-users-are-matched) describes. An unverified email still links to an existing user when the email is in one of the provider's verified domains. Return only addresses the provider vouches for, or a placeholder from `createPlaceholderEmail`. A placeholder is on the reserved `.invalid` domain, which never matches a verified domain.
+</Callout>
+
+The callback receives `protocol`, `providerId`, `accountKey`, and `providerUser`, plus `providerClaims` and `verifiedIdTokenClaims` for OIDC or `providerAttributes`, `nameID`, and `nameIDFormat` for SAML. `providerUser.emailVerified` is `false` unless the deprecated `trustEmailVerified` option is on.
+
+It can return `email`, `name`, and `image`. An email that differs from the provider's must be an email address. A field you omit keeps the provider's value. Other keys are ignored. To set additional user fields, use `mapping.extraFields` or `provisionUser`. This sign-in never marks a returned email verified when it differs from the provider's. The callback cannot return `emailVerified`. The stored email is verified only when the provider asserts it with the deprecated `trustEmailVerified` option on. Domain verification lets an unverified email link to an existing user; it does not mark the email verified. The account identity always stays the provider's `sub` claim or `NameID`.
+
+To refuse the email the provider sent, return `email: null`. Sign-in then fails with `missing_user_info`.
+
+The mapped values replace the provider's in `providerUser` for `resolveUser`, in `userInfo` for `provisionUser`, and in `userInfo` for an OIDC `getRole`. The provider's own values stay in `providerClaims`, `verifiedIdTokenClaims`, or `providerAttributes`.
+
+Sign-in redirects with `error=SSO_PROFILE_MAPPING_FAILED` when the callback does any of these:
+
+* Throws.
+* Returns a value that is not an object, such as `undefined` or an array.
+* Sets `email` to something other than a string, `null`, or `undefined`, or to a string that differs from the provider's email and is not an email address.
+* Sets `name` or `image` to something other than a string or `undefined`.
+
+`createPlaceholderEmail` builds `<identifier>@<namespace>.placeholder.invalid` and throws when the result is not a valid email address. Sign-in then fails with `error=SSO_PROFILE_MAPPING_FAILED`. The example works when both of these hold:
+
+* The provider ID contains only letters, digits, and hyphens, and starts with a letter or digit.
+* The subject contains only letters, digits, `_`, `+`, and `-`.
+
+Many SAML persistent `NameID` values are Base64 and contain `/` or `=`. Hex-encode a value that may contain other characters. Emails are compared case-insensitively, so also hex-encode subjects that can differ only by letter case. Placeholder emails cannot receive mail. See [Handling Providers Without Email](/docs/concepts/oauth#handling-providers-without-email).
+
+The returned email replaces the stored one when `resolveUser` returns `link` with `profile: "update"`. Without that decision, it replaces the stored one on every sign-in through an OIDC provider with [`overrideUserInfo`](#update-profiles-on-sign-in). If the provider stops sending the email, a placeholder then overwrites the user's real address.
+
+### Use an email-valued NameID
+
+When you cannot change an IdP's settings, you can use its email-valued `unspecified` `NameID` as the email. Do this only for providers whose IdP sets the `NameID` from an email its administrator controls. If users can edit the value, such as a username, a user could set it to another person's address. List those providers by ID:
+
+```ts title="auth.ts"
+// Providers whose NameID is an admin-controlled email.
+const NAME_ID_EMAIL_PROVIDERS = new Set(["acme"]);
+const UNSPECIFIED_NAME_ID_FORMATS = [
+    undefined,
+    "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
+    "urn:oasis:names:tc:SAML:1.0:nameid-format:unspecified",
+];
+
+sso({
+    mapProfileToUser: (input) =>
+        input.protocol === "saml" &&
+        NAME_ID_EMAIL_PROVIDERS.has(input.providerId) &&
+        !input.providerUser.email &&
+        UNSPECIFIED_NAME_ID_FORMATS.includes(input.nameIDFormat) &&
+        input.nameID.includes("@")
+            ? { email: input.nameID }
+            : {},
+});
+```
+
+The email from the `NameID` is stored unverified. A `NameID` without `@` is skipped, so the sign-in fails with `error=missing_user_info`. A value with `@` that is not an email address fails with `error=SSO_PROFILE_MAPPING_FAILED`.
 
 ## Resolve SSO users
 
@@ -107,7 +197,7 @@ Your resolver receives `input` and `context`. `input.protocol` is `"oidc"` or `"
 
 * `accountKey.issuer`: the ID token's `iss` for OIDC, or the IdP entity ID for SAML.
 * `accountKey.accountId`: the ID token's `sub` for OIDC, or the signed `NameID` for SAML. `NameID` matching is case-sensitive.
-* `providerUser`: the normalized profile.
+* `providerUser`: the normalized profile, after [`mapProfileToUser`](#providers-without-an-email) when it is set.
 * `verifiedIdTokenClaims` (OIDC only): the full verified ID token payload.
 * `providerClaims` (OIDC only): the UserInfo claims, or the ID token claims when there is no UserInfo endpoint.
 * `providerAttributes` (SAML only): the verified assertion attributes. Multi-valued attributes stay arrays.

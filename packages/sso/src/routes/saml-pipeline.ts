@@ -21,8 +21,10 @@ import {
 	SSO_PROVIDER_STATE_KEY,
 } from "../provider-reference";
 import {
+	getSAMLNameIDFormat,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
+	readSAMLEmail,
 	validateAudience,
 	validateInResponseTo,
 	validateSAMLAlgorithms,
@@ -47,6 +49,7 @@ import {
 	assertSSOUserResolutionNativeTransactionSupport,
 	assertSSOUserResolutionSessionStorage,
 	getFailedSSOAuthenticationResult,
+	mapSSOProfile,
 	requireSuccessfulSSOAuthentication,
 	resolveSSOUser,
 } from "../user-resolution";
@@ -369,6 +372,16 @@ export async function processSAMLResponse(
 			ctx.context.isTrustedOrigin(url, settings),
 	);
 	params.onErrorRedirectResolved?.(samlErrorRedirectUrl);
+	const redirectOnCodedAPIError = (e: unknown) => {
+		if (isAPIError(e) && e.body?.code) {
+			throw ctx.redirect(
+				buildSAMLRedirectUrl(samlErrorRedirectUrl, {
+					error: e.body.code,
+					...(e.body.message ? { error_description: e.body.message } : {}),
+				}),
+			);
+		}
+	};
 
 	const stateProviderReference = parseSSOProviderReference(
 		relayState?.serverContext?.[SSO_PROVIDER_STATE_KEY],
@@ -595,6 +608,7 @@ export async function processSAMLResponse(
 		}
 	}
 	const mapping = parsedSamlConfig.mapping ?? {};
+	const nameIDFormat = getSAMLNameIDFormat(samlBindingContent);
 
 	// samlify >= 2.13 types attribute values as `string | string[]` to support
 	// multi-valued attributes. The identity fields below are single-valued.
@@ -611,11 +625,11 @@ export async function processSAMLResponse(
 			]),
 		),
 		id: extract.nameID,
-		email: (
-			attr(mapping.email || "email") ||
-			extract.nameID ||
-			""
-		).toLowerCase(),
+		email: readSAMLEmail(attr, {
+			mappedAttribute: mapping.email,
+			nameID: extract.nameID,
+			nameIDFormat,
+		}),
 		name:
 			[
 				attr(mapping.firstName || "givenName"),
@@ -623,41 +637,76 @@ export async function processSAMLResponse(
 			]
 				.filter(Boolean)
 				.join(" ") ||
+			// Never the NameID: persistent and transient NameIDs are opaque (SAML Core §8.3.7, §8.3.8).
 			attr(mapping.name || "displayName") ||
-			extract.nameID,
+			undefined,
 		emailVerified:
 			options?.trustEmailVerified && mapping.emailVerified
 				? (parseStringBoolean(attr(mapping.emailVerified)) ?? false)
 				: false,
 	};
-	if (!userInfo.id || !userInfo.email) {
-		ctx.context.logger.error("Missing essential user info from SAML response", {
-			providerId,
-			attributeNames: Object.keys(attributes),
-			hasNameId: Boolean(userInfo.id),
-			hasEmail: Boolean(userInfo.email),
-		});
-		throw new APIError("BAD_REQUEST", {
-			message: "Unable to extract user ID or email from SAML response",
-		});
-	}
 	const providerUserAttributes = Object.fromEntries(
 		Object.entries(userInfo).filter(([key]) => key !== "id"),
 	);
+	const missingUserInfo = (hasNameId: boolean, providerSentEmail = false) => {
+		ctx.context.logger.error(
+			providerSentEmail
+				? "mapProfileToUser refused the email the SAML provider sent"
+				: hasNameId
+					? `SAML sign-in has no email. Send an email attribute, or a NameID with Format ${constants.SAML_EMAIL_NAME_ID_FORMAT}, from the IdP; set samlConfig.mapping.email; or return an email from mapProfileToUser.`
+					: "SAML response has no NameID",
+			{
+				providerId,
+				attributeNames: Object.keys(attributes),
+				nameIDFormat,
+			},
+		);
+		return new APIError("BAD_REQUEST", {
+			code: "MISSING_USER_INFO",
+			message:
+				"Unable to extract user ID or email from SAML response. Map an email attribute, or create a placeholder with `mapProfileToUser`.",
+		});
+	};
+	if (!userInfo.id) {
+		throw missingUserInfo(false);
+	}
+	const accountKey = { issuer, accountId: userInfo.id };
+	const mappedUser = await mapSSOProfile(
+		options,
+		{
+			protocol: "saml",
+			providerId,
+			accountKey,
+			providerUser: {
+				email: userInfo.email,
+				emailVerified: userInfo.emailVerified,
+				name: userInfo.name,
+				image:
+					typeof providerUserAttributes.image === "string"
+						? providerUserAttributes.image
+						: undefined,
+			},
+			providerAttributes,
+			nameID: userInfo.id,
+			nameIDFormat,
+		},
+		ctx.context.logger,
+	).catch((e) => {
+		redirectOnCodedAPIError(e);
+		throw e;
+	});
+	const email = mappedUser.email?.toLowerCase();
+	if (!email) {
+		throw missingUserInfo(true, Boolean(userInfo.email));
+	}
 	const providerUser = {
 		...providerUserAttributes,
-		email: userInfo.email as string,
-		name: (userInfo.name || userInfo.email) as string,
-		image:
-			typeof providerUserAttributes.image === "string"
-				? providerUserAttributes.image
-				: undefined,
-		emailVerified: userInfo.emailVerified,
+		email,
+		name: mappedUser.name || email,
+		image: mappedUser.image,
+		emailVerified: mappedUser.emailVerified,
 	};
-	const accountKey = {
-		issuer,
-		accountId: userInfo.id as string,
-	};
+	const mappedUserInfo = { ...providerUser, id: accountKey.accountId };
 
 	// 16. Session creation
 	// SSO provider ids are user-controlled and share the social-provider account
@@ -667,12 +716,11 @@ export async function processSAMLResponse(
 	const isTrustedProvider: boolean =
 		"domainVerified" in provider &&
 		!!(provider as { domainVerified?: boolean }).domainVerified &&
-		validateEmailDomain(userInfo.email as string, provider.domain);
+		validateEmailDomain(email, provider.domain);
 
 	const callbackUrl = redirectCandidates.some(Boolean)
 		? samlRedirectUrl
 		: ctx.context.baseURL;
-	const errorUrl = samlErrorRedirectUrl;
 
 	let result: Awaited<ReturnType<typeof handleOAuthUserInfo>>;
 	try {
@@ -727,10 +775,7 @@ export async function processSAMLResponse(
 					});
 				}
 				const authentication = await handleOAuthUserInfo(ctx, {
-					userInfo: {
-						...providerUser,
-						id: userInfo.id as string,
-					},
+					userInfo: mappedUserInfo,
 					account: {
 						providerId,
 						accountId: accountKey.accountId,
@@ -771,14 +816,8 @@ export async function processSAMLResponse(
 		const failedAuthentication = getFailedSSOAuthenticationResult(e);
 		if (failedAuthentication) {
 			result = failedAuthentication;
-		} else if (isAPIError(e) && e.body?.code) {
-			throw ctx.redirect(
-				buildSAMLRedirectUrl(errorUrl, {
-					error: e.body.code,
-					...(e.body.message ? { error_description: e.body.message } : {}),
-				}),
-			);
 		} else {
+			redirectOnCodedAPIError(e);
 			throw e;
 		}
 	}
@@ -800,7 +839,7 @@ export async function processSAMLResponse(
 	) {
 		await options.provisionUser({
 			user: user as User & Record<string, any>,
-			userInfo,
+			userInfo: mappedUserInfo,
 			provider,
 		});
 	}
@@ -811,9 +850,9 @@ export async function processSAMLResponse(
 		profile: {
 			providerType: "saml",
 			providerId,
-			accountId: userInfo.id as string,
-			email: userInfo.email as string,
-			emailVerified: userInfo.emailVerified,
+			accountId: accountKey.accountId,
+			email,
+			emailVerified: providerUser.emailVerified,
 			rawAttributes: attributes,
 		},
 		provider,

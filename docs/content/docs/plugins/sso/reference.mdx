@@ -11,6 +11,10 @@ Pass these options to `sso()`. All of them are optional.
 
 ### Users and accounts
 
+`mapProfileToUser` <span className="opacity-70">`(input) => Awaitable<SSOMappedUser>`</span>
+
+Returns the `email`, `name`, and `image` to use for the user on every OIDC and SAML sign-in, before the user is looked up. Use it for providers that send no email. A returned email that differs from the provider's is not marked verified. If the callback throws or returns an invalid result, sign-in redirects with `error=SSO_PROFILE_MAPPING_FAILED`. See [Providers without an email](/docs/plugins/sso/provisioning#providers-without-an-email).
+
 `resolveUser` <span className="opacity-70">`(input, context) => Awaitable<SSOUserResolution>`</span>
 
 Maps a verified provider identity to a user on every SSO sign-in. Return `continue`, `link`, or `reject`. Runs in a database transaction, so the adapter needs native transaction support. See [Resolve SSO users](/docs/plugins/sso/provisioning#resolve-sso-users).
@@ -235,7 +239,7 @@ Links the provider to an organization. The caller must be a member, and an owner
 
 `overrideUserInfo` <span className="opacity-70">`boolean`</span>
 
-OIDC only. On every sign-in, overwrites the user's name, email, image, and mapped additional fields with the provider's values. A changed email takes the provider's verified flag, which is `false` unless `trustEmailVerified` is on. Enable it only when the IdP controls its users' email addresses. Defaults to `defaultOverrideUserInfo`.
+OIDC only. On every sign-in, overwrites the user's name, email, image, and mapped additional fields with the provider's values, after `mapProfileToUser` when it is set. A changed email takes the provider's verified flag, which is `false` unless `trustEmailVerified` is on. An email from `mapProfileToUser` that differs from the provider's is always unverified. Enable it only when the IdP controls its users' email addresses. Defaults to `defaultOverrideUserInfo`.
 
 `oidcConfig` <span className="opacity-70">`object`</span>
 
@@ -461,11 +465,11 @@ Attribute names to read. See [Attribute mapping](/docs/plugins/sso/saml#attribut
   <Accordion title="samlConfig.mapping">
     `email` <span className="opacity-70">`string`</span>
 
-    Attribute for the email. Defaults to `email`, then the NameID.
+    Attribute for the email. Defaults to `email`. When the attribute is missing, the NameID is used if its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`. When this option is not set, Better Auth then tries the `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress`, `mail`, and `urn:oid:0.9.2342.19200300.100.1.3` attributes.
 
     `name` <span className="opacity-70">`string`</span>
 
-    Attribute for the name, read only when neither the first-name nor the last-name attribute is present. Defaults to `displayName`, then the NameID.
+    Attribute for the name, read only when neither the first-name nor the last-name attribute is present. Defaults to `displayName`. Without a name attribute, the name is the user's email.
 
     `firstName` <span className="opacity-70">`string`</span>
 

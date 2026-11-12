@@ -15,8 +15,10 @@ export {
 } from "./assertions";
 export { resolveSigningCerts, validateCertSources } from "./cert";
 export {
+	getSAMLNameIDFormat,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
+	readSAMLEmail,
 	validateSAMLResponseBinding,
 } from "./response-binding";
 export { validateAudience, validateInResponseTo } from "./response-validation";

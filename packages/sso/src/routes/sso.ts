@@ -77,6 +77,7 @@ import {
 	assertSSOUserResolutionNativeTransactionSupport,
 	assertSSOUserResolutionSessionStorage,
 	getFailedSSOAuthenticationResult,
+	mapSSOProfile,
 	requireSuccessfulSSOAuthentication,
 	resolveSSOUser,
 } from "../user-resolution";
@@ -1643,29 +1644,56 @@ async function handleOIDCCallback(
 		);
 	}
 
-	if (!userInfo.email || !userInfo.id) {
+	if (!userInfo.id) {
 		return redirectOIDCError("invalid_provider", "missing_user_info");
 	}
-	const userInfoEmail = userInfo.email;
-	const userInfoId = userInfo.id;
+	const accountKey = {
+		issuer:
+			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
+			provider.issuer,
+		accountId: userInfo.id,
+	};
+	const mappedUser = await mapSSOProfile(
+		options,
+		{
+			protocol: "oidc",
+			providerId,
+			accountKey,
+			providerUser: {
+				email: userInfo.email,
+				emailVerified: userInfo.emailVerified === true,
+				name: userInfo.name,
+				image: userInfo.image,
+			},
+			providerClaims: rawProfile ?? {},
+			verifiedIdTokenClaims: verifiedIdToken?.payload ?? {},
+		},
+		ctx.context.logger,
+	).catch((e) => {
+		if (isAPIError(e) && e.body?.code) {
+			redirectOIDCError(e.body.code, e.body.message);
+		}
+		throw e;
+	});
+	if (!mappedUser.email) {
+		ctx.context.logger.error(
+			"OIDC provider returned no email. Map an email claim, or create a placeholder with `mapProfileToUser`.",
+			{ providerId },
+		);
+		return redirectOIDCError("invalid_provider", "missing_user_info");
+	}
+	const userInfoEmail = mappedUser.email;
 	const providerUserAttributes = Object.fromEntries(
 		Object.entries(userInfo).filter(([key]) => key !== "id"),
 	);
 	const providerUser = {
 		...providerUserAttributes,
 		email: userInfoEmail,
-		name: typeof userInfo.name === "string" ? userInfo.name : "",
-		image: typeof userInfo.image === "string" ? userInfo.image : undefined,
-		emailVerified: options?.trustEmailVerified
-			? userInfo.emailVerified === true
-			: false,
+		name: mappedUser.name ?? "",
+		image: mappedUser.image,
+		emailVerified: mappedUser.emailVerified,
 	};
-	const accountKey = {
-		issuer:
-			(verifiedIdToken && readStringClaim(verifiedIdToken.payload, "iss")) ||
-			provider.issuer,
-		accountId: userInfoId,
-	};
+	const mappedUserInfo = { ...providerUser, id: accountKey.accountId };
 	const isTrustedProvider =
 		"domainVerified" in provider &&
 		(provider as { domainVerified?: boolean }).domainVerified === true &&
@@ -1726,19 +1754,12 @@ async function handleOIDCCallback(
 					});
 				}
 				const authentication = await handleOAuthUserInfo(ctx, {
-					userInfo: {
-						...providerUser,
-						email: providerUser.email,
-						name: providerUser.name,
-						id: userInfoId,
-						image: providerUser.image,
-						emailVerified: providerUser.emailVerified,
-					},
+					userInfo: mappedUserInfo,
 					account: {
 						idToken: tokenResponse.idToken,
 						accessToken: tokenResponse.accessToken,
 						refreshToken: tokenResponse.refreshToken,
-						accountId: userInfoId,
+						accountId: accountKey.accountId,
 						providerId: provider.providerId,
 						accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
 						refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
@@ -1801,7 +1822,7 @@ async function handleOIDCCallback(
 	) {
 		await options.provisionUser({
 			user,
-			userInfo,
+			userInfo: mappedUserInfo,
 			token: tokenResponse,
 			provider,
 		});
@@ -1812,10 +1833,10 @@ async function handleOIDCCallback(
 		profile: {
 			providerType: "oidc",
 			providerId: provider.providerId,
-			accountId: userInfoId,
+			accountId: accountKey.accountId,
 			email: userInfoEmail,
-			emailVerified: Boolean(userInfo.emailVerified),
-			rawAttributes: userInfo,
+			emailVerified: providerUser.emailVerified,
+			rawAttributes: mappedUserInfo,
 		},
 		provider,
 		token: tokenResponse,
