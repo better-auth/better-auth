@@ -271,6 +271,7 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 			clientId,
 			tokenEndpoint,
 			grantType: "authorization_code",
+			issuer: "https://idp.example.com",
 		});
 		const jwks = createLocalJWKSet({ keys: [publicJwk] });
 		const { payload } = await jwtVerify(assertion, jwks, {
@@ -280,5 +281,65 @@ describe("signPrivateKeyJwtClientAssertion", () => {
 		expect(payload.iss).toBe(clientId);
 		expect(payload.sub).toBe(clientId);
 		expect(payload.aud).toBe(tokenEndpoint);
+	});
+
+	describe("audience", () => {
+		const issuer = "https://idp.example.com";
+
+		async function createGetter(audience: "token_endpoint" | "issuer") {
+			const { privateKey } = await generateKeyPair("ES256", {
+				extractable: true,
+			});
+			return createPrivateKeyJwtClientAssertionGetter({
+				privateKeyJwk: await exportJWK(privateKey),
+				algorithm: "ES256",
+				audience,
+			});
+		}
+
+		/**
+		 * @see https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+		 */
+		it("signs the issuer as a single-string audience", async () => {
+			const getClientAssertion = await createGetter("issuer");
+			const assertion = await getClientAssertion({
+				clientId,
+				tokenEndpoint,
+				grantType: "refresh_token",
+				issuer,
+			});
+
+			expect(decodeJwt(assertion).aud).toBe(issuer);
+		});
+
+		it("refuses to sign when the issuer audience has no issuer", async () => {
+			const getClientAssertion = await createGetter("issuer");
+
+			await expect(
+				getClientAssertion({
+					clientId,
+					tokenEndpoint,
+					grantType: "authorization_code",
+				}),
+			).rejects.toThrow(
+				/audience "issuer" requires the authorization server issuer/,
+			);
+		});
+
+		it("rejects an unsupported audience at construction", async () => {
+			const { privateKey } = await generateKeyPair("ES256", {
+				extractable: true,
+			});
+			const privateKeyJwk = await exportJWK(privateKey);
+
+			expect(() =>
+				createPrivateKeyJwtClientAssertionGetter({
+					privateKeyJwk,
+					algorithm: "ES256",
+					// @ts-expect-error JS callers can pass an unsupported audience.
+					audience: "https://idp.example.com/token",
+				}),
+			).toThrow(/Unsupported private_key_jwt audience/);
+		});
 	});
 });

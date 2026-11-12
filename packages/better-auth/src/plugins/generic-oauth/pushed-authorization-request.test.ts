@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import type { IncomingMessage } from "node:http";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { createPrivateKeyJwtClientAssertionGetter } from "@better-auth/core/oauth2";
+import { decodeJwt, exportJWK, generateKeyPair } from "jose";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from ".";
@@ -255,7 +257,33 @@ describe("generic-oauth pushed authorization requests", async () => {
 			clientId: "par-client",
 			tokenEndpoint: `${authorizationServer.url}/token`,
 			grantType: "authorization_code",
+			issuer: as.url,
 		});
+	});
+
+	/**
+	 * @see https://openid.net/specs/fapi-security-profile-2_0-final.html#section-5.3.2.1
+	 */
+	it("signs the pushed request assertion for the issuer when audience is issuer", async () => {
+		const { privateKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const instance = await createInstance({
+			clientSecret: undefined,
+			tokenEndpointAuth: {
+				method: "private_key_jwt",
+				getClientAssertion: createPrivateKeyJwtClientAssertionGetter({
+					privateKeyJwk: await exportJWK(privateKey),
+					algorithm: "ES256",
+					audience: "issuer",
+				}),
+			},
+		});
+		const { res } = await signIn(instance);
+
+		expect(res.error).toBeNull();
+		const assertion = as.pushed()[0]!.body.get("client_assertion");
+		expect(decodeJwt(assertion!).aud).toBe(as.url);
 	});
 
 	it("sends client_secret_basic credentials in the Authorization header", async () => {

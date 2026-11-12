@@ -82,6 +82,12 @@ export interface ClientAssertionContext {
 	clientId: string;
 	tokenEndpoint: string;
 	grantType: ClientAssertionGrantType;
+	/**
+	 * The authorization server's issuer identifier, when the caller knows it,
+	 * for example from discovery. FAPI 2.0 and RFC 10070 require it as the
+	 * assertion audience.
+	 */
+	issuer?: string | undefined;
 }
 
 export type ClientAssertionGetter = (
@@ -99,6 +105,18 @@ export interface PrivateKeyJwtClientAssertionGetterOptions {
 	algorithm?: PrivateKeyJwtSigningAlgorithm;
 	/** Assertion lifetime in seconds. @default 120 */
 	expiresIn?: number;
+	/**
+	 * The `aud` claim of the assertion.
+	 *
+	 * - `"token_endpoint"`: the token endpoint URL, as OpenID Connect Core 1.0
+	 *   §9 recommends.
+	 * - `"issuer"`: the authorization server's issuer identifier, as FAPI 2.0
+	 *   and RFC 10070 require. Signing fails when the caller does not provide
+	 *   the issuer.
+	 *
+	 * @default "token_endpoint"
+	 */
+	audience?: "token_endpoint" | "issuer";
 }
 
 /**
@@ -108,7 +126,7 @@ export interface PrivateKeyJwtClientAssertionGetterOptions {
  *
  * - iss=clientId
  * - sub=clientId
- * - aud=tokenEndpoint
+ * - aud=audience, or tokenEndpoint when no audience is given
  * - exp=now + 120s
  * - jti=unique
  * - iat=now
@@ -121,9 +139,11 @@ export async function signPrivateKeyJwtClientAssertion({
 	kid,
 	algorithm,
 	expiresIn = 120,
+	audience = tokenEndpoint,
 }: {
 	clientId: string;
 	tokenEndpoint: string;
+	audience?: string;
 	privateKeyJwk?: JsonWebKey;
 	privateKeyPem?: string;
 	kid?: string;
@@ -156,7 +176,7 @@ export async function signPrivateKeyJwtClientAssertion({
 		.setProtectedHeader(header)
 		.setIssuer(clientId)
 		.setSubject(clientId)
-		.setAudience(tokenEndpoint)
+		.setAudience(audience)
 		.setIssuedAt(now)
 		.setExpirationTime(now + expiresIn)
 		.setJti(jti)
@@ -179,16 +199,32 @@ export function createPrivateKeyJwtClientAssertionGetter(
 		privateKeyPem: options.privateKeyPem,
 		algorithm: options.algorithm,
 	});
-	return ({ clientId, tokenEndpoint }) =>
-		signPrivateKeyJwtClientAssertion({
+	if (
+		options.audience !== undefined &&
+		options.audience !== "token_endpoint" &&
+		options.audience !== "issuer"
+	) {
+		throw new Error(
+			`Unsupported private_key_jwt audience: ${String(options.audience)}. Use "token_endpoint" or "issuer".`,
+		);
+	}
+	return async ({ clientId, tokenEndpoint, issuer }) => {
+		if (options.audience === "issuer" && !issuer) {
+			throw new Error(
+				'private_key_jwt audience "issuer" requires the authorization server issuer. Configure the provider with a discovery document that publishes it.',
+			);
+		}
+		return signPrivateKeyJwtClientAssertion({
 			clientId,
 			tokenEndpoint,
+			audience: options.audience === "issuer" ? issuer : undefined,
 			privateKeyJwk: options.privateKeyJwk,
 			privateKeyPem: options.privateKeyPem,
 			kid: options.kid,
 			algorithm: options.algorithm,
 			expiresIn: options.expiresIn,
 		});
+	};
 }
 
 /**
