@@ -3,6 +3,7 @@ import type {
 	BetterAuthClientPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { NodeSqliteDialect } from "@better-auth/kysely-adapter/node-sqlite-dialect";
 import type { JSONWebKeySet } from "jose";
@@ -15,6 +16,7 @@ import {
 	SignJWT,
 } from "jose";
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { getSessionFromCtx } from "../../api";
 import { betterAuth } from "../../auth/full";
 import { createAuthClient } from "../../client";
 import { parseCookies } from "../../cookies/cookie-utils";
@@ -82,8 +84,88 @@ describe("jwt", async () => {
 			},
 		});
 
+		expect(result.error).toBeNull();
 		expect(result.data).toBeNull();
 		expect(token).toBeNull();
+	});
+
+	it("does not issue a token for a session a before hook loaded and was then revoked", async () => {
+		const { client, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				jwt(),
+				{
+					id: "revoke-in-before-hook",
+					hooks: {
+						before: [
+							{
+								matcher: (ctx) => ctx.path === "/get-session",
+								handler: createAuthMiddleware(async (ctx) => {
+									const session = await getSessionFromCtx(ctx);
+									await ctx.context.internalAdapter.deleteSession(
+										session!.session.token,
+									);
+								}),
+							},
+						],
+					},
+				},
+			],
+		});
+		const { headers } = await signInWithTestUser();
+
+		let token: string | null = null;
+		const result = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					token = context.response.headers.get("set-auth-jwt");
+				},
+			},
+		});
+
+		expect(result.error).toBeNull();
+		expect(result.data).toBeNull();
+		expect(token).toBeNull();
+	});
+
+	it("does not issue a token when the session is revoked before its refresh", async () => {
+		let revokedToken: string | null = null;
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [jwt()],
+			session: {
+				updateAge: 0,
+			},
+			databaseHooks: {
+				session: {
+					update: {
+						before: async () => {
+							if (!revokedToken) {
+								return;
+							}
+							const ctx = await auth.$context;
+							await ctx.internalAdapter.deleteSession(revokedToken);
+						},
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+		const session = await auth.api.getSession({
+			headers,
+			query: {
+				disableRefresh: true,
+			},
+		});
+		revokedToken = session!.session.token;
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				headers,
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("set-auth-jwt")).toBeNull();
 	});
 
 	it("Client gets a token", async () => {

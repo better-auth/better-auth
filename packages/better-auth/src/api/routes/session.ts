@@ -73,6 +73,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		} | null> => {
 			ctx.setHeader("cache-control", "no-store");
 			ctx.setHeader("pragma", "no-cache");
+			// Hooks may read the session only when this request returns one.
+			ctx.context.session = null;
 
 			const deferSessionRefresh =
 				ctx.context.options.session?.deferSessionRefresh;
@@ -303,7 +305,6 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					}
 					return ctx.json(null);
 				}
-				// Set only after the expiry check so after-hooks never see an expired session.
 				ctx.context.session = session;
 				/**
 				 * We don't need to update the session if the user doesn't want to be remembered
@@ -428,6 +429,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					user: User<Option["user"], Option["plugins"]>;
 				});
 			} catch (error) {
+				ctx.context.session = null;
 				if (isAPIError(error)) {
 					throw error;
 				}
