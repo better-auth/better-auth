@@ -827,6 +827,9 @@ importers:
       '@better-auth/cimd':
         specifier: workspace:*
         version: link:../../packages/cimd
+      '@better-auth/dbsc':
+        specifier: workspace:*
+        version: link:../../packages/dbsc
       '@better-auth/electron':
         specifier: workspace:*
         version: link:../../packages/electron
