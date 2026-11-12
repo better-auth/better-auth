@@ -202,17 +202,22 @@ function resolveResourceMetadataUrl(
 }
 
 function buildBearerChallenge(
-	resource: string | string[],
+	resource: string | string[] | undefined,
 	opts: { resourceMetadataMappings?: Record<string, string> } | undefined,
-	authParams: (metadataUrl: string) => (string | false | undefined)[],
+	authParams: (
+		metadataUrl: string | undefined,
+	) => (string | false | undefined)[],
 ): string {
-	const resources = Array.isArray(resource) ? resource : [resource];
-	return resources
-		.map((value) => {
-			const params = authParams(resolveResourceMetadataUrl(value, opts)).filter(
-				(param) => !!param,
-			);
-			return `Bearer ${params.join(", ")}`;
+	const metadataUrls =
+		resource === undefined
+			? [undefined]
+			: (Array.isArray(resource) ? resource : [resource]).map((value) =>
+					resolveResourceMetadataUrl(value, opts),
+				);
+	return metadataUrls
+		.map((metadataUrl) => {
+			const params = authParams(metadataUrl).filter((param) => !!param);
+			return params.length ? `Bearer ${params.join(", ")}` : "Bearer";
 		})
 		.join(", ");
 }
@@ -282,6 +287,34 @@ export function createResourceServerChallenge(
 		request?: Request | Pick<ResourceRequestInput, "authorizationHeader">;
 	},
 ): APIError | undefined {
+	return buildResourceServerChallenge(error, resource, opts);
+}
+
+/**
+ * The challenge for a request without usable credentials. RFC 6750 §3.1 gives
+ * it no error code, and it offers both schemes (RFC 9449 §7.1) so the client
+ * can pick the one it holds a token for.
+ */
+export function buildMissingCredentialsChallenge(
+	resource: string | undefined,
+	dpopSigningAlgorithms: readonly string[],
+): string {
+	const bearer = buildBearerChallenge(resource, undefined, (metadataUrl) => [
+		metadataUrl && `resource_metadata="${quoteAuthParam(metadataUrl)}"`,
+	]);
+	return `${bearer}, DPoP algs="${quoteAuthParam(dpopSigningAlgorithms.join(" "))}"`;
+}
+
+/**
+ * {@link createResourceServerChallenge} for a resource that may have no
+ * identifier, such as UserInfo. Without `resource`, a Bearer challenge omits
+ * `resource_metadata`.
+ */
+export function buildResourceServerChallenge(
+	error: unknown,
+	resource: string | string[] | undefined,
+	opts?: Parameters<typeof createResourceServerChallenge>[2],
+): APIError | undefined {
 	const challengeScope = serializeChallengeScopes(opts?.challengeScopes);
 	if (isAPIError(error) && error.status === "UNAUTHORIZED") {
 		const { errorCode, description } = extractTokenError(error);
@@ -319,7 +352,7 @@ export function createResourceServerChallenge(
 				buildBearerChallenge(resource, opts, (metadataUrl) => [
 					invalidToken && `error="invalid_token"`,
 					errorDescription && `error_description="${errorDescription}"`,
-					`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
+					metadataUrl && `resource_metadata="${quoteAuthParam(metadataUrl)}"`,
 					challengeScope && `scope="${quoteAuthParam(challengeScope)}"`,
 				]),
 			),
@@ -363,7 +396,7 @@ export function createResourceServerChallenge(
 					buildBearerChallenge(resource, opts, (metadataUrl) => [
 						`error="insufficient_scope"`,
 						scope && `scope="${quoteAuthParam(scope)}"`,
-						`resource_metadata="${quoteAuthParam(metadataUrl)}"`,
+						metadataUrl && `resource_metadata="${quoteAuthParam(metadataUrl)}"`,
 						errorDescription && `error_description="${errorDescription}"`,
 					]),
 			),

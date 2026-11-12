@@ -310,6 +310,22 @@ export interface OAuthTokenResponse {
 
 export type ActiveAccessTokenPayload = JWTPayload & { active: true };
 
+/** Options for `OAuthProviderApi.verifyResourceRequest`. */
+export interface VerifyResourceRequestParams {
+	/**
+	 * Scopes the token must all carry. A token missing any of them fails with
+	 * a 403 `insufficient_scope` challenge that names every missing scope.
+	 */
+	scopes?: readonly string[];
+	/**
+	 * Resource identifier the token's `aud` claim must contain (RFC 9068
+	 * §4). It also sets the challenge's `resource_metadata` when it is a URL.
+	 * Without it, a token for any resource is accepted. An empty string throws
+	 * a `TypeError`.
+	 */
+	audience?: string;
+}
+
 /**
  * The OAuth Provider's server-side capability surface, bound to a request `ctx`.
  * A grant handler receives one as `provider`; a companion plugin's own endpoint
@@ -440,7 +456,9 @@ export interface OAuthProviderApi {
 	) => Awaitable<JWTPayload>;
 	/**
 	 * Validates an access token for a protected resource and throws the OAuth
-	 * bearer challenge when the token is inactive or unknown.
+	 * bearer challenge when the token is inactive or unknown. It checks the
+	 * token only: it does not verify a DPoP proof for a DPoP-bound token. A
+	 * protected endpoint should use `verifyResourceRequest` instead.
 	 */
 	requireActiveAccessToken: (
 		token: string,
@@ -450,14 +468,36 @@ export interface OAuthProviderApi {
 	 * Returns the subject identifier the given client sees for a user in its ID
 	 * tokens and UserInfo: the pairwise subject for a client with
 	 * `subject_type: "pairwise"` when `pairwiseSecret` is set, otherwise the
-	 * user ID. Access token payloads returned by `validateAccessToken` and
-	 * `requireActiveAccessToken` carry the user ID in `sub`; use this to
-	 * present it to a client.
+	 * user ID. Access token payloads returned by `validateAccessToken`,
+	 * `requireActiveAccessToken`, and `verifyResourceRequest` carry the user
+	 * ID in `sub`; use this to present it to a client.
 	 */
 	resolveSubject: (params: {
 		userId: string;
 		client: SchemaClient<Scope[]>;
 	}) => Promise<string>;
+	/**
+	 * Verifies the access token on this request for an endpoint served by this
+	 * instance, such as a companion plugin's protected endpoint. Opaque and JWT
+	 * access tokens are both validated against this server's own records: a
+	 * revoked opaque token, a token whose session ended, and a token whose
+	 * client is disabled or whose resource is deleted all fail immediately.
+	 *
+	 * It reads the token from the `Authorization` header (`Bearer` or `DPoP`),
+	 * requires it to be active, enforces a DPoP binding (RFC 9449 §7) with this
+	 * server's DPoP settings, including `dpop.nonce.required`, and then checks
+	 * `audience` and `scopes`. It returns the token's claims in RFC 7662
+	 * introspection form, with the user ID in `sub` even when the token's
+	 * `sub` is pairwise.
+	 *
+	 * A failure throws an `APIError` that is ready to send: a 401 or 403 with
+	 * the RFC 6750 or RFC 9449 `WWW-Authenticate` challenge. A DPoP-bound token
+	 * fails on a call without an HTTP request, such as `auth.api`, because the
+	 * proof's method and URL cannot be checked.
+	 */
+	verifyResourceRequest: (
+		params?: VerifyResourceRequestParams,
+	) => Promise<ActiveAccessTokenPayload>;
 }
 
 export interface OAuthExtensionGrantHandlerInput {

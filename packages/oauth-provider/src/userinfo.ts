@@ -1,27 +1,12 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError, isAPIError } from "better-auth/api";
-import {
-	createDpopReplayStore,
-	DPOP_SIGNING_ALGORITHMS,
-	enforceDpopBinding,
-	getDpopJktFromPayload,
-	isDpopBindingError,
-	parseAccessTokenAuthorization,
-} from "better-auth/oauth2";
+import { APIError } from "better-auth/api";
+import { parseAccessTokenAuthorization } from "better-auth/oauth2";
 import type { User } from "better-auth/types";
-import {
-	getDpopNonceOptions,
-	getDpopProofJwt,
-	getEndpointUrl,
-	setDpopNonceHeader,
-	withExposedHeaders,
-} from "./dpop";
 import {
 	collectExtensionUserInfoClaims,
 	hasUserInfoClaimExtension,
 } from "./extensions";
-import { requireActiveAccessTokenWithClaims } from "./introspect";
-import { buildDpopChallengeValue } from "./resource-challenge";
+import { verifyResourceRequest } from "./resource-request";
 import { STANDARD_CLAIMS } from "./standard-claims";
 import type { OAuthOptions, Scope } from "./types";
 import { getClient, resolveSubjectIdentifier } from "./utils";
@@ -110,55 +95,6 @@ function getUserInfoAccessToken(ctx: GenericEndpointContext) {
 }
 
 /**
- * The exposed-header list with `WWW-Authenticate` added. Before hooks write to
- * the dispatch's `ctx.context.responseHeaders`, which the endpoint's own
- * `ctx.responseHeaders` does not include, and an error's header replaces the
- * value they accumulated, so both lists are kept here.
- */
-function exposeChallengeHeader(ctx: GenericEndpointContext) {
-	const scoped = ctx as GenericEndpointContext & {
-		context: GenericEndpointContext["context"] & { responseHeaders?: Headers };
-	};
-	const names = [scoped.context.responseHeaders, ctx.responseHeaders].flatMap(
-		(headers) =>
-			headers?.get("access-control-expose-headers")?.split(",") ?? [],
-	);
-	return withExposedHeaders(
-		undefined,
-		...names.map((name) => name.trim()).filter(Boolean),
-		"WWW-Authenticate",
-	);
-}
-
-/**
- * A 401 carrying `challenge`, which browsers hide from cross-origin clients
- * unless it is exposed.
- */
-function unauthorized(
-	ctx: GenericEndpointContext,
-	body: { error: string; error_description: string },
-	challenge: string,
-) {
-	return new APIError("UNAUTHORIZED", body, {
-		"WWW-Authenticate": challenge,
-		"Access-Control-Expose-Headers": exposeChallengeHeader(ctx),
-	});
-}
-
-function dpopUnauthorized(
-	ctx: GenericEndpointContext,
-	opts: OAuthOptions<Scope[]>,
-	error: string,
-	description: string,
-) {
-	return unauthorized(
-		ctx,
-		{ error, error_description: description },
-		buildDpopChallengeValue(error, description, opts.dpop?.signingAlgorithms),
-	);
-}
-
-/**
  * Handles the /oauth2/userinfo endpoint.
  *
  * Every 401 carries a challenge (RFC 7235 §3.1): `DPoP` with the accepted
@@ -173,100 +109,9 @@ export async function userInfoEndpoint(
 	// TODO: converge on parseBearerToken (utils) once we decide whether userinfo
 	// should keep accepting a non-Bearer Authorization value as a bare token; the
 	// shared parser is strict and would reject that fallback.
-	const { authorization: accessTokenAuthorization } =
-		getUserInfoAccessToken(ctx);
-	if (!accessTokenAuthorization?.token) {
-		// RFC 6750 §3.1: a request without credentials gets no error code.
-		const algorithms = opts.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS;
-		throw unauthorized(
-			ctx,
-			{ error_description: "access token not found", error: "invalid_request" },
-			`Bearer, DPoP algs="${algorithms.join(" ")}"`,
-		);
-	}
-	const usesDpopScheme = accessTokenAuthorization.scheme === "DPoP";
-	let validated: Awaited<ReturnType<typeof requireActiveAccessTokenWithClaims>>;
-	try {
-		validated = await requireActiveAccessTokenWithClaims(
-			ctx,
-			opts,
-			accessTokenAuthorization.token,
-		);
-	} catch (error) {
-		if (isAPIError(error) && error.status === "UNAUTHORIZED") {
-			const body = error.body as
-				| { error?: string; error_description?: string }
-				| undefined;
-			const code = body?.error ?? "invalid_token";
-			const description = body?.error_description ?? error.message;
-			if (usesDpopScheme) {
-				throw dpopUnauthorized(ctx, opts, code, description);
-			}
-			throw unauthorized(
-				ctx,
-				{ error: code, error_description: description },
-				new Headers(error.headers).get("WWW-Authenticate") ??
-					`Bearer error="invalid_token"`,
-			);
-		}
-		throw error;
-	}
-	const { payload: jwt, requestedUserInfoClaims: requestedClaims } = validated;
-
-	// The DPoP `htm` check needs the real request method. Without a `ctx.request`
-	// (a programmatic `auth.api` call) the sender-constraint cannot be verified,
-	// so fail closed for a DPoP-bound token rather than assume "GET".
-	if (getDpopJktFromPayload(jwt) && !ctx.request) {
-		throw dpopUnauthorized(
-			ctx,
-			opts,
-			"invalid_token",
-			"DPoP-bound access token requires an HTTP request context",
-		);
-	}
-
-	const nonce = getDpopNonceOptions(ctx, opts);
-	try {
-		await enforceDpopBinding({
-			payload: jwt,
-			authorization: accessTokenAuthorization,
-			proofJwt: getDpopProofJwt(ctx),
-			method: ctx.request?.method ?? "GET",
-			url: getEndpointUrl(ctx, "/oauth2/userinfo"),
-			proofMaxAgeSeconds: opts.dpop?.proofMaxAgeSeconds,
-			signingAlgorithms: opts.dpop?.signingAlgorithms,
-			replayStore: createDpopReplayStore(ctx.context.internalAdapter),
-			nonce,
-		});
-	} catch (error) {
-		// Every binding failure means the token is DPoP-bound or the request
-		// used the DPoP scheme, so it is challenged with DPoP.
-		if (isDpopBindingError(error)) {
-			if (error.code === "use_dpop_nonce" && nonce) {
-				// RFC 9449 §9: a protected resource answers with a `DPoP`
-				// challenge and the nonce to retry with.
-				throw new APIError(
-					"UNAUTHORIZED",
-					{ error_description: error.message, error: error.code },
-					{
-						...(await setDpopNonceHeader(ctx, nonce, { challenge: true })),
-						"Access-Control-Expose-Headers": exposeChallengeHeader(ctx),
-						"WWW-Authenticate": buildDpopChallengeValue(
-							error.code,
-							error.message,
-							opts.dpop?.signingAlgorithms,
-						),
-					},
-				);
-			}
-			throw dpopUnauthorized(ctx, opts, error.code, error.message);
-		}
-		throw error;
-	}
-	// RFC 9449 §8.2: hand the client its next nonce with the response.
-	if (nonce && getDpopJktFromPayload(jwt)) {
-		await setDpopNonceHeader(ctx, nonce);
-	}
+	const { authorization } = getUserInfoAccessToken(ctx);
+	const { payload: jwt, requestedUserInfoClaims: requestedClaims } =
+		await verifyResourceRequest(ctx, opts, {}, authorization ?? null);
 
 	const scopes = (jwt.scope as string | undefined)?.split(" ");
 	if (!scopes?.includes("openid")) {
