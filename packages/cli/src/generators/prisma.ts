@@ -169,19 +169,17 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schema: getAuthTables(options),
 		usePlural: false,
 	});
+	const matchesTable = (model: string, tableKey: string, modelName: string) =>
+		model === tableKey ||
+		model === modelName ||
+		model === getModelName(tableKey) ||
+		model === getModelName(modelName);
 	const isMigrationDisabled = (model: string) =>
-		Object.entries(tables).some(([tableKey, table]) => {
-			if (table.disableMigrations !== true) {
-				return false;
-			}
-			const customModelName = table.modelName || tableKey;
-			return (
-				model === tableKey ||
-				model === customModelName ||
-				model === getModelName(tableKey) ||
-				model === getModelName(customModelName)
-			);
-		});
+		Object.entries(tables).some(
+			([tableKey, table]) =>
+				table.disableMigrations === true &&
+				matchesTable(model, tableKey, table.modelName || tableKey),
+		);
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
 		Object.keys(tables)
 			.filter((tableKey) => !isMigrationDisabled(tableKey))
