@@ -4,7 +4,7 @@ import type {
 	ClientFetchOption,
 } from "@better-auth/core";
 import { toKebabCase } from "@better-auth/core/utils/string";
-import type { BetterFetch, SuccessContext } from "@better-fetch/fetch";
+import type { BetterFetch } from "@better-fetch/fetch";
 import { isPayloadMethod } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
@@ -57,7 +57,7 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					knownPathMethods[routePath] ||
 					options.method ||
 					(Object.keys(body).length > 0 ? "POST" : "GET");
-				let successContext: SuccessContext | undefined;
+				let succeeded = false;
 				const result = await client(routePath, {
 					...options,
 					body: isPayloadMethod(method)
@@ -68,22 +68,23 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						: undefined,
 					query: query || options?.query,
 					method,
-					onSuccess(context) {
-						successContext = context;
+					async onSuccess(context) {
+						await options?.onSuccess?.(context);
+						succeeded = true;
 					},
 				});
-				if (!successContext) return result;
-
-				// Signal only after every fetch plugin hook ran, so cookies they persist
-				// are sent by the refetch, and before onSuccess, so it sees the auth change.
-				const matches =
-					atomListeners && !options.disableSignal
-						? atomListeners.filter((s) => s.matcher(routePath))
-						: [];
+				if (!succeeded || !atomListeners || options.disableSignal)
+					return result;
+				/**
+				 * We trigger listeners
+				 */
+				// Signal once every success hook ran, so the refetch sends the credentials they persisted.
+				const matches = atomListeners.filter((s) => s.matcher(routePath));
 				const visited = new Set<ClientAtomListener["signal"]>();
 				for (const match of matches) {
 					const signal = atoms[match.signal as any];
-					if (!signal || visited.has(match.signal)) {
+					if (!signal) break;
+					if (visited.has(match.signal)) {
 						continue;
 					}
 					visited.add(match.signal);
@@ -92,7 +93,6 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					// we also call the callback if it exists
 					match.callback?.(routePath);
 				}
-				await options?.onSuccess?.(successContext);
 				return result;
 			},
 		});

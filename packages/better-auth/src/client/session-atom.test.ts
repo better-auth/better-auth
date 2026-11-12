@@ -73,7 +73,7 @@ describe("session refetch while signed out", () => {
 });
 
 describe("session after sign-in", () => {
-	it("stays pending from sign-in success until the new session arrives", async () => {
+	it("stays pending until the session refetched with the persisted credentials loads", async () => {
 		const { client, testUser, signInWithTestUser, sessionSetter } =
 			await getTestInstance();
 		// Reuse the test user's request context with an empty cookie jar, so the
@@ -87,27 +87,18 @@ describe("session after sign-in", () => {
 			expect(states.at(-1)?.signedIn).toBe(false);
 
 			states.length = 0;
-			let inOnSuccess: SessionState | undefined;
 			await client.signIn.email({
 				email: testUser.email,
 				password: testUser.password,
 				fetchOptions: {
-					onSuccess(context) {
+					// Persist the credentials asynchronously, like token storage does.
+					async onSuccess(context) {
+						await new Promise((resolve) => setTimeout(resolve, 5));
 						sessionSetter(headers)(context);
-						const state = client.useSession.get();
-						inOnSuccess = {
-							isPending: state.isPending,
-							isRefetching: state.isRefetching,
-							signedIn: state.data !== null,
-						};
 					},
 				},
 			});
 			const afterSignIn = client.useSession.get();
-			expect(inOnSuccess).toMatchObject({
-				isPending: true,
-				signedIn: false,
-			});
 			expect(afterSignIn.isPending).toBe(true);
 			expect(afterSignIn.data).toBeNull();
 
