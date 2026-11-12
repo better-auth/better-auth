@@ -1433,6 +1433,35 @@ async function createUserTokens(
 			});
 		}
 	}
+	if (grantType === "authorization_code" && sessionId) {
+		// An initial grant has no rotation parent to fence issuance. Read the
+		// session after every insert: a concurrent logout may already have
+		// completed its sweep before these rows became visible. A later logout
+		// sees all inserted rows and revokes them itself.
+		const session = await ctx.context.adapter.findOne<Session>({
+			model: "session",
+			where: [{ field: "id", value: sessionId }],
+		});
+		if (!session || session.expiresAt < new Date()) {
+			const revokedAt = new Date();
+			for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
+				await ctx.context.adapter.updateMany({
+					model,
+					where: [
+						{
+							field: "authorizationCodeId",
+							value: params.authorizationCodeId!,
+						},
+					],
+					update: { revoked: revokedAt },
+				});
+			}
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_grant",
+				error_description: "session ended during token issuance",
+			});
+		}
+	}
 	return ctx.json(responseBody);
 }
 

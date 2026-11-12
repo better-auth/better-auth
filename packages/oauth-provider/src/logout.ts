@@ -266,7 +266,10 @@ const userGrantRevocationsByContext = new WeakMap<
 	Map<string, Promise<void>>
 >();
 
-function revokeAllUserGrants(ctx: GenericEndpointContext, userId: string) {
+export function revokeAllUserGrants(
+	ctx: GenericEndpointContext,
+	userId: string,
+) {
 	let users = userGrantRevocationsByContext.get(ctx);
 	if (!users) {
 		users = new Map();
@@ -283,6 +286,7 @@ function revokeAllUserGrants(ctx: GenericEndpointContext, userId: string) {
 		// state, so the issuer can run on a different worker.
 		// Refresh rows must be swept before access rows: an issuer that has
 		// already passed its final parent check has inserted both by this point.
+		const failures: unknown[] = [];
 		for (const model of ["oauthRefreshToken", "oauthAccessToken"] as const) {
 			try {
 				await adapter.updateMany({
@@ -302,8 +306,10 @@ function revokeAllUserGrants(ctx: GenericEndpointContext, userId: string) {
 					"back-channel logout: token revocation update failed",
 					error,
 				);
+				failures.push(error);
 			}
 		}
+		if (failures.length > 0) throw failures[0];
 	})();
 	users.set(userId, task);
 	return task;

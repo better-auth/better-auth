@@ -27,6 +27,7 @@ import {
 	applyBackchannelLogoutPlan,
 	endsAllUserGrants,
 	prepareBackchannelLogoutPlan,
+	revokeAllUserGrants,
 	rpInitiatedLogoutConfirmationEndpoint,
 	rpInitiatedLogoutEndpoint,
 } from "./logout";
@@ -613,6 +614,15 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 										backchannelLogoutPlansByContext.delete(hookCtx);
 									}
 									if (!plan) return;
+									// Revocation is part of the security-sensitive request,
+									// not best-effort background delivery. Surface storage
+									// failures even when a background handler is configured.
+									if (plan.revokeAllGrantsOfUserId) {
+										await revokeAllUserGrants(
+											hookCtx,
+											plan.revokeAllGrantsOfUserId,
+										);
+									}
 									const logoutTask = applyBackchannelLogoutPlan(
 										hookCtx,
 										plan,
