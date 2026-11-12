@@ -75,7 +75,7 @@ To read a client's public fields on the login page, set `allowPublicClientPrelog
 Only the server-only `adminCreateOAuthClient` and `adminUpdateOAuthClient` methods can set these fields:
 
 * `skip_consent`: skip the consent screen. Use it for [trusted clients](#trusted-clients).
-* `enable_end_session`: allow the client to [end the user's session](/docs/plugins/oauth-provider/openid-connect#rp-initiated-logout).
+* `enable_end_session`: allow the client to [end the user's session](/docs/plugins/oauth-provider/openid-connect#rp-initiated-logout). To allow it for registered clients, see [Registered clients](/docs/plugins/oauth-provider/openid-connect#registered-clients).
 * `require_pkce`: create only. Set `false` to let a confidential client skip [PKCE](/docs/plugins/oauth-provider/tokens#pkce). This removes the protection against intercepted and injected authorization codes. Keep the default, `true`.
 * `client_credentials_scopes`: see [Client credentials scopes](#client-credentials-scopes). Protected dynamic registration can also set it through `validateInitialAccessToken`.
 * `resources`: create only. Links the client to [resources](/docs/plugins/oauth-provider/tokens#resources). When `resourcePrivileges` is set, it must approve the `link` action for each one.

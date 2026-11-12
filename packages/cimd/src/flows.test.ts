@@ -1420,3 +1420,111 @@ describe("CIMD - extension client metadata", async () => {
 		expect(JSON.stringify(response)).toContain("invalid_client_metadata");
 	});
 });
+
+describe("CIMD - RP-initiated logout for metadata document clients", async () => {
+	const authServerBaseUrl = "http://localhost:3109";
+	const redirectUri = "http://127.0.0.1:5109/callback";
+	const documentFor = (clientId: string) => ({
+		client_id: clientId,
+		client_name: "Logout Test Client",
+		redirect_uris: [redirectUri],
+		post_logout_redirect_uris: [`${new URL(clientId).origin}/logged-out`],
+		token_endpoint_auth_method: "none",
+		application_type: "native",
+	});
+	let allowEndSession = true;
+	const endSessionPolicy = vi.fn(() => allowEndSession);
+
+	const {
+		auth: authorizationServer,
+		signInWithTestUser,
+		customFetchImpl,
+	} = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			jwt(),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["openid", "profile", "email", "offline_access"],
+				clientRegistrationEnableEndSession: endSessionPolicy,
+			}),
+			cimd({
+				metadataRevalidationInterval: 0,
+				metadataFetchPolicy: { minimumFetchInterval: 0 },
+				fetchClientMetadataResource: (input, init) =>
+					globalThis.fetch(input, init),
+				// Leave post-logout URIs unbound to the document origin so the
+				// provider's own origin rule is what a refresh runs into.
+				originBoundFields: ["client_uri"],
+			}),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authorize = (clientId: string) =>
+		customFetchImpl(
+			buildAuthorizeUrl(authServerBaseUrl, clientId, redirectUri),
+			{
+				headers,
+				redirect: "manual",
+			},
+		);
+	const storedClient = async (clientId: string) => {
+		const ctx = await authorizationServer.$context;
+		return ctx.adapter.findOne<SchemaClient<Scope[]>>({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: clientId }],
+		});
+	};
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		endSessionPolicy.mockClear();
+		allowEndSession = true;
+	});
+
+	it("allows logout for a document client whose post-logout URI uses its client_id origin", async () => {
+		const clientId = "https://mcp-logout.example.com/client.json";
+		stubMetadataFetch(clientId, documentFor(clientId));
+		await authorize(clientId);
+
+		expect((await storedClient(clientId))?.enableEndSession).toBe(true);
+		expect(endSessionPolicy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				registrationSource: "clientMetadataDocument",
+				client: expect.objectContaining({ client_id: clientId }),
+			}),
+		);
+	});
+
+	it("never grants logout on a metadata document refresh", async () => {
+		const clientId = "https://mcp-logout-refresh.example.com/client.json";
+		stubMetadataFetch(clientId, documentFor(clientId));
+		allowEndSession = false;
+		await authorize(clientId);
+		expect((await storedClient(clientId))?.enableEndSession).toBeFalsy();
+
+		allowEndSession = true;
+		endSessionPolicy.mockClear();
+		await authorize(clientId);
+		expect((await storedClient(clientId))?.enableEndSession).toBeFalsy();
+		expect(endSessionPolicy).not.toHaveBeenCalled();
+	});
+
+	it("rejects a refresh that moves post-logout URIs to another origin", async () => {
+		const clientId = "https://mcp-logout-moved.example.com/client.json";
+		stubMetadataFetch(clientId, documentFor(clientId));
+		await authorize(clientId);
+		expect((await storedClient(clientId))?.enableEndSession).toBe(true);
+
+		vi.unstubAllGlobals();
+		stubMetadataFetch(clientId, {
+			...documentFor(clientId),
+			post_logout_redirect_uris: ["https://attacker.example/landing"],
+		});
+		await authorize(clientId);
+		expect((await storedClient(clientId))?.postLogoutRedirectUris).toEqual([
+			"https://mcp-logout-moved.example.com/logged-out",
+		]);
+	});
+});

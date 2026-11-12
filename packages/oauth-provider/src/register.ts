@@ -885,6 +885,46 @@ export async function checkOAuthClient(
 	}
 }
 
+/**
+ * Origin of a redirect URI for comparing a post-logout redirect with the
+ * client's redirect URIs. Loopback redirects match on any port, as authorization
+ * does (RFC 8252 §7.3), and a private-use URI matches on its scheme and
+ * authority.
+ */
+function redirectOriginKey(uri: string): string | undefined {
+	let url: URL;
+	try {
+		url = new URL(uri);
+	} catch {
+		return undefined;
+	}
+	const isHttp = url.protocol === "http:" || url.protocol === "https:";
+	const isLoopback = isLoopbackIP(url.hostname) || url.hostname === "localhost";
+	return isHttp && isLoopback
+		? `${url.protocol}//${url.hostname}`
+		: `${url.protocol}//${url.host}`;
+}
+
+function assertPostLogoutRedirectOrigins(
+	postLogoutRedirectUris: string[] | undefined,
+	allowedOriginUris: string[],
+	allowedDescription: string,
+) {
+	if (!postLogoutRedirectUris?.length) return;
+	const allowedOrigins = new Set(
+		allowedOriginUris.map(redirectOriginKey).filter((key) => key),
+	);
+	for (const uri of postLogoutRedirectUris) {
+		const key = redirectOriginKey(uri);
+		if (!key || !allowedOrigins.has(key)) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `post_logout_redirect_uri ${uri} must share an origin with ${allowedDescription}`,
+			});
+		}
+	}
+}
+
 interface CreateOAuthClientRegistrationBaseInput {
 	/** Validated endpoint metadata or trusted internal metadata. */
 	metadata: OAuthClientRegistrationMetadata;
@@ -1091,6 +1131,47 @@ async function persistOAuthClientRegistration(
 		clientId,
 		body.redirect_uris,
 	);
+	const existingClient =
+		input.registrationSource === "clientMetadataDocument"
+			? input.existingClient
+			: undefined;
+	if (input.registrationSource !== "managed") {
+		const policy = opts.clientRegistrationEnableEndSession;
+		const {
+			metadata: _metadata,
+			client_secret: _clientSecret,
+			client_secret_expires_at: _clientSecretExpiresAt,
+			client_id_issued_at: _clientIdIssuedAt,
+			user_id: _userId,
+			reference_id: _referenceId,
+			disabled: _disabled,
+			skip_consent: _skipConsent,
+			enable_end_session: _enableEndSession,
+			require_pkce: _requirePKCE,
+			...clientMetadata
+		} = body;
+		const enableEndSession = existingClient
+			? Boolean(existingClient.enableEndSession)
+			: typeof policy === "function"
+				? (await policy({
+						client: { ...clientMetadata, client_id: clientId },
+						registrationSource: input.registrationSource,
+					})) === true
+				: policy === true;
+		if (enableEndSession) {
+			// A metadata document's own URL is also an origin its owner controls.
+			const isDocument = input.registrationSource === "clientMetadataDocument";
+			assertPostLogoutRedirectOrigins(
+				body.post_logout_redirect_uris,
+				isDocument
+					? [...(body.redirect_uris ?? []), clientId]
+					: (body.redirect_uris ?? []),
+				isDocument ? "its redirect_uris or client_id" : "its redirect_uris",
+			);
+		}
+		// A refresh never writes this value (see the update below).
+		schema.enableEndSession = enableEndSession || undefined;
+	}
 	if (
 		input.registrationSource === "clientMetadataDocument" &&
 		body.application_type === undefined
@@ -1112,10 +1193,6 @@ async function persistOAuthClientRegistration(
 	const clientModel = opts.schema?.oauthClient?.modelName ?? "oauthClient";
 	const clientResourceModel =
 		opts.schema?.oauthClientResource?.modelName ?? "oauthClientResource";
-	const existingClient =
-		input.registrationSource === "clientMetadataDocument"
-			? input.existingClient
-			: undefined;
 	const clientDiscoveryId =
 		input.registrationSource === "clientMetadataDocument"
 			? input.clientDiscoveryId
