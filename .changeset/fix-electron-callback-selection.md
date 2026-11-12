@@ -2,4 +2,4 @@
 "@better-auth/electron": patch
 ---
 
-Fix desktop sign-in callbacks being ignored on Windows and Linux when extra launch arguments follow the callback URL.
+Fix missed desktop sign-in callbacks on Windows and Linux when launch arguments change order or callbacks arrive through additional data.

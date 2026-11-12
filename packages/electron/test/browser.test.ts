@@ -138,32 +138,51 @@ describe.each(["win32", "linux"] as const)(
 			},
 		);
 
-		it.each([{}, "https://example.com", "myapp://open"])(
-			"ignores unrelated additional data %j",
-			async (data) => {
-				const auth = await startAuthentication(platform);
-				auth.setup();
-				await auth.dispatch(
-					"second-instance",
-					["app.exe", auth.callback, "--flag"],
-					".",
-					data,
-				);
-				await auth.expectSignedIn();
-			},
-		);
-
-		it("accepts a callback supplied only in additional data", async () => {
+		it.each([
+			null,
+			{},
+			{ url: "https://example.com", count: 1 },
+			"https://example.com",
+			"myapp://open",
+		])("ignores unrelated additional data %j", async (data) => {
 			const auth = await startAuthentication(platform);
 			auth.setup();
 			await auth.dispatch(
 				"second-instance",
-				["app.exe", "--flag"],
+				["app.exe", auth.callback, "--flag"],
 				".",
-				auth.callback,
+				data,
 			);
 			await auth.expectSignedIn();
 		});
+
+		it.each([
+			{ name: "a string", wrap: (url: string) => url },
+			{ name: "a url property", wrap: (url: string) => Object.freeze({ url }) },
+			{
+				name: "another string property",
+				wrap: (url: string) =>
+					Object.freeze({
+						url: "https://example.com",
+						count: 1,
+						nested: { url },
+						callback: url,
+					}),
+			},
+		])(
+			"accepts a callback supplied only in additional data as $name",
+			async ({ wrap }) => {
+				const auth = await startAuthentication(platform);
+				auth.setup();
+				await auth.dispatch(
+					"second-instance",
+					["app.exe", "--flag"],
+					".",
+					wrap(auth.callback),
+				);
+				await auth.expectSignedIn();
+			},
+		);
 
 		it("handles a repeated callback candidate only once", async () => {
 			const auth = await startAuthentication(platform);
@@ -173,7 +192,7 @@ describe.each(["win32", "linux"] as const)(
 				"second-instance",
 				[auth.callback, auth.callback],
 				".",
-				auth.callback,
+				{ url: auth.callback },
 			);
 			await auth.expectSignedIn();
 			expect(error).not.toHaveBeenCalled();

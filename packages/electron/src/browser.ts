@@ -236,8 +236,12 @@ function registerProtocolScheme(
 					win.focus();
 				}
 
+				const additionalValues: unknown[] =
+					typeof additionalData === "object" && additionalData !== null
+						? Object.values(additionalData)
+						: [additionalData];
 				const url = findAuthCallbackURL(
-					[additionalData, ...commandLine],
+					[...additionalValues, ...commandLine],
 					options,
 				);
 
