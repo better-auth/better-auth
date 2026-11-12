@@ -196,6 +196,37 @@ describe("relations-v2 schema generator", () => {
 		expect(typeErrors(code)).toEqual([]);
 	});
 
+	test("does not add foreign keys to externally managed tables referenced by model name", async () => {
+		const { code = "" } = await generate({
+			user: {
+				additionalFields: {
+					roleId: {
+						type: "string",
+						required: false,
+						references: { model: "roles", field: "id" },
+					},
+				},
+			},
+			plugins: [
+				{
+					id: "app-tables",
+					schema: {
+						role: {
+							modelName: "roles",
+							disableMigration: true,
+							fields: {},
+						},
+					},
+				},
+			],
+		});
+
+		expect(code).toContain("roleId");
+		expect(code).not.toContain("roles.id");
+		expect(code).not.toContain("r.one.roles");
+		expect(typeErrors(code)).toEqual([]);
+	});
+
 	/**
 	 * A hardcoded `export const relations = defineRelationsPart(...)` collides
 	 * with a user model whose table name is `relations` (e.g.

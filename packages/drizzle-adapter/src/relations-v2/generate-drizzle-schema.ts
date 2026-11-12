@@ -125,16 +125,21 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		schema: tables,
 		usePlural: adapterConfig?.usePlural,
 	});
+	const matchesTable = (model: string, tableKey: string, modelName: string) =>
+		model === tableKey ||
+		model === modelName ||
+		model === getModelName(tableKey) ||
+		model === getModelName(modelName);
+	const isMigrationDisabled = (model: string) =>
+		Object.entries(tables).some(
+			([tableKey, table]) =>
+				table.disableMigrations === true &&
+				matchesTable(model, tableKey, table.modelName || tableKey),
+		);
 	const isSchemaModel = (model: string) =>
-		Object.entries(tables).some(([tableKey, table]) => {
-			const customModelName = table.modelName || tableKey;
-			return (
-				model === tableKey ||
-				model === customModelName ||
-				model === getModelName(tableKey) ||
-				model === getModelName(customModelName)
-			);
-		});
+		Object.entries(tables).some(([tableKey, table]) =>
+			matchesTable(model, tableKey, table.modelName || tableKey),
+		);
 	const resolvedIndexesByTable = resolveDatabaseSchemaIndexes(
 		Object.keys(tables)
 			.filter((tableKey) => !tables[tableKey]!.disableMigrations)
@@ -412,8 +417,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}
 							// No table is generated for these, so the column has nothing to reference.
 							const referencesDisabledModel =
-								attr.references &&
-								tables[attr.references.model]?.disableMigrations;
+								attr.references && isMigrationDisabled(attr.references.model);
 							if (
 								attr.references &&
 								!referencesDisabledModel &&
@@ -476,7 +480,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		for (const [fieldName, field] of foreignFields) {
 			const referencedModel = field.references!.model;
-			if (tables[referencedModel]?.disableMigrations) continue;
+			if (isMigrationDisabled(referencedModel)) continue;
 			const targetModelName = getModelName(referencedModel);
 			const fromField = getFieldName({ model: tableKey, field: fieldName });
 			const toField = getFieldName({
