@@ -220,6 +220,37 @@ describe("session", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10716
+	 */
+	it("gets the session when a user field references an app table", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				account: [],
+				session: [],
+				verification: [],
+			}),
+			user: {
+				additionalFields: {
+					roleId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "roles",
+							field: "id",
+						},
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+
+		await expect(auth.api.getSession({ headers })).resolves.toMatchObject({
+			session: { id: expect.any(String) },
+		});
+	});
+
 	describe("session refresh and expiration", () => {
 		const startedAt = new Date("2026-01-01T00:00:00Z").getTime();
 
