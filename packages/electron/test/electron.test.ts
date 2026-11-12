@@ -8,7 +8,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { generateCodeChallenge } from "better-auth/oauth2";
 import { getTestInstance } from "better-auth/test";
-import { beforeEach, describe, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kElectron } from "../src/authenticate";
 import { electronClient } from "../src/client";
 import { getCookie } from "../src/cookies";
@@ -2828,6 +2828,13 @@ describe("main-process session polling", () => {
 		{ sessionOptions: { refetchInterval: 60 } },
 	);
 
+	// Stop poll timers even when an assertion fails, so they don't leak into later tests.
+	afterEach(() => {
+		for (const [event, listener] of mockElectron.app.on.mock.calls) {
+			if (event === "will-quit") (listener as () => void)();
+		}
+	});
+
 	const setSessionData = () =>
 		client.$store.atoms.session!.set({
 			...client.$store.atoms.session!.get(),
@@ -2849,10 +2856,8 @@ describe("main-process session polling", () => {
 		expect(typeof window).toBe("undefined");
 
 		client.setupMain({ bridges: true });
-		await vi.advanceTimersByTimeAsync(0);
 
-		expect(getSessionRequests).toHaveBeenCalledTimes(1);
-		quitApp();
+		await vi.waitFor(() => expect(getSessionRequests).toHaveBeenCalledTimes(1));
 	});
 
 	it("polls /get-session on refetchInterval while a session exists", async ({
@@ -2891,9 +2896,7 @@ describe("main-process session polling", () => {
 		expect(getSessionRequests).not.toHaveBeenCalled();
 
 		markReady();
-		await vi.advanceTimersByTimeAsync(0);
-		expect(getSessionRequests).toHaveBeenCalledTimes(1);
-		quitApp();
+		await vi.waitFor(() => expect(getSessionRequests).toHaveBeenCalledTimes(1));
 	});
 
 	it("retries the first session fetch after it fails", async ({
@@ -2909,16 +2912,16 @@ describe("main-process session polling", () => {
 		vi.spyOn(console, "error").mockImplementation(() => {});
 
 		client.setupMain({ bridges: true });
-		await vi.advanceTimersByTimeAsync(0);
-		expect(getSessionRequests).toHaveBeenCalledTimes(1);
-		expect(client.$store.atoms.session!.get().error).not.toBeNull();
+		await vi.waitFor(() => {
+			expect(getSessionRequests).toHaveBeenCalledTimes(1);
+			expect(client.$store.atoms.session!.get().error).not.toBeNull();
+		});
 
 		await vi.advanceTimersByTimeAsync(60_000);
 		expect(getSessionRequests).toHaveBeenCalledTimes(2);
 
 		await vi.advanceTimersByTimeAsync(60_000);
 		expect(getSessionRequests).toHaveBeenCalledTimes(2);
-		quitApp();
 	});
 
 	it("does not poll while offline by default, and fetches once back online", async ({
@@ -2938,7 +2941,6 @@ describe("main-process session polling", () => {
 		mockElectron.net.isOnline.mockReturnValue(true);
 		await vi.advanceTimersByTimeAsync(60_000);
 		expect(getSessionRequests).toHaveBeenCalledTimes(1);
-		quitApp();
 	});
 });
 
@@ -2955,13 +2957,19 @@ describe("main-process session polling with refetchWhenOffline", () => {
 		{ sessionOptions: { refetchInterval: 60, refetchWhenOffline: true } },
 	);
 
+	// Stop poll timers even when an assertion fails, so they don't leak into later tests.
+	afterEach(() => {
+		for (const [event, listener] of mockElectron.app.on.mock.calls) {
+			if (event === "will-quit") (listener as () => void)();
+		}
+	});
+
 	it("fetches and polls while offline", async ({ setProcessType }) => {
 		setProcessType("browser");
 		mockElectron.net.isOnline.mockReturnValue(false);
 
 		client.setupMain({ bridges: true });
-		await vi.advanceTimersByTimeAsync(0);
-		expect(getSessionRequests).toHaveBeenCalledTimes(1);
+		await vi.waitFor(() => expect(getSessionRequests).toHaveBeenCalledTimes(1));
 
 		client.$store.atoms.session!.set({
 			...client.$store.atoms.session!.get(),
