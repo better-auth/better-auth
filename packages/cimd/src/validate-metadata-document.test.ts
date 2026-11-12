@@ -848,7 +848,7 @@ describe("validateCimdMetadata", () => {
 		);
 		// post_logout_redirect_uris and client_uri are NOT in the custom
 		// originBoundFields, so origin mismatch is not checked.
-		// However, they still get SSRF validation.
+		// client_uri still receives SSRF validation.
 		expect(result.valid).toBe(true);
 	});
 
