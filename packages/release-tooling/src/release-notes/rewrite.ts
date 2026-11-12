@@ -153,6 +153,17 @@ function validationFeedback(
 	}
 }
 
+function normalizedRewrite(
+	context: ReleaseRewriteContext,
+	rewrite: GeneratedReleaseRewrites[number],
+): GeneratedReleaseRewrites[number] {
+	const entry = context[rewrite.id];
+	if (!entry)
+		throw new Error(`Release rewrite context ${rewrite.id} is missing`);
+	const { title, migration } = validateGeneratedReleaseRewrite(rewrite, entry);
+	return { id: rewrite.id, title, migration: migration ?? null };
+}
+
 function fallbackReason(
 	reviewFeedback: string | null,
 	copyFeedback: string | null,
@@ -217,7 +228,7 @@ export async function rewriteReleaseNotes(
 			if (!rewrite) throw new Error(`AI rewrite ${review.id} is missing`);
 			const copyFeedback = validationFeedback(batch, rewrite);
 			if (review.approved && !review.feedback && !copyFeedback) {
-				acceptedRewrites.set(review.id, rewrite);
+				acceptedRewrites.set(review.id, normalizedRewrite(batch, rewrite));
 				fallbackReasons.delete(review.id);
 			} else {
 				const feedback = review.feedback ?? copyFeedback;
@@ -277,7 +288,10 @@ export async function rewriteReleaseNotes(
 				if (!rewrite) throw new Error(`AI repair ${review.id} is missing`);
 				const copyFeedback = validationFeedback(repairContext, rewrite);
 				if (review.approved && !review.feedback && !copyFeedback) {
-					acceptedRewrites.set(review.id, rewrite);
+					acceptedRewrites.set(
+						review.id,
+						normalizedRewrite(repairContext, rewrite),
+					);
 					fallbackReasons.delete(review.id);
 				} else {
 					fallbackReasons.set(

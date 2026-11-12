@@ -25,16 +25,11 @@ const maxReportedIssues = 10;
 
 interface ValidationIssue {
 	path?: ReadonlyArray<PropertyKey | { key: PropertyKey }>;
-	message: string;
+	code?: unknown;
 }
 
 function isValidationIssue(value: unknown): value is ValidationIssue {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		"message" in value &&
-		typeof value.message === "string"
-	);
+	return typeof value === "object" && value !== null;
 }
 
 function validationIssues(cause: unknown): ValidationIssue[] {
@@ -47,8 +42,9 @@ function validationIssues(cause: unknown): ValidationIssue[] {
 	return Array.isArray(issues) ? issues.filter(isValidationIssue) : [];
 }
 
-// Report where the output failed without the output itself: error messages
-// from the AI SDK embed the generated text, which repeats release content.
+// Report where the output failed without the output itself. AI SDK error
+// messages embed the generated text, and issue messages can name keys the
+// model invented, so only paths and fixed issue codes are logged.
 function describeValidationFailure(cause: unknown): string {
 	const issues = validationIssues(cause);
 	if (issues.length === 0) {
@@ -62,7 +58,11 @@ function describeValidationFailure(cause: unknown): string {
 				String(typeof segment === "object" ? segment.key : segment),
 			)
 			.join(".");
-		return `${path || "(root)"}: ${issue.message}`;
+		const code =
+			typeof issue.code === "string" && /^[a-z_]+$/.test(issue.code)
+				? issue.code
+				: "invalid";
+		return `${path || "(root)"}: ${code}`;
 	});
 	const omitted = issues.length - described.length;
 	if (omitted > 0) described.push(`${omitted} more`);
