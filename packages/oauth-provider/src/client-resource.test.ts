@@ -1,3 +1,4 @@
+import { DPOP_SIGNING_ALGORITHMS } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import type { Auth, BetterAuthOptions } from "better-auth/types";
@@ -89,7 +90,11 @@ describe("resource client defaults with an origin-only baseURL", async () => {
 			new Headers((error as { headers: HeadersInit }).headers).get(
 				"WWW-Authenticate",
 			),
-		).toMatch(/^DPoP error="invalid_token", error_description="[^"]+", algs="/);
+		).toMatch(
+			new RegExp(
+				`^DPoP error="invalid_token", error_description="[^"]+", algs="${DPOP_SIGNING_ALGORITHMS.join(" ")}"$`,
+			),
+		);
 	});
 
 	it("advertises the resolved issuer as the authorization server", async () => {

@@ -476,12 +476,12 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				joins?: boolean;
 				/**
-				 * Validate the schema during initialization and report problems
-				 * through the configured logger. Authentication requests await
-				 * the same check and fail when the schema does not match.
-				 * Kysely introspects the database; Drizzle and Prisma inspect
-				 * local schema metadata without opening a connection.
-				 * Set `false` to disable runtime schema validation.
+				 * Validate the schema when the auth instance is first used.
+				 * Requests and server API calls await the check and fail when the
+				 * schema does not match. Kysely introspects the database; Drizzle
+				 * and Prisma inspect local schema metadata without opening a
+				 * connection. Other adapters are not validated and log a skip
+				 * message instead. Set `false` to disable runtime schema validation.
 				 *
 				 * @default true
 				 */
