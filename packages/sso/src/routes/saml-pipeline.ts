@@ -21,7 +21,6 @@ import {
 	SSO_PROVIDER_STATE_KEY,
 } from "../provider-reference";
 import {
-	getSAMLNameIDFormat,
 	getSAMLPostAssertionConsumerServiceUrls,
 	hasSAMLEncryptedAssertion,
 	readSAMLEmail,
@@ -443,6 +442,7 @@ export async function processSAMLResponse(
 	const serviceProviderPolicy =
 		deriveSAMLServiceProviderPolicy(parsedSamlConfig);
 	let samlBindingContent: string;
+	let boundAssertion: ReturnType<typeof validateSAMLResponseBinding>;
 	try {
 		samlBindingContent = await getSAMLResponseBindingContent(sp, samlContent);
 		if (serviceProviderPolicy.wantAssertionsSigned) {
@@ -451,7 +451,7 @@ export async function processSAMLResponse(
 				signatureAlgorithm: idp.entitySetting.requestSignatureAlgorithm,
 			});
 		}
-		validateSAMLResponseBinding(samlBindingContent, {
+		boundAssertion = validateSAMLResponseBinding(samlBindingContent, {
 			expectedAudiences,
 			expectedRecipients,
 		});
@@ -608,7 +608,7 @@ export async function processSAMLResponse(
 		}
 	}
 	const mapping = parsedSamlConfig.mapping ?? {};
-	const nameIDFormat = getSAMLNameIDFormat(samlBindingContent);
+	const { nameIDFormat } = boundAssertion;
 
 	// samlify >= 2.13 types attribute values as `string | string[]` to support
 	// multi-valued attributes. The identity fields below are single-valued.

@@ -325,14 +325,6 @@ export function readSAMLEmail(
 	);
 }
 
-/** Returns the `Format` of the assertion's Subject NameID, when it sets one. */
-export function getSAMLNameIDFormat(samlContent: string): string | undefined {
-	const parsed = parseSAMLContent(samlContent);
-	const assertion = getAssertionNode(parsed, getResponseNode(parsed));
-	const format = firstNode(firstNode(assertion.Subject)?.NameID)?.["@_Format"];
-	return typeof format === "string" ? format : undefined;
-}
-
 function getBearerSubjectConfirmationData(assertion: XmlNode): XmlNode[] {
 	const subject = firstNode(assertion.Subject);
 	const confirmations = toNodeArray(subject?.SubjectConfirmation);
@@ -395,10 +387,15 @@ function validateResponseDestination(
 	}
 }
 
+/**
+ * Validates that the assertion is bound to this Service Provider, then returns
+ * the NameID format so user attribute extraction need not parse the response
+ * again.
+ */
 export function validateSAMLResponseBinding(
 	samlContent: string,
 	options: SAMLResponseBindingValidationOptions,
-): void {
+): { nameIDFormat?: string } {
 	const expectedAudiences = toStringSet(options.expectedAudiences);
 	const expectedRecipients = toStringSet(options.expectedRecipients);
 	const parsed = parseSAMLContent(samlContent);
@@ -408,4 +405,14 @@ export function validateSAMLResponseBinding(
 	validateAudienceRestrictions(assertion, expectedAudiences);
 	validateBearerRecipient(assertion, expectedRecipients);
 	validateResponseDestination(response, expectedRecipients);
+
+	const nameIDFormat = firstNode(firstNode(assertion.Subject)?.NameID)?.[
+		"@_Format"
+	];
+	return {
+		nameIDFormat:
+			typeof nameIDFormat === "string" && nameIDFormat
+				? nameIDFormat
+				: undefined,
+	};
 }
