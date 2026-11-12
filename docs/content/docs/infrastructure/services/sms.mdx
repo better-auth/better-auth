@@ -9,55 +9,83 @@ description: Better Auth Infrastructure provides a managed SMS service for sendi
 
 The SMS service offers:
 
-* Pre-built SMS templates for common auth flows
-* E.164 phone number format support
-* Type-safe template variables
-* No infrastructure to manage
-* Global delivery support
+* Pre-built templates for phone verification, two-factor, and sign-in OTP
+* E.164 phone numbers
+* Managed delivery
 
 <Callout type="warn">
-  Note that SMS delivery is intended to only be used for authentication flows.
+  Call `sendSMS` and `createSMSSender` from server code only. They authenticate with your Infrastructure API key. SMS delivery is intended only for authentication flows.
 </Callout>
 
 ## Installation
 
-The SMS service is included in the `@better-auth/infra` package:
+The SMS service is included in `@better-auth/infra`. Install the package and set `BETTER_AUTH_API_KEY` as described in [Getting Started](/docs/infrastructure/getting-started).
 
 ```ts
-import { sendSMS, createSMSSender } from "@better-auth/infra";
+import { sendSMS } from "@better-auth/infra";
 ```
 
 ## Quick Start
 
-### Send a Single SMS
-
 ```ts
 import { sendSMS } from "@better-auth/infra";
 
-await sendSMS({
+const result = await sendSMS({
   to: "+1234567890",
   code: "123456",
   template: "phone-verification",
 });
+
+if (!result.success) {
+  console.error("Failed to send SMS:", result.error);
+}
 ```
 
-### Create a Reusable Sender
+These helpers return a result instead of throwing when delivery fails. Check `result.success` when the caller needs to know whether the message was sent.
+
+To reuse credentials across calls:
 
 ```ts
 import { createSMSSender } from "@better-auth/infra";
 
 const smsSender = createSMSSender({
   apiKey: process.env.BETTER_AUTH_API_KEY,
-  apiUrl: process.env.BETTER_AUTH_API_URL,
 });
 
-// Send multiple SMS messages
 await smsSender.send({
   to: "+1234567890",
   code: "123456",
   template: "two-factor",
 });
 ```
+
+## Use with Better Auth
+
+`dash()` does not send SMS for you. Pass `sendSMS` into the plugin callback that already receives the OTP, such as [`phoneNumber.sendOTP`](/docs/plugins/phone-number):
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { phoneNumber } from "better-auth/plugins";
+import { sendSMS } from "@better-auth/infra";
+
+export const auth = betterAuth({
+  plugins: [
+    phoneNumber({
+      sendOTP: ({ phoneNumber, code }) => {
+        void sendSMS({
+          to: phoneNumber,
+          code,
+          template: "phone-verification",
+        });
+      },
+    }),
+  ],
+});
+```
+
+<Callout type="warn">
+  Avoid awaiting `sendOTP` work to prevent timing attacks. On serverless platforms, use a [`backgroundTasks` handler](/docs/reference/options#backgroundtasks) such as `waitUntil` so the send still finishes after the response.
+</Callout>
 
 ## Available Templates
 
@@ -148,29 +176,18 @@ Phone numbers must be in E.164 format:
 
 ## Configuration
 
-### SMSConfig
+| Option       | Type     | Description                                                                                                  |
+| ------------ | -------- | ------------------------------------------------------------------------------------------------------------ |
+| `apiKey`     | `string` | Your API key. Falls back to `BETTER_AUTH_API_KEY`.                                                           |
+| `apiUrl`     | `string` | Better Auth Infrastructure API URL. Default: `https://dash.better-auth.com`                                  |
+| `apiOptions` | `object` | HTTP client options. Accepts `timeout?: number` (ms, default `3000`) and `headers?: Record<string, string>`. |
+| `apiTimeout` | `number` | Deprecated alias for `apiOptions.timeout`.                                                                   |
 
-```ts
-interface SMSConfig {
-  apiKey?: string;   // Your Better Auth Infrastructure API key
-  apiUrl?: string;   // Custom API URL (optional)
-}
-```
-
-### Environment Variables
-
-The SMS service automatically reads from environment variables:
-
-```dotenv
-BETTER_AUTH_API_KEY=your_api_key_here
-BETTER_AUTH_API_URL=https://api.betterauth.com  # Optional
-```
+Pass this object to `createSMSSender`, or as the second argument to `sendSMS`. If you omit `apiKey` or `apiUrl`, the client reads `BETTER_AUTH_API_KEY` and `BETTER_AUTH_API_URL`.
 
 ## API Reference
 
 ### sendSMS
-
-Send a single SMS message.
 
 ```ts
 async function sendSMS(
@@ -179,114 +196,32 @@ async function sendSMS(
 ): Promise<SendSMSResult>
 ```
 
-### SendSMSOptions
-
-| Property   | Type            | Required | Description                           |
-| ---------- | --------------- | -------- | ------------------------------------- |
-| `to`       | `string`        | Yes      | Phone number in E.164 format          |
-| `code`     | `string`        | Yes      | The OTP code to send                  |
-| `template` | `SMSTemplateId` | No       | Template to use (defaults to generic) |
+| Property   | Type            | Required | Description                                                                                                                                                         |
+| ---------- | --------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `to`       | `string`        | Yes      | Phone number in E.164 format                                                                                                                                        |
+| `code`     | `string`        | Yes      | The OTP code to send                                                                                                                                                |
+| `template` | `SMSTemplateId` | No       | `phone-verification`, `two-factor`, or `sign-in-otp`. Omit for a generic verification message.                                                                      |
+| `clientIp` | `string`        | No       | End-user IP for abuse limits. Omit in Better Auth callbacks. If you send outside a request, pass only an IP your server determined — never a client-supplied value. |
 
 ### createSMSSender
 
-Create a reusable SMS sender instance.
-
 ```ts
-const sender = createSMSSender(config?: SMSConfig);
+const smsSender = createSMSSender(config?: SMSConfig);
 
-// Use the sender
-await sender.send(options: SendSMSOptions);
+await smsSender.send(options);
 ```
 
-## Response Format
-
-### SendSMSResult
+### Results
 
 ```ts
 interface SendSMSResult {
   success: boolean;
-  messageId?: string;  // SMS provider message ID
-  error?: string;      // Error message if failed
+  messageId?: string;
+  error?: string;
 }
 ```
 
-### Example Usage
-
-```ts
-const result = await sendSMS({
-  to: "+1234567890",
-  code: "123456",
-  template: "phone-verification",
-});
-
-if (result.success) {
-  console.log("SMS sent:", result.messageId);
-} else {
-  console.error("Failed to send SMS:", result.error);
-}
-```
-
-## Error Handling
-
-Common error scenarios:
-
-```ts
-const result = await sendSMS({
-  to: "+1234567890",
-  code: "123456",
-});
-
-if (!result.success) {
-  switch (result.error) {
-    case "API key not configured":
-      // Missing BETTER_AUTH_API_KEY
-      break;
-    case "Invalid phone number":
-      // Phone number not in E.164 format
-      break;
-    default:
-      // Other delivery error
-      console.error("SMS error:", result.error);
-  }
-}
-```
-
-## Integration with Better Auth
-
-When using the `dash()` or `sentinel()` plugins with Better Auth's phone authentication, SMS messages are automatically sent for:
-
-* Phone number verification
-* Phone-based two-factor authentication
-* Phone OTP sign-in
-
-You don't need to call `sendSMS()` manually for these flows - the plugins handle it automatically.
-
-### Better Auth Phone Plugin Integration
-
-```ts
-import { betterAuth } from "better-auth";
-import { phoneNumber } from "better-auth/plugins";
-import { dash } from "@better-auth/infra";
-
-export const auth = betterAuth({
-  plugins: [
-    phoneNumber({
-      sendOTP: async ({ phoneNumber, code }) => {
-        // This is handled automatically when dash() is configured
-        // But you can customize if needed:
-        await sendSMS({
-          to: phoneNumber,
-          code,
-          template: "phone-verification",
-        });
-      },
-    }),
-    dash({
-      apiKey: process.env.BETTER_AUTH_API_KEY,
-    }),
-  ],
-});
-```
+Treat `error` as an opaque string.
 
 ## Plan Requirements
 
