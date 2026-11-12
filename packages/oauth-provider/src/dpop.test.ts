@@ -82,7 +82,10 @@ const dpopCompanion = {
 			"/test/dpop-bind",
 			{
 				method: "POST",
-				body: z.object({ required: z.boolean().optional() }),
+				body: z.object({
+					required: z.boolean().optional(),
+					expectedJkt: z.string().optional(),
+				}),
 			},
 			async (ctx) => {
 				const provider = getOAuthProviderApi(
@@ -91,6 +94,7 @@ const dpopCompanion = {
 				);
 				const proof = await provider.verifyDpopProof({
 					required: ctx.body.required,
+					expectedJkt: ctx.body.expectedJkt,
 				});
 				return ctx.json({ jkt: proof?.jkt ?? null });
 			},
@@ -920,7 +924,10 @@ describe("DPoP nonces on a companion endpoint", async () => {
 		testWith: "sqlite",
 	});
 
-	function bind(dpopProof?: string, body: { required?: boolean } = {}) {
+	function bind(
+		dpopProof?: string,
+		body: { required?: boolean; expectedJkt?: string } = {},
+	) {
 		return customFetchImpl(pluginBindEndpoint, {
 			method: "POST",
 			headers: {
@@ -997,6 +1004,71 @@ describe("DPoP nonces on a companion endpoint", async () => {
 		expect(required.status).toBe(400);
 		expect(await required.json()).toMatchObject({
 			error: "invalid_dpop_proof",
+		});
+	});
+
+	describe("with expectedJkt", () => {
+		it("accepts a proof signed with the expected key", async () => {
+			const key = await createDpopKey();
+			const nonce = await createDpopNonce({ secret: context.secret });
+			const bound = await bind(await bindProof(key, nonce), {
+				expectedJkt: key.jkt,
+			});
+			expect(bound.status).toBe(200);
+			expect(await bound.json()).toEqual({ jkt: key.jkt });
+		});
+
+		it("requires a proof even when required is not set", async () => {
+			const key = await createDpopKey();
+			const response = await bind(undefined, { expectedJkt: key.jkt });
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				error: "invalid_dpop_proof",
+				error_description: "DPoP proof header is required",
+			});
+		});
+
+		it("rejects a proof signed with another key without consuming it", async () => {
+			const expected = await createDpopKey();
+			const other = await createDpopKey();
+			const nonce = await createDpopNonce({ secret: context.secret });
+			const proof = await bindProof(other, nonce);
+			const rejected = await bind(proof, { expectedJkt: expected.jkt });
+			expect(rejected.status).toBe(400);
+			expect(await rejected.json()).toMatchObject({
+				error: "invalid_dpop_proof",
+			});
+			// The key is checked before the jti is stored, so the proof is still
+			// unused.
+			const accepted = await bind(proof);
+			expect(accepted.status).toBe(200);
+			expect(await accepted.json()).toEqual({ jkt: other.jkt });
+		});
+
+		it("rejects another key before asking for a nonce", async () => {
+			const expected = await createDpopKey();
+			const other = await createDpopKey();
+			const response = await bind(await bindProof(other), {
+				expectedJkt: expected.jkt,
+			});
+			expect(response.status).toBe(400);
+			expect(await response.json()).toMatchObject({
+				error: "invalid_dpop_proof",
+			});
+		});
+
+		it("challenges the expected key for a nonce and accepts the retry", async () => {
+			const key = await createDpopKey();
+			const challenge = await bind(await bindProof(key), {
+				expectedJkt: key.jkt,
+			});
+			expect(challenge.status).toBe(400);
+			expect(await challenge.json()).toMatchObject({ error: "use_dpop_nonce" });
+			const nonce = challenge.headers.get("DPoP-Nonce");
+			const bound = await bind(await bindProof(key, nonce), {
+				expectedJkt: key.jkt,
+			});
+			expect(bound.status).toBe(200);
 		});
 	});
 
@@ -1265,6 +1337,16 @@ describe("OAuthProviderApi DPoP types", () => {
 			Promise<VerifiedDpopProof | undefined>
 		>();
 		expectTypeOf(verify({ required: false })).toEqualTypeOf<
+			Promise<VerifiedDpopProof | undefined>
+		>();
+		expectTypeOf(verify({ expectedJkt: "jkt" })).toEqualTypeOf<
+			Promise<VerifiedDpopProof>
+		>();
+		expectTypeOf(verify({ required: true, expectedJkt: "jkt" })).toEqualTypeOf<
+			Promise<VerifiedDpopProof>
+		>();
+		const storedJkt = undefined as string | undefined;
+		expectTypeOf(verify({ expectedJkt: storedJkt })).toEqualTypeOf<
 			Promise<VerifiedDpopProof | undefined>
 		>();
 		expectTypeOf<OAuthProviderApi["issueDpopNonce"]>().toEqualTypeOf<

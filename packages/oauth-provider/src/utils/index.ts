@@ -1040,14 +1040,50 @@ export function destructureCredentials(
 /**
  * Extracts and resolves client credentials from the request.
  * Supports: client_secret_basic, client_secret_post, private_key_jwt, and none (public).
+ *
+ * With `expectedClientId`, a request that names no client is read as naming
+ * that one, and a request that names another client fails with
+ * `invalid_client`.
  */
 export async function extractClientCredentials(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	expectedAudience?: string,
+	expectedClientId?: string,
 ): Promise<ExtractedCredentials | null> {
 	const body = { ...((ctx.body ?? {}) as Record<string, unknown>) };
 	await normalizeClientAuthenticationParameters(ctx.request, body);
+	if (expectedClientId === undefined) {
+		return readClientCredentials(ctx, opts, body, expectedAudience);
+	}
+	const requestedClientId = body.client_id;
+	body.client_id ??= expectedClientId;
+	const credentials = await readClientCredentials(
+		ctx,
+		opts,
+		body,
+		expectedAudience,
+	);
+	// Basic credentials name their client apart from `client_id`, and an
+	// extension strategy returns the client its assertion proved.
+	if (
+		(requestedClientId !== undefined &&
+			requestedClientId !== expectedClientId) ||
+		credentials?.clientId !== expectedClientId
+	) {
+		throwInvalidClient("client_id does not match the expected client", {
+			method: credentials?.method,
+		});
+	}
+	return credentials;
+}
+
+async function readClientCredentials(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	body: Record<string, unknown>,
+	expectedAudience?: string,
+): Promise<ExtractedCredentials | null> {
 	const authorization = ctx.request?.headers.get("authorization") ?? undefined;
 
 	// 1. Check for assertion-based client authentication.

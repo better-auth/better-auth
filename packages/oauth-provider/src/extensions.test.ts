@@ -1,4 +1,4 @@
-import { APIError } from "better-auth/api";
+import { APIError, createAuthEndpoint } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { CLIENT_ASSERTION_TYPE } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
@@ -2005,3 +2005,225 @@ describe.each(["postgres", "mysql"] as const)(
 		});
 	},
 );
+
+/**
+ * A follow-up request may omit `client_id` when state the endpoint stored
+ * already names its client, and must not name another client.
+ *
+ * @see https://datatracker.ietf.org/doc/html/draft-ietf-oauth-first-party-apps-04#section-5.1
+ */
+describe("authenticateClient with an expected client", async () => {
+	const baseURL = "http://localhost:3000";
+	const redirectUri = "https://client.example.com/callback";
+	const assertionMethod = "test_follow_up_jwt";
+	const assertionType = "urn:better-auth:test:client-assertion-type:follow-up";
+	// Stands in for the server-side state a follow-up request refers to, such
+	// as a session handle the endpoint issued on the first request.
+	const handles = new Map<string, string>();
+	const followUpPlugin = {
+		id: "test-follow-up",
+		init(ctx) {
+			extendOAuthProvider(ctx, {
+				clientAuthentication: {
+					[assertionMethod]: {
+						assertionTypes: [assertionType],
+						// Proves the client the assertion names, whatever the request
+						// expects.
+						authenticate: ({ assertion }) => ({
+							clientId: assertion.slice("assertion:".length),
+						}),
+					},
+				},
+			});
+		},
+		endpoints: {
+			testFollowUp: createAuthEndpoint(
+				"/test/follow-up",
+				{
+					method: "POST",
+					cloneRequest: true,
+					metadata: {
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
+					},
+				},
+				async (ctx) => {
+					const { handle } = ctx.body as { handle?: string };
+					const provider = getOAuthProviderApi(
+						ctx,
+						ctx.context.getPlugin("oauth-provider")!.options,
+						"authorization_code",
+					);
+					const { clientId, method } = await provider.authenticateClient({
+						clientId: handle ? handles.get(handle) : undefined,
+						requireCredentials: false,
+					});
+					return ctx.json({ client_id: clientId, method });
+				},
+			),
+		},
+	} satisfies BetterAuthPlugin;
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
+			followUpPlugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const createClient = (
+		tokenEndpointAuthMethod:
+			| "none"
+			| "client_secret_post"
+			| "client_secret_basic"
+			| typeof assertionMethod,
+	) =>
+		auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: tokenEndpointAuthMethod,
+				grant_types: ["authorization_code"],
+				redirect_uris: [redirectUri],
+			},
+		});
+	const [publicClient, otherPublicClient, postClient, basicClient] =
+		await Promise.all([
+			createClient("none"),
+			createClient("none"),
+			createClient("client_secret_post"),
+			createClient("client_secret_basic"),
+		]);
+	const [assertionClient, otherAssertionClient] = await Promise.all([
+		createClient(assertionMethod),
+		createClient(assertionMethod),
+	]);
+	handles.set("public", publicClient.client_id);
+	handles.set("post", postClient.client_id);
+	handles.set("basic", basicClient.client_id);
+	handles.set("assertion", assertionClient.client_id);
+
+	const followUp = (
+		params: Record<string, string>,
+		requestHeaders: Record<string, string> = {},
+	) =>
+		customFetchImpl(`${baseURL}/api/auth/test/follow-up`, {
+			method: "POST",
+			headers: {
+				"content-type": "application/x-www-form-urlencoded",
+				...requestHeaders,
+			},
+			body: new URLSearchParams(params).toString(),
+		});
+	const basic = (clientId: string, clientSecret: string) => ({
+		authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+	});
+
+	it("authenticates a request without client_id as the expected client", async () => {
+		const response = await followUp({ handle: "public" });
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			client_id: publicClient.client_id,
+			method: "none",
+		});
+	});
+
+	it("accepts a client_id that names the expected client", async () => {
+		const response = await followUp({
+			handle: "public",
+			client_id: publicClient.client_id,
+		});
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			client_id: publicClient.client_id,
+			method: "none",
+		});
+	});
+
+	it("rejects a client_id for another client", async () => {
+		const response = await followUp({
+			handle: "public",
+			client_id: otherPublicClient.client_id,
+		});
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "invalid_client",
+			error_description: "client_id does not match the expected client",
+		});
+	});
+
+	it("requires the expected client's registered authentication", async () => {
+		const missing = await followUp({ handle: "post" });
+		expect(missing.status).toBe(400);
+		expect(await missing.json()).toMatchObject({ error: "invalid_client" });
+
+		const authenticated = await followUp({
+			handle: "post",
+			client_secret: postClient.client_secret!,
+		});
+		expect(authenticated.status).toBe(200);
+		expect(await authenticated.json()).toEqual({
+			client_id: postClient.client_id,
+			method: "client_secret_post",
+		});
+	});
+
+	it("rejects Basic credentials or a client_id that name another client", async () => {
+		const otherCredentials = await followUp(
+			{ handle: "public" },
+			basic(basicClient.client_id, basicClient.client_secret!),
+		);
+		expect(otherCredentials.status).toBe(401);
+		expect(otherCredentials.headers.get("WWW-Authenticate")).toBe("Basic");
+		expect(await otherCredentials.json()).toMatchObject({
+			error: "invalid_client",
+		});
+
+		// Basic credentials name the client apart from client_id, so a matching
+		// header does not excuse a client_id for another client.
+		const otherClientId = await followUp(
+			{ handle: "basic", client_id: publicClient.client_id },
+			basic(basicClient.client_id, basicClient.client_secret!),
+		);
+		expect(otherClientId.status).toBe(401);
+		expect(await otherClientId.json()).toMatchObject({
+			error: "invalid_client",
+		});
+
+		const authenticated = await followUp(
+			{ handle: "basic" },
+			basic(basicClient.client_id, basicClient.client_secret!),
+		);
+		expect(authenticated.status).toBe(200);
+		expect(await authenticated.json()).toEqual({
+			client_id: basicClient.client_id,
+			method: "client_secret_basic",
+		});
+	});
+
+	it("rejects a client assertion for another client", async () => {
+		const assertion = (clientId: string) => ({
+			handle: "assertion",
+			client_assertion_type: assertionType,
+			client_assertion: `assertion:${clientId}`,
+		});
+		const authenticated = await followUp(assertion(assertionClient.client_id));
+		expect(authenticated.status).toBe(200);
+		expect(await authenticated.json()).toEqual({
+			client_id: assertionClient.client_id,
+			method: assertionMethod,
+		});
+
+		const other = await followUp(assertion(otherAssertionClient.client_id));
+		expect(other.status).toBe(400);
+		expect(await other.json()).toMatchObject({ error: "invalid_client" });
+	});
+
+	it("requires client_id when no client is expected", async () => {
+		const response = await followUp({});
+		expect(response.status).toBe(400);
+		expect(await response.json()).toEqual({
+			error: "invalid_request",
+			error_description: "Missing required client_id",
+		});
+	});
+});

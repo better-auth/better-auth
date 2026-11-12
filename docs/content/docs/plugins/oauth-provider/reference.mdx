@@ -617,6 +617,22 @@ A grant handler receives `provider` (`getClient`, `authenticateClient`, `issueAu
 
 When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to check that client credentials are not repeated or combined across authentication methods. The endpoint must therefore keep a readable request after parsing the form.
 
+Some companion endpoints take several requests to finish, such as a sign-in that returns a session handle the client sends back on its next request. The handle already names the client, so the later requests can leave out `client_id`. Pass the client your endpoint stored with the handle as `clientId`:
+
+```ts
+const { client } = await provider.authenticateClient({
+  clientId: pending.clientId,
+  requireCredentials: false,
+});
+```
+
+* A request that names no client is authenticated as `clientId`, by the rules of that client's registered authentication method. A confidential client must still send its credentials, even with `requireCredentials: false`.
+* A `client_id`, Basic credentials, or a client assertion for another client fails with `invalid_client`.
+
+Without `clientId`, a request that names no client fails with `invalid_request`.
+
+A public client sends no credentials, so for a public client the handle is the only thing that ties a request to the flow. Anyone who holds the handle can continue the flow as that client. To prevent this, bind the handle to the client's DPoP key with [`expectedJkt`](/docs/plugins/oauth-provider/tokens#bind-later-requests-to-a-dpop-key).
+
 To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the sender constraint it proved as `confirmation`, such as a DPoP key thumbprint (`jkt`) or a certificate thumbprint (`x5t#S256`):
 
 * The built-in `client_credentials` grant binds its token to that confirmation.

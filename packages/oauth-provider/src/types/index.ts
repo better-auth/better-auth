@@ -221,6 +221,17 @@ export interface OAuthClientAuthenticationRequest {
 	 * @default true
 	 */
 	requireCredentials?: boolean;
+	/**
+	 * The client the request belongs to, for an endpoint whose follow-up
+	 * requests may omit `client_id` because state the endpoint stored, such as
+	 * a session handle it issued, already names the client. A request that
+	 * names no client is authenticated as this one, under the rules of its
+	 * registered authentication method. A `client_id`, Basic credentials, or
+	 * client assertion for another client fails with `invalid_client`.
+	 *
+	 * Without it, a request that names no client fails with `invalid_request`.
+	 */
+	clientId?: string;
 }
 
 export interface OAuthTokenIssueParams {
@@ -495,7 +506,7 @@ export interface OAuthProviderApi {
 	 * endpoint: signing algorithms, proof age, `jti` replay protection, and the
 	 * `htm` and `htu` of this request. Returns the verified proof, whose `jkt`
 	 * is the key thumbprint to bind, or `undefined` when the request has no
-	 * `DPoP` header and `required` is not `true`.
+	 * `DPoP` header and neither `required: true` nor `expectedJkt` is set.
 	 *
 	 * When `dpop.nonce.required` is on, a proof without a current nonce fails
 	 * with `use_dpop_nonce` and a fresh `DPoP-Nonce` header (RFC 9449 §8), and a
@@ -511,7 +522,14 @@ export interface OAuthProviderApi {
 	 * `jti` as replayed.
 	 */
 	verifyDpopProof: {
-		(params: { required: true }): Promise<VerifiedDpopProof>;
+		(params: {
+			required: true;
+			expectedJkt?: string;
+		}): Promise<VerifiedDpopProof>;
+		(params: {
+			required?: boolean;
+			expectedJkt: string;
+		}): Promise<VerifiedDpopProof>;
 		(params?: {
 			/**
 			 * Reject a request without a `DPoP` header with `invalid_dpop_proof`.
@@ -519,6 +537,14 @@ export interface OAuthProviderApi {
 			 * @default false
 			 */
 			required?: boolean;
+			/**
+			 * The DPoP key thumbprint (RFC 7638) an earlier request proved, such
+			 * as the `jkt` stored when the client started a multi-step flow. The
+			 * request must then carry a proof signed with this key, even without
+			 * `required`. A missing proof, or one signed with another key, fails
+			 * with `invalid_dpop_proof`.
+			 */
+			expectedJkt?: string;
 		}): Promise<VerifiedDpopProof | undefined>;
 	};
 	/**
