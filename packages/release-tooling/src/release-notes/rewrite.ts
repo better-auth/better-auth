@@ -146,7 +146,10 @@ function validationFeedback(
 		validateGeneratedReleaseRewrite(rewrite, entry);
 		return null;
 	} catch (error) {
-		return error instanceof Error ? error.message : String(error);
+		const message = error instanceof Error ? error.message : String(error);
+		// Messages name only the entry ID and the broken rule, never the copy.
+		console.warn(message);
+		return message;
 	}
 }
 
