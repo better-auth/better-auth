@@ -255,14 +255,26 @@ describe("verifyDpopProof", () => {
 		expect(payload.cnf).toMatchObject({ jkt });
 	});
 
-	it("rejects an access token presented without the Bearer or DPoP scheme", async () => {
-		await expect(
-			verifyAccessTokenRequest(
-				{ authorizationHeader: "raw-token-without-scheme", method, url },
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	it.each([
+		["no scheme", "raw-token-without-scheme"],
+		["an unsupported scheme", "Basic dXNlcjpwYXNz"],
+	])(
+		"rejects a token with %s without an error code",
+		async (_, authorizationHeader) => {
+			const error = await verifyAccessTokenRequest(
+				{ authorizationHeader, method, url },
 				remoteVerifyOptions(),
-			),
-		).rejects.toThrow("authorization scheme must be Bearer or DPoP");
-	});
+			).catch((e: unknown) => e);
+			expect(error).toMatchObject({
+				status: "UNAUTHORIZED",
+				body: { message: "authorization scheme must be Bearer or DPoP" },
+			});
+			expect(error).not.toHaveProperty("body.error");
+		},
+	);
 });
 
 describe("enforceDpopBinding", () => {

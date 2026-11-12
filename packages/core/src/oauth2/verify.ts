@@ -747,12 +747,10 @@ export async function verifyAccessTokenRequest(
 	}
 	// RFC 6750 §2.1 / RFC 9449 §7.1: an access token is presented with the
 	// `Bearer` or `DPoP` scheme. Reject a scheme-less or unknown-scheme value
-	// rather than accept a bare token.
+	// rather than accept a bare token. RFC 6750 §3.1 counts an unsupported
+	// scheme as no credentials, so the error carries no error code.
 	if (authorization.scheme === "Unknown") {
-		throwDpopUnauthorized(
-			"authorization scheme must be Bearer or DPoP",
-			"invalid_token",
-		);
+		throwDpopUnauthorized("authorization scheme must be Bearer or DPoP");
 	}
 
 	const payload = await verifyAccessTokenPayload(authorization.token, opts);
