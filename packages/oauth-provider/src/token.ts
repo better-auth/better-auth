@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { APIError } from "better-auth/api";
 import {
 	generateRandomString,
@@ -18,6 +19,7 @@ import { resolveSigningKey, signJWT, toExpJWT } from "better-auth/plugins";
 import type { Session, User } from "better-auth/types";
 import type { JWTPayload } from "jose";
 import { base64url, decodeProtectedHeader, SignJWT } from "jose";
+import type * as z from "zod";
 import {
 	LEVEL_0_ACR,
 	stripReservedIdTokenClaims,
@@ -61,7 +63,10 @@ import type {
 	VerificationValue,
 } from "./types";
 import type { GrantType } from "./types/oauth";
-import { verificationValueSchema } from "./types/zod";
+import {
+	consumedAuthorizationCodeSchema,
+	verificationValueSchema,
+} from "./types/zod";
 import { pickClaims } from "./userinfo";
 import {
 	assertConfirmation,
@@ -683,6 +688,105 @@ async function revokeTokensIssuedForAuthorizationCode(
 	await deleteIssuedTokens("oauthAccessToken");
 }
 
+function consumedAuthorizationCodeIdentifier(authorizationCodeId: string) {
+	return `oauth_consumed_code:${authorizationCodeId}`;
+}
+
+/**
+ * Tokens derived from a code can outlive the code itself, so the record of a
+ * consumed code lasts as long as the longest token issued alongside it, and
+ * each refresh-token rotation extends it. Per-scope and per-resource lifetimes
+ * only shorten these defaults.
+ */
+function consumedAuthorizationCodeExpiresAt(opts: OAuthOptions<Scope[]>) {
+	const lifetimeSeconds = Math.max(
+		opts.accessTokenExpiresIn ?? 3600,
+		opts.refreshTokenExpiresIn ?? 2592000,
+	);
+	return new Date(Date.now() + lifetimeSeconds * 1000);
+}
+
+async function recordConsumedAuthorizationCode(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	authorizationCodeId: string,
+	query: Pick<
+		VerificationValue["query"],
+		"client_id" | "code_challenge" | "code_challenge_method"
+	>,
+) {
+	try {
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: consumedAuthorizationCodeIdentifier(authorizationCodeId),
+			value: JSON.stringify({
+				clientId: query.client_id,
+				codeChallenge: query.code_challenge,
+				codeChallengeMethod: query.code_challenge_method,
+			} satisfies z.infer<typeof consumedAuthorizationCodeSchema>),
+			expiresAt: consumedAuthorizationCodeExpiresAt(opts),
+		});
+	} catch (error) {
+		ctx.context.logger.error(
+			"failed to record consumed authorization code",
+			error,
+		);
+	}
+}
+
+async function extendConsumedAuthorizationCodeRecord(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	authorizationCodeId: string,
+) {
+	try {
+		await ctx.context.internalAdapter.updateVerificationByIdentifier(
+			consumedAuthorizationCodeIdentifier(authorizationCodeId),
+			{ expiresAt: consumedAuthorizationCodeExpiresAt(opts) },
+		);
+	} catch (error) {
+		ctx.context.logger.error(
+			"failed to extend consumed authorization code record",
+			error,
+		);
+	}
+}
+
+/**
+ * Whether a reused code comes from the client it was issued to. The client is
+ * already authenticated, so a code issued without PKCE needs only a matching
+ * `client_id`. A code issued with PKCE also needs the matching
+ * `code_verifier`, or anyone holding a leaked public-client code could revoke
+ * that client's tokens (OAuth 2.1 §7.5.3).
+ */
+async function isReuseByIssuingClient(
+	ctx: GenericEndpointContext,
+	authorizationCodeId: string,
+	clientId: string,
+	codeVerifier: string | undefined,
+) {
+	let record: { value: string; expiresAt: Date | string } | null;
+	try {
+		record = await ctx.context.internalAdapter.findVerificationValue(
+			consumedAuthorizationCodeIdentifier(authorizationCodeId),
+		);
+	} catch (error) {
+		ctx.context.logger.error(
+			"failed to read consumed authorization code",
+			error,
+		);
+		return false;
+	}
+	if (!record || new Date(record.expiresAt) < new Date()) return false;
+	const consumed = consumedAuthorizationCodeSchema.safeParse(
+		safeJSONParse(record.value),
+	);
+	if (!consumed.success || consumed.data.clientId !== clientId) return false;
+	const { codeChallenge, codeChallengeMethod } = consumed.data;
+	if (!codeChallenge) return true;
+	if (!codeVerifier || codeChallengeMethod !== "S256") return false;
+	return (await generateCodeChallenge(codeVerifier)) === codeChallenge;
+}
+
 async function createRefreshToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -793,6 +897,9 @@ async function createRefreshToken(
 		model: "oauthRefreshToken",
 		data: newRow,
 	});
+	if (authorizationCodeId) {
+		await extendConsumedAuthorizationCodeRecord(ctx, opts, authorizationCodeId);
+	}
 
 	return {
 		id: refreshToken.id,
@@ -1579,13 +1686,17 @@ async function createUserTokens(
 
 /**
  * Rejects an unknown, expired, or already-redeemed authorization code. A code
- * presented after redemption revokes the tokens it issued (RFC 6749 §4.1.2).
+ * reused by the client it was issued to revokes the tokens it issued
+ * (OAuth 2.1 §4.1.3); a reuse that fails that check revokes nothing (§7.5.3).
  */
 async function rejectAuthorizationCode(
 	ctx: GenericEndpointContext,
 	authorizationCodeId: string,
+	reuseByIssuingClient: boolean,
 ): Promise<never> {
-	await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+	if (reuseByIssuingClient) {
+		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+	}
 	throw new APIError("BAD_REQUEST", {
 		error_description: "invalid code",
 		error: "invalid_grant",
@@ -1604,6 +1715,7 @@ async function checkVerificationValue(
 	client_id: string,
 	redirect_uri?: string,
 	resource?: string[],
+	code_verifier?: string,
 ) {
 	const authorizationCodeId = await storeToken(
 		opts.storeTokens,
@@ -1619,7 +1731,16 @@ async function checkVerificationValue(
 		!verification ||
 		new Date(verification.expiresAt).getTime() < Date.now()
 	) {
-		return rejectAuthorizationCode(ctx, authorizationCodeId);
+		return rejectAuthorizationCode(
+			ctx,
+			authorizationCodeId,
+			await isReuseByIssuingClient(
+				ctx,
+				authorizationCodeId,
+				client_id,
+				code_verifier,
+			),
+		);
 	}
 
 	let rawValue: unknown;
@@ -1788,6 +1909,7 @@ async function handleAuthorizationCodeGrant(
 		client_id,
 		redirect_uri,
 		resources,
+		code_verifier,
 	);
 	const scopes = verificationValue.query.scope?.split(" ");
 	if (!scopes) {
@@ -1922,12 +2044,23 @@ async function handleAuthorizationCodeGrant(
 	// are rejected as a replay with `invalid_grant` (RFC 6749 §5.2). Lookup
 	// and consume each take the newest row for the identifier, so issue only
 	// when they are the same row.
+	// The reuse record must exist before the code is consumed, or a concurrent
+	// duplicate that loses the consume race could find neither and skip
+	// revocation.
+	await recordConsumedAuthorizationCode(
+		ctx,
+		opts,
+		authorizationCodeId,
+		verificationValue.query,
+	);
 	const consumed =
 		await ctx.context.internalAdapter.consumeVerificationValue(
 			authorizationCodeId,
 		);
 	if (!consumed || consumed.id !== verificationId) {
-		return rejectAuthorizationCode(ctx, authorizationCodeId);
+		// This request already passed the client and PKCE checks against this
+		// code, so it is a reuse by the issuing client.
+		return rejectAuthorizationCode(ctx, authorizationCodeId, true);
 	}
 	await dpop.recordReplay();
 

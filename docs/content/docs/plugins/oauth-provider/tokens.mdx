@@ -133,6 +133,17 @@ oauthProvider({
 })
 ```
 
+## Authorization code reuse
+
+An authorization code works once. A second token request with the same code is rejected. When that request comes from the client the code was issued to, the provider also revokes the tokens issued from the code ([OAuth 2.1 §7.5.3](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-7.5.3)):
+
+* The request must authenticate as that client.
+* If the code was issued with PKCE, the request must carry the matching `code_verifier`.
+
+A request that fails either check is rejected and the tokens stay valid. This includes a confidential client that sends its secret but leaves out the `code_verifier` for a code issued with PKCE. Someone who has the code but not the `code_verifier` therefore cannot revoke the client's tokens.
+
+The tokens issued from a code can outlive the code, so the provider remembers a redeemed code for as long as those tokens can still be valid. The record lasts for the longer of `accessTokenExpiresIn` and `refreshTokenExpiresIn` after redemption (30 days by default), and each refresh-token rotation extends it by the same amount. A reuse after the code expires still revokes the tokens while that record exists.
+
 ## Refresh tokens
 
 Each refresh issues a new refresh token and invalidates the old one, following [OAuth 2.1 §4.3.1](https://datatracker.ietf.org/doc/html/draft-ietf-oauth-v2-1#section-4.3.1). Reusing a rotated refresh token is treated as replay: every refresh token the user holds for that client is revoked, and the opaque access tokens they issued are deleted. JWT access tokens stay valid until they expire. After a replay, the refresh fails with `invalid_grant`, and the client must start a new authorization request to get tokens.
