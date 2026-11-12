@@ -9,7 +9,7 @@ import type {
 	OpaqueAccessTokenRecord,
 	RefreshTokenRecord,
 } from "./token-lookup";
-import { findToken } from "./token-lookup";
+import { findToken, jwtRevocationMarker } from "./token-lookup";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	destructureCredentials,
@@ -26,10 +26,12 @@ import {
  */
 
 /**
- * A JWT access token is self-contained and never stored, so there is nothing to
- * delete. Once the token is confirmed to be a valid JWT for this server, the
- * endpoint reports `unsupported_token_type` (RFC 7009 §2.2.1) instead of a
- * silent success, so callers can tell that no server-side revocation happened.
+ * A JWT access token is self-contained and never stored. With
+ * `revocableJwtAccessTokens`, revoking one stores its `jti` in the verification
+ * store until the token's `exp`, and token lookup then treats the token as
+ * inactive. Without it, or for a token without `jti` or `exp`, the endpoint
+ * reports `unsupported_token_type` (RFC 7009 §2.2.1) instead of a silent
+ * success, so callers can tell that no server-side revocation happened.
  * A JWT with an audience rejected by the OAuth resource model is already
  * inactive and resolves as a successful no-op. Session-bound tokens (carrying
  * `sid`) are cut off early by the session-liveness check in introspection and
@@ -45,6 +47,14 @@ async function revokeJwtAccessToken(
 			userInfoResource(ctx.context.baseURL),
 		]))
 	) {
+		return null;
+	}
+	const marker = jwtRevocationMarker(opts, payload);
+	if (marker) {
+		await ctx.context.internalAdapter.createVerificationValue({
+			...marker,
+			value: payload.azp,
+		});
 		return null;
 	}
 	throw new APIError("BAD_REQUEST", {

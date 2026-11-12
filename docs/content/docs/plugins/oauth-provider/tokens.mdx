@@ -422,9 +422,29 @@ What the endpoint does depends on the token:
 * **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
 * **Refresh token**: marked revoked, so it can no longer issue tokens. The opaque access tokens it issued are deleted. JWT access tokens it issued stay valid until they expire.
 * **Refresh token that was already revoked or rotated**: treated as replay. The endpoint still returns 200, and it deletes the client's refresh tokens for that user, along with the opaque access tokens they issued. An access token issued without a refresh token, and any JWT access token, stays valid until it expires.
-* **JWT access token**: cannot be revoked, because it is never stored. An expired JWT is treated as unknown and returns 200. A JWT issued to the calling client that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), unless its audience names a resource that is not registered. Such a JWT returns 200 instead.
+* **JWT access token**: revoked only with [`revocableJwtAccessTokens`](#revoke-jwt-access-tokens). Without it, a JWT issued to the calling client that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), because the token is never stored. An expired JWT is treated as unknown and returns 200. So does a JWT whose audience names a resource that is not registered.
 
 To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session. Its lifetime is the only limit.
+
+### Revoke JWT access tokens
+
+A JWT access token is self-contained, so by default it stays valid until it expires. Set `revocableJwtAccessTokens: true` to let a client revoke one:
+
+```ts title="auth.ts"
+oauthProvider({
+  revocableJwtAccessTokens: true, // [!code highlight]
+})
+```
+
+Revoking a JWT access token then returns 200 and stores its `jti` in the [verification store](/docs/concepts/database#verification) until the token's `exp`. After that, the token is reported inactive by introspection, rejected by UserInfo with 401 `invalid_token`, and reported inactive by `validateAccessToken`. Revoking the same token again returns 200.
+
+Before you turn it on, consider:
+
+* **Resource servers that verify locally don't see revocations.** `verifyAccessTokenRequest` without `remoteVerify`, and [`requireMcpAuth`](/docs/plugins/mcp), check the signature against the JWKS and never ask the server. A revoked token stays valid there until it expires. To honor revocation, set [`remoteVerify`](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens) so every token is introspected.
+* **Each check adds a lookup.** Introspection, UserInfo, and `validateAccessToken` look up the token's `jti` in the verification store, revoked or not. In the database, each lookup also deletes expired verification rows, unless you set `verification.disableCleanup`. With `verification.storeIdentifier: "hashed"`, a token that was never revoked takes two reads.
+* **Revocations last only as long as their storage.** With [secondary storage](/docs/concepts/database#secondary-storage), entries go there and expire on their own at the token's `exp`. If the storage evicts or loses an entry, the revoked token is accepted again. Use storage that never evicts these keys, or set `verification.storeInDatabase: true` to also keep entries in the database.
+* **Writes are bounded by the rate limit.** Each revocation writes one entry, and only for a valid token issued to the calling client. The `/oauth2/revoke` [rate limit](/docs/plugins/oauth-provider/reference#rate-limits), 30 requests per 60 seconds by default, bounds how fast entries are written.
+* **Only the presented token is revoked.** Revoking a refresh token does not revoke JWT access tokens issued from it, because the server does not record their `jti`. Revoke each access token, or end the user's session.
 
 ## Without the JWT plugin
 

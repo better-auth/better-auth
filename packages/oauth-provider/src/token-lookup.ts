@@ -177,6 +177,28 @@ export async function findRefreshToken(
 	});
 }
 
+/**
+ * The verification-store entry that marks a JWT access token as revoked, kept
+ * until the token's `exp`. `null` when the token cannot be revoked: the option
+ * is off, or the token lacks `jti` or `exp`.
+ */
+export function jwtRevocationMarker(
+	opts: OAuthOptions<Scope[]>,
+	payload: JwtAccessTokenPayload,
+) {
+	if (
+		!opts.revocableJwtAccessTokens ||
+		typeof payload.jti !== "string" ||
+		typeof payload.exp !== "number"
+	) {
+		return null;
+	}
+	return {
+		identifier: `oauth-revoked-access-token:${payload.jti}`,
+		expiresAt: new Date(payload.exp * 1000),
+	};
+}
+
 async function identifyAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -184,7 +206,18 @@ async function identifyAccessToken(
 ): Promise<FoundAccessToken | "inactive" | null> {
 	const payload = await verifyJwtAccessToken(ctx, opts, token);
 	if (payload === "inactive") return payload;
-	if (payload) return { type: "jwt", payload };
+	if (payload) {
+		const marker = jwtRevocationMarker(opts, payload);
+		if (
+			marker &&
+			(await ctx.context.internalAdapter.findVerificationValue(
+				marker.identifier,
+			))
+		) {
+			return "inactive";
+		}
+		return { type: "jwt", payload };
+	}
 	const record = await findOpaqueAccessToken(ctx, opts, token);
 	return record ? { type: "opaque", record } : null;
 }
