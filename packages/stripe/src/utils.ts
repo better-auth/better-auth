@@ -40,7 +40,7 @@ export async function resolveBillingPortalSessionParams(
 		resolvedPlans ??
 		(await getPlans(options.subscription).catch((error) => {
 			ctx.context.logger.error(
-				"Failed to resolve plans for Billing Portal session; using the default portal configuration",
+				"Failed to resolve plans for Billing Portal session; plan `billingPortalConfiguration` will not be applied",
 				error,
 			);
 			return [];

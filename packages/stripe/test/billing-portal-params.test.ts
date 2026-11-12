@@ -643,6 +643,44 @@ describe("billing portal when plans cannot be resolved", () => {
 		});
 	});
 
+	test("should still apply getBillingPortalSessionParams", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
+		const failing = withFailingPlans(stripeOptions);
+		const getBillingPortalSessionParams = vi.fn(() => ({
+			params: { configuration: "bpc_from_hook" },
+		}));
+		const { client, headers } = await setup(
+			{
+				...failing,
+				subscription: {
+					...(failing.subscription as SubscriptionOptions),
+					enabled: true,
+					getBillingPortalSessionParams,
+				},
+			},
+			memory,
+		);
+
+		const res = await client.subscription.billingPortal({
+			returnUrl: "/dashboard",
+			fetchOptions: { headers },
+		});
+
+		expect(res.error).toBeNull();
+		expect(getBillingPortalSessionParams).toHaveBeenCalledWith(
+			expect.objectContaining({ plan: undefined }),
+			expect.anything(),
+		);
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith({
+			configuration: "bpc_from_hook",
+			customer: "cus_mock123",
+			return_url: "http://localhost:3000/dashboard",
+		});
+	});
+
 	test("should still open the cancellation flow", async ({
 		stripeMock,
 		memory,
