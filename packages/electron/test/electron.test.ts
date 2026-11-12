@@ -64,6 +64,7 @@ const mockElectron = vi.hoisted(() => {
 		},
 		net: {
 			fetch: vi.fn(),
+			isOnline: vi.fn(() => true),
 		},
 		protocol: {
 			registerSchemesAsPrivileged: vi.fn(),
@@ -2805,6 +2806,9 @@ describe("cookies getCookie", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/pull/12324
+ */
 describe("main-process session polling", () => {
 	const getSessionRequests = vi.fn();
 	const { client } = testUtils(
@@ -2818,33 +2822,62 @@ describe("main-process session polling", () => {
 		{ sessionOptions: { refetchInterval: 60 } },
 	);
 
-	it("polls /get-session on refetchInterval while a session exists", async ({
+	const setSessionData = () =>
+		client.$store.atoms.session!.set({
+			...client.$store.atoms.session!.get(),
+			data: { user: { id: "test-user" }, session: { id: "test-session" } },
+		});
+
+	const quitApp = () => {
+		const onWillQuit = mockElectron.app.on.mock.calls.find(
+			([event]) => event === "will-quit",
+		)?.[1] as (() => void) | undefined;
+		expect(onWillQuit).toBeTypeOf("function");
+		onWillQuit!();
+	};
+
+	it("fetches the session once on setup, so a restored session can poll", async ({
 		setProcessType,
 	}) => {
 		setProcessType("browser");
 		expect(typeof window).toBe("undefined");
 
 		client.setupMain({ bridges: true });
-		client.$store.atoms.session!.set({
-			...client.$store.atoms.session!.get(),
-			data: { user: { id: "test-user" }, session: { id: "test-session" } },
-		});
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(getSessionRequests).toHaveBeenCalledTimes(1);
+		quitApp();
+	});
+
+	it("polls /get-session on refetchInterval while a session exists", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		client.setupMain({ bridges: true });
+		await vi.advanceTimersByTimeAsync(0);
+		setSessionData();
 		getSessionRequests.mockClear();
 
 		await vi.advanceTimersByTimeAsync(60_000);
 		expect(getSessionRequests).toHaveBeenCalled();
 
-		const onWillQuit = mockElectron.app.on.mock.calls.find(
-			([event]) => event === "will-quit",
-		)?.[1] as (() => void) | undefined;
-		expect(onWillQuit).toBeTypeOf("function");
-		onWillQuit!();
+		quitApp();
 		getSessionRequests.mockClear();
-		client.$store.atoms.session!.set({
-			...client.$store.atoms.session!.get(),
-			data: { user: { id: "test-user" }, session: { id: "test-session" } },
-		});
+		setSessionData();
 		await vi.advanceTimersByTimeAsync(120_000);
 		expect(getSessionRequests).not.toHaveBeenCalled();
+	});
+
+	it("does not poll while offline by default", async ({ setProcessType }) => {
+		setProcessType("browser");
+		mockElectron.net.isOnline.mockReturnValue(false);
+
+		client.setupMain({ bridges: true });
+		setSessionData();
+		await vi.advanceTimersByTimeAsync(120_000);
+
+		expect(getSessionRequests).not.toHaveBeenCalled();
+		quitApp();
 	});
 });

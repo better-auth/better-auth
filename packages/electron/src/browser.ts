@@ -16,7 +16,7 @@ import {
 	parseProtocolScheme,
 } from "./utils";
 
-const { app, session, protocol, BrowserWindow, ipcMain, webContents } =
+const { app, session, protocol, BrowserWindow, ipcMain, net, webContents } =
 	electron;
 
 export function withGetWindowFallback(
@@ -355,8 +355,15 @@ function setupBridges(
 	const refetchInterval = clientOptions?.sessionOptions?.refetchInterval ?? 0;
 	if (ctx.$store && refetchInterval > 0) {
 		const $store = ctx.$store;
+		const refetchWhenOffline =
+			clientOptions?.sessionOptions?.refetchWhenOffline ?? false;
+		const canRefetch = () => refetchWhenOffline || net.isOnline();
+		// Without `window` the session atom skips its mount fetch, so a session restored from storage would stay `null` and never poll.
+		if (canRefetch()) {
+			$store.notify("$sessionSignal");
+		}
 		const pollInterval = setInterval(() => {
-			if ($store.atoms.session?.get()?.data != null) {
+			if ($store.atoms.session?.get()?.data != null && canRefetch()) {
 				$store.notify("$sessionSignal");
 			}
 		}, refetchInterval * 1000);

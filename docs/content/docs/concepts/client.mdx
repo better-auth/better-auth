@@ -296,7 +296,7 @@ export const clientSessionOptionsType = {
 
 <TypeTable type={clientSessionOptionsType} />
 
-`refetchInterval` polling, window focus refetching, and cross-tab sync run only where a `window` object exists, such as a browser. During server rendering the client sets none of them up, so timers and listeners don't accumulate per request. The [Electron](/docs/integrations/electron) main process has no `window` either; when you call `setupMain()` there with bridges enabled (the default), the Electron plugin polls on `refetchInterval` itself while a session exists.
+`refetchInterval` polling, window focus refetching, and cross-tab sync run only where a `window` object exists, such as a browser. During server rendering the client sets none of them up, so timers and listeners don't accumulate per request. The [Electron](/docs/integrations/electron) main process has no `window` either; when the IPC bridges are set up there, the Electron plugin polls on `refetchInterval` itself while a session exists. `setupMain()` with no arguments sets up the bridges; if you pass a config object, include `bridges: true`.
 
 ### Disable Default Fetch Plugins
 
