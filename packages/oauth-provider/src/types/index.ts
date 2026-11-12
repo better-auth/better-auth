@@ -469,10 +469,9 @@ export interface OAuthProviderApi {
 		 *   `response_type` and `redirect_uri` are required, and the code is
 		 *   bound to the `redirect_uri`.
 		 * - `"headless"`: in the response of the plugin's endpoint.
-		 *   `response_type` is optional. A `redirect_uri` must be registered
-		 *   for the client, but is removed from the result, so the code is
-		 *   redeemed without one (RFC 6749 §4.1.3). `state` is removed too.
-		 *   `response_mode` is rejected.
+		 *   `response_type` is optional, and `state` is removed. A
+		 *   `redirect_uri` or `response_mode` is rejected, so the code is
+		 *   redeemed without `redirect_uri`.
 		 *
 		 * Both modes reject `request`, `request_uri`, and the parameters that
 		 * identify an extension's interaction request, such as `user_code`.
@@ -481,7 +480,7 @@ export interface OAuthProviderApi {
 	}) => Promise<StoredAuthorizationQuery>;
 	/**
 	 * Stores a single-use authorization code for an approved request and
-	 * returns it, without a redirect. Use it in a flow that authenticates the
+	 * returns it, without redirecting. Use it in a flow that authenticates the
 	 * user outside `/oauth2/authorize`, such as a first-party app's sign-in.
 	 * The code redeems at the token endpoint like a code from
 	 * `/oauth2/authorize`, with the same PKCE, `redirect_uri`, `dpop_jkt`, and
@@ -497,6 +496,11 @@ export interface OAuthProviderApi {
 	 * It skips what `/oauth2/authorize` does once a user is signed in: the
 	 * `prompt` and `max_age` checks, account selection, post-login, and
 	 * consent. The caller decides these before calling it.
+	 *
+	 * For a request with a `redirect_uri`, send the user to the returned
+	 * `url`. An error after `validateAuthorizationRequest` accepted such a
+	 * request also belongs at the `redirect_uri`, with `state` and `iss`
+	 * (RFC 6749 §4.1.2.1, RFC 9207).
 	 */
 	issueAuthorizationCode: (params: {
 		/**
@@ -523,13 +527,24 @@ export interface OAuthProviderApi {
 			 */
 			amr?: string[];
 		};
-		/** Consent reference to record on the code and the tokens it yields. */
+		/**
+		 * Consent reference to record on the code and the tokens it yields,
+		 * such as the `referenceId` of the consent the user accepted. Defaults
+		 * to what `postLogin.consentReferenceId` returns, as in
+		 * `/oauth2/authorize`.
+		 */
 		referenceId?: string;
 	}) => Promise<{
 		/** The authorization code to return to the client. */
 		code: string;
 		/** When the code expires, `codeExpiresIn` seconds from now. */
 		expiresAt: Date;
+		/**
+		 * The authorization response for a request with a `redirect_uri`:
+		 * that URI with `code`, `state`, and `iss`. Absent for a headless
+		 * request.
+		 */
+		url?: string;
 	}>;
 	/**
 	 * Computes the stored lookup key for a token value (the same hash the

@@ -103,7 +103,7 @@ describe("public oauth-provider types", () => {
 		>();
 		expectTypeOf<Parameters<Issue>[0]["session"]>().toEqualTypeOf<Session>();
 		expectTypeOf<ReturnType<Issue>>().toEqualTypeOf<
-			Promise<{ code: string; expiresAt: Date }>
+			Promise<{ code: string; expiresAt: Date; url?: string }>
 		>();
 	});
 });

@@ -913,6 +913,14 @@ export async function validateAuthorizationRequest(
 			"response_mode is not supported without a redirect",
 		);
 	}
+	// RFC 6749 §4.1.3 would require the client to repeat a redirect_uri at the
+	// token endpoint, so a headless request must not carry one.
+	if (headless && request.redirect_uri !== undefined) {
+		throw authorizationRequestError(
+			"invalid_request",
+			"redirect_uri is not supported without a redirect",
+		);
+	}
 	if (
 		request.client_id !== undefined &&
 		request.client_id !== client.clientId
@@ -985,9 +993,8 @@ export async function validateAuthorizationRequest(
 			"redirect_uri is required",
 		);
 	}
-	// A headless code is returned in a response, not through a redirect, so it
-	// binds no redirect_uri and carries no state.
-	const { redirect_uri: _redirectUri, state: _state, ...headlessQuery } = query;
+	// A headless code is returned in a response, so it carries no state.
+	const { state: _state, ...headlessQuery } = query;
 	return validateAuthorizationParameters(ctx, opts, client, {
 		...(headless ? headlessQuery : query),
 		response_type: "code",
@@ -1002,7 +1009,7 @@ export async function issueAuthorizationCode(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	params: Parameters<OAuthProviderApi["issueAuthorizationCode"]>[0],
-): Promise<{ code: string; expiresAt: Date }> {
+): Promise<{ code: string; expiresAt: Date; url?: string }> {
 	const client = await getClient(ctx, opts, params.request.client_id);
 	if (!client) {
 		throw authorizationRequestError("invalid_client", "client not found");
@@ -1025,16 +1032,37 @@ export async function issueAuthorizationCode(
 		});
 	}
 	const scopes = query.scope?.split(" ").filter((scope) => scope) ?? [];
-	let authenticationContext: OAuthAuthenticationContext = {};
 	// The resolver runs only for requests that can yield an ID token.
-	if (opts.authenticationContext?.resolve && scopes.includes("openid")) {
-		const user = await ctx.context.internalAdapter.findUserById(session.userId);
-		if (!user) {
-			throw authorizationRequestError(
-				"invalid_request",
-				"the session's user no longer exists",
-			);
-		}
+	const resolvesContext =
+		opts.authenticationContext?.resolve !== undefined &&
+		scopes.includes("openid");
+	const resolvesReferenceId =
+		params.referenceId === undefined &&
+		opts.postLogin?.consentReferenceId !== undefined;
+	const user =
+		resolvesContext || resolvesReferenceId
+			? await ctx.context.internalAdapter.findUserById(session.userId)
+			: null;
+	if ((resolvesContext || resolvesReferenceId) && !user) {
+		throw authorizationRequestError(
+			"invalid_request",
+			"the session's user no longer exists",
+		);
+	}
+	// As in /oauth2/authorize, the reference defaults to the one postLogin
+	// selects, so codes for the same request and user carry the same reference.
+	const referenceId =
+		params.referenceId ??
+		(user
+			? await getConsentReferenceId(opts, {
+					user,
+					session,
+					scopes,
+					query: serializeAuthorizationQuery(query),
+				})
+			: undefined);
+	let authenticationContext: OAuthAuthenticationContext = {};
+	if (resolvesContext && user) {
 		authenticationContext = await resolveAuthenticationContext(opts, {
 			user,
 			session,
@@ -1057,15 +1085,29 @@ export async function issueAuthorizationCode(
 			"essential acr requirement cannot be met",
 		);
 	}
-	return storeAuthorizationCode(ctx, opts, {
+	const issued = await storeAuthorizationCode(ctx, opts, {
 		query,
 		userId: session.userId,
 		sessionId: session.id,
-		referenceId: params.referenceId,
+		referenceId,
 		authTime: authTime.getTime(),
 		...authenticationContext,
 		resource: toResourceList(query.resource) ?? [],
 	});
+	return query.redirect_uri
+		? {
+				...issued,
+				url: authorizationResponseURL(
+					ctx,
+					opts,
+					{
+						...query,
+						redirect_uri: query.redirect_uri,
+					},
+					issued.code,
+				),
+			}
+		: issued;
 }
 
 /**
@@ -1378,18 +1420,23 @@ async function createAuthorizationCodeURL(
 	},
 ) {
 	const { code } = await storeAuthorizationCode(ctx, opts, verificationValue);
+	return authorizationResponseURL(ctx, opts, verificationValue.query, code);
+}
 
-	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
-	redirectUriWithCode.searchParams.set("code", code);
-	if (verificationValue.query.state) {
-		redirectUriWithCode.searchParams.set(
-			"state",
-			verificationValue.query.state,
-		);
+/** The client redirect URL that delivers `code` (RFC 6749 §4.1.2, RFC 9207). */
+function authorizationResponseURL(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	query: { redirect_uri: string; state?: string },
+	code: string,
+): string {
+	const url = new URL(query.redirect_uri);
+	url.searchParams.set("code", code);
+	if (query.state) {
+		url.searchParams.set("state", query.state);
 	}
-	redirectUriWithCode.searchParams.set("iss", getIssuer(ctx, opts));
-
-	return redirectUriWithCode.toString();
+	url.searchParams.set("iss", getIssuer(ctx, opts));
+	return url.toString();
 }
 
 async function redirectWithPromptCode(

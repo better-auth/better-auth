@@ -83,6 +83,7 @@ const codeIssuer = {
 				return ctx.json({
 					code: issued.code,
 					expiresAt: issued.expiresAt.getTime(),
+					url: issued.url,
 				});
 			},
 		),
@@ -199,7 +200,7 @@ async function setup(
 		request: StoredAuthorizationQuery,
 		extra: { authTime?: number; amr?: string[]; referenceId?: string } = {},
 	) {
-		return client.$fetch<{ code: string; expiresAt: number }>(
+		return client.$fetch<{ code: string; expiresAt: number; url?: string }>(
 			"/test/issue-authorization-code",
 			{ method: "POST", headers, body: { request, ...extra } },
 		);
@@ -385,6 +386,13 @@ describe.each(["sqlite", "postgres"] as const)(
 				resource: [resource],
 			});
 			expect(issued.expiresAt).toBe(issuedRow!.expiresAt.getTime());
+			const url = new URL(issued.url!);
+			expect(`${url.origin}${url.pathname}`).toBe(redirectUri);
+			expect(Object.fromEntries(url.searchParams)).toEqual({
+				code: issued.code,
+				state: "state-1",
+				iss: authServerBaseUrl,
+			});
 			expect(
 				issuedRow!.expiresAt.getTime() - issuedRow!.createdAt.getTime(),
 			).toBe(codeExpiresIn * 1000);
@@ -433,19 +441,25 @@ describe.each(["sqlite", "postgres"] as const)(
 			expect(errorOf(await exchange(body))).toBe("invalid_grant");
 		});
 
-		it("rejects a redirect_uri when redeeming a headless code", async () => {
-			const { code, verifier } = await headlessCode({
-				redirect_uri: redirectUri,
-				state: "dropped",
-			});
+		it("returns no redirect URL for a headless code", async () => {
+			const { verifier, challenge } = await pkce();
+			const issued = await validateAndIssue(
+				publicClient,
+				{
+					scope: "openid",
+					code_challenge: challenge,
+					code_challenge_method: "S256",
+				},
+				"headless",
+			);
+
+			expect(issued.url).toBeUndefined();
 			const tokens = await exchange({
-				code,
+				code: issued.code,
 				code_verifier: verifier,
 				client_id: publicClient.client_id,
-				redirect_uri: redirectUri,
 			});
-
-			expect(errorOf(tokens)).toBe("invalid_grant");
+			expect(tokens.error).toBeNull();
 		});
 
 		it("requires the PKCE verifier the request was bound to", async () => {
@@ -549,11 +563,10 @@ describe("provider.validateAuthorizationRequest", async () => {
 		({ challenge } = await pkce());
 	});
 
-	it("returns a headless request: no redirect_uri or state, defaults applied", async () => {
+	it("returns a headless request: no state, defaults applied", async () => {
 		const result = await validate(
 			confidentialClient,
 			{
-				redirect_uri: redirectUri,
 				state: "state-1",
 				code_challenge: challenge,
 				code_challenge_method: "S256",
@@ -670,16 +683,31 @@ describe("provider.validateAuthorizationRequest", async () => {
 	it.each([
 		{
 			name: "an unregistered redirect_uri",
-			request: { redirect_uri: "https://attacker.example.com/callback" },
+			mode: "redirect",
+			request: {
+				response_type: "code",
+				redirect_uri: "https://attacker.example.com/callback",
+			},
 			error: "invalid_request",
 			description: "invalid redirect uri",
 		},
 		{
 			name: "an HTTP redirect_uri",
-			request: { redirect_uri: "http://rp.example.com/callback" },
+			mode: "redirect",
+			request: {
+				response_type: "code",
+				redirect_uri: "http://rp.example.com/callback",
+			},
 			error: "invalid_request",
 			description:
 				"Redirect URI must use HTTPS (HTTP allowed only for loopback hosts)",
+		},
+		{
+			// RFC 6749 §4.1.3 would require it again at the token endpoint.
+			name: "a redirect_uri in headless mode",
+			request: { redirect_uri: redirectUri },
+			error: "invalid_request",
+			description: "redirect_uri is not supported without a redirect",
 		},
 		{
 			name: "an unsupported response_type",
@@ -772,7 +800,13 @@ describe("provider.validateAuthorizationRequest", async () => {
 			error: "invalid_request",
 			description: "client_id does not match the client",
 		},
-	])("rejects $name", async ({ request, error, description }) => {
+	] satisfies {
+		name: string;
+		mode?: "redirect" | "headless";
+		request: Record<string, unknown>;
+		error: string;
+		description: string;
+	}[])("rejects $name", async ({ mode, request, error, description }) => {
 		const result = await validate(
 			confidentialClient,
 			{
@@ -781,7 +815,7 @@ describe("provider.validateAuthorizationRequest", async () => {
 				code_challenge_method: "S256",
 				...request,
 			},
-			"headless",
+			mode ?? "headless",
 		);
 
 		expect(result.error).toMatchObject({
@@ -937,5 +971,64 @@ describe("provider.issueAuthorizationCode authentication context", async () => {
 		const satisfied = await issue(request, { amr: ["pwd", "otp"] });
 		expect(satisfied.error).toBeNull();
 		expect(await findCodeRow(satisfied.data!.code)).not.toBeNull();
+	});
+});
+
+describe("provider.issueAuthorizationCode consent reference", async () => {
+	const consentReferenceId = vi.fn(
+		(_context: { scopes: string[]; query: URLSearchParams }) => "org-1",
+	);
+	const { createClient, pkce, validate, issue, findCodeRow } = await setup({
+		oauth: {
+			postLogin: {
+				page: "/select-organization",
+				shouldRedirect: () => false,
+				consentReferenceId,
+			},
+		},
+	});
+	let publicClient: OAuthClient;
+
+	beforeAll(async () => {
+		publicClient = await createClient({
+			token_endpoint_auth_method: "none",
+			application_type: "native",
+		});
+	});
+
+	async function issueWith(referenceId?: string) {
+		const { challenge } = await pkce();
+		const validated = await validate(
+			publicClient,
+			{
+				scope: "openid",
+				code_challenge: challenge,
+				code_challenge_method: "S256",
+			},
+			"headless",
+		);
+		expect(validated.error).toBeNull();
+		const issued = await issue(validated.data!, { referenceId });
+		expect(issued.error).toBeNull();
+		const row = await findCodeRow(issued.data!.code);
+		return JSON.parse(row!.value).referenceId;
+	}
+
+	it("defaults to the reference postLogin selects, as /oauth2/authorize does", async () => {
+		consentReferenceId.mockClear();
+		expect(await issueWith()).toBe("org-1");
+		expect(consentReferenceId).toHaveBeenCalledOnce();
+		expect(consentReferenceId.mock.calls[0]![0]).toMatchObject({
+			scopes: ["openid"],
+		});
+		expect(consentReferenceId.mock.calls[0]![0].query.get("client_id")).toBe(
+			publicClient.client_id,
+		);
+	});
+
+	it("records the caller's reference instead", async () => {
+		consentReferenceId.mockClear();
+		expect(await issueWith("org-2")).toBe("org-2");
+		expect(consentReferenceId).not.toHaveBeenCalled();
 	});
 });
