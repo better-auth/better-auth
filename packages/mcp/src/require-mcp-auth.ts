@@ -1,15 +1,12 @@
-import type { Awaitable } from "@better-auth/core";
+import type { AuthContext, Awaitable } from "@better-auth/core";
 import type {
 	DpopReplayReservations,
 	DpopReplayStore,
 } from "better-auth/oauth2";
 import { createDpopReplayStore } from "better-auth/oauth2";
 import type { BetterAuthOptions } from "better-auth/types";
-import type { JWTPayload } from "jose";
-import {
-	createMcpProtectedRequestHandler,
-	validateMcpResource,
-} from "./handler";
+import type { JSONWebKeySet, JWTPayload } from "jose";
+import { createProtectedRequestHandler, validateMcpResource } from "./handler";
 
 export interface RequireMcpAuthOptions {
 	/**
@@ -23,8 +20,8 @@ export interface RequireMcpAuthOptions {
 	 */
 	issuer?: string;
 	/**
-	 * URL of the authorization server's JWKS. Defaults to `/jwks` under the
-	 * server's resolved base URL.
+	 * URL of the authorization server's JWKS. When unset, the signing keys are
+	 * read from the auth instance in-process, without an HTTP request.
 	 */
 	jwksUrl?: string;
 	/**
@@ -78,10 +75,11 @@ export interface RequireMcpAuthOptions {
 export const requireMcpAuth = <
 	Auth extends {
 		options: BetterAuthOptions;
-		$context: Promise<{
-			baseURL: string;
-			internalAdapter: DpopReplayReservations;
-		}>;
+		$context: Promise<
+			Pick<AuthContext, "baseURL" | "getPlugin"> & {
+				internalAdapter: DpopReplayReservations;
+			}
+		>;
 	},
 >(
 	auth: Auth,
@@ -100,7 +98,8 @@ export const requireMcpAuth = <
 		// the auth context so the verified issuer and audience match what the
 		// provider issued. Override via `opts` for a custom `jwt.issuer`, a
 		// distinct resource, or a non-default JWKS location.
-		const { baseURL, internalAdapter } = await auth.$context;
+		const authContext = await auth.$context;
+		const { baseURL, internalAdapter } = authContext;
 		if (!baseURL) {
 			throw new Error(
 				"requireMcpAuth requires a resolvable base URL. For dynamic base URLs use `createMcpProtectedRequestHandler` with explicit verification options.",
@@ -108,9 +107,22 @@ export const requireMcpAuth = <
 		}
 		const issuer = opts?.issuer ?? baseURL;
 		const resource = opts?.resource ?? baseURL;
+		// A JWT plugin that serves its own keys lets this process verify without
+		// requesting its own `/jwks`, which fails on runtimes that block
+		// requests to their own hostname.
+		const jwtPlugin = authContext.getPlugin("jwt");
+		const localJwks =
+			!opts?.jwksUrl && jwtPlugin && !jwtPlugin.options?.jwks?.remoteUrl
+				? {
+						jwksFetch: async (): Promise<JSONWebKeySet | undefined> =>
+							jwtPlugin.endpoints.getJwks({ context: authContext }),
+						jwksCacheKey: jwtPlugin,
+					}
+				: undefined;
 		const jwksUrl = opts?.jwksUrl ?? `${baseURL}/jwks`;
-		return createMcpProtectedRequestHandler(
+		return createProtectedRequestHandler(
 			{
+				...localJwks,
 				issuer,
 				audience: resource,
 				// Every access token the provider issues names its client in `azp`.
