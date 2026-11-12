@@ -26,7 +26,6 @@ import type {
 import {
 	escapeStripeSearchValue,
 	findPlanByName,
-	getPlanByName,
 	getPlans,
 	isActiveOrTrialing,
 	isPendingCancel,
@@ -291,7 +290,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				);
 			}
 
-			const plan = await getPlanByName(options, ctx.body.plan);
+			// Resolve plans once so every lookup in this request uses one snapshot.
+			const plans = await getPlans(options.subscription);
+			const plan = findPlanByName(plans, ctx.body.plan);
 			if (!plan) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -579,7 +580,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 			// Get the current price ID from the active Stripe subscription
 			const resolvedPlan = activeSubscription
-				? await resolvePlanItem(options, activeSubscription.items.data)
+				? await resolvePlanItem(options, activeSubscription.items.data, plans)
 				: undefined;
 			const planItem = resolvedPlan?.item;
 			const stripeSubscriptionPriceId = planItem?.price.id;
@@ -722,7 +723,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				}
 
 				const oldPlan = activeOrTrialingSubscription
-					? await getPlanByName(options, activeOrTrialingSubscription.plan)
+					? findPlanByName(plans, activeOrTrialingSubscription.plan)
 					: undefined;
 
 				// Build a price replacement map:
@@ -981,6 +982,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							plan,
 						}),
 						ctx,
+						plans,
 					);
 					({ url: upgradeUrl } = await client.billingPortal.sessions
 						.create(

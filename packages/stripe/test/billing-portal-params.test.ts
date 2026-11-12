@@ -6,6 +6,7 @@ import { stripeClient } from "../src/client";
 import type {
 	BillingPortalSessionParamsData,
 	StripeOptions,
+	StripePlan,
 	Subscription,
 	SubscriptionOptions,
 } from "../src/types";
@@ -504,6 +505,56 @@ describe("plan billingPortalConfiguration", () => {
 					type: "subscription_update_confirm",
 				}),
 			}),
+		);
+	});
+
+	test("should resolve dynamic plans once when changing plans", async ({
+		stripeMock,
+		memory,
+		stripeOptions,
+	}) => {
+		const staticOptions = withPortalConfigurations(stripeOptions);
+		const staticPlans = (staticOptions.subscription as SubscriptionOptions)
+			.plans as StripePlan[];
+		const plans = vi.fn(async () => staticPlans);
+		const { client, ctx, headers, userId } = await setup(
+			{
+				...staticOptions,
+				subscription: { enabled: true, plans },
+			},
+			memory,
+		);
+		await createActiveSubscription(ctx, userId, "starter", "sub_upgrade");
+		stripeMock.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				createSubscription({
+					id: "sub_upgrade",
+					status: "active",
+					items: {
+						object: "list",
+						data: [
+							createSubscriptionItem({
+								id: "si_starter",
+								price: createPrice({ id: TEST_PRICES.starter }),
+							}),
+						],
+						has_more: false,
+						url: "",
+					},
+				}),
+			],
+		});
+		plans.mockClear();
+
+		const res = await client.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		expect(res.error).toBeNull();
+		expect(plans).toHaveBeenCalledTimes(1);
+		expect(stripeMock.billingPortal.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({ configuration: "bpc_starter" }),
 		);
 	});
 
