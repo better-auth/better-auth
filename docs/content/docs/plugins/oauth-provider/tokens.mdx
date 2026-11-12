@@ -539,7 +539,7 @@ export const auth = betterAuth({
 
 The grant `urn:ietf:params:oauth:grant-type:token-exchange` is then advertised in `grant_types_supported`. RFC 8693 defines no other discovery metadata.
 
-Register the exchanging service as a confidential client with `TOKEN_EXCHANGE_GRANT_TYPE`. Public clients cannot exchange tokens.
+Register the exchanging service as a confidential client with `TOKEN_EXCHANGE_GRANT_TYPE`. A public client can exchange only its own DPoP-bound tokens, and only after you [enable public clients](#exchange-as-a-public-client).
 
 ```ts title="register-exchanging-client.ts"
 import { TOKEN_EXCHANGE_GRANT_TYPE } from "@better-auth/oauth-provider";
@@ -603,6 +603,27 @@ curl https://auth.example.com/api/auth/oauth2/token \
 | `audience`                        | Optional, and may repeat. Each value must equal a registered resource identifier and is treated like `resource`                                                                                                                 |
 
 With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
+
+### Exchange as a public client
+
+A public client, such as a desktop, mobile, or browser app, has no secret, so the provider cannot tell it apart from someone who copied its `client_id`. By default, a public client that requests a token exchange gets `invalid_client`. To let public clients exchange tokens, set `publicClients` to `"dpop-bound"`:
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  publicClients: "dpop-bound",
+});
+```
+
+A DPoP key ([RFC 9449](https://datatracker.ietf.org/doc/html/rfc9449)) held by the app then stands in for its secret. The provider accepts an exchange from a public client registered for the token-exchange grant only when all of these hold:
+
+* The subject token was issued to that same client. A token whose audience the client is linked to is not enough.
+* The subject token is DPoP-bound. Get one by sending a DPoP proof on the app's authorization code request.
+* The request carries a DPoP proof from the subject token's key.
+* The request has no `actor_token`.
+
+The exchanged token is bound to the same key. Someone who steals a public client's access token cannot exchange it without that key.
+
+Confidential clients still authenticate as before.
 
 ### Delegate to an actor
 
@@ -766,17 +787,17 @@ A refused exchange fails with `invalid_request`.
 
 The provider applies these rules to every exchange, before your `allowExchange` policy:
 
-| Rule                                                                                                                                                  | Why                                                                                                                 |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
-| The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
-| The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
-| A client that exchanges its own sender-constrained token proves the same binding: the same DPoP key, or the same strategy `confirmation`              | An exchange cannot remove or replace the client's binding                                                           |
-| The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
-| Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
-| A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
-| The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                           | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
-| No refresh token or ID token is issued                                                                                                                | The service must exchange again when the token expires                                                              |
+| Rule                                                                                                                                                        | Why                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| The client is registered for the token-exchange grant and is confidential, or is a public client allowed by [`publicClients`](#exchange-as-a-public-client) | Someone who only holds a leaked token cannot exchange it                                                            |
+| The subject token is an access token this server issued to a user                                                                                           | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
+| The client is the subject token's client, or is linked to a resource in the token's audience                                                                | A client cannot exchange a token that was never sent to it                                                          |
+| A client that exchanges its own sender-constrained token proves the same binding: the same DPoP key, or the same strategy `confirmation`                    | An exchange cannot remove or replace the client's binding                                                           |
+| The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged       | An exchange cannot add access. An exchange is not a sign-in                                                         |
+| Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                              | The client's resource policy still applies, including each resource's `allowedScopes`                               |
+| A client that does not skip consent needs a stored consent covering the scopes and resources                                                                | The user must have approved this client for this access                                                             |
+| The exchanged token expires no later than the subject token and carries the subject token's session (`sid`)                                                 | Repeated exchanges cannot extend access, and once the session ends, introspection reports exchanged tokens inactive |
+| No refresh token or ID token is issued                                                                                                                      | The service must exchange again when the token expires                                                              |
 
 Scope names are global across resources. A `read` scope on the MCP server and a `read` scope on the API are the same scope, so restrict what a resource accepts with its `allowedScopes`.
 
@@ -800,6 +821,7 @@ A token exchange fails with one of these errors:
   * The user has no stored consent for the client that covers the request.
   * The client exchanges its own token bound by a non-DPoP `cnf`, such as an mTLS certificate, and its client authentication does not return that same `confirmation`.
   * Your `allowExchange` policy denies the exchange.
+  * A public client sends a subject token issued to another client, a subject token that is not DPoP-bound, or an `actor_token`.
 * `invalid_scope` (400), when any of these applies:
   * The request names a scope that the subject token or the client does not have.
   * The request names `openid` or `offline_access`.
@@ -808,7 +830,7 @@ A token exchange fails with one of these errors:
   * A `resource` or `audience` value is unknown or disabled.
   * A `resource` or `audience` value is not linked to the client while `enforcePerClientResources` is on.
   * A `resource` or `audience` value is the userinfo endpoint.
-* `invalid_client`, when client authentication fails.
+* `invalid_client`, when client authentication fails, including when a public client exchanges without `publicClients: "dpop-bound"`.
 * `unauthorized_client` (400), when the client is not registered for the token-exchange grant.
 * `invalid_dpop_proof` (400), when any of these applies:
   * The DPoP proof is invalid.
