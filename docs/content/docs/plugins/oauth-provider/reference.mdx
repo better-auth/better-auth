@@ -355,6 +355,8 @@ Errors use the [RFC 6749 §5.2](https://datatracker.ietf.org/doc/html/rfc6749#se
 | `invalid_target`         | 400    | A `resource` is unknown, disabled, or not linked to the client while `enforcePerClientResources` is on.                                  |
 | `invalid_dpop_proof`     | 400    | The DPoP proof is missing or invalid for a DPoP-bound client or resource.                                                                |
 
+Authorization codes and device codes are single-use, and the token endpoint consumes one only after the request passes every check. A request rejected for its `code_verifier`, `redirect_uri`, `resource`, client, or DPoP proof leaves the code redeemable until it expires, so the client can retry with a corrected request. When two requests redeem the same authorization code at once, one gets tokens and the other gets `invalid_grant`. Presenting an authorization code that was already redeemed returns `invalid_grant` and revokes the tokens issued from it.
+
 When `adminCreateOAuthClient` links resources, an invalid identifier fails validation with `VALIDATION_ERROR`, an unknown or disabled resource returns `invalid_target`, and a `resourcePrivileges` denial returns `401`. The call creates nothing in each case.
 
 ## Rate limits

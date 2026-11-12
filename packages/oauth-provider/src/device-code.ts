@@ -15,12 +15,13 @@ import {
 	extractRepeatedResourceFromForm,
 	resolveResourcePolicy,
 } from "./resources";
-import { getOAuthProviderApi } from "./token";
+import { checkDpopProofBeforeConsume, getOAuthProviderApi } from "./token";
 import type {
 	OAuthExtensionGrantHandlerInput,
 	OAuthProviderExtension,
 	OAuthTokenResponse,
 } from "./types";
+import type { Confirmation } from "./types/oauth";
 import { ResourceUriSchema } from "./types/zod";
 import {
 	getClient,
@@ -123,14 +124,18 @@ async function exchangeOAuthDeviceCode(
 		requireCredentials: false,
 	});
 	const {
-		authorizationContext: { client, confirmation, scopes },
+		authorizationContext: { client, scopes },
 		claimedDeviceCode,
-		redemptionContext: resources,
+		redemptionContext: { resources, confirmation, recordReplay },
 		user,
 	} = await redeemDeviceCode<
 		OAuthDeviceCodeFields,
 		ClientAuthorization,
-		string[] | undefined
+		{
+			resources?: string[];
+			confirmation?: Confirmation;
+			recordReplay: () => Promise<void>;
+		}
 	>({
 		ctx,
 		deviceCode,
@@ -181,9 +186,25 @@ async function exchangeOAuthDeviceCode(
 				clientId: authorization.client.clientId,
 				requestedScopes: authorization.scopes,
 			});
-			return resources;
+			// A sender constraint the client-authentication strategy proved takes
+			// precedence over a DPoP proof, as in issuance. Otherwise check the
+			// proof here too, so a rejected proof leaves the code for a retry.
+			if (authorization.confirmation) {
+				return {
+					resources,
+					confirmation: authorization.confirmation,
+					recordReplay: async () => {},
+				};
+			}
+			const dpop = await checkDpopProofBeforeConsume(ctx, input.opts, {
+				client: authorization.client,
+				scopes: authorization.scopes,
+				resources,
+			});
+			return { resources, ...dpop };
 		},
 	});
+	await recordReplay();
 
 	return provider.issueTokens({
 		client,
@@ -192,7 +213,6 @@ async function exchangeOAuthDeviceCode(
 		resources,
 		// Seed refresh tokens with every approved resource, not the narrowed poll.
 		originalResources: claimedDeviceCode.resources ?? undefined,
-		// Forward a sender-constraint a confidential client-auth strategy proved.
 		confirmation,
 	});
 }

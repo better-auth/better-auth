@@ -4,7 +4,7 @@ import { openAPI } from "better-auth/plugins";
 import { deviceAuthorization } from "better-auth/plugins/device-authorization";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { decodeJwt } from "jose";
+import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { oauthDeviceAuthorizationClient, oauthProviderClient } from "./client";
 import {
@@ -323,6 +323,71 @@ describe("oauth-provider device-code grant", async () => {
 			headers: FORM_HEADERS,
 		});
 	}
+
+	/** Polls an approved device code with a DPoP proof. */
+	async function createDpopPoller(clientId: string, deviceCode: string) {
+		const { privateKey, publicKey } = await generateKeyPair("ES256", {
+			extractable: true,
+		});
+		const publicJwk = await exportJWK(publicKey);
+		const proofFor = (htu = `${baseURL}/api/auth/oauth2/token`) =>
+			new SignJWT({
+				jti: crypto.randomUUID(),
+				htm: "POST",
+				htu,
+				iat: Math.floor(Date.now() / 1000),
+			})
+				.setProtectedHeader({ typ: "dpop+jwt", alg: "ES256", jwk: publicJwk })
+				.sign(privateKey);
+		const poll = (proof: string) =>
+			client.$fetch<Record<string, unknown>>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: DEVICE_CODE_GRANT_TYPE,
+					device_code: deviceCode,
+					client_id: clientId,
+				}),
+				headers: { ...FORM_HEADERS, dpop: proof },
+			});
+		return { proofFor, poll };
+	}
+
+	it("keeps an approved device code when the poll's DPoP proof is rejected", async () => {
+		const clientId = await createDeviceClient();
+		const { proofFor, poll } = await createDpopPoller(
+			clientId,
+			await approvedDeviceCode(clientId),
+		);
+
+		const rejected = await poll(
+			await proofFor(`${baseURL}/api/auth/oauth2/introspect`),
+		);
+		expect(rejected.error).toMatchObject({ error: "invalid_dpop_proof" });
+
+		await new Promise((resolve) => setTimeout(resolve, 2_100));
+		const issued = await poll(await proofFor());
+		expect(issued.error).toBeNull();
+		expect(issued.data?.token_type).toBe("DPoP");
+	});
+
+	it("issues once when two polls with one DPoP proof arrive together", async () => {
+		const clientId = await createDeviceClient();
+		const { proofFor, poll } = await createDpopPoller(
+			clientId,
+			await approvedDeviceCode(clientId),
+		);
+		const proof = await proofFor();
+
+		const results = await Promise.all([poll(proof), poll(proof)]);
+		const successes = results.filter((result) => result.error === null);
+		expect(successes).toHaveLength(1);
+		expect(successes[0]?.data?.token_type).toBe("DPoP");
+		// The loser either finds the code claimed or sees the winner's poll time.
+		const loser = results.find((result) => result.error !== null)?.error as
+			| { error?: string }
+			| undefined;
+		expect(["invalid_grant", "slow_down"]).toContain(loser?.error);
+	});
 
 	it("accepts a confidential client authenticated with Basic without body client_id", async () => {
 		const { headers } = await signInWithTestUser();

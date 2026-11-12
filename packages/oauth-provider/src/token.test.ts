@@ -591,9 +591,19 @@ describe("oauth token - authorization_code", async () => {
 		expect(tokens.data?.refresh_token).toBeDefined();
 
 		const context = await auth.$context;
+		const originalDeleteMany = context.adapter.deleteMany.bind(context.adapter);
+		let accessTokenCleanupFailed = false;
 		const deleteMany = vi
 			.spyOn(context.adapter, "deleteMany")
-			.mockRejectedValueOnce(new Error("cleanup failed"));
+			.mockImplementation(async (data) => {
+				// The code lookup's expired-row cleanup also calls deleteMany, so
+				// fail the first access-token cleanup rather than the first call.
+				if (data.model === "oauthAccessToken" && !accessTokenCleanupFailed) {
+					accessTokenCleanupFailed = true;
+					throw new Error("cleanup failed");
+				}
+				return originalDeleteMany(data);
+			});
 		const loggerError = vi
 			.spyOn(context.logger, "error")
 			.mockImplementation(() => undefined);
@@ -608,14 +618,17 @@ describe("oauth token - authorization_code", async () => {
 				"authorization code replay cleanup failed",
 				expect.any(Error),
 			);
-			expect(deleteMany).toHaveBeenNthCalledWith(
-				1,
-				expect.objectContaining({ model: "oauthAccessToken" }),
-			);
-			expect(deleteMany).toHaveBeenNthCalledWith(
-				2,
-				expect.objectContaining({ model: "oauthRefreshToken" }),
-			);
+			const cleanupModels = deleteMany.mock.calls
+				.map(([data]) => data.model)
+				.filter(
+					(model) =>
+						model === "oauthAccessToken" || model === "oauthRefreshToken",
+				);
+			expect(cleanupModels).toEqual([
+				"oauthAccessToken",
+				"oauthRefreshToken",
+				"oauthAccessToken",
+			]);
 
 			const { body, headers } = await refreshAccessTokenRequest({
 				refreshToken: tokens.data!.refresh_token!,
@@ -638,6 +651,71 @@ describe("oauth token - authorization_code", async () => {
 			deleteMany.mockRestore();
 			loggerError.mockRestore();
 		}
+	});
+
+	it("keeps the authorization code when the PKCE verifier is rejected", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const rejected = await validateAuthCode({
+			code: code!,
+			codeVerifier: generateRandomString(32),
+		});
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.access_token).toBeDefined();
+
+		const replay = await validateAuthCode({ code: code!, codeVerifier });
+		expect((replay.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
+	});
+
+	it("rejects an expired authorization code with invalid_grant", async () => {
+		const { url: authUrl, codeVerifier } = await createAuthUrl({
+			scopes: ["openid"],
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(authUrl.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		const code = new URL(callbackRedirectUrl).searchParams.get("code");
+		expect(code).toBeTruthy();
+
+		const context = await auth.$context;
+		await context.adapter.update({
+			model: "verification",
+			where: [
+				{
+					field: "identifier",
+					value: await storeToken("hashed", code!, "authorization_code"),
+				},
+			],
+			update: { expiresAt: new Date(Date.now() - 1000) },
+		});
+
+		const tokens = await validateAuthCode({ code: code!, codeVerifier });
+		expect(tokens.data?.access_token).toBeUndefined();
+		expect((tokens.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
+		);
 	});
 
 	/**
@@ -5330,6 +5408,114 @@ describe("oauth token - DPoP", async () => {
 		expect(tokens.data?.access_token).toBeUndefined();
 		expect((tokens.error as { error?: string } | null)?.error).toBe(
 			"invalid_dpop_proof",
+		);
+	});
+
+	it("keeps the authorization code when the DPoP proof is rejected", async () => {
+		const dpopKey = await createDpopKey();
+		const otherKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+
+		const wrongKeyProof = await createDpopProof({
+			privateKey: otherKey.privateKey,
+			publicJwk: otherKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-wrong-key-proof",
+		});
+		const rejected = await exchangeCode(
+			code,
+			codeVerifier,
+			jwtResource,
+			wrongKeyProof,
+		);
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-valid-proof",
+		});
+		const tokens = await exchangeCode(code, codeVerifier, jwtResource, proof);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+		expect(decodeJwt(tokens.data!.access_token!).cnf).toMatchObject({
+			jkt: dpopKey.jkt,
+		});
+	});
+
+	it("keeps the authorization code when a required DPoP proof is missing", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			undefined,
+			dpopRequiredResource,
+		);
+
+		const rejected = await exchangeCode(
+			code,
+			codeVerifier,
+			dpopRequiredResource,
+		);
+		expect((rejected.error as { error?: string } | null)?.error).toBe(
+			"invalid_dpop_proof",
+		);
+
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "retry-required-proof",
+		});
+		const tokens = await exchangeCode(
+			code,
+			codeVerifier,
+			dpopRequiredResource,
+			proof,
+		);
+		expect(tokens.error).toBeNull();
+		expect(tokens.data?.token_type).toBe("DPoP");
+	});
+
+	/**
+	 * The proof's `jti` is recorded only after the code is consumed, so the
+	 * request that loses the race is told the code is gone, not that the proof
+	 * was replayed.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2
+	 */
+	it("issues once when two exchanges with one DPoP proof arrive together", async () => {
+		const dpopKey = await createDpopKey();
+		const { code, codeVerifier } = await authorizeForCode(
+			dpopKey.jkt,
+			jwtResource,
+		);
+		const proof = await createDpopProof({
+			privateKey: dpopKey.privateKey,
+			publicJwk: dpopKey.publicJwk,
+			method: "POST",
+			url: tokenEndpoint,
+			jti: "concurrent-shared-proof",
+		});
+
+		const results = await Promise.all([
+			exchangeCode(code, codeVerifier, jwtResource, proof),
+			exchangeCode(code, codeVerifier, jwtResource, proof),
+		]);
+		const successes = results.filter((result) => result.error === null);
+		const failures = results.filter((result) => result.error !== null);
+		expect(successes).toHaveLength(1);
+		expect(successes[0]?.data?.token_type).toBe("DPoP");
+		expect(failures).toHaveLength(1);
+		expect((failures[0]?.error as { error?: string } | null)?.error).toBe(
+			"invalid_grant",
 		);
 	});
 
