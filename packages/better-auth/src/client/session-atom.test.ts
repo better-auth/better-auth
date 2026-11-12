@@ -46,6 +46,32 @@ function recordSession(client: Client) {
 	};
 }
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/12074
+ */
+describe("session refetch while signed out", () => {
+	it("keeps isPending false and reports the refetch through isRefetching", async () => {
+		const { client } = await getTestInstance();
+		const { states, settled, unsubscribe } = recordSession(client);
+		await settled();
+		expect(states.at(-1)?.signedIn).toBe(false);
+
+		states.length = 0;
+		await client.useSession.get().refetch();
+		await settled();
+		unsubscribe();
+
+		expect(states).toContainEqual({
+			isPending: false,
+			isRefetching: true,
+			signedIn: false,
+		});
+		expect(states).not.toContainEqual(
+			expect.objectContaining({ isPending: true }),
+		);
+	});
+});
+
 describe("session after sign-in", () => {
 	it("stays pending from sign-in success until the new session arrives", async () => {
 		const { client, testUser, signInWithTestUser, sessionSetter } =
