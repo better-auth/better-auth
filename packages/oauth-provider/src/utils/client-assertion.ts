@@ -17,6 +17,7 @@ import {
 import { getIssuer } from "../authorize";
 import { validatePublicClientJwks } from "../client-jwks";
 import { getClientDiscoveries } from "../extensions";
+import { PUSHED_AUTHORIZATION_REQUEST_PATH } from "../par";
 import type {
 	ClientMetadataResourceFetch,
 	OAuthOptions,
@@ -554,12 +555,24 @@ export async function verifyClientAssertion(
 
 	// Fetch JWKS and verify signature + claims
 	const jwks = await fetchClientJwks(ctx, opts, client);
-	const endpointAudience =
-		expectedAudience ?? `${ctx.context.baseURL}/oauth2/token`;
+	const tokenEndpoint = `${ctx.context.baseURL}/oauth2/token`;
+	const endpointAudience = expectedAudience ?? tokenEndpoint;
 	const issuerAudience = getIssuer(ctx, opts);
+	// RFC 9126 §2: the PAR endpoint also accepts the token endpoint URL.
+	const tokenEndpointAudience =
+		endpointAudience ===
+		`${ctx.context.baseURL}${PUSHED_AUTHORIZATION_REQUEST_PATH}`
+			? [tokenEndpoint]
+			: [];
 	const acceptedAudiences = options?.endpointAudienceOnly
 		? [endpointAudience]
-		: [...new Set([endpointAudience, issuerAudience])];
+		: [
+				...new Set([
+					endpointAudience,
+					issuerAudience,
+					...tokenEndpointAudience,
+				]),
+			];
 	const verifyOpts = {
 		issuer: clientId,
 		subject: clientId,

@@ -66,6 +66,8 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				require_pkce: z.boolean().optional(),
 				// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 				dpop_bound_access_tokens: z.boolean().optional(),
+				// RFC 9126 §6: client accepts authorization requests only through PAR.
+				require_pushed_authorization_requests: z.boolean().optional(),
 				subject_type: z.enum(["public", "pairwise"]).optional(),
 				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
@@ -267,6 +269,8 @@ export const createOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 				response_types: z.array(z.enum(["code"])).optional(),
 				// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 				dpop_bound_access_tokens: z.boolean().optional(),
+				// RFC 9126 §6: client accepts authorization requests only through PAR.
+				require_pushed_authorization_requests: z.boolean().optional(),
 			}),
 			metadata: {
 				noStore: true,
@@ -546,6 +550,8 @@ export const adminUpdateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					disabled: z.boolean().optional(),
 					// RFC 9449 §5.2: client asks for DPoP-bound access tokens.
 					dpop_bound_access_tokens: z.boolean().optional(),
+					// RFC 9126 §6: client accepts authorization requests only through PAR.
+					require_pushed_authorization_requests: z.boolean().optional(),
 					metadata: z.record(z.string(), z.unknown()).optional(),
 				}),
 			}),

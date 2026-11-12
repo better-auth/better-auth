@@ -12,6 +12,10 @@ import {
 	getSupportedAuthMethods,
 	getSupportedGrantTypes,
 } from "./extensions";
+import {
+	isPushedAuthorizationRequestEnabled,
+	PUSHED_AUTHORIZATION_REQUEST_PATH,
+} from "./par";
 import { getSupportedClaims } from "./standard-claims";
 import type { OAuthOptions, Scope } from "./types";
 import type {
@@ -141,6 +145,13 @@ function buildAuthServerMetadata(
 		jwt_disabled: opts.disableJwtPlugin,
 		dpop_signing_alg_values_supported: opts.dpop?.signingAlgorithms,
 	});
+	// RFC 9126 §5: the endpoint advertises PAR; `request_uri_parameter_supported`
+	// stays false because it covers request objects hosted by the client.
+	if (isPushedAuthorizationRequestEnabled(opts)) {
+		authMetadata.pushed_authorization_request_endpoint = `${ctx.context.baseURL}${PUSHED_AUTHORIZATION_REQUEST_PATH}`;
+		authMetadata.require_pushed_authorization_requests =
+			opts.pushedAuthorizationRequests?.required === true;
+	}
 	return { jwtPluginOptions, clientDiscoveries, authMetadata };
 }
 

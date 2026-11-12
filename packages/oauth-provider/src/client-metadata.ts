@@ -40,6 +40,7 @@ const OAUTH_CLIENT_RECORD_FIELDS = {
 	jwksUri: true,
 	requirePKCE: true,
 	dpopBoundAccessTokens: true,
+	requirePushedAuthorizationRequests: true,
 	skipConsent: true,
 	enableEndSession: true,
 	subjectType: true,
@@ -89,6 +90,7 @@ const OAUTH_CLIENT_WIRE_FIELD_NAMES = [
 	"enable_end_session",
 	"require_pkce",
 	"dpop_bound_access_tokens",
+	"require_pushed_authorization_requests",
 	"subject_type",
 	"reference_id",
 ] as const;
@@ -139,6 +141,7 @@ const CIMD_FORBIDDEN_SERVER_FIELD_NAMES = new Set([
 	"backchannelLogoutSessionRequired",
 	"jwksUri",
 	"dpopBoundAccessTokens",
+	"requirePushedAuthorizationRequests",
 	"subjectType",
 ]);
 

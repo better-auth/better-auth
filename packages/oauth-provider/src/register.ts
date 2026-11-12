@@ -542,6 +542,17 @@ export async function checkOAuthClient(
 			error_description: "dpop_bound_access_tokens must be a boolean",
 		});
 	}
+	if (
+		clientWithDefaults.require_pushed_authorization_requests !== undefined &&
+		typeof clientWithDefaults.require_pushed_authorization_requests !==
+			"boolean"
+	) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description:
+				"require_pushed_authorization_requests must be a boolean",
+		});
+	}
 
 	const grantTypes = clientWithDefaults.grant_types ?? [];
 	const responseTypes = clientWithDefaults.response_types;
@@ -1606,6 +1617,7 @@ export function oauthToSchema(
 		enable_end_session: enableEndSession,
 		require_pkce: requirePKCE,
 		dpop_bound_access_tokens: dpopBoundAccessTokens,
+		require_pushed_authorization_requests: requirePushedAuthorizationRequests,
 		subject_type: subjectType,
 		reference_id: referenceId,
 		metadata: inputMetadata,
@@ -1677,6 +1689,7 @@ export function oauthToSchema(
 		enableEndSession,
 		requirePKCE,
 		dpopBoundAccessTokens,
+		requirePushedAuthorizationRequests,
 		subjectType,
 		referenceId,
 		metadata,
@@ -1731,6 +1744,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		enableEndSession,
 		requirePKCE,
 		dpopBoundAccessTokens,
+		requirePushedAuthorizationRequests,
 		subjectType,
 		referenceId,
 		metadata, // in JSON format
@@ -1794,6 +1808,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		enable_end_session: enableEndSession ?? undefined,
 		require_pkce: requirePKCE ?? undefined,
 		dpop_bound_access_tokens: dpopBoundAccessTokens ?? undefined,
+		require_pushed_authorization_requests:
+			requirePushedAuthorizationRequests ?? undefined,
 		subject_type: subjectType ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};

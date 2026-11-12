@@ -39,6 +39,12 @@ import { createOAuthEndpoint } from "./oauth-endpoint";
 import * as oauthClientEndpoints from "./oauthClient";
 import * as oauthConsentEndpoints from "./oauthConsent";
 import * as oauthResourceEndpoints from "./oauthResource";
+import {
+	isPushedAuthorizationRequestEnabled,
+	MAX_PUSHED_AUTHORIZATION_REQUEST_EXPIRES_IN,
+	PUSHED_AUTHORIZATION_REQUEST_PATH,
+	pushedAuthorizationRequestEndpoint,
+} from "./par";
 import { registerEndpoint } from "./register";
 import {
 	logEnforcePerClientResourcesResolution,
@@ -260,6 +266,26 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	) {
 		throw new BetterAuthError(
 			"dpop.nonce.expiresIn must be a positive integer number of seconds",
+		);
+	}
+
+	const parExpiresIn = opts.pushedAuthorizationRequests?.expiresIn;
+	if (
+		parExpiresIn !== undefined &&
+		(!Number.isSafeInteger(parExpiresIn) ||
+			parExpiresIn <= 0 ||
+			parExpiresIn >= MAX_PUSHED_AUTHORIZATION_REQUEST_EXPIRES_IN)
+	) {
+		throw new BetterAuthError(
+			`pushedAuthorizationRequests.expiresIn must be a whole number of seconds below ${MAX_PUSHED_AUTHORIZATION_REQUEST_EXPIRES_IN}`,
+		);
+	}
+	if (
+		opts.pushedAuthorizationRequests?.required &&
+		!opts.pushedAuthorizationRequests.enabled
+	) {
+		throw new BetterAuthError(
+			"pushedAuthorizationRequests.required needs pushedAuthorizationRequests.enabled",
 		);
 	}
 
@@ -1115,6 +1141,76 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					return tokenEndpoint(ctx, opts);
 				},
 			),
+			oauth2PushedAuthorizationRequest: createOAuthEndpoint(
+				PUSHED_AUTHORIZATION_REQUEST_PATH,
+				{
+					method: "POST",
+					// RFC 8707 §2 lets `resource` repeat.
+					formParams: { repeatable: ["resource"] },
+					// Validated as an authorization request by the handler.
+					body: z.record(z.string(), z.unknown()),
+					metadata: {
+						noStore: true,
+						allowedMediaTypes: ["application/x-www-form-urlencoded"],
+						openapi: {
+							description:
+								"Push an OAuth2 authorization request and receive a request_uri (RFC 9126)",
+							parameters: [
+								{
+									name: "DPoP",
+									in: "header",
+									required: false,
+									schema: { type: "string" },
+									description:
+										"RFC 9449 DPoP proof JWT that binds the authorization code to its key",
+								},
+							],
+							responses: {
+								"201": {
+									description: "Authorization request stored",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													request_uri: {
+														type: "string",
+														description:
+															"Single-use reference to pass to the authorization endpoint",
+													},
+													expires_in: {
+														type: "number",
+														description: "Lifetime of request_uri in seconds",
+													},
+												},
+												required: ["request_uri", "expires_in"],
+											},
+										},
+									},
+								},
+								"400": {
+									description: "Invalid request or error response",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													error: { type: "string" },
+													error_description: { type: "string" },
+												},
+												required: ["error"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					return pushedAuthorizationRequestEndpoint(ctx, opts);
+				},
+			),
 			oauth2Introspect: createOAuthEndpoint(
 				"/oauth2/introspect",
 				{
@@ -1840,6 +1936,17 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					]
 				: []),
 			// UserInfo - API endpoint
+			...(isPushedAuthorizationRequestEnabled(opts) &&
+			opts.rateLimit?.par !== false
+				? [
+						{
+							pathMatcher: (path: string) =>
+								path === PUSHED_AUTHORIZATION_REQUEST_PATH,
+							window: opts.rateLimit?.par?.window ?? 60,
+							max: opts.rateLimit?.par?.max ?? 20,
+						},
+					]
+				: []),
 			...(opts.rateLimit?.userinfo !== false
 				? [
 						{

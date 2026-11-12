@@ -33,6 +33,63 @@ Better Auth also applies these rules to the authorize request ([OAuth 2.1 §4.1.
 * Every success and error response includes `iss` ([RFC 9207 §2](https://datatracker.ietf.org/doc/html/rfc9207#section-2)).
 * `resource` restricts the tokens to a resource server ([RFC 8707 §2](https://datatracker.ietf.org/doc/html/rfc8707#section-2)). See [Resources](/docs/plugins/oauth-provider/tokens#resources).
 
+## Pushed authorization requests
+
+A plain authorization request carries its parameters in the browser URL, where the user, browser extensions, and logs can read or change them. A pushed authorization request (PAR) moves them to a direct call from the client to your server ([RFC 9126](https://datatracker.ietf.org/doc/html/rfc9126)). The browser then carries only a short-lived reference.
+
+To serve the endpoint, set `pushedAuthorizationRequests.enabled`:
+
+```ts title="auth.ts"
+oauthProvider({
+  pushedAuthorizationRequests: {
+    enabled: true, // [!code highlight]
+  },
+})
+```
+
+Discovery then advertises `pushed_authorization_request_endpoint`. The client uses it in three steps:
+
+1. The client sends the authorization parameters to `/oauth2/par` as a form-encoded POST. It authenticates as it does at the token endpoint. A `private_key_jwt` assertion can name the issuer, the token endpoint URL, or the PAR endpoint URL as its audience. A public client sends only `client_id`.
+2. The server answers `201` with `request_uri` and `expires_in`.
+3. The client sends the user to `/oauth2/authorize` with only `client_id` and `request_uri`.
+
+The PAR endpoint checks the parameters as the authorize endpoint would. An unregistered `redirect_uri`, an unknown scope, or missing PKCE fails at the push with a JSON error, before the user sees a page. A pushed request that contains `request_uri` fails with `invalid_request`.
+
+Each `request_uri` has these limits ([RFC 9126 §4](https://datatracker.ietf.org/doc/html/rfc9126#section-4)):
+
+* It expires after `expiresIn` seconds, `60` by default. The value must be below `600`, the limit FAPI 2.0 sets.
+* It works once. The authorize endpoint consumes it on first use. Reloading the original authorize URL fails with `invalid_request_uri`, and the client must push a new request. The login, consent, and other screens resume from the [signed query](#how-the-redirect-works), which stays valid for `codeExpiresIn`, as it does for any authorization request.
+* It works only with the `client_id` that pushed it.
+
+The authorize endpoint uses only the pushed parameters. It ignores any other parameter added to the authorize URL besides `client_id`.
+
+### Bind the code to a DPoP key
+
+A client can send a `DPoP` proof with the push, signed for the `/oauth2/par` URL. The server then binds the authorization code to that key ([RFC 9449 §10.1](https://datatracker.ietf.org/doc/html/rfc9449#section-10.1)). The token request must carry a proof signed by the same key. A pushed `dpop_jkt` that names a different key fails with `invalid_request`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
+
+### Require pushed requests
+
+A required policy stops clients from starting authorization with parameters in the URL. To require PAR from every client, set `required: true`:
+
+```ts title="auth.ts"
+oauthProvider({
+  pushedAuthorizationRequests: {
+    enabled: true,
+    required: true, // [!code highlight]
+  },
+})
+```
+
+To require it from one client, register the client with `require_pushed_authorization_requests: true` ([RFC 9126 §6](https://datatracker.ietf.org/doc/html/rfc9126#section-6)). A client can set this on itself through dynamic registration, because it only restricts that client.
+
+An authorization request without `request_uri` then fails with `invalid_request` and the description `pushed authorization request is required`. With `required: true`, discovery also advertises `require_pushed_authorization_requests: true`. The login, consent, and other screens keep working, because they resume from the signed query.
+
+### Resolve your own request URIs
+
+`requestUriResolver` resolves `request_uri` values that your own endpoint issues. With both PAR options set, the authorize endpoint first looks up values that `/oauth2/par` issued, and calls your resolver for any other value. A request your resolver returns counts as pushed under a required policy.
+
+Your resolver must enforce what the built-in endpoint does: each value expires quickly, works once, and works only for the client that pushed it. To bind the code to a DPoP key from your endpoint, call [`verifyDpopProof`](/docs/plugins/oauth-provider/tokens#nonces-on-your-own-endpoints) there and store the proof's `jkt` as `dpop_jkt` with the request.
+
 ## Login page
 
 To send users to your sign-in page, set `loginPage`. When the sign-in request carries `oauth_query` and creates a session, the plugin continues the authorization flow. With `oauthProviderClient`, your page needs no OAuth code.
