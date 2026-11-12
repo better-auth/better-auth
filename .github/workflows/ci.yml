@@ -92,10 +92,7 @@ jobs:
 
       # Versioned docs content comes from other branches, so check its icons against this registry.
       - name: Lint Docs Sidebar Icons
-        working-directory: docs
-        run: |
-          pnpm sync-versions
-          node --import=tsx scripts/validate-sidebar-icons.ts
+        run: pnpm --filter docs validate:sidebar-icons
 
   typecheck:
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'better-auth/better-auth' || github.event_name != 'pull_request' && github.repository == 'better-auth/better-auth') && 'starsling-ubuntu-26.04' || 'ubuntu-24.04' }}
