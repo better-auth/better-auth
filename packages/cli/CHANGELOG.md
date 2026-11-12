@@ -1,5 +1,14 @@
 # auth
 
+## 1.8.0-beta.9
+
+### Patch Changes
+
+- Updated dependencies []:
+  - better-auth@1.8.0-beta.9
+  - @better-auth/core@1.8.0-beta.9
+  - @better-auth/telemetry@1.8.0-beta.9
+
 ## 1.8.0-beta.8
 
 ### Patch Changes

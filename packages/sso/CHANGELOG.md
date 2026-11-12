@@ -1,5 +1,28 @@
 # @better-auth/sso
 
+## 1.8.0-beta.9
+
+### Minor Changes
+
+- [#12484](https://github.com/better-auth/better-auth/pull/12484) [`68ad66d`](https://github.com/better-auth/better-auth/commit/68ad66df7398019118881cb989ba6eefe83c8b55) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - OIDC and SAML providers that send no email can now sign users in through the new `mapProfileToUser` option.
+
+  - It runs on every SSO sign-in before the user is looked up, and returns the `email`, `name`, and `image` to use, such as a placeholder from `createPlaceholderEmail` in `@better-auth/core/utils/email`. Previously an OIDC sign-in without an email always failed with `error_description=missing_user_info`.
+  - An email that differs from the provider's must be an email address and is never marked verified.
+  - A callback that throws or returns an invalid result redirects with `error=SSO_PROFILE_MAPPING_FAILED`.
+
+- [#12484](https://github.com/better-auth/better-auth/pull/12484) [`68ad66d`](https://github.com/better-auth/better-auth/commit/68ad66df7398019118881cb989ba6eefe83c8b55) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SAML sign-in now uses the `NameID` as the user's email only when its `Format` is `urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress`.
+
+  - **Breaking:** providers that send no email attribute and a NameID in another Format, or with no Format, now fail with `error=missing_user_info`, including for users who signed in that way before. Previously any NameID became the email, even when it was not an address.
+  - To keep these users signing in, send an `email` attribute or the `emailAddress` NameID Format from the IdP, set `samlConfig.mapping.email` to the attribute it does send, or return the NameID from `mapProfileToUser` as the SSO provisioning docs describe. The server log names the Format the IdP sent.
+  - Without `samlConfig.mapping.email`, the email is also read from the `http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress`, `mail`, and `urn:oid:0.9.2342.19200300.100.1.3` attributes.
+  - A SAML response without a NameID now redirects with `error=missing_user_info`, not `error=saml_error`.
+
+- [#12484](https://github.com/better-auth/better-auth/pull/12484) [`68ad66d`](https://github.com/better-auth/better-auth/commit/68ad66df7398019118881cb989ba6eefe83c8b55) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - SAML users who sign in without a name attribute now get their email as their name, not the NameID.
+
+  - Previously an opaque NameID such as `a1b2c3d4-opaque` became the stored display name. The name attributes are `displayName`, `givenName`, and `surname`, unless remapped in `samlConfig.mapping`.
+  - In `mapProfileToUser`, `providerUser.name` is `undefined` in that case, and a name the callback returns is used.
+  - Existing users keep their stored name, unless `resolveUser` links them with `profile: "update"`, or `account.accountLinking.updateUserInfoOnLink` is on when their SSO account is first linked by email.
+
 ## 1.8.0-beta.8
 
 ## 1.8.0-beta.7

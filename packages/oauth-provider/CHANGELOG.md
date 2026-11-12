@@ -1,5 +1,35 @@
 # @better-auth/oauth-provider
 
+## 1.8.0-beta.9
+
+### Minor Changes
+
+- [#12440](https://github.com/better-auth/better-auth/pull/12440) [`d55aaa4`](https://github.com/better-auth/better-auth/commit/d55aaa46a92225356eb610a887e665209c2eff4c) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A `client_credentials` token is now bound to the `confirmation` a `clientAuthentication` strategy returns, such as an mTLS certificate thumbprint. Before, the grant ignored it and issued an unbound token, unless the request also carried a DPoP proof. The token's `cnf` now holds that confirmation, and introspection returns it.
+
+  When the strategy returns a DPoP key (`jkt`), the token type is now `DPoP`. The client must then send a DPoP proof with each request to a protected resource. Strategies that return no confirmation are unaffected.
+
+  A confirmation that is not a DPoP key, such as a certificate thumbprint, no longer replaces a required DPoP binding in any grant, including extension grants. When the client is registered with `dpop_bound_access_tokens: true`, or a resource sets `dpopBoundAccessTokensRequired: true`, such an issuance now fails with `invalid_dpop_proof` instead of returning a token without a DPoP binding. `provider.resolveConfirmation()` applies the same rule, so the device code and CIBA grants reject it before they consume the code.
+
+- [#12437](https://github.com/better-auth/better-auth/pull/12437) [`f85e180`](https://github.com/better-auth/better-auth/commit/f85e18016c6a7007cd3698850fad78fa63fa0a71) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Plugin endpoints on the auth server can verify DPoP proofs with the token endpoint's rules, including server-provided nonces. Call `verifyDpopProof()` or `issueDpopNonce()` on `getOAuthProviderApi(ctx, opts)`. Do not combine `verifyDpopProof()` with `issueTokens` or `resolveConfirmation` on one request, because they already verify the proof. A proof on an `auth.api` call without an HTTP request fails. Custom `OAuthProviderApi` implementations must add both methods.
+
+- [#12436](https://github.com/better-auth/better-auth/pull/12436) [`3d9db7a`](https://github.com/better-auth/better-auth/commit/3d9db7a78960f33f56e80a17c7f988e2fe57b097) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `provider.resolveConfirmation()` accepts an `expectedJkt` option, so an extension grant can keep a DPoP-bound token bound to the same key, as the built-in refresh and token exchange grants do. With `expectedJkt`, the request must carry a DPoP proof signed by that key, or client authentication must return a `confirmation` with the same `jkt`. Otherwise the request is rejected, as on refresh. Calls without `expectedJkt` behave as before.
+
+- [#12439](https://github.com/better-auth/better-auth/pull/12439) [`fc81d8e`](https://github.com/better-auth/better-auth/commit/fc81d8ec1c96b4718b1673c0d2147872d29a722e) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - `oauthTokenExchange()` now supports RFC 8693 delegation. A service can send an `actor_token` with `actor_token_type=urn:ietf:params:oauth:token-type:access_token`. The exchanged token then names the actor in an `act` claim, nesting earlier actors from the subject token. Introspection returns `act` for JWT and opaque access tokens. Before, any request with `actor_token` failed with `invalid_request`.
+
+  The actor token must be an active access token this server issued to the exchanging client, such as the service's own `client_credentials` token. A delegated token, one that already carries `act`, cannot be an actor token. A subject token with a `may_act` claim can only be exchanged by an actor that matches it. `delegation.maxDepth` limits the number of actors and defaults to `1`. Set it to `0` to keep rejecting actor tokens. `allowExchange` now also receives `actor` and `act`, and `delegation.actorClaims` adds your own fields to the current actor's entry.
+
+  Introspection now reports an opaque access token inactive when its user no longer exists. Before, adapters without foreign keys, such as MongoDB, returned it as active without a `sub`.
+
+  **Breaking for claim contributors:** `act` is now owned by the authorization server, like `cnf`. A value set by `customAccessTokenClaims`, an extension `claims.accessToken` contributor, or a resource's `customClaims` is stripped with a warning. Custom grants can pass `act` to `issueTokens` instead.
+
+  **Migration required:** opaque delegated tokens store their actor chain in a new optional `act` column on `oauthAccessToken`. Run `npx auth@latest migrate` or `npx auth@latest generate` before upgrading.
+
+### Patch Changes
+
+- [#12443](https://github.com/better-auth/better-auth/pull/12443) [`c1c19fe`](https://github.com/better-auth/better-auth/commit/c1c19fe4047f28984219dd6e60d579dc0f517166) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - A malformed `confirmation` from a `clientAuthentication` strategy, or one passed to `issueTokens` or `resolveConfirmation`, now fails the request with `server_error` instead of issuing a token. A confirmation must have exactly one member, `jkt` or `x5t#S256`, and its value must be a non-empty string. Before, a confirmation with both members produced a token that DPoP proofs treated as DPoP-bound only, which dropped its certificate binding.
+
+- [#12438](https://github.com/better-auth/better-auth/pull/12438) [`868ba35`](https://github.com/better-auth/better-auth/commit/868ba355e38b18e825fe39d9766d788c923d3b4a) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - When a client exchanges its own access token with `oauthTokenExchange()`, and that token is bound by a mechanism other than DPoP, such as an mTLS certificate in `cnf["x5t#S256"]`, the client's `clientAuthentication` strategy must now return the same `confirmation`. Otherwise the exchange fails with `invalid_request`. DPoP-bound tokens, and exchanges by a service in the token's audience, are unchanged.
+
 ## 1.8.0-beta.8
 
 ### Minor Changes
