@@ -253,7 +253,7 @@ Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Witho
 
 `revocableJwtAccessTokens` <span className="opacity-70">`boolean`</span>
 
-Lets `/oauth2/revoke` revoke JWT access tokens by `jti`. Introspection, UserInfo, and `validateAccessToken` then look up each JWT access token in the verification store. Defaults to `false`. See [Revoke JWT access tokens](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
+Lets `/oauth2/revoke` revoke JWT access tokens by `jti`, and makes revoking a refresh token also revoke the JWT access tokens of its grant. Introspection, UserInfo, and `validateAccessToken` then look up each JWT access token in the verification store. Defaults to `false`. See [Revoke JWT access tokens](/docs/plugins/oauth-provider/tokens#revoke-jwt-access-tokens).
 
 `dpop` <span className="opacity-70">`{ proofMaxAgeSeconds?, signingAlgorithms?, nonce? }`</span>
 
@@ -801,6 +801,7 @@ export const oauthRefreshTokenTableFields = [
   { name: "userId", type: "string", description: "User the token was issued for", isForeignKey: true, references: { model: "user", field: "id" } },
   { name: "referenceId", type: "string", description: "Consent reference", isOptional: true },
   { name: "authorizationCodeId", type: "string", description: "Authorization code that started this token family", isOptional: true },
+  { name: "grantId", type: "string", description: "Grant shared by every rotation, used to revoke the grant's access tokens", isOptional: true },
   { name: "resources", type: "string[]", description: "Resources the token may request", isOptional: true },
   { name: "requestedUserInfoClaims", type: "string[]", description: "UserInfo claims requested with `claims`", isOptional: true },
   { name: "scopes", type: "string[]", description: "Granted scopes" },
@@ -833,6 +834,7 @@ export const oauthAccessTokenTableFields = [
   { name: "referenceId", type: "string", description: "Consent reference", isOptional: true },
   { name: "authorizationCodeId", type: "string", description: "Authorization code that started this token family", isOptional: true },
   { name: "refreshId", type: "string", description: "Refresh token this access token belongs to", isOptional: true, isForeignKey: true, references: { model: "oauthRefreshToken", field: "id" } },
+  { name: "grantId", type: "string", description: "Grant of the refresh token issued with this token, used to revoke it with any refresh token of the grant", isOptional: true },
   { name: "resources", type: "string[]", description: "Resources the token is valid for", isOptional: true },
   { name: "requestedUserInfoClaims", type: "string[]", description: "UserInfo claims requested with `claims`", isOptional: true },
   { name: "scopes", type: "string[]", description: "Granted scopes" },

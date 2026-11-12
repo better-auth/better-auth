@@ -5,6 +5,7 @@ import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	refreshAccessTokenRequest,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
@@ -80,6 +81,7 @@ function createSecondaryStorage() {
 async function setup(
 	providerOptions?: Partial<OAuthOptions<Scope[]>>,
 	authOptions?: Partial<BetterAuthOptions>,
+	testWith?: "sqlite" | "postgres" | "mysql" | "mongodb",
 ) {
 	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
@@ -97,7 +99,12 @@ async function setup(
 				validateProbe,
 			],
 		},
-		{ clientOptions: { plugins: [oauthProviderClient()] } },
+		{
+			clientOptions: { plugins: [oauthProviderClient()] },
+			testWith,
+			// MongoDB keeps one database for every instance.
+			testUser: { email: `${generateRandomString(12)}@test.com` },
+		},
 	);
 	const { headers } = await signInWithTestUser();
 	const oauthClient = await auth.api.adminCreateOAuthClient({
@@ -116,7 +123,17 @@ async function setup(
 
 type TestServer = Awaited<ReturnType<typeof setup>>;
 
-async function getAccessToken({ client, headers, oauthClient }: TestServer) {
+interface TokenResponse {
+	access_token?: string;
+	refresh_token?: string;
+}
+
+/** Runs the authorization code flow; `offline` also requests a refresh token. */
+async function authorize(
+	server: TestServer,
+	{ offline = false }: { offline?: boolean } = {},
+) {
+	const { client, headers, oauthClient } = server;
 	const codeVerifier = generateRandomString(32);
 	const authUrl = await createAuthorizationURL({
 		id: "test",
@@ -128,7 +145,12 @@ async function getAccessToken({ client, headers, oauthClient }: TestServer) {
 		redirectURI: "",
 		authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
 		state: "123",
-		scopes: ["openid", "profile", "email"],
+		scopes: [
+			"openid",
+			"profile",
+			"email",
+			...(offline ? ["offline_access"] : []),
+		],
 		codeVerifier,
 	});
 	let callbackRedirectUrl = "";
@@ -139,24 +161,54 @@ async function getAccessToken({ client, headers, oauthClient }: TestServer) {
 		},
 	});
 	const code = new URL(callbackRedirectUrl).searchParams.get("code")!;
-	const { body, headers: tokenHeaders } = await authorizationCodeRequest({
-		code,
-		codeVerifier,
-		redirectURI: redirectUri,
-		resource: validResource,
+	const redeem = async () => {
+		const { body, headers: tokenHeaders } = await authorizationCodeRequest({
+			code,
+			codeVerifier,
+			redirectURI: redirectUri,
+			resource: validResource,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret!,
+				redirectURI: redirectUri,
+			},
+		});
+		return client.$fetch<TokenResponse>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: tokenHeaders,
+		});
+	};
+	const tokens = (await redeem()).data!;
+	expect(tokens.access_token!.split(".")).toHaveLength(3);
+	return {
+		accessToken: tokens.access_token!,
+		refreshToken: tokens.refresh_token,
+		redeem,
+	};
+}
+
+async function getAccessToken(server: TestServer) {
+	return (await authorize(server)).accessToken;
+}
+
+async function refresh(
+	{ client, oauthClient }: TestServer,
+	refreshToken: string,
+) {
+	const { body, headers } = await refreshAccessTokenRequest({
+		refreshToken,
 		options: {
 			clientId: oauthClient.client_id,
 			clientSecret: oauthClient.client_secret!,
 			redirectURI: redirectUri,
 		},
 	});
-	const tokens = await client.$fetch<{ access_token?: string }>(
-		"/oauth2/token",
-		{ method: "POST", body, headers: tokenHeaders },
-	);
-	const accessToken = tokens.data!.access_token!;
-	expect(accessToken.split(".")).toHaveLength(3);
-	return accessToken;
+	return client.$fetch<TokenResponse>("/oauth2/token", {
+		method: "POST",
+		body,
+		headers,
+	});
 }
 
 async function isActiveAtIntrospection(
@@ -322,5 +374,206 @@ describe("oauth-provider - JWT access token revocation disabled", async () => {
 			find.mockRestore();
 			create.mockRestore();
 		}
+	});
+
+	it("stamps no grant_id and leaves JWTs active after refresh revocation", async () => {
+		const grant = await authorize(server, { offline: true });
+		expect(decodeJwt(grant.accessToken).grant_id).toBeUndefined();
+		expect((await revoke(server, grant.refreshToken!)).error).toBe(null);
+		expect(await isActiveAtIntrospection(server, grant.accessToken)).toBe(true);
+	});
+});
+
+async function expectRevoked(server: TestServer, token: string) {
+	expect(await isActiveAtIntrospection(server, token)).toBe(false);
+	expect(await userinfoStatus(server, token)).toBe(401);
+	expect(await isActiveAtProviderApi(server, token)).toBe(false);
+}
+
+async function expectActive(server: TestServer, token: string) {
+	expect(await isActiveAtIntrospection(server, token)).toBe(true);
+	expect(await userinfoStatus(server, token)).toBe(200);
+	expect(await isActiveAtProviderApi(server, token)).toBe(true);
+}
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+ */
+describe.each(["sqlite", "postgres", "mysql", "mongodb"] as const)(
+	"oauth-provider - refresh token revocation revokes the grant's JWT access tokens on %s",
+	(testWith) => {
+		// Each test gets its own instance: MongoDB instances share one database,
+		// so a suite-wide instance collides with other files running in parallel.
+		const createServer = () =>
+			setup({ revocableJwtAccessTokens: true }, undefined, testWith);
+
+		it("revokes JWTs from the first issue and every rotation, and leaves other grants alone", async () => {
+			const server = await createServer();
+			const first = await authorize(server, { offline: true });
+			const rotated = (await refresh(server, first.refreshToken!)).data!;
+			const otherGrant = await authorize(server, { offline: true });
+
+			const grantId = decodeJwt(first.accessToken).grant_id;
+			expect(grantId).toEqual(expect.any(String));
+			expect(decodeJwt(rotated.access_token!).grant_id).toBe(grantId);
+			expect(decodeJwt(otherGrant.accessToken).grant_id).not.toBe(grantId);
+
+			expect((await revoke(server, rotated.refresh_token!)).error).toBe(null);
+
+			await expectRevoked(server, first.accessToken);
+			await expectRevoked(server, rotated.access_token!);
+			await expectActive(server, otherGrant.accessToken);
+			expect((await refresh(server, otherGrant.refreshToken!)).error).toBe(
+				null,
+			);
+		});
+
+		it("revokes the grant's JWTs when a rotated refresh token is replayed at the token endpoint", async () => {
+			const server = await createServer();
+			const first = await authorize(server, { offline: true });
+			const rotated = (await refresh(server, first.refreshToken!)).data!;
+
+			const replay = await refresh(server, first.refreshToken!);
+			expect(replay.error?.status).toBe(400);
+
+			await expectRevoked(server, rotated.access_token!);
+		});
+
+		it("revokes the grant's JWTs when a rotated refresh token is presented for revocation", async () => {
+			const server = await createServer();
+			const first = await authorize(server, { offline: true });
+			const rotated = (await refresh(server, first.refreshToken!)).data!;
+
+			expect((await revoke(server, first.refreshToken!)).error).toBe(null);
+
+			await expectRevoked(server, rotated.access_token!);
+		});
+
+		it("revokes the grant's JWTs when the authorization code is replayed", async () => {
+			const server = await createServer();
+			const grant = await authorize(server, { offline: true });
+
+			const replay = await grant.redeem();
+			expect(replay.error?.status).toBe(400);
+
+			await expectRevoked(server, grant.accessToken);
+		});
+
+		it("revokes every JWT of the grant when revocation races a refresh", async () => {
+			const server = await createServer();
+			const grant = await authorize(server, { offline: true });
+
+			const [, refreshed] = await Promise.all([
+				revoke(server, grant.refreshToken!),
+				refresh(server, grant.refreshToken!),
+			]);
+
+			await expectRevoked(server, grant.accessToken);
+			if (refreshed.data?.access_token) {
+				await expectRevoked(server, refreshed.data.access_token);
+			}
+		});
+
+		it("starts a grant ID for a refresh token stored before the option was enabled", async () => {
+			const server = await createServer();
+			const grant = await authorize(server, { offline: true });
+			const ctx = await server.auth.$context;
+			await ctx.adapter.updateMany({
+				model: "oauthRefreshToken",
+				where: [{ field: "clientId", value: server.oauthClient.client_id }],
+				update: { grantId: null },
+			});
+
+			const rotated = (await refresh(server, grant.refreshToken!)).data!;
+			expect(decodeJwt(rotated.access_token!).grant_id).toEqual(
+				expect.any(String),
+			);
+
+			expect((await revoke(server, rotated.refresh_token!)).error).toBe(null);
+			await expectRevoked(server, rotated.access_token!);
+		});
+
+		it("stamps no grant ID when the response has no refresh token", async () => {
+			const server = await createServer();
+			const token = await getAccessToken(server);
+			expect(decodeJwt(token).grant_id).toBeUndefined();
+		});
+	},
+);
+
+describe("oauth-provider - grant_id in custom claims without revocation", async () => {
+	const server = await setup({
+		customAccessTokenClaims: () => ({ grant_id: "custom" }),
+	});
+
+	it("keeps a custom grant_id claim", async () => {
+		const grant = await authorize(server, { offline: true });
+		expect(decodeJwt(grant.accessToken).grant_id).toBe("custom");
+	});
+});
+
+describe("oauth-provider - grant revocation when the verification store fails", async () => {
+	const server = await setup({ revocableJwtAccessTokens: true });
+
+	it("still tears down the refresh token family on replay", async () => {
+		const first = await authorize(server, { offline: true });
+		const rotated = (await refresh(server, first.refreshToken!)).data!;
+		const ctx = await server.auth.$context;
+		const create = vi
+			.spyOn(ctx.internalAdapter, "createVerificationValue")
+			.mockRejectedValueOnce(new Error("store unavailable"));
+		try {
+			const replay = await refresh(server, first.refreshToken!);
+			expect(replay.error).not.toBe(null);
+			expect(create).toHaveBeenCalled();
+		} finally {
+			create.mockRestore();
+		}
+
+		const afterReplay = await refresh(server, rotated.refresh_token!);
+		expect(afterReplay.error?.status).toBe(400);
+	});
+});
+
+describe("oauth-provider - grant revocation with contributed claims", async () => {
+	const server = await setup({
+		revocableJwtAccessTokens: true,
+		customAccessTokenClaims: () => ({ grant_id: "forged" }),
+	});
+
+	it("keeps grant_id owned by the server", async () => {
+		const grant = await authorize(server, { offline: true });
+		const token = await getAccessToken(server);
+		expect(decodeJwt(grant.accessToken).grant_id).not.toBe("forged");
+		expect(decodeJwt(token).grant_id).toBeUndefined();
+	});
+});
+
+describe("oauth-provider - grant revocation in secondary storage", async () => {
+	const accessTokenExpiresIn = 600;
+	const { store, ttls, storage } = createSecondaryStorage();
+	const server = await setup(
+		{ revocableJwtAccessTokens: true, accessTokenExpiresIn },
+		{
+			secondaryStorage: storage,
+			session: { storeSessionInDatabase: true },
+		},
+	);
+
+	it("keeps the grant entry for the access token lifetime", async () => {
+		const grant = await authorize(server, { offline: true });
+		const grantId = decodeJwt(grant.accessToken).grant_id as string;
+		expect((await revoke(server, grant.refreshToken!)).error).toBe(null);
+
+		const key = [...store.keys()].find(
+			(k) => k.startsWith("verification:") && k.includes(grantId),
+		);
+		expect(key).toBeDefined();
+		expect(
+			Math.abs(ttls.get(key!)! - accessTokenExpiresIn),
+		).toBeLessThanOrEqual(2);
+		expect(await isActiveAtIntrospection(server, grant.accessToken)).toBe(
+			false,
+		);
 	});
 });

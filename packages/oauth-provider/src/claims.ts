@@ -45,12 +45,18 @@ const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
  */
 function stripReservedClaims(
 	claims: Record<string, unknown> | null | undefined,
+	opts: OAuthOptions<Scope[]>,
 ): Record<string, unknown> {
 	if (!claims) return {};
+	// `grant_id` is AS-owned only when grants are revocable; otherwise it stays
+	// available to custom claims.
+	const isReserved = (key: string) =>
+		RESERVED_ACCESS_TOKEN_CLAIMS.has(key) ||
+		(key === "grant_id" && !!opts.revocableJwtAccessTokens);
 	const stripped: string[] = [];
 	const safe: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(claims)) {
-		if (RESERVED_ACCESS_TOKEN_CLAIMS.has(key)) {
+		if (isReserved(key)) {
 			stripped.push(key);
 			continue;
 		}
@@ -154,10 +160,13 @@ export async function resolveAccessTokenClaims(
 				metadata,
 			})
 		: {};
-	return stripReservedClaims({
-		...extensionClaims,
-		...(perRequestClaims ?? {}),
-		...pluginClaims,
-		...resourcePolicyClaims,
-	});
+	return stripReservedClaims(
+		{
+			...extensionClaims,
+			...(perRequestClaims ?? {}),
+			...pluginClaims,
+			...resourcePolicyClaims,
+		},
+		input.opts,
+	);
 }

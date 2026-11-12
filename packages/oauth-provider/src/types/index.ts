@@ -1820,6 +1820,10 @@ export interface OAuthOptions<
 	 * secondary storage alone, a lost or evicted entry makes the token valid
 	 * again; set `verification.storeInDatabase` to keep entries durable.
 	 *
+	 * Revoking a refresh token, or replaying a rotated refresh token or an
+	 * authorization code, also revokes the JWT access tokens of its grant
+	 * (RFC 7009 §2.1). They carry the grant in a `grant_id` claim.
+	 *
 	 * Resource servers that verify JWT access tokens locally against the JWKS
 	 * never see the revocation. They must introspect to honor it.
 	 *
@@ -2450,6 +2454,13 @@ export interface OAuthOpaqueAccessToken<
 	 * Not available without the "offline_access" scope
 	 */
 	refreshId?: string;
+	/**
+	 * The grant of the refresh token issued with this access token. Revoking
+	 * any refresh token of the grant deletes every access token with it.
+	 *
+	 * Not available without the "offline_access" scope
+	 */
+	grantId?: string;
 	/** The expiration date of the access token. */
 	expiresAt: Date;
 	/** The creation date of the access token. */
@@ -2498,6 +2509,14 @@ export interface OAuthRefreshToken<
 	userId: string;
 	referenceId?: string;
 	authorizationCodeId?: string;
+	/**
+	 * Identifies the grant this refresh token belongs to. Every rotation keeps
+	 * it, and the grant's opaque access tokens store it. With
+	 * `revocableJwtAccessTokens`, its JWT access tokens carry it as `grant_id`.
+	 *
+	 * Absent on refresh tokens stored before 1.8; the next rotation adds one.
+	 */
+	grantId?: string;
 	clientId?: string;
 	expiresAt: Date;
 	createdAt: Date;

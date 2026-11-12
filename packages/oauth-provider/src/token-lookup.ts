@@ -201,6 +201,54 @@ export function jwtRevocationMarker(
 	};
 }
 
+function grantRevocationIdentifier(grantId: string) {
+	return `oauth-revoked-grant:${grantId}`;
+}
+
+/**
+ * Revokes every JWT access token of a grant, keyed on the `grant_id` they
+ * carry. A no-op without `revocableJwtAccessTokens` or a grant ID.
+ *
+ * The entry lasts `accessTokenExpiresIn`: every user access token expires
+ * within that of being issued, so the entry outlives every token the grant
+ * issued before it was written.
+ */
+export async function revokeGrantAccessTokens(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	grant: { grantId?: string | null; clientId: string },
+) {
+	if (!opts.revocableJwtAccessTokens || !grant.grantId) return;
+	await ctx.context.internalAdapter.createVerificationValue({
+		identifier: grantRevocationIdentifier(grant.grantId),
+		value: grant.clientId,
+		expiresAt: new Date(
+			Date.now() + (opts.accessTokenExpiresIn ?? 3600) * 1000,
+		),
+	});
+}
+
+async function isRevokedJwtAccessToken(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	payload: JwtAccessTokenPayload,
+) {
+	if (!opts.revocableJwtAccessTokens) return false;
+	const find = (identifier: string | undefined) =>
+		identifier
+			? ctx.context.internalAdapter.findVerificationValue(identifier)
+			: null;
+	const [tokenEntry, grantEntry] = await Promise.all([
+		find(jwtRevocationMarker(opts, payload)?.identifier),
+		find(
+			typeof payload.grant_id === "string"
+				? grantRevocationIdentifier(payload.grant_id)
+				: undefined,
+		),
+	]);
+	return Boolean(tokenEntry || grantEntry);
+}
+
 async function identifyAccessToken(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -209,15 +257,7 @@ async function identifyAccessToken(
 	const payload = await verifyJwtAccessToken(ctx, opts, token);
 	if (payload === "inactive") return payload;
 	if (payload) {
-		const marker = jwtRevocationMarker(opts, payload);
-		if (
-			marker &&
-			(await ctx.context.internalAdapter.findVerificationValue(
-				marker.identifier,
-			))
-		) {
-			return "inactive";
-		}
+		if (await isRevokedJwtAccessToken(ctx, opts, payload)) return "inactive";
 		return { type: "jwt", payload };
 	}
 	const record = await findOpaqueAccessToken(ctx, opts, token);

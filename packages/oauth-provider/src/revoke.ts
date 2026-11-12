@@ -9,7 +9,11 @@ import type {
 	OpaqueAccessTokenRecord,
 	RefreshTokenRecord,
 } from "./token-lookup";
-import { findToken, jwtRevocationMarker } from "./token-lookup";
+import {
+	findToken,
+	jwtRevocationMarker,
+	revokeGrantAccessTokens,
+} from "./token-lookup";
 import type { OAuthOptions, Scope } from "./types";
 import {
 	destructureCredentials,
@@ -78,16 +82,23 @@ async function revokeOpaqueAccessToken(
 
 async function revokeRefreshToken(
 	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
 	refreshToken: RefreshTokenRecord,
 	clientId: string,
 ) {
-	const { userId } = refreshToken;
 	// Presenting an already revoked refresh token is treated as replay: tear
 	// down the whole family, and still answer 200 since the token is unusable.
 	if (refreshToken.revoked) {
-		await invalidateRefreshFamily(ctx, clientId, userId);
+		await invalidateRefreshFamily(ctx, opts, clientId, refreshToken);
 		return;
 	}
+	// RFC 7009 §2.1: also revoke the grant's JWT access tokens. Written before
+	// the refresh token is marked revoked, so a failed write leaves the grant
+	// fully usable rather than half revoked.
+	await revokeGrantAccessTokens(ctx, opts, {
+		grantId: refreshToken.grantId,
+		clientId,
+	});
 
 	const iat = Math.floor(Date.now() / 1000);
 	// Atomic compare-and-swap. If a concurrent rotation already revoked
@@ -112,12 +123,17 @@ async function revokeRefreshToken(
 		},
 	});
 	if (!won) {
-		await invalidateRefreshFamily(ctx, clientId, userId);
+		await invalidateRefreshFamily(ctx, opts, clientId, refreshToken);
 		return;
 	}
+	// RFC 7009 §2.1: every opaque access token of the grant, including those
+	// linked to refresh tokens rotated away earlier. A refresh token stored
+	// before grant IDs existed only reaches its own access tokens.
 	await ctx.context.adapter.deleteMany({
 		model: "oauthAccessToken",
-		where: [{ field: "refreshId", value: refreshToken.id }],
+		where: refreshToken.grantId
+			? [{ field: "grantId", value: refreshToken.grantId }]
+			: [{ field: "refreshId", value: refreshToken.id }],
 	});
 }
 
@@ -196,7 +212,7 @@ export async function revokeEndpoint(
 		if (found.type === "opaque") {
 			await revokeOpaqueAccessToken(ctx, found.record);
 		} else {
-			await revokeRefreshToken(ctx, found.record, client.clientId);
+			await revokeRefreshToken(ctx, opts, found.record, client.clientId);
 		}
 		return null;
 	} catch (error) {

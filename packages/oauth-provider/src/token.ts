@@ -44,7 +44,7 @@ import { isUserDelegatedScope } from "./oauthClient/client-credentials";
 import type { ResolvedResourcePolicy } from "./resources";
 import { resolveResourcePolicy } from "./resources";
 import { getSupportedClaims, STANDARD_CLAIM_NAMES } from "./standard-claims";
-import { findRefreshToken } from "./token-lookup";
+import { findRefreshToken, revokeGrantAccessTokens } from "./token-lookup";
 import type {
 	Confirmation,
 	OAuthActorClaim,
@@ -312,6 +312,8 @@ async function createJwtAccessToken(
 		confirmation?: Confirmation;
 		/** RFC 8693 actor chain, stamped as `act`. AS-owned, like `cnf`. */
 		act?: OAuthActorClaim;
+		/** The refresh-token grant, stamped as `grant_id`. AS-owned, like `sid`. */
+		grantId?: string;
 	},
 ) {
 	const iat = overrides?.iat ?? Math.floor(Date.now() / 1000);
@@ -348,6 +350,7 @@ async function createJwtAccessToken(
 			// AS-owned, like `sid`: grants derived from this token (token exchange)
 			// read the consent reference back from here.
 			reference_id: overrides?.referenceId,
+			...(overrides?.grantId ? { grant_id: overrides.grantId } : {}),
 			iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 			iat,
 			exp,
@@ -538,9 +541,10 @@ async function createOpaqueAccessToken(
 		confirmation?: Confirmation;
 		requestedUserInfoClaims?: string[];
 		act?: OAuthActorClaim;
+		grantId?: string;
 	} = {},
 ) {
-	const { confirmation, requestedUserInfoClaims, act } = issuance;
+	const { confirmation, requestedUserInfoClaims, act, grantId } = issuance;
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
 	const token = opts.generateOpaqueAccessToken
@@ -560,6 +564,7 @@ async function createOpaqueAccessToken(
 				authorizationCodeId,
 				resources,
 				refreshId,
+				grantId,
 				confirmation,
 				act,
 				requestedUserInfoClaims: requestedUserInfoClaims?.length
@@ -633,9 +638,11 @@ function grantRevokedDuringIssuance() {
  */
 export async function invalidateRefreshFamily(
 	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
 	clientId: string,
-	userId: string,
+	refreshToken: Pick<OAuthRefreshToken<Scope[]>, "userId" | "grantId">,
 ) {
+	const { userId } = refreshToken;
 	// Every access token linked to this family's refresh rows carries the same
 	// client and user, so the delete needs no list of refresh IDs, which
 	// `findMany` would cap at `defaultFindManyLimit`.
@@ -659,12 +666,46 @@ export async function invalidateRefreshFamily(
 	// Without a foreign key, an in-flight issuance can store an access token
 	// between the two deletes above. See `createOpaqueAccessToken`.
 	await deleteLinkedAccessTokens();
+	// Last, so a failed write cannot stop the teardown above. JWT access tokens
+	// are never stored, so only the presented token's grant can be revoked.
+	// JWTs from the user's other grants with this client stay valid until they
+	// expire.
+	await revokeGrantAccessTokens(ctx, opts, {
+		grantId: refreshToken.grantId,
+		clientId,
+	});
 }
 
 async function revokeTokensIssuedForAuthorizationCode(
 	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
 	authorizationCodeId: string,
 ) {
+	if (opts.revocableJwtAccessTokens) {
+		try {
+			const refreshTokens = await ctx.context.adapter.findMany<{
+				grantId?: string;
+				clientId: string;
+			}>({
+				model: "oauthRefreshToken",
+				where: [{ field: "authorizationCodeId", value: authorizationCodeId }],
+			});
+			// Rotations of one grant share its ID, so revoke each grant once.
+			const grants = new Map(
+				refreshTokens.map((row) => [row.grantId, row.clientId]),
+			);
+			await Promise.all(
+				[...grants].map(([grantId, clientId]) =>
+					revokeGrantAccessTokens(ctx, opts, { grantId, clientId }),
+				),
+			);
+		} catch (error) {
+			ctx.context.logger.error(
+				"authorization code replay grant revocation failed",
+				error,
+			);
+		}
+	}
 	const deleteIssuedTokens = async (
 		model: "oauthAccessToken" | "oauthRefreshToken",
 	) => {
@@ -802,6 +843,7 @@ async function createRefreshToken(
 	confirmation?: Confirmation,
 	requestedUserInfoClaims?: string[],
 	authenticationContext?: OAuthAuthenticationContext,
+	grantId?: string,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -821,6 +863,7 @@ async function createRefreshToken(
 		userId: user.id,
 		referenceId,
 		authorizationCodeId,
+		...(grantId ? { grantId } : {}),
 		authTime,
 		acr: authenticationContext?.acr,
 		amr: authenticationContext?.amr,
@@ -1466,6 +1509,12 @@ async function createUserTokens(
 		(existingRefreshToken?.scopes?.includes("offline_access") ||
 			scopes.includes("offline_access"));
 	const isJwtAccessToken = audienceClaim && !opts.disableJwtPlugin;
+	// Kept across rotations, so revoking any refresh token of the grant can
+	// revoke the access tokens it issued. A legacy row without one starts a new
+	// grant ID here.
+	const grantId = isRefreshToken
+		? (existingRefreshToken?.grantId ?? generateRandomString(32))
+		: undefined;
 	const isIdToken = user && effectiveScopes.includes("openid");
 	const metadata = parseClientMetadata(client.metadata);
 	const additionalIdTokenClaims =
@@ -1545,6 +1594,7 @@ async function createUserTokens(
 					confirmation,
 					requestedUserInfoClaims,
 					authenticationContext,
+					grantId,
 				)
 			: undefined;
 
@@ -1588,6 +1638,8 @@ async function createUserTokens(
 						accessTokenClaims,
 						confirmation,
 						act: params.act,
+						// Only read back by the JWT revocation check.
+						grantId: opts.revocableJwtAccessTokens ? grantId : undefined,
 					},
 				)
 			: createOpaqueAccessToken(
@@ -1605,7 +1657,12 @@ async function createUserTokens(
 					referenceId,
 					params.authorizationCodeId,
 					earlyRefreshToken?.id,
-					{ confirmation, requestedUserInfoClaims, act: params.act },
+					{
+						confirmation,
+						requestedUserInfoClaims,
+						act: params.act,
+						grantId,
+					},
 				),
 		earlyRefreshToken
 			? earlyRefreshToken
@@ -1629,6 +1686,7 @@ async function createUserTokens(
 						confirmation,
 						requestedUserInfoClaims,
 						authenticationContext,
+						grantId,
 					)
 				: undefined,
 	]);
@@ -1691,11 +1749,16 @@ async function createUserTokens(
  */
 async function rejectAuthorizationCode(
 	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
 	authorizationCodeId: string,
 	reuseByIssuingClient: boolean,
 ): Promise<never> {
 	if (reuseByIssuingClient) {
-		await revokeTokensIssuedForAuthorizationCode(ctx, authorizationCodeId);
+		await revokeTokensIssuedForAuthorizationCode(
+			ctx,
+			opts,
+			authorizationCodeId,
+		);
 	}
 	throw new APIError("BAD_REQUEST", {
 		error_description: "invalid code",
@@ -1733,6 +1796,7 @@ async function checkVerificationValue(
 	) {
 		return rejectAuthorizationCode(
 			ctx,
+			opts,
 			authorizationCodeId,
 			await isReuseByIssuingClient(
 				ctx,
@@ -2060,7 +2124,7 @@ async function handleAuthorizationCodeGrant(
 	if (!consumed || consumed.id !== verificationId) {
 		// This request already passed the client and PKCE checks against this
 		// code, so it is a reuse by the issuing client.
-		return rejectAuthorizationCode(ctx, authorizationCodeId, true);
+		return rejectAuthorizationCode(ctx, opts, authorizationCodeId, true);
 	}
 	await dpop.recordReplay();
 
@@ -2311,7 +2375,7 @@ async function handleRefreshTokenGrant(
 				error: "invalid_grant",
 			});
 		}
-		await invalidateRefreshFamily(ctx, client_id, refreshToken.userId);
+		await invalidateRefreshFamily(ctx, opts, client_id, refreshToken);
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
 			error: "invalid_grant",

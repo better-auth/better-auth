@@ -420,8 +420,8 @@ A client can only revoke tokens issued to it ([RFC 7009 §2.1](https://datatrack
 What the endpoint does depends on the token:
 
 * **Opaque access token**: deleted. Refresh tokens from the same grant stay valid.
-* **Refresh token**: marked revoked, so it can no longer issue tokens. The opaque access tokens it issued are deleted. JWT access tokens it issued stay valid until they expire.
-* **Refresh token that was already revoked or rotated**: treated as replay. The endpoint still returns 200, and it deletes the client's refresh tokens for that user, along with the opaque access tokens they issued. An access token issued without a refresh token, and any JWT access token, stays valid until it expires.
+* **Refresh token**: marked revoked, so it can no longer issue tokens. The opaque access tokens of its grant are deleted, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). An opaque access token issued before your deployment stored grant IDs is deleted only with the refresh token that issued it. JWT access tokens from the same grant are revoked only with [`revocableJwtAccessTokens`](#revoke-jwt-access-tokens). Without it, they stay valid until they expire.
+* **Refresh token that was already revoked or rotated**: treated as replay. The endpoint still returns 200, and it deletes the client's refresh tokens for that user, along with the opaque access tokens they issued. With `revocableJwtAccessTokens`, the JWT access tokens of the replayed token's grant are also revoked. Any other JWT access token, and an access token issued without a refresh token, stays valid until it expires.
 * **JWT access token**: revoked only with [`revocableJwtAccessTokens`](#revoke-jwt-access-tokens). Without it, a JWT issued to the calling client that still verifies returns 400 `unsupported_token_type` ([RFC 7009 §2.2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.2.1)), because the token is never stored. An expired JWT is treated as unknown and returns 200. So does a JWT whose audience names a resource that is not registered.
 
 To limit a JWT access token, keep `accessTokenExpiresIn` short or end the user's session. A JWT that carries a `sid` is reported inactive by introspection and rejected by UserInfo once its session ends. A `client_credentials` JWT has no session. Its lifetime is the only limit.
@@ -441,10 +441,26 @@ Revoking a JWT access token then returns 200 and stores its `jti` in the [verifi
 Before you turn it on, consider:
 
 * **Resource servers that verify locally don't see revocations.** `verifyAccessTokenRequest` without `remoteVerify`, and [`requireMcpAuth`](/docs/plugins/mcp), check the signature against the JWKS and never ask the server. A revoked token stays valid there until it expires. To honor revocation, set [`remoteVerify`](/docs/plugins/oauth-provider/resource-server#jwt-or-opaque-tokens) so every token is introspected.
-* **Each check adds a lookup.** Introspection, UserInfo, and `validateAccessToken` look up the token's `jti` in the verification store, revoked or not. In the database, each lookup also deletes expired verification rows, unless you set `verification.disableCleanup`. With `verification.storeIdentifier: "hashed"`, a token that was never revoked takes two reads.
-* **Revocations last only as long as their storage.** With [secondary storage](/docs/concepts/database#secondary-storage), entries go there and expire on their own at the token's `exp`. If the storage evicts or loses an entry, the revoked token is accepted again. Use storage that never evicts these keys, or set `verification.storeInDatabase: true` to also keep entries in the database.
-* **Writes are bounded by the rate limit.** Each revocation writes one entry, and only for a valid token issued to the calling client. When rate limiting is enabled, which is the default in production, the `/oauth2/revoke` [rate limit](/docs/plugins/oauth-provider/reference#rate-limits) of 30 requests per 60 seconds bounds how fast entries are written. If you turn rate limiting off, nothing bounds them.
-* **Only the presented token is revoked.** Revoking a refresh token does not revoke JWT access tokens issued from it, because the server does not record their `jti`. Revoke each access token, or end the user's session.
+* **Each check adds lookups.** Introspection, UserInfo, and `validateAccessToken` look up the token's `jti` in the verification store, revoked or not. A token that carries a [`grant_id`](#revoke-the-access-tokens-of-a-grant) also has its grant looked up, in parallel. In the database, each lookup also deletes expired verification rows, unless you set `verification.disableCleanup`. With `verification.storeIdentifier: "hashed"`, each lookup that finds nothing takes two reads.
+* **Revocations last only as long as their storage.** With [secondary storage](/docs/concepts/database#secondary-storage), entries go there and expire on their own: a token's entry at its `exp`, a grant's entry after `accessTokenExpiresIn`. If the storage evicts or loses an entry, the revoked token is accepted again. Use storage that never evicts these keys, or set `verification.storeInDatabase: true` to also keep entries in the database.
+* **Writes are bounded by the rate limit.** Each revocation writes one entry, and only for a valid token issued to the calling client. Revoking a refresh token writes one entry for its grant. When rate limiting is enabled, which is the default in production, the `/oauth2/revoke` [rate limit](/docs/plugins/oauth-provider/reference#rate-limits) of 30 requests per 60 seconds bounds how fast entries are written. If you turn rate limiting off, nothing bounds them.
+
+#### Revoke the access tokens of a grant
+
+A grant is everything one authorization produced: its first tokens and every refresh token rotated from them. Each refresh token stores its grant's ID. With the option on, each JWT access token issued with a refresh token also carries it in a `grant_id` claim. Better Auth sets this claim, and custom access-token claims can't override it.
+
+Revoking a refresh token then also revokes the JWT access tokens of its grant, including those issued before earlier rotations ([RFC 7009 §2.1](https://datatracker.ietf.org/doc/html/rfc7009#section-2.1)). Better Auth stores one entry for the grant, not one per token, and keeps it for `accessTokenExpiresIn`. Every access token the grant issued before the revocation expires within that time. The same happens in these cases:
+
+* A refresh token that was already rotated is presented at the token endpoint or for revocation.
+* An authorization code is redeemed a second time. The grant of the refresh token issued for that code is revoked.
+
+The grant revocation has these limits:
+
+* **Other grants stay valid.** Replay deletes all of a client's refresh tokens for the user, but only the replayed grant's JWT access tokens are revoked. JWT access tokens of the user's other grants with that client stay valid until they expire.
+* **Tokens without a refresh token aren't covered.** A JWT access token issued without a refresh token has no `grant_id`. Revoke it by its `jti`, or end the user's session.
+* **Tokens from token exchange aren't covered.** A token that a client obtained by exchanging one of the grant's access tokens doesn't carry the grant's `grant_id`. It stays valid until it expires.
+* **Tokens from before you turned the option on aren't covered.** They carry no `grant_id`. JWT access tokens issued from then on carry it, including those issued by refreshing an earlier refresh token.
+* **Shortening the lifetime shortens the entry.** If you lower `accessTokenExpiresIn`, a token issued under the longer lifetime can outlive the entry for its grant.
 
 ## Without the JWT plugin
 
