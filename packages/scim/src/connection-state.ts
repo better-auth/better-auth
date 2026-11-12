@@ -1,6 +1,7 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import type { DBAdapter, DBTransactionAdapter } from "better-auth";
 import type { SCIMConnectionBinding } from "./persistence";
+import { chunkSCIMIds } from "./persistence";
 import { createScopedKey } from "./resource-key";
 import { createSCIMError } from "./scim-error";
 
@@ -77,16 +78,16 @@ export async function findDecommissionedSCIMConnectionIds(
 	connectionIds: readonly string[],
 ): Promise<Set<string>> {
 	if (connectionIds.length === 0) return new Set();
-	const bindings = await database.findMany<SCIMConnectionBinding>({
-		model: "scimConnectionBinding",
-		where: [
-			{
-				field: "connectionId",
-				value: [...new Set(connectionIds)],
-				operator: "in",
-			},
-		],
-	});
+	const bindings: SCIMConnectionBinding[] = [];
+	for (const chunk of chunkSCIMIds([...new Set(connectionIds)])) {
+		bindings.push(
+			...(await database.findMany<SCIMConnectionBinding>({
+				model: "scimConnectionBinding",
+				where: [{ field: "connectionId", value: chunk, operator: "in" }],
+				limit: chunk.length,
+			})),
+		);
+	}
 	return new Set(
 		bindings
 			.filter((binding) => binding.decommissionStatus !== "active")

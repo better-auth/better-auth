@@ -220,6 +220,37 @@ describe("session", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10716
+	 */
+	it("gets the session when a user field references an app table", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			database: memoryAdapter({
+				user: [],
+				account: [],
+				session: [],
+				verification: [],
+			}),
+			user: {
+				additionalFields: {
+					roleId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "roles",
+							field: "id",
+						},
+					},
+				},
+			},
+		});
+		const { headers } = await signInWithTestUser();
+
+		await expect(auth.api.getSession({ headers })).resolves.toMatchObject({
+			session: { id: expect.any(String) },
+		});
+	});
+
 	describe("session refresh and expiration", () => {
 		const startedAt = new Date("2026-01-01T00:00:00Z").getTime();
 
@@ -946,6 +977,29 @@ describe("cookie cache", () => {
 		expect(cached.data).toEqual(refreshed.data);
 		expect(findOne).toHaveBeenCalledOnce();
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/11690
+	 */
+	it.for(["/revoke-session", "/revoke-sessions"])(
+		"stops serving the caller's cached session after %s",
+		async (path) => {
+			const { client, headers, cookieSetter } = await createCachedSession();
+			const cached = await client.getSession({ fetchOptions: { headers } });
+
+			await client.$fetch(path, {
+				method: "POST",
+				body: {
+					token: cached.data?.session.token,
+				},
+				headers,
+				onSuccess: cookieSetter(headers),
+			});
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			expect(session.data).toBeNull();
+		},
+	);
 });
 
 describe("cookie cache with JWT strategy", async () => {
@@ -2456,6 +2510,42 @@ describe("deferSessionRefresh", async () => {
 				method: "POST",
 			}),
 		).rejects.toThrow("POST method requires deferSessionRefresh to be enabled");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10588
+	 */
+	it("should accept a refresh POST whose empty body arrives as a stream", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				deferSessionRefresh: true,
+			},
+		});
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			returnHeaders: true,
+		});
+
+		// Next.js and Nuxt hand a bodyless POST to the handler as an empty stream.
+		const res = await auth.handler(
+			new Request("http://localhost:3000/api/auth/get-session", {
+				method: "POST",
+				headers: {
+					cookie: signInRes.headers.getSetCookie()[0]!,
+				},
+				body: new ReadableStream({
+					start(controller) {
+						controller.close();
+					},
+				}),
+				duplex: "half",
+			} as RequestInit),
+		);
+
+		expect(res.status).toBe(200);
 	});
 
 	it("should not delete expired session on GET when deferSessionRefresh is enabled", async () => {

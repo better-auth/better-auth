@@ -33,6 +33,19 @@ function isJoseInfrastructureError(error: joseErrors.JOSEError) {
 	return joseInfrastructureErrorCodes.has(error.code);
 }
 
+/**
+ * A presented access token that failed validation. RFC 6750 §3.1 reserves the
+ * `invalid_token` code for this case, and resource-server challenges read it
+ * to tell a failed token apart from a request that sent none.
+ */
+function invalidTokenError(message: string) {
+	return new APIError("UNAUTHORIZED", {
+		message,
+		error: "invalid_token",
+		error_description: message,
+	});
+}
+
 interface JwksCacheEntry {
 	/** Last fetched key set; absent until a fetch succeeds. */
 	jwks?: JSONWebKeySet | undefined;
@@ -451,16 +464,12 @@ async function verifyAccessTokenPayload(
 				if (error.name === "TypeError" || error.name === "JWSInvalid") {
 					// likely an opaque token (continue)
 				} else if (error instanceof joseErrors.JWTExpired) {
-					throw new APIError("UNAUTHORIZED", {
-						message: "token expired",
-					});
+					throw invalidTokenError("token expired");
 				} else if (error instanceof joseErrors.JOSEError) {
 					if (isJoseInfrastructureError(error)) {
 						throw error;
 					}
-					throw new APIError("UNAUTHORIZED", {
-						message: "invalid access token",
-					});
+					throw invalidTokenError("invalid access token");
 				} else {
 					throw error;
 				}
@@ -498,10 +507,7 @@ async function verifyAccessTokenPayload(
 			throw new APIError("INTERNAL_SERVER_ERROR", {
 				message: "introspection failed",
 			});
-		if (!introspect.active)
-			throw new APIError("UNAUTHORIZED", {
-				message: "token inactive",
-			});
+		if (!introspect.active) throw invalidTokenError("token inactive");
 		// Verifies payload using verify options (token valid through introspect).
 		// Audience is enforced by default: when `verifyOptions.audience` is set
 		// but the introspection response omits `aud` (or it mismatches),
@@ -522,14 +528,20 @@ async function verifyAccessTokenPayload(
 			);
 			payload = verify.payload;
 		} catch (error) {
+			if (error instanceof joseErrors.JWTExpired) {
+				throw invalidTokenError("token expired");
+			}
+			if (
+				error instanceof joseErrors.JOSEError &&
+				!isJoseInfrastructureError(error)
+			) {
+				throw invalidTokenError("invalid access token");
+			}
 			throw new Error(error as unknown as string);
 		}
 	}
 
-	if (!payload)
-		throw new APIError("UNAUTHORIZED", {
-			message: `no token payload`,
-		});
+	if (!payload) throw invalidTokenError("no token payload");
 
 	const grantedScopes = parseGrantedScopes(payload.scope);
 
@@ -596,11 +608,7 @@ function parseGrantedScopes(scope: unknown): ReadonlySet<string> {
 		scope.length === 0 ||
 		scope.split(" ").some((token) => !isOAuthScopeToken(token))
 	) {
-		throw new APIError("UNAUTHORIZED", {
-			message: "access token scope claim is invalid",
-			error: "invalid_token",
-			error_description: "access token scope claim is invalid",
-		});
+		throw invalidTokenError("access token scope claim is invalid");
 	}
 	return new Set(scope.split(" "));
 }

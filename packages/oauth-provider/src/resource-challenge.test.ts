@@ -88,7 +88,7 @@ describe("resource server challenge", () => {
 		);
 	});
 
-	it("rejects header-injection characters in challenge params", () => {
+	it("cleans header-injection characters out of an insufficient-scope description", () => {
 		const insufficientScopeError = createInsufficientScopeError([
 			"files:write",
 		]);
@@ -98,34 +98,23 @@ describe("resource server challenge", () => {
 			}
 		).error_description = 'bad "scope"\r\nSet-Cookie: x=y';
 
-		expect(() =>
-			createResourceServerChallenge(
-				insufficientScopeError,
-				"https://api.example.com",
-			),
-		).toThrow("invalid error_description");
+		const challenge = createResourceServerChallenge(
+			insufficientScopeError,
+			"https://api.example.com",
+		) as APIError;
+		const header = new Headers(challenge.headers).get("WWW-Authenticate");
+		expect(challenge.statusCode).toBe(403);
+		expect(header).toBe(
+			`Bearer error="insufficient_scope", scope="files:write", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource", error_description="bad 'scope' Set-Cookie: x=y"`,
+		);
+		expect(challenge.body).toMatchObject({
+			error: "insufficient_scope",
+			error_description: 'bad "scope"\r\nSet-Cookie: x=y',
+		});
 	});
 
-	it("retains serialization-time validation for a mutated typed scope error", () => {
-		const insufficientScopeError = createInsufficientScopeError([
-			"files:write",
-		]);
-		(
-			insufficientScopeError.body as {
-				error_description: string;
-			}
-		).error_description = "café";
-
-		expect(() =>
-			createResourceServerChallenge(
-				insufficientScopeError,
-				"https://api.example.com",
-			),
-		).toThrow("invalid error_description");
-	});
-
-	it.each([42, null])(
-		"rejects a non-string insufficient-scope error_description during serialization: %j",
+	it.each([42, null, "\u00e9\u00e8"])(
+		"omits an insufficient-scope error_description with nothing left to send: %j",
 		(description) => {
 			const insufficientScopeError = createInsufficientScopeError([
 				"files:write",
@@ -139,12 +128,14 @@ describe("resource server challenge", () => {
 				description,
 			);
 
-			expect(() =>
-				createResourceServerChallenge(
-					insufficientScopeError,
-					"https://api.example.com",
-				),
-			).toThrow(new TypeError("invalid error_description"));
+			const challenge = createResourceServerChallenge(
+				insufficientScopeError,
+				"https://api.example.com",
+			) as APIError;
+			expect(challenge.statusCode).toBe(403);
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'Bearer error="insufficient_scope", scope="files:write", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+			);
 		},
 	);
 
@@ -174,19 +165,188 @@ describe("resource server challenge", () => {
 		);
 	});
 
-	it.each(['bad "quote"', "bad\\slash", "café", "bad\r\ninjected"])(
-		"rejects an invalid DPoP error_description: %s",
-		(description) => {
-			expect(() =>
-				createResourceServerChallenge(
-					new APIError("UNAUTHORIZED", {
-						message: description,
-						error: "invalid_dpop_proof",
-						error_description: description,
-					}),
+	it("keeps a DPoP challenge when the description contains quotes", () => {
+		const challenge = createResourceServerChallenge(
+			new APIError("UNAUTHORIZED", {
+				message: 'DPoP proof typ must be "dpop+jwt"',
+				error: "invalid_dpop_proof",
+				error_description: 'DPoP proof typ must be "dpop+jwt"',
+			}),
+			"https://api.example.com",
+			{ dpopSigningAlgorithms: ["ES256"] },
+		) as APIError;
+		expect(challenge.statusCode).toBe(401);
+		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+			`DPoP error="invalid_dpop_proof", error_description="DPoP proof typ must be 'dpop+jwt'", algs="ES256"`,
+		);
+		expect(challenge.body).toMatchObject({
+			error: "invalid_dpop_proof",
+			error_description: 'DPoP proof typ must be "dpop+jwt"',
+		});
+	});
+
+	it.each([
+		["bad\\slash", "bad slash"],
+		["caf\u00e9 au lait", "caf au lait"],
+		["bad\r\ninjected", "bad injected"],
+		["  tab\tand\u007fdel  ", "tab and del"],
+	])("cleans the DPoP error_description %j to %j", (description, cleaned) => {
+		const challenge = createResourceServerChallenge(
+			new APIError("UNAUTHORIZED", {
+				message: description,
+				error: "invalid_dpop_proof",
+				error_description: description,
+			}),
+			"https://api.example.com",
+			{ dpopSigningAlgorithms: ["ES256"] },
+		) as APIError;
+		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+			`DPoP error="invalid_dpop_proof", error_description="${cleaned}", algs="ES256"`,
+		);
+	});
+
+	it("omits a DPoP error_description that is empty after cleaning", () => {
+		const challenge = createResourceServerChallenge(
+			new APIError("UNAUTHORIZED", {
+				message: "\r\n",
+				error: "invalid_dpop_proof",
+				error_description: "\r\n",
+			}),
+			"https://api.example.com",
+			{ dpopSigningAlgorithms: ["ES256"] },
+		) as APIError;
+		expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+			'DPoP error="invalid_dpop_proof", algs="ES256"',
+		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.2
+	 */
+	describe("challenge scheme follows the presented authorization scheme", () => {
+		const expiredToken = () =>
+			new APIError("UNAUTHORIZED", {
+				message: "token expired",
+				error: "invalid_token",
+				error_description: "token expired",
+			});
+
+		it.each([
+			[
+				"a Request",
+				new Request("https://api.example.com", {
+					headers: { Authorization: "DPoP access-token" },
+				}),
+			],
+			[
+				"a resource request input",
+				{ authorizationHeader: "dpop access-token" },
+			],
+		])(
+			"answers a failed DPoP request with a DPoP challenge from %s",
+			(_, request) => {
+				const challenge = createResourceServerChallenge(
+					expiredToken(),
 					"https://api.example.com",
-				),
-			).toThrow("invalid error_description");
-		},
-	);
+					{ request, dpopSigningAlgorithms: ["ES256"] },
+				) as APIError;
+				expect(challenge.statusCode).toBe(401);
+				expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+					'DPoP error="invalid_token", error_description="token expired", algs="ES256"',
+				);
+			},
+		);
+
+		it("defaults the DPoP error code to invalid_token", () => {
+			const challenge = createResourceServerChallenge(
+				new APIError("UNAUTHORIZED", { message: "invalid access token" }),
+				"https://api.example.com",
+				{
+					request: { authorizationHeader: "DPoP access-token" },
+					dpopSigningAlgorithms: ["ES256"],
+				},
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'DPoP error="invalid_token", error_description="invalid access token", algs="ES256"',
+			);
+		});
+
+		it("omits the error_description of an empty message", () => {
+			const challenge = createResourceServerChallenge(
+				new APIError("UNAUTHORIZED"),
+				"https://api.example.com",
+				{
+					request: { authorizationHeader: "DPoP access-token" },
+					dpopSigningAlgorithms: ["ES256"],
+				},
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'DPoP error="invalid_token", algs="ES256"',
+			);
+			expect(challenge.body).toMatchObject({ error: "invalid_token" });
+		});
+
+		it.each([
+			["a Bearer request", "Bearer access-token"],
+			["a request without credentials", null],
+			["an unknown scheme", "Basic dXNlcjpwYXNz"],
+		])("keeps the Bearer challenge for %s", (_, authorizationHeader) => {
+			const challenge = createResourceServerChallenge(
+				expiredToken(),
+				"https://api.example.com",
+				{ request: { authorizationHeader } },
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'Bearer error="invalid_token", error_description="token expired", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+			);
+		});
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3.1
+	 */
+	describe("presented-token failures", () => {
+		it("reports invalid_token with its description and keeps the error in the body", () => {
+			const challenge = createResourceServerChallenge(
+				new APIError("UNAUTHORIZED", {
+					message: "token expired",
+					error: "invalid_token",
+					error_description: "token expired",
+				}),
+				"https://api.example.com/mcp",
+				{ challengeScopes: ["mcp:read"] },
+			) as APIError;
+			expect(challenge.statusCode).toBe(401);
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'Bearer error="invalid_token", error_description="token expired", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource/mcp", scope="mcp:read"',
+			);
+			expect(challenge.body).toMatchObject({
+				message: "token expired",
+				error: "invalid_token",
+				error_description: "token expired",
+			});
+		});
+
+		it("falls back to the message when the error has no description", () => {
+			const challenge = createResourceServerChallenge(
+				new APIError("UNAUTHORIZED", {
+					message: "invalid access token",
+					error: "invalid_token",
+				}),
+				"https://api.example.com",
+			) as APIError;
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'Bearer error="invalid_token", error_description="invalid access token", resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+			);
+		});
+
+		it("leaves the error code out when no token was presented", () => {
+			const challenge = catchChallenge("https://api.example.com");
+			expect(new Headers(challenge.headers).get("WWW-Authenticate")).toBe(
+				'Bearer resource_metadata="https://api.example.com/.well-known/oauth-protected-resource"',
+			);
+			expect(challenge.body).not.toHaveProperty("error");
+			expect(challenge.body).not.toHaveProperty("error_description");
+		});
+	});
 });

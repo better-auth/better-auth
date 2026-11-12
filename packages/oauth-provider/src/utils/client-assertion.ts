@@ -414,6 +414,7 @@ export async function consumeClientAssertion(
 	const jtiId = encodeDeterministicId(
 		new Uint8Array(jtiDigest).slice(0, 24),
 		ctx.context.options,
+		{ adapter: ctx.context.adapter, model: "oauthClientAssertion" },
 	);
 	try {
 		await ctx.context.adapter.create({

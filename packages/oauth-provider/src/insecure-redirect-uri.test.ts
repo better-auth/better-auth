@@ -326,7 +326,21 @@ describe("allowInsecureRedirectUri boundaries", () => {
 				redirect_uris: [lanRedirect],
 				post_logout_redirect_uris: [uri],
 			}),
-		).rejects.toThrow();
+		).rejects.toMatchObject({ body: { error: "invalid_redirect_uri" } });
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc7591#section-3.2.2
+	 */
+	it("reports a rejected http post-logout redirect URI as invalid_redirect_uri", async () => {
+		const provider = await setupProvider({});
+
+		await expect(
+			provider.createClient({
+				redirect_uris: ["https://rp.example.com/callback"],
+				post_logout_redirect_uris: [lanLogoutRedirect],
+			}),
+		).rejects.toMatchObject({ body: { error: "invalid_redirect_uri" } });
 	});
 
 	it("keeps the exact loopback host rule for native clients", async () => {
@@ -360,7 +374,11 @@ describe("allowInsecureRedirectUri boundaries", () => {
 		allowed = false;
 		const completed = await provider.confirmEndSession(confirmation);
 
+		expect(completed.status).toBe(200);
 		expect(completed.headers.get("location")).toBeNull();
+		expect(await completed.text()).toContain(
+			"The requested post-logout redirect was not registered.",
+		);
 	});
 });
 

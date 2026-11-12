@@ -260,11 +260,11 @@ describe("mcp", () => {
 	it.for([
 		{
 			resource: apiServerBaseUrl,
-			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource"`,
+			expected: `Bearer error="invalid_token", error_description="no token payload", resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource"`,
 		},
 		{
 			resource: `${apiServerBaseUrl}/resource1`,
-			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
+			expected: `Bearer error="invalid_token", error_description="no token payload", resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource/resource1"`,
 		},
 	])(
 		"provides the OAuth resource challenge for $resource",

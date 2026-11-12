@@ -32,6 +32,37 @@ describe("prisma-adapter", () => {
 		expect(adapter).toBeDefined();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12071
+	 */
+	it("reports which models key rows by ObjectId", () => {
+		const idField = (nativeType: [string, unknown[]] | null) => ({
+			name: "id",
+			kind: "scalar",
+			isId: true,
+			nativeType,
+		});
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				_runtimeDataModel: {
+					models: {
+						Verification: { fields: [idField(["ObjectId", []])] },
+						Identity: { fields: [idField(["ObjectId", []])] },
+						User: { fields: [idField(null)] },
+					},
+				},
+			} as never,
+			{ provider: "mongodb" },
+		)({ account: { modelName: "identity" } } as BetterAuthOptions);
+		const usesObjectIdKey = adapter.options?.usesObjectIdKey;
+
+		expect(usesObjectIdKey("verification")).toBe(true);
+		expect(usesObjectIdKey("account")).toBe(true);
+		expect(usesObjectIdKey("user")).toBe(false);
+		expect(usesObjectIdKey("session")).toBe(false);
+	});
+
 	it("keeps field mapping tied to the schema model", async () => {
 		const findFirst = vi.fn(async () => ({
 			id: "user-id",
@@ -58,6 +89,46 @@ describe("prisma-adapter", () => {
 			expect.objectContaining({
 				where: { email: { equals: "ada@example.com" } },
 				select: { email: true },
+			}),
+		);
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10716
+	 */
+	it("joins the user relation when a user field references an app table", async () => {
+		const findFirst = vi.fn(async () => null);
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				session: { findFirst },
+			} as never,
+			{ provider: "sqlite" },
+		)({
+			user: {
+				additionalFields: {
+					roleId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "roles",
+							field: "id",
+						},
+					},
+				},
+			},
+			advanced: { database: { joins: true } },
+		});
+
+		await adapter.findOne({
+			model: "session",
+			where: [{ field: "token", value: "session-token" }],
+			join: { user: true },
+		});
+
+		expect(findFirst).toHaveBeenCalledWith(
+			expect.objectContaining({
+				select: expect.objectContaining({ user: true }),
 			}),
 		);
 	});
@@ -92,7 +163,10 @@ describe("prisma-adapter", () => {
 		expect(updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: {
-					identifier: { equals: "magic-link-token" },
+					AND: [
+						{ identifier: { equals: "magic-link-token" } },
+						{ id: "verification-id" },
+					],
 				},
 				data: expect.objectContaining({
 					value: "updated-value",
@@ -245,7 +319,10 @@ describe("prisma-adapter", () => {
 		expect(updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: {
-					email: { equals: "test@example.com", mode: "insensitive" },
+					AND: [
+						{ email: { equals: "test@example.com", mode: "insensitive" } },
+						{ id: "user-id" },
+					],
 				},
 				data: expect.objectContaining({
 					name: "Updated",
@@ -350,6 +427,131 @@ describe("prisma-adapter", () => {
 		});
 		expect(update).toHaveBeenCalledWith(
 			expect.objectContaining({ where: { id: "user-id", AND: [isNull] } }),
+		);
+	});
+
+	/**
+	 * A unique field compared with `null` can match many rows, so it does not
+	 * select a single row for Prisma's `update`.
+	 *
+	 * @see https://www.prisma.io/docs/orm/reference/prisma-client-reference#update
+	 */
+	describe("a unique field compared with null", () => {
+		const createAdapter = (
+			provider: "sqlite" | "mongodb",
+			user: Record<string, unknown>,
+		) =>
+			prismaAdapter(
+				{ $transaction: vi.fn(), user },
+				{ provider },
+			)({
+				user: {
+					additionalFields: {
+						username: { type: "string", unique: true, required: false },
+					},
+				},
+			});
+		const isNull = {
+			sqlite: { username: { equals: null } },
+			mongodb: { OR: [{ username: null }, { username: { isSet: false } }] },
+		};
+
+		it.each(["sqlite", "mongodb"] as const)(
+			"falls back to updateMany on %s",
+			async (provider) => {
+				const update = vi.fn();
+				const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+				const findFirst = vi
+					.fn()
+					.mockResolvedValueOnce({ id: "user-id" })
+					.mockResolvedValueOnce({ id: "user-id", username: "alice" });
+				const adapter = createAdapter(provider, {
+					update,
+					updateMany,
+					findFirst,
+				});
+
+				const result = await adapter.update({
+					model: "user",
+					where: [{ field: "username", value: null }],
+					update: { username: "alice" },
+				});
+
+				expect(update).not.toHaveBeenCalled();
+				// Only the row read first is written, still guarded by the filter.
+				expect(updateMany).toHaveBeenCalledWith({
+					where: { AND: [isNull[provider], { id: "user-id" }] },
+					data: expect.objectContaining({ username: "alice" }),
+				});
+				// The update changed the filtered field, so the row is read back by ID.
+				expect(findFirst).toHaveBeenLastCalledWith({
+					where: { id: "user-id" },
+				});
+				expect(result).toEqual({ id: "user-id", username: "alice" });
+			},
+		);
+
+		it("reads the row back by its new ID when the update changes it", async () => {
+			const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+			const findFirst = vi
+				.fn()
+				.mockResolvedValueOnce({ id: "old-id" })
+				.mockResolvedValueOnce({ id: "new-id" });
+			const adapter = createAdapter("sqlite", {
+				update: vi.fn(),
+				updateMany,
+				findFirst,
+			});
+
+			const result = await adapter.update({
+				model: "user",
+				where: [{ field: "username", value: null }],
+				update: { id: "new-id" },
+			});
+
+			expect(findFirst).toHaveBeenLastCalledWith({ where: { id: "new-id" } });
+			expect(result).toEqual({ id: "new-id" });
+		});
+
+		it("returns null without writing when no row matches", async () => {
+			const updateMany = vi.fn();
+			const adapter = createAdapter("sqlite", {
+				update: vi.fn(),
+				updateMany,
+				findFirst: vi.fn().mockResolvedValue(null),
+			});
+
+			await expect(
+				adapter.update({
+					model: "user",
+					where: [{ field: "username", value: null }],
+					update: { name: "Updated" },
+				}),
+			).resolves.toBeNull();
+			expect(updateMany).not.toHaveBeenCalled();
+		});
+
+		it.each(["sqlite", "mongodb"] as const)(
+			"keeps the null comparison out of the unique selector on %s",
+			async (provider) => {
+				const update = vi.fn().mockResolvedValue({ id: "user-id" });
+				const adapter = createAdapter(provider, { update });
+
+				await adapter.update({
+					model: "user",
+					where: [
+						{ field: "id", value: "user-id" },
+						{ field: "username", value: null },
+					],
+					update: { name: "Updated" },
+				});
+
+				expect(update).toHaveBeenCalledWith(
+					expect.objectContaining({
+						where: { id: "user-id", AND: [isNull[provider]] },
+					}),
+				);
+			},
 		);
 	});
 

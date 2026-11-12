@@ -33,6 +33,7 @@ import {
 import type { SCIMPatchValueTarget } from "./null-attributes";
 import { expandSCIMPatchNullValues } from "./null-attributes";
 import type { SCIMGroup, SCIMGroupMember, SCIMUser } from "./persistence";
+import { chunkSCIMIds, SCIM_UNBOUNDED_ROW_LIMIT } from "./persistence";
 import type { SCIMProjectionCoordinator } from "./projection";
 import { projectSCIMResourceAttributes } from "./resource-attribute-projection";
 import { createSCIMOrderKey, createScopedKey } from "./resource-key";
@@ -55,8 +56,6 @@ const {
 	schemaId: SCIM_GROUP_SCHEMA,
 } = SCIM_RESOURCE_SCHEMA_REGISTRY.Group;
 const SCIM_PATCH_SCHEMA = "urn:ietf:params:scim:api:messages:2.0:PatchOp";
-const SCIM_USER_ID_QUERY_CHUNK_SIZE = 500;
-
 function requireGroupAttributeProjection(
 	input: SCIMCollectionQueryInput,
 ): SCIMAttributeProjection {
@@ -505,14 +504,12 @@ async function assertConnectionOwnsUsers(
 	scimUserIds: string[],
 ): Promise<void> {
 	if (scimUserIds.length === 0) return;
-	const scimUsers = await adapter.findMany<SCIMUser>({
-		model: "scimUser",
-		where: [
-			{ field: "connectionId", value: connectionId },
-			{ field: "id", value: scimUserIds, operator: "in" },
-		],
-	});
-	if (scimUsers.length !== scimUserIds.length) {
+	const scimUserById = await findSCIMUsersByIds(
+		adapter,
+		connectionId,
+		scimUserIds,
+	);
+	if (scimUserById.size !== scimUserIds.length) {
 		throw createSCIMError("BAD_REQUEST", {
 			detail: "One or more Group members are invalid",
 			scimType: "invalidValue",
@@ -524,6 +521,29 @@ type GroupMembershipAdapter = Pick<
 	DBAdapter,
 	"count" | "create" | "deleteMany" | "findMany"
 >;
+
+async function deleteGroupMemberships(
+	adapter: Pick<DBAdapter, "deleteMany">,
+	connectionId: string,
+	groupId: string,
+	memberships: readonly SCIMGroupMember[],
+) {
+	const scimUserIds = memberships.map((membership) => membership.scimUserId);
+	for (const chunk of chunkSCIMIds(scimUserIds)) {
+		await adapter.deleteMany({
+			model: "scimGroupMember",
+			where: [
+				{ field: "connectionId", value: connectionId },
+				{ field: "groupId", value: groupId },
+				{
+					field: "scimUserId",
+					value: chunk,
+					operator: "in",
+				},
+			],
+		});
+	}
+}
 
 async function applyIncrementalGroupMembershipPatch(
 	adapter: GroupMembershipAdapter,
@@ -544,14 +564,20 @@ async function applyIncrementalGroupMembershipPatch(
 			removedMemberships: [] as SCIMGroupMember[],
 		};
 	}
-	const existingMemberships = await adapter.findMany<SCIMGroupMember>({
-		model: "scimGroupMember",
-		where: [
-			{ field: "connectionId", value: input.connectionId },
-			{ field: "groupId", value: input.groupId },
-			{ field: "scimUserId", value: targetedUserIds, operator: "in" },
-		],
-	});
+	const existingMemberships: SCIMGroupMember[] = [];
+	for (const chunk of chunkSCIMIds(targetedUserIds)) {
+		existingMemberships.push(
+			...(await adapter.findMany<SCIMGroupMember>({
+				model: "scimGroupMember",
+				where: [
+					{ field: "connectionId", value: input.connectionId },
+					{ field: "groupId", value: input.groupId },
+					{ field: "scimUserId", value: chunk, operator: "in" },
+				],
+				limit: chunk.length,
+			})),
+		);
+	}
 	const existingByUserId = new Map(
 		existingMemberships.map((membership) => [
 			membership.scimUserId,
@@ -578,20 +604,12 @@ async function applyIncrementalGroupMembershipPatch(
 	assertGroupMemberCount(
 		existingMemberCount + addedSCIMUserIds.length - removedMemberships.length,
 	);
-	if (removedMemberships.length > 0) {
-		await adapter.deleteMany({
-			model: "scimGroupMember",
-			where: [
-				{ field: "connectionId", value: input.connectionId },
-				{ field: "groupId", value: input.groupId },
-				{
-					field: "scimUserId",
-					value: removedMemberships.map((membership) => membership.scimUserId),
-					operator: "in",
-				},
-			],
-		});
-	}
+	await deleteGroupMemberships(
+		adapter,
+		input.connectionId,
+		input.groupId,
+		removedMemberships,
+	);
 
 	const addedMemberships: SCIMGroupMember[] = [];
 	for (const scimUserId of addedSCIMUserIds) {
@@ -641,6 +659,7 @@ async function replaceGroupMemberships(
 				{ field: "connectionId", value: input.connectionId },
 				{ field: "groupId", value: input.groupId },
 			],
+			limit: SCIM_UNBOUNDED_ROW_LIMIT,
 		}));
 	const existingMemberIds = new Set(
 		existingMemberships.map((membership) => membership.scimUserId),
@@ -649,20 +668,12 @@ async function replaceGroupMemberships(
 	const removedMemberships = existingMemberships.filter(
 		(membership) => !requestedMemberIds.has(membership.scimUserId),
 	);
-	if (removedMemberships.length > 0) {
-		await adapter.deleteMany({
-			model: "scimGroupMember",
-			where: [
-				{ field: "connectionId", value: input.connectionId },
-				{ field: "groupId", value: input.groupId },
-				{
-					field: "scimUserId",
-					value: removedMemberships.map((membership) => membership.scimUserId),
-					operator: "in",
-				},
-			],
-		});
-	}
+	await deleteGroupMemberships(
+		adapter,
+		input.connectionId,
+		input.groupId,
+		removedMemberships,
+	);
 
 	const addedMemberships: SCIMGroupMember[] = [];
 	for (const scimUserId of input.scimUserIds) {
@@ -747,19 +758,18 @@ async function findSCIMUsersForMemberships(
 	connectionId: string,
 	memberships: readonly SCIMGroupMember[],
 ): Promise<Map<string, SCIMUser>> {
-	const scimUserIds = [
+	return findSCIMUsersByIds(adapter, connectionId, [
 		...new Set(memberships.map((membership) => membership.scimUserId)),
-	];
+	]);
+}
+
+async function findSCIMUsersByIds(
+	adapter: Pick<DBAdapter, "findMany">,
+	connectionId: string,
+	scimUserIds: readonly string[],
+): Promise<Map<string, SCIMUser>> {
 	const scimUsers: SCIMUser[] = [];
-	for (
-		let offset = 0;
-		offset < scimUserIds.length;
-		offset += SCIM_USER_ID_QUERY_CHUNK_SIZE
-	) {
-		const chunk = scimUserIds.slice(
-			offset,
-			offset + SCIM_USER_ID_QUERY_CHUNK_SIZE,
-		);
+	for (const chunk of chunkSCIMIds(scimUserIds)) {
 		scimUsers.push(
 			...(await adapter.findMany<SCIMUser>({
 				model: "scimUser",
@@ -1274,6 +1284,7 @@ export function replaceSCIMGroup(
 								{ field: "connectionId", value: connection.id },
 								{ field: "groupId", value: currentGroup.id },
 							],
+							limit: SCIM_UNBOUNDED_ROW_LIMIT,
 						});
 						await projection.acquireUserLocks({
 							database: trx,
@@ -1466,6 +1477,7 @@ export function patchSCIMGroup(
 									{ field: "connectionId", value: connection.id },
 									{ field: "groupId", value: currentGroup.id },
 								],
+								limit: SCIM_UNBOUNDED_ROW_LIMIT,
 							});
 							const patch = applyGroupPatch(
 								currentGroup,
@@ -1643,6 +1655,7 @@ export function deleteSCIMGroup(
 						{ field: "connectionId", value: connection.id },
 						{ field: "groupId", value: currentGroup.id },
 					],
+					limit: SCIM_UNBOUNDED_ROW_LIMIT,
 				});
 				await projection.acquireUserLocks({
 					database: trx,

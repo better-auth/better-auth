@@ -1,5 +1,11 @@
 # @better-auth/telemetry
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12425](https://github.com/better-auth/better-auth/pull/12425) [`ef4d4f7`](https://github.com/better-auth/better-auth/commit/ef4d4f7dc457fc78b0414e9c6a60827a7a3eab0e) Thanks [@bytaesu](https://github.com/bytaesu)! - Telemetry now reports Cloudflare Workers as `workerd` instead of `node` when `nodejs_compat` is enabled. `@better-auth/core/env` exports the runtime detection it uses.
+
 ## 1.7.20
 
 ## 1.7.19

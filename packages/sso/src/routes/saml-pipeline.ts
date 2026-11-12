@@ -2,12 +2,14 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { parseStringBoolean } from "@better-auth/core/oauth2";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
+import type { Element as XMLElement } from "@xmldom/xmldom";
+import { DOMParser } from "@xmldom/xmldom";
 import type { User } from "better-auth";
 import { APIError } from "better-auth/api";
 import { setAccountCookie, setSessionCookie } from "better-auth/cookies";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
-import { XMLParser } from "fast-xml-parser";
 import type { FlowResult } from "samlify/types/src/flow";
 
 import * as constants from "../constants";
@@ -50,7 +52,6 @@ import {
 } from "../user-resolution";
 import {
 	isSafeSAMLRedirectPath,
-	parseProviderEmailVerified,
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
@@ -235,26 +236,24 @@ async function getSAMLResponseBindingContent(
 /**
  * Extracts the Assertion ID from a SAML response XML.
  * Used for replay protection per SAML 2.0 Core section 2.3.3.
+ *
+ * Reads the ID through the DOM so character references are decoded the same
+ * way the signature check decodes them: re-spelling the ID keeps the
+ * signature valid, so it must not change the replay key.
  */
 function extractAssertionId(samlContent: string): string | null {
 	try {
-		const parser = new XMLParser({
-			ignoreAttributes: false,
-			attributeNamePrefix: "@_",
-			removeNSPrefix: true,
-		});
-		const parsed = parser.parse(samlContent);
+		const response = new DOMParser().parseFromString(
+			samlContent,
+			"text/xml",
+		).documentElement;
+		if (response?.localName !== "Response") return null;
 
-		const response = parsed.Response || parsed["samlp:Response"];
-		if (!response) return null;
-
-		const rawAssertion = response.Assertion || response["saml:Assertion"];
-		const assertion = Array.isArray(rawAssertion)
-			? rawAssertion[0]
-			: rawAssertion;
-		if (!assertion) return null;
-
-		return assertion["@_ID"] || null;
+		const assertion = Array.from(response.childNodes).find(
+			(node): node is XMLElement =>
+				node.nodeType === 1 && node.localName === "Assertion",
+		);
+		return assertion?.getAttribute("ID") || null;
 	} catch {
 		return null;
 	}
@@ -628,7 +627,7 @@ export async function processSAMLResponse(
 			extract.nameID,
 		emailVerified:
 			options?.trustEmailVerified && mapping.emailVerified
-				? parseProviderEmailVerified(attr(mapping.emailVerified))
+				? (parseStringBoolean(attr(mapping.emailVerified)) ?? false)
 				: false,
 	};
 	if (!userInfo.id || !userInfo.email) {

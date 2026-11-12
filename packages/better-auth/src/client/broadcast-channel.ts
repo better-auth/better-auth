@@ -50,6 +50,8 @@ class WindowBroadcastChannel implements BroadcastChannel {
 			return () => {};
 		}
 
+		// Cleanup can run after a test environment has removed this global.
+		const target = window;
 		const handler = (event: StorageEvent) => {
 			if (event.key !== this.name) return;
 			const message: BroadcastMessage = JSON.parse(event.newValue ?? "{}");
@@ -58,10 +60,10 @@ class WindowBroadcastChannel implements BroadcastChannel {
 			this.listeners.forEach((listener) => listener(message));
 		};
 
-		window.addEventListener("storage", handler);
+		target.addEventListener("storage", handler);
 
 		return () => {
-			window.removeEventListener("storage", handler);
+			target.removeEventListener("storage", handler);
 		};
 	}
 }

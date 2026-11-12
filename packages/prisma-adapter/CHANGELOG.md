@@ -1,5 +1,15 @@
 # @better-auth/prisma-adapter
 
+## 1.7.21
+
+### Patch Changes
+
+- [#12126](https://github.com/better-auth/better-auth/pull/12126) [`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b) Thanks [@hardikguptaofficialgit](https://github.com/hardikguptaofficialgit)! - On Prisma with MongoDB, when your id columns use `@db.ObjectId`, magic link and email OTP sign-in for users with an unverified email no longer fail with a 500 (`Malformed ObjectID`). SAML sign-in, DPoP-bound OAuth requests, and `private_key_jwt` client authentication are fixed the same way, and Sign-In with Ethereum now keeps the email the user supplied instead of a placeholder. Setups with plain `String` id columns and other databases are unaffected.
+
+- [#11807](https://github.com/better-auth/better-auth/pull/11807) [`b241ffc`](https://github.com/better-auth/better-auth/commit/b241ffc9404fa182fa60a2cf5c54765334729f4f) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The Prisma adapter with `provider: "mongodb"` now matches `contains`, `starts_with`, and `ends_with` filters, and every case-insensitive filter, as literal text. Before, regex characters in the value acted as patterns: an admin `listUsers` search for `.` with `searchOperator: "contains"` returned every user, a `deleteMany` with `starts_with: ".*"` deleted every row, and a case-insensitive lookup for `a.c@example.com` also matched `abc@example.com`. Other providers are unaffected.
+
+- [#12390](https://github.com/better-auth/better-auth/pull/12390) [`57fa843`](https://github.com/better-auth/better-auth/commit/57fa8432d89117e7a1ce49cdb7f194dbde0839e3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Prisma adapter updates that compare a unique field with `null` no longer fail with a Prisma validation error. Any `update` whose `where` has no unique equality match, including these, now changes one matching row instead of every match, and returns that row even when the update changes a filtered field or the `id`. Use `updateMany` to change every matching row.
+
 ## 1.7.20
 
 ### Patch Changes
