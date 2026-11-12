@@ -104,6 +104,17 @@ export type StripePlan = {
 		| Stripe.SubscriptionUpdateParams.ProrationBehavior
 		| undefined;
 	/**
+	 * Stripe Billing Portal configuration ID (`bpc_...`) for customers
+	 * subscribed to this plan. Uses your default portal configuration when not
+	 * set.
+	 *
+	 * Applies to the billing portal, plan changes, and cancellation. During a
+	 * plan change, the configuration of the customer's current plan is used.
+	 *
+	 * @see https://docs.stripe.com/customer-management/portal-deep-dive
+	 */
+	billingPortalConfiguration?: string | undefined;
+	/**
 	 * Additional line items to include in the checkout session.
 	 *
 	 * All line items must use the same billing interval as the base price (e.g. all monthly or all yearly).
@@ -384,6 +395,59 @@ export type SubscriptionOptions = {
 						options?: Stripe.RequestOptions;
 				  })
 		| undefined;
+	/**
+	 * Customize the Stripe Billing Portal session parameters, for example to
+	 * use a specific portal `configuration` per plan, customer, or organization.
+	 *
+	 * Called whenever the plugin creates a Billing Portal session: the
+	 * billing portal endpoint, plan changes on an existing subscription, and
+	 * cancellation. `customer`, `customer_account`, `return_url`, and
+	 * `flow_data` are managed by the plugin and are ignored if returned.
+	 *
+	 * @param data - data about the session being created
+	 * @param ctx - the context object
+	 * @see https://docs.stripe.com/api/customer_portal/sessions/create
+	 */
+	getBillingPortalSessionParams?:
+		| ((
+				data: BillingPortalSessionParamsData,
+				ctx: GenericEndpointContext,
+		  ) =>
+				| Promise<BillingPortalSessionParamsResult | undefined>
+				| BillingPortalSessionParamsResult
+				| undefined)
+		| undefined;
+};
+
+export type BillingPortalAction = Extract<
+	AuthorizeReferenceAction,
+	"billing-portal" | "upgrade-subscription" | "cancel-subscription"
+>;
+
+export type BillingPortalSessionParamsData = {
+	user: StripeCtxSession["user"];
+	session: StripeCtxSession["session"];
+	referenceId: string;
+	customerType: CustomerType;
+	/**
+	 * Why the session is being created.
+	 */
+	action: BillingPortalAction;
+	/**
+	 * The subscription the session concerns. For `billing-portal`, this is
+	 * the reference's active or trialing subscription, if any.
+	 */
+	subscription: Subscription | undefined;
+	/**
+	 * The plan the session concerns. For `upgrade-subscription`, this is the
+	 * plan being switched to.
+	 */
+	plan: StripePlan | undefined;
+};
+
+export type BillingPortalSessionParamsResult = {
+	params?: Stripe.BillingPortal.SessionCreateParams;
+	options?: Stripe.RequestOptions;
 };
 
 export interface StripeOptions {

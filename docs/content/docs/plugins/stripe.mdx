@@ -524,6 +524,8 @@ To create a [Stripe billing portal session](https://docs.stripe.com/api/customer
 
 This endpoint creates a Stripe billing portal session and returns a URL in the response as `data.url`. You can redirect users to this URL to allow them to manage their subscription, payment methods, and billing history.
 
+To show a [portal configuration](https://docs.stripe.com/api/customer_portal/configurations) other than your default, see [Billing Portal Configurations](#billing-portal-configurations).
+
 ### Reference System
 
 By default, subscriptions are associated with the user ID. However, you can use a custom reference ID to associate subscriptions with other entities, such as organizations:
@@ -853,34 +855,36 @@ stripe({
 
 ### Subscription Options
 
-| Option                     | Type                         | Description                                                                                                                                                                |
-| -------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `enabled`                  | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                                                                                |
-| `plans`                    | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                                                                           |
-| `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                                                                             |
-| `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                                                                    |
-| `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.                                                      |
-| `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context.                                              |
-| `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.                                                      |
-| `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription, stripeSubscription }`. Use `stripeSubscription` for raw Stripe fields like `cancellation_details`. |
-| `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.                                                       |
-| `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                                                                             |
+| Option                          | Type                         | Description                                                                                                                                                                                                                                      |
+| ------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `enabled`                       | `boolean`                    | Whether to enable subscription functionality. **Required.**                                                                                                                                                                                      |
+| `plans`                         | `StripePlan[]` or `function` | An array of subscription plans or an async function that returns plans. **Required** if enabled.                                                                                                                                                 |
+| `requireEmailVerification`      | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                                                                                                                                                   |
+| `authorizeReference`            | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                                                                                                                                          |
+| `getCheckoutSessionParams`      | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.                                                                                                                            |
+| `getBillingPortalSessionParams` | `function`                   | Customize Stripe Billing Portal session parameters, such as the portal `configuration`. Receives `{ user, session, referenceId, customerType, action, subscription, plan }` and context. See [below](#custom-billing-portal-session-parameters). |
+| `onSubscriptionComplete`        | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context.                                                                                                                    |
+| `onSubscriptionCreated`         | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.                                                                                                                            |
+| `onSubscriptionUpdate`          | `function`                   | Called when a subscription is updated. Receives `{ event, subscription, stripeSubscription }`. Use `stripeSubscription` for raw Stripe fields like `cancellation_details`.                                                                       |
+| `onSubscriptionCancel`          | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.                                                                                                                             |
+| `onSubscriptionDeleted`         | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                                                                                                                                                   |
 
 #### Plan Configuration
 
-| Option                    | Type         | Description                                                                                                   |
-| ------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------- |
-| `name`                    | `string`     | The name of the plan. **Required.**                                                                           |
-| `priceId`                 | `string`     | The Stripe price ID. **Required** unless using `lookupKey`.                                                   |
-| `lookupKey`               | `string`     | The Stripe price lookup key. Alternative to `priceId`.                                                        |
-| `annualDiscountPriceId`   | `string`     | A price ID for annual billing.                                                                                |
-| `annualDiscountLookupKey` | `string`     | The Stripe price lookup key for annual billing.                                                               |
-| `limits`                  | `object`     | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).                                                        |
-| `group`                   | `string`     | A group name for categorizing plans.                                                                          |
-| `seatPriceId`             | `string`     | Per-seat billing price ID. Requires the `organization` plugin.                                                |
-| `prorationBehavior`       | `string`     | Proration behavior on subscription updates: `"create_prorations"` (default), `"always_invoice"`, or `"none"`. |
-| `lineItems`               | `LineItem[]` | Additional line items to include in the checkout session.                                                     |
-| `freeTrial`               | `object`     | Trial configuration. See [below](#free-trial-configuration).                                                  |
+| Option                       | Type         | Description                                                                                                                                         |
+| ---------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                       | `string`     | The name of the plan. **Required.**                                                                                                                 |
+| `priceId`                    | `string`     | The Stripe price ID. **Required** unless using `lookupKey`.                                                                                         |
+| `lookupKey`                  | `string`     | The Stripe price lookup key. Alternative to `priceId`.                                                                                              |
+| `annualDiscountPriceId`      | `string`     | A price ID for annual billing.                                                                                                                      |
+| `annualDiscountLookupKey`    | `string`     | The Stripe price lookup key for annual billing.                                                                                                     |
+| `limits`                     | `object`     | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).                                                                                              |
+| `group`                      | `string`     | A group name for categorizing plans.                                                                                                                |
+| `seatPriceId`                | `string`     | Per-seat billing price ID. Requires the `organization` plugin.                                                                                      |
+| `prorationBehavior`          | `string`     | Proration behavior on subscription updates: `"create_prorations"` (default), `"always_invoice"`, or `"none"`.                                       |
+| `billingPortalConfiguration` | `string`     | Stripe Billing Portal configuration ID (`bpc_...`) for customers on this plan. See [Billing Portal Configurations](#billing-portal-configurations). |
+| `lineItems`                  | `LineItem[]` | Additional line items to include in the checkout session.                                                                                           |
+| `freeTrial`                  | `object`     | Trial configuration. See [below](#free-trial-configuration).                                                                                        |
 
 <Callout type="info">
   Stripe does not support [mixed-interval subscriptions](https://docs.stripe.com/billing/subscriptions/mixed-interval) via Checkout Sessions. All line items in a checkout should use the **same billing interval** (e.g. all monthly or all yearly). If intervals differ, the Stripe API will reject the request.
@@ -1045,6 +1049,64 @@ getCheckoutSessionParams: async ({ user, session, plan, subscription }, ctx) => 
     };
 }
 ```
+
+### Billing Portal Configurations
+
+Stripe lets you create several [customer portal configurations](https://docs.stripe.com/api/customer_portal/configurations), for example to offer different upgrade options or cancellation policies per plan. Set `billingPortalConfiguration` on a plan to the configuration ID (`bpc_...`) its customers should see:
+
+```ts title="auth.ts"
+subscription: {
+    enabled: true,
+    plans: [
+        {
+            name: "basic",
+            priceId: "price_basic",
+            billingPortalConfiguration: "bpc_basic",
+        },
+        {
+            name: "pro",
+            priceId: "price_pro",
+            billingPortalConfiguration: "bpc_pro",
+        },
+    ],
+}
+```
+
+The plan's configuration is used when the customer opens the billing portal, changes plans, or cancels. During a plan change, the configuration of the plan they are switching **from** is used. Customers without an active subscription, and plans without `billingPortalConfiguration`, use your default portal configuration.
+
+### Custom Billing Portal Session Parameters
+
+Use `getBillingPortalSessionParams` to customize every Stripe Billing Portal session the plugin creates. For example, you can choose a portal configuration per organization instead of per plan:
+
+```ts title="auth.ts"
+subscription: {
+    // ... other options
+    getBillingPortalSessionParams: async ({ customerType, referenceId }, ctx) => {
+        if (customerType !== "organization") return;
+        return {
+            params: {
+                configuration: await getOrganizationPortalConfiguration(referenceId),
+            },
+        };
+    }
+}
+```
+
+A `configuration` returned here takes precedence over the plan's `billingPortalConfiguration`.
+
+The callback receives `{ user, session, referenceId, customerType, action, subscription, plan }` and the context. `action` tells you why the session is being created:
+
+| `action`               | Created by                                 | `subscription`                         | `plan`                        |
+| ---------------------- | ------------------------------------------ | -------------------------------------- | ----------------------------- |
+| `billing-portal`       | `subscription.billingPortal`               | The reference's active or trialing one | The plan of that subscription |
+| `upgrade-subscription` | `subscription.upgrade` on an existing plan | The subscription being changed         | The plan being switched to    |
+| `cancel-subscription`  | `subscription.cancel`                      | The subscription being canceled        | The plan of that subscription |
+
+`subscription` and `plan` can be `undefined`, for example when a customer without an active subscription opens the billing portal.
+
+<Callout type="info">
+  The plugin manages `customer`, `customer_account`, `return_url`, and `flow_data`, so these are ignored if returned. A `locale` passed to the billing portal endpoint takes precedence over one returned here.
+</Callout>
 
 ### Tax Collection
 
