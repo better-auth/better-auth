@@ -58,6 +58,20 @@ const pluginIssuer = {
 } satisfies BetterAuthPlugin;
 
 const pluginBindEndpoint = `${authServerBaseUrl}/api/auth/test/dpop-bind`;
+/** Counts requests that passed `challengeDpopNonce` on the companion endpoint. */
+let stagedChallenges = 0;
+
+/** A before hook that runs `challengeDpopNonce` on `path`, then `onPass`. */
+function challengeNonceHook(path: string, onPass: () => void) {
+	return createAuthMiddleware(async (ctx) => {
+		if (ctx.path !== path) return;
+		await getOAuthProviderApi(
+			ctx,
+			ctx.context.getPlugin("oauth-provider")!.options,
+		).challengeDpopNonce();
+		onPass();
+	});
+}
 
 // A companion endpoint that accepts DPoP proofs outside the token endpoint,
 // and one that only hands out nonces.
@@ -78,6 +92,22 @@ const dpopCompanion = {
 				const proof = await provider.verifyDpopProof({
 					required: ctx.body.required,
 				});
+				return ctx.json({ jkt: proof?.jkt ?? null });
+			},
+		),
+		// Challenges for a nonce before staging state, then verifies the same
+		// proof, as an endpoint that consumes a one-time credential would.
+		testDpopChallenge: createAuthEndpoint(
+			"/test/dpop-challenge",
+			{ method: "POST" },
+			async (ctx) => {
+				const provider = getOAuthProviderApi(
+					ctx,
+					ctx.context.getPlugin("oauth-provider")!.options,
+				);
+				await provider.challengeDpopNonce();
+				stagedChallenges++;
+				const proof = await provider.verifyDpopProof();
 				return ctx.json({ jkt: proof?.jkt ?? null });
 			},
 		),
@@ -995,6 +1025,7 @@ describe("DPoP nonces on a companion endpoint", async () => {
 });
 
 describe("DPoP proofs on a companion endpoint without nonces", async () => {
+	let hookChallenged = 0;
 	const { customFetchImpl } = await getTestInstance({
 		baseURL: authServerBaseUrl,
 		plugins: [
@@ -1002,6 +1033,11 @@ describe("DPoP proofs on a companion endpoint without nonces", async () => {
 			jwt(),
 			oauthProvider({ loginPage: "/login", consentPage: "/consent" }),
 		],
+		hooks: {
+			before: challengeNonceHook("/test/dpop-challenge", () => {
+				hookChallenged++;
+			}),
+		},
 	});
 
 	it("verifies a proof without a nonce and issues none", async () => {
@@ -1028,10 +1064,198 @@ describe("DPoP proofs on a companion endpoint without nonces", async () => {
 		expect(await issued.json()).toEqual({ nonce: null });
 		expect(issued.headers.get("DPoP-Nonce")).toBeNull();
 	});
+
+	it("passes challengeDpopNonce in a hook and an endpoint", async () => {
+		const key = await createDpopKey();
+		const endpoint = `${authServerBaseUrl}/api/auth/test/dpop-challenge`;
+
+		const response = await customFetchImpl(endpoint, {
+			method: "POST",
+			headers: {
+				DPoP: await createProof(key, { method: "POST", url: endpoint }),
+			},
+		});
+
+		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({ jkt: key.jkt });
+		expect(response.headers.get("DPoP-Nonce")).toBeNull();
+		expect(hookChallenged).toBe(1);
+	});
+});
+
+/**
+ * RFC 9449 §8: a plugin endpoint or before hook that stages state challenges
+ * for a nonce first, without reserving the proof's `jti`.
+ */
+describe("challengeDpopNonce with nonces required", async () => {
+	const baseURL = "http://localhost:3003";
+	const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
+	const challengeEndpoint = `${baseURL}/api/auth/test/dpop-challenge`;
+	/** Runs in the token endpoint's before hook once its check passes. */
+	let afterHookChallenge: () => void = () => {};
+	let stagedByHook = 0;
+	const {
+		auth,
+		context,
+		customFetchImpl,
+		authorizeForCode,
+		codeRequestBody,
+		postToken,
+	} = await setupNonceProvider({
+		testWith: "sqlite",
+		baseURL,
+		hooks: {
+			before: challengeNonceHook("/oauth2/token", () => {
+				stagedByHook++;
+				afterHookChallenge();
+			}),
+		},
+	});
+
+	afterEach(() => {
+		afterHookChallenge = () => {};
+	});
+
+	function challenge(dpopProof?: string) {
+		return customFetchImpl(challengeEndpoint, {
+			method: "POST",
+			headers: dpopProof ? { DPoP: dpopProof } : {},
+		});
+	}
+
+	/** A proof whose nonce expires one second after the request arrives. */
+	async function proofWithExpiringNonce(key: DpopKey) {
+		return createProof(key, {
+			method: "POST",
+			url: tokenEndpoint,
+			nonce: await nonceIssuedAgo(context.secret, 299),
+		});
+	}
+
+	/** Moves the clock past that nonce's expiry once the hook's check passes. */
+	function expireNonceAfterHook() {
+		const arrival = Date.now();
+		vi.useFakeTimers({ toFake: ["Date"] });
+		vi.setSystemTime(arrival);
+		afterHookChallenge = () => vi.setSystemTime(arrival + 10_000);
+	}
+
+	describe("on a plugin endpoint", () => {
+		it("challenges a proof without a nonce before staging state", async () => {
+			const key = await createDpopKey();
+			const staged = stagedChallenges;
+
+			const response = await challenge(
+				await createProof(key, { method: "POST", url: challengeEndpoint }),
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				error: "use_dpop_nonce",
+				error_description: "DPoP proof must include a server-provided nonce",
+			});
+			expect(response.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+			expect(stagedChallenges).toBe(staged);
+		});
+
+		it("leaves the jti for the proof verification that follows", async () => {
+			const key = await createDpopKey();
+			const nonce = await createDpopNonce({ secret: context.secret });
+
+			const response = await challenge(
+				await createProof(key, {
+					method: "POST",
+					url: challengeEndpoint,
+					nonce,
+				}),
+			);
+
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({ jkt: key.jkt });
+		});
+
+		it("passes a request without a DPoP header", async () => {
+			const staged = stagedChallenges;
+
+			const response = await challenge();
+
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual({ jkt: null });
+			expect(stagedChallenges).toBe(staged + 1);
+		});
+	});
+
+	describe("in a before hook", () => {
+		it("challenges a proof without a nonce before the hook stages state", async () => {
+			const key = await createDpopKey();
+			const { code, codeVerifier } = await authorizeForCode();
+			const body = await codeRequestBody(code, codeVerifier);
+			const staged = stagedByHook;
+
+			const rejected = await postToken(
+				body,
+				await createProof(key, { method: "POST", url: tokenEndpoint }),
+			);
+
+			expect(rejected.response.status).toBe(400);
+			expect(rejected.body.error).toBe("use_dpop_nonce");
+			expect(stagedByHook).toBe(staged);
+			const issued = await postToken(
+				body,
+				await createProof(key, {
+					method: "POST",
+					url: tokenEndpoint,
+					nonce: rejected.response.headers.get("DPoP-Nonce"),
+				}),
+			);
+			expect(issued.response.status).toBe(200);
+			expect(issued.body.token_type).toBe("DPoP");
+			expect(stagedByHook).toBe(staged + 1);
+		});
+
+		it("passes a request without a DPoP header", async () => {
+			const { code, codeVerifier } = await authorizeForCode();
+			const staged = stagedByHook;
+
+			const issued = await postToken(await codeRequestBody(code, codeVerifier));
+
+			expect(issued.response.status).toBe(200);
+			expect(issued.body.token_type).toBe("Bearer");
+			expect(stagedByHook).toBe(staged + 1);
+		});
+
+		it("shares the request time with the token endpoint", async () => {
+			const key = await createDpopKey();
+			const { code, codeVerifier } = await authorizeForCode();
+			const body = await codeRequestBody(code, codeVerifier);
+			const proof = await proofWithExpiringNonce(key);
+			expireNonceAfterHook();
+
+			const issued = await postToken(body, proof);
+
+			expect(issued.response.status).toBe(200);
+			expect(issued.body.token_type).toBe("DPoP");
+		});
+
+		it("shares the request time on an auth.api call without a request", async () => {
+			const key = await createDpopKey();
+			const { code, codeVerifier } = await authorizeForCode();
+			const body = await codeRequestBody(code, codeVerifier);
+			const proof = await proofWithExpiringNonce(key);
+			expireNonceAfterHook();
+
+			const issued = await auth.api.oauth2Token({
+				headers: new Headers({ DPoP: proof }),
+				body: { ...Object.fromEntries(body), grant_type: "authorization_code" },
+			});
+
+			expect(issued.token_type).toBe("DPoP");
+		});
+	});
 });
 
 describe("OAuthProviderApi DPoP types", () => {
-	it("exposes the proof verifier and nonce issuer", () => {
+	it("exposes the proof verifier, nonce issuer, and nonce challenge", () => {
 		const verify = (async () =>
 			undefined) as unknown as OAuthProviderApi["verifyDpopProof"];
 		expectTypeOf(verify({ required: true })).toEqualTypeOf<
@@ -1045,6 +1269,9 @@ describe("OAuthProviderApi DPoP types", () => {
 		>();
 		expectTypeOf<OAuthProviderApi["issueDpopNonce"]>().toEqualTypeOf<
 			() => Promise<string | undefined>
+		>();
+		expectTypeOf<OAuthProviderApi["challengeDpopNonce"]>().toEqualTypeOf<
+			() => Promise<void>
 		>();
 	});
 });

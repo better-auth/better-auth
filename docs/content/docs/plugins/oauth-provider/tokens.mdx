@@ -322,6 +322,24 @@ Call it before your endpoint consumes a one-time credential, such as a code. The
 
 An endpoint that only hands out nonces, such as a credential issuer's Nonce Endpoint, calls `provider.issueDpopNonce()`. It sets a nonce only when `dpop.nonce.required` is on. Otherwise it returns `undefined` and sets no header.
 
+A plugin endpoint or before hook that stages state before the proof is verified calls `provider.challengeDpopNonce()` first. It sends the token endpoint's nonce challenge, a 400 `use_dpop_nonce` error with a fresh `DPoP-Nonce`, when the proof lacks a current nonce. The client's retry then finds the state untouched. It does nothing when `dpop.nonce.required` is off or the request has no `DPoP` header.
+
+```ts title="dpop-hook.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthMiddleware } from "better-auth/api";
+
+export const before = createAuthMiddleware(async (ctx) => {
+  if (ctx.path !== "/oauth2/token") return;
+  await getOAuthProviderApi(
+    ctx,
+    ctx.context.getPlugin("oauth-provider")!.options,
+  ).challengeDpopNonce();
+  // Stage state here. The token endpoint verifies the proof afterwards.
+});
+```
+
+`challengeDpopNonce` checks only the proof's `nonce`. It does not verify the signature, `htm`, or `htu`, and it does not store the `jti`. The request must still verify the proof, with `verifyDpopProof`, `issueTokens`, or `resolveConfirmation`, before you trust it. Within one request, that verification measures nonce freshness at the same time as the challenge, so a nonce that passes the challenge cannot expire before the proof is verified.
+
 ## Custom claims
 
 To add claims to access tokens, set `customAccessTokenClaims`. It receives `user`, `scopes`, `referenceId`, `resources`, and the client's `metadata`. It returns an object of claims to add. Use namespaced claim names, and see [RFC 9068 §2.2](https://datatracker.ietf.org/doc/html/rfc9068#section-2.2) for the claims the provider already sets. To stop a token from being issued, for example when the user has left the organization, throw from the callback.

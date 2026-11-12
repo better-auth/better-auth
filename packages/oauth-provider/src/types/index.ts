@@ -440,6 +440,18 @@ export interface OAuthProviderApi {
 	 */
 	issueDpopNonce: () => Promise<string | undefined>;
 	/**
+	 * Throws the token endpoint's 400 `use_dpop_nonce` error with a fresh
+	 * `DPoP-Nonce` (RFC 9449 §8) when `dpop.nonce.required` is on and the
+	 * request's proof lacks a current nonce. Call it in a plugin endpoint or
+	 * before hook before consuming a one-time credential or staging state.
+	 * Resolves when nonces are off or the request has no `DPoP` header.
+	 *
+	 * It checks only the `nonce` claim and does not reserve the `jti`. Verify
+	 * the proof afterwards with `verifyDpopProof`, `resolveConfirmation`, or
+	 * `issueTokens` before trusting it.
+	 */
+	challengeDpopNonce: () => Promise<void>;
+	/**
 	 * Computes the stored lookup key for a token value (the same hash the
 	 * provider persists), so a caller can find or revoke a previously issued
 	 * opaque token by its value.
