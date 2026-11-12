@@ -40,7 +40,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Reject stale release merge groups
         if: github.event_name == 'merge_group'
@@ -111,7 +111,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
 
       - name: Typecheck
         run: pnpm typecheck
@@ -138,7 +138,7 @@ jobs:
       matrix:
         node-version: [22.x, 24.x]
     env:
-      COMPOSE_SERVICES: postgres postgres-kysely mongodb
+      COMPOSE_SERVICES: postgres postgres-kysely mongodb mysql
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -153,7 +153,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@08e5520e7a829b03bee1152913682b67d2ba44b1
+      - uses: better-auth/shared-workflows/.github/actions/setup-pnpm@3181777f24e51b1ac88fd7cfe6dfcebccd9212d1
         with:
           node-version: ${{ matrix.node-version }}
 

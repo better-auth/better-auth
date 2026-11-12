@@ -1,5 +1,65 @@
 # @better-auth/mcp
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12447](https://github.com/better-auth/better-auth/pull/12447) [`5976842`](https://github.com/better-auth/better-auth/commit/59768427a963413f1a7a4eb7595b00b395713770) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a failed request that used the `DPoP` authorization scheme with a `DPoP` challenge. Before, an expired, revoked, or otherwise invalid DPoP-bound token got a `Bearer` challenge, which a client that supports only DPoP might not act on. `createResourceServerChallenge` accepts a new `request` option, either the failed `Request` or `{ authorizationHeader }`, and reads the scheme from it. The resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass it automatically.
+
+- Updated dependencies [[`5976842`](https://github.com/better-auth/better-auth/commit/59768427a963413f1a7a4eb7595b00b395713770), [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b), [`1393028`](https://github.com/better-auth/better-auth/commit/139302823057cdf9693bca48735fca99faf3ccfd)]:
+  - @better-auth/oauth-provider@1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- Updated dependencies [[`4739122`](https://github.com/better-auth/better-auth/commit/4739122fa67c77cde71c4d1b60d84483fc1bf11b), [`fd66861`](https://github.com/better-auth/better-auth/commit/fd66861c353574418a7bf48e0b79c0ebe4251c1c), [`db930d9`](https://github.com/better-auth/better-auth/commit/db930d90115a1d6182bac83a3f010205d86baa3b), [`900195d`](https://github.com/better-auth/better-auth/commit/900195df3f1313d84301f7b7dc4997845e568a8e), [`9362c0d`](https://github.com/better-auth/better-auth/commit/9362c0d42e7f65a1dbfd6318360cd97ea9dd9d5b), [`b0ced9d`](https://github.com/better-auth/better-auth/commit/b0ced9d2576db02f5c41b493e07e847d5a260e4d), [`79d61b0`](https://github.com/better-auth/better-auth/commit/79d61b0fb0ff3750ec42aa1ef5cd136f573c996b)]:
+  - @better-auth/oauth-provider@1.7.21
+
+## 1.7.20
+
+### Patch Changes
+
+- Updated dependencies [[`a3f50d0`](https://github.com/better-auth/better-auth/commit/a3f50d064dd3bd1ee8a83a687ea54428aaec8997), [`dc07ae4`](https://github.com/better-auth/better-auth/commit/dc07ae4565205d27589cb285052455ede56ce3f7), [`1a368a1`](https://github.com/better-auth/better-auth/commit/1a368a15350814822126ca5e4db05772784c9ed8)]:
+  - @better-auth/oauth-provider@1.7.20
+
+## 1.7.19
+
+### Patch Changes
+
+- [#12322](https://github.com/better-auth/better-auth/pull/12322) [`76e6a20`](https://github.com/better-auth/better-auth/commit/76e6a207e912a7719067eed81ad71b8ea26af79e) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed MCP rejecting plain-HTTP `resource` URLs on `.localhost` subdomains as non-HTTPS.
+
+- Updated dependencies [[`76f9d55`](https://github.com/better-auth/better-auth/commit/76f9d554b371c3c7874ccfa54af97a4d4f3db82b), [`b0f795a`](https://github.com/better-auth/better-auth/commit/b0f795a0bbb934b35a7f2601a8853f5a48fbe7ca), [`6080a5e`](https://github.com/better-auth/better-auth/commit/6080a5e542db35016bf8309bc89b033db823f0b3)]:
+  - @better-auth/oauth-provider@1.7.19
+
+## 1.7.18
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.18
+
+## 1.7.17
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- Updated dependencies []:
+  - @better-auth/oauth-provider@1.7.15
+
 ## 1.7.14
 
 ### Patch Changes

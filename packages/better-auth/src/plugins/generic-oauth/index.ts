@@ -10,11 +10,13 @@ import type {
 import {
 	applyDefaultAccessTokenExpiry,
 	createAuthorizationURL,
+	parseStringBoolean,
 	refreshAccessToken,
 	validateAuthorizationCode,
 	verifyProviderIdToken,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
+import type { JWTPayload } from "jose";
 import { createRemoteJWKSet, decodeJwt } from "jose";
 import { PACKAGE_VERSION } from "../../version";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
@@ -89,11 +91,9 @@ function isClientSecretTokenEndpointAuth(
 
 /** A request waits on a discovery retry, so bound it (the SSO plugin uses 10s too). */
 const DISCOVERY_RETRY_TIMEOUT_MS = 10_000;
+const MAX_DISCOVERY_REDIRECTS = 5;
 
-type PendingDiscovery = Map<
-	string,
-	{ config: GenericOAuthConfig; attempt?: Promise<void> | undefined }
->;
+type PendingDiscovery = Map<string, GenericOAuthConfig>;
 
 /**
  * Providers skipped because startup discovery failed. Init stores them on each auth
@@ -105,34 +105,81 @@ const getPendingDiscovery = (ctx: AuthContext) =>
 	(ctx as AuthContext & { genericOAuthPendingDiscovery?: PendingDiscovery })
 		.genericOAuthPendingDiscovery;
 
+/**
+ * Reads ID token claims, or null for a token that is not a JWS, so a
+ * malformed token fails the sign-in instead of throwing.
+ */
+const readIdTokenClaims = (idToken: string) => {
+	try {
+		return decodeJwt(idToken);
+	} catch {
+		return null;
+	}
+};
+
 async function fetchDiscovery(
 	url: string,
 	headers?: Record<string, string>,
 	timeout?: number,
 ): Promise<DiscoveryDocument | null> {
-	const result = await betterFetch<DiscoveryDocument>(url, {
-		method: "GET",
-		headers,
-		// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
-		signal: timeout ? AbortSignal.timeout(timeout) : undefined,
-	});
-	if (result.error || !result.data) {
-		return null;
-	}
-	// Validate the issuer is a syntactically valid URL
-	if (result.data.issuer) {
-		try {
-			new URL(result.data.issuer);
-		} catch {
+	// betterFetch's `timeout` stops at the response headers; a signal also bounds the body.
+	const signal = timeout ? AbortSignal.timeout(timeout) : undefined;
+	let target = url;
+	for (let hop = 0; ; hop++) {
+		const redirect: { location?: string | null } = {};
+		const result = await betterFetch<DiscoveryDocument>(target, {
+			method: "GET",
+			headers,
+			// Fetch forwards custom headers across cross-origin redirects, so
+			// redirects are followed here, and only within the configured origin.
+			redirect: headers ? "manual" : undefined,
+			signal,
+			onError: ({ response }) => {
+				if (response.status >= 300 && response.status < 400) {
+					redirect.location = response.headers.get("location");
+				}
+			},
+		});
+		if (headers && redirect.location) {
+			const next = new URL(redirect.location, target);
+			if (next.origin !== new URL(url).origin) {
+				throw new Error(
+					`discovery redirected to ${next.origin}; with discoveryHeaders set, only same-origin redirects are followed. Set discoveryUrl to the final URL.`,
+				);
+			}
+			if (hop >= MAX_DISCOVERY_REDIRECTS) {
+				throw new Error(
+					`discovery redirected more than ${MAX_DISCOVERY_REDIRECTS} times. Set discoveryUrl to the final URL.`,
+				);
+			}
+			target = next.href;
+			continue;
+		}
+		// A browser runtime hides the redirect target behind an opaque status 0.
+		if (headers && result.error?.status === 0) {
+			throw new Error(
+				"discovery redirected; with discoveryHeaders set, set discoveryUrl to the final URL.",
+			);
+		}
+		if (result.error || !result.data) {
 			return null;
 		}
+		// Validate the issuer is a syntactically valid URL
+		if (result.data.issuer) {
+			try {
+				new URL(result.data.issuer);
+			} catch {
+				return null;
+			}
+		}
+		return result.data;
 	}
-	return result.data;
 }
 
 async function fetchUserInfo(
 	tokens: OAuth2Tokens,
 	userInfoUrl: string | undefined,
+	idTokenClaims?: JWTPayload,
 ): Promise<GenericOAuthUserInfo | null> {
 	// When the provider declares an `idToken` config (OIDC discovery published
 	// a jwks_uri), the caller has already verified this token through
@@ -140,28 +187,25 @@ async function fetchUserInfo(
 	// verification is the OIDC Core 1.0 §3.1.3.7 posture for tokens received
 	// over the TLS-protected token-endpoint channel.
 	if (tokens.idToken) {
-		try {
-			const decoded = decodeJwt(tokens.idToken) as {
-				sub: string;
-				email_verified: boolean;
-				email: string;
-				name: string;
-				picture: string;
+		// Malformed ID token — fall through to userinfo endpoint
+		const decoded = (idTokenClaims ?? readIdTokenClaims(tokens.idToken)) as {
+			sub: string;
+			email_verified: boolean;
+			email: string;
+			name: string;
+			picture: string;
+		} | null;
+		if (decoded?.sub && decoded?.email) {
+			return {
+				id: decoded.sub,
+				emailVerified: parseStringBoolean(decoded.email_verified) ?? false,
+				image: decoded.picture,
+				...decoded,
 			};
-			if (decoded?.sub && decoded?.email) {
-				return {
-					id: decoded.sub,
-					emailVerified: decoded.email_verified,
-					image: decoded.picture,
-					...decoded,
-				};
-			}
-		} catch {
-			// Malformed ID token — fall through to userinfo endpoint
 		}
 	}
 
-	if (!userInfoUrl) {
+	if (!userInfoUrl || !tokens.accessToken) {
 		return null;
 	}
 
@@ -184,7 +228,7 @@ async function fetchUserInfo(
 	return {
 		...userInfo.data,
 		email: userInfo.data.email,
-		emailVerified: userInfo.data.email_verified ?? false,
+		emailVerified: parseStringBoolean(userInfo.data.email_verified) ?? false,
 		image: userInfo.data.picture,
 		name: userInfo.data.name,
 	};
@@ -262,8 +306,16 @@ export const genericOAuth = <const ID extends string>(
 							);
 							continue;
 						}
+						// The JWKS fetch refuses redirects, so these headers stay on the discovery origin.
+						const jwksHeaders =
+							jwksUrl.origin === new URL(c.discoveryUrl).origin
+								? c.discoveryHeaders
+								: undefined;
 						idTokenConfig = {
-							jwks: createRemoteJWKSet(jwksUrl),
+							jwks: createRemoteJWKSet(
+								jwksUrl,
+								jwksHeaders && { headers: jwksHeaders },
+							),
 							issuer: discovered.issuer,
 							audience: c.clientId,
 							algorithms: isOidc ? signingAlgs : undefined,
@@ -315,6 +367,39 @@ export const genericOAuth = <const ID extends string>(
 				);
 			}
 
+			const resolveUserInfo = async (
+				tokens: OAuth2Tokens,
+				idTokenClaims?: JWTPayload,
+			) => {
+				const raw = c.getUserInfo
+					? await c.getUserInfo(tokens)
+					: await fetchUserInfo(tokens, userInfoUrl, idTokenClaims);
+				if (!raw) return null;
+
+				// Custom profiles may use a different identifier and omit `sub`.
+				const requiresSubjectMatch = !c.getUserInfo || raw.sub != null;
+				if (
+					idTokenClaims?.sub !== undefined &&
+					requiresSubjectMatch &&
+					String(raw.sub) !== idTokenClaims.sub
+				) {
+					return null;
+				}
+
+				const mapped = c.mapProfileToUser ? await c.mapProfileToUser(raw) : {};
+				const user = {
+					email: raw.email,
+					emailVerified: parseStringBoolean(raw.emailVerified) ?? false,
+					image: raw.image,
+					name: raw.name,
+					...mapped,
+				};
+				return {
+					user: { ...user, image: user.image ?? undefined },
+					data: raw,
+				};
+			};
+
 			const accountSubject = c.accountSubject;
 			const provider: OAuthProvider = {
 				id: c.providerId,
@@ -327,9 +412,15 @@ export const genericOAuth = <const ID extends string>(
 					if (accountSubject) {
 						return accountSubject({ tokens, profile: genericProfile });
 					}
-					return isOidc
-						? (genericProfile.sub ?? "")
-						: (genericProfile.id ?? "");
+					if (!isOidc) {
+						return genericProfile.id ?? "";
+					}
+					// getUserInfo or the id_token sign-in route verified this token,
+					// so it names the subject; the profile only describes it.
+					if (idTokenConfig && tokens.idToken) {
+						return readIdTokenClaims(tokens.idToken)?.sub ?? "";
+					}
+					return genericProfile.sub ?? "";
 				},
 				idToken: idTokenConfig,
 				requiresIdTokenNonce:
@@ -441,46 +532,32 @@ export const genericOAuth = <const ID extends string>(
 					});
 					return applyDefaultAccessTokenExpiry(tokens, c.accessTokenExpiresIn);
 				},
+				async getUserInfoFromIdToken(idToken) {
+					const claims = provider.idToken
+						? readIdTokenClaims(idToken)
+						: undefined;
+					if (claims === null) return null;
+					return resolveUserInfo({ idToken }, claims);
+				},
 				async getUserInfo(tokens) {
 					const { expectedIdTokenNonce, ...oauthTokens } = tokens;
-					// Fail closed: when discovery published a JWKS, an id_token
-					// that cannot be verified must not become an identity source.
-					if (oauthTokens.idToken && provider.idToken) {
-						const verified = await verifyProviderIdToken(
-							provider,
-							oauthTokens.idToken,
-							expectedIdTokenNonce,
-						);
-						if (!verified) {
-							ctx.logger.error(
-								`Provider "${c.providerId}": id_token failed verification against the discovery JWKS or expected nonce`,
-							);
-							return null;
-						}
+					if (!oauthTokens.idToken || !provider.idToken) {
+						return resolveUserInfo(oauthTokens);
 					}
-					const raw = c.getUserInfo
-						? await c.getUserInfo(oauthTokens)
-						: await fetchUserInfo(oauthTokens, userInfoUrl);
-					if (!raw) {
+
+					const valid = await verifyProviderIdToken(
+						provider,
+						oauthTokens.idToken,
+						expectedIdTokenNonce,
+					);
+					const claims = valid ? readIdTokenClaims(oauthTokens.idToken) : null;
+					if (!claims) {
+						ctx.logger.error(
+							`Provider "${c.providerId}": id_token failed verification against the discovery JWKS or expected nonce`,
+						);
 						return null;
 					}
-					const mapped = c.mapProfileToUser
-						? await c.mapProfileToUser(raw)
-						: {};
-					const user = {
-						email: raw.email,
-						emailVerified: raw.emailVerified,
-						image: raw.image,
-						name: raw.name,
-						...mapped,
-					};
-					return {
-						user: {
-							...user,
-							image: user.image ?? undefined,
-						},
-						data: raw,
-					};
+					return resolveUserInfo(oauthTokens, claims);
 				},
 				async refreshAccessToken(
 					refreshToken: string,
@@ -506,6 +583,7 @@ export const genericOAuth = <const ID extends string>(
 						tokenEndpointAuth,
 						tokenEndpoint: tokenUrl,
 						extraParams: resolvedRefreshParams,
+						headers: c.authorizationHeaders,
 					});
 					return applyDefaultAccessTokenExpiry(tokens, c.accessTokenExpiresIn);
 				},
@@ -522,25 +600,19 @@ export const genericOAuth = <const ID extends string>(
 		return genericProviders;
 	};
 
-	// Concurrent requests share one retry, and a failed retry stays pending.
-	const retryDiscovery = (ctx: AuthContext, providerId: string) => {
+	// Each request runs its own retry: on Workers, a pending fetch started by a request
+	// that has ended never settles. The first success installs the provider.
+	const retryDiscovery = async (ctx: AuthContext, providerId: string) => {
 		const pendingDiscovery = getPendingDiscovery(ctx);
 		const pending = pendingDiscovery?.get(providerId);
 		if (!pending) return;
-		pending.attempt ??= buildProviders(
-			[pending.config],
+		const [provider] = await buildProviders(
+			[pending],
 			ctx,
 			DISCOVERY_RETRY_TIMEOUT_MS,
-		)
-			.then(([provider]) => {
-				if (!provider) return;
-				pendingDiscovery?.delete(providerId);
-				ctx.socialProviders.unshift(provider);
-			})
-			.finally(() => {
-				pending.attempt = undefined;
-			});
-		return pending.attempt;
+		);
+		if (!provider || !pendingDiscovery?.delete(providerId)) return;
+		ctx.socialProviders.unshift(provider);
 	};
 	// shortcut: account routes that look the provider up from a stored account recover
 	// only after a request names it; resolve the account here if that becomes a need.
@@ -566,7 +638,7 @@ export const genericOAuth = <const ID extends string>(
 			const genericOAuthPendingDiscovery: PendingDiscovery = new Map(
 				options.config
 					.filter((c) => !built.has(c.providerId))
-					.map((c) => [c.providerId, { config: c }]),
+					.map((c) => [c.providerId, c]),
 			);
 
 			const existingIds = new Set(ctx.socialProviders.map((p) => p.id));

@@ -12,6 +12,8 @@ import type {
 	ReleaseRewrites,
 } from "./schema.ts";
 import {
+	generatedMigrationMaxLength,
+	generatedTitleMaxLength,
 	parseSchema,
 	releaseManifestSchema,
 	releaseRewritesSchema,
@@ -111,6 +113,7 @@ export function formatReleaseBody(
 		list.push(entry);
 		grouped.set(entry.packageName, list);
 		if (entry.author !== "unknown") contributors.add(entry.author);
+		for (const login of entry.commitAuthors) contributors.add(login);
 	}
 
 	const packageOrder = [...grouped.keys()].sort((a, b) => {
@@ -255,11 +258,22 @@ export function validateGeneratedReleaseRewrite(
 		changesetDescription,
 	}: Pick<ReleaseEntry, "changeType" | "changesetDescription">,
 ): ReleaseRewrites[string] {
-	const title = validateGeneratedCopy(value.title, "title", value.id, 300);
+	const title = validateGeneratedCopy(
+		value.title,
+		"title",
+		value.id,
+		generatedTitleMaxLength,
+	);
+	// Models sometimes write "" for "no action needed".
 	const migration =
-		value.migration === null
+		value.migration === null || !value.migration.trim()
 			? undefined
-			: validateGeneratedCopy(value.migration, "migration", value.id, 500);
+			: validateGeneratedCopy(
+					value.migration,
+					"migration",
+					value.id,
+					generatedMigrationMaxLength,
+				);
 
 	if (changeType === "breaking" && !migration) {
 		throw new Error(

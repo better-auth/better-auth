@@ -12,6 +12,104 @@ import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
 
+describe("device approval session authority", () => {
+	it("does not claim a device code for a revoked cached session", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.userId ?? null).toBeNull();
+	});
+
+	it("does not approve a claimed code after the session is revoked", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			auth.api.deviceApprove({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
+
+	it("does not deny a claimed code after the session is revoked", async () => {
+		const { auth, client, testUser, cookieSetter } = await getTestInstance({
+			session: { cookieCache: { enabled: true, maxAge: 60 } },
+			plugins: [deviceAuthorization()],
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const current = await client.getSession({
+			fetchOptions: { headers, onSuccess: cookieSetter(headers) },
+		});
+		const { user_code } = await auth.api.deviceCode({
+			body: { client_id: "test-client" },
+		});
+		await auth.api.deviceVerify({ query: { user_code }, headers });
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.deleteSession(current.data!.session.token);
+
+		await expect(
+			auth.api.deviceDeny({ body: { userCode: user_code }, headers }),
+		).rejects.toMatchObject({ status: "UNAUTHORIZED" });
+		const stored = await ctx.adapter.findOne<DeviceCode>({
+			model: "deviceCode",
+			where: [{ field: "userCode", value: user_code }],
+		});
+		expect(stored?.status).toBe("pending");
+	});
+});
+
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
 		const options = deviceAuthorizationOptionsSchema.parse({});
@@ -188,7 +286,7 @@ describe("client validation", async () => {
 			}),
 		).rejects.toMatchObject({
 			body: {
-				error: "invalid_grant",
+				error: "invalid_client",
 				error_description: "Invalid client ID",
 			},
 		});
@@ -452,6 +550,72 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device verification", () => {
+		it("rejects a lookup whose code is deleted while it claims the code", async () => {
+			const { headers } = await signInWithTestUser();
+			const { user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client" },
+			});
+			const context = await auth.$context;
+			const spy = vi
+				.spyOn(context.adapter, "incrementOne")
+				.mockImplementationOnce(async () => {
+					await context.adapter.deleteMany({
+						model: "deviceCode",
+						where: [{ field: "userCode", value: user_code }],
+					});
+					return null;
+				});
+			try {
+				await expect(
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+				).rejects.toMatchObject({
+					body: { error: "invalid_request" },
+				});
+			} finally {
+				spy.mockRestore();
+			}
+		});
+
+		/**
+		 * React Strict Mode runs an approval page's lookup effect twice, so one
+		 * user can send two lookups for an unclaimed code at once.
+		 */
+		it("returns the request details to both concurrent lookups by the claiming user", async () => {
+			const { headers } = await signInWithTestUser();
+			const { user_code } = await auth.api.deviceCode({
+				body: { client_id: "test-client", scope: "read" },
+			});
+			const context = await auth.$context;
+			const incrementOne = context.adapter.incrementOne.bind(context.adapter);
+			const bothReading = Promise.withResolvers<void>();
+			let calls = 0;
+			const spy = vi
+				.spyOn(context.adapter, "incrementOne")
+				.mockImplementation(async (...args) => {
+					// Both lookups read the unclaimed code before either claims it.
+					if (++calls === 2) bothReading.resolve();
+					await bothReading.promise;
+					return incrementOne(...args);
+				});
+			try {
+				const lookups = await Promise.all([
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+					auth.api.deviceVerify({ query: { user_code }, headers }),
+				]);
+
+				expect(calls).toBe(2);
+				for (const lookup of lookups) {
+					expect(lookup).toMatchObject({
+						status: "pending",
+						client_id: "test-client",
+						scope: "read",
+					});
+				}
+			} finally {
+				spy.mockRestore();
+			}
+		});
+
 		it("accepts lowercase user codes for verification, approval, and denial", async () => {
 			const { headers } = await signInWithTestUser();
 			const createLowercaseUserCode = async () => {

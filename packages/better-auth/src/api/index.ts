@@ -420,11 +420,13 @@ export {
 } from "@better-auth/core/api";
 export { APIError } from "@better-auth/core/error";
 export { getIP } from "@better-auth/core/utils/ip";
+export { generateGenericState, parseGenericState } from "../state";
 export { isAPIError } from "../utils/is-api-error";
 export { type DispatchContext, dispatchAuthEndpoint } from "./dispatch";
 export * from "./middlewares";
 export * from "./routes";
 export { addOAuthServerContext, getOAuthState } from "./state/oauth";
+export { markSessionOutsideStore } from "./state/session-source";
 export {
 	getShouldSkipSessionRefresh,
 	setShouldSkipSessionRefresh,

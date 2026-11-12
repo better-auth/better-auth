@@ -1,5 +1,33 @@
 # @better-auth/kysely-adapter
 
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#11912](https://github.com/better-auth/better-auth/pull/11912) [`5c12074`](https://github.com/better-auth/better-auth/commit/5c120747e4d5ab37f1fa71fee11653ade82739bc) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - If you use PostgreSQL and other schemas in the same database are dropped while Better Auth reads the database, for example one schema per tenant or parallel test runs, the startup schema check and `npx auth@latest migrate` no longer fail intermittently with `schema "…" does not exist` or `relation "…" does not exist`. The startup schema check now reads only the schemas on the connection's `search_path`, plus any schema set with `schemaName` or a schema plugin, and `migrate` reads only the schema it migrates. Before, both read every schema in the database. If no other schemas change while Better Auth reads the database, nothing changes for you.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+### Patch Changes
+
+- [#12220](https://github.com/better-auth/better-auth/pull/12220) [`fc2e00b`](https://github.com/better-auth/better-auth/commit/fc2e00bb4fd65e80246fdefcd5d8d5b1ea9d1512) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, a `create` that fails because the table reports no auto-increment id no longer leaves the inserted row behind, so retrying does not fail with a duplicate key error.
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - On MySQL with `generateId: "serial"`, resolve the created row from the id reported by the INSERT itself instead of re-reading `LAST_INSERT_ID()` on a separate connection, and fail instead of guessing when no auto-increment id is reported.
+
+## 1.7.15
+
 ## 1.7.14
 
 ## 1.7.13

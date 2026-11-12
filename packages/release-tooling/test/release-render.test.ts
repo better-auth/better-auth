@@ -60,6 +60,7 @@ function renderReleaseRewrites(
 						changesetDescription,
 						prNumber: 10769,
 						author: "bytaesu",
+						commitAuthors: [],
 						domain: "core",
 						packageName: "better-auth",
 						changeType: breaking ? "breaking" : "fix",
@@ -120,6 +121,7 @@ describe("AI release-note rewrites", () => {
 						"Breaking change\n\nRead https://example.com before upgrading.",
 					prNumber: 42,
 					author: "octocat",
+					commitAuthors: [],
 					domain: "core",
 					packageName: "better-auth",
 					changeType: "breaking",
@@ -132,6 +134,7 @@ describe("AI release-note rewrites", () => {
 					changesetDescription: "Update custom session refresh integrations.",
 					prNumber: 43,
 					author: "octocat",
+					commitAuthors: [],
 					domain: "core",
 					packageName: "better-auth",
 					changeType: "breaking",
@@ -380,6 +383,7 @@ describe("AI release-note rewrites", () => {
 			changesetDescription: "Run `auth migrate` after upgrading.",
 			prNumber: 42,
 			author: "octocat",
+			commitAuthors: [] as string[],
 			domain: "core",
 			changeType: "fix",
 			breaking: false,
@@ -419,6 +423,45 @@ describe("AI release-note rewrites", () => {
 
 		expect(output.match(/Run `auth migrate`/g)).toHaveLength(1);
 		expect(output.match(/- Fixed missing migration/g)).toHaveLength(2);
+	});
+
+	it("credits commit authors alongside the pull request author", () => {
+		const output = formatReleaseBody(
+			{
+				repository: "better-auth/better-auth",
+				version: "1.9.1",
+				commitRef: "0123456789abcdef0123456789abcdef01234567",
+				previousTag: "v1.9.0",
+				packageMetadata: {
+					"better-auth": {
+						newPackage: false,
+						referenceLabel: "CHANGELOG",
+						referenceUrl:
+							"https://github.com/better-auth/better-auth/blob/0123456789abcdef0123456789abcdef01234567/CHANGELOG.md",
+					},
+				},
+				entries: [
+					{
+						id: "pr-42:better-auth",
+						rewriteKey: "pr-42",
+						title: "fix: require explicit migration",
+						changesetDescription: null,
+						prNumber: 42,
+						author: "octocat",
+						commitAuthors: ["octocat", "jane-doe"],
+						domain: "core",
+						packageName: "better-auth",
+						changeType: "fix",
+						breaking: false,
+					},
+				],
+			},
+			{},
+		);
+
+		expect(output).toContain(
+			"Thanks to everyone who contributed to this release:\n\n@jane-doe, @octocat\n",
+		);
 	});
 
 	it("allows safe identifiers inside inline code", () => {

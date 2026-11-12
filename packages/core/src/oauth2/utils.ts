@@ -83,6 +83,18 @@ export function mergeScopes(
 }
 
 /**
+ * Reads a boolean that some providers send as a string.
+ *
+ * Accepts `true`, `false` and their exact string forms. Any other value
+ * returns `undefined`, so the caller decides how to treat it.
+ */
+export function parseStringBoolean(value: unknown): boolean | undefined {
+	if (value === true || value === "true") return true;
+	if (value === false || value === "false") return false;
+	return undefined;
+}
+
+/**
  * Return the provider's primary Client ID: the single string, or the entry at
  * array index 0 for the cross-platform form used by ID token audience
  * verification. Index 0 is the designated primary and pairs with

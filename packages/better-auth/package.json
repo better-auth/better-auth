@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.7.14",
+  "version": "1.7.22",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -535,7 +535,7 @@
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "botid": "^1.5.10",
-    "happy-dom": "^20.8.9",
+    "happy-dom": "^21.0.4",
     "msw": "^2.14.6",
     "next": "^16.4.2",
     "oauth2-mock-server": "^9.0.0",

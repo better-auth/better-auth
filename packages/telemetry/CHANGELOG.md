@@ -1,5 +1,29 @@
 # @better-auth/telemetry
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12448](https://github.com/better-auth/better-auth/pull/12448) [`79219b4`](https://github.com/better-auth/better-auth/commit/79219b4f8e8b4cff0e184333fc46ef64e3c47e2e) Thanks [@bytaesu](https://github.com/bytaesu)! - Enabling telemetry without a static `baseURL` no longer fails every request to an auth instance created at module scope on Cloudflare Workers.
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12425](https://github.com/better-auth/better-auth/pull/12425) [`ef4d4f7`](https://github.com/better-auth/better-auth/commit/ef4d4f7dc457fc78b0414e9c6a60827a7a3eab0e) Thanks [@bytaesu](https://github.com/bytaesu)! - Telemetry now reports Cloudflare Workers as `workerd` instead of `node` when `nodejs_compat` is enabled. `@better-auth/core/env` exports the runtime detection it uses.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
 ## 1.7.14
 
 ## 1.7.13

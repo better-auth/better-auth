@@ -1,5 +1,29 @@
 # @better-auth/api-key
 
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12107](https://github.com/better-auth/better-auth/pull/12107) [`9ce8b2c`](https://github.com/better-auth/better-auth/commit/9ce8b2c725ef7e088e83a675fe427d92b0c1010d) Thanks [@bytaesu](https://github.com/bytaesu)! - API keys stored in secondary storage now verify, load, and list correctly when the storage client returns already-parsed JSON objects, such as `@upstash/redis`.
+
 ## 1.7.14
 
 ## 1.7.13

@@ -1,5 +1,33 @@
 # @better-auth/electron
 
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12409](https://github.com/better-auth/better-auth/pull/12409) [`9362c0d`](https://github.com/better-auth/better-auth/commit/9362c0d42e7f65a1dbfd6318360cd97ea9dd9d5b) Thanks [@bytaesu](https://github.com/bytaesu)! - A deep link that fails to authenticate, such as one opened again after sign-in, is now logged instead of causing an unhandled promise rejection in the main process.
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Sign-in and sign-up now return their normal response when the Electron transfer cookie does not hold a valid transfer request.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Desktop authorization codes are now bound to the browser session that issued them and stop working once that session ends.
+
+## 1.7.15
+
 ## 1.7.14
 
 ## 1.7.13

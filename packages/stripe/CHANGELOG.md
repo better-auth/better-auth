@@ -1,5 +1,41 @@
 # @better-auth/stripe
 
+## 1.7.22
+
+### Patch Changes
+
+- [#12473](https://github.com/better-auth/better-auth/pull/12473) [`f6487ed`](https://github.com/better-auth/better-auth/commit/f6487eddd799de2758420621ddf5d248f30aa3f3) Thanks [@bytaesu](https://github.com/bytaesu)! - A `customer.subscription.updated` webhook for a customer with no local subscription now logs a clear warning instead of failing with a `TypeError`.
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
+## 1.7.18
+
+## 1.7.17
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - Stripe customer ids and the subscription fields the plugin manages can no longer be set from sign-up or update-user requests and are removed from their input types. This includes server calls such as `auth.api.updateUser`; write them through your database adapter instead.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - When several records share a Stripe customer id, subscriptions created outside checkout now go to the owner recorded on the Stripe customer, and are skipped with a warning when no recorded owner holds the id.
+
+## 1.7.15
+
+### Patch Changes
+
+- [#12102](https://github.com/better-auth/better-auth/pull/12102) [`3b3a595`](https://github.com/better-auth/better-auth/commit/3b3a5957a0ce1bde906954c5490735706a5202f9) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now checks the `callbackURL` against trusted origins after replacing `{CHECKOUT_SESSION_ID}`, so a `checkoutSessionId` value can no longer redirect to an untrusted origin.
+
+- [#12105](https://github.com/better-auth/better-auth/pull/12105) [`4af793f`](https://github.com/better-auth/better-auth/commit/4af793f1c8db057d2822b59c2d9099d76a0fb279) Thanks [@bytaesu](https://github.com/bytaesu)! - `/subscription/success` now rejects non-string `callbackURL` and `checkoutSessionId` query values, such as duplicated parameters, with a 400 instead of failing with a 500.
+
 ## 1.7.14
 
 ## 1.7.13

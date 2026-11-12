@@ -1,5 +1,39 @@
 # @better-auth/expo
 
+## 1.7.22
+
+## 1.7.21
+
+### Patch Changes
+
+- [#12404](https://github.com/better-auth/better-auth/pull/12404) [`9b40ac6`](https://github.com/better-auth/better-auth/commit/9b40ac62af33d16952778bc3acfc0dc86d25a84a) Thanks [@bytaesu](https://github.com/bytaesu)! - Plugin packages no longer import from the `better-auth` root, so bundlers that split code stop emitting unused Kysely chunks when used with `better-auth/minimal`.
+
+## 1.7.20
+
+## 1.7.19
+
+### Patch Changes
+
+- [#12368](https://github.com/better-auth/better-auth/pull/12368) [`339414f`](https://github.com/better-auth/better-auth/commit/339414f9b9af88f96de089eac17f0e130d98809d) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy no longer logs a provider configuration error on every OAuth sign-in when a social provider is set up for ID token sign-in only, such as Apple without a client secret.
+
+## 1.7.18
+
+## 1.7.17
+
+### Patch Changes
+
+- [#12218](https://github.com/better-auth/better-auth/pull/12218) [`b00bff0`](https://github.com/better-auth/better-auth/commit/b00bff02882839df3df94ce1c103b50b26fb8843) Thanks [@bytaesu](https://github.com/bytaesu)! - When OAuth state is stored in a cookie, Expo social sign-in now rejects authorization URLs without a `state` parameter, the same as with the default database storage.
+
+## 1.7.16
+
+### Patch Changes
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy now redirects only to the origin of a configured social or generic OAuth provider's authorization endpoint, or of an SSO provider on a trusted origin. If Expo sign-in through an SSO identity provider fails, add the identity provider's origin to `trustedOrigins`.
+
+- [#12198](https://github.com/better-auth/better-auth/pull/12198) [`f25081a`](https://github.com/better-auth/better-auth/commit/f25081ac0476a9a4295f7a9736ae7239974c7b1e) Thanks [@bytaesu](https://github.com/bytaesu)! - The Expo authorization proxy now sets the signed state cookie only for an unexpired state issued by the server. `getAuthStateVerificationIdentifier` is now exported for plugins that look up OAuth state records.
+
+## 1.7.15
+
 ## 1.7.14
 
 ## 1.7.13
