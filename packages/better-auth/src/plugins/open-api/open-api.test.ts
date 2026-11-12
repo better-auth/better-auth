@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as z from "zod";
 import { createAuthEndpoint } from "../../api";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { admin } from "../admin";
 import { emailOTP } from "../email-otp";
 import { phoneNumber } from "../phone-number";
 import { username } from "../username";
@@ -331,6 +332,9 @@ describe("open-api", async () => {
 			openAPI(),
 		],
 	});
+	const { auth: authWithAdmin } = await getTestInstance({
+		plugins: [openAPI(), admin()],
+	});
 	const { auth: authWithNullableIntersection } = await getTestInstance({
 		plugins: [openAPI(), nullableIntersectionPlugin],
 	});
@@ -357,6 +361,22 @@ describe("open-api", async () => {
 		const schema = await auth.api.generateOpenAPISchema();
 		expect(schema).toBeDefined();
 		expect(schema).toMatchSnapshot("openAPISchema");
+	});
+
+	it("should describe admin ban expiry inputs as date-time strings", async () => {
+		const schema = await authWithAdmin.api.generateOpenAPISchema();
+		const paths = schema.paths as Record<string, Path>;
+		const requestBody = getPostRequestBody(paths, "/admin/ban-user");
+		const requestSchema = requestBody.content["application/json"].schema;
+		const banExpires = getSchemaProperty(requestSchema, "banExpires");
+
+		expect(banExpires.anyOf).toHaveLength(2);
+		for (const option of banExpires.anyOf ?? []) {
+			expect(option).toMatchObject({
+				type: "string",
+				format: "date-time",
+			});
+		}
 	});
 
 	it("should mark model id fields as required and read-only", async () => {
