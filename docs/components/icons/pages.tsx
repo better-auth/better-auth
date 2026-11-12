@@ -530,6 +530,7 @@ export const pageIcons = {
 		</svg>
 	),
 	guidesOptimizingForPerformance: () => <Gauge className="size-4" />,
+	guidesV18UpgradeGuide: () => <ScrollTextIcon className="size-4" />,
 	guidesV17UpgradeGuide: () => <ScrollTextIcon className="size-4" />,
 	guidesNextAuthMigrationGuide: () => (
 		<svg
