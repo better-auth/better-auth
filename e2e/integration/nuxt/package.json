@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "nuxt": "4.6.2"
+    "nuxt": "4.6.3"
   },
   "devDependencies": {
     "@nuxt/test-utils": "4.3.1",
