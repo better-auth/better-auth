@@ -280,8 +280,47 @@ Requests without a `DPoP` proof are unaffected.
 Nonces are not stored. Each nonce holds its issue time and a signature keyed from your auth `secret`. Any instance with the same secret accepts a nonce another instance issued. Rotating the secret invalidates outstanding nonces, and each client recovers with one retry. Discovery metadata does not change, because RFC 9449 defines no metadata for nonces. A client learns that nonces are required from the first `use_dpop_nonce` response.
 
 <Callout>
-  The [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html#section-4) requires DPoP, and requires wallets to handle `DPoP-Nonce` from the authorization server and the credential issuer. To serve nonces from your own endpoints, such as a credential issuer's Nonce Endpoint or an API on the same origin, see [Require DPoP nonces](/docs/plugins/oauth-provider/resource-server#require-dpop-nonces).
+  The [OpenID4VC High Assurance Interoperability Profile 1.0](https://openid.net/specs/openid4vc-high-assurance-interoperability-profile-1_0.html#section-4) requires DPoP, and requires wallets to handle `DPoP-Nonce` from the authorization server and the credential issuer. To serve nonces from a plugin endpoint on the auth server, see [Nonces on your own endpoints](#nonces-on-your-own-endpoints). For an API that verifies access tokens, see [Require DPoP nonces](/docs/plugins/oauth-provider/resource-server#require-dpop-nonces).
 </Callout>
+
+#### Nonces on your own endpoints
+
+A plugin endpoint on the auth server can verify DPoP proofs with the same rules as the token endpoint, nonces included. Call `verifyDpopProof` on the provider API:
+
+```ts title="dpop-plugin.ts"
+import { getOAuthProviderApi } from "@better-auth/oauth-provider";
+import { createAuthEndpoint } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth/types";
+
+export const dpopBinding = () =>
+  ({
+    id: "dpop-binding",
+    endpoints: {
+      bindKey: createAuthEndpoint(
+        "/dpop/bind",
+        { method: "POST" },
+        async (ctx) => {
+          const provider = getOAuthProviderApi(
+            ctx,
+            ctx.context.getPlugin("oauth-provider")!.options,
+          );
+          const proof = await provider.verifyDpopProof({ required: true });
+          // proof.jkt is the thumbprint of the key the client proved.
+          return ctx.json({ jkt: proof.jkt });
+        },
+      ),
+    },
+  }) satisfies BetterAuthPlugin;
+```
+
+`verifyDpopProof` checks the proof against your `dpop` settings and stores its `jti`, so the proof cannot be reused. Without `required: true`, it returns `undefined` when the request has no proof. When `dpop.nonce.required` is on:
+
+* A proof without a current nonce fails with a 400 `use_dpop_nonce` error and a fresh `DPoP-Nonce`.
+* A verified proof sets the client's next nonce on the response.
+
+Call it before your endpoint consumes a one-time credential, such as a code. The client's retry with the nonce can then still redeem it. Do not call it on a request that also calls `issueTokens` or `resolveConfirmation`. Those verify the proof themselves, and a second check rejects its `jti` as reused. A proof sent through `auth.api` fails, because there is no HTTP method to check against `htm`.
+
+An endpoint that only hands out nonces, such as a credential issuer's Nonce Endpoint, calls `provider.issueDpopNonce()`. It sets a nonce only when `dpop.nonce.required` is on. Otherwise it returns `undefined` and sets no header.
 
 ## Custom claims
 
@@ -405,7 +444,7 @@ The user approves a device code through `/oauth2/authorize?user_code=…`, on th
 
 A service that receives a user's access token sometimes needs to call another API as that user. Forwarding the token fails the API's audience check and gives the API more access than it needs. Token exchange ([RFC 8693](https://datatracker.ietf.org/doc/html/rfc8693)) lets the service trade the token at the token endpoint for a new access token for the other API. The new token has the same user as `sub`, the downstream API as `aud`, and the exchanging service as `client_id`.
 
-The exchanged token impersonates the user: it represents the user and does not name the service as an actor (`act`). A typical case is an MCP server that receives a token for itself and calls a downstream API.
+By default, the exchanged token impersonates the user: it represents the user and does not name the service. A typical case is an MCP server that receives a token for itself and calls a downstream API. To record that the service acts for the user, send an actor token. See [Delegate to an actor](#delegate-to-an-actor).
 
 ### Set up token exchange
 
@@ -495,10 +534,120 @@ curl https://auth.example.com/api/auth/oauth2/token \
 | `resource`                        | Required unless `audience` is sent, and may repeat ([RFC 8707](https://datatracker.ietf.org/doc/html/rfc8707)). Each value must be a registered, enabled resource, linked to the client while `enforcePerClientResources` is on |
 | `scope`                           | Optional. Defaults to the subject token's scopes, without `openid` and `offline_access`, that the client is also registered for                                                                                                 |
 | `requested_token_type`            | Optional. Only `urn:ietf:params:oauth:token-type:access_token` is accepted                                                                                                                                                      |
-| `actor_token`, `actor_token_type` | Not supported. Sending either returns `invalid_request`                                                                                                                                                                         |
+| `actor_token`, `actor_token_type` | Optional, sent together. See [Delegate to an actor](#delegate-to-an-actor)                                                                                                                                                      |
 | `audience`                        | Optional, and may repeat. Each value must equal a registered resource identifier and is treated like `resource`                                                                                                                 |
 
 With the JWT plugin enabled, the exchanged token is a JWT access token whose `aud` is the requested resource. With `disableJwtPlugin: true`, it is opaque and the resource is returned by introspection. The response has no refresh token and no ID token.
+
+### Delegate to an actor
+
+An impersonation token does not show which service acts for the user. A resource server then cannot tell a call from the user's own client apart from a call by a service in between. Delegation ([RFC 8693 §1.1](https://datatracker.ietf.org/doc/html/rfc8693#section-1.1)) adds that information. The service sends an actor token next to the subject token, and the exchanged token names the actor in its `act` claim. The token keeps the same user as `sub`, and the same scopes and audience rules as an impersonation token.
+
+The actor token must be an access token this server issued to the exchanging client. A service usually sends its own `client_credentials` token:
+
+```bash
+curl https://auth.example.com/api/auth/oauth2/token \
+  -u "$EXCHANGING_CLIENT_ID:$EXCHANGING_CLIENT_SECRET" \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  --data-urlencode "subject_token=$USER_ACCESS_TOKEN" \
+  -d subject_token_type=urn:ietf:params:oauth:token-type:access_token \
+  --data-urlencode "actor_token=$SERVICE_ACCESS_TOKEN" \
+  -d actor_token_type=urn:ietf:params:oauth:token-type:access_token \
+  --data-urlencode resource=https://api.example.com
+```
+
+To get that token, register the service for both grants, `grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, "client_credentials"]`, with the scopes it may request in `client_credentials_scopes`. The exchanged token then carries:
+
+```json
+{
+  "sub": "user_123",
+  "client_id": "mcp-server",
+  "act": { "sub": "mcp-server" }
+}
+```
+
+`act.sub` is the actor token's subject. For a `client_credentials` token, it is the client ID. For a user's token issued to the service, it is that user's ID. Introspection returns `act` for JWT and opaque access tokens.
+
+#### Actor chains
+
+A delegated token can be exchanged again. When the next service sends its own actor token, the new actor wraps the earlier one, as [RFC 8693 §4.1](https://datatracker.ietf.org/doc/html/rfc8693#section-4.1) describes:
+
+```json
+{
+  "act": {
+    "sub": "billing-service",
+    "act": { "sub": "mcp-server" }
+  }
+}
+```
+
+The outer `act` is the current actor. Nested entries are earlier actors, and RFC 8693 treats them as information only, not for access decisions.
+
+An exchange never removes actors. When a delegated token is exchanged without an actor token, the exchanged token keeps the subject token's `act` unchanged. Otherwise, a service could turn a delegated token into an impersonation token.
+
+`delegation.maxDepth` limits the number of actors in a chain. It defaults to `1`, so a delegated token can be exchanged again only without a new actor. Raise it to allow chains, or set it to `0` to reject every actor token and every subject token that has `act`:
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  delegation: { maxDepth: 2 },
+});
+```
+
+#### Delegation rules
+
+The provider applies these rules to every delegation, in addition to the [exchange rules](#exchange-rules):
+
+| Rule                                                                                  | Why                                                                                                       |
+| ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| The actor token is an active access token this server issued to the exchanging client | A client can only name an actor whose token was issued to it, not one that only lists the client in `aud` |
+| The actor token has no `act` of its own                                               | Its earlier actors would be lost from the chain                                                           |
+| The actor is not the subject token's user                                             | A user acting for themselves adds nothing to the audit trail                                              |
+| An actor token bound to a key requires proof of that key                              | Someone who copies the actor token cannot use it without the key                                          |
+| When the subject token has `may_act`, the request has an actor that matches it        | The subject token decides who may act for its user                                                        |
+| The chain has at most `maxDepth` actors                                               | Chains cannot grow without limit                                                                          |
+| The exchanged token expires no later than the actor token                             | Delegated access ends when the actor's token ends                                                         |
+
+A token the client got by exchanging a user's token is also issued to the client, so it can be an actor token. A service that can exchange a user's token can already act as that user, so this gives it no access it did not have.
+
+#### Limit who may act with `may_act`
+
+A subject token with a `may_act` claim ([RFC 8693 §4.4](https://datatracker.ietf.org/doc/html/rfc8693#section-4.4)) names the only actor allowed to act for its user. The provider never adds `may_act` itself. Add it with `customAccessTokenClaims`, which also covers opaque tokens at introspection:
+
+```ts title="auth.ts"
+oauthProvider({
+  // ...
+  customAccessTokenClaims: ({ resources }) =>
+    resources?.includes("https://mcp.example.com")
+      ? { may_act: { sub: process.env.MCP_SERVER_CLIENT_ID } }
+      : {},
+}),
+```
+
+Every member of `may_act` must match the actor:
+
+* `sub` must equal the actor's `act.sub`.
+* `client_id` must equal the actor token's client, which is the exchanging client.
+* `iss` must equal this server's issuer.
+
+Any other member denies the exchange, because the provider cannot check it. So does an empty `may_act`. A subject token with `may_act` also cannot be exchanged without an actor token.
+
+#### Add fields to the actor
+
+`delegation.actorClaims` adds your own fields to the current actor's entry in `act`. It runs after every other check, only when the request has an actor token. It receives the same request as `allowExchange`, with `actor` always set:
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  delegation: {
+    actorClaims: ({ actor }) => ({
+      actor_type: actor.user ? "user" : "service",
+    }),
+  },
+});
+```
+
+The provider ignores the fields `sub`, `iss`, and `act` and logs a warning. The hook cannot change who acted or the earlier actors.
+
+`act` belongs to the authorization server, like `cnf`. `customAccessTokenClaims`, claim contributors, and resource `customClaims` cannot set it.
 
 ### Exchange DPoP-bound tokens
 
@@ -514,8 +663,23 @@ A [`clientAuthentication` strategy](/docs/plugins/oauth-provider/reference#provi
 
 When the subject token is DPoP-bound, the rules depend on who exchanges it:
 
-* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A missing proof, or a proof or `confirmation` with another key, fails with `invalid_dpop_proof`.
+* **The client the token was issued to** must prove the same key. It sends a proof signed by that key, as it does for a refresh, or its `clientAuthentication` strategy returns that key as `confirmation`. The exchanged token stays bound to that key. A request with neither a proof nor a `confirmation` fails with `invalid_dpop_proof`. So does a proof or `confirmation` with another key.
 * **A service in the token's audience**, such as the MCP server that received it, does not hold the client's key. If the service sends its own proof, the exchanged token is bound to the service's key. If it sends no proof and none is required, the exchanged token is a bearer token.
+
+A subject token can also be bound by another mechanism, such as an mTLS certificate in `cnf["x5t#S256"]` that came from a strategy's `confirmation`. When the client the token was issued to exchanges it, its strategy must return the same `confirmation` again. The exchanged token then stays bound to that certificate. The exchange fails with `invalid_request` in any of these cases:
+
+* The strategy returns a different certificate.
+* The strategy returns no `confirmation`. A DPoP proof does not replace it.
+* The token's `cnf` uses a method the server does not recognize.
+
+A service in the token's audience is treated as for a DPoP-bound token. The exchanged token is bound to the service's own proof or `confirmation`, or is a bearer token when the service sends neither and none is required.
+
+An [actor token](#delegate-to-an-actor) is always the exchanging client's own token. When it is bound to a key, the request must prove the same key:
+
+* For a DPoP-bound actor token, send a proof signed by that key, or let the client's `clientAuthentication` strategy return that key as `confirmation`.
+* For an actor token bound another way, such as to a certificate, the strategy must return the same `confirmation`.
+
+The exchanged token is then bound to that key.
 
 A service that passes the [exchange rules](#exchange-rules) does not need the client's key. It can turn each DPoP-bound token it receives into a token for the APIs it is linked to. To keep those tokens DPoP-bound, require a proof in either of these ways:
 
@@ -542,7 +706,7 @@ The provider applies these rules to every exchange, before your `allowExchange` 
 | The client is confidential and registered for the token-exchange grant                                                                                | Someone who only holds a leaked token cannot exchange it                                                            |
 | The subject token is an access token this server issued to a user                                                                                     | Tokens from other issuers and machine tokens from `client_credentials` are rejected                                 |
 | The client is the subject token's client, or is linked to a resource in the token's audience                                                          | A client cannot exchange a token that was never sent to it                                                          |
-| A client that exchanges its own DPoP-bound token sends a proof signed by the same key                                                                 | An exchange cannot remove or replace the client's DPoP binding                                                      |
+| A client that exchanges its own sender-constrained token proves the same binding: the same DPoP key, or the same strategy `confirmation`              | An exchange cannot remove or replace the client's binding                                                           |
 | The requested scopes are a subset of the subject token's scopes and the client's registered scopes. `openid` and `offline_access` are never exchanged | An exchange cannot add access. An exchange is not a sign-in                                                         |
 | Each target resource is registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default)                        | The client's resource policy still applies, including each resource's `allowedScopes`                               |
 | A client that does not skip consent needs a stored consent covering the scopes and resources                                                          | The user must have approved this client for this access                                                             |
@@ -558,10 +722,18 @@ A token exchange fails with one of these errors:
 * `invalid_request` (400), when any of these applies:
   * The subject token is missing or invalid.
   * `subject_token_type` is unsupported.
-  * The request sends `actor_token` or `actor_token_type`.
+  * The request sends only one of `actor_token` and `actor_token_type`.
+  * `actor_token_type` is not `urn:ietf:params:oauth:token-type:access_token`.
+  * The actor token is invalid, expired, or not issued to the client.
+  * The actor token represents the subject token's user.
+  * The actor token carries its own `act`.
+  * The actor token is bound to a key the request does not prove, by a binding other than DPoP.
+  * The subject token's `may_act` does not match the actor, or the request has no actor.
+  * The `act` chain would exceed `delegation.maxDepth`.
   * `requested_token_type` is unsupported.
   * The request sends neither `resource` nor `audience`.
   * The user has no stored consent for the client that covers the request.
+  * The client exchanges its own token bound by a non-DPoP `cnf`, such as an mTLS certificate, and its client authentication does not return that same `confirmation`.
   * Your `allowExchange` policy denies the exchange.
 * `invalid_scope` (400), when any of these applies:
   * The request names a scope that the subject token or the client does not have.
@@ -577,6 +749,8 @@ A token exchange fails with one of these errors:
   * The DPoP proof is invalid.
   * A proof is required and the request has none.
   * The client exchanges its own DPoP-bound token with a proof, or a strategy `confirmation`, for another key.
+  * A DPoP-bound actor token comes without a proof from its key, and the client's strategy `confirmation` does not prove that key either.
+  * The subject token and the actor token are both the client's own and are bound to different keys.
 
 ### Keep the organization the user approved
 
@@ -594,6 +768,10 @@ The provider reads the reference from the subject token's [`reference_id`](#cons
 * `scopes`: the scopes the exchanged token will carry, after each resource's `allowedScopes` narrows the requested ones
 * `referenceId`: the inherited consent reference
 * `subjectToken`: the subject token's introspection payload
+* `actor`: the validated actor, when the request sends an actor token. It has `sub`, the actor's `user` when the actor token represents a user, and `token`, the actor token's introspection payload
+* `act`: the `act` claim the exchanged token will carry, before fields from `delegation.actorClaims`
+
+`allowExchange` and `delegation.actorClaims` receive a copy of the request. Changing it does not change the exchanged token.
 
 ```ts title="auth.ts"
 oauthTokenExchange({
@@ -603,13 +781,21 @@ oauthTokenExchange({
 });
 ```
 
+To require delegation, so that every exchanged token names its actor, deny requests without one:
+
+```ts title="auth.ts"
+oauthTokenExchange({
+  allowExchange: ({ actor }) => actor !== undefined,
+});
+```
+
 ### Limitations
 
-* **No delegation.** `actor_token` is rejected, and exchanged tokens carry no `act` claim. The exchanging service is identified only by `client_id`.
+* **Actor tokens are access tokens from this server.** ID tokens and tokens from other issuers cannot be actor tokens.
+* **Revoking the actor.** Revoking the actor token, or ending the actor user's session, does not revoke tokens exchanged with it earlier. They still expire no later than the actor token.
 * **No refresh tokens** are issued for exchanged tokens.
 * **Own access tokens only.** ID tokens, refresh tokens, and tokens from other issuers cannot be exchanged.
 * **Signing out and local JWT verification.** Signing out makes exchanged tokens inactive at introspection. A resource server that verifies JWT access tokens locally against the JWKS keeps accepting them until `exp`, which is never later than the subject token's `exp`.
 * **Subject tokens without a session.** An access token refreshed from an `offline_access` refresh token after the user signed out carries no `sid`. A token exchanged from it is not tied to a session and lasts until its `exp`. Return `false` from `allowExchange` when `subjectToken.sid` is missing if exchanges must always end with the session.
-* **`may_act` is not evaluated.**
 * **Pairwise subjects.** The exchanged token belongs to the exchanging service, so introspection reports that service's `sub` for the user. A service that exchanges a pairwise client's token can link that client's `sub` to its own.
 * **Registration default resources.** `clientRegistrationDefaultResources` links every dynamically registered client to those resources. Such a client then counts as a resource server for tokens whose audience is one of them, so the audience rule does not tell it apart from your own service. The consent rule still limits it to what the user approved for that client.

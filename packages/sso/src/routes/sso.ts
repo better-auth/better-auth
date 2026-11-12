@@ -9,6 +9,7 @@ import {
 	createPrivateKeyJwtClientAssertionGetter,
 	getOAuth2Tokens,
 	PRIVATE_KEY_JWT_SIGNING_ALGORITHMS,
+	parseStringBoolean,
 } from "@better-auth/core/oauth2";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import { appendQueryParams } from "@better-auth/core/utils/url";
@@ -80,12 +81,7 @@ import {
 	requireSuccessfulSSOAuthentication,
 	resolveSSOUser,
 } from "../user-resolution";
-import {
-	domainMatches,
-	parseProviderEmailVerified,
-	safeJsonParse,
-	validateEmailDomain,
-} from "../utils";
+import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 import { getVerificationIdentifier } from "./domain-verification";
 import {
 	assertSAMLIdentityProviderAuthority,
@@ -1614,9 +1610,9 @@ async function handleOIDCCallback(
 			id: readStringClaim(rawUserInfo, "sub"),
 			email: readEmailClaim(rawUserInfo),
 			emailVerified: options?.trustEmailVerified
-				? parseProviderEmailVerified(
+				? (parseStringBoolean(
 						rawUserInfo[mapping.emailVerified || "email_verified"],
-					)
+					) ?? false)
 				: false,
 			name: readStringClaim(rawUserInfo, mapping.name || "name"),
 			image: readStringClaim(rawUserInfo, mapping.image || "picture"),
@@ -1634,9 +1630,9 @@ async function handleOIDCCallback(
 			id: idToken.sub,
 			email: readEmailClaim(idToken),
 			emailVerified: options?.trustEmailVerified
-				? parseProviderEmailVerified(
+				? (parseStringBoolean(
 						idToken[mapping.emailVerified || "email_verified"],
-					)
+					) ?? false)
 				: false,
 			name: readStringClaim(idToken, mapping.name || "name"),
 			image: readStringClaim(idToken, mapping.image || "picture"),

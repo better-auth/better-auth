@@ -3817,7 +3817,24 @@ describe("oauth2", async () => {
 		});
 	});
 
+	// Serve provider discovery locally so these tests never reach a real host.
+	function mockDiscovery(issuer: string) {
+		mswServer.use(
+			http.get(`${issuer}/.well-known/openid-configuration`, () =>
+				HttpResponse.json({
+					issuer,
+					authorization_endpoint: `${issuer}/authorize`,
+					token_endpoint: `${issuer}/token`,
+					userinfo_endpoint: `${issuer}/userinfo`,
+					jwks_uri: `${issuer}/keys`,
+					id_token_signing_alg_values_supported: ["RS256"],
+				}),
+			),
+		);
+	}
+
 	it("should integrate okta provider helper with genericOAuth", async () => {
+		mockDiscovery("https://dev-12345.okta.com/oauth2/default");
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -3836,6 +3853,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should integrate auth0 provider helper with genericOAuth", async () => {
+		mockDiscovery("https://dev-xxx.eu.auth0.com");
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -3903,6 +3921,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should integrate keycloak provider helper with genericOAuth", async () => {
+		mockDiscovery("https://my-domain.com/realms/MyRealm");
 		const { auth: testAuth } = await getTestInstance({
 			plugins: [
 				genericOAuth({
@@ -4603,6 +4622,78 @@ describe("oauth2", async () => {
 			).rejects.toThrow(
 				'Provider "test-assertion-with-secret": tokenEndpointAuth.method "private_key_jwt" cannot be combined with clientSecret',
 			);
+		});
+
+		it.each(["Authorization", "authorization", "AUTHORIZATION"])(
+			"should reject a %s header in authorizationHeaders",
+			async (name) => {
+				await expect(
+					getTestInstance({
+						plugins: [
+							genericOAuth({
+								config: [
+									{
+										providerId: "test-authorization-header",
+										discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+										clientId,
+										clientSecret,
+										authorizationHeaders: { [name]: "Bearer provider-token" },
+									},
+								],
+							}),
+						],
+					}),
+				).rejects.toThrow(
+					'Provider "test-authorization-header": authorizationHeaders cannot set "Authorization"',
+				);
+			},
+		);
+
+		it("should send the authorization header a custom method sets", async () => {
+			issueIdTokenFor("oauth2");
+			let capturedHeaders: Record<string, unknown> = {};
+			server.service.once("beforeTokenSigning", (_token, req) => {
+				capturedHeaders = { ...req.headers };
+			});
+
+			const { client, customFetchImpl, cookieSetter } = await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test-custom-authorization",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId,
+								tokenEndpointAuth: {
+									method: "custom",
+									customizeRequest: ({ body, headers }) => {
+										body.set("client_id", clientId);
+										headers.authorization = "Provider custom-credential";
+									},
+								},
+								authorizationHeaders: { "X-Custom-Header": "test-value" },
+								pkce: true,
+							},
+						],
+					}),
+				],
+			});
+
+			const headers = new Headers();
+			const res = await client.signIn.social({
+				provider: "test-custom-authorization",
+				callbackURL: "http://localhost:3000/dashboard",
+				fetchOptions: { onSuccess: cookieSetter(headers) },
+			});
+			const { callbackURL } = await simulateOAuthFlow(
+				res.data?.url || "",
+				headers,
+				customFetchImpl,
+			);
+
+			expect(callbackURL).toBe("http://localhost:3000/dashboard");
+			expect(capturedHeaders.authorization).toBe("Provider custom-credential");
+			expect(capturedHeaders["x-custom-header"]).toBe("test-value");
 		});
 
 		it.each(["client_secret_basic", "client_secret_post"] as const)(

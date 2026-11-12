@@ -69,6 +69,29 @@ describe("resource client defaults with an origin-only baseURL", async () => {
 		expect(payload).toMatchObject({ iss: issuer, aud: resource });
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.2
+	 */
+	it("answers a failed DPoP request with a DPoP challenge", async () => {
+		vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) =>
+			auth.handler(new Request(input, init)),
+		);
+		const error = await actions
+			.verifyAccessTokenRequest(
+				new Request(resource, {
+					headers: { Authorization: "DPoP not-a-valid-token" },
+				}),
+				{ verifyOptions: { audience: resource } },
+			)
+			.catch((e: unknown) => e);
+		expect(error).toMatchObject({ statusCode: 401 });
+		expect(
+			new Headers((error as { headers: HeadersInit }).headers).get(
+				"WWW-Authenticate",
+			),
+		).toMatch(/^DPoP error="invalid_token", error_description="[^"]+", algs="/);
+	});
+
 	it("advertises the resolved issuer as the authorization server", async () => {
 		const metadata = await actions.getProtectedResourceMetadata({ resource });
 		expect(metadata.authorization_servers).toEqual([issuer]);

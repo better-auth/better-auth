@@ -5,7 +5,10 @@ import type {
 	TokenEndpointAuth,
 	TokenEndpointSecretAuthentication,
 } from "./token-endpoint-auth";
-import { applyTokenEndpointAuth } from "./token-endpoint-auth";
+import {
+	applyTokenEndpointAuth,
+	setCallerTokenRequestHeaders,
+} from "./token-endpoint-auth";
 import { parseScopeField } from "./utils";
 
 interface RefreshAccessTokenRequestInput {
@@ -17,8 +20,8 @@ interface RefreshAccessTokenRequestInput {
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 	/**
-	 * Extra headers to send to the token endpoint. Client authentication
-	 * headers are applied after these and take precedence.
+	 * Extra headers to send to the token endpoint. `Authorization` is rejected;
+	 * set it from `tokenEndpointAuth: { method: "custom", customizeRequest }`.
 	 */
 	headers?: Record<string, string> | undefined;
 }
@@ -106,10 +109,7 @@ function buildRefreshAccessTokenRequest({
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
-	// Lowercase keys so client authentication, written lowercase, replaces any caller value.
-	for (const [key, value] of Object.entries(extraHeaders ?? {})) {
-		headers[key.toLowerCase()] = value;
-	}
+	setCallerTokenRequestHeaders(headers, extraHeaders);
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);

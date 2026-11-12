@@ -1,5 +1,51 @@
 # better-auth
 
+## 1.8.0-beta.8
+
+### Minor Changes
+
+- [#11823](https://github.com/better-auth/better-auth/pull/11823) [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Apps where clients sign in or link accounts with a provider ID token (for example from a native Google or Apple SDK) can now bind each token to one request. Set `requireIssuedIdTokenNonce: true` on a social provider. Clients then fetch a single-use nonce with `authClient.idToken.nonce({ provider })`, pass it to the provider's SDK, and send it with the ID token to `signIn.social` or `linkSocial`. A request without an issued nonce, or reusing one, is rejected with `400 INVALID_ID_TOKEN_NONCE`. The option is off by default, and providers without it behave as before.
+
+  One change applies to every provider that uses built-in verification: an opaque (non-JWT) token, such as a Facebook Graph access token, is now rejected when the request also sends a `nonce`, because the token cannot carry one. A custom `verifyIdToken` must compare the nonce to the token's claim itself. Opaque tokens sent without a nonce are still accepted.
+
+  Expired verification rows are now also deleted when a single-use value, such as a magic link, an OTP, or an issued nonce, is used. Before, cleanup ran only when a value was looked up. `verification.disableCleanup` turns off both.
+
+- [#11823](https://github.com/better-auth/better-auth/pull/11823) [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - **Breaking for custom One Tap callers:** `/one-tap/callback` now requires a single-use nonce from the new `POST /one-tap/nonce` endpoint, so each Google ID token signs in only once.
+
+  If you sign in with `authClient.oneTap()`, there's nothing to change. The client fetches a nonce before each prompt and button render, passes it to Google, and sends it with the ID token. Button mode fetches a new nonce after each sign-in attempt and before the current one expires five minutes after it was issued.
+
+  If you call `/one-tap/callback` or `auth.api.oneTapCallback` yourself, call `POST /one-tap/nonce` first, pass the returned `nonce` to `google.accounts.id.initialize({ nonce })`, and send it back as `nonce` in the callback body. Callbacks are now rejected in three cases, all of which were accepted before:
+  - Without a `nonce`, with `400`.
+  - With a nonce that is unknown, expired, or already used, with `400 INVALID_ID_TOKEN_NONCE`.
+  - With a token whose `nonce` claim differs from the nonce, as an invalid ID token.
+
+  The client's `nonce` option is now ignored and logs a warning, and a `nonce` in `additionalOptions` is no longer passed to Google. Remove both.
+
+- [#12416](https://github.com/better-auth/better-auth/pull/12416) [`2326bad`](https://github.com/better-auth/better-auth/commit/2326bad1607e2e579d366a64d821e6cbecae3be3) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Generic OAuth providers with an `Authorization` entry in `authorizationHeaders`, in any letter case, now fail at startup with an error naming the provider. Before, Better Auth sent that header to the token endpoint, where it could conflict with the client authentication from `clientSecret` or `tokenEndpointAuth`. To send a provider-specific `Authorization` header, set it from `customizeRequest`. The custom method adds no client credentials. Your hook must also set every credential the provider requires, such as a `client_id`, a secret, or a client assertion:
+
+  ```ts
+  tokenEndpointAuth: {
+    method: "custom",
+    customizeRequest({ body, headers }) {
+      body.set("client_id", providerClientId);
+      headers.authorization = `Provider ${providerCredential}`;
+    },
+  },
+  ```
+
+  Direct calls to `validateAuthorizationCode`, `authorizationCodeRequest`, `refreshAccessToken`, or `refreshAccessTokenRequest` from `@better-auth/core/oauth2` that pass `authorization` in `headers` now throw. Configs without an `Authorization` entry are unaffected.
+
+### Patch Changes
+
+- Updated dependencies [[`b91d155`](https://github.com/better-auth/better-auth/commit/b91d155bf775b43186bd2c817446c367bdfab657), [`6da60b5`](https://github.com/better-auth/better-auth/commit/6da60b5fb9bd24cc90f5aa1068f734409a21e9aa), [`2326bad`](https://github.com/better-auth/better-auth/commit/2326bad1607e2e579d366a64d821e6cbecae3be3)]:
+  - @better-auth/core@1.8.0-beta.8
+  - @better-auth/drizzle-adapter@1.8.0-beta.8
+  - @better-auth/kysely-adapter@1.8.0-beta.8
+  - @better-auth/memory-adapter@1.8.0-beta.8
+  - @better-auth/mongo-adapter@1.8.0-beta.8
+  - @better-auth/prisma-adapter@1.8.0-beta.8
+  - @better-auth/telemetry@1.8.0-beta.8
+
 ## 1.8.0-beta.7
 
 ### Patch Changes
@@ -145,6 +191,39 @@
   - @better-auth/mongo-adapter@1.8.0-beta.0
   - @better-auth/prisma-adapter@1.8.0-beta.0
   - @better-auth/telemetry@1.8.0-beta.0
+
+## 1.7.22
+
+### Patch Changes
+
+- [#12324](https://github.com/better-auth/better-auth/pull/12324) [`80c407b`](https://github.com/better-auth/better-auth/commit/80c407b7ca15d70b734a68b048dfbd22614c2242) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed `ReferenceError: window is not defined` when a client session subscription is cleaned up after a test environment such as happy-dom tears down its globals.
+
+- [#12462](https://github.com/better-auth/better-auth/pull/12462) [`d32a30a`](https://github.com/better-auth/better-auth/commit/d32a30af372591f42b06a396755d38c0c76d4f28) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed session polling never firing when the runtime's `navigator` does not report connectivity.
+
+- [#12324](https://github.com/better-auth/better-auth/pull/12324) [`80c407b`](https://github.com/better-auth/better-auth/commit/80c407b7ca15d70b734a68b048dfbd22614c2242) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed client session refresh listeners piling up on the server during SSR.
+
+- [#12321](https://github.com/better-auth/better-auth/pull/12321) [`946177e`](https://github.com/better-auth/better-auth/commit/946177e509ce1cb0010bfd98562609f72abe4da7) Thanks [@bytaesu](https://github.com/bytaesu)! - Revoking your current session with `revokeSession` or `revokeSessions`, and deleting your account with `deleteUser({ token })`, now expire the session cookies, so a cached session is no longer returned afterwards.
+
+- [#12459](https://github.com/better-auth/better-auth/pull/12459) [`d210421`](https://github.com/better-auth/better-auth/commit/d210421a26ef7f7728ea7e668bba755b3003fe37) Thanks [@bytaesu](https://github.com/bytaesu)! - `getSession` no longer leaves an expired session in the request context after returning `null`.
+
+- [#12331](https://github.com/better-auth/better-auth/pull/12331) [`485567e`](https://github.com/better-auth/better-auth/commit/485567e2c9d594a35810cfdfe07247e8cb744e24) Thanks [@bytaesu](https://github.com/bytaesu)! - OAuth sign-up rejected by a `user.create.before` hook returning `false` no longer logs a `TypeError`. It still fails with `unable_to_create_user`.
+
+- [#12334](https://github.com/better-auth/better-auth/pull/12334) [`ec3047d`](https://github.com/better-auth/better-auth/commit/ec3047da814ec22294573db6d9cdde3ba616992a) Thanks [@bytaesu](https://github.com/bytaesu)! - Fixed `deleteOrganization` clearing the session's active organization when a `beforeDeleteOrganization` hook rejected the delete. The active organization is now cleared only after the organization is actually deleted.
+
+- [#12330](https://github.com/better-auth/better-auth/pull/12330) [`d521343`](https://github.com/better-auth/better-auth/commit/d521343fc3e3c8a27ff63b7a62551459e85de38c) Thanks [@bytaesu](https://github.com/bytaesu)! - Fix `deferSessionRefresh` refresh requests failing with 415 in Next.js and Nuxt, where the bodyless `POST /get-session` reached the handler as an empty stream without a `Content-Type`.
+
+- [#12451](https://github.com/better-auth/better-auth/pull/12451) [`71052af`](https://github.com/better-auth/better-auth/commit/71052af880e62e2a3ce8e4a200880e020c309348) Thanks [@bytaesu](https://github.com/bytaesu)! - On Cloudflare Workers, consuming a verification value no longer hangs when an earlier request for the same identifier ended mid-query. A superseded code can also no longer be consumed while a newer one is being verified on a database without transactions.
+
+- [#12448](https://github.com/better-auth/better-auth/pull/12448) [`79219b4`](https://github.com/better-auth/better-auth/commit/79219b4f8e8b4cff0e184333fc46ef64e3c47e2e) Thanks [@bytaesu](https://github.com/bytaesu)! - Schema validation now runs when the auth instance is first used instead of when it is created, so a module-scope instance on Cloudflare Workers no longer logs a validation error on every cold start. On every runtime, a mismatch is no longer logged at startup and is reported by the requests that fail.
+
+- Updated dependencies [[`6536174`](https://github.com/better-auth/better-auth/commit/6536174213f63a8d544cd0d018659515bab5f8ad), [`262adc0`](https://github.com/better-auth/better-auth/commit/262adc0e76969fe04ef9355d1c77972bd5f0a1a8), [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b), [`79219b4`](https://github.com/better-auth/better-auth/commit/79219b4f8e8b4cff0e184333fc46ef64e3c47e2e)]:
+  - @better-auth/core@1.7.22
+  - @better-auth/drizzle-adapter@1.7.22
+  - @better-auth/prisma-adapter@1.7.22
+  - @better-auth/telemetry@1.7.22
+  - @better-auth/kysely-adapter@1.7.22
+  - @better-auth/memory-adapter@1.7.22
+  - @better-auth/mongo-adapter@1.7.22
 
 ## 1.7.21
 

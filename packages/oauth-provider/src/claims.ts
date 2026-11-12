@@ -11,9 +11,10 @@ import type { GrantType } from "./types/oauth";
  * contributor, or a resource row's `customClaims`) may override. The AS is the
  * only source of truth for issuer identity, subject, audience, lifetime, scope,
  * authentication context, the token's stable ID, and its sender-constraint
- * (`cnf`).
+ * (`cnf`), and its delegation chain (`act`).
  *
  * @see RFC 9068 §2.2 (registered access-token claims)
+ * @see RFC 8693 §4.1 (`act` — the token's actor chain)
  * @see RFC 7800 / RFC 9449 §6 (`cnf` confirmation — the token's bound key)
  */
 const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
@@ -29,6 +30,7 @@ const RESERVED_ACCESS_TOKEN_CLAIMS = new Set([
 	"acr",
 	"amr",
 	"cnf",
+	"act",
 	"reference_id",
 ]);
 

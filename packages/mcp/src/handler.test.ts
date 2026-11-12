@@ -76,6 +76,32 @@ describe("createMcpProtectedRequestHandler", () => {
 		);
 	});
 
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.2
+	 */
+	it("answers a failed DPoP request with a DPoP challenge", async () => {
+		verifyAccessTokenRequest.mockRejectedValue(
+			new APIError("UNAUTHORIZED", {
+				error: "invalid_token",
+				message: "token expired",
+			}),
+		);
+
+		const response = await createMcpProtectedRequestHandler(
+			{ ...protectedRequestOptions, dpop: { signingAlgorithms: ["ES256"] } },
+			async () => new Response("unreachable"),
+		)(
+			new Request("https://app.example.com/mcp", {
+				headers: { Authorization: "DPoP access-token" },
+			}),
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("WWW-Authenticate")).toBe(
+			'DPoP error="invalid_token", error_description="token expired", algs="ES256"',
+		);
+	});
+
 	it("propagates a handler error with its type and stack intact", async () => {
 		const failure = new Error("database connection lost");
 		failure.name = "ToolExecutionError";

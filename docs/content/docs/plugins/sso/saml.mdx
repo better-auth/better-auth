@@ -159,6 +159,8 @@ To choose which SAML attributes fill the user's profile, set `mapping`:
 | `lastName`    | `surname`, joined with `firstName` to build `name`                                                                                                                                                                      |
 | `extraFields` | The attribute named in each entry                                                                                                                                                                                       |
 
+`mapProfileToUser` can return a different name. An existing user's stored name changes only when `resolveUser` links them with `profile: "update"`, or when `account.accountLinking.updateUserInfoOnLink` is on and their SSO account is first linked by email.
+
 ```ts
 samlConfig: {
     mapping: {

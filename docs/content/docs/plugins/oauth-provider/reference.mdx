@@ -251,7 +251,7 @@ Issues opaque access tokens and HS256 ID tokens. Defaults to `false`. See [Witho
 
 DPoP proof validation. `proofMaxAgeSeconds` defaults to `300`, and `signingAlgorithms` to `["EdDSA", "ES256", "ES512", "PS256", "RS256"]`. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
 
-`nonce` takes `{ required, expiresIn? }`. With `required: true`, DPoP proofs at the token and UserInfo endpoints must carry a nonce the server issued. `expiresIn` is in seconds and defaults to `300`. See [Server-provided nonces](/docs/plugins/oauth-provider/tokens#server-provided-nonces).
+`nonce` takes `{ required, expiresIn? }`. With `required: true`, DPoP proofs at the token and UserInfo endpoints, and at plugin endpoints that call `verifyDpopProof`, must carry a nonce the server issued. `expiresIn` is in seconds and defaults to `300`. See [Server-provided nonces](/docs/plugins/oauth-provider/tokens#server-provided-nonces).
 
 `requestUriResolver` <span className="opacity-70">`(input) => Promise<Record<string, string> | null>`</span>
 
@@ -580,7 +580,7 @@ export const customOAuthExtension = () =>
 * `metadata` and `claims` only add keys. A key the provider owns is kept, and a key two extensions contribute resolves to the first one registered. To advertise extension claims, set `advertisedMetadata.claims_supported`.
 * A `clientDiscovery` entry has a stable `id` stored as client provenance. Changing it requires migrating the owned clients, and removing it makes them fail closed.
 
-A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
+A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolveConfirmation`, `issueTokens`, `verifyDpopProof`, `issueDpopNonce`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
 
 <Callout type="warn">
   `issueTokens` applies the provider's resource policy. Each resource must be registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default). Each resource's `allowedScopes` also applies. It does not re-check anything else it is given. Validate the user, the client's registered scopes, and any grant-specific policy in your handler before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
@@ -588,9 +588,39 @@ A grant handler receives `provider` (`getClient`, `authenticateClient`, `resolve
 
 When a companion endpoint accepts `application/x-www-form-urlencoded`, set `cloneRequest: true` in its endpoint options before calling `authenticateClient()`. Client authentication re-reads the raw form body to check that client credentials are not repeated or combined across authentication methods. The endpoint must therefore keep a readable request after parsing the form.
 
-To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens` or return it from a `clientAuthentication` strategy. Claim contributors cannot set `cnf`.
+To bind a token with `cnf` ([RFC 7800 §3](https://datatracker.ietf.org/doc/html/rfc7800#section-3)), pass `confirmation` to `issueTokens`. A `clientAuthentication` strategy can also return the sender constraint it proved as `confirmation`, such as a DPoP key thumbprint (`jkt`) or a certificate thumbprint (`x5t#S256`):
+
+* The built-in `client_credentials` grant binds its token to that confirmation.
+* An extension grant receives it from `authenticateClient()` and passes it to `issueTokens`.
+* The built-in `authorization_code` and `refresh_token` grants do not use it.
+
+With a `jkt` confirmation, the token response has `token_type: DPoP`. The client must then send a DPoP proof signed by that key when it calls a protected resource.
+
+A confirmation that is not a DPoP key cannot replace a required DPoP binding. When the client is registered with `dpop_bound_access_tokens: true`, or a resource sets `dpopBoundAccessTokensRequired: true`, issuance with such a confirmation fails with `invalid_dpop_proof`. `provider.resolveConfirmation()` fails the same way, so a grant that calls it before consuming a one-time credential keeps that credential for a retry.
+
+A confirmation has exactly one member, and its value is a non-empty string: `jkt` for a DPoP key, or `x5t#S256` for an mTLS certificate. A confirmation with any other shape fails the request with `server_error`. This applies whether a `clientAuthentication` strategy returns it or you pass it to `issueTokens` or `resolveConfirmation`. No token is issued.
+
+Claim contributors cannot set `cnf`.
+
+A `clientAuthentication` strategy must return the same `confirmation` whenever the client proves the same key. [Token exchange](/docs/plugins/oauth-provider/tokens#exchange-dpop-bound-tokens) compares it with the `cnf` of the client's own subject token.
 
 A grant that consumes a one-time credential, such as a device code, should resolve the binding before it claims the credential. `provider.resolveConfirmation({ client, scopes, resources, confirmation })` returns the confirmation the client proved at authentication. Without one, it verifies the request's DPoP proof by the same rules `issueTokens` applies. Pass the result to `issueTokens` as `confirmation`. A rejected proof then fails before the credential is consumed, so the client can retry with a valid one.
+
+To stop a stolen DPoP-bound token from being reissued under another key, a grant that reissues an existing token can require that token's key. Verify the existing token first. When the caller is the client the token was issued to, pass the token's key thumbprint as `expectedJkt`, as the built-in refresh and token exchange grants do. Another party, such as a resource server, cannot hold that key.
+
+```ts
+import { getConfirmationJkt } from "better-auth/oauth2";
+
+const confirmation = await provider.resolveConfirmation({
+  client,
+  scopes,
+  resources,
+  confirmation: authenticated.confirmation,
+  expectedJkt: getConfirmationJkt(verifiedToken.cnf),
+});
+```
+
+The request must then carry a DPoP proof signed by that key, or client authentication must return a `confirmation` with the same `jkt`. A returned `confirmation` replaces the proof, so one with another key fails even when the proof uses the expected key. Anything else fails with `invalid_dpop_proof`, including an mTLS confirmation. With `dpop.nonce.required`, a proof without a current nonce gets `use_dpop_nonce` instead, so the client can retry. If the existing token is not DPoP-bound, `getConfirmationJkt` returns `undefined` and the usual rules apply.
 
 ### Client registration metadata
 
@@ -796,6 +826,7 @@ export const oauthAccessTokenTableFields = [
   { name: "scopes", type: "string[]", description: "Granted scopes" },
   { name: "revoked", type: "Date", description: "When the token was revoked", isOptional: true },
   { name: "confirmation", type: "json", description: "`cnf` binding, returned by introspection", isOptional: true },
+  { name: "act", type: "json", description: "`act` actor chain of a delegated token exchange, returned by introspection", isOptional: true },
   { name: "createdAt", type: "Date", description: "Creation time" },
   { name: "expiresAt", type: "Date", description: "Expiry time" },
 ];

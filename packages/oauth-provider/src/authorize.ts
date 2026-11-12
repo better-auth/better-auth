@@ -48,6 +48,7 @@ import {
 	getConsentReferenceId,
 	getJwtPlugin,
 	isPKCERequired,
+	isRecord,
 	isRedirectUriTransportAllowed,
 	parsePrompt,
 	storeToken,
@@ -133,10 +134,6 @@ const authorizationQueryErrorCodesByField = {
 	response_type: { invalid: "unsupported_response_type" },
 	resource: { invalid: "invalid_target" },
 } as const;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getStringParameter(value: unknown): string | undefined {
 	return typeof value === "string" ? value : undefined;

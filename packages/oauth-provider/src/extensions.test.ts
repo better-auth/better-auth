@@ -12,6 +12,7 @@ import { oauthProvider } from "./oauth";
 import { getOAuthProviderApi } from "./token";
 import type {
 	ClientDiscovery,
+	Confirmation,
 	OAuthProviderExtension,
 	SchemaClient,
 	Scope,
@@ -1450,5 +1451,284 @@ describe("oauth-provider client metadata extensions", async () => {
 				],
 			}),
 		).rejects.toThrow("client metadata field is reserved: redirect_uris");
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3
+ */
+describe("client_credentials with a confirmation-proving strategy", async () => {
+	const issuer = "http://localhost:3000";
+	const resource = "https://api.example.com";
+	const dpopResource = "https://dpop-api.example.com";
+	const authMethod = "test_attestation_jwt";
+	const assertionType =
+		"urn:better-auth:test:client-assertion-type:test-attestation";
+	let proven: Confirmation = { "x5t#S256": "attested-certificate" };
+	// A grant that consumes a one-time credential after resolving its binding,
+	// like the device code and CIBA grants.
+	const oneTimeGrant = "urn:better-auth:test:one-time-grant";
+	let consumed = 0;
+	const strategy = {
+		id: "test-confirmation-strategy",
+		init(ctx) {
+			extendOAuthProvider(ctx, {
+				grants: {
+					[oneTimeGrant]: async ({ provider }) => {
+						const { client, confirmation } =
+							await provider.authenticateClient();
+						const binding = await provider.resolveConfirmation({
+							client,
+							scopes: ["read"],
+							confirmation,
+						});
+						consumed++;
+						return provider.issueTokens({
+							client,
+							scopes: ["read"],
+							confirmation: binding,
+						});
+					},
+				},
+				clientAuthentication: {
+					[authMethod]: {
+						assertionTypes: [assertionType],
+						authenticate: async ({ clientId }) => ({
+							clientId: clientId!,
+							confirmation: proven,
+						}),
+					},
+				},
+			});
+		},
+	} satisfies BetterAuthPlugin;
+	const { auth, client, signInWithTestUser } = await getTestInstance({
+		baseURL: issuer,
+		plugins: [
+			jwt({ jwt: { issuer } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				resources: [
+					resource,
+					{ identifier: dpopResource, dpopBoundAccessTokensRequired: true },
+				],
+				enforcePerClientResources: false,
+				clientPrivileges: () => true,
+			}),
+			strategy,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+
+	const issue = async ({
+		target = resource,
+		dpopBound = false,
+	}: {
+		target?: string;
+		dpopBound?: boolean;
+	} = {}) => {
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: authMethod,
+				grant_types: ["client_credentials"],
+				scope: "read",
+				client_credentials_scopes: ["read"],
+				...(dpopBound ? { dpop_bound_access_tokens: true } : {}),
+			},
+		});
+		return client.$fetch<{ access_token: string; token_type: string }>(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					client_id: machine.client_id,
+					client_assertion_type: assertionType,
+					client_assertion: `assertion:${machine.client_id}`,
+					scope: "read",
+					resource: target,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			},
+		);
+	};
+
+	it("binds the token to the confirmation the strategy proved", async () => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const { data, error } = await issue();
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).cnf).toEqual(proven);
+		expect(data?.token_type).toBe("Bearer");
+	});
+
+	it("issues a DPoP token for a DPoP key confirmation", async () => {
+		proven = { jkt: "strategy-proven-key" };
+		const { data, error } = await issue({ target: dpopResource });
+		expect(error).toBeNull();
+		expect(data?.token_type).toBe("DPoP");
+		expect(decodeJwt(data!.access_token).cnf).toEqual(proven);
+	});
+
+	it("rejects a certificate confirmation before a one-time credential is consumed", async () => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const machine = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: authMethod,
+				grant_types: [oneTimeGrant],
+				scope: "read",
+				dpop_bound_access_tokens: true,
+			},
+		});
+		consumed = 0;
+		const { error } = await client.$fetch("/oauth2/token", {
+			method: "POST",
+			body: new URLSearchParams({
+				grant_type: oneTimeGrant,
+				client_id: machine.client_id,
+				client_assertion_type: assertionType,
+				client_assertion: `assertion:${machine.client_id}`,
+			}),
+			headers: { "content-type": "application/x-www-form-urlencoded" },
+		});
+		expect(error).toMatchObject({
+			error: "invalid_dpop_proof",
+			error_description: "A DPoP-bound access token is required",
+		});
+		expect(consumed).toBe(0);
+	});
+
+	it.each([
+		["the client requires DPoP-bound tokens", { dpopBound: true }],
+		["the resource requires DPoP-bound tokens", { target: dpopResource }],
+	])("rejects a certificate confirmation when %s", async (_, options) => {
+		proven = { "x5t#S256": "attested-certificate" };
+		const { error } = await issue(options);
+		expect(error).toMatchObject({
+			error: "invalid_dpop_proof",
+			error_description: "A DPoP-bound access token is required",
+		});
+	});
+});
+
+/**
+ * @see https://datatracker.ietf.org/doc/html/rfc7800#section-3.1
+ * @see https://datatracker.ietf.org/doc/html/rfc9449#section-6
+ * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3.1
+ */
+describe("oauth-provider extension client authentication confirmation", async () => {
+	const baseURL = "http://localhost:3000";
+	const authMethod = "malformed_confirmation_jwt";
+	const assertionType =
+		"urn:better-auth:test:client-assertion-type:malformed-confirmation";
+	let strategyConfirmation: unknown;
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		baseURL,
+		plugins: [
+			jwt({ jwt: { issuer: baseURL } }),
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				scopes: ["read"],
+				clientPrivileges: () => true,
+			}),
+			{
+				id: "malformed-confirmation-extension",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientAuthentication: {
+							[authMethod]: {
+								assertionTypes: [assertionType],
+								authenticate: async ({ clientId }) => ({
+									clientId: clientId!,
+									confirmation: strategyConfirmation as Confirmation,
+								}),
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin,
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const oauthClient = await auth.api.adminCreateOAuthClient({
+		headers,
+		body: {
+			token_endpoint_auth_method: authMethod,
+			grant_types: ["client_credentials"],
+			scope: "read",
+			client_credentials_scopes: ["read"],
+		},
+	});
+
+	const requestToken = () =>
+		auth.handler(
+			new Request(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "client_credentials",
+					scope: "read",
+					client_id: oauthClient!.client_id,
+					client_assertion_type: assertionType,
+					client_assertion: "assertion",
+				}),
+			}),
+		);
+
+	it("issues a token bound to a well-formed strategy confirmation", async () => {
+		strategyConfirmation = { "x5t#S256": "strategy-cert" };
+		const response = await requestToken();
+		expect(response.status).toBe(200);
+	});
+
+	it.each([
+		["both members", { jkt: "strategy-jkt", "x5t#S256": "strategy-cert" }],
+		["neither member", {}],
+		["a non-string member", { jkt: 1 }],
+		["an empty jkt", { jkt: "" }],
+		["an empty x5t#S256", { "x5t#S256": "" }],
+		["an extra member", { jkt: "strategy-jkt", extra: "value" }],
+		["an array", Object.assign([], { jkt: "strategy-jkt" })],
+		["an inherited member", Object.create({ jkt: "strategy-jkt" })],
+	])("rejects a strategy confirmation with %s", async (_, confirmation) => {
+		strategyConfirmation = confirmation;
+		const response = await requestToken();
+		expect(response.status).toBe(500);
+		expect(await response.json()).toMatchObject({ error: "server_error" });
+	});
+
+	describe("from an extension grant", () => {
+		const api = getOAuthProviderApi(
+			{
+				context: { baseURL },
+			} as Parameters<typeof getOAuthProviderApi>[0],
+			{} as Parameters<typeof getOAuthProviderApi>[1],
+			"urn:better-auth:test:grant",
+		);
+		const client = { clientId: "x" } as SchemaClient<Scope[]>;
+		const confirmation = {
+			jkt: "strategy-jkt",
+			"x5t#S256": "strategy-cert",
+		} as unknown as Confirmation;
+		const serverError = expect.objectContaining({
+			body: expect.objectContaining({ error: "server_error" }),
+		});
+
+		it("rejects a malformed confirmation passed to issueTokens", () => {
+			expect(() =>
+				api.issueTokens({ client, scopes: [], confirmation }),
+			).toThrow(serverError);
+		});
+
+		it("rejects a malformed confirmation passed to resolveConfirmation", async () => {
+			await expect(
+				api.resolveConfirmation({ client, scopes: [], confirmation }),
+			).rejects.toThrow(serverError);
+		});
 	});
 });

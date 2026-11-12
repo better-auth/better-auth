@@ -2,6 +2,7 @@ import { PRIVATE_KEY_JWT_SIGNING_ALGORITHMS } from "@better-auth/core/oauth2";
 import { APIError } from "better-auth/api";
 import type { JSONWebKeySet } from "jose";
 import type { OAuthClient } from "./types/oauth";
+import { isRecord } from "./utils";
 
 /** A client's inline public JWK Set, as registration and key rotation accept it. */
 export type ClientJwks = NonNullable<OAuthClient["jwks"]>;
@@ -38,10 +39,6 @@ export type PublicClientJwksValidationResult =
 				| "jwks keys must be supported public JWKs with required key parameters"
 				| "jwks key alg must be supported for private_key_jwt and compatible with its key type and signing curve";
 	  };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function hasStringMember(
 	key: Record<string, unknown>,

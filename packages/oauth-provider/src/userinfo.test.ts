@@ -1,8 +1,10 @@
+import { createAuthMiddleware } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { generateRandomString } from "better-auth/crypto";
 import {
 	authorizationCodeRequest,
 	createAuthorizationURL,
+	DPOP_SIGNING_ALGORITHMS,
 	deriveDpopAth,
 	deriveDpopJkt,
 	refreshAccessTokenRequest,
@@ -605,6 +607,314 @@ describe("oauth userinfo", async () => {
 		expect(await response.json()).toMatchObject({ sub: user.id });
 	});
 
+	/**
+	 * Every 401 carries a challenge (RFC 7235 §3.1). A DPoP-bound token, or a
+	 * request that used the DPoP scheme, is challenged with `DPoP` and the
+	 * accepted proof algorithms; everything else with `Bearer`.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9449#section-7.1
+	 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3
+	 */
+	describe("WWW-Authenticate challenges", () => {
+		const userinfoUrl = `${authServerBaseUrl}/api/auth/oauth2/userinfo`;
+		const algs = DPOP_SIGNING_ALGORITHMS.join(" ");
+		const dpopChallenge = (error: string, description: string) =>
+			`DPoP error="${error}", error_description="${description}", algs="${algs}"`;
+
+		async function getDpopBoundToken() {
+			const dpopKey = await createDpopKey();
+			const { url: authUrl, codeVerifier } = await createAuthUrl({
+				additionalParams: { dpop_jkt: dpopKey.jkt },
+			});
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			const tokens = await validateAuthCode(
+				{
+					code: new URL(callbackRedirectUrl).searchParams.get("code")!,
+					codeVerifier,
+					resource: validResource,
+				},
+				{
+					DPoP: await createDpopProof({
+						privateKey: dpopKey.privateKey,
+						publicJwk: dpopKey.publicJwk,
+						method: "POST",
+						url: `${authServerBaseUrl}/api/auth/oauth2/token`,
+						jti: crypto.randomUUID(),
+					}),
+				},
+			);
+			expect(tokens.data?.token_type).toBe("DPoP");
+			return { dpopKey, accessToken: tokens.data!.access_token! };
+		}
+
+		async function requestUserinfo(init: RequestInit) {
+			const response = await customFetchImpl(userinfoUrl, init);
+			return {
+				status: response.status,
+				challenge: response.headers.get("WWW-Authenticate"),
+				exposed: response.headers.get("Access-Control-Expose-Headers"),
+			};
+		}
+
+		it("offers both schemes without an error code when no token is sent", async () => {
+			const result = await requestUserinfo({});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(`Bearer, DPoP algs="${algs}"`);
+			expect(result.exposed).toBe("WWW-Authenticate");
+		});
+
+		it("carries the no-token challenge on an auth.api error", async () => {
+			const error = await auth.api
+				.oauth2UserInfo({ headers: new Headers() })
+				.catch((error: APIError) => error);
+
+			expect((error as APIError).statusCode).toBe(401);
+			expect(
+				new Headers((error as APIError).headers).get("WWW-Authenticate"),
+			).toBe(`Bearer, DPoP algs="${algs}"`);
+		});
+
+		it("keeps the Bearer challenge for an invalid token sent with the Bearer scheme", async () => {
+			const result = await requestUserinfo({
+				headers: { authorization: "Bearer this-is-not-a-valid-access-token" },
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(INVALID_ACCESS_TOKEN_CHALLENGE);
+			expect(result.exposed).toBe("WWW-Authenticate");
+		});
+
+		it("challenges with DPoP for an invalid token sent with the DPoP scheme", async () => {
+			const result = await requestUserinfo({
+				headers: { authorization: "DPoP this-is-not-a-valid-access-token" },
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge("invalid_token", "Invalid access token"),
+			);
+		});
+
+		it("challenges with DPoP when a DPoP-bound token is sent with the Bearer scheme", async () => {
+			const { accessToken } = await getDpopBoundToken();
+			const result = await requestUserinfo({
+				headers: { authorization: `Bearer ${accessToken}` },
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge(
+					"invalid_token",
+					"DPoP-bound access token requires the DPoP authorization scheme",
+				),
+			);
+			expect(result.exposed).toBe("WWW-Authenticate");
+		});
+
+		it("challenges with DPoP when a DPoP-bound token is sent in the form body", async () => {
+			const { accessToken } = await getDpopBoundToken();
+			const result = await requestUserinfo({
+				method: "POST",
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({ access_token: accessToken }),
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge(
+					"invalid_token",
+					"DPoP-bound access token requires the DPoP authorization scheme",
+				),
+			);
+		});
+
+		it("challenges with DPoP when the DPoP scheme carries a token that is not DPoP-bound", async () => {
+			const tokens = await getTokens();
+			const result = await requestUserinfo({
+				headers: { authorization: `DPoP ${tokens.data!.access_token!}` },
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge(
+					"invalid_token",
+					"DPoP authorization requires a DPoP-bound access token",
+				),
+			);
+		});
+
+		it("challenges with invalid_dpop_proof when the proof is missing", async () => {
+			const { accessToken } = await getDpopBoundToken();
+			const result = await requestUserinfo({
+				headers: { authorization: `DPoP ${accessToken}` },
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge("invalid_dpop_proof", "DPoP proof header is required"),
+			);
+			expect(result.exposed).toBe("WWW-Authenticate");
+		});
+
+		it("challenges with invalid_dpop_proof when the proof is not a JWT", async () => {
+			const { accessToken } = await getDpopBoundToken();
+			const result = await requestUserinfo({
+				headers: { authorization: `DPoP ${accessToken}`, DPoP: "not-a-jwt" },
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge("invalid_dpop_proof", "DPoP proof must be a compact JWT"),
+			);
+		});
+
+		it("challenges with invalid_dpop_proof when the proof htu does not match", async () => {
+			const { dpopKey, accessToken } = await getDpopBoundToken();
+			const result = await requestUserinfo({
+				headers: {
+					authorization: `DPoP ${accessToken}`,
+					DPoP: await createDpopProof({
+						privateKey: dpopKey.privateKey,
+						publicJwk: dpopKey.publicJwk,
+						method: "GET",
+						url: `${authServerBaseUrl}/api/auth/oauth2/introspect`,
+						jti: crypto.randomUUID(),
+						accessToken,
+					}),
+				},
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge(
+					"invalid_dpop_proof",
+					"DPoP proof htu does not match the request URL",
+				),
+			);
+		});
+
+		it("challenges with invalid_dpop_proof when the proof htm does not match", async () => {
+			const { dpopKey, accessToken } = await getDpopBoundToken();
+			const result = await requestUserinfo({
+				headers: {
+					authorization: `DPoP ${accessToken}`,
+					DPoP: await createDpopProof({
+						privateKey: dpopKey.privateKey,
+						publicJwk: dpopKey.publicJwk,
+						method: "POST",
+						url: userinfoUrl,
+						jti: crypto.randomUUID(),
+						accessToken,
+					}),
+				},
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge(
+					"invalid_dpop_proof",
+					"DPoP proof htm does not match the request method",
+				),
+			);
+		});
+
+		it("challenges with invalid_dpop_proof when the proof is signed by another key", async () => {
+			const { accessToken } = await getDpopBoundToken();
+			const otherKey = await createDpopKey();
+			const result = await requestUserinfo({
+				headers: {
+					authorization: `DPoP ${accessToken}`,
+					DPoP: await createDpopProof({
+						privateKey: otherKey.privateKey,
+						publicJwk: otherKey.publicJwk,
+						method: "GET",
+						url: userinfoUrl,
+						jti: crypto.randomUUID(),
+						accessToken,
+					}),
+				},
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge(
+					"invalid_dpop_proof",
+					"DPoP proof key does not match the bound token",
+				),
+			);
+		});
+
+		it("carries a DPoP challenge on an auth.api error for a DPoP-bound token", async () => {
+			const { accessToken } = await getDpopBoundToken();
+			const error = await auth.api
+				.oauth2UserInfo({
+					headers: new Headers({ authorization: `DPoP ${accessToken}` }),
+				})
+				.catch((error: APIError) => error);
+
+			expect((error as APIError).statusCode).toBe(401);
+			expect(
+				new Headers((error as APIError).headers).get("WWW-Authenticate"),
+			).toBe(
+				dpopChallenge(
+					"invalid_token",
+					"DPoP-bound access token requires an HTTP request context",
+				),
+			);
+		});
+
+		it("sends no challenge on a successful Bearer request", async () => {
+			const tokens = await getTokens();
+			const result = await requestUserinfo({
+				headers: { authorization: `Bearer ${tokens.data!.access_token!}` },
+			});
+
+			expect(result.status).toBe(200);
+			expect(result.challenge).toBeNull();
+		});
+
+		/**
+		 * The message `DPoP proof typ must be "dpop+jwt"` contains quotes, which
+		 * RFC 6750 §3 does not allow in `error_description`. The challenge carries
+		 * them as single quotes instead of failing the request with 500.
+		 *
+		 * @see https://datatracker.ietf.org/doc/html/rfc6750#section-3
+		 */
+		it("challenges with invalid_dpop_proof when the proof message contains quotes", async () => {
+			const { dpopKey, accessToken } = await getDpopBoundToken();
+			const proof = await new SignJWT({
+				jti: crypto.randomUUID(),
+				htm: "GET",
+				htu: userinfoUrl,
+				iat: Math.floor(Date.now() / 1000),
+				ath: await deriveDpopAth(accessToken),
+			})
+				.setProtectedHeader({
+					typ: "JWT",
+					alg: "ES256",
+					jwk: dpopKey.publicJwk,
+				})
+				.sign(dpopKey.privateKey);
+			const result = await requestUserinfo({
+				headers: { authorization: `DPoP ${accessToken}`, DPoP: proof },
+			});
+
+			expect(result.status).toBe(401);
+			expect(result.challenge).toBe(
+				dpopChallenge(
+					"invalid_dpop_proof",
+					"DPoP proof typ must be 'dpop+jwt'",
+				),
+			);
+		});
+	});
+
 	it("should pass provide scoped user information - sub only", async () => {
 		const tokens = await getTokens({
 			scopes: ["openid"],
@@ -848,5 +1158,35 @@ describe("oauth userinfo - unresolved baseURL", async () => {
 			statusCode: 400,
 			body: { error: "invalid_scope" },
 		});
+	});
+});
+
+describe("oauth userinfo - exposed headers from hooks", async () => {
+	const { customFetchImpl } = await getTestInstance({
+		baseURL: "http://localhost:3000",
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				ctx.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
+			}),
+		},
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				disableJwtPlugin: true,
+			}),
+		],
+	});
+
+	it("keeps names a before hook exposed when a 401 exposes its challenge", async () => {
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/userinfo",
+			{ headers: { authorization: "Bearer this-is-not-a-valid-access-token" } },
+		);
+
+		expect(response.status).toBe(401);
+		expect(response.headers.get("Access-Control-Expose-Headers")).toBe(
+			"X-Request-Id, WWW-Authenticate",
+		);
 	});
 });

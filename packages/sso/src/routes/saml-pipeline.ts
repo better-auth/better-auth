@@ -2,6 +2,7 @@ import {
 	getCurrentAdapter,
 	runWithTransaction,
 } from "@better-auth/core/context";
+import { parseStringBoolean } from "@better-auth/core/oauth2";
 import { isAPIError } from "@better-auth/core/utils/is-api-error";
 import type { Element as XMLElement } from "@xmldom/xmldom";
 import { DOMParser } from "@xmldom/xmldom";
@@ -53,7 +54,6 @@ import {
 } from "../user-resolution";
 import {
 	isSafeSAMLRedirectPath,
-	parseProviderEmailVerified,
 	safeJsonParse,
 	validateEmailDomain,
 } from "../utils";
@@ -642,7 +642,7 @@ export async function processSAMLResponse(
 			undefined,
 		emailVerified:
 			options?.trustEmailVerified && mapping.emailVerified
-				? parseProviderEmailVerified(attr(mapping.emailVerified))
+				? (parseStringBoolean(attr(mapping.emailVerified)) ?? false)
 				: false,
 	};
 	const providerUserAttributes = Object.fromEntries(

@@ -1,5 +1,18 @@
 # @better-auth/mcp
 
+## 1.8.0-beta.8
+
+### Minor Changes
+
+- [#12376](https://github.com/better-auth/better-auth/pull/12376) [`b91d155`](https://github.com/better-auth/better-auth/commit/b91d155bf775b43186bd2c817446c367bdfab657) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - The OAuth provider can require server-provided DPoP nonces (RFC 9449 §8 and §9). A nonce stops a client from using DPoP proofs it signed ahead of time. Set `dpop: { nonce: { required: true } }` on `oauthProvider()` or `mcp()`. The token and UserInfo endpoints then answer a proof without a current nonce with `use_dpop_nonce` and a fresh nonce in the `DPoP-Nonce` header. Successful DPoP responses carry the next nonce. The token endpoint checks the nonce before it redeems an authorization code, device code, or refresh token, so the client's retry still succeeds. Nonces are derived from the auth secret and are not stored, so any instance that shares the secret accepts them.
+
+  Resource servers can require nonces too. Pass `dpop: { nonce: { required: true, secret } }` to `verifyAccessTokenRequest`, answer failures with `createResourceServerChallenge`, and send the next nonce with `createDpopNonce({ secret })` from `better-auth/oauth2`. Responses the library builds with a nonce are marked `Cache-Control: no-store`; mark your own nonce-bearing responses the same way. `requireMcpAuth` and the resource client created with your auth instance default to the auth secret and the provider's nonce lifetime.
+
+### Patch Changes
+
+- Updated dependencies [[`b91d155`](https://github.com/better-auth/better-auth/commit/b91d155bf775b43186bd2c817446c367bdfab657), [`bca6570`](https://github.com/better-auth/better-auth/commit/bca65701bfcf9e416d1850506adbac542eaabde4)]:
+  - @better-auth/oauth-provider@1.8.0-beta.8
+
 ## 1.8.0-beta.7
 
 ### Patch Changes
@@ -22,6 +35,15 @@
   - @better-auth/oauth-provider@1.8.0-beta.5
 
 ## 1.8.0-beta.4
+
+## 1.7.22
+
+### Patch Changes
+
+- [#12447](https://github.com/better-auth/better-auth/pull/12447) [`5976842`](https://github.com/better-auth/better-auth/commit/59768427a963413f1a7a4eb7595b00b395713770) Thanks [@gustavovalverde](https://github.com/gustavovalverde)! - Answer a failed request that used the `DPoP` authorization scheme with a `DPoP` challenge. Before, an expired, revoked, or otherwise invalid DPoP-bound token got a `Bearer` challenge, which a client that supports only DPoP might not act on. `createResourceServerChallenge` accepts a new `request` option, either the failed `Request` or `{ authorizationHeader }`, and reads the scheme from it. The resource client's `verifyAccessTokenRequest`, `requireMcpAuth`, and `createMcpProtectedRequestHandler` pass it automatically.
+
+- Updated dependencies [[`5976842`](https://github.com/better-auth/better-auth/commit/59768427a963413f1a7a4eb7595b00b395713770), [`e9d8e59`](https://github.com/better-auth/better-auth/commit/e9d8e5977cb37ab1aa3824f1bb67b5c99a444e9b), [`1393028`](https://github.com/better-auth/better-auth/commit/139302823057cdf9693bca48735fca99faf3ccfd)]:
+  - @better-auth/oauth-provider@1.7.22
 
 ## 1.7.21
 

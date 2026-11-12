@@ -3,7 +3,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { createAuthorizationURL, deriveDpopJkt } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import type { BetterAuthPlugin } from "better-auth/types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth/types";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { describe, expect, it, vi } from "vitest";
 import { extendOAuthProvider } from "./extensions";
@@ -15,7 +15,12 @@ import {
 	oauthTokenExchange,
 	TOKEN_EXCHANGE_GRANT_TYPE,
 } from "./token-exchange";
-import type { Confirmation, OAuthOptions, Scope } from "./types";
+import type {
+	Confirmation,
+	OAuthOptions,
+	OAuthTokenIssueParams,
+	Scope,
+} from "./types";
 
 const issuer = "http://localhost:3000";
 const mcp = "https://mcp.example.com";
@@ -67,10 +72,12 @@ async function bootScenario(
 		disableJwtPlugin = false,
 		testWith,
 		plugins = [],
+		advanced,
 	}: {
 		disableJwtPlugin?: boolean;
 		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
 		plugins?: BetterAuthPlugin[];
+		advanced?: BetterAuthOptions["advanced"];
 	} = {},
 	providerOptions: Partial<OAuthOptions<Scope[]>> = {},
 ) {
@@ -89,6 +96,7 @@ async function bootScenario(
 	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
 			baseURL: issuer,
+			advanced,
 			plugins: [
 				...(disableJwtPlugin ? [] : [jwt({ jwt: { issuer } })]),
 				oauthProvider(opts),
@@ -375,19 +383,6 @@ describe("oauthTokenExchange", () => {
 		const subject = await userTokenForMcp();
 		const { error } = await exchangeAs(agent, subject.access_token);
 		expect(error?.error).toBe("unauthorized_client");
-	});
-
-	it("rejects actor tokens until delegation is supported", async () => {
-		const { mcpServer, userTokenForMcp, exchangeAs } = await bootScenario();
-		const subject = await userTokenForMcp();
-		const { error } = await exchangeAs(mcpServer, subject.access_token, {
-			actor_token: subject.access_token,
-			actor_token_type: ACCESS_TOKEN_TYPE,
-		});
-		expect(error).toMatchObject({
-			error: "invalid_request",
-			error_description: "actor_token is not supported",
-		});
 	});
 
 	it("applies the allowExchange policy after the built-in checks", async () => {
@@ -872,67 +867,88 @@ describe("oauthTokenExchange", () => {
 		expect(error).toBeNull();
 	});
 
-	describe("a client whose authentication strategy proves a confirmation", () => {
-		const authMethod = "test_attestation_jwt";
+	/**
+	 * Boots a wallet client whose `clientAuthentication` strategy returns
+	 * whatever `confirmation` the test sets, and exchanges as that wallet.
+	 */
+	async function bootConfirmingWallet(
+		scenario: { disableJwtPlugin?: boolean } = {},
+	) {
+		const authMethod = "test_confirming_auth";
 		const assertionType =
-			"urn:better-auth:test:client-assertion-type:test-attestation";
-
-		async function exchangeWithProvenConfirmation(
-			proven: (subjectJkt: string) => Confirmation,
-		) {
-			let confirmation: Confirmation | undefined;
-			const attestation = {
-				id: "test-attestation",
-				init(ctx) {
-					extendOAuthProvider(ctx, {
-						clientAuthentication: {
-							[authMethod]: {
-								assertionTypes: [assertionType],
-								authenticate: async ({ clientId }) => ({
-									clientId: clientId!,
-									confirmation,
-								}),
-							},
+			"urn:better-auth:test:client-assertion-type:test-confirming";
+		const state: { confirmation?: Confirmation } = {};
+		const confirming = {
+			id: "test-confirming",
+			init(ctx) {
+				extendOAuthProvider(ctx, {
+					clientAuthentication: {
+						[authMethod]: {
+							assertionTypes: [assertionType],
+							authenticate: async ({ clientId }) => ({
+								clientId: clientId!,
+								confirmation: state.confirmation,
+							}),
 						},
-					});
-				},
-			} satisfies BetterAuthPlugin;
-			const allowExchange = vi.fn(() => true);
-			const { createClient, userTokenForMcp, postToken } = await bootScenario(
-				{ allowExchange },
-				{ plugins: [attestation] },
-			);
-			const wallet = await createClient({
-				token_endpoint_auth_method: authMethod,
-				grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
-				redirect_uris: [redirectUri],
-				scope: "openid read write",
-				skip_consent: true,
-				resources: [mcp, api],
-			});
-			const clientAuth = {
-				client_assertion_type: assertionType,
-				client_assertion: `assertion:${wallet.client_id}`,
-			};
-			const key = await createDpopKey();
-			const subject = await userTokenForMcp({
+					},
+				});
+			},
+		} satisfies BetterAuthPlugin;
+		const allowExchange = vi.fn(() => true);
+		const { createClient, userTokenForMcp, postToken } = await bootScenario(
+			{ allowExchange },
+			{ plugins: [confirming], ...scenario },
+		);
+		const wallet = await createClient({
+			token_endpoint_auth_method: authMethod,
+			grant_types: ["authorization_code", TOKEN_EXCHANGE_GRANT_TYPE],
+			redirect_uris: [redirectUri],
+			scope: "openid read write",
+			skip_consent: true,
+			resources: [mcp, api],
+		});
+		const clientAuth = {
+			client_assertion_type: assertionType,
+			client_assertion: `assertion:${wallet.client_id}`,
+		};
+		const userToken = (tokenHeaders?: Record<string, string>) =>
+			userTokenForMcp({
 				scope: "openid read",
 				requester: wallet,
 				clientAuth,
-				tokenHeaders: { DPoP: await key.prove() },
+				tokenHeaders,
 			});
+		const exchange = (
+			subjectToken: string,
+			extraHeaders?: Record<string, string>,
+		) =>
+			postToken(
+				{
+					grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+					client_id: wallet.client_id,
+					...clientAuth,
+					subject_token: subjectToken,
+					subject_token_type: ACCESS_TOKEN_TYPE,
+					resource: api,
+				},
+				extraHeaders,
+			);
+		return { state, allowExchange, userToken, exchange };
+	}
+
+	describe("a client whose authentication strategy proves a confirmation", () => {
+		async function exchangeWithProvenConfirmation(
+			proven: (subjectJkt: string) => Confirmation,
+		) {
+			const { state, allowExchange, userToken, exchange } =
+				await bootConfirmingWallet();
+			const key = await createDpopKey();
+			const subject = await userToken({ DPoP: await key.prove() });
 			const subjectJkt = await deriveDpopJkt(key.publicJwk);
 			expect(decodeJwt(subject.access_token).cnf).toEqual({ jkt: subjectJkt });
 
-			confirmation = proven(subjectJkt);
-			const result = await postToken({
-				grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
-				client_id: wallet.client_id,
-				...clientAuth,
-				subject_token: subject.access_token,
-				subject_token_type: ACCESS_TOKEN_TYPE,
-				resource: api,
-			});
+			state.confirmation = proven(subjectJkt);
+			const result = await exchange(subject.access_token);
 			return { ...result, allowExchange, subjectJkt };
 		}
 
@@ -961,6 +977,92 @@ describe("oauthTokenExchange", () => {
 				expect(allowExchange).not.toHaveBeenCalled();
 			},
 		);
+	});
+
+	/**
+	 * @see https://datatracker.ietf.org/doc/html/rfc8705#section-3
+	 * @see https://datatracker.ietf.org/doc/html/rfc8693#section-2.2.2
+	 */
+	describe("a client exchanging its own certificate-bound subject token", () => {
+		const certificate = { "x5t#S256": "subject-certificate" };
+
+		async function exchangeCertificateBoundSubject(
+			presented: Confirmation | undefined,
+			extraHeaders?: Record<string, string>,
+			scenario: { disableJwtPlugin?: boolean } = {},
+		) {
+			const { state, allowExchange, userToken, exchange } =
+				await bootConfirmingWallet(scenario);
+			// Built-in grants bind only DPoP, so the certificate-bound subject comes
+			// from an exchange that presented the certificate.
+			state.confirmation = certificate;
+			const { data: subject } = await exchange(
+				(await userToken()).access_token,
+			);
+			if (!scenario.disableJwtPlugin) {
+				expect(decodeJwt(subject!.access_token).cnf).toEqual(certificate);
+			}
+
+			state.confirmation = presented;
+			allowExchange.mockClear();
+			const result = await exchange(subject!.access_token, extraHeaders);
+			return { ...result, allowExchange };
+		}
+
+		const mismatch = {
+			error: "invalid_request",
+			error_description:
+				"client authentication does not match the subject_token binding",
+		};
+
+		it("keeps the binding when the client presents the same certificate", async () => {
+			const { data, error } = await exchangeCertificateBoundSubject({
+				...certificate,
+			});
+			expect(error).toBeNull();
+			expect(data?.token_type).toBe("Bearer");
+			expect(decodeJwt(data!.access_token).cnf).toEqual(certificate);
+		});
+
+		it.each([
+			["a different certificate", { "x5t#S256": "another-certificate" }],
+			["no certificate", undefined],
+		] satisfies [string, Confirmation | undefined][])(
+			"rejects %s before allowExchange runs",
+			async (_label, presented) => {
+				const { error, allowExchange } =
+					await exchangeCertificateBoundSubject(presented);
+				expect(error).toMatchObject(mismatch);
+				expect(allowExchange).not.toHaveBeenCalled();
+			},
+		);
+
+		it("checks the stored binding of an opaque subject token", async () => {
+			const opaque = { disableJwtPlugin: true };
+			const same = await exchangeCertificateBoundSubject(
+				{ ...certificate },
+				undefined,
+				opaque,
+			);
+			expect(same.error).toBeNull();
+			const other = await exchangeCertificateBoundSubject(
+				{ "x5t#S256": "another-certificate" },
+				undefined,
+				opaque,
+			);
+			expect(other.error).toMatchObject(mismatch);
+			expect(other.allowExchange).not.toHaveBeenCalled();
+		});
+
+		it("rejects a DPoP proof in place of the certificate", async () => {
+			const key = await createDpopKey();
+			const { error, allowExchange } = await exchangeCertificateBoundSubject(
+				undefined,
+				{ DPoP: await key.prove() },
+			);
+			expect(error).toMatchObject(mismatch);
+			expect(allowExchange).not.toHaveBeenCalled();
+		});
 	});
 
 	it.each([
@@ -1081,6 +1183,89 @@ describe("oauthTokenExchange without the JWT plugin", () => {
  * @see https://github.com/better-auth/better-auth/issues/8023
  */
 describe("OAuthTokenIssueParams.maxExpiresAt", () => {
+	it("never issues or rotates a refresh token with act", async () => {
+		const delegatingGrant = "urn:better-auth:test:delegating-grant";
+		// A parent refresh token the grant asks to rotate, when set.
+		let parent: OAuthTokenIssueParams["refreshToken"];
+		const delegatingPlugin = {
+			id: "test-delegating-grant",
+			init(ctx) {
+				extendOAuthProvider(ctx, {
+					grants: {
+						[delegatingGrant]: async ({ ctx, provider }) => {
+							const { client } = await provider.authenticateClient();
+							const user = await ctx.context.internalAdapter.findUserById(
+								(ctx.body as { user_id: string }).user_id,
+							);
+							return provider.issueTokens({
+								client,
+								user: user!,
+								scopes: ["read", "offline_access"],
+								resources: [api],
+								act: { sub: "service-a" },
+								refreshToken: parent,
+							});
+						},
+					},
+				});
+			},
+		} satisfies BetterAuthPlugin;
+		const { auth, client, signInWithTestUser } = await getTestInstance({
+			baseURL: issuer,
+			plugins: [
+				jwt({ jwt: { issuer } }),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					scopes: ["read", "offline_access"],
+					resources: [api],
+				}),
+				delegatingPlugin,
+			],
+		});
+		const { headers, user } = await signInWithTestUser();
+		const registered = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				token_endpoint_auth_method: "client_secret_post",
+				grant_types: [delegatingGrant, "refresh_token"],
+				scope: "read offline_access",
+				resources: [api],
+			},
+		});
+		const issue = () =>
+			client.$fetch<TokenResponse>("/oauth2/token", {
+				method: "POST",
+				body: new URLSearchParams({
+					grant_type: delegatingGrant,
+					client_id: registered.client_id,
+					client_secret: registered.client_secret!,
+					user_id: user.id,
+				}),
+				headers: { "content-type": "application/x-www-form-urlencoded" },
+			});
+
+		const { data } = await issue();
+		expect(decodeJwt(data!.access_token).act).toEqual({ sub: "service-a" });
+		expect(data?.refresh_token).toBeUndefined();
+
+		parent = {
+			id: "parent-refresh-token",
+			token: "parent",
+			userId: user.id,
+			clientId: registered.client_id,
+			scopes: ["read", "offline_access"],
+			createdAt: new Date(),
+			expiresAt: new Date(Date.now() + 60_000),
+		};
+		const { error } = await issue();
+		expect(error).toMatchObject({
+			status: 500,
+			error: "server_error",
+			error_description: "issueTokens does not accept act with refreshToken",
+		});
+	});
+
 	it("caps the expiry of an extension grant's access token", async () => {
 		const cappedGrant = "urn:better-auth:test:capped-grant";
 		let cap: Date | undefined;
@@ -1434,3 +1619,724 @@ describe.each(["postgres", "mongodb"] as const)(
 		});
 	},
 );
+
+/**
+ * A service that exchanges with an actor token. `delegator` can get its own
+ * client_credentials token as the actor, and `downstream` re-exchanges the
+ * delegated token to show chains.
+ */
+async function bootDelegation(
+	exchange: OAuthTokenExchangeOptions = {},
+	bootOptions: Parameters<typeof bootScenario>[1] = {},
+	providerOptions: Partial<OAuthOptions<Scope[]>> = {},
+) {
+	const scenario = await bootScenario(exchange, bootOptions, providerOptions);
+	const machineClient = (resources: string[]) =>
+		scenario.exchanger({
+			grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, "client_credentials"],
+			client_credentials_scopes: ["read"],
+			resources,
+		});
+	const delegator = await machineClient([mcp, api]);
+	const downstream = await machineClient([api, other]);
+	const actorTokenFor = async (
+		requester: { client_id: string; client_secret?: string },
+		extraHeaders?: Record<string, string>,
+	) => {
+		const { data, error } = await scenario.postToken(
+			{
+				grant_type: "client_credentials",
+				client_id: requester.client_id,
+				client_secret: requester.client_secret!,
+				scope: "read",
+				resource: api,
+			},
+			extraHeaders,
+		);
+		expect(error).toBeNull();
+		return data!;
+	};
+	const actorParams = (actorToken: string) => ({
+		actor_token: actorToken,
+		actor_token_type: ACCESS_TOKEN_TYPE,
+	});
+	/** Exchanges the user's MCP token as `delegator`, with its own actor token. */
+	const delegate = async () => {
+		const subject = await scenario.userTokenForMcp();
+		const actor = await actorTokenFor(delegator);
+		return scenario.exchangeAs(
+			delegator,
+			subject.access_token,
+			actorParams(actor.access_token),
+		);
+	};
+	/** Exchanges a delegated token again as `downstream`, with its own actor. */
+	const redelegate = async (delegatedToken: string) => {
+		const actor = await actorTokenFor(downstream);
+		return scenario.exchangeAs(downstream, delegatedToken, {
+			...actorParams(actor.access_token),
+			resource: other,
+		});
+	};
+	return {
+		...scenario,
+		redelegate,
+		machineClient,
+		delegator,
+		downstream,
+		actorTokenFor,
+		actorParams,
+		delegate,
+	};
+}
+
+describe("oauthTokenExchange delegation", () => {
+	it("names the actor in act and returns it at introspection", async () => {
+		const { delegator, delegate, introspect, userTokenForMcp } =
+			await bootDelegation();
+		const { data, error } = await delegate();
+		expect(error).toBeNull();
+		const issued = decodeJwt(data!.access_token);
+		expect(issued.act).toEqual({ sub: delegator.client_id });
+		expect(issued.sub).toBe(
+			decodeJwt((await userTokenForMcp()).access_token).sub,
+		);
+		expect(await introspect(data!.access_token, delegator)).toMatchObject({
+			active: true,
+			act: { sub: delegator.client_id },
+		});
+	});
+
+	it("stores act on an opaque token and returns it at introspection", async () => {
+		const { delegator, delegate, introspect } = await bootDelegation(
+			{},
+			{ disableJwtPlugin: true },
+		);
+		const { data, error } = await delegate();
+		expect(error).toBeNull();
+		expect(data!.access_token.split(".")).toHaveLength(1);
+		expect(await introspect(data!.access_token, delegator)).toMatchObject({
+			active: true,
+			act: { sub: delegator.client_id },
+		});
+	});
+
+	it("nests the subject token's actors under the new actor", async () => {
+		const { delegator, downstream, delegate, redelegate } =
+			await bootDelegation({ delegation: { maxDepth: 2 } });
+		const first = await delegate();
+		const { data, error } = await redelegate(first.data!.access_token);
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).act).toEqual({
+			sub: downstream.client_id,
+			act: { sub: delegator.client_id },
+		});
+	});
+
+	it("nests act across opaque tokens", async () => {
+		const { delegator, downstream, delegate, introspect, redelegate } =
+			await bootDelegation(
+				{ delegation: { maxDepth: 2 } },
+				{ disableJwtPlugin: true },
+			);
+		const first = await delegate();
+		const { data, error } = await redelegate(first.data!.access_token);
+		expect(error).toBeNull();
+		expect((await introspect(data!.access_token, downstream))?.act).toEqual({
+			sub: downstream.client_id,
+			act: { sub: delegator.client_id },
+		});
+	});
+
+	it("keeps the subject token's act when no actor is sent", async () => {
+		const { delegator, downstream, delegate, exchangeAs } =
+			await bootDelegation();
+		const first = await delegate();
+		const { data, error } = await exchangeAs(
+			downstream,
+			first.data!.access_token,
+			{ resource: other },
+		);
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).act).toEqual({
+			sub: delegator.client_id,
+		});
+	});
+
+	it("rejects a chain longer than maxDepth", async () => {
+		const { delegate, redelegate } = await bootDelegation();
+		const first = await delegate();
+		const { error } = await redelegate(first.data!.access_token);
+		expect(error).toMatchObject({
+			error: "invalid_request",
+			error_description: "delegation exceeds the maximum depth",
+		});
+	});
+
+	it("rejects every actor with maxDepth 0", async () => {
+		const { delegate } = await bootDelegation({ delegation: { maxDepth: 0 } });
+		const { error } = await delegate();
+		expect(error?.error_description).toBe(
+			"delegation exceeds the maximum depth",
+		);
+	});
+
+	it("rejects an invalid maxDepth at startup", () => {
+		expect(() => oauthTokenExchange({ delegation: { maxDepth: -1 } })).toThrow(
+			"delegation.maxDepth must be a non-negative integer",
+		);
+		expect(() =>
+			oauthTokenExchange({ delegation: { maxDepth: 1.5 } }),
+		).toThrow();
+	});
+
+	it("requires actor_token and actor_token_type together", async () => {
+		const { delegator, userTokenForMcp, exchangeAs, actorTokenFor } =
+			await bootDelegation();
+		const subject = await userTokenForMcp();
+		const actor = await actorTokenFor(delegator);
+		const halves: Record<string, string>[] = [
+			{ actor_token: actor.access_token },
+			{ actor_token_type: ACCESS_TOKEN_TYPE },
+		];
+		for (const extra of halves) {
+			const { error } = await exchangeAs(
+				delegator,
+				subject.access_token,
+				extra,
+			);
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description:
+					"actor_token and actor_token_type must be sent together",
+			});
+		}
+	});
+
+	it("accepts only access tokens as actor tokens", async () => {
+		const { delegator, userTokenForMcp, exchangeAs, actorTokenFor } =
+			await bootDelegation();
+		const subject = await userTokenForMcp();
+		const actor = await actorTokenFor(delegator);
+		const { error } = await exchangeAs(delegator, subject.access_token, {
+			actor_token: actor.access_token,
+			actor_token_type: "urn:ietf:params:oauth:token-type:id_token",
+		});
+		expect(error?.error_description).toBe(
+			`actor_token_type must be ${ACCESS_TOKEN_TYPE}`,
+		);
+	});
+
+	it("rejects an actor token issued to another client", async () => {
+		const {
+			delegator,
+			downstream,
+			userTokenForMcp,
+			exchangeAs,
+			actorTokenFor,
+			actorParams,
+		} = await bootDelegation();
+		const subject = await userTokenForMcp();
+		// `delegator` is linked to the actor token's audience, but the token was
+		// issued to `downstream`.
+		const actor = await actorTokenFor(downstream);
+		const { error } = await exchangeAs(
+			delegator,
+			subject.access_token,
+			actorParams(actor.access_token),
+		);
+		expect(error).toMatchObject({
+			error: "invalid_request",
+			error_description: "actor_token is invalid",
+		});
+	});
+
+	it("rejects an actor that is the subject token's user", async () => {
+		const { createClient, userTokenForMcp, exchangeAs, actorParams } =
+			await bootDelegation();
+		const service = await createClient({
+			grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, "authorization_code"],
+			redirect_uris: [redirectUri],
+			scope: "openid read write",
+			skip_consent: true,
+			resources: [mcp, api],
+		});
+		const subject = await userTokenForMcp();
+		const own = await userTokenForMcp({
+			requester: service,
+			scope: "openid read",
+		});
+		const { error } = await exchangeAs(
+			service,
+			subject.access_token,
+			actorParams(own.access_token),
+		);
+		expect(error?.error_description).toBe(
+			"actor_token must not represent the subject token's user",
+		);
+	});
+
+	it("caps the expiry at the actor token's expiry", async () => {
+		const { delegate } = await bootDelegation(
+			{},
+			{},
+			{ m2mAccessTokenExpiresIn: 20 },
+		);
+		const { data, error } = await delegate();
+		expect(error).toBeNull();
+		expect(data!.expires_in).toBeLessThanOrEqual(20);
+	});
+
+	it("passes the actor and act chain to allowExchange", async () => {
+		const allowExchange = vi.fn(() => true);
+		const { delegator, delegate } = await bootDelegation({ allowExchange });
+		await delegate();
+		expect(allowExchange).toHaveBeenCalledWith(
+			expect.objectContaining({
+				actor: expect.objectContaining({
+					sub: delegator.client_id,
+					token: expect.objectContaining({ client_id: delegator.client_id }),
+				}),
+				act: { sub: delegator.client_id },
+			}),
+		);
+	});
+
+	it("lets allowExchange require delegation", async () => {
+		const { delegator, delegate, userTokenForMcp, exchangeAs } =
+			await bootDelegation({ allowExchange: ({ actor }) => !!actor });
+		expect((await delegate()).error).toBeNull();
+		const subject = await userTokenForMcp();
+		const { error } = await exchangeAs(delegator, subject.access_token);
+		expect(error?.error_description).toBe("token exchange denied by policy");
+	});
+
+	it("adds actorClaims fields without overriding sub, iss, or earlier actors", async () => {
+		const actorClaims = vi.fn(() => ({
+			sub: "forged",
+			iss: "https://evil.example.com",
+			act: { sub: "forged" },
+			actor_type: "service",
+		}));
+		const { delegator, downstream, delegate, redelegate } =
+			await bootDelegation({ delegation: { maxDepth: 2, actorClaims } });
+		const first = await delegate();
+		expect(decodeJwt(first.data!.access_token).act).toEqual({
+			sub: delegator.client_id,
+			actor_type: "service",
+		});
+		const { data } = await redelegate(first.data!.access_token);
+		expect(decodeJwt(data!.access_token).act).toEqual({
+			sub: downstream.client_id,
+			actor_type: "service",
+			act: { sub: delegator.client_id, actor_type: "service" },
+		});
+	});
+
+	it("does not run actorClaims without an actor", async () => {
+		const actorClaims = vi.fn(() => ({ actor_type: "service" }));
+		const { mcpServer, userTokenForMcp, exchangeAs } = await bootDelegation({
+			delegation: { actorClaims },
+		});
+		const subject = await userTokenForMcp();
+		const { data } = await exchangeAs(mcpServer, subject.access_token);
+		expect(actorClaims).not.toHaveBeenCalled();
+		expect(decodeJwt(data!.access_token).act).toBeUndefined();
+	});
+
+	it("keeps act owned by the authorization server", async () => {
+		const { mcpServer, delegator, delegate, userTokenForMcp, exchangeAs } =
+			await bootDelegation(
+				{},
+				{},
+				{ customAccessTokenClaims: () => ({ act: { sub: "forged" } }) },
+			);
+		const subject = await userTokenForMcp();
+		expect(decodeJwt(subject.access_token).act).toBeUndefined();
+		const impersonated = await exchangeAs(mcpServer, subject.access_token);
+		expect(decodeJwt(impersonated.data!.access_token).act).toBeUndefined();
+		const delegated = await delegate();
+		expect(decodeJwt(delegated.data!.access_token).act).toEqual({
+			sub: delegator.client_id,
+		});
+	});
+
+	it("rejects a delegated token as the actor token", async () => {
+		const { delegator, delegate, userTokenForMcp, exchangeAs, actorParams } =
+			await bootDelegation();
+		const delegated = await delegate();
+		const subject = await userTokenForMcp();
+		const { error } = await exchangeAs(
+			delegator,
+			subject.access_token,
+			actorParams(delegated.data!.access_token),
+		);
+		expect(error).toMatchObject({
+			error: "invalid_request",
+			error_description: "actor_token must not be a delegated token",
+		});
+	});
+
+	it("ignores hook changes to the act it receives", async () => {
+		const { delegator, downstream, delegate, redelegate } =
+			await bootDelegation({
+				delegation: {
+					maxDepth: 2,
+					actorClaims: ({ act }) => {
+						if (act) {
+							act.sub = "forged";
+							if (act.act) act.act.sub = "forged";
+						}
+						return {};
+					},
+				},
+				allowExchange: ({ subjectToken }) => {
+					if (subjectToken.act)
+						(subjectToken.act as { sub: string }).sub = "forged";
+					return true;
+				},
+			});
+		const first = await delegate();
+		const { data } = await redelegate(first.data!.access_token);
+		expect(decodeJwt(data!.access_token).act).toEqual({
+			sub: downstream.client_id,
+			act: { sub: delegator.client_id },
+		});
+	});
+
+	it("ignores hook changes to expiry, scopes, and the user", async () => {
+		const farFuture = Math.floor(Date.now() / 1000) + 86_400;
+		let seen:
+			| { actorSub: string; userId: string; scopes: string[] }
+			| undefined;
+		const { delegate } = await bootDelegation(
+			{
+				allowExchange: (request) => {
+					request.scopes.push("write");
+					request.user.id = "someone-else";
+					if (request.actor) request.actor.sub = "forged-actor";
+					(request.subjectToken as { exp: number }).exp = farFuture;
+					return true;
+				},
+				delegation: {
+					actorClaims: ({ actor, user, scopes }) => {
+						// Changes made by allowExchange do not reach this hook.
+						seen = { actorSub: actor.sub, userId: user.id, scopes };
+						(actor.token as { exp: number }).exp = farFuture;
+						return {};
+					},
+				},
+			},
+			{},
+			{ m2mAccessTokenExpiresIn: 20 },
+		);
+		const { data, error } = await delegate();
+		expect(error).toBeNull();
+		expect(data!.expires_in).toBeLessThanOrEqual(20);
+		expect(data!.scope).toBe("read");
+		const issued = decodeJwt(data!.access_token);
+		expect(issued.sub).not.toBe("someone-else");
+		expect(seen).toEqual({
+			actorSub: (issued.act as { sub: string }).sub,
+			userId: issued.sub,
+			scopes: ["read"],
+		});
+	});
+
+	it("rejects an actor token whose client id equals a user id", async () => {
+		let nextClientId: string | undefined;
+		const {
+			auth,
+			headers,
+			machineClient,
+			userTokenForMcp,
+			exchangeAs,
+			actorTokenFor,
+			actorParams,
+		} = await bootDelegation(
+			{},
+			{},
+			{ generateClientId: () => nextClientId ?? generateRandomString(16) },
+		);
+		const session = await auth.api.getSession({ headers });
+		nextClientId = session!.user.id;
+		const colliding = await machineClient([mcp, api]);
+		expect(colliding.client_id).toBe(session!.user.id);
+		nextClientId = undefined;
+		const subject = await userTokenForMcp();
+		const actor = await actorTokenFor(colliding);
+		const { error } = await exchangeAs(
+			colliding,
+			subject.access_token,
+			actorParams(actor.access_token),
+		);
+		expect(error).toMatchObject({
+			error: "invalid_request",
+			error_description: "actor_token is invalid",
+		});
+	});
+
+	it("does not look up a client id as a serial user id", async () => {
+		const { auth, delegator, delegate } = await bootDelegation(
+			{},
+			{ advanced: { database: { generateId: "serial" } } },
+		);
+		const ctx = await auth.$context;
+		const lookup = vi.spyOn(ctx.internalAdapter, "findUserById");
+		const { data, error } = await delegate();
+		expect(error).toBeNull();
+		expect(decodeJwt(data!.access_token).act).toEqual({
+			sub: delegator.client_id,
+		});
+		expect(lookup).not.toHaveBeenCalledWith(delegator.client_id);
+		lookup.mockRestore();
+	});
+
+	it("reports an opaque token of a deleted user inactive", async () => {
+		const { auth, agent, userTokenForMcp, introspect } = await bootDelegation(
+			{},
+			{ disableJwtPlugin: true },
+		);
+		const token = await userTokenForMcp();
+		expect((await introspect(token.access_token, agent))?.active).toBe(true);
+		const ctx = await auth.$context;
+		// Adapters without foreign keys, such as memory and MongoDB, keep the
+		// token row after its user is deleted. Simulate that lookup result.
+		const lookup = vi
+			.spyOn(ctx.internalAdapter, "findUserById")
+			.mockResolvedValueOnce(null);
+		expect(await introspect(token.access_token, agent)).toEqual({
+			active: false,
+		});
+		expect(lookup).toHaveBeenCalled();
+		lookup.mockRestore();
+	});
+
+	describe("may_act", () => {
+		const bootWithMayAct = async () => {
+			const state: { mayAct?: unknown } = {};
+			const scenario = await bootDelegation(
+				{},
+				{},
+				{
+					customAccessTokenClaims: () =>
+						state.mayAct === undefined ? {} : { may_act: state.mayAct },
+				},
+			);
+			return { ...scenario, state };
+		};
+
+		it("allows an actor that matches every member", async () => {
+			const { delegator, delegate, state } = await bootWithMayAct();
+			state.mayAct = {
+				sub: delegator.client_id,
+				client_id: delegator.client_id,
+				iss: issuer,
+			};
+			const { data, error } = await delegate();
+			expect(error).toBeNull();
+			expect(decodeJwt(data!.access_token).act).toEqual({
+				sub: delegator.client_id,
+			});
+		});
+
+		it.each<[string, Record<string, string> | string]>([
+			["another actor", { sub: "someone-else" }],
+			["another issuer", { sub: "delegator", iss: "https://other.example" }],
+			["a member it cannot evaluate", { sub: "delegator", email: "a@b.c" }],
+			["a value that is not an object", "delegator"],
+			["an empty object", {}],
+		])("denies %s", async (_, mayAct) => {
+			const { delegator, delegate, state } = await bootWithMayAct();
+			state.mayAct =
+				typeof mayAct === "object" && mayAct.sub === "delegator"
+					? { ...mayAct, sub: delegator.client_id }
+					: mayAct;
+			const { error } = await delegate();
+			expect(error).toMatchObject({
+				error: "invalid_request",
+				error_description:
+					"the actor is not permitted by the subject token's may_act",
+			});
+		});
+
+		it("denies an exchange without an actor", async () => {
+			const { mcpServer, delegator, userTokenForMcp, exchangeAs, state } =
+				await bootWithMayAct();
+			state.mayAct = { sub: delegator.client_id };
+			const subject = await userTokenForMcp();
+			const { error } = await exchangeAs(mcpServer, subject.access_token);
+			expect(error?.error_description).toBe(
+				"the actor is not permitted by the subject token's may_act",
+			);
+		});
+	});
+
+	describe("an actor bound by client authentication", () => {
+		const authMethod = "test_attestation_jwt";
+		const assertionType =
+			"urn:better-auth:test:client-assertion-type:test-attestation";
+		const boundGrant = "urn:better-auth:test:bound-actor";
+
+		async function bootBoundActor() {
+			const state: { confirmation?: Confirmation } = {};
+			const plugin = {
+				id: "test-bound-actor",
+				init(ctx) {
+					extendOAuthProvider(ctx, {
+						clientAuthentication: {
+							[authMethod]: {
+								assertionTypes: [assertionType],
+								authenticate: async ({ clientId }) => ({
+									clientId: clientId!,
+									confirmation: state.confirmation,
+								}),
+							},
+						},
+						// Issues an actor token bound to what client authentication proved.
+						grants: {
+							[boundGrant]: async ({ provider }) => {
+								const { client, confirmation } =
+									await provider.authenticateClient();
+								return provider.issueTokens({
+									client,
+									scopes: ["read"],
+									resources: [api],
+									confirmation,
+								});
+							},
+						},
+					});
+				},
+			} satisfies BetterAuthPlugin;
+			const allowExchange = vi.fn(() => true);
+			const scenario = await bootDelegation(
+				{ allowExchange },
+				{ plugins: [plugin] },
+			);
+			const service = await scenario.createClient({
+				token_endpoint_auth_method: authMethod,
+				grant_types: [TOKEN_EXCHANGE_GRANT_TYPE, boundGrant],
+				scope: "read write",
+				skip_consent: true,
+				resources: [mcp, api],
+			});
+			const clientAuth = {
+				client_id: service.client_id,
+				client_assertion_type: assertionType,
+				client_assertion: `assertion:${service.client_id}`,
+			};
+			/** Issues an actor token bound to `confirmation`. */
+			const issueActor = async (confirmation: Confirmation) => {
+				state.confirmation = confirmation;
+				const { data, error } = await scenario.postToken({
+					grant_type: boundGrant,
+					...clientAuth,
+				});
+				expect(error).toBeNull();
+				expect(decodeJwt(data!.access_token).cnf).toEqual(confirmation);
+				return data!.access_token;
+			};
+			/** Exchanges as the service while authentication proves `confirmation`. */
+			const exchange = async (
+				actorToken: string,
+				confirmation: Confirmation | undefined,
+			) => {
+				state.confirmation = confirmation;
+				const subject = await scenario.userTokenForMcp();
+				return scenario.postToken({
+					grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+					...clientAuth,
+					subject_token: subject.access_token,
+					subject_token_type: ACCESS_TOKEN_TYPE,
+					...scenario.actorParams(actorToken),
+					resource: api,
+				});
+			};
+			return { service, allowExchange, issueActor, exchange };
+		}
+
+		it("accepts a certificate-bound actor when authentication proves the same certificate", async () => {
+			const { service, issueActor, exchange } = await bootBoundActor();
+			const certificate = { "x5t#S256": "certificate-a" };
+			const actor = await issueActor(certificate);
+			const { data, error } = await exchange(actor, certificate);
+			expect(error).toBeNull();
+			const issued = decodeJwt(data!.access_token);
+			expect(issued.cnf).toEqual(certificate);
+			expect(issued.act).toEqual({ sub: service.client_id });
+		});
+
+		it.each([
+			["a different certificate", { "x5t#S256": "certificate-b" }],
+			["no confirmation", undefined],
+		] satisfies [string, Confirmation | undefined][])(
+			"rejects a certificate-bound actor with %s before allowExchange runs",
+			async (_, proven) => {
+				const { allowExchange, issueActor, exchange } = await bootBoundActor();
+				const actor = await issueActor({ "x5t#S256": "certificate-a" });
+				const { error } = await exchange(actor, proven);
+				expect(error).toMatchObject({
+					error: "invalid_request",
+					error_description:
+						"actor_token is bound to a key the request does not prove",
+				});
+				expect(allowExchange).not.toHaveBeenCalled();
+			},
+		);
+
+		it("accepts a matching confirmation in place of a DPoP proof", async () => {
+			const { issueActor, exchange } = await bootBoundActor();
+			const key = { jkt: "dpop-key-a" };
+			const actor = await issueActor(key);
+			const { data, error } = await exchange(actor, key);
+			expect(error).toBeNull();
+			expect(data?.token_type).toBe("DPoP");
+			expect(decodeJwt(data!.access_token).cnf).toEqual(key);
+		});
+	});
+
+	describe("DPoP", () => {
+		it("requires a proof from the key an actor token is bound to", async () => {
+			const {
+				delegator,
+				userTokenForMcp,
+				exchangeAs,
+				actorTokenFor,
+				actorParams,
+			} = await bootDelegation();
+			const key = await createDpopKey();
+			const actor = await actorTokenFor(delegator, { DPoP: await key.prove() });
+			expect(actor.token_type).toBe("DPoP");
+			const subject = await userTokenForMcp();
+
+			const missing = await exchangeAs(
+				delegator,
+				subject.access_token,
+				actorParams(actor.access_token),
+			);
+			expect(missing.error?.error).toBe("invalid_dpop_proof");
+
+			const otherKey = await createDpopKey();
+			const wrong = await exchangeAs(
+				delegator,
+				subject.access_token,
+				actorParams(actor.access_token),
+				{ DPoP: await otherKey.prove() },
+			);
+			expect(wrong.error?.error).toBe("invalid_dpop_proof");
+
+			const { data, error } = await exchangeAs(
+				delegator,
+				subject.access_token,
+				actorParams(actor.access_token),
+				{ DPoP: await key.prove() },
+			);
+			expect(error).toBeNull();
+			expect(data?.token_type).toBe("DPoP");
+			const issued = decodeJwt(data!.access_token);
+			expect(issued.cnf).toEqual({ jkt: await deriveDpopJkt(key.publicJwk) });
+			expect(issued.act).toEqual({ sub: delegator.client_id });
+		});
+	});
+});
