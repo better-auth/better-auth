@@ -56,23 +56,24 @@ export const releaseManifestSchema = z.strictObject({
 	packageMetadata: z.record(z.string().min(1), packageReleaseMetadataSchema),
 });
 
+export const generatedTitleMaxLength = 300;
+export const generatedMigrationMaxLength = 500;
+
+// Providers enforce only the shape while decoding. Length and line limits are
+// checked per entry in render.ts, so one overlong entry cannot fail its batch.
 const releaseRewriteSchema = z.strictObject({
 	id: releaseRewriteKeySchema.describe("The unchanged input change ID"),
 	title: z
 		.string()
-		.trim()
-		.min(1)
-		.max(300)
-		.regex(/^[^\r\n]+$/)
-		.describe("A single-line, user-focused release-note title"),
+		.describe(
+			`A single-line, user-focused release-note title of at most ${generatedTitleMaxLength} characters`,
+		),
 	migration: z
 		.string()
-		.trim()
-		.min(1)
-		.max(500)
-		.regex(/^[^\r\n]+$/)
 		.nullable()
-		.describe("An action users must take, otherwise null"),
+		.describe(
+			`A single-line action users must take, of at most ${generatedMigrationMaxLength} characters, otherwise null`,
+		),
 });
 
 export const releaseRewritesSchema = z.strictObject({
