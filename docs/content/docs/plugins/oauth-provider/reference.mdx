@@ -413,6 +413,19 @@ export const customOAuthExtension = () =>
 
 A grant handler receives `provider` (`getClient`, `authenticateClient`, `issueTokens`, `hashToken`, `validateAccessToken`, `requireActiveAccessToken`). Other endpoints get the same object from `getOAuthProviderApi(ctx, opts, grantType?)`. Without `grantType`, `issueTokens` throws. `validateAccessToken` can return an inactive payload; protected endpoints should use `requireActiveAccessToken`, which rejects inactive tokens with a bearer challenge.
 
+`requireActiveAccessToken` checks the token, not the request. For a DPoP-bound token, it returns the payload with the key thumbprint in `cnf.jkt` and does not check a DPoP proof ([RFC 9449 §6.2](https://datatracker.ietf.org/doc/html/rfc9449#section-6.2)). An endpoint that stops there accepts the token from anyone who holds it, without the client's key. After `requireActiveAccessToken` returns, call `enforceDpopBinding` from `better-auth/oauth2` on every request, as the UserInfo endpoint does. For a DPoP-bound token, it requires the `DPoP` scheme and a valid proof signed by the bound key ([RFC 9449 §7.1](https://datatracker.ietf.org/doc/html/rfc9449#section-7.1)).
+
+Pass it the payload, the request's method and `DPoP` header, and:
+
+* `authorization`: the `Authorization` header parsed with `parseAccessTokenAuthorization`. Pass its `token` to `requireActiveAccessToken`, because the proof's `ath` is checked against it.
+* `url`: your `baseURL` plus the part of the request path below its base path. Do not take the host from `request.url` or from forwarded headers. See [DPoP](/docs/plugins/oauth-provider/tokens#dpop).
+* `replayStore`: `createDpopReplayStore(ctx.context.internalAdapter)`, created on each request. Without a replay store, a captured proof can be sent again within its `proofMaxAgeSeconds`. For its storage requirement, see [Verify access tokens](/docs/plugins/oauth-provider/resource-server#verify-access-tokens).
+* `proofMaxAgeSeconds` and `signingAlgorithms`: the values from your `dpop` options.
+
+An `auth.api` call has no HTTP request to check a proof against. When `ctx.request` is missing and `getDpopJktFromPayload(payload)` returns a value, reject the call with `invalid_token`.
+
+When `enforceDpopBinding` throws, check the error with `isDpopBindingError`, and rethrow any other error. Wrap a binding error as `new APIError("UNAUTHORIZED", { error: error.code, error_description: error.message })`, pass it to [`createResourceServerChallenge`](/docs/plugins/oauth-provider/resource-server#verify-access-tokens) with `dpopSigningAlgorithms` and `request: ctx.request`, and throw the result. Pass errors from `requireActiveAccessToken` through it too, so a client that used the `DPoP` scheme gets a `DPoP` challenge.
+
 <Callout type="warn">
   `issueTokens` applies the provider's resource policy. Each resource must be registered and enabled, and linked to the client while `enforcePerClientResources` is on (the default). Each resource's `allowedScopes` also applies. It does not re-check anything else it is given. Validate the user, the client's registered scopes, and any grant-specific policy in your handler before calling it. Pass `scopes` to `authenticateClient` so a client cannot obtain scopes it was never registered for.
 </Callout>
