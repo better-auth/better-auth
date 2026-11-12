@@ -692,7 +692,9 @@ Extension claims only add claim names. Your own callbacks can override profile c
 | ID token     | subject and authentication claims \< `customIdTokenClaims`. Extension and per-issuance `idTokenClaims` only add names and cannot set profile or email claims. | `iss`, `sub`, `aud`, `exp`, `nbf`, `iat`, `jti`, `nonce`, `sid`, `at_hash`, `c_hash`, `s_hash`, `auth_time`, `acr`, `amr`, `azp`                                                                            |
 | UserInfo     | scope and `claims.userinfo` claims \< extension `claims.userInfo` (add only) \< `customUserInfoClaims`                                                        | `sub`, applied last                                                                                                                                                                                         |
 
-Per-issuance `accessTokenClaims` are signed into JWT access tokens, so introspecting a JWT access token returns them. An opaque access token stores no per-issuance claims, so introspecting it does not return them. A claim that introspection of an opaque token must return belongs in a `claims.accessToken` contributor that does not depend on the grant type.
+Introspection returns per-issuance `accessTokenClaims` for both token formats. A JWT access token carries them in its signed payload. An opaque access token stores them as JSON in the `accessTokenClaims` column of `oauthAccessToken`, after removing the provider-owned names, and introspection merges them back in the same order as the table above. Only clients allowed to introspect the token receive them.
+
+Stored claims stay in the database until the token row is deleted. Keep personal data out of them when the resource server can look it up instead. Values read back in their JSON form, as they would from a JWT, so pass JSON-serializable values.
 
 ## Schema
 
@@ -841,6 +843,7 @@ export const oauthAccessTokenTableFields = [
   { name: "revoked", type: "Date", description: "When the token was revoked", isOptional: true },
   { name: "confirmation", type: "json", description: "`cnf` binding, returned by introspection", isOptional: true },
   { name: "act", type: "json", description: "`act` actor chain of a delegated token exchange, returned by introspection", isOptional: true },
+  { name: "accessTokenClaims", type: "json", description: "Per-issuance `accessTokenClaims` from `issueTokens`, returned by introspection", isOptional: true },
   { name: "createdAt", type: "Date", description: "Creation time" },
   { name: "expiresAt", type: "Date", description: "Expiry time" },
 ];

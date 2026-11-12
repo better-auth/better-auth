@@ -530,6 +530,11 @@ export const schema = {
 				type: "json",
 				required: false,
 			},
+			// Per-issuance `accessTokenClaims`, returned at introspection.
+			accessTokenClaims: {
+				type: "json",
+				required: false,
+			},
 			// Shall be same as refreshId.scopes if using refreshId
 			scopes: {
 				type: "string[]",

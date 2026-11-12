@@ -291,9 +291,9 @@ async function validateOpaqueAccessToken(
 	const resourcePolicyClaims = resources?.length
 		? await getResourceCustomClaims(ctx, opts, resources)
 		: {};
-	// `grantType` and per-issuance extras are not persisted on the opaque row,
-	// so extension claims are re-derived grant-type-stable and per-request
-	// extras are JWT-only (see `resolveAccessTokenClaims`).
+	// `grantType` is not persisted on the opaque row, so extension claims are
+	// re-derived grant-type-stable. Per-issuance claims come from the row, so
+	// they keep the precedence they have in a JWT.
 	const accessTokenClaims = client
 		? await resolveAccessTokenClaims({
 				ctx,
@@ -306,7 +306,7 @@ async function validateOpaqueAccessToken(
 				resources,
 				referenceId: accessToken.referenceId,
 				metadata: parseClientMetadata(client.metadata),
-				perRequestClaims: undefined,
+				perRequestClaims: accessToken.accessTokenClaims ?? undefined,
 				resourcePolicyClaims,
 			})
 		: {};

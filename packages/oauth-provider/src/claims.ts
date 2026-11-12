@@ -73,6 +73,21 @@ function stripReservedClaims(
 }
 
 /**
+ * Per-issuance claims as stored on an opaque-token row: reserved names removed
+ * and values in the JSON form a signed JWT would carry, on every adapter.
+ */
+export function toStoredAccessTokenClaims(
+	claims: Record<string, unknown> | undefined,
+	opts: OAuthOptions<Scope[]>,
+): Record<string, unknown> | undefined {
+	if (!claims) return undefined;
+	const safe: Record<string, unknown> = JSON.parse(
+		JSON.stringify(stripReservedClaims(claims, opts)),
+	);
+	return Object.keys(safe).length > 0 ? safe : undefined;
+}
+
+/**
  * Inputs for {@link resolveAccessTokenClaims}. Every field is derivable from
  * persisted token state, so the resolver produces the same enriched claim set
  * whether it runs at issuance (from the grant) or at introspection (from the
@@ -99,8 +114,8 @@ export interface AccessTokenClaimsInput {
 	/** Session the tokens are issued for; `undefined` at introspection. See {@link OAuthClaimExtensionInput.sessionId}. */
 	sessionId: string | undefined;
 	/**
-	 * Per-issuance claims a grant handler supplied via `accessTokenClaims`.
-	 * Available only at issuance; `undefined` at introspection.
+	 * Per-issuance claims a grant handler supplied via `accessTokenClaims`. At
+	 * introspection, the claims stored on the opaque-token row.
 	 */
 	perRequestClaims: Record<string, unknown> | undefined;
 	/** Per-resource `customClaims` from `resolveResourcePolicy` (raw, not yet stripped). */
