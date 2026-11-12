@@ -5573,8 +5573,17 @@ describe("expired-key cleanup uses runInBackground across key routes", async () 
 			expect(releaseCleanup).not.toBeNull();
 			expect(cleanupSettled).toBe(false);
 			expect(backgroundTasks.length).toBeGreaterThanOrEqual(1);
+
+			let bgSettledWhilePending = false;
+			const pendingBg = Promise.all(backgroundTasks).then(() => {
+				bgSettledWhilePending = true;
+			});
+			await Promise.resolve();
+			expect(bgSettledWhilePending).toBe(false);
+			expect(cleanupSettled).toBe(false);
+
 			releaseCleanup!();
-			await Promise.all(backgroundTasks);
+			await pendingBg;
 			expect(cleanupSettled).toBe(true);
 		};
 
