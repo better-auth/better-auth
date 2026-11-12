@@ -222,6 +222,8 @@ interface GenericOAuthConfig {
   discoveryUrl?: string;
   requireIdTokenVerification?: boolean;
   authorizationUrl?: string;
+  pushedAuthorizationRequest?: boolean | "auto";
+  pushedAuthorizationRequestUrl?: string;
   tokenUrl?: string;
   userInfoUrl?: string;
   endSessionEndpoint?: string;
@@ -256,6 +258,10 @@ interface GenericOAuthConfig {
 **disableIdTokenNonceBinding**: (Optional) Turn off OIDC `nonce` binding for a discovery provider's `id_token`. Binding is on by default and rejects an `id_token` that does not echo the server-generated `nonce` (OIDC Core 1.0 §3.1.3.7). Set this to `true` only for providers that do not return the `nonce` claim in the authorization-code flow; it removes `id_token` replay protection for the provider.
 
 **authorizationUrl**: (Optional) The OAuth provider's authorization endpoint. Not required if using `discoveryUrl`.
+
+**pushedAuthorizationRequest**: (Optional) Whether to send the authorization request to the provider's pushed authorization request endpoint before redirecting the user. Accepts `"auto"`, `true`, or `false`. Defaults to `"auto"`, which pushes only when discovery reports `require_pushed_authorization_requests: true`. See [Pushed Authorization Requests](#pushed-authorization-requests).
+
+**pushedAuthorizationRequestUrl**: (Optional) The OAuth provider's pushed authorization request endpoint. Not required if using `discoveryUrl` and the discovery document includes `pushed_authorization_request_endpoint`.
 
 **tokenUrl**: (Optional) The OAuth provider's token endpoint. Not required if using `discoveryUrl`.
 
@@ -404,7 +410,7 @@ genericOAuth({
 * The discovery request follows a redirect only within that origin. If `discoveryUrl` redirects to another origin, discovery fails and Better Auth logs an error. Set `discoveryUrl` to the final URL.
 * The request for the provider's signing keys (`jwks_uri`) gets the headers when `jwks_uri` is on that origin. A `jwks_uri` on another origin gets no headers.
 
-**authorizationHeaders**: (Optional) Custom headers to include in requests to the token endpoint, both the authorization code exchange and token refresh. A custom `getToken` replaces the default code exchange, so it must add these headers itself. Useful for providers that require special headers. `Authorization` is not allowed in any letter case, because that header belongs to client authentication. Initialization fails with an error naming the provider. To send a provider-specific `Authorization` header, use `tokenEndpointAuth` with `method: "custom"`.
+**authorizationHeaders**: (Optional) Custom headers to include in requests to the token endpoint, both the authorization code exchange and token refresh, and in pushed authorization requests. A custom `getToken` replaces the default code exchange, so it must add these headers itself. Useful for providers that require special headers. `Authorization` is not allowed in any letter case, because that header belongs to client authentication. Initialization fails with an error naming the provider. To send a provider-specific `Authorization` header, use `tokenEndpointAuth` with `method: "custom"`.
 
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
 
@@ -534,6 +540,41 @@ getUserInfo: async (tokens) => {
   };
 }
 ```
+
+### Pushed Authorization Requests
+
+Some providers require pushed authorization requests (PAR, RFC 9126). High-security profiles such as FAPI 2.0 require them. With PAR, your server sends the authorization request, including `state`, `redirect_uri`, scopes, and the PKCE challenge, directly to the provider. The provider returns a short-lived `request_uri`. The user's browser is then redirected with only `client_id` and `request_uri`. The request parameters never pass through the browser, so nobody can read or change them on the way.
+
+By default, Better Auth uses PAR when the provider's discovery document sets `require_pushed_authorization_requests: true`. Providers that do not require PAR keep the browser redirect they use today. Some providers require PAR only for specific clients and do not say so in discovery. To push every request to such a provider, or to any provider that supports PAR, set `pushedAuthorizationRequest: true`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+
+export const auth = betterAuth({
+    plugins: [
+        genericOAuth({
+            config: [
+                {
+                    providerId: "example",
+                    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+                    clientId: process.env.EXAMPLE_CLIENT_ID,
+                    clientSecret: process.env.EXAMPLE_CLIENT_SECRET,
+                    pushedAuthorizationRequest: true,
+                },
+            ],
+        }),
+    ],
+});
+```
+
+The pushed request authenticates your client the same way as the token request. Better Auth uses `clientSecret`, `authentication`, or `tokenEndpointAuth`, and sends `authorizationHeaders` with it. A `private_key_jwt` assertion getter receives the token endpoint URL as `tokenEndpoint`. RFC 9126 requires the provider to accept that URL as the assertion audience for pushed requests.
+
+Pushing needs a pushed authorization request endpoint. Better Auth reads it from `pushed_authorization_request_endpoint` in the discovery document, or from `pushedAuthorizationRequestUrl`. If no endpoint is found, startup fails for a manually configured provider. A discovery provider is skipped and retried like any other failed discovery.
+
+If the provider rejects the pushed request, sign-in returns a `502` error with the code `PUSHED_AUTHORIZATION_REQUEST_FAILED` and no redirect URL. The server log records the provider's status and error code.
+
+Set `pushedAuthorizationRequest: false` only for a provider whose discovery document claims to require PAR when it does not. Better Auth logs a warning at startup, because a provider that does require PAR rejects every browser-redirect sign-in.
 
 ### IDP-Initiated Flows
 

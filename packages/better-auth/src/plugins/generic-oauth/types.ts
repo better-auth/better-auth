@@ -70,6 +70,27 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	 */
 	authorizationUrl?: string | undefined;
 	/**
+	 * Send the authorization request to the provider's pushed authorization
+	 * request endpoint (RFC 9126) instead of the browser redirect.
+	 *
+	 * - `"auto"`: push when discovery reports
+	 *   `require_pushed_authorization_requests: true`.
+	 * - `true`: always push. Requires a pushed authorization request endpoint
+	 *   from discovery or `pushedAuthorizationRequestUrl`.
+	 * - `false`: never push.
+	 *
+	 * The pushed request authenticates the client the same way as the token
+	 * endpoint request, using `clientSecret` or `tokenEndpointAuth`.
+	 *
+	 * @default "auto"
+	 */
+	pushedAuthorizationRequest?: (boolean | "auto") | undefined;
+	/**
+	 * URL for the pushed authorization request endpoint.
+	 * Optional if using discoveryUrl.
+	 */
+	pushedAuthorizationRequestUrl?: string | undefined;
+	/**
 	 * URL for the token endpoint.
 	 * Optional if using discoveryUrl.
 	 */
@@ -255,8 +276,9 @@ export interface GenericOAuthConfig<ID extends string = string> {
 	discoveryHeaders?: Record<string, string> | undefined;
 	/**
 	 * Custom headers to include in token endpoint requests: the authorization
-	 * code exchange and token refresh. A custom `getToken` replaces the default
-	 * code exchange, so it must add these headers itself.
+	 * code exchange, token refresh, and pushed authorization requests. A custom
+	 * `getToken` replaces the default code exchange, so it must add these
+	 * headers itself.
 	 * Useful for providers like Qonto that require specific headers (e.g., X-Qonto-Staging-Token for local development).
 	 *
 	 * `Authorization` is not allowed in any letter case, and initialization fails
