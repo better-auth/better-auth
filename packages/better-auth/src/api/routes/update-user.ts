@@ -1,6 +1,10 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	BetterAuthOptions,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
+import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -368,6 +372,48 @@ export const setPassword = createAuthEndpoint.serverOnly(
 	},
 );
 
+/**
+ * Deletes the signed-in user and expires the session cookies on the
+ * caller's response.
+ */
+async function deleteCurrentUser(ctx: GenericEndpointContext, user: User) {
+	const beforeDelete = ctx.context.options.user?.deleteUser?.beforeDelete;
+	if (beforeDelete) {
+		await beforeDelete(user, ctx.request);
+	}
+	// Also deletes the user's accounts and stored sessions.
+	await ctx.context.internalAdapter.deleteUser(user.id);
+	await ctx.context.internalAdapter.deleteUserSessions(user.id);
+	deleteSessionCookie(ctx);
+	const afterDelete = ctx.context.options.user?.deleteUser?.afterDelete;
+	if (afterDelete) {
+		await afterDelete(user, ctx.request);
+	}
+}
+
+/**
+ * Consumes a delete-account token issued to `user` and deletes the user.
+ * Runs on the caller's context so the expired cookies reach its response.
+ */
+async function deleteUserWithToken(
+	ctx: GenericEndpointContext,
+	user: User,
+	token: string,
+) {
+	// Consume the single-use delete token atomically before any
+	// destructive work so concurrent callbacks with the same token can
+	// only delete the account once: the first caller wins, later racers
+	// get null. A wrong-owner token is still burned by this consume.
+	const verification =
+		await ctx.context.internalAdapter.consumeVerificationValue(
+			`delete-account-${token}`,
+		);
+	if (!verification || verification.value !== user.id) {
+		throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
+	}
+	await deleteCurrentUser(ctx, user);
+}
+
 export const deleteUser = createAuthEndpoint(
 	"/delete-user",
 	{
@@ -492,15 +538,7 @@ export const deleteUser = createAuthEndpoint(
 		}
 
 		if (ctx.body.token) {
-			//@ts-expect-error
-			await deleteUserCallback({
-				...ctx,
-				query: {
-					token: ctx.body.token,
-				},
-			});
-			// The callback's cookie writes land on its own context, not this response.
-			deleteSessionCookie(ctx);
+			await deleteUserWithToken(ctx, session.user, ctx.body.token);
 			return ctx.json({
 				success: true,
 				message: "User deleted",
@@ -548,17 +586,7 @@ export const deleteUser = createAuthEndpoint(
 			}
 		}
 
-		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
-		if (beforeDelete) {
-			await beforeDelete(session.user, ctx.request);
-		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
-		deleteSessionCookie(ctx);
-		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
-		if (afterDelete) {
-			await afterDelete(session.user, ctx.request);
-		}
+		await deleteCurrentUser(ctx, session.user);
 		return ctx.json({
 			success: true,
 			message: "User deleted",
@@ -635,30 +663,7 @@ export const deleteUserCallback = createAuthEndpoint(
 				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
 			);
 		}
-		// Consume the single-use delete token atomically before any
-		// destructive work so concurrent callbacks with the same token can
-		// only delete the account once: the first caller wins, later racers
-		// get null. A wrong-owner token is still burned by this consume.
-		const token = await ctx.context.internalAdapter.consumeVerificationValue(
-			`delete-account-${ctx.query.token}`,
-		);
-		if (!token || token.value !== session.user.id) {
-			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
-		}
-		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
-		if (beforeDelete) {
-			await beforeDelete(session.user, ctx.request);
-		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
-		await ctx.context.internalAdapter.deleteUserSessions(session.user.id);
-		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-
-		deleteSessionCookie(ctx);
-
-		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
-		if (afterDelete) {
-			await afterDelete(session.user, ctx.request);
-		}
+		await deleteUserWithToken(ctx, session.user, ctx.query.token);
 		if (ctx.query.callbackURL) {
 			throw ctx.redirect(ctx.query.callbackURL || "/");
 		}
