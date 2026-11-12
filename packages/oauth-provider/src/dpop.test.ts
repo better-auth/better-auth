@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { createAuthEndpoint } from "better-auth/api";
+import { createAuthEndpoint, createAuthMiddleware } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { VerifiedDpopProof } from "better-auth/oauth2";
 import {
@@ -13,7 +13,7 @@ import {
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import type { BetterAuthPlugin } from "better-auth/types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth/types";
 import type { APIError } from "better-call";
 import type { JWK } from "jose";
 import { decodeJwt, exportJWK, generateKeyPair, SignJWT } from "jose";
@@ -156,6 +156,7 @@ async function setupNonceProvider(params: {
 	expiresIn?: number;
 	/** A separate origin keeps the JWKS cache, keyed by URL, per instance. */
 	baseURL?: string;
+	hooks?: BetterAuthOptions["hooks"];
 }) {
 	const baseURL = params.baseURL ?? authServerBaseUrl;
 	const tokenEndpoint = `${baseURL}/api/auth/oauth2/token`;
@@ -163,6 +164,7 @@ async function setupNonceProvider(params: {
 		await getTestInstance(
 			{
 				baseURL,
+				hooks: params.hooks,
 				plugins: [
 					pluginIssuer,
 					dpopCompanion,
@@ -778,6 +780,46 @@ describe.each(["sqlite", "postgres"] as const)(
 		});
 	},
 );
+
+describe("DPoP nonce challenge on userinfo with hook-exposed headers", async () => {
+	const baseURL = "http://localhost:3002";
+	const endpoint = `${baseURL}/api/auth/oauth2/userinfo`;
+	const { customFetchImpl, issueDpopTokens } = await setupNonceProvider({
+		testWith: "sqlite",
+		baseURL,
+		hooks: {
+			before: createAuthMiddleware(async (ctx) => {
+				ctx.setHeader("Access-Control-Expose-Headers", "X-Request-Id");
+			}),
+		},
+	});
+
+	it("keeps the names a before hook exposed alongside the nonce and challenge", async () => {
+		const key = await createDpopKey();
+		const { accessToken } = await issueDpopTokens(key);
+
+		const challenge = await customFetchImpl(endpoint, {
+			headers: {
+				authorization: `DPoP ${accessToken}`,
+				DPoP: await createProof(key, {
+					method: "GET",
+					url: endpoint,
+					accessToken,
+				}),
+			},
+		});
+
+		expect(challenge.status).toBe(401);
+		expect(challenge.headers.get("WWW-Authenticate")).toMatch(
+			/^DPoP error="use_dpop_nonce", /,
+		);
+		expect(challenge.headers.get("DPoP-Nonce")).toEqual(expect.any(String));
+		expect(challenge.headers.get("Cache-Control")).toBe("no-store");
+		expect(challenge.headers.get("Access-Control-Expose-Headers")).toBe(
+			"X-Request-Id, DPoP-Nonce, WWW-Authenticate",
+		);
+	});
+});
 
 describe("DPoP nonce lifetime shared with the resource client", async () => {
 	const issuer = "http://localhost:3001";
