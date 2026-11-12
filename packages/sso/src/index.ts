@@ -493,9 +493,11 @@ export function sso<O extends SSOOptions>(
 					},
 					userId: {
 						type: "string",
+						required: false,
 						references: {
 							model: "user",
 							field: "id",
+							onDelete: "set null",
 						},
 						fieldName:
 							options?.fields?.userId ??
