@@ -239,6 +239,7 @@ export const oauthProviderResourceClient = <
 							verifyOptions.verifyOptions.audience,
 							{
 								resourceMetadataMappings: opts?.resourceMetadataMappings,
+								request,
 								dpopSigningAlgorithms:
 									opts?.dpop?.signingAlgorithms ?? DPOP_SIGNING_ALGORITHMS,
 							},

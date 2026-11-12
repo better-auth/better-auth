@@ -94,6 +94,46 @@ describe("prisma-adapter", () => {
 	});
 
 	/**
+	 * @see https://github.com/better-auth/better-auth/issues/10716
+	 */
+	it("joins the user relation when a user field references an app table", async () => {
+		const findFirst = vi.fn(async () => null);
+		const adapter = prismaAdapter(
+			{
+				$transaction: vi.fn(),
+				session: { findFirst },
+			} as never,
+			{ provider: "sqlite" },
+		)({
+			user: {
+				additionalFields: {
+					roleId: {
+						type: "string",
+						required: false,
+						references: {
+							model: "roles",
+							field: "id",
+						},
+					},
+				},
+			},
+			advanced: { database: { joins: true } },
+		});
+
+		await adapter.findOne({
+			model: "session",
+			where: [{ field: "token", value: "session-token" }],
+			join: { user: true },
+		});
+
+		expect(findFirst).toHaveBeenCalledWith(
+			expect.objectContaining({
+				select: expect.objectContaining({ user: true }),
+			}),
+		);
+	});
+
+	/**
 	 * @see https://github.com/better-auth/better-auth/issues/8365
 	 */
 	it("should fall back to updateMany for non-unique verification identifiers", async () => {

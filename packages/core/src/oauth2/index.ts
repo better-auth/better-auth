@@ -93,6 +93,7 @@ export {
 	getOAuth2Tokens,
 	getPrimaryClientId,
 	mergeScopes,
+	parseStringBoolean,
 } from "./utils";
 export {
 	authorizationCodeRequest,

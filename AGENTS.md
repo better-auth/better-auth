@@ -89,3 +89,5 @@ When a flow must synthesize an email, use `createPlaceholderEmail` with a stable
 - DO NOT COMMIT unless the user explicitly asks
 - Conventional Commits: `feat(scope):`, `fix(scope):`, `docs:`, `chore:`. Use `!` for breaking changes (e.g. `feat(auth)!:`)
 - PRs target `main`
+- Write one changeset per user-visible change. A PR that fixes several things adds several changesets, and each becomes its own release-note entry. Start each with a one-sentence summary of what changed for users.
+- When review grows a PR's scope, update its title and changesets to match the final change. Release notes pair each changeset with the PR title.
