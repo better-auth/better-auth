@@ -912,6 +912,96 @@ describe("oauth back-channel logout", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/12276
 	 */
+	it.each(["oauthAccessToken", "oauthRefreshToken", "oauthClient"])(
+		"revokes offline grants despite a failed %s notification lookup",
+		async (model) => {
+			await auth.api.revokeSessions({ headers });
+			headers = (await signInWithTestUser()).headers;
+			const oauthClient = await registerClient();
+			const earlier = await issueTokens({ client: oauthClient });
+			await client.signOut({ fetchOptions: { headers } });
+			headers = (await signInWithTestUser()).headers;
+			await issueTokens({ client: oauthClient });
+			const context = await auth.$context;
+			const findMany = context.adapter.findMany.bind(context.adapter);
+			const spy = vi.spyOn(context.adapter, "findMany");
+			spy.mockImplementation(async (...args) => {
+				if (args[0].model === model)
+					throw new Error("notification lookup failed");
+				return findMany(...args);
+			});
+			try {
+				await auth.api.revokeSessions({ headers });
+			} finally {
+				spy.mockRestore();
+			}
+			await expectAllClientTokensRevoked(oauthClient.client_id);
+			expect(
+				(await refreshTokenGrant(oauthClient, earlier.refresh_token!)).error
+					?.status,
+			).toBe(400);
+		},
+	);
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("surfaces a sweep failure after notification planning fails", async () => {
+		const oauthClient = await registerClient();
+		await issueTokens({ client: oauthClient });
+		const context = await auth.$context;
+		const findMany = context.adapter.findMany.bind(context.adapter);
+		vi.spyOn(context.adapter, "findMany").mockImplementation(
+			async (...args) => {
+				if (args[0].model === "oauthAccessToken")
+					throw new Error("notification lookup failed");
+				return findMany(...args);
+			},
+		);
+		const updateMany = context.adapter.updateMany.bind(context.adapter);
+		vi.spyOn(context.adapter, "updateMany").mockImplementation(
+			async (...args) => {
+				if (args[0].model === "oauthRefreshToken")
+					throw new Error("token write failed");
+				return updateMany(...args);
+			},
+		);
+		await expect(auth.api.revokeSessions({ headers })).rejects.toThrow();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
+	it("keeps grants when deletion is vetoed after notification planning fails", async () => {
+		const oauthClient = await registerClient();
+		const tokens = await issueTokens({ client: oauthClient });
+		const context = await auth.$context;
+		const findMany = context.adapter.findMany.bind(context.adapter);
+		const spy = vi.spyOn(context.adapter, "findMany");
+		spy.mockImplementation(async (...args) => {
+			if (args[0].model === "oauthAccessToken")
+				throw new Error("notification lookup failed");
+			return findMany(...args);
+		});
+		shouldVetoSessionDeletion = true;
+		try {
+			await auth.api.revokeSessions({ headers });
+		} finally {
+			spy.mockRestore();
+			shouldVetoSessionDeletion = false;
+		}
+		const { refreshTokens } = await readClientTokenRevocation(
+			oauthClient.client_id,
+		);
+		for (const token of refreshTokens) expect(token.revoked ?? null).toBeNull();
+		expect(
+			(await refreshTokenGrant(oauthClient, tokens.refresh_token!)).error,
+		).toBeNull();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/12276
+	 */
 	it("sweeps user grants once while delivering logout for every session", async () => {
 		await auth.api.revokeSessions({ headers });
 		headers = (await signInWithTestUser()).headers;

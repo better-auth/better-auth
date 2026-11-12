@@ -165,6 +165,17 @@ async function prepareBackchannelLogoutPlan(
 ): Promise<BackchannelLogoutPlan | null> {
 	const { sessionId, userId, revokeAllUserGrants } = input;
 	if (!userId) return null;
+	// User-wide revocation needs only the user ID. Notification lookups must
+	// never prevent this required work from running after deletion commits.
+	const sweepPlan: BackchannelLogoutPlan | null = revokeAllUserGrants
+		? {
+				accessTokenIds: [],
+				refreshTokenIds: [],
+				sessionId,
+				targets: [],
+				revokeAllGrantsOfUserId: userId,
+			}
+		: null;
 
 	const logger = ctx.context.logger;
 	try {
@@ -188,15 +199,7 @@ async function prepareBackchannelLogoutPlan(
 		if (affectedClientIds.size === 0) {
 			// Tokens can outlive the session that issued them, so a user-wide
 			// sweep still has work to do when this session holds none.
-			return revokeAllUserGrants
-				? {
-						accessTokenIds: [],
-						refreshTokenIds: [],
-						sessionId,
-						targets: [],
-						revokeAllGrantsOfUserId: userId,
-					}
-				: null;
+			return sweepPlan;
 		}
 
 		const clients = await adapter.findMany<SchemaClient<Scope[]>>({
@@ -255,7 +258,7 @@ async function prepareBackchannelLogoutPlan(
 		};
 	} catch (error) {
 		logger.error("back-channel logout planning failed", error);
-		return null;
+		return sweepPlan;
 	}
 }
 
