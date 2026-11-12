@@ -75,6 +75,11 @@ allowBuilds:
 
 linkWorkspacePackages: true
 
+autoDedupe: true
+
+lockfile:
+  includeResolutionSettings: true
+
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - '@better-auth/*'
