@@ -750,7 +750,7 @@ export const auth = betterAuth({
 });
 ```
 
-`npx auth@latest migrate` adds the foreign key. Generated Drizzle and Prisma schemas include the `roleId` column without a relation, since the `roles` table lives in your own schema. Add the relation there if you need one.
+With the built-in Kysely adapter, `npx auth@latest migrate` creates the `roleId` column with a foreign key. Generated Drizzle and Prisma schemas include the `roleId` column without a relation, since the `roles` table lives in your own schema. Add the relation there if you need one.
 
 ### ID Generation
 
