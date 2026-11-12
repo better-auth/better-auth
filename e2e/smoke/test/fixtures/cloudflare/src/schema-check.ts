@@ -14,6 +14,7 @@ let delayEnabled = false;
 let queriesStarted = 0;
 let queriesCompleted = 0;
 let schemaLookups = 0;
+let waitUntilPending = 0;
 
 function delayedDatabase(database: D1Database, delay: number): D1Database {
 	function statement(
@@ -102,13 +103,21 @@ export default {
 			}
 			if (url.searchParams.get("waitUntil") === "true") {
 				const check = initialized.checkSchema?.();
-				if (check) context.waitUntil(check);
+				if (check) {
+					waitUntilPending++;
+					context.waitUntil(
+						check.finally(() => {
+							waitUntilPending--;
+						}),
+					);
+				}
 			}
 			return Response.json({
 				instance,
 				queriesStarted,
 				queriesCompleted,
 				schemaLookups,
+				waitUntilPending,
 			});
 		}
 		if (url.pathname === "/status") {
@@ -117,6 +126,7 @@ export default {
 				queriesStarted,
 				queriesCompleted,
 				schemaLookups,
+				waitUntilPending,
 			});
 		}
 		if (!auth) return new Response("Missing auth instance", { status: 409 });
