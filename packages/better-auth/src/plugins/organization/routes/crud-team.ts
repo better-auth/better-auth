@@ -5,13 +5,16 @@ import {
 } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { PrettifyDeep } from "../../../types/helper";
 import { getOrgAdapter } from "../adapter";
-import { orgMiddleware, orgSessionMiddleware } from "../call";
+import {
+	getOrgSessionFromCtx,
+	orgMiddleware,
+	orgSessionMiddleware,
+} from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { TeamMember } from "../schema";
@@ -100,7 +103,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			const session = await getOrgSessionFromCtx(ctx);
 			const organizationId =
 				ctx.body.organizationId || session?.session.activeOrganizationId;
 			if (!session && (ctx.request || ctx.headers)) {
@@ -264,7 +267,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			const session = await getOrgSessionFromCtx(ctx);
 			const organizationId =
 				ctx.body.organizationId || session?.session.activeOrganizationId;
 			if (!organizationId) {
