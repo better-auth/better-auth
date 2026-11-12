@@ -511,7 +511,7 @@ export interface ResourceServerMetadata {
 	resource_policy_uri?: string;
 	resource_tos_uri?: string;
 	tls_client_certificate_bound_access_tokens?: boolean;
-	authorization_details_types_supported?: string;
+	authorization_details_types_supported?: string[];
 	/* cspell:disable-next-line */
 	dpop_signing_alg_values_supported?: JWSAlgorithms[];
 	/* cspell:disable-next-line */
