@@ -198,7 +198,26 @@ Better Auth computes the value with HMAC-SHA256 over the client's **sector ident
 Changing a client's redirect URIs recomputes its sector, so moving to another host changes the `sub` its users receive. Clients created before Better Auth stored sectors keep the sector of their first redirect URI host, so their users' `sub` does not change. Unrelated custom-scheme or loopback clients created before then can share a sector.
 
 * Pairwise `sub` appears in the ID token, UserInfo, and introspection. Introspection returns the `sub` of the client the token was issued to.
-* JWT access tokens keep the real user ID as `sub`, so resource servers can look users up. A client can decode its own JWT access tokens, so a pairwise client that requests a `resource` learns the real user ID. To keep the user ID from a pairwise client, have it request opaque tokens by omitting `resource`.
+* JWT access tokens carry the user ID as `sub` by default, so resource servers can look users up. A client can decode its own JWT access tokens, so a pairwise client that requests a `resource` learns the user ID. To keep the user ID from pairwise clients, set `accessTokenSubject: "pairwise"`, or have them request opaque tokens by omitting `resource`.
+
+### Pairwise `sub` in JWT access tokens
+
+With `accessTokenSubject: "pairwise"`, JWT access tokens issued to a pairwise client carry the same `sub` as its ID tokens:
+
+```ts title="auth.ts"
+oauthProvider({
+  pairwiseSecret: process.env.PAIRWISE_SECRET,
+  accessTokenSubject: "pairwise", // [!code highlight]
+})
+```
+
+Resource servers that read `sub` from those tokens then see a different value for the same user under each sector, and cannot look the user up by that value. Keep the default if a resource server keys its data on the user ID across clients. Tokens for clients with `subject_type: "public"` and `client_credentials` tokens are unaffected.
+
+The option covers the top-level `sub` only. A token from [delegation](/docs/plugins/oauth-provider/tokens#delegate-to-an-actor) still carries the actor user's ID in `act.sub`.
+
+The token also carries a `ba_uid` claim: the user ID encrypted with the Better Auth secret, with a fresh nonce for each token so the value does not link users across clients. UserInfo, introspection, and token exchange read the user from it. Resource servers should ignore it. Rotating the Better Auth secret without keeping the old one makes existing tokens inactive.
+
+Endpoints you build on the [provider API](/docs/plugins/oauth-provider/reference) still receive the user ID in `sub`, and can call `resolveSubject` to get the value a client sees.
 
 <Callout type="warn">
   `pairwiseSecret` must be at least 32 characters. Changing it changes every pairwise `sub` and breaks existing client accounts. Treat it as permanent.

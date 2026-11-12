@@ -247,6 +247,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		);
 	}
 
+	if (opts.accessTokenSubject === "pairwise" && !opts.pairwiseSecret) {
+		throw new BetterAuthError(
+			'accessTokenSubject: "pairwise" requires pairwiseSecret',
+		);
+	}
+
 	const dpopNonceExpiresIn = opts.dpop?.nonce?.expiresIn;
 	if (
 		dpopNonceExpiresIn !== undefined &&

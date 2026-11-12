@@ -79,6 +79,7 @@ import {
 	isPKCERequired,
 	normalizeTimestampValue,
 	parseClientMetadata,
+	resolveAccessTokenSubject,
 	resolveSessionAuthTime,
 	resolveSubjectIdentifier,
 	storeToken,
@@ -263,6 +264,8 @@ export function getOAuthProviderApi(
 			const { requireActiveAccessToken } = await import("./introspect");
 			return requireActiveAccessToken(ctx, opts, token, clientId);
 		},
+		resolveSubject: ({ userId, client }) =>
+			resolveSubjectIdentifier(userId, client, opts),
 	};
 }
 
@@ -307,7 +310,12 @@ async function createJwtAccessToken(
 	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
-	const subject = user?.id ?? client.clientId;
+	// RFC 9068 §2.2 requires `sub` on every JWT access token. For
+	// client_credentials, no resource owner participates, so the client is the
+	// subject represented to the resource server.
+	const subject = user
+		? await resolveAccessTokenSubject(ctx, user.id, client, opts)
+		: { sub: client.clientId };
 
 	// Sign token — pass per-resource signing config if set; otherwise fall
 	// back to the JWT plugin's default.
@@ -318,10 +326,7 @@ async function createJwtAccessToken(
 		signingAlgorithm: overrides?.signingAlgorithm ?? undefined,
 		payload: {
 			...(overrides?.accessTokenClaims ?? {}),
-			// RFC 9068 §2.2 requires `sub` on every JWT access token. For
-			// client_credentials, no resource owner participates, so the client is
-			// the subject represented to the resource server.
-			sub: subject,
+			...subject,
 			aud: toAudienceClaim(audienceClaim),
 			// RFC 9068 §2.2.3: `client_id` MUST be present in JWT access tokens.
 			// Distinct from `azp` (authorized party — OIDC), kept for back-compat
