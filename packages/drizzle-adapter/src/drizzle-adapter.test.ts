@@ -706,4 +706,130 @@ describe("drizzle-adapter", () => {
 			expect(result).toBeNull();
 		});
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8655
+	 * @see https://github.com/better-auth/better-auth/issues/7440
+	 */
+	describe("JSON and array serialization configuration", () => {
+		const adapterFactories = [
+			{
+				relations: "Relations v1",
+				createAdapter: drizzleAdapter,
+			},
+			{
+				relations: "Relations v2",
+				createAdapter: drizzleRelationsV2Adapter,
+			},
+		] as const;
+
+		it.for(adapterFactories)(
+			"should enable supportsJSON and supportsArrays by default for all providers ($relations)",
+			async ({ createAdapter }) => {
+				for (const provider of ["sqlite", "mysql", "pg"] as const) {
+					let capturedValues: any = null;
+					const db = {
+						_: { fullSchema: {} },
+						insert: vi.fn().mockReturnValue({
+							values: vi.fn().mockImplementation((val) => {
+								capturedValues = val;
+								return {
+									returning: vi.fn().mockResolvedValue([val]),
+								};
+							}),
+						}),
+					} as any;
+
+					const adapter = createAdapter(db, { provider })({
+						plugins: [
+							{
+								id: "test-plugin",
+								schema: {
+									testModel: {
+										fields: {
+											metadata: { type: "json" },
+											tags: { type: "string[]" },
+										},
+									},
+								},
+							},
+						],
+					});
+
+					const metadata = { theme: "dark", count: 42 };
+					const tags = ["auth", "drizzle"];
+
+					await adapter.create({
+						model: "testModel",
+						data: {
+							id: "1",
+							metadata,
+							tags,
+						},
+					});
+
+					// Values must remain raw objects/arrays for Drizzle to serialize in JSON mode,
+					// avoiding double stringification.
+					expect(capturedValues.metadata).toEqual(metadata);
+					expect(typeof capturedValues.metadata).toBe("object");
+					expect(capturedValues.tags).toEqual(tags);
+					expect(Array.isArray(capturedValues.tags)).toBe(true);
+				}
+			},
+		);
+
+		it.for(adapterFactories)(
+			"should allow user override of supportsJSON and supportsArrays via config ($relations)",
+			async ({ createAdapter }) => {
+				let capturedValues: any = null;
+				const db = {
+					_: { fullSchema: {} },
+					insert: vi.fn().mockReturnValue({
+						values: vi.fn().mockImplementation((val) => {
+							capturedValues = val;
+							return {
+								returning: vi.fn().mockResolvedValue([val]),
+							};
+						}),
+					}),
+				} as any;
+
+				const adapter = createAdapter(db, {
+					provider: "sqlite",
+					supportsJSON: false,
+					supportsArrays: false,
+				})({
+					plugins: [
+						{
+							id: "test-plugin",
+							schema: {
+								testModel: {
+									fields: {
+										metadata: { type: "json" },
+										tags: { type: "string[]" },
+									},
+								},
+							},
+						},
+					],
+				});
+
+				const metadata = { theme: "dark" };
+				const tags = ["auth"];
+
+				await adapter.create({
+					model: "testModel",
+					data: {
+						id: "1",
+						metadata,
+						tags,
+					},
+				});
+
+				// When overridden to false, Better Auth pre-stringifies the values
+				expect(capturedValues.metadata).toBe(JSON.stringify(metadata));
+				expect(capturedValues.tags).toBe(JSON.stringify(tags));
+			},
+		);
+	});
 });
