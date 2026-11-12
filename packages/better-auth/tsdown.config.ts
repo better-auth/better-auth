@@ -24,6 +24,7 @@ export default defineConfig({
 		"./src/db/adapter-base.ts",
 		"./src/db/get-migration.ts",
 		"./src/oauth2/index.ts",
+		"./src/oauth2/dpop-client.ts",
 		"./src/client/react/index.ts",
 		"./src/client/vue/index.ts",
 		"./src/client/svelte/index.ts",

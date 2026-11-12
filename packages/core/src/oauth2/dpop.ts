@@ -7,20 +7,30 @@ import {
 	importJWK,
 	jwtVerify,
 } from "jose";
+import type { AccessTokenAuthorization } from "./dpop-protocol";
+import {
+	DPOP_PROOF_TYPE,
+	DPOP_SIGNING_ALGORITHMS,
+	deriveDpopAth,
+	normalizeDpopHtu,
+} from "./dpop-protocol";
 
-export const DPOP_AUTHORIZATION_SCHEME = "DPoP";
-export const BEARER_AUTHORIZATION_SCHEME = "Bearer";
-export const DPOP_PROOF_TYPE = "dpop+jwt";
-/** The RFC 9449 §8 response header that carries a server-provided nonce. */
-export const DPOP_NONCE_HEADER = "DPoP-Nonce";
-
-export const DPOP_SIGNING_ALGORITHMS = [
-	"EdDSA",
-	"ES256",
-	"ES512",
-	"PS256",
-	"RS256",
-] as const;
+export type {
+	AccessTokenAuthorization,
+	AccessTokenAuthorizationScheme,
+	DpopSigningAlgorithm,
+} from "./dpop-protocol";
+export {
+	BEARER_AUTHORIZATION_SCHEME,
+	DPOP_AUTHORIZATION_SCHEME,
+	DPOP_NONCE_HEADER,
+	DPOP_PROOF_TYPE,
+	DPOP_SIGNING_ALGORITHMS,
+	deriveDpopAth,
+	normalizeDpopHtu,
+	parseAccessTokenAuthorization,
+	stripAccessTokenAuthorizationScheme,
+} from "./dpop-protocol";
 
 const DEFAULT_DPOP_PROOF_MAX_AGE_SECONDS = 300;
 const MAX_DPOP_JTI_LENGTH = 512;
@@ -44,15 +54,6 @@ const JWK_PRIVATE_FIELDS = new Set([
 	"oth",
 	"k",
 ]);
-
-export type DpopSigningAlgorithm = (typeof DPOP_SIGNING_ALGORITHMS)[number];
-
-export type AccessTokenAuthorizationScheme = "Bearer" | "DPoP" | "Unknown";
-
-export interface AccessTokenAuthorization {
-	scheme: AccessTokenAuthorizationScheme;
-	token: string;
-}
 
 /**
  * `use_dpop_nonce` means the proof was otherwise valid but lacked a current
@@ -375,50 +376,6 @@ export async function assertDpopProofNonce(
 		return;
 	}
 	await assertDpopNonce(payload, options, nowSeconds);
-}
-
-export function parseAccessTokenAuthorization(
-	authorization: string | null | undefined,
-): AccessTokenAuthorization | undefined {
-	if (!authorization) return undefined;
-	const value = authorization.trim();
-	if (!value) return undefined;
-	const match = /^([A-Za-z][A-Za-z0-9!#$%&'*+.^_`|~-]*)\s+(.+)$/.exec(value);
-	if (!match) {
-		return { scheme: "Unknown", token: value };
-	}
-	const scheme = match[1] ?? "";
-	const token = match[2]?.trim() ?? "";
-	if (scheme.toLowerCase() === "bearer") {
-		return { scheme: "Bearer", token };
-	}
-	if (scheme.toLowerCase() === "dpop") {
-		return { scheme: "DPoP", token };
-	}
-	return { scheme: "Unknown", token: value };
-}
-
-export function stripAccessTokenAuthorizationScheme(token: string): string {
-	return parseAccessTokenAuthorization(token)?.token ?? token;
-}
-
-export function normalizeDpopHtu(url: string): string {
-	const parsed = new URL(url);
-	// RFC 9449 §4.2: `htu` is the target URI without query and fragment parts.
-	// Reject a fragment rather than silently strip it, so a malformed proof
-	// fails fast instead of matching a request URL it does not actually name.
-	if (parsed.hash) {
-		throw new Error("DPoP proof htu must not contain a fragment");
-	}
-	return `${parsed.origin}${parsed.pathname}`;
-}
-
-export async function deriveDpopAth(accessToken: string): Promise<string> {
-	const digest = await crypto.subtle.digest(
-		"SHA-256",
-		new TextEncoder().encode(accessToken),
-	);
-	return base64url.encode(new Uint8Array(digest));
 }
 
 export async function deriveDpopJkt(jwk: JWK): Promise<string> {
